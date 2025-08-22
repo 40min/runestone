@@ -3,6 +3,7 @@
 Simple test to verify that python-dotenv is loading environment variables correctly.
 """
 import os
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -17,10 +18,10 @@ print(f"VERBOSE: {os.getenv('VERBOSE')}")
 
 # Verify expected values
 expected_values = {
-    'LLM_PROVIDER': 'openai',
-    'OPENAI_API_KEY': 'test-openai-key',
-    'OPENAI_MODEL': 'gpt-4o',
-    'VERBOSE': 'true'
+    "LLM_PROVIDER": "openai",
+    "OPENAI_API_KEY": "test-openai-key",
+    "OPENAI_MODEL": "gpt-4o",
+    "VERBOSE": "true",
 }
 
 success = True

@@ -94,7 +94,7 @@ The script will produce a single, formatted text output to the console, structur
     *   `rich` for nice output to console (emoji are welcomed)
     *   Use uv as package manager
     *   Use `pre-commit` for pre-commit hooks and common libs for style checking (flake8, black, isort)
-    *   Write Makefile to run service commands like: 
+    *   Write Makefile to run service commands like:
         *   lint checking
         *   run tests
         *   install deps

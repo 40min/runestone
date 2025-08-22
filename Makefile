@@ -27,7 +27,7 @@ install:
 # Install development dependencies
 install-dev:
 	@echo "Installing development dependencies..."
-	uv sync
+	uv sync --extra dev
 
 # Lint checking with fixes
 lint:

@@ -6,9 +6,9 @@ LLM providers like OpenAI and Gemini.
 """
 
 from .base import BaseLLMClient
-from .openai_client import OpenAIClient
-from .gemini_client import GeminiClient
 from .factory import create_llm_client, get_available_providers, get_default_provider
+from .gemini_client import GeminiClient
+from .openai_client import OpenAIClient
 
 __all__ = [
     "BaseLLMClient",
@@ -16,5 +16,5 @@ __all__ = [
     "GeminiClient",
     "create_llm_client",
     "get_available_providers",
-    "get_default_provider"
+    "get_default_provider",
 ]

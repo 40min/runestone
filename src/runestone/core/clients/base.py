@@ -6,7 +6,7 @@ must inherit from to ensure consistent interfaces.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional
+
 from PIL import Image
 
 
@@ -16,7 +16,7 @@ class BaseLLMClient(ABC):
     def __init__(self, api_key: str, verbose: bool = False):
         """
         Initialize the LLM client.
-        
+
         Args:
             api_key: API key for the LLM provider
             verbose: Enable verbose logging
@@ -28,14 +28,14 @@ class BaseLLMClient(ABC):
     def extract_text_from_image(self, image: Image.Image, prompt: str) -> str:
         """
         Extract text from an image using OCR capabilities.
-        
+
         Args:
             image: PIL Image object
             prompt: OCR prompt for the model
-            
+
         Returns:
             Extracted text as string
-            
+
         Raises:
             Exception: If OCR processing fails
         """
@@ -45,13 +45,13 @@ class BaseLLMClient(ABC):
     def analyze_content(self, prompt: str) -> str:
         """
         Analyze content using the LLM.
-        
+
         Args:
             prompt: Analysis prompt
-            
+
         Returns:
             Analysis result as string
-            
+
         Raises:
             Exception: If content analysis fails
         """
@@ -61,13 +61,13 @@ class BaseLLMClient(ABC):
     def search_resources(self, prompt: str) -> str:
         """
         Search for learning resources using the LLM.
-        
+
         Args:
             prompt: Search prompt
-            
+
         Returns:
             Search results as string
-            
+
         Raises:
             Exception: If resource search fails
         """

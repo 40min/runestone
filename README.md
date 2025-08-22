@@ -35,24 +35,24 @@ A command-line tool for analyzing Swedish textbook pages using OCR and Large Lan
    ```bash
    # Using UV (recommended)
    make install
-   
+
    # Or using pip
    pip install -e .
    ```
 
 3. **Set up your API key:**
-   
+
    **For OpenAI (default):**
    ```bash
    export OPENAI_API_KEY="your-openai-api-key"
    ```
-   
+
    **For Gemini:**
    ```bash
    export GEMINI_API_KEY="your-gemini-api-key"
    export LLM_PROVIDER="gemini"
    ```
-   
+
    **Or copy and configure the environment file:**
    ```bash
    cp .env.example .env
@@ -154,7 +154,7 @@ pre-commit install
 ```bash
 make help           # Show all available commands
 make install        # Install production dependencies
-make install-dev    # Install development dependencies  
+make install-dev    # Install development dependencies
 make setup          # Full development environment setup
 make lint           # Run code formatting and linting
 make lint-check     # Check code formatting (no fixes)

@@ -6,27 +6,27 @@ grammar rules, vocabulary, and generate learning resources.
 """
 
 import json
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
 
-from .exceptions import ContentAnalysisError, LLMError
 from .clients.base import BaseLLMClient
 from .clients.factory import create_llm_client
+from .exceptions import ContentAnalysisError
 
 
 class ContentAnalyzer:
     """Analyzes Swedish textbook content using configurable LLM providers."""
-    
+
     def __init__(
         self,
         client: Optional[BaseLLMClient] = None,
         provider: Optional[str] = None,
         api_key: Optional[str] = None,
         model_name: Optional[str] = None,
-        verbose: bool = False
+        verbose: bool = False,
     ):
         """
         Initialize the content analyzer.
-        
+
         Args:
             client: Pre-configured LLM client (if provided, other params are ignored)
             provider: LLM provider name ("openai" or "gemini")
@@ -35,7 +35,7 @@ class ContentAnalyzer:
             verbose: Enable verbose logging
         """
         self.verbose = verbose
-        
+
         if client is not None:
             self.client = client
         else:
@@ -43,25 +43,26 @@ class ContentAnalyzer:
                 provider=provider,
                 api_key=api_key,
                 model_name=model_name,
-                verbose=verbose
+                verbose=verbose,
             )
-    
+
     def analyze_content(self, extracted_text: str) -> Dict[str, Any]:
         """
         Analyze Swedish textbook content to extract learning materials.
-        
+
         Args:
             extracted_text: Raw text extracted from the textbook page
-            
+
         Returns:
             Dictionary containing analyzed content with grammar, vocabulary, and resources
-            
+
         Raises:
             ContentAnalysisError: If content analysis fails
         """
         try:
             analysis_prompt = f"""
-            You are a Swedish language learning expert. Analyze this text from a Swedish textbook page and provide a structured learning guide.
+            You are a Swedish language learning expert. Analyze this text from a Swedish
+            textbook page and provide a structured learning guide.
 
             TEXT TO ANALYZE:
             {extracted_text}
@@ -94,67 +95,72 @@ class ContentAnalyzer:
                - Set has_explicit_rules to true if there's a clear grammar rule box/section
                - Set has_explicit_rules to false if you need to infer the grammar from exercises
                - Provide a clear English explanation of the grammatical concept
-            
+
             2. For vocabulary:
                - Extract key Swedish words, phrases, and important terms
                - Prioritize nouns, verbs, adjectives, and useful phrases
                - Provide accurate English translations
                - Include 10-20 most important items
-            
+
             3. For core_topics:
                - Identify 2-4 main learning topics from this page
                - Use clear, descriptive terms
-            
+
             4. For search_needed:
                - Set should_search to true if additional resources would be helpful
                - Suggest specific search queries focusing on the identified topics
-            
+
             Return ONLY valid JSON, no additional text or formatting.
             """
-            
+
             if self.verbose:
                 print(f"Analyzing content with {self.client.provider_name}...")
-            
+
             response_text = self.client.analyze_content(analysis_prompt)
-            
+
             if not response_text:
                 raise ContentAnalysisError("No analysis returned from LLM")
-            
+
             # Parse JSON response
             try:
                 analysis = json.loads(response_text.strip())
-                
+
                 # Validate required fields
-                required_fields = ["grammar_focus", "vocabulary", "core_topics", "search_needed"]
+                required_fields = [
+                    "grammar_focus",
+                    "vocabulary",
+                    "core_topics",
+                    "search_needed",
+                ]
                 for field in required_fields:
                     if field not in analysis:
                         raise ContentAnalysisError(f"Missing required field: {field}")
-                
+
                 if self.verbose:
-                    print(f"Analysis completed - found {len(analysis.get('vocabulary', []))} vocabulary items")
-                
+                    print(f"Analysis completed - found {len(analysis.get('vocabulary', []))} " "vocabulary items")
+
                 return analysis
-                
-            except json.JSONDecodeError as e:
+
+            except json.JSONDecodeError:
                 # If JSON parsing fails, try to extract content manually
                 if self.verbose:
                     print("JSON parsing failed, attempting fallback analysis...")
-                
+
                 return self._fallback_analysis(extracted_text, response_text)
-                
+
         except ContentAnalysisError:
             raise
         except Exception as e:
             raise ContentAnalysisError(f"Content analysis failed: {str(e)}")
-    
+
     def _fallback_analysis(self, extracted_text: str, raw_response: str) -> Dict[str, Any]:
         """
         Fallback analysis when JSON parsing fails.
-        
+
         Args:
             extracted_text: Original extracted text
             raw_response: Raw LLM response
-            
+
         Returns:
             Basic analysis structure
         """
@@ -162,134 +168,146 @@ class ContentAnalyzer:
             "grammar_focus": {
                 "has_explicit_rules": False,
                 "topic": "Swedish language practice",
-                "explanation": "This page contains Swedish language exercises and examples."
+                "explanation": "This page contains Swedish language exercises and examples.",  # noqa: E501
             },
             "vocabulary": [],
             "core_topics": ["Swedish language learning"],
             "search_needed": {
                 "should_search": True,
-                "query_suggestions": ["Swedish grammar basics", "Swedish vocabulary practice"]
+                "query_suggestions": [
+                    "Swedish grammar basics",
+                    "Swedish vocabulary practice",
+                ],
             },
             "fallback_used": True,
-            "raw_response": raw_response
+            "raw_response": raw_response,
         }
-    
+
     def find_learning_resources(self, analysis: Dict[str, Any]) -> List[Dict[str, str]]:
         """
         Find relevant learning resources using web search.
-        
+
         Args:
             analysis: Content analysis results
-            
+
         Returns:
             List of relevant learning resources with URLs
         """
         resources = []
-        
+
         if not analysis.get("search_needed", {}).get("should_search", False):
             return resources
-        
+
         try:
             # Get search queries from analysis
             search_queries = analysis.get("search_needed", {}).get("query_suggestions", [])
             core_topics = analysis.get("core_topics", [])
-            
+
             if not search_queries and core_topics:
                 # Generate search queries from topics
                 search_queries = [f"Swedish {topic} grammar explanation" for topic in core_topics[:2]]
-            
+
             if not search_queries:
                 search_queries = ["Swedish grammar basics"]
-            
+
             # Perform searches using the LLM's search capability
             for query in search_queries[:2]:  # Limit to 2 searches
                 if self.verbose:
                     print(f"Searching for resources: {query}")
-                
+
                 search_prompt = f"""
-                Search for high-quality Swedish language learning resources related to: {query}
-                
+                Search for high-quality Swedish language learning resources related to:
+                {query}
+
                 PRIORITY SOURCES (prefer these if available):
                 1. svenska.se
                 2. clozemaster.com/blog/
                 3. worddive.com/en/grammar/swedish-grammar/
                 4. kielibuusti.fi/en/learn-swedish/
                 5. swedishpod101.com/blog/
-                
+
                 Find 2-3 relevant, high-quality educational resources. Use the google_search tool.
                 """
-                
+
                 try:
                     response_text = self.client.search_resources(search_prompt)
-                    
+
                     if response_text and "http" in response_text:
                         # Extract URLs from the response (basic implementation)
-                        lines = response_text.split('\n')
+                        lines = response_text.split("\n")
                         for line in lines:
-                            if 'http' in line and any(domain in line for domain in [
-                                'svenska.se', 'clozemaster.com', 'worddive.com',
-                                'kielibuusti.fi', 'swedishpod101.com'
-                            ]):
+                            if "http" in line and any(
+                                domain in line
+                                for domain in [
+                                    "svenska.se",
+                                    "clozemaster.com",
+                                    "worddive.com",
+                                    "kielibuusti.fi",
+                                    "swedishpod101.com",
+                                ]
+                            ):
                                 # Extract URL and title (simplified)
-                                url_start = line.find('http')
-                                url_end = line.find(' ', url_start)
+                                url_start = line.find("http")
+                                url_end = line.find(" ", url_start)
                                 if url_end == -1:
                                     url = line[url_start:].strip()
                                 else:
                                     url = line[url_start:url_end].strip()
-                                
-                                title = query.replace('Swedish ', '').title()
-                                resources.append({
-                                    "title": f"Swedish {title} - Learning Resource",
-                                    "url": url,
-                                    "description": f"Educational resource for {query}"
-                                })
-                                
+
+                                title = query.replace("Swedish ", "").title()
+                                resources.append(
+                                    {
+                                        "title": f"Swedish {title} - Learning Resource",
+                                        "url": url,
+                                        "description": f"Educational resource for {query}",
+                                    }
+                                )
+
                                 if len(resources) >= 3:
                                     break
-                    
+
                 except Exception as e:
                     if self.verbose:
                         print(f"Search failed for query '{query}': {e}")
                     continue
-            
+
             # If no resources found, provide default high-quality resources
             if not resources:
                 resources = self._get_default_resources(analysis)
-            
+
             return resources[:3]  # Return max 3 resources
-            
+
         except Exception as e:
             if self.verbose:
                 print(f"Resource search failed: {e}")
             return self._get_default_resources(analysis)
-    
+
     def _get_default_resources(self, analysis: Dict[str, Any]) -> List[Dict[str, str]]:
         """
         Get default high-quality Swedish learning resources.
-        
+
         Args:
             analysis: Content analysis results
-            
+
         Returns:
             List of default learning resources
         """
         grammar_topic = analysis.get("grammar_focus", {}).get("topic", "grammar")
-        
+
         return [
             {
                 "title": "Svenska.se - Swedish Grammar Reference",
                 "url": "https://svenska.se/tre/sprak/grammatik/",
-                "description": "Official Swedish grammar reference and explanations"
+                "description": "Official Swedish grammar reference and explanations",
             },
             {
                 "title": "Swedish Grammar Basics - Clozemaster",
                 "url": "https://www.clozemaster.com/blog/swedish-grammar/",
-                "description": f"Comprehensive guide to Swedish {grammar_topic}"
+                "description": f"Comprehensive guide to Swedish {grammar_topic}",  # noqa: E501
             },
             {
                 "title": "Swedish Language Learning - WordDive",
                 "url": "https://worddive.com/en/grammar/swedish-grammar/",
-                "description": "Interactive Swedish grammar lessons and exercises"
-            }
+                "description": "Interactive Swedish grammar lessons and exercises",  # noqa: E501
+            },
         ]
