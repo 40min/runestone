@@ -69,9 +69,7 @@ class ResultFormatter:
         char_count = ocr_result.get("character_count", 0)
 
         # Truncate very long text for display
-        display_text = text
-        if len(text) > 1000:
-            display_text = text[:1000] + f"\n... (showing first 1000 of {char_count} characters)"
+        display_text = text        
 
         panel = Panel(
             display_text,

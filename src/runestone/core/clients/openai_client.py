@@ -98,9 +98,9 @@ class OpenAIClient(BaseLLMClient):
                         ],
                     }
                 ],
-                max_tokens=4000,
+                max_tokens=10000,
                 temperature=0.1,
-            )
+            )            
 
             if not response.choices or not response.choices[0].message.content:
                 raise OCRError("No text returned from OpenAI API")
