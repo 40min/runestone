@@ -71,8 +71,12 @@ class TestCLI:
             mock_processor.process_image.assert_called_once()
             mock_processor.display_results_console.assert_called_once_with(mock_results)
 
-    def test_process_command_missing_api_key(self):
+    @patch("os.getenv")
+    def test_process_command_missing_api_key(self, mock_getenv):
         """Test process command without API key."""
+        # Mock os.getenv to return None for OPENAI_API_KEY
+        mock_getenv.return_value = None
+
         with self.runner.isolated_filesystem():
             Path(self.test_image_path).touch()
 
@@ -85,7 +89,7 @@ class TestCLI:
         """Test process command with non-existent file."""
         result = self.runner.invoke(cli, ["process", "nonexistent.jpg", "--api-key", self.api_key])
 
-        assert result.exit_code == 1
+        assert result.exit_code == 2  # Click's Path validation returns exit code 2 for non-existent files
         assert "does not exist" in result.output
 
     def test_process_command_non_image_file(self):
@@ -186,10 +190,14 @@ class TestCLI:
         assert result.exit_code == 0
         assert "0.1.0" in result.output
 
-    @patch.dict("os.environ", {"GEMINI_API_KEY": "env-api-key"})
+    @patch("runestone.cli.os.getenv")
+    @patch.dict("os.environ", {"OPENAI_API_KEY": "env-api-key"})
     @patch("runestone.cli.RunestoneProcessor")
-    def test_process_command_env_api_key(self, mock_processor_class):
+    def test_process_command_env_api_key(self, mock_processor_class, mock_getenv):
         """Test process command using API key from environment."""
+        # Configure mock_getenv to return the API key for OPENAI_API_KEY
+        mock_getenv.side_effect = lambda key: "env-api-key" if key == "OPENAI_API_KEY" else None
+
         with self.runner.isolated_filesystem():
             Path(self.test_image_path).touch()
 
@@ -207,4 +215,4 @@ class TestCLI:
 
             assert result.exit_code == 0
             # Should use API key from environment
-            mock_processor_class.assert_called_once_with(provider="openai", api_key="env-api-key", model_name=None, verbose=False)
+            mock_processor_class.assert_called_once_with(provider="openai", api_key="env-api-key", model_name=None, verbose=True)

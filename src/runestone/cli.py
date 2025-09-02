@@ -96,20 +96,31 @@ def process(
         if not provider:
             provider = get_default_provider()
 
-        # Validate API key is available (either passed or in environment)
+        # Get API key from environment if not provided
         if not api_key:
-            if provider == "openai" and not os.getenv("OPENAI_API_KEY"):
-                console.print(
-                    "[red]Error:[/red] OpenAI API key is required. "
-                    "Set OPENAI_API_KEY environment variable or use --api-key option."
-                )
-                sys.exit(1)
-            elif provider == "gemini" and not os.getenv("GEMINI_API_KEY"):
-                console.print(
-                    "[red]Error:[/red] Gemini API key is required. "
-                    "Set GEMINI_API_KEY environment variable or use --api-key option."
-                )
-                sys.exit(1)
+            if provider == "openai":
+                api_key = os.getenv("OPENAI_API_KEY")
+            elif provider == "gemini":
+                api_key = os.getenv("GEMINI_API_KEY")
+
+        # Validate API key is available
+        if not api_key:
+            if provider == "openai":
+                api_key=os.getenv("OPENAI_API_KEY")
+                if not api_key:
+                    console.print(
+                        "[red]Error:[/red] OpenAI API key is required. "
+                        "Set OPENAI_API_KEY environment variable or use --api-key option."
+                    )
+                    sys.exit(1)
+            elif provider == "gemini":
+                api_key=os.getenv("GEMINI_API_KEY")
+                if not api_key:
+                    console.print(
+                        "[red]Error:[/red] Gemini API key is required. "
+                        "Set GEMINI_API_KEY environment variable or use --api-key option."
+                    )
+                    sys.exit(1)
 
         # Validate image file
         if not image_path.is_file():
