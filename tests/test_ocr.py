@@ -23,10 +23,11 @@ class TestOCRProcessor:
     @patch("google.generativeai.GenerativeModel")
     def test_init_success(self, mock_model, mock_configure):
         """Test successful initialization."""
-        processor = OCRProcessor(self.api_key, verbose=True)
+        processor = OCRProcessor(provider="gemini", api_key=self.api_key, verbose=True)
 
         mock_configure.assert_called_once_with(api_key=self.api_key)
-        mock_model.assert_called_once_with("gemini-2.0-flash-exp")
+        # GeminiClient creates two models (OCR and analysis), so expect 2 calls
+        assert mock_model.call_count == 2
         assert processor.verbose is True
 
     @patch("google.generativeai.configure")
@@ -35,7 +36,7 @@ class TestOCRProcessor:
         mock_configure.side_effect = Exception("Invalid API key")
 
         with pytest.raises(APIKeyError) as exc_info:
-            OCRProcessor(self.api_key)
+            OCRProcessor(provider="gemini", api_key=self.api_key)
 
         assert "Failed to configure Gemini API" in str(exc_info.value)
 
@@ -52,7 +53,7 @@ class TestOCRProcessor:
             patch("google.generativeai.configure"),
             patch("google.generativeai.GenerativeModel"),
         ):
-            processor = OCRProcessor(self.api_key)
+            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
 
         result = processor._load_and_validate_image(self.test_image_path)
 
@@ -67,6 +68,7 @@ class TestOCRProcessor:
         mock_image.mode = "RGBA"
         mock_image.size = (800, 600)
         mock_converted = Mock()
+        mock_converted.size = (800, 600)  # Mock converted image size
         mock_image.convert.return_value = mock_converted
         mock_image_open.return_value = mock_image
 
@@ -74,7 +76,7 @@ class TestOCRProcessor:
             patch("google.generativeai.configure"),
             patch("google.generativeai.GenerativeModel"),
         ):
-            processor = OCRProcessor(self.api_key)
+            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
 
         result = processor._load_and_validate_image(self.test_image_path)
 
@@ -93,7 +95,7 @@ class TestOCRProcessor:
             patch("google.generativeai.configure"),
             patch("google.generativeai.GenerativeModel"),
         ):
-            processor = OCRProcessor(self.api_key)
+            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
 
         with pytest.raises(ImageProcessingError) as exc_info:
             processor._load_and_validate_image(self.test_image_path)
@@ -109,7 +111,7 @@ class TestOCRProcessor:
             patch("google.generativeai.configure"),
             patch("google.generativeai.GenerativeModel"),
         ):
-            processor = OCRProcessor(self.api_key)
+            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
 
         with pytest.raises(ImageProcessingError) as exc_info:
             processor._load_and_validate_image(self.test_image_path)
@@ -137,7 +139,7 @@ class TestOCRProcessor:
             mock_model.generate_content.return_value = mock_response
             mock_model_class.return_value = mock_model
 
-            processor = OCRProcessor(self.api_key)
+            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
             result = processor.extract_text(self.test_image_path)
 
         # Verify result structure
@@ -150,8 +152,10 @@ class TestOCRProcessor:
         # Verify Gemini was called correctly
         mock_model.generate_content.assert_called_once()
         args = mock_model.generate_content.call_args[0]
-        assert len(args) == 2  # prompt and image
-        assert "extract ALL text" in args[0]
+        assert len(args) == 1  # Single argument which is a list
+        content_list = args[0]
+        assert len(content_list) == 2  # prompt and image
+        assert "accurately transcribe all readable text" in content_list[0]
 
     @patch("PIL.Image.open")
     def test_extract_text_error_response(self, mock_image_open):
@@ -174,7 +178,7 @@ class TestOCRProcessor:
             mock_model.generate_content.return_value = mock_response
             mock_model_class.return_value = mock_model
 
-            processor = OCRProcessor(self.api_key)
+            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
 
             with pytest.raises(OCRError) as exc_info:
                 processor.extract_text(self.test_image_path)
@@ -202,7 +206,7 @@ class TestOCRProcessor:
             mock_model.generate_content.return_value = mock_response
             mock_model_class.return_value = mock_model
 
-            processor = OCRProcessor(self.api_key)
+            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
 
             with pytest.raises(OCRError) as exc_info:
                 processor.extract_text(self.test_image_path)
@@ -230,9 +234,204 @@ class TestOCRProcessor:
             mock_model.generate_content.return_value = mock_response
             mock_model_class.return_value = mock_model
 
-            processor = OCRProcessor(self.api_key)
+            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
 
             with pytest.raises(OCRError) as exc_info:
                 processor.extract_text(self.test_image_path)
 
         assert "No text returned" in str(exc_info.value)
+
+    def test_parse_and_analyze_recognition_stats_success(self):
+        """Test successful parsing and analysis of recognition statistics."""
+        with (
+            patch("google.generativeai.configure"),
+            patch("google.generativeai.GenerativeModel"),
+        ):
+            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+
+        # Test text with good recognition stats
+        test_text = """This is the main content of the page.
+
+---
+Recognition Statistics:
+- Total text elements identified: 100
+- Successfully transcribed: 95
+- Unclear/uncertain: 3
+- Unable to recognize: 2
+---
+"""
+
+        result = processor._parse_and_analyze_recognition_stats(test_text)
+
+        # Should return cleaned text without stats
+        expected_text = "This is the main content of the page."
+        assert result == expected_text
+
+    def test_parse_and_analyze_recognition_stats_low_percentage(self):
+        """Test that OCRError is raised when recognition percentage is below 90%."""
+        with (
+            patch("google.generativeai.configure"),
+            patch("google.generativeai.GenerativeModel"),
+        ):
+            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+
+        # Test text with poor recognition stats
+        test_text = """This is the main content.
+
+---
+Recognition Statistics:
+- Total text elements identified: 100
+- Successfully transcribed: 85
+- Unclear/uncertain: 10
+- Unable to recognize: 5
+---
+"""
+
+        with pytest.raises(OCRError) as exc_info:
+            processor._parse_and_analyze_recognition_stats(test_text)
+
+        assert "OCR recognition percentage below 90%: 85.0% (85/100)" in str(exc_info.value)
+        assert "Total text elements identified: 100" in exc_info.value.details
+
+    def test_parse_and_analyze_recognition_stats_no_stats(self):
+        """Test handling when no recognition statistics are present."""
+        with (
+            patch("google.generativeai.configure"),
+            patch("google.generativeai.GenerativeModel"),
+        ):
+            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+
+        # Test text without stats
+        test_text = "This is plain text without statistics."
+
+        result = processor._parse_and_analyze_recognition_stats(test_text)
+
+        # Should return the text as-is
+        assert result == test_text
+
+    def test_parse_and_analyze_recognition_stats_zero_total(self):
+        """Test handling when total text elements is zero."""
+        with (
+            patch("google.generativeai.configure"),
+            patch("google.generativeai.GenerativeModel"),
+        ):
+            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+
+        # Test text with zero total elements
+        test_text = """Some content.
+
+---
+Recognition Statistics:
+- Total text elements identified: 0
+- Successfully transcribed: 0
+- Unclear/uncertain: 0
+- Unable to recognize: 0
+---
+"""
+
+        result = processor._parse_and_analyze_recognition_stats(test_text)
+
+        # Should return cleaned text without raising error
+        expected_text = "Some content."
+        assert result == expected_text
+
+    def test_parse_and_analyze_recognition_stats_boundary_percentage(self):
+        """Test boundary case where percentage is exactly 90%."""
+        with (
+            patch("google.generativeai.configure"),
+            patch("google.generativeai.GenerativeModel"),
+        ):
+            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+
+        # Test text with exactly 90% recognition
+        test_text = """Content.
+
+---
+Recognition Statistics:
+- Total text elements identified: 100
+- Successfully transcribed: 90
+- Unclear/uncertain: 5
+- Unable to recognize: 5
+---
+"""
+
+        result = processor._parse_and_analyze_recognition_stats(test_text)
+
+        # Should succeed (not raise error) since 90% is acceptable
+        expected_text = "Content."
+        assert result == expected_text
+
+    @patch("PIL.Image.open")
+    def test_extract_text_with_stats_parsing(self, mock_image_open):
+        """Test that extract_text properly parses and removes statistics."""
+        # Mock image
+        mock_image = Mock()
+        mock_image.mode = "RGB"
+        mock_image.size = (800, 600)
+        mock_image_open.return_value = mock_image
+
+        # Mock response with stats
+        mock_response = Mock()
+        mock_response.text = """Extracted Swedish text content.
+
+---
+Recognition Statistics:
+- Total text elements identified: 100
+- Successfully transcribed: 95
+- Unclear/uncertain: 3
+- Unable to recognize: 2
+---
+"""
+
+        with (
+            patch("google.generativeai.configure"),
+            patch("google.generativeai.GenerativeModel") as mock_model_class,
+        ):
+            mock_model = Mock()
+            mock_model.generate_content.return_value = mock_response
+            mock_model_class.return_value = mock_model
+
+            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+            result = processor.extract_text(self.test_image_path)
+
+        # Verify result contains cleaned text without stats
+        assert result["text"] == "Extracted Swedish text content."
+        assert "Recognition Statistics" not in result["text"]
+        assert result["character_count"] == len("Extracted Swedish text content.")
+
+    @patch("PIL.Image.open")
+    def test_extract_text_with_low_recognition_raises_error(self, mock_image_open):
+        """Test that extract_text raises OCRError for low recognition percentage."""
+        # Mock image
+        mock_image = Mock()
+        mock_image.mode = "RGB"
+        mock_image.size = (800, 600)
+        mock_image_open.return_value = mock_image
+
+        # Mock response with poor stats
+        mock_response = Mock()
+        mock_response.text = """Some text.
+
+---
+Recognition Statistics:
+- Total text elements identified: 100
+- Successfully transcribed: 80
+- Unclear/uncertain: 15
+- Unable to recognize: 5
+---
+"""
+
+        with (
+            patch("google.generativeai.configure"),
+            patch("google.generativeai.GenerativeModel") as mock_model_class,
+        ):
+            mock_model = Mock()
+            mock_model.generate_content.return_value = mock_response
+            mock_model_class.return_value = mock_model
+
+            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+
+            with pytest.raises(OCRError) as exc_info:
+                processor.extract_text(self.test_image_path)
+
+        assert "OCR recognition percentage below 90%: 80.0% (80/100)" in str(exc_info.value)

@@ -67,7 +67,7 @@ class TestCLI:
             )
 
             assert result.exit_code == 0
-            mock_processor_class.assert_called_once_with(api_key=self.api_key, verbose=True)
+            mock_processor_class.assert_called_once_with(provider="openai", api_key=self.api_key, model_name=None, verbose=True)
             mock_processor.process_image.assert_called_once()
             mock_processor.display_results_console.assert_called_once_with(mock_results)
 
@@ -79,14 +79,14 @@ class TestCLI:
             result = self.runner.invoke(cli, ["process", self.test_image_path])
 
             assert result.exit_code == 1
-            assert "Gemini API key is required" in result.output  # noqa: E501
+            assert "OpenAI API key is required" in result.output  # noqa: E501
 
     def test_process_command_file_not_found(self):
         """Test process command with non-existent file."""
         result = self.runner.invoke(cli, ["process", "nonexistent.jpg", "--api-key", self.api_key])
 
         assert result.exit_code == 1
-        assert "File not found" in result.output
+        assert "does not exist" in result.output
 
     def test_process_command_non_image_file(self):
         """Test process command with non-image file extension."""
@@ -207,4 +207,4 @@ class TestCLI:
 
             assert result.exit_code == 0
             # Should use API key from environment
-            mock_processor_class.assert_called_once_with(api_key="env-api-key", verbose=False)
+            mock_processor_class.assert_called_once_with(provider="openai", api_key="env-api-key", model_name=None, verbose=False)

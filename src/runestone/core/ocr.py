@@ -7,12 +7,14 @@ using various LLM providers like OpenAI or Gemini.
 
 from pathlib import Path
 from typing import Any, Dict, Optional
+import re
 
 from PIL import Image
 
 from .clients.base import BaseLLMClient
 from .clients.factory import create_llm_client
 from .exceptions import ImageProcessingError, OCRError
+from .prompts import OCR_PROMPT
 
 
 class OCRProcessor:
@@ -85,6 +87,48 @@ class OCRProcessor:
             raise ImageProcessingError(f"Image file not found: {image_path}")
         except Exception as e:
             raise ImageProcessingError(f"Failed to load image: {str(e)}")
+    def _parse_and_analyze_recognition_stats(self, extracted_text: str) -> str:
+        """
+        Parse recognition statistics from extracted text and analyze quality.
+
+        Args:
+            extracted_text: Raw text from OCR including statistics
+
+        Returns:
+            Cleaned text without statistics
+
+        Raises:
+            OCRError: If recognition percentage is below 90%
+        """
+        separator = "---\nRecognition Statistics:"
+
+        if separator in extracted_text:
+            text_part, stats_part = extracted_text.rsplit(separator, 1)
+            text_part = text_part.strip()
+        else:
+            text_part = extracted_text
+            stats_part = None
+
+        # Analyze statistics if present
+        if stats_part:
+            total_match = re.search(r"Total text elements identified: (\d+)", stats_part)
+            success_match = re.search(r"Successfully transcribed: (\d+)", stats_part)
+
+            if total_match and success_match:
+                total = int(total_match.group(1))
+                success = int(success_match.group(1))
+
+                if total > 0:
+                    percentage = (success / total) * 100
+                    if percentage < 90:
+                        raise OCRError(
+                            f"OCR recognition percentage below 90%: {percentage:.1f}% ({success}/{total})",
+                            details=stats_part.strip()
+                        )
+                # If total == 0, skip check (assume no text to recognize)
+
+        return text_part
+
 
     def extract_text(self, image_path: Path) -> Dict[str, Any]:
         """
@@ -104,76 +148,22 @@ class OCRProcessor:
             image = self._load_and_validate_image(image_path)
 
             # Prepare the prompt for OCR
-            ocr_prompt = """
-You are an expert OCR transcription assistant. Your task is to accurately transcribe all readable text from the provided image.
-
-## Core Instructions:
-1. **Exact Transcription**: Copy text exactly as it appears, preserving:
-   - Original formatting and layout
-   - All punctuation marks and special characters (å, ä, ö, é, ñ, etc.)
-   - Capitalization patterns
-   - Number formatting and mathematical notation
-
-2. **Content Inclusion**: Transcribe ALL visible text including:
-   - Main body text and headings
-   - Text within boxes, frames, or highlighted areas
-   - Exercise questions and instructions
-   - Notes, captions, and annotations
-   - Word lists and vocabulary
-   - Page numbers and headers/footers
-   - Table content and labels
-
-3. **Formatting Preservation**:
-   - Maintain paragraph breaks and line spacing
-   - Preserve indentation and bullet points
-   - Keep table structure using simple formatting
-   - Use --- or === for visual separators when present
-
-4. **Special Handling**:
-   - Underscores (_) in exercises represent blank spaces for student answers - transcribe as is
-   - For unclear text, use [unclear: best_guess] or [unclear] if no guess possible
-   - Mark different sections clearly if the layout suggests distinct areas
-
-5. **Quality Control**:
-   - Double-check numbers, dates, and proper names
-   - Verify special characters are correctly represented
-   - Ensure no text is accidentally omitted
-
-## Output Format:
-Provide the transcribed text followed by recognition statistics.
-
-If no readable text exists, respond with:
-ERROR: Could not recognize text on the page.
-
-End your transcription with:
-```
----
-Recognition Statistics: 
-- Total text elements identified: N
-- Successfully transcribed: X
-- Unclear/uncertain: Y
-- Unable to recognize: Z
----
-```
-
-## Important Notes:
-- Ignore purely decorative elements, images, and non-text graphics
-- Focus on text content only, not visual layout descriptions
-- If text appears in multiple columns, transcribe left-to-right, top-to-bottom
-- Maintain the original language of the text (don't translate)
-"""
+            ocr_prompt = OCR_PROMPT
 
             # Use the client for OCR processing
             extracted_text = self.client.extract_text_from_image(image, ocr_prompt)
 
+            # Parse and analyze recognition statistics
+            text_part = self._parse_and_analyze_recognition_stats(extracted_text)
+
             if self.verbose:
-                print(f"Successfully extracted {len(extracted_text)} characters of text")
+                print(f"Successfully extracted {len(text_part)} characters of text")
 
             return {
-                "text": extracted_text,
+                "text": text_part,
                 "image_path": str(image_path),
                 "image_size": image.size,
-                "character_count": len(extracted_text),
+                "character_count": len(text_part),
             }
 
         except OCRError:

@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from runestone.core.analyzer import ContentAnalyzer
-from runestone.core.exceptions import ContentAnalysisError, LLMError
+from runestone.core.exceptions import APIKeyError, ContentAnalysisError, LLMError
 
 
 class TestContentAnalyzer:
@@ -23,10 +23,11 @@ class TestContentAnalyzer:
     @patch("google.generativeai.GenerativeModel")
     def test_init_success(self, mock_model, mock_configure):
         """Test successful initialization."""
-        analyzer = ContentAnalyzer(self.api_key, verbose=True)
+        analyzer = ContentAnalyzer(provider="gemini", api_key=self.api_key, verbose=True)
 
         mock_configure.assert_called_once_with(api_key=self.api_key)
-        mock_model.assert_called_once()
+        # GeminiClient creates two models (OCR and analysis), so expect 2 calls
+        assert mock_model.call_count == 2
         assert analyzer.verbose is True
 
     @patch("google.generativeai.configure")
@@ -34,8 +35,8 @@ class TestContentAnalyzer:
         """Test initialization with invalid API key."""
         mock_configure.side_effect = Exception("Invalid API key")
 
-        with pytest.raises(LLMError) as exc_info:
-            ContentAnalyzer(self.api_key)
+        with pytest.raises(APIKeyError) as exc_info:
+            ContentAnalyzer(provider="gemini", api_key=self.api_key)
 
         assert "Failed to configure Gemini API" in str(exc_info.value)
 
@@ -69,7 +70,7 @@ class TestContentAnalyzer:
         mock_model.generate_content.return_value = mock_response
         mock_model_class.return_value = mock_model
 
-        analyzer = ContentAnalyzer(self.api_key)
+        analyzer = ContentAnalyzer(provider="gemini", api_key=self.api_key)
         result = analyzer.analyze_content(self.sample_text)
 
         # Verify result structure
@@ -102,7 +103,7 @@ class TestContentAnalyzer:
         mock_model.generate_content.return_value = mock_response
         mock_model_class.return_value = mock_model
 
-        analyzer = ContentAnalyzer(self.api_key)
+        analyzer = ContentAnalyzer(provider="gemini", api_key=self.api_key)
         result = analyzer.analyze_content(self.sample_text)
 
         # Should get fallback analysis
@@ -132,7 +133,7 @@ class TestContentAnalyzer:
         mock_model.generate_content.return_value = mock_response
         mock_model_class.return_value = mock_model
 
-        analyzer = ContentAnalyzer(self.api_key)
+        analyzer = ContentAnalyzer(provider="gemini", api_key=self.api_key)
 
         with pytest.raises(ContentAnalysisError) as exc_info:
             analyzer.analyze_content(self.sample_text)
@@ -150,7 +151,7 @@ class TestContentAnalyzer:
         mock_model.generate_content.return_value = mock_response
         mock_model_class.return_value = mock_model
 
-        analyzer = ContentAnalyzer(self.api_key)
+        analyzer = ContentAnalyzer(provider="gemini", api_key=self.api_key)
 
         with pytest.raises(ContentAnalysisError) as exc_info:
             analyzer.analyze_content(self.sample_text)
@@ -163,7 +164,7 @@ class TestContentAnalyzer:
         """Test resource finding when search is not needed."""
         analysis = {"search_needed": {"should_search": False, "query_suggestions": []}}
 
-        analyzer = ContentAnalyzer(self.api_key)
+        analyzer = ContentAnalyzer(provider="gemini", api_key=self.api_key)
         resources = analyzer.find_learning_resources(analysis)
 
         assert resources == []
@@ -193,7 +194,7 @@ class TestContentAnalyzer:
         mock_model.generate_content.return_value = mock_search_response
         mock_model_class.return_value = mock_model
 
-        analyzer = ContentAnalyzer(self.api_key)
+        analyzer = ContentAnalyzer(provider="gemini", api_key=self.api_key)
         resources = analyzer.find_learning_resources(analysis)
 
         # Should find resources or return defaults
@@ -211,7 +212,7 @@ class TestContentAnalyzer:
         """Test default resource generation."""
         analysis = {"grammar_focus": {"topic": "Swedish verbs"}}
 
-        analyzer = ContentAnalyzer(self.api_key)
+        analyzer = ContentAnalyzer(provider="gemini", api_key=self.api_key)
         resources = analyzer._get_default_resources(analysis)
 
         assert isinstance(resources, list)
@@ -236,7 +237,7 @@ class TestContentAnalyzer:
             patch("google.generativeai.configure"),
             patch("google.generativeai.GenerativeModel"),
         ):
-            analyzer = ContentAnalyzer(self.api_key)
+            analyzer = ContentAnalyzer(provider="gemini", api_key=self.api_key)
 
         result = analyzer._fallback_analysis("test text", "raw response")
 
