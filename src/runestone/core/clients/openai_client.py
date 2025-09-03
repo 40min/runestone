@@ -12,19 +12,20 @@ from openai import OpenAI
 from PIL import Image
 
 from ..exceptions import APIKeyError, LLMError, OCRError
+from ..logging_config import get_logger
 from .base import BaseLLMClient
 
 
 class OpenAIClient(BaseLLMClient):
     """OpenAI implementation of the LLM client interface."""
 
-    def __init__(self, api_key: str, model_name: str = "gpt-4o", verbose: bool = False):
+    def __init__(self, api_key: str, model_name: str = "gpt-4o-mini", verbose: bool = False):
         """
         Initialize the OpenAI client.
 
         Args:
             api_key: OpenAI API key
-            model_name: Name of the OpenAI model to use (default: gpt-4o)
+            model_name: Name of the OpenAI model to use (default: gpt-4o-mini)
             verbose: Enable verbose logging
         """
         super().__init__(api_key, verbose)
@@ -76,7 +77,8 @@ class OpenAIClient(BaseLLMClient):
         """
         try:
             if self.verbose:
-                print("Sending image to OpenAI for OCR processing...")
+                logger = get_logger(__name__)
+                logger.info("Sending image to OpenAI for OCR processing...")
 
             # Convert image to base64
             image_b64 = self._image_to_base64(image)
@@ -115,7 +117,8 @@ class OpenAIClient(BaseLLMClient):
                 raise OCRError("Extracted text is too short - may not be a valid textbook page")
 
             if self.verbose:
-                print(f"Successfully extracted {len(extracted_text)} characters of text")
+                logger = get_logger(__name__)
+                logger.info(f"Successfully extracted {len(extracted_text)} characters of text")
 
             return extracted_text
 
@@ -139,7 +142,8 @@ class OpenAIClient(BaseLLMClient):
         """
         try:
             if self.verbose:
-                print("Analyzing content with OpenAI...")
+                logger = get_logger(__name__)
+                logger.info("Analyzing content with OpenAI...")
 
             response = self.client.chat.completions.create(
                 model=self._model_name,
@@ -174,7 +178,8 @@ class OpenAIClient(BaseLLMClient):
         """
         try:
             if self.verbose:
-                print("Generating resource suggestions with OpenAI...")
+                logger = get_logger(__name__)
+                logger.info("Generating resource suggestions with OpenAI...")
 
             # Enhanced prompt to generate realistic resource suggestions
             enhanced_prompt = f"""

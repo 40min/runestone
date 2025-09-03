@@ -11,6 +11,10 @@ from typing import Any, Dict, List, Optional
 from .clients.base import BaseLLMClient
 from .clients.factory import create_llm_client
 from .exceptions import ContentAnalysisError
+from .logging_config import get_logger
+
+# Get logger for this module
+logger = get_logger(__name__)
 
 
 class ContentAnalyzer:
@@ -65,7 +69,9 @@ class ContentAnalyzer:
             textbook page and provide a structured learning guide.
 
             TEXT TO ANALYZE:
+            ```
             {extracted_text}
+            ```
 
             Please provide your analysis in the following JSON format:
 
@@ -114,7 +120,7 @@ class ContentAnalyzer:
             """
 
             if self.verbose:
-                print(f"Analyzing content with {self.client.provider_name}...")
+                logger.info(f"Analyzing content with {self.client.provider_name}...")
 
             response_text = self.client.analyze_content(analysis_prompt)
 
@@ -137,14 +143,14 @@ class ContentAnalyzer:
                         raise ContentAnalysisError(f"Missing required field: {field}")
 
                 if self.verbose:
-                    print(f"Analysis completed - found {len(analysis.get('vocabulary', []))} " "vocabulary items")
+                    logger.info(f"Analysis completed - found {len(analysis.get('vocabulary', []))} " "vocabulary items")
 
                 return analysis
 
             except json.JSONDecodeError:
                 # If JSON parsing fails, try to extract content manually
                 if self.verbose:
-                    print("JSON parsing failed, attempting fallback analysis...")
+                    logger.warning("JSON parsing failed, attempting fallback analysis...")
 
                 return self._fallback_analysis(extracted_text, response_text)
 
@@ -213,7 +219,7 @@ class ContentAnalyzer:
             # Perform searches using the LLM's search capability
             for query in search_queries[:2]:  # Limit to 2 searches
                 if self.verbose:
-                    print(f"Searching for resources: {query}")
+                    logger.info(f"Searching for resources: {query}")
 
                 search_prompt = f"""
                 Search for high-quality Swedish language learning resources related to:
@@ -268,7 +274,7 @@ class ContentAnalyzer:
 
                 except Exception as e:
                     if self.verbose:
-                        print(f"Search failed for query '{query}': {e}")
+                        logger.warning(f"Search failed for query '{query}': {e}")
                     continue
 
             # If no resources found, provide default high-quality resources
@@ -279,7 +285,8 @@ class ContentAnalyzer:
 
         except Exception as e:
             if self.verbose:
-                print(f"Resource search failed: {e}")
+                logger = get_logger(__name__)
+                logger.error(f"Resource search failed: {e}")
             return self._get_default_resources(analysis)
 
     def _get_default_resources(self, analysis: Dict[str, Any]) -> List[Dict[str, str]]:

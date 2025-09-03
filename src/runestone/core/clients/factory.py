@@ -62,7 +62,7 @@ def create_llm_client(
     # Create client
     if provider == "openai":
         if model_name is None:
-            model_name = os.getenv("OPENAI_MODEL", "gpt-4o")
+            model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         return OpenAIClient(api_key=api_key, model_name=model_name, verbose=verbose)
 
     elif provider == "gemini":

@@ -74,7 +74,7 @@ runestone process /path/to/textbook_page.jpg
 runestone process --provider gemini /path/to/textbook_page.jpg
 
 # Use specific OpenAI model
-runestone process --provider openai --model gpt-4o /path/to/textbook_page.jpg
+runestone process --provider openai --model gpt-4o-mini /path/to/textbook_page.jpg
 
 # With verbose output
 runestone process /path/to/textbook_page.jpg --verbose
@@ -234,7 +234,7 @@ tests/
 
 **OpenAI Configuration:**
 - `OPENAI_API_KEY`: Your OpenAI API key (required for OpenAI provider)
-- `OPENAI_MODEL`: Model to use (default: `gpt-4o`)
+- `OPENAI_MODEL`: Model to use (default: `gpt-4o-mini`)
 
 **Gemini Configuration:**
 - `GEMINI_API_KEY`: Your Google Gemini API key (required for Gemini provider)
@@ -256,7 +256,7 @@ LLM_PROVIDER=openai
 
 # OpenAI settings
 OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-4o
+OPENAI_MODEL=gpt-4o-mini
 
 # Gemini settings (if using Gemini)
 GEMINI_API_KEY=your_gemini_api_key_here

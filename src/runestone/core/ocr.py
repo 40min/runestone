@@ -14,6 +14,7 @@ from PIL import Image
 from .clients.base import BaseLLMClient
 from .clients.factory import create_llm_client
 from .exceptions import ImageProcessingError, OCRError
+from .logging_config import get_logger
 from .prompts import OCR_PROMPT
 
 
@@ -79,7 +80,8 @@ class OCRProcessor:
                 # Resize large images to prevent API issues
                 image.thumbnail((4096, 4096), Image.Resampling.LANCZOS)
                 if self.verbose:
-                    print(f"Resized large image to {image.size}")
+                    logger = get_logger(__name__)
+                    logger.info(f"Resized large image to {image.size}")
 
             return image
 
@@ -157,7 +159,8 @@ class OCRProcessor:
             text_part = self._parse_and_analyze_recognition_stats(extracted_text)
 
             if self.verbose:
-                print(f"Successfully extracted {len(text_part)} characters of text")
+                logger = get_logger(__name__)
+                logger.info(f"Successfully extracted {len(text_part)} characters of text")
 
             return {
                 "text": text_part,

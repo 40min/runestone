@@ -55,7 +55,7 @@ def cli():
 @click.option(
     "--model",
     help=(
-        "Model name to use. If not provided, uses provider defaults (gpt-4o for OpenAI, "
+        "Model name to use. If not provided, uses provider defaults (gpt-4o-mini for OpenAI, "
         "gemini-2.0-flash-exp for Gemini). Can be set via OPENAI_MODEL environment "
         "variable for OpenAI."
     ),

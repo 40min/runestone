@@ -9,6 +9,7 @@ import google.generativeai as genai
 from PIL import Image
 
 from ..exceptions import APIKeyError, LLMError, OCRError
+from ..logging_config import get_logger
 from .base import BaseLLMClient
 
 
@@ -75,7 +76,8 @@ class GeminiClient(BaseLLMClient):
         """
         try:
             if self.verbose:
-                print("Sending image to Gemini for OCR processing...")
+                logger = get_logger(__name__)
+                logger.info("Sending image to Gemini for OCR processing...")
 
             response = self.ocr_model.generate_content([prompt, image])
 
@@ -92,7 +94,8 @@ class GeminiClient(BaseLLMClient):
                 raise OCRError("Extracted text is too short - may not be a valid textbook page")
 
             if self.verbose:
-                print(f"Successfully extracted {len(extracted_text)} characters of text")
+                logger = get_logger(__name__)
+                logger.info(f"Successfully extracted {len(extracted_text)} characters of text")
 
             return extracted_text
 
@@ -116,7 +119,8 @@ class GeminiClient(BaseLLMClient):
         """
         try:
             if self.verbose:
-                print("Analyzing content with Gemini...")
+                logger = get_logger(__name__)
+                logger.info("Analyzing content with Gemini...")
 
             response = self.analysis_model.generate_content(prompt)
 
@@ -143,7 +147,8 @@ class GeminiClient(BaseLLMClient):
         """
         try:
             if self.verbose:
-                print("Searching for resources with Gemini...")
+                logger = get_logger(__name__)
+                logger.info("Searching for resources with Gemini...")
 
             response = self.analysis_model.generate_content(prompt)
 
