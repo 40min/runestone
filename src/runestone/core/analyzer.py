@@ -8,10 +8,12 @@ grammar rules, vocabulary, and generate learning resources.
 import json
 from typing import Any, Dict, List, Optional
 
+from runestone.core import console
 from runestone.core.clients.base import BaseLLMClient
 from runestone.core.clients.factory import create_llm_client
 from runestone.core.console import get_console
 from runestone.core.exceptions import ContentAnalysisError
+from runestone.core.prompts import ANALYSIS_PROMPT_TEMPLATE, SEARCH_PROMPT_TEMPLATE
 
 
 class ContentAnalyzer:
@@ -62,60 +64,7 @@ class ContentAnalyzer:
             ContentAnalysisError: If content analysis fails
         """
         try:
-            analysis_prompt = f"""
-            You are a Swedish language learning expert. Analyze this text from a Swedish
-            textbook page and provide a structured learning guide.
-
-            TEXT TO ANALYZE:
-            ```
-            {extracted_text}
-            ```
-
-            Please provide your analysis in the following JSON format:
-
-            {{
-                "grammar_focus": {{
-                    "has_explicit_rules": boolean,
-                    "topic": "string describing the main grammatical topic",
-                    "explanation": "English explanation of the grammar rule or pattern"
-                }},
-                "vocabulary": [
-                    {{
-                        "swedish": "Swedish word or phrase",
-                        "english": "English translation"
-                    }}
-                ],
-                "core_topics": [
-                    "list of main topics covered on this page"
-                ],
-                "search_needed": {{
-                    "should_search": boolean,
-                    "query_suggestions": ["list of search queries for finding additional resources"]
-                }}
-            }}
-
-            INSTRUCTIONS:
-            1. For grammar_focus:
-               - Set has_explicit_rules to true if there's a clear grammar rule box/section
-               - Set has_explicit_rules to false if you need to infer the grammar from exercises
-               - Provide a clear English explanation of the grammatical concept
-
-            2. For vocabulary:
-               - Extract key Swedish words, phrases, and important terms
-               - Prioritize nouns, verbs, adjectives, and useful phrases
-               - Provide accurate English translations
-               - Include 10-20 most important items
-
-            3. For core_topics:
-               - Identify 2-4 main learning topics from this page
-               - Use clear, descriptive terms
-
-            4. For search_needed:
-               - Set should_search to true if additional resources would be helpful
-               - Suggest specific search queries focusing on the identified topics
-
-            Return ONLY valid JSON, no additional text or formatting.
-            """
+            analysis_prompt = ANALYSIS_PROMPT_TEMPLATE.format(extracted_text=extracted_text)
 
             if self.verbose:
                 self.console.print(f"Analyzing content with {self.client.provider_name}...")
@@ -212,26 +161,15 @@ class ContentAnalyzer:
                 search_queries = [f"Swedish {topic} grammar explanation" for topic in core_topics[:2]]
 
             if not search_queries:
-                search_queries = ["Swedish grammar basics"]
+                self.console.print("[yellow]Warning:[/yellow] No search queries generated")
+                return resources
 
             # Perform searches using the LLM's search capability
             for query in search_queries[:2]:  # Limit to 2 searches
                 if self.verbose:
                     self.console.print(f"Searching for resources: {query}")
 
-                search_prompt = f"""
-                Search for high-quality Swedish language learning resources related to:
-                {query}
-
-                PRIORITY SOURCES (prefer these if available):
-                1. svenska.se
-                2. clozemaster.com/blog/
-                3. worddive.com/en/grammar/swedish-grammar/
-                4. kielibuusti.fi/en/learn-swedish/
-                5. swedishpod101.com/blog/
-
-                Find 2-3 relevant, high-quality educational resources. Use the google_search tool.
-                """
+                search_prompt = SEARCH_PROMPT_TEMPLATE.format(query=query)
 
                 try:
                     response_text = self.client.search_resources(search_prompt)

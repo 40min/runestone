@@ -62,3 +62,74 @@ Recognition Statistics:
 - If text appears in multiple columns, transcribe left-to-right, top-to-bottom
 - Maintain the original language of the text (don't translate)
 """
+
+ANALYSIS_PROMPT_TEMPLATE = """
+You are a Swedish language learning expert. Analyze this text from a Swedish
+textbook page and provide a structured learning guide.
+
+TEXT TO ANALYZE:
+```
+{extracted_text}
+```
+
+Please provide your analysis in the following JSON format:
+
+{{
+    "grammar_focus": {{
+        "has_explicit_rules": boolean,
+        "topic": "string describing the main grammatical topic",
+        "explanation": "English explanation of the grammar rule or pattern"
+    }},
+    "vocabulary": [
+        {{
+            "swedish": "Swedish word or phrase",
+            "english": "English translation"
+        }}
+    ],
+    "core_topics": [
+        "list of main topics covered on this page"
+    ],
+    "search_needed": {{
+        "should_search": boolean,
+        "query_suggestions": ["list of search queries for finding additional resources"]
+    }}
+}}
+
+INSTRUCTIONS:
+1. For grammar_focus:
+   - Set has_explicit_rules to true if there's a clear grammar rule box/section
+   - Set has_explicit_rules to false if you need to infer the grammar from exercises
+   - Provide a clear English explanation of the grammatical concept
+
+2. For vocabulary:
+   - Extract key Swedish words, phrases, and important terms
+   - Prioritize nouns, verbs, adjectives, and useful phrases
+   - Provide accurate English translations
+   - Include 10-20 most important items
+
+3. For core_topics:
+   - Identify 2-4 main learning topics from this page
+   - Use clear, descriptive terms
+
+4. For search_needed:
+	- Set should_search = true if the provided page lacks grammar explanations and only contains exercises, examples, or incomplete information.
+	- If should_search = true, generate a list of specific and targeted search queries that would help find reliable grammar explanations for the identified topic(s).
+	- Queries should be concise, precise, and focus on the exact grammar concept(s) missing from the resource.
+	- If explanations are already sufficient, set should_search = false and do not generate queries.
+
+Return ONLY valid JSON, no additional text or formatting.
+"""
+
+SEARCH_PROMPT_TEMPLATE = """
+Search for high-quality Swedish language learning resources related to:
+{query}
+
+PRIORITY SOURCES (prefer these if available):
+1. svenska.se
+2. clozemaster.com/blog/
+3. worddive.com/en/grammar/swedish-grammar/
+4. kielibuusti.fi/en/learn-swedish/
+5. swedishpod101.com/blog/
+
+Find 2-3 relevant, high-quality educational resources. Use the google_search tool.
+"""

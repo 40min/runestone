@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from runestone.core.analyzer import ContentAnalyzer
+from runestone.core.console import setup_console
 from runestone.core.exceptions import APIKeyError, ContentAnalysisError, LLMError
 
 
@@ -16,6 +17,7 @@ class TestContentAnalyzer:
 
     def setup_method(self):
         """Set up test fixtures."""
+        setup_console()
         self.api_key = "test-api-key"
         self.sample_text = "Hej, jag heter Anna. Hur mår du?"
 
