@@ -7,24 +7,25 @@ interface, handling OCR and content analysis using Google's Gemini API.
 
 import google.generativeai as genai
 from PIL import Image
+from rich.console import Console
 
 from ..exceptions import APIKeyError, LLMError, OCRError
-from ..logging_config import get_logger
 from .base import BaseLLMClient
 
 
 class GeminiClient(BaseLLMClient):
     """Gemini implementation of the LLM client interface."""
 
-    def __init__(self, api_key: str, verbose: bool = False):
+    def __init__(self, console: Console, api_key: str, verbose: bool = False):
         """
         Initialize the Gemini client.
 
         Args:
+            console: Rich Console instance for output
             api_key: Google Gemini API key
             verbose: Enable verbose logging
         """
-        super().__init__(api_key, verbose)
+        super().__init__(console, api_key, verbose)
         self._configure_client()
 
     def _configure_client(self) -> None:
@@ -76,8 +77,7 @@ class GeminiClient(BaseLLMClient):
         """
         try:
             if self.verbose:
-                logger = get_logger(__name__)
-                logger.info("Sending image to Gemini for OCR processing...")
+                self.console.print("Sending image to Gemini for OCR processing...")
 
             response = self.ocr_model.generate_content([prompt, image])
 
@@ -94,8 +94,7 @@ class GeminiClient(BaseLLMClient):
                 raise OCRError("Extracted text is too short - may not be a valid textbook page")
 
             if self.verbose:
-                logger = get_logger(__name__)
-                logger.info(f"Successfully extracted {len(extracted_text)} characters of text")
+                self.console.print(f"Successfully extracted {len(extracted_text)} characters of text")
 
             return extracted_text
 
@@ -119,8 +118,7 @@ class GeminiClient(BaseLLMClient):
         """
         try:
             if self.verbose:
-                logger = get_logger(__name__)
-                logger.info("Analyzing content with Gemini...")
+                self.console.print("Analyzing content with Gemini...")
 
             response = self.analysis_model.generate_content(prompt)
 
@@ -147,8 +145,7 @@ class GeminiClient(BaseLLMClient):
         """
         try:
             if self.verbose:
-                logger = get_logger(__name__)
-                logger.info("Searching for resources with Gemini...")
+                self.console.print("Searching for resources with Gemini...")
 
             response = self.analysis_model.generate_content(prompt)
 

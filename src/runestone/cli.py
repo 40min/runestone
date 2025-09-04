@@ -11,16 +11,17 @@ from typing import Optional
 
 import click
 from dotenv import load_dotenv
-from rich.console import Console
 
 from .core.clients.factory import get_available_providers, get_default_provider
+from .core.console_config import setup_console
 from .core.exceptions import RunestoneError
 from .core.processor import RunestoneProcessor
 
 # Load environment variables from .env file
 load_dotenv()
 
-console = Console()
+# Setup console
+console = setup_console()
 
 
 @click.group()
@@ -136,12 +137,12 @@ def process(
             )
 
         if verbose:
-            console.print(f"[blue]Info:[/blue] Processing image: {image_path}")
-            console.print(f"[blue]Info:[/blue] Provider: {provider}")
-            console.print(f"[blue]Info:[/blue] Output format: {output_format}")
+            console.print(f"Processing image: {image_path}")
+            console.print(f"Provider: {provider}")
+            console.print(f"Output format: {output_format}")
 
         # Initialize processor
-        processor = RunestoneProcessor(provider=provider, api_key=api_key, model_name=model, verbose=verbose)
+        processor = RunestoneProcessor(console=console, provider=provider, api_key=api_key, model_name=model, verbose=verbose)
 
         # Process the image
         result = processor.process_image(image_path)

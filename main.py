@@ -1,13 +1,12 @@
-from src.runestone.core.logging_config import setup_logging, get_logger
+from runestone.cli import process
+from src.runestone.core.console_config import setup_console
 
-# Setup logging
-setup_logging()
-
-# Get logger for this module
-logger = get_logger(__name__)
+# Setup console
+console = setup_console()
 
 def main():
-    logger.info("Hello from runestone!")
+    console.print("Hello from runestone!")
+    process("/Users/40min/Downloads/ref.jpeg")
 
 
 if __name__ == "__main__":

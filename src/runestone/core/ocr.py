@@ -10,11 +10,11 @@ from typing import Any, Dict, Optional
 import re
 
 from PIL import Image
+from rich.console import Console
 
 from .clients.base import BaseLLMClient
 from .clients.factory import create_llm_client
 from .exceptions import ImageProcessingError, OCRError
-from .logging_config import get_logger
 from .prompts import OCR_PROMPT
 
 
@@ -23,6 +23,7 @@ class OCRProcessor:
 
     def __init__(
         self,
+        console: Console,
         client: Optional[BaseLLMClient] = None,
         provider: Optional[str] = None,
         api_key: Optional[str] = None,
@@ -33,6 +34,7 @@ class OCRProcessor:
         Initialize the OCR processor.
 
         Args:
+            console: Rich Console instance for output
             client: Pre-configured LLM client (if provided, other params are ignored)
             provider: LLM provider name ("openai" or "gemini")
             api_key: API key for the provider
@@ -40,6 +42,7 @@ class OCRProcessor:
             verbose: Enable verbose logging
         """
         self.verbose = verbose
+        self.console = console
 
         if client is not None:
             self.client = client
@@ -80,8 +83,7 @@ class OCRProcessor:
                 # Resize large images to prevent API issues
                 image.thumbnail((4096, 4096), Image.Resampling.LANCZOS)
                 if self.verbose:
-                    logger = get_logger(__name__)
-                    logger.info(f"Resized large image to {image.size}")
+                    self.console.print(f"Resized large image to {image.size}")
 
             return image
 
@@ -159,8 +161,7 @@ class OCRProcessor:
             text_part = self._parse_and_analyze_recognition_stats(extracted_text)
 
             if self.verbose:
-                logger = get_logger(__name__)
-                logger.info(f"Successfully extracted {len(text_part)} characters of text")
+                self.console.print(f"Successfully extracted {len(text_part)} characters of text")
 
             return {
                 "text": text_part,

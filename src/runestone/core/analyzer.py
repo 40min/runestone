@@ -8,13 +8,11 @@ grammar rules, vocabulary, and generate learning resources.
 import json
 from typing import Any, Dict, List, Optional
 
+from rich.console import Console
+
 from .clients.base import BaseLLMClient
 from .clients.factory import create_llm_client
 from .exceptions import ContentAnalysisError
-from .logging_config import get_logger
-
-# Get logger for this module
-logger = get_logger(__name__)
 
 
 class ContentAnalyzer:
@@ -22,6 +20,7 @@ class ContentAnalyzer:
 
     def __init__(
         self,
+        console: Console,
         client: Optional[BaseLLMClient] = None,
         provider: Optional[str] = None,
         api_key: Optional[str] = None,
@@ -32,6 +31,7 @@ class ContentAnalyzer:
         Initialize the content analyzer.
 
         Args:
+            console: Rich Console instance for output
             client: Pre-configured LLM client (if provided, other params are ignored)
             provider: LLM provider name ("openai" or "gemini")
             api_key: API key for the provider
@@ -39,6 +39,7 @@ class ContentAnalyzer:
             verbose: Enable verbose logging
         """
         self.verbose = verbose
+        self.console = console
 
         if client is not None:
             self.client = client
@@ -120,7 +121,7 @@ class ContentAnalyzer:
             """
 
             if self.verbose:
-                logger.info(f"Analyzing content with {self.client.provider_name}...")
+                self.console.print(f"Analyzing content with {self.client.provider_name}...")
 
             response_text = self.client.analyze_content(analysis_prompt)
 
@@ -143,14 +144,14 @@ class ContentAnalyzer:
                         raise ContentAnalysisError(f"Missing required field: {field}")
 
                 if self.verbose:
-                    logger.info(f"Analysis completed - found {len(analysis.get('vocabulary', []))} " "vocabulary items")
+                    self.console.print(f"Analysis completed - found {len(analysis.get('vocabulary', []))} vocabulary items")
 
                 return analysis
 
             except json.JSONDecodeError:
                 # If JSON parsing fails, try to extract content manually
                 if self.verbose:
-                    logger.warning("JSON parsing failed, attempting fallback analysis...")
+                    self.console.print("[yellow]Warning:[/yellow] JSON parsing failed, attempting fallback analysis...")
 
                 return self._fallback_analysis(extracted_text, response_text)
 
@@ -219,7 +220,7 @@ class ContentAnalyzer:
             # Perform searches using the LLM's search capability
             for query in search_queries[:2]:  # Limit to 2 searches
                 if self.verbose:
-                    logger.info(f"Searching for resources: {query}")
+                    self.console.print(f"Searching for resources: {query}")
 
                 search_prompt = f"""
                 Search for high-quality Swedish language learning resources related to:
@@ -274,7 +275,7 @@ class ContentAnalyzer:
 
                 except Exception as e:
                     if self.verbose:
-                        logger.warning(f"Search failed for query '{query}': {e}")
+                        self.console.print(f"[yellow]Warning:[/yellow] Search failed for query '{query}': {e}")
                     continue
 
             # If no resources found, provide default high-quality resources
@@ -285,8 +286,7 @@ class ContentAnalyzer:
 
         except Exception as e:
             if self.verbose:
-                logger = get_logger(__name__)
-                logger.error(f"Resource search failed: {e}")
+                self.console.print(f"[red]Error:[/red] Resource search failed: {e}")
             return self._get_default_resources(analysis)
 
     def _get_default_resources(self, analysis: Dict[str, Any]) -> List[Dict[str, str]]:
