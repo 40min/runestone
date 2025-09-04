@@ -136,120 +136,57 @@ class ContentAnalyzer:
             "raw_response": raw_response,
         }
 
-    def find_learning_resources(self, analysis: Dict[str, Any]) -> List[Dict[str, str]]:
+    def find_extra_learning_info(self, analysis: Dict[str, Any]) -> str:
         """
-        Find relevant learning resources using web search.
+        Find extra learning information using web search and compile educational material.
 
         Args:
             analysis: Content analysis results
 
         Returns:
-            List of relevant learning resources with URLs
+            Compiled educational material from web search as a string
         """
-        resources = []
-
         if not analysis.get("search_needed", {}).get("should_search", False):
-            return resources
+            return ""
 
         try:
-            # Get search queries from analysis
+            # Get search queries and core topics from analysis
             search_queries = analysis.get("search_needed", {}).get("query_suggestions", [])
             core_topics = analysis.get("core_topics", [])
 
-            if not search_queries and core_topics:
-                # Generate search queries from topics
-                search_queries = [f"Swedish {topic} grammar explanation" for topic in core_topics[:2]]
+            if not search_queries and not core_topics:
+                self.console.print("[yellow]Warning:[/yellow] No search queries or topics generated")
+                return ""
 
-            if not search_queries:
-                self.console.print("[yellow]Warning:[/yellow] No search queries generated")
-                return resources
+            if self.verbose:
+                self.console.print(f"Searching for educational material on topics: {', '.join(core_topics)} and queries: {', '.join(search_queries)}")
 
-            # Perform searches using the LLM's search capability
-            for query in search_queries[:2]:  # Limit to 2 searches
+
+            # Use combined queries in one search prompt
+            search_prompt = SEARCH_PROMPT_TEMPLATE.format(                
+                core_topics=", ".join(core_topics[:3]),
+                query_suggestions=", ".join(search_queries[:4])
+            )
+
+            try:
+                response_text = self.client.search_resources(search_prompt)
+
+                if response_text:
+                    # Return the LLM response as is
+                    return response_text
+
+                # Fallback with simple message if no response
+                return "No extra learning info available at this time."
+
+            except Exception as e:
                 if self.verbose:
-                    self.console.print(f"Searching for resources: {query}")
-
-                search_prompt = SEARCH_PROMPT_TEMPLATE.format(query=query)
-
-                try:
-                    response_text = self.client.search_resources(search_prompt)
-
-                    if response_text and "http" in response_text:
-                        # Extract URLs from the response (basic implementation)
-                        lines = response_text.split("\n")
-                        for line in lines:
-                            if "http" in line and any(
-                                domain in line
-                                for domain in [
-                                    "svenska.se",
-                                    "clozemaster.com",
-                                    "worddive.com",
-                                    "kielibuusti.fi",
-                                    "swedishpod101.com",
-                                ]
-                            ):
-                                # Extract URL and title (simplified)
-                                url_start = line.find("http")
-                                url_end = line.find(" ", url_start)
-                                if url_end == -1:
-                                    url = line[url_start:].strip()
-                                else:
-                                    url = line[url_start:url_end].strip()
-
-                                title = query.replace("Swedish ", "").title()
-                                resources.append(
-                                    {
-                                        "title": f"Swedish {title} - Learning Resource",
-                                        "url": url,
-                                        "description": f"Educational resource for {query}",
-                                    }
-                                )
-
-                                if len(resources) >= 3:
-                                    break
-
-                except Exception as e:
-                    if self.verbose:
-                        self.console.print(f"[yellow]Warning:[/yellow] Search failed for query '{query}': {e}")
-                    continue
-
-            # If no resources found, provide default high-quality resources
-            if not resources:
-                resources = self._get_default_resources(analysis)
-
-            return resources[:3]  # Return max 3 resources
+                    self.console.print(f"[yellow]Warning:[/yellow] Search failed: {e}")
+                return f"Search failed: {str(e)}"
 
         except Exception as e:
             if self.verbose:
                 self.console.print(f"[red]Error:[/red] Resource search failed: {e}")
-            return self._get_default_resources(analysis)
+            return f"Resource search failed: {str(e)}"
 
-    def _get_default_resources(self, analysis: Dict[str, Any]) -> List[Dict[str, str]]:
-        """
-        Get default high-quality Swedish learning resources.
+    
 
-        Args:
-            analysis: Content analysis results
-
-        Returns:
-            List of default learning resources
-        """
-        grammar_topic = analysis.get("grammar_focus", {}).get("topic", "grammar")
-
-        return [
-            {
-                "title": "Svenska.se - Swedish Grammar Reference",
-                "url": "https://svenska.se/tre/sprak/grammatik/",
-                "description": "Official Swedish grammar reference and explanations",
-            },
-            {
-                "title": "Swedish Grammar Basics - Clozemaster",
-                "url": "https://www.clozemaster.com/blog/swedish-grammar/",
-                "description": f"Comprehensive guide to Swedish {grammar_topic}",  # noqa: E501
-            },
-            {
-                "title": "Swedish Language Learning - WordDive",
-                "url": "https://worddive.com/en/grammar/swedish-grammar/",
-                "description": "Interactive Swedish grammar lessons and exercises",  # noqa: E501
-            },
-        ]

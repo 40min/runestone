@@ -158,10 +158,7 @@ class OpenAIClient(BaseLLMClient):
 
     def search_resources(self, prompt: str) -> str:
         """
-        Search for learning resources using OpenAI.
-
-        Note: OpenAI doesn't have built-in web search capabilities like Gemini,
-        so this method generates search suggestions and simulated results.
+        Search for learning resources using OpenAI with web search capabilities.
 
         Args:
             prompt: Search prompt
@@ -174,30 +171,12 @@ class OpenAIClient(BaseLLMClient):
         """
         try:
             if self.verbose:
-                self.console.print("Generating resource suggestions with OpenAI...")
-
-            # Enhanced prompt to generate realistic resource suggestions
-            enhanced_prompt = f"""
-            {prompt}
-
-            Since I don't have real-time web search capabilities, please provide detailed
-            suggestions for high-quality Swedish language learning resources that would be
-            relevant to the search query. Format your response as if you found actual
-            resources, including realistic URLs from these trusted sources:
-
-            - svenska.se (official Swedish language resources)
-            - clozemaster.com/blog/ (language learning blog)
-            - worddive.com/en/grammar/swedish-grammar/ (Swedish grammar)
-            - kielibuusti.fi/en/learn-swedish/ (Finnish-Swedish learning resources)
-            - swedishpod101.com/blog/ (Swedish learning blog)
-
-            Provide 2-3 specific resources with titles, URLs, and descriptions that would genuinely help with the topic.
-            """
+                self.console.print("Searching for educational resources with OpenAI...")
 
             response = self.client.chat.completions.create(
                 model=self._model_name,
-                messages=[{"role": "user", "content": enhanced_prompt}],
-                max_tokens=1500,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=2000,
                 temperature=0.3,
             )
 

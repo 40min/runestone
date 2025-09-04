@@ -101,21 +101,23 @@ class RunestoneProcessor:
                 vocab_count = len(analysis.get("vocabulary", []))
                 self.console.print(f"[green]✓[/green] Found {vocab_count} vocabulary items")  # noqa: E501
 
-            # Step 3: Find learning resources
+            # Step 3: Find learning extra learning info
             if self.verbose:
                 self.console.print("[blue]Step 3:[/blue] Finding learning resources...")
 
-            resources = self.content_analyzer.find_learning_resources(analysis)
+            extra_info = self.content_analyzer.find_extra_learning_info(analysis)
 
             if self.verbose:
-                resource_count = len(resources)
-                self.console.print(f"[green]✓[/green] Found {resource_count} learning resources")  # noqa: E501
+                if extra_info:
+                    self.console.print(f"[green]✓[/green] Found extra learning information")
+                else:
+                    self.console.print(f"[yellow]⚠[/yellow] No extra learning information found")
 
             # Compile complete results
             results = {
                 "ocr_result": ocr_result,
                 "analysis": analysis,
-                "resources": resources,
+                "extra_info": extra_info,
                 "processing_successful": True,
             }
 
@@ -144,7 +146,7 @@ class RunestoneProcessor:
             self.formatter.format_console_output(
                 ocr_result=results["ocr_result"],
                 analysis=results["analysis"],
-                resources=results["resources"],
+                extra_info=results["extra_info"],
             )
         except Exception as e:
             raise RunestoneError(f"Failed to display results: {str(e)}")
@@ -160,7 +162,7 @@ class RunestoneProcessor:
             markdown_output = self.formatter.format_markdown_output(
                 ocr_result=results["ocr_result"],
                 analysis=results["analysis"],
-                resources=results["resources"],
+                resources=results["extra_info"],
             )
             self.console.print(markdown_output)
         except Exception as e:
@@ -178,7 +180,7 @@ class RunestoneProcessor:
             markdown_output = self.formatter.format_markdown_output(
                 ocr_result=results["ocr_result"],
                 analysis=results["analysis"],
-                resources=results["resources"],
+                resources=results["extra_info"],
             )
 
             output_path.write_text(markdown_output, encoding="utf-8")

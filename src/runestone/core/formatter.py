@@ -30,7 +30,7 @@ class ResultFormatter:
         self,
         ocr_result: Dict[str, Any],
         analysis: Dict[str, Any],
-        resources: List[Dict[str, str]],
+        extra_info: str,
     ) -> None:
         """
         Format and display results to console using Rich.
@@ -38,7 +38,7 @@ class ResultFormatter:
         Args:
             ocr_result: OCR processing results
             analysis: Content analysis results
-            resources: Learning resources
+            extra_info: Extra learning info
         """
         # Header
         self.console.print()
@@ -56,7 +56,7 @@ class ResultFormatter:
         self._format_vocabulary(analysis)
 
         # Extra resources section
-        self._format_resources(resources)
+        self._format_resources(extra_info)
 
         # Footer
         self.console.print()
@@ -134,24 +134,12 @@ class ResultFormatter:
         self.console.print(panel)
         self.console.print()
 
-    def _format_resources(self, resources: List[Dict[str, str]]) -> None:
+    def _format_resources(self, resources: str) -> None:
         """Format the resources section."""
         if not resources:
             content = "[italic]No additional resources found[/italic]"
         else:
-            content = ""
-            for i, resource in enumerate(resources, 1):
-                title = resource.get("title", "Unknown Title")
-                url = resource.get("url", "")
-                description = resource.get("description", "")
-
-                content += f"[bold cyan]{i}. {title}[/bold cyan]\n"
-                if url:
-                    content += f"   🔗 {url}\n"
-                if description:
-                    content += f"   📝 {description}\n"
-                if i < len(resources):
-                    content += "\n"
+            content = resources
 
         panel = Panel(
             content,
@@ -166,7 +154,7 @@ class ResultFormatter:
         self,
         ocr_result: Dict[str, Any],
         analysis: Dict[str, Any],
-        resources: List[Dict[str, str]],
+        resources: str,
     ) -> str:
         """
         Format results as markdown text.
@@ -233,18 +221,7 @@ class ResultFormatter:
         if not resources:
             md_lines.append("*No additional resources found*")
         else:
-            for i, resource in enumerate(resources, 1):
-                title = resource.get("title", "Unknown Title")
-                url = resource.get("url", "")
-                description = resource.get("description", "")
-
-                if url:
-                    md_lines.append(f"{i}. [{title}]({url})")
-                else:
-                    md_lines.append(f"{i}. {title}")
-
-                if description:
-                    md_lines.append(f"   - {description}")
-                md_lines.append("")
+            md_lines.append(resources)
+            md_lines.append("")
 
         return "\n".join(md_lines)

@@ -162,18 +162,18 @@ class TestContentAnalyzer:
 
     @patch("google.generativeai.configure")
     @patch("google.generativeai.GenerativeModel")
-    def test_find_learning_resources_no_search_needed(self, mock_model_class, mock_configure):
+    def test_find_extra_learning_info_no_search_needed(self, mock_model_class, mock_configure):
         """Test resource finding when search is not needed."""
         analysis = {"search_needed": {"should_search": False, "query_suggestions": []}}
 
         analyzer = ContentAnalyzer(provider="gemini", api_key=self.api_key)
-        resources = analyzer.find_learning_resources(analysis)
+        resources = analyzer.find_extra_learning_info(analysis)
 
-        assert resources == []
+        assert resources == ""
 
     @patch("google.generativeai.configure")
     @patch("google.generativeai.GenerativeModel")
-    def test_find_learning_resources_with_search(self, mock_model_class, mock_configure):
+    def test_find_extra_learning_info_with_search(self, mock_model_class, mock_configure):
         """Test resource finding with search queries."""
         analysis = {
             "search_needed": {
@@ -184,54 +184,49 @@ class TestContentAnalyzer:
             "grammar_focus": {"topic": "Swedish greetings"},
         }
 
-        # Mock search response
+        # Mock search response with educational material
         mock_search_response = Mock()
-        mock_search_response.text = """
-        Here are some resources:
-        https://svenska.se/tre/sprak/grammatik/ - Swedish Grammar
-        https://clozemaster.com/blog/swedish-grammar/ - Grammar Guide
-        """
+        mock_search_response.text = "Here is educational material about Swedish greetings and introductions. Swedish greetings include 'Hej' (Hi), 'God morgon' (Good morning), and 'Tack' (Thank you). Use 'Jag heter' (My name is) followed by your name."
 
         mock_model = Mock()
         mock_model.generate_content.return_value = mock_search_response
         mock_model_class.return_value = mock_model
 
         analyzer = ContentAnalyzer(provider="gemini", api_key=self.api_key)
-        resources = analyzer.find_learning_resources(analysis)
+        resources = analyzer.find_extra_learning_info(analysis)
 
-        # Should find resources or return defaults
-        assert isinstance(resources, list)
-        assert len(resources) <= 3
-
-        for resource in resources:
-            assert "title" in resource
-            assert "url" in resource
-            assert "description" in resource
+        # Should return a string with educational material
+        assert isinstance(resources, str)
+        assert len(resources) > 0
+        assert "Swedish greetings" in resources or "introductions" in resources
 
     @patch("google.generativeai.configure")
     @patch("google.generativeai.GenerativeModel")
-    def test_get_default_resources(self, mock_model_class, mock_configure):
-        """Test default resource generation."""
-        analysis = {"grammar_focus": {"topic": "Swedish verbs"}}
+    def test_find_extra_learning_info_fallback(self, mock_model_class, mock_configure):
+        """Test fallback behavior when search fails."""
+        analysis = {
+            "search_needed": {
+                "should_search": True,
+                "query_suggestions": ["Swedish greetings"],
+            },
+            "core_topics": ["greetings"],
+            "grammar_focus": {"topic": "Swedish greetings"},
+        }
+
+        # Mock search response with empty text (simulating failure)
+        mock_search_response = Mock()
+        mock_search_response.text = ""
+
+        mock_model = Mock()
+        mock_model.generate_content.return_value = mock_search_response
+        mock_model_class.return_value = mock_model
 
         analyzer = ContentAnalyzer(provider="gemini", api_key=self.api_key)
-        resources = analyzer._get_default_resources(analysis)
+        resources = analyzer.find_extra_learning_info(analysis)
 
-        assert isinstance(resources, list)
-        assert len(resources) == 3
-
-        # Check that all required fields are present
-        for resource in resources:
-            assert "title" in resource
-            assert "url" in resource
-            assert "description" in resource
-            assert resource["url"].startswith("http")
-
-        # Check for priority sources
-        urls = [r["url"] for r in resources]
-        assert any("svenska.se" in url for url in urls)
-        assert any("clozemaster.com" in url for url in urls)
-        assert any("worddive.com" in url for url in urls)
+        # Should return error message when LLM fails
+        assert isinstance(resources, str)
+        assert "Search failed" in resources or "Resource search failed" in resources
 
     def test_fallback_analysis_structure(self):
         """Test structure of fallback analysis."""

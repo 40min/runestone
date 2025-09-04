@@ -121,15 +121,24 @@ Return ONLY valid JSON, no additional text or formatting.
 """
 
 SEARCH_PROMPT_TEMPLATE = """
-Search for high-quality Swedish language learning resources related to:
-{query}
+You have web search capabilities. Search the web for educational material related to Swedish language learning.
 
-PRIORITY SOURCES (prefer these if available):
-1. svenska.se
-2. clozemaster.com/blog/
-3. worddive.com/en/grammar/swedish-grammar/
-4. kielibuusti.fi/en/learn-swedish/
-5. swedishpod101.com/blog/
+Core topics to search for: {core_topics}
+Additional query suggestions: {query_suggestions}
 
-Find 2-3 relevant, high-quality educational resources. Use the google_search tool.
+Using your web search capabilities, find and analyze relevant educational content from these topics. Compile the results into 3-5 short, useful educational materials that would help students learn Swedish.
+
+For each piece of educational material, provide:
+- Title: A clear, descriptive title
+- Description: A brief summary of the educational content
+- Content: Key educational points or explanations (keep it concise and focused on learning)
+
+Focus on high-quality, educational content from reliable sources like:
+- svenska.se (official Swedish resources)
+- clozemaster.com/blog/
+- worddive.com/en/grammar/
+- kielibuusti.fi/en/learn-swedish/
+- swedishpod101.com/blog/
+
+Return the compiled educational material in a structured format.
 """
