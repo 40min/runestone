@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 import pytest
 from click.testing import CliRunner
 
+from runestone.config import Settings
 from runestone.core.console import setup_console
 from runestone.core.exceptions import RunestoneError
 from runestone.core.processor import RunestoneProcessor
@@ -22,13 +23,14 @@ class TestRunestoneIntegration:
         self.runner = CliRunner()
         self.api_key = "test-api-key"
         self.test_image_path = Path("test_image.jpg")
+        self.settings = Settings()
 
     @patch("runestone.core.processor.OCRProcessor")
     @patch("runestone.core.processor.ContentAnalyzer")
     @patch("runestone.core.processor.ResultFormatter")
     def test_processor_init_success(self, mock_formatter, mock_analyzer, mock_ocr):
         """Test successful processor initialization."""
-        processor = RunestoneProcessor(provider="openai", api_key=self.api_key, model_name=None, verbose=True)
+        processor = RunestoneProcessor(settings=self.settings, provider="openai", api_key=self.api_key, model_name=None, verbose=True)
 
         assert processor.verbose is True
         # OCRProcessor and ContentAnalyzer are now called with client and verbose
@@ -44,7 +46,7 @@ class TestRunestoneIntegration:
         mock_ocr.side_effect = Exception("OCR init failed")
 
         with pytest.raises(RunestoneError) as exc_info:
-            RunestoneProcessor(provider="openai", api_key=self.api_key, model_name=None)
+            RunestoneProcessor(settings=self.settings, provider="openai", api_key=self.api_key, model_name=None)
 
         assert "Failed to initialize processor" in str(exc_info.value)
 
@@ -112,7 +114,7 @@ class TestRunestoneIntegration:
             mock_formatter.return_value = mock_formatter_instance
 
             # Run processor
-            processor = RunestoneProcessor(provider="openai", api_key=self.api_key, model_name=None, verbose=True)
+            processor = RunestoneProcessor(settings=self.settings, provider="openai", api_key=self.api_key, model_name=None, verbose=True)
             result = processor.process_image(self.test_image_path)
 
             # Verify workflow execution
@@ -139,7 +141,7 @@ class TestRunestoneIntegration:
         mock_analyzer.return_value = Mock()
         mock_formatter.return_value = Mock()
 
-        processor = RunestoneProcessor(provider="openai", api_key=self.api_key, model_name=None)
+        processor = RunestoneProcessor(settings=self.settings, provider="openai", api_key=self.api_key, model_name=None)
 
         with pytest.raises(RunestoneError) as exc_info:
             processor.process_image(self.test_image_path)
@@ -171,7 +173,7 @@ class TestRunestoneIntegration:
             mock_analyzer.return_value = Mock()
             mock_formatter.return_value = Mock()
 
-            processor = RunestoneProcessor(provider="openai", api_key=self.api_key, model_name=None)
+            processor = RunestoneProcessor(settings=self.settings, provider="openai", api_key=self.api_key, model_name=None)
 
             with pytest.raises(RunestoneError) as exc_info:
                 processor.process_image(self.test_image_path)
@@ -195,7 +197,7 @@ class TestRunestoneIntegration:
         mock_formatter_instance = Mock()
         mock_formatter.return_value = mock_formatter_instance
 
-        processor = RunestoneProcessor(provider="openai", api_key=self.api_key, model_name=None)
+        processor = RunestoneProcessor(settings=self.settings, provider="openai", api_key=self.api_key, model_name=None)
         processor.display_results_console(mock_results)
 
         mock_formatter_instance.format_console_output.assert_called_once_with(
@@ -222,7 +224,7 @@ class TestRunestoneIntegration:
         mock_formatter_instance.format_markdown_output.return_value = "# Markdown Output"
         mock_formatter.return_value = mock_formatter_instance
 
-        processor = RunestoneProcessor(provider="openai", api_key=self.api_key, model_name=None)
+        processor = RunestoneProcessor(settings=self.settings, provider="openai", api_key=self.api_key, model_name=None)
         processor.display_results_markdown(mock_results)
 
         mock_formatter_instance.format_markdown_output.assert_called_once_with(
@@ -252,7 +254,7 @@ class TestRunestoneIntegration:
         # Mock Path.write_text
         output_path = Mock()
 
-        processor = RunestoneProcessor(provider="openai", api_key=self.api_key, model_name=None, verbose=True)
+        processor = RunestoneProcessor(settings=self.settings, provider="openai", api_key=self.api_key, model_name=None, verbose=True)
         processor.save_results_to_file(mock_results, output_path)
 
         mock_formatter_instance.format_markdown_output.assert_called_once_with(

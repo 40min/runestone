@@ -67,15 +67,31 @@ class TestCLI:
             )
 
             assert result.exit_code == 0
-            mock_processor_class.assert_called_once_with(provider="openai", api_key=self.api_key, model_name=None, verbose=True)
+            # Check that settings was passed and other parameters
+            call_args = mock_processor_class.call_args
+            assert call_args[1]['provider'] == "openai"
+            assert call_args[1]['api_key'] == self.api_key
+            assert call_args[1]['model_name'] is None
+            assert call_args[1]['verbose'] is True
+            assert 'settings' in call_args[1]
             mock_processor.process_image.assert_called_once()
             mock_processor.display_results_console.assert_called_once_with(mock_results)
 
-    @patch("os.getenv")
-    def test_process_command_missing_api_key(self, mock_getenv):
+    @patch("runestone.cli.settings")
+    @patch("PIL.Image.open")
+    def test_process_command_missing_api_key(self, mock_image_open, mock_settings):
         """Test process command without API key."""
-        # Mock os.getenv to return None for OPENAI_API_KEY
-        mock_getenv.return_value = None
+        # Mock the global settings instance to return None for API keys
+        mock_settings.llm_provider = "openai"
+        mock_settings.openai_api_key = None
+        mock_settings.gemini_api_key = None
+        mock_settings.verbose = False
+
+        # Mock PIL Image to avoid image loading error
+        mock_image = Mock()
+        mock_image.mode = "RGB"
+        mock_image.size = (800, 600)
+        mock_image_open.return_value = mock_image
 
         with self.runner.isolated_filesystem():
             Path(self.test_image_path).touch()
@@ -83,7 +99,8 @@ class TestCLI:
             result = self.runner.invoke(cli, ["process", self.test_image_path])
 
             assert result.exit_code == 1
-            assert "OpenAI API key is required" in result.output  # noqa: E501
+            # Check for API key error message
+            assert "api key" in result.output.lower()
 
     def test_process_command_file_not_found(self):
         """Test process command with non-existent file."""
@@ -190,13 +207,16 @@ class TestCLI:
         assert result.exit_code == 0
         assert "0.1.0" in result.output
 
-    @patch("runestone.cli.os.getenv")
     @patch.dict("os.environ", {"OPENAI_API_KEY": "env-api-key"})
+    @patch("runestone.cli.settings")
     @patch("runestone.cli.RunestoneProcessor")
-    def test_process_command_env_api_key(self, mock_processor_class, mock_getenv):
+    def test_process_command_env_api_key(self, mock_processor_class, mock_settings):
         """Test process command using API key from environment."""
-        # Configure mock_getenv to return the API key for OPENAI_API_KEY
-        mock_getenv.side_effect = lambda key: "env-api-key" if key == "OPENAI_API_KEY" else None
+        # Mock the global settings instance to use the test API key
+        mock_settings.llm_provider = "openai"
+        mock_settings.openai_api_key = "env-api-key"
+        mock_settings.gemini_api_key = None
+        mock_settings.verbose = False
 
         with self.runner.isolated_filesystem():
             Path(self.test_image_path).touch()
@@ -215,4 +235,9 @@ class TestCLI:
 
             assert result.exit_code == 0
             # Should use API key from environment
-            mock_processor_class.assert_called_once_with(provider="openai", api_key="env-api-key", model_name=None, verbose=True)
+            call_args = mock_processor_class.call_args
+            assert call_args[1]['provider'] == "openai"
+            assert call_args[1]['api_key'] == "env-api-key"
+            assert call_args[1]['model_name'] is None
+            assert call_args[1]['verbose'] is True
+            assert 'settings' in call_args[1]

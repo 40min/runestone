@@ -16,6 +16,7 @@ from runestone.core.clients.factory import create_llm_client
 from runestone.core.console import get_console
 from runestone.core.exceptions import ImageProcessingError, OCRError
 from runestone.core.prompts import OCR_PROMPT
+from runestone.config import Settings
 
 
 class OCRProcessor:
@@ -23,33 +24,38 @@ class OCRProcessor:
 
     def __init__(
         self,
+        settings: Settings,
         client: Optional[BaseLLMClient] = None,
         provider: Optional[str] = None,
         api_key: Optional[str] = None,
         model_name: Optional[str] = None,
-        verbose: bool = False,
+        verbose: Optional[bool] = None,
     ):
         """
         Initialize the OCR processor.
 
         Args:
+            settings: application settings
             client: Pre-configured LLM client (if provided, other params are ignored)
             provider: LLM provider name ("openai" or "gemini")
             api_key: API key for the provider
             model_name: Model name to use
-            verbose: Enable verbose logging
+            verbose: Enable verbose logging. If None, uses settings.verbose
         """
-        self.verbose = verbose
+        # Use provided settings or create default
+        self.settings = settings
+        self.verbose = verbose if verbose is not None else self.settings.verbose
         self.console = get_console()
 
         if client is not None:
             self.client = client
         else:
             self.client = create_llm_client(
+                settings=self.settings,
                 provider=provider,
                 api_key=api_key,
                 model_name=model_name,
-                verbose=verbose,
+                verbose=self.verbose,
             )
 
     def _load_and_validate_image(self, image_path: Path) -> Image.Image:

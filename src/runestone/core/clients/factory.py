@@ -5,7 +5,6 @@ This module provides a factory function to create the appropriate LLM client
 based on environment variables and configuration.
 """
 
-import os
 from typing import Optional
 
 from runestone.core.console import get_console
@@ -13,22 +12,25 @@ from runestone.core.exceptions import APIKeyError
 from runestone.core.clients.base import BaseLLMClient
 from runestone.core.clients.gemini_client import GeminiClient
 from runestone.core.clients.openai_client import OpenAIClient
+from runestone.config import Settings
 
 
 def create_llm_client(
+    settings: Settings,
     provider: Optional[str] = None,
     api_key: Optional[str] = None,
     model_name: Optional[str] = None,
-    verbose: bool = False,
+    verbose: Optional[bool] = None,
 ) -> BaseLLMClient:
     """
-    Create an LLM client based on configuration.
+    Create an LLM client based on centralized configuration.
 
     Args:
-        provider: LLM provider ("openai" or "gemini"). If None, uses LLM_PROVIDER env var or defaults to "openai"
-        api_key: API key for the provider. If None, uses provider-specific env vars
-        model_name: Model name to use. If None, uses defaults
-        verbose: Enable verbose logging
+        settings: Centralized application settings
+        provider: LLM provider ("openai" or "gemini"). If None, uses settings.llm_provider
+        api_key: API key for the provider. If None, uses provider-specific settings
+        model_name: Model name to use. If None, uses provider defaults from settings
+        verbose: Enable verbose logging. If None, uses settings.verbose
 
     Returns:
         Configured LLM client instance
@@ -38,24 +40,26 @@ def create_llm_client(
         ValueError: If unsupported provider is specified
     """
     console = get_console()
-    # Determine provider
-    provider = provider or os.getenv("LLM_PROVIDER", "openai")
+
+    # Use settings values as defaults, but allow overrides
+    provider = provider or settings.llm_provider
     provider = provider.lower()
+    verbose = verbose if verbose is not None else settings.verbose
 
     # Validate provider
     if provider not in ["openai", "gemini"]:
         raise ValueError(f"Unsupported LLM provider: {provider}. Supported providers: openai, gemini")
 
-    # Get API key
+    # Get API key from settings or parameter
     if api_key is None:
         if provider == "openai":
-            api_key = os.getenv("OPENAI_API_KEY")
+            api_key = settings.openai_api_key
             if not api_key:
                 raise APIKeyError(
                     "OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass api_key parameter."
                 )
         elif provider == "gemini":
-            api_key = os.getenv("GEMINI_API_KEY")
+            api_key = settings.gemini_api_key
             if not api_key:
                 raise APIKeyError(
                     "Gemini API key is required. Set GEMINI_API_KEY environment variable or pass api_key parameter."
@@ -63,8 +67,7 @@ def create_llm_client(
 
     # Create client
     if provider == "openai":
-        if model_name is None:
-            model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        model_name = model_name or settings.openai_model
         return OpenAIClient(api_key=str(api_key), model_name=model_name, verbose=verbose)
 
     elif provider == "gemini":
@@ -83,13 +86,3 @@ def get_available_providers() -> list[str]:
         List of supported provider names
     """
     return ["openai", "gemini"]
-
-
-def get_default_provider() -> str:
-    """
-    Get the default LLM provider.
-
-    Returns:
-        Default provider name
-    """
-    return "openai"

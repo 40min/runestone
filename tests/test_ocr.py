@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from runestone.config import Settings
 from runestone.core.exceptions import APIKeyError, ImageProcessingError, OCRError
 from runestone.core.ocr import OCRProcessor
 
@@ -18,12 +19,13 @@ class TestOCRProcessor:
         """Set up test fixtures."""
         self.api_key = "test-api-key"
         self.test_image_path = Path("test_image.jpg")
+        self.settings = Settings()
 
     @patch("google.generativeai.configure")
     @patch("google.generativeai.GenerativeModel")
     def test_init_success(self, mock_model, mock_configure):
         """Test successful initialization."""
-        processor = OCRProcessor(provider="gemini", api_key=self.api_key, verbose=True)
+        processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key, verbose=True)
 
         mock_configure.assert_called_once_with(api_key=self.api_key)
         # GeminiClient creates two models (OCR and analysis), so expect 2 calls
@@ -36,7 +38,7 @@ class TestOCRProcessor:
         mock_configure.side_effect = Exception("Invalid API key")
 
         with pytest.raises(APIKeyError) as exc_info:
-            OCRProcessor(provider="gemini", api_key=self.api_key)
+            OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
         assert "Failed to configure Gemini API" in str(exc_info.value)
 
@@ -53,7 +55,7 @@ class TestOCRProcessor:
             patch("google.generativeai.configure"),
             patch("google.generativeai.GenerativeModel"),
         ):
-            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+            processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
         result = processor._load_and_validate_image(self.test_image_path)
 
@@ -76,7 +78,7 @@ class TestOCRProcessor:
             patch("google.generativeai.configure"),
             patch("google.generativeai.GenerativeModel"),
         ):
-            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+            processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
         result = processor._load_and_validate_image(self.test_image_path)
 
@@ -95,7 +97,7 @@ class TestOCRProcessor:
             patch("google.generativeai.configure"),
             patch("google.generativeai.GenerativeModel"),
         ):
-            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+            processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
         with pytest.raises(ImageProcessingError) as exc_info:
             processor._load_and_validate_image(self.test_image_path)
@@ -111,7 +113,7 @@ class TestOCRProcessor:
             patch("google.generativeai.configure"),
             patch("google.generativeai.GenerativeModel"),
         ):
-            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+            processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
         with pytest.raises(ImageProcessingError) as exc_info:
             processor._load_and_validate_image(self.test_image_path)
@@ -139,7 +141,7 @@ class TestOCRProcessor:
             mock_model.generate_content.return_value = mock_response
             mock_model_class.return_value = mock_model
 
-            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+            processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
             result = processor.extract_text(self.test_image_path)
 
         # Verify result structure
@@ -178,7 +180,7 @@ class TestOCRProcessor:
             mock_model.generate_content.return_value = mock_response
             mock_model_class.return_value = mock_model
 
-            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+            processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
             with pytest.raises(OCRError) as exc_info:
                 processor.extract_text(self.test_image_path)
@@ -206,7 +208,7 @@ class TestOCRProcessor:
             mock_model.generate_content.return_value = mock_response
             mock_model_class.return_value = mock_model
 
-            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+            processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
             with pytest.raises(OCRError) as exc_info:
                 processor.extract_text(self.test_image_path)
@@ -234,7 +236,7 @@ class TestOCRProcessor:
             mock_model.generate_content.return_value = mock_response
             mock_model_class.return_value = mock_model
 
-            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+            processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
             with pytest.raises(OCRError) as exc_info:
                 processor.extract_text(self.test_image_path)
@@ -247,7 +249,7 @@ class TestOCRProcessor:
             patch("google.generativeai.configure"),
             patch("google.generativeai.GenerativeModel"),
         ):
-            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+            processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
         # Test text with good recognition stats
         test_text = """This is the main content of the page.
@@ -273,7 +275,7 @@ Recognition Statistics:
             patch("google.generativeai.configure"),
             patch("google.generativeai.GenerativeModel"),
         ):
-            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+            processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
         # Test text with poor recognition stats
         test_text = """This is the main content.
@@ -299,7 +301,7 @@ Recognition Statistics:
             patch("google.generativeai.configure"),
             patch("google.generativeai.GenerativeModel"),
         ):
-            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+            processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
         # Test text without stats
         test_text = "This is plain text without statistics."
@@ -315,7 +317,7 @@ Recognition Statistics:
             patch("google.generativeai.configure"),
             patch("google.generativeai.GenerativeModel"),
         ):
-            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+            processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
         # Test text with zero total elements
         test_text = """Some content.
@@ -341,7 +343,7 @@ Recognition Statistics:
             patch("google.generativeai.configure"),
             patch("google.generativeai.GenerativeModel"),
         ):
-            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+            processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
         # Test text with exactly 90% recognition
         test_text = """Content.
@@ -391,7 +393,7 @@ Recognition Statistics:
             mock_model.generate_content.return_value = mock_response
             mock_model_class.return_value = mock_model
 
-            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+            processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
             result = processor.extract_text(self.test_image_path)
 
         # Verify result contains cleaned text without stats
@@ -429,7 +431,7 @@ Recognition Statistics:
             mock_model.generate_content.return_value = mock_response
             mock_model_class.return_value = mock_model
 
-            processor = OCRProcessor(provider="gemini", api_key=self.api_key)
+            processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
             with pytest.raises(OCRError) as exc_info:
                 processor.extract_text(self.test_image_path)

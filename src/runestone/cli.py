@@ -4,7 +4,6 @@ Command-line interface for Runestone.
 This module provides the main CLI commands and handles user interaction.
 """
 
-import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -12,10 +11,11 @@ from typing import Optional
 import click
 from dotenv import load_dotenv
 
-from runestone.core.clients.factory import get_available_providers, get_default_provider
+from runestone.core.clients.factory import get_available_providers
 from runestone.core.console import setup_console
 from runestone.core.exceptions import RunestoneError
 from runestone.core.processor import RunestoneProcessor
+from runestone.config import Settings
 
 # Load environment variables from .env file
 load_dotenv()
@@ -23,6 +23,8 @@ load_dotenv()
 # Setup console
 console = setup_console()
 
+# Load centralized settings
+settings = Settings()
 
 @click.group()
 @click.version_option(version="0.1.0", prog_name="runestone")
@@ -43,7 +45,7 @@ def cli():
     type=click.Choice(get_available_providers()),
     envvar="LLM_PROVIDER",
     help=(
-        f"LLM provider to use (default: {get_default_provider()}). Can be set via " "LLM_PROVIDER environment variable."
+        f"LLM provider to use (default: {settings.llm_provider}). Can be set via " "LLM_PROVIDER environment variable."
     ),
 )
 @click.option(
@@ -92,36 +94,32 @@ def process(
         runestone process --provider openai /path/to/textbook_page.jpg
         runestone process --provider gemini --api-key YOUR_KEY /path/to/textbook_page.jpg # noqa: E501
     """
-    try:
-        # Determine provider
+    try:        
+        # Determine provider (use CLI arg, then settings, then default)
         if not provider:
-            provider = get_default_provider()
+            provider = settings.llm_provider
 
-        # Get API key from environment if not provided
+        # Get API key from CLI arg, then settings
         if not api_key:
             if provider == "openai":
-                api_key = os.getenv("OPENAI_API_KEY")
+                api_key = settings.openai_api_key
             elif provider == "gemini":
-                api_key = os.getenv("GEMINI_API_KEY")
+                api_key = settings.gemini_api_key
 
         # Validate API key is available
         if not api_key:
             if provider == "openai":
-                api_key=os.getenv("OPENAI_API_KEY")
-                if not api_key:
-                    console.print(
-                        "[red]Error:[/red] OpenAI API key is required. "
-                        "Set OPENAI_API_KEY environment variable or use --api-key option."
-                    )
-                    sys.exit(1)
+                console.print(
+                    "[red]Error:[/red] OpenAI API key is required. "
+                    "Set OPENAI_API_KEY environment variable or use --api-key option."
+                )
+                sys.exit(1)
             elif provider == "gemini":
-                api_key=os.getenv("GEMINI_API_KEY")
-                if not api_key:
-                    console.print(
-                        "[red]Error:[/red] Gemini API key is required. "
-                        "Set GEMINI_API_KEY environment variable or use --api-key option."
-                    )
-                    sys.exit(1)
+                console.print(
+                    "[red]Error:[/red] Gemini API key is required. "
+                    "Set GEMINI_API_KEY environment variable or use --api-key option."
+                )
+                sys.exit(1)
 
         # Validate image file
         if not image_path.is_file():
@@ -141,8 +139,14 @@ def process(
             console.print(f"Provider: {provider}")
             console.print(f"Output format: {output_format}")
 
-        # Initialize processor
-        processor = RunestoneProcessor(provider=provider, api_key=api_key, model_name=model, verbose=verbose)
+        # Initialize processor with settings
+        processor = RunestoneProcessor(
+            settings=settings,
+            provider=provider,
+            api_key=api_key,
+            model_name=model,
+            verbose=verbose
+        )
 
         # Process the image
         result = processor.process_image(image_path)
