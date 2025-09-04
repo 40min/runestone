@@ -8,14 +8,13 @@ and output formatting to provide a complete Swedish textbook analysis.
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from rich.console import Console
-
-from .analyzer import ContentAnalyzer
-from .clients.base import BaseLLMClient
-from .clients.factory import create_llm_client
-from .exceptions import RunestoneError
-from .formatter import ResultFormatter
-from .ocr import OCRProcessor
+from runestone.core.analyzer import ContentAnalyzer
+from runestone.core.clients.base import BaseLLMClient
+from runestone.core.clients.factory import create_llm_client
+from runestone.core.console import get_console
+from runestone.core.exceptions import RunestoneError
+from runestone.core.formatter import ResultFormatter
+from runestone.core.ocr import OCRProcessor
 
 
 class RunestoneProcessor:
@@ -23,7 +22,6 @@ class RunestoneProcessor:
 
     def __init__(
         self,
-        console: Console,
         client: Optional[BaseLLMClient] = None,
         provider: Optional[str] = None,
         api_key: Optional[str] = None,
@@ -34,7 +32,6 @@ class RunestoneProcessor:
         Initialize the Runestone processor.
 
         Args:
-            console: Rich Console instance for output
             client: Pre-configured LLM client (if provided, other params are ignored)
             provider: LLM provider name ("openai" or "gemini")
             api_key: API key for the provider
@@ -42,25 +39,24 @@ class RunestoneProcessor:
             verbose: Enable verbose logging
         """
         self.verbose = verbose
-        self.console = console
+        self.console = get_console()
 
         # Create or use provided client
         if client is not None:
             self.client = client
         else:
             self.client = create_llm_client(
-                console=self.console,
                 provider=provider,
                 api_key=api_key,
                 model_name=model_name,
                 verbose=verbose,
             )
 
-        # Initialize components with the client and console
+        # Initialize components with the client
         try:
-            self.ocr_processor = OCRProcessor(console=self.console, client=self.client, verbose=verbose)  # noqa: E501
-            self.content_analyzer = ContentAnalyzer(console=self.console, client=self.client, verbose=verbose)
-            self.formatter = ResultFormatter(self.console)
+            self.ocr_processor = OCRProcessor(client=self.client, verbose=verbose)
+            self.content_analyzer = ContentAnalyzer(client=self.client, verbose=verbose)
+            self.formatter = ResultFormatter()
         except Exception as e:
             raise RunestoneError(f"Failed to initialize processor: {str(e)}")
 

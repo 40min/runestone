@@ -1,5 +1,5 @@
 from runestone.cli import process
-from src.runestone.core.console_config import setup_console
+from src.runestone.core.console import setup_console
 
 # Setup console
 console = setup_console()

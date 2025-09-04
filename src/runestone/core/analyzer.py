@@ -8,11 +8,10 @@ grammar rules, vocabulary, and generate learning resources.
 import json
 from typing import Any, Dict, List, Optional
 
-from rich.console import Console
-
-from .clients.base import BaseLLMClient
-from .clients.factory import create_llm_client
-from .exceptions import ContentAnalysisError
+from runestone.core.clients.base import BaseLLMClient
+from runestone.core.clients.factory import create_llm_client
+from runestone.core.console import get_console
+from runestone.core.exceptions import ContentAnalysisError
 
 
 class ContentAnalyzer:
@@ -20,7 +19,6 @@ class ContentAnalyzer:
 
     def __init__(
         self,
-        console: Console,
         client: Optional[BaseLLMClient] = None,
         provider: Optional[str] = None,
         api_key: Optional[str] = None,
@@ -31,7 +29,6 @@ class ContentAnalyzer:
         Initialize the content analyzer.
 
         Args:
-            console: Rich Console instance for output
             client: Pre-configured LLM client (if provided, other params are ignored)
             provider: LLM provider name ("openai" or "gemini")
             api_key: API key for the provider
@@ -39,7 +36,7 @@ class ContentAnalyzer:
             verbose: Enable verbose logging
         """
         self.verbose = verbose
-        self.console = console
+        self.console = get_console()
 
         if client is not None:
             self.client = client

@@ -8,16 +8,14 @@ based on environment variables and configuration.
 import os
 from typing import Optional
 
-from rich.console import Console
-
-from ..exceptions import APIKeyError
-from .base import BaseLLMClient
-from .gemini_client import GeminiClient
-from .openai_client import OpenAIClient
+from runestone.core.console import get_console
+from runestone.core.exceptions import APIKeyError
+from runestone.core.clients.base import BaseLLMClient
+from runestone.core.clients.gemini_client import GeminiClient
+from runestone.core.clients.openai_client import OpenAIClient
 
 
 def create_llm_client(
-    console: Console,
     provider: Optional[str] = None,
     api_key: Optional[str] = None,
     model_name: Optional[str] = None,
@@ -27,7 +25,6 @@ def create_llm_client(
     Create an LLM client based on configuration.
 
     Args:
-        console: Rich Console instance for output
         provider: LLM provider ("openai" or "gemini"). If None, uses LLM_PROVIDER env var or defaults to "openai"
         api_key: API key for the provider. If None, uses provider-specific env vars
         model_name: Model name to use. If None, uses defaults
@@ -40,6 +37,7 @@ def create_llm_client(
         APIKeyError: If API key is not provided or invalid provider specified
         ValueError: If unsupported provider is specified
     """
+    console = get_console()
     # Determine provider
     provider = provider or os.getenv("LLM_PROVIDER", "openai")
     provider = provider.lower()
@@ -67,11 +65,11 @@ def create_llm_client(
     if provider == "openai":
         if model_name is None:
             model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        return OpenAIClient(console=console, api_key=api_key, model_name=model_name, verbose=verbose)
+        return OpenAIClient(api_key=str(api_key), model_name=model_name, verbose=verbose)
 
     elif provider == "gemini":
         # Gemini client doesn't need model_name parameter (uses fixed model)
-        return GeminiClient(console=console, api_key=api_key, verbose=verbose)
+        return GeminiClient(api_key=str(api_key), verbose=verbose)
 
     # This should never be reached due to earlier validation
     raise ValueError(f"Unsupported provider: {provider}")

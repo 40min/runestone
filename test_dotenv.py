@@ -5,7 +5,7 @@ Simple test to verify that python-dotenv is loading environment variables correc
 import os
 
 from dotenv import load_dotenv
-from src.runestone.core.console_config import setup_console
+from runestone.core.console import setup_console
 
 # Load environment variables from .env file
 load_dotenv()

@@ -12,10 +12,10 @@ from typing import Optional
 import click
 from dotenv import load_dotenv
 
-from .core.clients.factory import get_available_providers, get_default_provider
-from .core.console_config import setup_console
-from .core.exceptions import RunestoneError
-from .core.processor import RunestoneProcessor
+from runestone.core.clients.factory import get_available_providers, get_default_provider
+from runestone.core.console import setup_console
+from runestone.core.exceptions import RunestoneError
+from runestone.core.processor import RunestoneProcessor
 
 # Load environment variables from .env file
 load_dotenv()
@@ -142,7 +142,7 @@ def process(
             console.print(f"Output format: {output_format}")
 
         # Initialize processor
-        processor = RunestoneProcessor(console=console, provider=provider, api_key=api_key, model_name=model, verbose=verbose)
+        processor = RunestoneProcessor(provider=provider, api_key=api_key, model_name=model, verbose=verbose)
 
         # Process the image
         result = processor.process_image(image_path)

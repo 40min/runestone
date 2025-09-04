@@ -10,12 +10,12 @@ from typing import Any, Dict, Optional
 import re
 
 from PIL import Image
-from rich.console import Console
 
-from .clients.base import BaseLLMClient
-from .clients.factory import create_llm_client
-from .exceptions import ImageProcessingError, OCRError
-from .prompts import OCR_PROMPT
+from runestone.core.clients.base import BaseLLMClient
+from runestone.core.clients.factory import create_llm_client
+from runestone.core.console import get_console
+from runestone.core.exceptions import ImageProcessingError, OCRError
+from runestone.core.prompts import OCR_PROMPT
 
 
 class OCRProcessor:
@@ -23,7 +23,6 @@ class OCRProcessor:
 
     def __init__(
         self,
-        console: Console,
         client: Optional[BaseLLMClient] = None,
         provider: Optional[str] = None,
         api_key: Optional[str] = None,
@@ -34,7 +33,6 @@ class OCRProcessor:
         Initialize the OCR processor.
 
         Args:
-            console: Rich Console instance for output
             client: Pre-configured LLM client (if provided, other params are ignored)
             provider: LLM provider name ("openai" or "gemini")
             api_key: API key for the provider
@@ -42,7 +40,7 @@ class OCRProcessor:
             verbose: Enable verbose logging
         """
         self.verbose = verbose
-        self.console = console
+        self.console = get_console()
 
         if client is not None:
             self.client = client

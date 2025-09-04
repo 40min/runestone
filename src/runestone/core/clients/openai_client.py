@@ -10,26 +10,24 @@ import io
 
 from openai import OpenAI
 from PIL import Image
-from rich.console import Console
 
-from ..exceptions import APIKeyError, LLMError, OCRError
-from .base import BaseLLMClient
+from runestone.core.exceptions import APIKeyError, LLMError, OCRError
+from runestone.core.clients.base import BaseLLMClient
 
 
 class OpenAIClient(BaseLLMClient):
     """OpenAI implementation of the LLM client interface."""
 
-    def __init__(self, console: Console, api_key: str, model_name: str = "gpt-4o-mini", verbose: bool = False):
+    def __init__(self, api_key: str, model_name: str = "gpt-4o-mini", verbose: bool = False):
         """
         Initialize the OpenAI client.
 
         Args:
-            console: Rich Console instance for output
             api_key: OpenAI API key
             model_name: Name of the OpenAI model to use (default: gpt-4o-mini)
             verbose: Enable verbose logging
         """
-        super().__init__(console, api_key, verbose)
+        super().__init__(api_key, verbose)
         self._model_name = model_name
         self._configure_client()
 

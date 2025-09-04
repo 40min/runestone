@@ -8,22 +8,22 @@ must inherit from to ensure consistent interfaces.
 from abc import ABC, abstractmethod
 
 from PIL import Image
-from rich.console import Console
+
+from runestone.core.console import get_console
 
 
 class BaseLLMClient(ABC):
     """Abstract base class for LLM client implementations."""
 
-    def __init__(self, console: Console, api_key: str, verbose: bool = False):
+    def __init__(self, api_key: str, verbose: bool = False):
         """
         Initialize the LLM client.
 
         Args:
-            console: Rich Console instance for output
             api_key: API key for the LLM provider
             verbose: Enable verbose logging
         """
-        self.console = console
+        self.console = get_console()
         self.api_key = api_key
         self.verbose = verbose
 

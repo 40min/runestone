@@ -7,25 +7,23 @@ interface, handling OCR and content analysis using Google's Gemini API.
 
 import google.generativeai as genai
 from PIL import Image
-from rich.console import Console
 
-from ..exceptions import APIKeyError, LLMError, OCRError
-from .base import BaseLLMClient
+from runestone.core.exceptions import APIKeyError, LLMError, OCRError
+from runestone.core.clients.base import BaseLLMClient
 
 
 class GeminiClient(BaseLLMClient):
     """Gemini implementation of the LLM client interface."""
 
-    def __init__(self, console: Console, api_key: str, verbose: bool = False):
+    def __init__(self, api_key: str, verbose: bool = False):
         """
         Initialize the Gemini client.
 
         Args:
-            console: Rich Console instance for output
             api_key: Google Gemini API key
             verbose: Enable verbose logging
         """
-        super().__init__(console, api_key, verbose)
+        super().__init__(api_key, verbose)
         self._configure_client()
 
     def _configure_client(self) -> None:
