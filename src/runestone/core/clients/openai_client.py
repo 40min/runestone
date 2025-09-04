@@ -112,10 +112,7 @@ class OpenAIClient(BaseLLMClient):
                 raise OCRError("Could not recognise text on the page.")
 
             if len(extracted_text) < 10:
-                raise OCRError("Extracted text is too short - may not be a valid textbook page")
-
-            if self.verbose:
-                self.console.print(f"Successfully extracted {len(extracted_text)} characters of text")
+                raise OCRError("Extracted text is too short - may not be a valid textbook page")            
 
             return extracted_text
 
@@ -137,10 +134,7 @@ class OpenAIClient(BaseLLMClient):
         Raises:
             LLMError: If content analysis fails
         """
-        try:
-            if self.verbose:
-                self.console.print("Analyzing content with OpenAI...")
-
+        try:            
             response = self.client.chat.completions.create(
                 model=self._model_name,
                 messages=[{"role": "user", "content": prompt}],

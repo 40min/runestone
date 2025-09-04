@@ -123,22 +123,26 @@ Return ONLY valid JSON, no additional text or formatting.
 SEARCH_PROMPT_TEMPLATE = """
 You have web search capabilities. Search the web for educational material related to Swedish language learning.
 
-Core topics to search for: {core_topics}
-Additional query suggestions: {query_suggestions}
+Core topics: {core_topics}
+Additional suggestions: {query_suggestions}
 
-Using your web search capabilities, find and analyze relevant educational content from these topics. Compile the results into 3-5 short, useful educational materials that would help students learn Swedish.
+Instructions:
+- Search the web for relevant, high-quality educational resources.
+- Summarize findings into a single structured text, grouped by topic.
+- For each topic, give 2–4 concise bullet points with the most useful rules, explanations, or examples.
+- Keep the text readable and compact (avoid long sections or repeated titles).
+- Prioritize reliable sources such as:
+  - svenska.se
+  - clozemaster.com/blog/
+  - worddive.com/en/grammar/
+  - kielibuusti.fi/en/learn-swedish/
+  - swedishpod101.com/blog/
 
-For each piece of educational material, provide:
-- Title: A clear, descriptive title
-- Description: A brief summary of the educational content
-- Content: Key educational points or explanations (keep it concise and focused on learning)
+Return only the structured educational text.
 
-Focus on high-quality, educational content from reliable sources like:
-- svenska.se (official Swedish resources)
-- clozemaster.com/blog/
-- worddive.com/en/grammar/
-- kielibuusti.fi/en/learn-swedish/
-- swedishpod101.com/blog/
-
-Return the compiled educational material in a structured format.
+Format:
+- Format the summary in plain text, not Markdown.
+- Use emojis for section headers and bullets (e.g., 📌, ❓, 📖, 💡).
+- Keep explanations concise and structured with short lines.
+- Do not use symbols like **bold**, # headers, or markdown tables.
 """

@@ -120,7 +120,7 @@ class ResultFormatter:
                 swedish = item.get("swedish", "")
                 english = item.get("english", "")
                 if swedish and english:
-                    table.add_row(swedish, english)
+                    table.add_row(swedish, "-", english)
 
             content = table
 

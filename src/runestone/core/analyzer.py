@@ -87,10 +87,7 @@ class ContentAnalyzer:
                 ]
                 for field in required_fields:
                     if field not in analysis:
-                        raise ContentAnalysisError(f"Missing required field: {field}")
-
-                if self.verbose:
-                    self.console.print(f"Analysis completed - found {len(analysis.get('vocabulary', []))} vocabulary items")
+                        raise ContentAnalysisError(f"Missing required field: {field}")                
 
                 return analysis
 
@@ -159,13 +156,17 @@ class ContentAnalyzer:
                 return ""
 
             if self.verbose:
-                self.console.print(f"Searching for educational material on topics: {', '.join(core_topics)} and queries: {', '.join(search_queries)}")
-
+                self.console.print("Searching for educational material on topics:")
+                for topic in core_topics:
+                    self.console.print(f"* {topic}")
+                self.console.print(f"and queries:")
+                for query in search_queries:
+                    self.console.print(f"* {query}")
 
             # Use combined queries in one search prompt
-            search_prompt = SEARCH_PROMPT_TEMPLATE.format(                
-                core_topics=", ".join(core_topics[:3]),
-                query_suggestions=", ".join(search_queries[:4])
+            search_prompt = SEARCH_PROMPT_TEMPLATE.format(
+                core_topics=', '.join(f'"{topic}"' for topic in core_topics[:3]),
+                query_suggestions=', '.join(f'"{query}"' for query in search_queries[:4])
             )
 
             try:

@@ -156,10 +156,7 @@ class OCRProcessor:
             extracted_text = self.client.extract_text_from_image(image, ocr_prompt)
 
             # Parse and analyze recognition statistics
-            text_part = self._parse_and_analyze_recognition_stats(extracted_text)
-
-            if self.verbose:
-                self.console.print(f"Successfully extracted {len(text_part)} characters of text")
+            text_part = self._parse_and_analyze_recognition_stats(extracted_text)            
 
             return {
                 "text": text_part,
