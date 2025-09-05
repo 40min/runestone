@@ -46,7 +46,7 @@ graph TD
     *   **Responsibility:** To define and load all application settings from environment variables in a centralized, type-safe manner.
     *   **Technology:** Pydantic `BaseSettings`.
 
-2.  **Backend API (New Module: `src/runestone/web`)**
+2.  **Backend API (New Module: `src/runestone/api`)**
     *   **Responsibility:** To expose the core application functionality over HTTP.
     *   **Components:**
         *   `main.py`: FastAPI app instance, CORS middleware, API routers.
@@ -94,27 +94,27 @@ graph TD
 -   **Task 2.2:** Create Backend Application Structure
     -   **Rationale/Goal:** Establish an organized structure for web-related code.
     -   **Estimated Effort (Optional):S**
-    -   **Deliverable/Criteria for Completion:** New directory `src/runestone/web` is created with `__init__.py`, `main.py`, `endpoints.py`, `schemas.py`.
+    -   **Deliverable/Criteria for Completion:** New directory `src/runestone/api` is created with `__init__.py`, `main.py`, `endpoints.py`, `schemas.py`.
 
 -   **Task 2.3:** Define API Response Schemas
     -   **Rationale/Goal:** Create Pydantic models for a consistent and validated API contract.
     -   **Estimated Effort (Optional):** S
-    -   **Deliverable/Criteria for Completion:** The `src/runestone/web/schemas.py` file contains Pydantic models reflecting the structure of the processing result.
+    -   **Deliverable/Criteria for Completion:** The `src/runestone/api/schemas.py` file contains Pydantic models reflecting the structure of the processing result.
 
 -   **Task 2.4:** Implement Image Processing Endpoint with DI
     -   **Rationale/Goal:** Create the core API endpoint that uses FastAPI's Dependency Injection to receive the centralized configuration.
     -   **Estimated Effort (Optional):** M
-    -   **Deliverable/Criteria for Completion:** A `POST /api/process` endpoint is implemented in `src/runestone/web/endpoints.py`. It accepts a file upload, gets the `Settings` object via `Depends()`, instantiates and uses the `RunestoneProcessor`, and returns a valid JSON response.
+    -   **Deliverable/Criteria for Completion:** A `POST /api/process` endpoint is implemented in `src/runestone/api/endpoints.py`. It accepts a file upload, gets the `Settings` object via `Depends()`, instantiates and uses the `RunestoneProcessor`, and returns a valid JSON response.
 
 -   **Task 2.5:** Configure FastAPI Application
     -   **Rationale/Goal:** Set up the main application entry point, including CORS middleware.
     -   **Estimated Effort (Optional):** S
-    -   **Deliverable/Criteria for Completion:** The `src/runestone/web/main.py` file initializes the FastAPI app, includes the endpoint router, and configures `CORSMiddleware` to allow requests from `http://localhost:3000`.
+    -   **Deliverable/Criteria for Completion:** The `src/runestone/api/main.py` file initializes the FastAPI app, includes the endpoint router, and configures `CORSMiddleware` to allow requests from `http://localhost:3000`.
 
 -   **Task 2.6:** Add Backend Run Command to Makefile
     -   **Rationale/Goal:** Provide a simple command to start the backend server.
     -   **Estimated Effort (Optional):** S
-    -   **Deliverable/Criteria for Completion:** A new target `run-backend` in the `Makefile` runs `uvicorn runestone.web.main:app --reload`.
+    -   **Deliverable/Criteria for Completion:** A new target `run-backend` in the `Makefile` runs `uvicorn runestone.api.main:app --reload`.
 
 #### Phase 3: Frontend Development
 -   **Objective(s):** Build a single-page React application for image upload and result display.
@@ -168,7 +168,7 @@ graph TD
 
 ### 4.3. Non-Functional Requirements (NFRs) Addressed
 -   **Usability:** The web UI will dramatically improve usability for users not comfortable with a command line.
--   **Maintainability:** Centralizing configuration into a single Pydantic model makes the system easier to understand, configure, and maintain. Decoupling components into `core`, `cli`, `web`, and `frontend` improves modularity.
+-   **Maintainability:** Centralizing configuration into a single Pydantic model makes the system easier to understand, configure, and maintain. Decoupling components into `core`, `cli`, `api`, and `frontend` improves modularity.
 
 ## 5. Success Metrics / Validation Criteria
 -   The core refactoring is complete, and the CLI (`runestone process ...`) functions exactly as before.
@@ -182,4 +182,4 @@ graph TD
 -   All required application configuration can be sourced from environment variables.
 
 ## 7. Open Questions / Areas for Further Investigation
--   For the `run-dev` command, we will need to decide on a simple mechanism for running processes concurrently. A simple shell command using `&` within the Makefile is sufficient for this scope. Example: `(cd frontend && npm run dev) & uvicorn runestone.web.main:app --reload`.
+-   For the `run-dev` command, we will need to decide on a simple mechanism for running processes concurrently. A simple shell command using `&` within the Makefile is sufficient for this scope. Example: `(cd frontend && npm run dev) & uvicorn runestone.api.main:app --reload`.

@@ -1,4 +1,4 @@
-.PHONY: help install install-dev lint test test-coverage run clean setup
+.PHONY: help install install-dev lint test test-coverage run run-backend clean setup
 
 # Default target
 help:
@@ -11,6 +11,7 @@ help:
 	@echo "  test         - Run test suite"
 	@echo "  test-coverage - Run tests with coverage report"
 	@echo "  run          - Run the application (requires IMAGE_PATH and GEMINI_API_KEY)"
+	@echo "  run-backend  - Run the FastAPI backend server"
 	@echo "  clean        - Clean up temporary files and caches"
 
 # Set up development environment
@@ -67,6 +68,11 @@ run:
 	fi
 	@echo "Running Runestone with image: $(IMAGE_PATH)"
 	runestone process "$(IMAGE_PATH)" --verbose
+
+# Run the FastAPI backend server
+run-backend:
+	@echo "Starting FastAPI backend server..."
+	uvicorn runestone.api.main:app --reload --host 0.0.0.0 --port 8000
 
 # Clean up temporary files and caches
 clean:
