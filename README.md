@@ -1,6 +1,6 @@
 # 🪨 Runestone
 
-![Runestone Logo](res/runestone_logo.jpeg)
+<img src="res/runestone_logo.jpeg" alt="Runestone Logo" width="200">
 
 A command-line tool and web application for analyzing Swedish textbook pages using OCR and Large Language Models. Transform phone photos of Swedish textbook pages into structured digital study guides with vocabulary, grammar explanations, and learning resources.
 
