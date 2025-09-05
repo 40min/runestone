@@ -1,6 +1,8 @@
 # 🪨 Runestone
 
-A command-line tool for analyzing Swedish textbook pages using OCR and Large Language Models. Transform phone photos of Swedish textbook pages into structured digital study guides with vocabulary, grammar explanations, and learning resources.
+![Runestone Logo](res/runestone_logo.jpeg)
+
+A command-line tool and web application for analyzing Swedish textbook pages using OCR and Large Language Models. Transform phone photos of Swedish textbook pages into structured digital study guides with vocabulary, grammar explanations, and learning resources.
 
 ## 🎯 Features
 
@@ -12,12 +14,15 @@ A command-line tool for analyzing Swedish textbook pages using OCR and Large Lan
 - **✨ Rich Output**: Beautiful console output with emojis and formatting
 - **📝 Export Options**: Output results to console or markdown format
 - **⚙️ Configurable**: Easy provider switching via environment variables or CLI options
+- **🌐 Web API**: REST API for programmatic access to image processing functionality
+- **🖥️ Web Interface**: Planned responsive web application for easy image upload and results viewing (coming soon)
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
 - Python 3.13+
+- Node.js 18+ and npm (for web interface development)
 - API key for your chosen LLM provider:
   - **OpenAI**: API key with GPT-4o access (recommended, default)
   - **Gemini**: Google Gemini API key with vision capabilities
@@ -85,6 +90,25 @@ runestone process /path/to/textbook_page.jpg --output-format markdown
 # Specify API key directly
 runestone process --provider openai --api-key YOUR_API_KEY /path/to/textbook_page.jpg
 ```
+
+### Web API Usage
+
+Runestone also provides a REST API for programmatic access:
+
+```bash
+# Start the API server
+make run-backend
+
+# Or run directly
+uvicorn runestone.api.main:app --reload
+```
+
+The API will be available at `http://localhost:8000` with the following endpoints:
+
+- `POST /api/process`: Upload an image and get analysis results
+- `GET /api/health`: Health check endpoint
+
+API documentation is available at `http://localhost:8000/docs`.
 
 ## 📖 Example Output
 
@@ -161,7 +185,9 @@ make lint-check     # Check code formatting (no fixes)
 make test           # Run test suite
 make test-coverage  # Run tests with coverage report
 make clean          # Clean up temporary files
-make run IMAGE_PATH=/path/to/image.jpg  # Run the application
+make run IMAGE_PATH=/path/to/image.jpg  # Run the CLI application
+make run-backend    # Start the FastAPI server
+make run-dev        # Start both backend and frontend (when available)
 ```
 
 ### Running Tests
@@ -195,6 +221,12 @@ The project uses several tools for code quality:
 ```
 src/runestone/
 ├── cli.py              # Command-line interface
+├── config.py           # Centralized configuration management
+├── api/                # REST API layer
+│   ├── __init__.py
+│   ├── main.py         # FastAPI application setup
+│   ├── endpoints.py    # API endpoints
+│   └── schemas.py      # Pydantic models for API
 ├── core/
 │   ├── processor.py    # Main workflow orchestration
 │   ├── ocr.py         # OCR processing (provider-agnostic)
@@ -211,6 +243,7 @@ src/runestone/
 
 tests/
 ├── test_cli.py        # CLI tests
+├── test_api.py        # API tests
 ├── test_ocr.py        # OCR processing tests
 ├── test_analyzer.py   # Content analysis tests
 └── test_integration.py # Integration tests
@@ -325,5 +358,9 @@ If you encounter issues or have questions:
    - System information
 
 ---
+
+## 🚧 Planned Features
+
+- **🖥️ Web Interface**: A responsive React-based frontend for easy image upload and results visualization is currently in development. This will provide a user-friendly alternative to the command-line interface.
 
 **Happy Swedish learning!** 🇸🇪✨
