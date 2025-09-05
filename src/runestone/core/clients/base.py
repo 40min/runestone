@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 
 from PIL import Image
 
-from runestone.core.console import get_console
+from runestone.core.logging_config import get_logger
 
 
 class BaseLLMClient(ABC):
@@ -23,7 +23,7 @@ class BaseLLMClient(ABC):
             api_key: API key for the LLM provider
             verbose: Enable verbose logging
         """
-        self.console = get_console()
+        self.logger = get_logger(__name__)
         self.api_key = api_key
         self.verbose = verbose
 

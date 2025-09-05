@@ -75,7 +75,7 @@ class GeminiClient(BaseLLMClient):
         """
         try:
             if self.verbose:
-                self.console.print("Sending image to Gemini for OCR processing...")
+                self.logger.info("Sending image to Gemini for OCR processing...")
 
             response = self.ocr_model.generate_content([prompt, image])
 
@@ -113,7 +113,7 @@ class GeminiClient(BaseLLMClient):
         """
         try:
             if self.verbose:
-                self.console.print("Analyzing content with Gemini...")
+                self.logger.info("Analyzing content with Gemini...")
 
             response = self.analysis_model.generate_content(prompt)
 
@@ -140,7 +140,7 @@ class GeminiClient(BaseLLMClient):
         """
         try:
             if self.verbose:
-                self.console.print("Searching for resources with Gemini...")
+                self.logger.info("Searching for resources with Gemini...")
 
             response = self.analysis_model.generate_content(prompt)
 

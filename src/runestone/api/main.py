@@ -12,12 +12,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from runestone.api.endpoints import router as api_router
+from runestone.core.logging_config import setup_logging
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan context manager."""
     # Startup
+    setup_logging()
     yield
     # Shutdown
 

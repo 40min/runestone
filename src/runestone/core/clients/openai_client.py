@@ -76,7 +76,7 @@ class OpenAIClient(BaseLLMClient):
         """
         try:
             if self.verbose:
-                self.console.print("Sending image to OpenAI for OCR processing...")
+                self.logger.info("Sending image to OpenAI for OCR processing...")
 
             # Convert image to base64
             image_b64 = self._image_to_base64(image)
@@ -165,7 +165,7 @@ class OpenAIClient(BaseLLMClient):
         """
         try:
             if self.verbose:
-                self.console.print("Searching for educational resources with OpenAI...")
+                self.logger.info("Searching for educational resources with OpenAI...")
 
             response = self.client.chat.completions.create(
                 model=self._model_name,

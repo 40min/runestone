@@ -14,7 +14,7 @@ from PIL import Image
 from runestone.config import Settings
 from runestone.core.clients.base import BaseLLMClient
 from runestone.core.clients.factory import create_llm_client
-from runestone.core.console import get_console
+from runestone.core.logging_config import get_logger
 from runestone.core.exceptions import ImageProcessingError, OCRError
 from runestone.core.prompts import OCR_PROMPT
 
@@ -45,7 +45,7 @@ class OCRProcessor:
         # Use provided settings or create default
         self.settings = settings
         self.verbose = verbose if verbose is not None else self.settings.verbose
-        self.console = get_console()
+        self.logger = get_logger(__name__)
 
         if client is not None:
             self.client = client
@@ -87,7 +87,7 @@ class OCRProcessor:
                 # Resize large images to prevent API issues
                 image.thumbnail((4096, 4096), Image.Resampling.LANCZOS)
                 if self.verbose:
-                    self.console.print(f"Resized large image to {image.size}")
+                    self.logger.info(f"Resized large image to {image.size}")
 
             return image
 

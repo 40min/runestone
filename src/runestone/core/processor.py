@@ -12,7 +12,7 @@ from runestone.config import Settings
 from runestone.core.analyzer import ContentAnalyzer
 from runestone.core.clients.base import BaseLLMClient
 from runestone.core.clients.factory import create_llm_client
-from runestone.core.console import get_console
+from runestone.core.logging_config import get_logger
 from runestone.core.exceptions import RunestoneError
 from runestone.core.formatter import ResultFormatter
 from runestone.core.ocr import OCRProcessor
@@ -44,7 +44,7 @@ class RunestoneProcessor:
         # Use provided settings or create default
         self.settings = settings
         self.verbose = verbose if verbose is not None else self.settings.verbose
-        self.console = get_console()
+        self.logger = get_logger(__name__)
 
         # Create or use provided client
         if client is not None:
@@ -80,22 +80,22 @@ class RunestoneProcessor:
             RunestoneError: If processing fails at any stage
         """
         if self.verbose:
-            self.console.print(f"[blue]Starting processing of:[/blue] {image_path}")
+            self.logger.info(f"Starting processing of: {image_path}")
 
         try:
             # Step 1: Extract text using OCR
             if self.verbose:
-                self.console.print("[blue]Step 1:[/blue] Extracting text from image...")
+                self.logger.info("Step 1: Extracting text from image...")
 
             ocr_result = self.ocr_processor.extract_text(image_path)
 
             if self.verbose:
                 char_count = ocr_result.get("character_count", 0)
-                self.console.print(f"[green]✓[/green] Extracted {char_count} characters")  # noqa: E501
+                self.logger.info(f"Extracted {char_count} characters")  # noqa: E501
 
             # Step 2: Analyze content
             if self.verbose:
-                self.console.print("[blue]Step 2:[/blue] Analyzing content...")
+                self.logger.info("Step 2: Analyzing content...")
 
             extracted_text = ocr_result.get("text", "")
             if not extracted_text:
@@ -105,19 +105,19 @@ class RunestoneProcessor:
 
             if self.verbose:
                 vocab_count = len(analysis.get("vocabulary", []))
-                self.console.print(f"[green]✓[/green] Found {vocab_count} vocabulary items")  # noqa: E501
+                self.logger.info(f"Found {vocab_count} vocabulary items")  # noqa: E501
 
             # Step 3: Find learning extra learning info
             if self.verbose:
-                self.console.print("[blue]Step 3:[/blue] Finding learning resources...")
+                self.logger.info("Step 3: Finding learning resources...")
 
             extra_info = self.content_analyzer.find_extra_learning_info(analysis)
 
             if self.verbose:
                 if extra_info:
-                    self.console.print(f"[green]✓[/green] Found extra learning information")
+                    self.logger.info("Found extra learning information")
                 else:
-                    self.console.print(f"[yellow]⚠[/yellow] No extra learning information found")
+                    self.logger.warning("No extra learning information found")
 
             # Compile complete results
             results = {
@@ -128,13 +128,13 @@ class RunestoneProcessor:
             }
 
             if self.verbose:
-                self.console.print("[green]✓ Processing completed successfully![/green]")  # noqa: E501
+                self.logger.info("Processing completed successfully!")  # noqa: E501
 
             return results
 
         except Exception as e:
             if self.verbose:
-                self.console.print(f"[red]✗ Processing failed:[/red] {str(e)}")
+                self.logger.error(f"Processing failed: {str(e)}")
 
             if isinstance(e, RunestoneError):
                 raise
@@ -170,7 +170,7 @@ class RunestoneProcessor:
                 analysis=results["analysis"],
                 resources=results["extra_info"],
             )
-            self.console.print(markdown_output)
+            print(markdown_output)
         except Exception as e:
             raise RunestoneError(f"Failed to generate markdown output: {str(e)}")
 
@@ -192,7 +192,7 @@ class RunestoneProcessor:
             output_path.write_text(markdown_output, encoding="utf-8")
 
             if self.verbose:
-                self.console.print(f"[green]✓[/green] Results saved to: {output_path}")  # noqa: E501
+                self.logger.info(f"Results saved to: {output_path}")  # noqa: E501
 
         except Exception as e:
             raise RunestoneError(f"Failed to save results to file: {str(e)}")

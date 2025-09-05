@@ -64,7 +64,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
     { id: 'ocr', label: 'OCR Text' },
     { id: 'grammar', label: 'Grammar' },
     { id: 'vocabulary', label: 'Vocabulary' },
-    { id: 'resources', label: 'Resources' }
+    { id: 'extra_info', label: 'Extra info' }
   ];
 
   return (
@@ -132,10 +132,16 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
               )}
             </div>
           )}
-          {activeTab === 'resources' && (
+          {activeTab === 'extra_info' && (
             <div className="prose prose-invert max-w-none text-gray-300">
-              <h4 className="text-white">Learning Resources</h4>
-              <p>Additional learning materials and resources will be displayed here.</p>
+              <h4 className="text-white">Extra info</h4>
+              {result && result.extra_info ? (
+                <div className="mt-4 p-4 bg-[#2a1f35] rounded-lg">
+                  <div className="text-white whitespace-pre-wrap">{result.extra_info}</div>
+                </div>
+              ) : (
+                <p>Additional learning materials and resources will be displayed here.</p>
+              )}
             </div>
           )}
         </div>

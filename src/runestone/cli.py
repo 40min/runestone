@@ -15,6 +15,7 @@ from runestone.config import Settings
 from runestone.core.clients.factory import get_available_providers
 from runestone.core.console import setup_console
 from runestone.core.exceptions import RunestoneError
+from runestone.core.logging_config import setup_logging
 from runestone.core.processor import RunestoneProcessor
 
 # Load environment variables from .env file
@@ -22,6 +23,9 @@ load_dotenv()
 
 # Setup console
 console = setup_console()
+
+# Setup logging
+setup_logging()
 
 # Load centralized settings
 settings = Settings()

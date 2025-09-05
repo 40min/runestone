@@ -11,7 +11,7 @@ from runestone.config import Settings
 from runestone.core.clients.base import BaseLLMClient
 from runestone.core.clients.gemini_client import GeminiClient
 from runestone.core.clients.openai_client import OpenAIClient
-from runestone.core.console import get_console
+from runestone.core.logging_config import get_logger
 from runestone.core.exceptions import APIKeyError
 
 
@@ -39,7 +39,7 @@ def create_llm_client(
         APIKeyError: If API key is not provided or invalid provider specified
         ValueError: If unsupported provider is specified
     """
-    console = get_console()
+    logger = get_logger(__name__)
 
     # Use settings values as defaults, but allow overrides
     provider = provider or settings.llm_provider

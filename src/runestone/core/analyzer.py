@@ -9,11 +9,10 @@ import json
 from typing import Any, Dict, List, Optional
 
 from runestone.config import Settings
-from runestone.core import console
 from runestone.core.clients.base import BaseLLMClient
 from runestone.core.clients.factory import create_llm_client
-from runestone.core.console import get_console
 from runestone.core.exceptions import ContentAnalysisError
+from runestone.core.logging_config import get_logger
 from runestone.core.prompts import ANALYSIS_PROMPT_TEMPLATE, SEARCH_PROMPT_TEMPLATE
 
 
@@ -43,7 +42,7 @@ class ContentAnalyzer:
         # Use provided settings or create default
         self.settings = settings
         self.verbose = verbose if verbose is not None else self.settings.verbose
-        self.console = get_console()
+        self.logger = get_logger(__name__)
 
         if client is not None:
             self.client = client
@@ -73,7 +72,7 @@ class ContentAnalyzer:
             analysis_prompt = ANALYSIS_PROMPT_TEMPLATE.format(extracted_text=extracted_text)
 
             if self.verbose:
-                self.console.print(f"Analyzing content with {self.client.provider_name}...")
+                self.logger.info(f"Analyzing content with {self.client.provider_name}...")
 
             response_text = self.client.analyze_content(analysis_prompt)
 
@@ -100,7 +99,7 @@ class ContentAnalyzer:
             except json.JSONDecodeError:
                 # If JSON parsing fails, try to extract content manually
                 if self.verbose:
-                    self.console.print("[yellow]Warning:[/yellow] JSON parsing failed, attempting fallback analysis...")
+                    self.logger.warning("JSON parsing failed, attempting fallback analysis...")
 
                 return self._fallback_analysis(extracted_text, response_text)
 
@@ -158,16 +157,11 @@ class ContentAnalyzer:
             core_topics = analysis.get("core_topics", [])
 
             if not search_queries and not core_topics:
-                self.console.print("[yellow]Warning:[/yellow] No search queries or topics generated")
+                self.logger.warning("No search queries or topics generated")
                 return ""
 
             if self.verbose:
-                self.console.print("Searching for educational material on topics:")
-                for topic in core_topics:
-                    self.console.print(f"* {topic}")
-                self.console.print(f"and queries:")
-                for query in search_queries:
-                    self.console.print(f"* {query}")
+                self.logger.info(f"Searching for educational material on topics: {core_topics} and queries: {search_queries}")
 
             # Use combined queries in one search prompt
             search_prompt = SEARCH_PROMPT_TEMPLATE.format(
@@ -187,10 +181,10 @@ class ContentAnalyzer:
 
             except Exception as e:
                 if self.verbose:
-                    self.console.print(f"[yellow]Warning:[/yellow] Search failed: {e}")
+                    self.logger.warning(f"Search failed: {e}")
                 return f"Search failed: {str(e)}"
 
         except Exception as e:
             if self.verbose:
-                self.console.print(f"[red]Error:[/red] Resource search failed: {e}")
+                self.logger.error(f"Resource search failed: {e}")
             return f"Resource search failed: {str(e)}"
