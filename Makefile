@@ -1,10 +1,11 @@
-.PHONY: help install install-dev install-frontend lint lint-frontend test test-coverage test-frontend run run-backend run-frontend clean setup
+.PHONY: help install install-all install-dev install-frontend lint lint-frontend test test-coverage test-frontend run run-backend run-frontend clean setup
 
 # Default target
 help:
 	@echo "Available commands:"
 	@echo "  setup        - Set up the development environment"
 	@echo "  install      - Install production dependencies"
+	@echo "  install-all  - Install all dependencies (production + dev)"
 	@echo "  install-dev  - Install development dependencies"
 	@echo "  lint         - Run all linting checks"
 	@echo "  lint-check   - Run linting in check mode (no fixes)"
@@ -32,6 +33,11 @@ install:
 # Install development dependencies
 install-dev:
 	@echo "Installing development dependencies..."
+	uv sync --extra dev
+
+# Install all dependencies
+install-all:
+	@echo "Installing all dependencies..."
 	uv sync --extra dev
 
 # Lint checking with fixes

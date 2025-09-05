@@ -7,7 +7,6 @@ interface FileUploadProps {
 
 const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isProcessing }) => {
   const [dragActive, setDragActive] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDrag = (e: React.DragEvent) => {
@@ -33,7 +32,6 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isProcessing }) =
 
   const handleFileSelect = (file: File) => {
     if (file.type.startsWith('image/')) {
-      setSelectedFile(file);
       onFileSelect(file);
     } else {
       alert('Please select an image file');
@@ -51,18 +49,19 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isProcessing }) =
   };
 
   return (
-    <div className="w-full max-w-md mx-auto">
-      <div
-        className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-          dragActive
-            ? 'border-blue-500 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400'
-        } ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}
-        onDragEnter={handleDrag}
-        onDragLeave={handleDrag}
-        onDragOver={handleDrag}
-        onDrop={handleDrop}
-      >
+    <div className="rounded-lg border-2 border-dashed border-[#4d3c63] p-12 text-center hover:border-[var(--primary-color)] transition-colors">
+      <div className="flex flex-col items-center gap-4">
+        <span className="material-symbols-outlined text-6xl text-gray-500">upload_file</span>
+        <p className="text-lg font-semibold text-white">Drag & drop a file or click to upload</p>
+        <p className="text-sm text-gray-400">PNG, JPG, or GIF up to 10MB</p>
+        <button
+          type="button"
+          onClick={handleButtonClick}
+          className="mt-4 flex min-w-[120px] cursor-pointer items-center justify-center overflow-hidden rounded-md h-12 px-6 bg-[var(--primary-color)] text-[#111714] text-base font-bold leading-normal tracking-[0.015em] hover:bg-opacity-90 transition-all"
+          disabled={isProcessing}
+        >
+          <span className="truncate">Browse Files</span>
+        </button>
         <input
           ref={fileInputRef}
           type="file"
@@ -71,35 +70,6 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isProcessing }) =
           className="hidden"
           disabled={isProcessing}
         />
-
-        <div className="space-y-4">
-          <div className="text-4xl">📷</div>
-          <div>
-            <p className="text-lg font-medium text-gray-900">
-              {selectedFile ? selectedFile.name : 'Drop your image here'}
-            </p>
-            <p className="text-sm text-gray-500">
-              or{' '}
-              <button
-                type="button"
-                onClick={handleButtonClick}
-                className="text-blue-600 hover:text-blue-500 font-medium"
-                disabled={isProcessing}
-              >
-                browse files
-              </button>
-            </p>
-          </div>
-          {selectedFile && (
-            <div className="mt-4">
-              <img
-                src={URL.createObjectURL(selectedFile)}
-                alt="Preview"
-                className="max-w-full h-32 object-contain mx-auto rounded"
-              />
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
