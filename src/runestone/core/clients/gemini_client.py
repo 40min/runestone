@@ -8,8 +8,8 @@ interface, handling OCR and content analysis using Google's Gemini API.
 import google.generativeai as genai
 from PIL import Image
 
-from runestone.core.exceptions import APIKeyError, LLMError, OCRError
 from runestone.core.clients.base import BaseLLMClient
+from runestone.core.exceptions import APIKeyError, LLMError, OCRError
 
 
 class GeminiClient(BaseLLMClient):
@@ -89,7 +89,7 @@ class GeminiClient(BaseLLMClient):
                 raise OCRError("Could not recognise text on the page.")
 
             if len(extracted_text) < 10:
-                raise OCRError("Extracted text is too short - may not be a valid textbook page")            
+                raise OCRError("Extracted text is too short - may not be a valid textbook page")
 
             return extracted_text
 

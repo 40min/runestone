@@ -5,18 +5,18 @@ This module handles image processing and text extraction from Swedish textbook p
 using various LLM providers like OpenAI or Gemini.
 """
 
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional
-import re
 
 from PIL import Image
 
+from runestone.config import Settings
 from runestone.core.clients.base import BaseLLMClient
 from runestone.core.clients.factory import create_llm_client
 from runestone.core.console import get_console
 from runestone.core.exceptions import ImageProcessingError, OCRError
 from runestone.core.prompts import OCR_PROMPT
-from runestone.config import Settings
 
 
 class OCRProcessor:
@@ -95,6 +95,7 @@ class OCRProcessor:
             raise ImageProcessingError(f"Image file not found: {image_path}")
         except Exception as e:
             raise ImageProcessingError(f"Failed to load image: {str(e)}")
+
     def _parse_and_analyze_recognition_stats(self, extracted_text: str) -> str:
         """
         Parse recognition statistics from extracted text and analyze quality.
@@ -131,12 +132,11 @@ class OCRProcessor:
                     if percentage < 90:
                         raise OCRError(
                             f"OCR recognition percentage below 90%: {percentage:.1f}% ({success}/{total})",
-                            details=stats_part.strip()
+                            details=stats_part.strip(),
                         )
                 # If total == 0, skip check (assume no text to recognize)
 
         return text_part
-
 
     def extract_text(self, image_path: Path) -> Dict[str, Any]:
         """
@@ -162,7 +162,7 @@ class OCRProcessor:
             extracted_text = self.client.extract_text_from_image(image, ocr_prompt)
 
             # Parse and analyze recognition statistics
-            text_part = self._parse_and_analyze_recognition_stats(extracted_text)            
+            text_part = self._parse_and_analyze_recognition_stats(extracted_text)
 
             return {
                 "text": text_part,

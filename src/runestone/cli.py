@@ -11,11 +11,11 @@ from typing import Optional
 import click
 from dotenv import load_dotenv
 
+from runestone.config import Settings
 from runestone.core.clients.factory import get_available_providers
 from runestone.core.console import setup_console
 from runestone.core.exceptions import RunestoneError
 from runestone.core.processor import RunestoneProcessor
-from runestone.config import Settings
 
 # Load environment variables from .env file
 load_dotenv()
@@ -25,6 +25,7 @@ console = setup_console()
 
 # Load centralized settings
 settings = Settings()
+
 
 @click.group()
 @click.version_option(version="0.1.0", prog_name="runestone")
@@ -94,7 +95,7 @@ def process(
         runestone process --provider openai /path/to/textbook_page.jpg
         runestone process --provider gemini --api-key YOUR_KEY /path/to/textbook_page.jpg # noqa: E501
     """
-    try:        
+    try:
         # Determine provider (use CLI arg, then settings, then default)
         if not provider:
             provider = settings.llm_provider
@@ -141,11 +142,7 @@ def process(
 
         # Initialize processor with settings
         processor = RunestoneProcessor(
-            settings=settings,
-            provider=provider,
-            api_key=api_key,
-            model_name=model,
-            verbose=verbose
+            settings=settings, provider=provider, api_key=api_key, model_name=model, verbose=verbose
         )
 
         # Process the image

@@ -8,6 +8,7 @@ and output formatting to provide a complete Swedish textbook analysis.
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from runestone.config import Settings
 from runestone.core.analyzer import ContentAnalyzer
 from runestone.core.clients.base import BaseLLMClient
 from runestone.core.clients.factory import create_llm_client
@@ -15,7 +16,6 @@ from runestone.core.console import get_console
 from runestone.core.exceptions import RunestoneError
 from runestone.core.formatter import ResultFormatter
 from runestone.core.ocr import OCRProcessor
-from runestone.config import Settings
 
 
 class RunestoneProcessor:

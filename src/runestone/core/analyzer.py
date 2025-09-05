@@ -8,13 +8,13 @@ grammar rules, vocabulary, and generate learning resources.
 import json
 from typing import Any, Dict, List, Optional
 
+from runestone.config import Settings
 from runestone.core import console
 from runestone.core.clients.base import BaseLLMClient
 from runestone.core.clients.factory import create_llm_client
 from runestone.core.console import get_console
 from runestone.core.exceptions import ContentAnalysisError
 from runestone.core.prompts import ANALYSIS_PROMPT_TEMPLATE, SEARCH_PROMPT_TEMPLATE
-from runestone.config import Settings
 
 
 class ContentAnalyzer:
@@ -93,7 +93,7 @@ class ContentAnalyzer:
                 ]
                 for field in required_fields:
                     if field not in analysis:
-                        raise ContentAnalysisError(f"Missing required field: {field}")                
+                        raise ContentAnalysisError(f"Missing required field: {field}")
 
                 return analysis
 
@@ -171,8 +171,8 @@ class ContentAnalyzer:
 
             # Use combined queries in one search prompt
             search_prompt = SEARCH_PROMPT_TEMPLATE.format(
-                core_topics=', '.join(f'"{topic}"' for topic in core_topics[:3]),
-                query_suggestions=', '.join(f'"{query}"' for query in search_queries[:4])
+                core_topics=", ".join(f'"{topic}"' for topic in core_topics[:3]),
+                query_suggestions=", ".join(f'"{query}"' for query in search_queries[:4]),
             )
 
             try:
@@ -194,6 +194,3 @@ class ContentAnalyzer:
             if self.verbose:
                 self.console.print(f"[red]Error:[/red] Resource search failed: {e}")
             return f"Resource search failed: {str(e)}"
-
-    
-

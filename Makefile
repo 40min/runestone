@@ -1,4 +1,4 @@
-.PHONY: help install install-dev lint test test-coverage run run-backend clean setup
+.PHONY: help install install-dev install-frontend lint lint-frontend test test-coverage test-frontend run run-backend run-frontend clean setup
 
 # Default target
 help:
@@ -8,10 +8,14 @@ help:
 	@echo "  install-dev  - Install development dependencies"
 	@echo "  lint         - Run all linting checks"
 	@echo "  lint-check   - Run linting in check mode (no fixes)"
+	@echo "  lint-frontend - Run frontend linting checks"
 	@echo "  test         - Run test suite"
 	@echo "  test-coverage - Run tests with coverage report"
+	@echo "  test-frontend - Run frontend test suite"
 	@echo "  run          - Run the application (requires IMAGE_PATH and GEMINI_API_KEY)"
 	@echo "  run-backend  - Run the FastAPI backend server"
+	@echo "  install-frontend - Install frontend dependencies"
+	@echo "  run-frontend - Run the frontend development server"
 	@echo "  clean        - Clean up temporary files and caches"
 
 # Set up development environment
@@ -33,18 +37,25 @@ install-dev:
 # Lint checking with fixes
 lint:
 	@echo "Running code formatters..."
-	black src/ tests/
-	isort src/ tests/
+	uv run black src/ tests/
+	uv run isort src/ tests/
 	@echo "Running linting checks..."
-	flake8 src/ tests/
+	uv run flake8 --max-line-length=120 --extend-ignore=E203,W503 src/ tests/
+	@echo "Running frontend linting..."
+	cd frontend && npm run lint
 
 # Lint checking without fixes
 lint-check:
 	@echo "Checking code formatting..."
-	black --check src/ tests/
-	isort --check-only src/ tests/
+	uv run black --check src/ tests/
+	uv run isort --check-only src/ tests/
 	@echo "Running linting checks..."
-	flake8 src/ tests/
+	uv run flake8 --max-line-length=120 --extend-ignore=E203,W503 src/ tests/
+
+# Run frontend linting
+lint-frontend:
+	@echo "Running frontend linting checks..."
+	cd frontend && npm run lint
 
 # Run test suite
 test:
@@ -73,6 +84,22 @@ run:
 run-backend:
 	@echo "Starting FastAPI backend server..."
 	uvicorn runestone.api.main:app --reload --host 0.0.0.0 --port 8000
+
+# Install frontend dependencies
+install-frontend:
+	@echo "Installing frontend dependencies..."
+	cd frontend && npm install
+
+# Run frontend test suite
+test-frontend:
+	@echo "Running frontend test suite..."
+	cd frontend && npm run test:run
+
+
+# Run the frontend development server
+run-frontend:
+	@echo "Starting frontend development server..."
+	cd frontend && npm run dev
 
 # Clean up temporary files and caches
 clean:

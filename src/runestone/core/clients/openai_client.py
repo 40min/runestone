@@ -11,8 +11,8 @@ import io
 from openai import OpenAI
 from PIL import Image
 
-from runestone.core.exceptions import APIKeyError, LLMError, OCRError
 from runestone.core.clients.base import BaseLLMClient
+from runestone.core.exceptions import APIKeyError, LLMError, OCRError
 
 
 class OpenAIClient(BaseLLMClient):
@@ -100,7 +100,7 @@ class OpenAIClient(BaseLLMClient):
                 ],
                 max_tokens=10000,
                 temperature=0.1,
-            )            
+            )
 
             if not response.choices or not response.choices[0].message.content:
                 raise OCRError("No text returned from OpenAI API")
@@ -112,7 +112,7 @@ class OpenAIClient(BaseLLMClient):
                 raise OCRError("Could not recognise text on the page.")
 
             if len(extracted_text) < 10:
-                raise OCRError("Extracted text is too short - may not be a valid textbook page")            
+                raise OCRError("Extracted text is too short - may not be a valid textbook page")
 
             return extracted_text
 
@@ -134,7 +134,7 @@ class OpenAIClient(BaseLLMClient):
         Raises:
             LLMError: If content analysis fails
         """
-        try:            
+        try:
             response = self.client.chat.completions.create(
                 model=self._model_name,
                 messages=[{"role": "user", "content": prompt}],

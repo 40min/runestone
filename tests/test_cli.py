@@ -69,11 +69,11 @@ class TestCLI:
             assert result.exit_code == 0
             # Check that settings was passed and other parameters
             call_args = mock_processor_class.call_args
-            assert call_args[1]['provider'] == "openai"
-            assert call_args[1]['api_key'] == self.api_key
-            assert call_args[1]['model_name'] is None
-            assert call_args[1]['verbose'] is True
-            assert 'settings' in call_args[1]
+            assert call_args[1]["provider"] == "openai"
+            assert call_args[1]["api_key"] == self.api_key
+            assert call_args[1]["model_name"] is None
+            assert call_args[1]["verbose"] is True
+            assert "settings" in call_args[1]
             mock_processor.process_image.assert_called_once()
             mock_processor.display_results_console.assert_called_once_with(mock_results)
 
@@ -236,8 +236,8 @@ class TestCLI:
             assert result.exit_code == 0
             # Should use API key from environment
             call_args = mock_processor_class.call_args
-            assert call_args[1]['provider'] == "openai"
-            assert call_args[1]['api_key'] == "env-api-key"
-            assert call_args[1]['model_name'] is None
-            assert call_args[1]['verbose'] is True
-            assert 'settings' in call_args[1]
+            assert call_args[1]["provider"] == "openai"
+            assert call_args[1]["api_key"] == "env-api-key"
+            assert call_args[1]["model_name"] is None
+            assert call_args[1]["verbose"] is True
+            assert "settings" in call_args[1]

@@ -69,7 +69,7 @@ class ResultFormatter:
         char_count = ocr_result.get("character_count", 0)
 
         # Truncate very long text for display
-        display_text = text        
+        display_text = text
 
         panel = Panel(
             display_text,

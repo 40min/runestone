@@ -17,7 +17,6 @@ from runestone.config import Settings, settings
 from runestone.core.exceptions import RunestoneError
 from runestone.core.processor import RunestoneProcessor
 
-
 router = APIRouter()
 
 

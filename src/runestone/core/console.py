@@ -7,7 +7,6 @@ used throughout the application for consistent output formatting.
 
 from rich.console import Console
 
-
 # Global console instance
 _console: Console = None
 

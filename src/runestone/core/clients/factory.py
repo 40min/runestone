@@ -7,12 +7,12 @@ based on environment variables and configuration.
 
 from typing import Optional
 
-from runestone.core.console import get_console
-from runestone.core.exceptions import APIKeyError
+from runestone.config import Settings
 from runestone.core.clients.base import BaseLLMClient
 from runestone.core.clients.gemini_client import GeminiClient
 from runestone.core.clients.openai_client import OpenAIClient
-from runestone.config import Settings
+from runestone.core.console import get_console
+from runestone.core.exceptions import APIKeyError
 
 
 def create_llm_client(
