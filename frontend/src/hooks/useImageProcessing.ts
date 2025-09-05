@@ -34,17 +34,23 @@ interface UseImageProcessingReturn {
   error: string | null;
   isProcessing: boolean;
   reset: () => void;
+  currentImage: string | null;
 }
 
 const useImageProcessing = (): UseImageProcessingReturn => {
   const [result, setResult] = useState<ProcessingResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [currentImage, setCurrentImage] = useState<string | null>(null);
 
   const processImage = async (file: File) => {
     setIsProcessing(true);
     setError(null);
     setResult(null);
+
+    // Create data URL for the image to display during processing
+    const imageUrl = URL.createObjectURL(file);
+    setCurrentImage(imageUrl);
 
     try {
       const formData = new FormData();
@@ -67,6 +73,11 @@ const useImageProcessing = (): UseImageProcessingReturn => {
       setError(errorMessage);
     } finally {
       setIsProcessing(false);
+      // Clean up the object URL to prevent memory leaks
+      if (imageUrl) {
+        URL.revokeObjectURL(imageUrl);
+        setCurrentImage(null);
+      }
     }
   };
 
