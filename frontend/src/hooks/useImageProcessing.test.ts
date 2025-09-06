@@ -119,6 +119,104 @@ describe('useImageProcessing', () => {
       expect(result.current.result).toBeNull();
       expect(result.current.error).toBeNull();
       expect(result.current.isProcessing).toBe(false);
+      expect(result.current.progress).toBe(0);
+    });
+  });
+
+  it('should update progress during processing', async () => {
+    const mockResponse = {
+      ocr_result: { text: 'Sample text', character_count: 11 },
+      analysis: {
+        grammar_focus: { topic: 'Present tense', explanation: 'Focus on present tense usage', has_explicit_rules: true },
+        vocabulary: [{ swedish: 'hej', english: 'hello' }],
+      },
+      processing_successful: true,
+    };
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockResponse),
+    });
+
+    const { result } = renderHook(() => useImageProcessing());
+
+    const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
+
+    await act(async () => {
+      await result.current.processImage(file);
+    });
+
+    // Check that progress updates occurred
+    expect(result.current.progress).toBe(100);
+  });
+
+  it('should set currentImage during processing', async () => {
+    const mockResponse = {
+      ocr_result: { text: 'Sample text', character_count: 11 },
+      analysis: {
+        grammar_focus: { topic: 'Present tense', explanation: 'Focus on present tense usage', has_explicit_rules: true },
+        vocabulary: [{ swedish: 'hej', english: 'hello' }],
+      },
+      processing_successful: true,
+    };
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockResponse),
+    });
+
+    const { result } = renderHook(() => useImageProcessing());
+
+    const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
+
+    await act(async () => {
+      await result.current.processImage(file);
+    });
+
+    // currentImage should be null after processing completes (cleaned up)
+    await waitFor(() => {
+      expect(result.current.currentImage).toBeNull();
+    });
+  });
+
+  it('should handle malformed JSON response', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.reject(new Error('Invalid JSON')),
+    });
+
+    const { result } = renderHook(() => useImageProcessing());
+
+    const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
+    await act(async () => {
+      await result.current.processImage(file);
+    });
+
+    await waitFor(() => {
+      expect(result.current.error).toBe('Invalid JSON');
+      expect(result.current.result).toBeNull();
+      expect(result.current.isProcessing).toBe(false);
+    });
+  });
+
+  it('should handle response without json method', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    const { result } = renderHook(() => useImageProcessing());
+
+    const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
+    await act(async () => {
+      await result.current.processImage(file);
+    });
+
+    await waitFor(() => {
+      expect(result.current.error).toBe('response.json is not a function');
+      expect(result.current.result).toBeNull();
+      expect(result.current.isProcessing).toBe(false);
     });
   });
 });

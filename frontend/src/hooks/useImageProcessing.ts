@@ -103,6 +103,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
     isProcessing,
     reset,
     progress,
+    currentImage,
   };
 };
 

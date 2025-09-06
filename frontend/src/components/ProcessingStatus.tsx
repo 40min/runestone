@@ -10,7 +10,11 @@ const ProcessingStatus: React.FC<ProcessingStatusProps> = ({ isProcessing }) => 
   return (
     <div className="flex flex-col items-center justify-center space-y-4 py-8">
       <div className="relative">
-        <div className="w-16 h-16 border-4 border-[#4d3c63] border-t-[var(--primary-color)] rounded-full animate-spin"></div>
+        <div
+          className="w-16 h-16 border-4 border-[#4d3c63] border-t-[var(--primary-color)] rounded-full animate-spin"
+          role="status"
+          aria-label="Processing"
+        ></div>
       </div>
       <p className="text-lg font-semibold text-white">Processing...</p>
     </div>

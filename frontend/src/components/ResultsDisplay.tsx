@@ -70,6 +70,10 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
     );
   }
 
+  if (!result) {
+    return null;
+  }
+
   const tabs = [
     { id: "ocr", label: "OCR Text" },
     { id: "grammar", label: "Grammar" },
