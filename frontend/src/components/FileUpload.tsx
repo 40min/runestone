@@ -1,14 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
+import { Button, Box, Typography } from "@mui/material";
 
 interface FileUploadProps {
   onFileSelect: (file: File) => void;
   isProcessing: boolean;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({
-  onFileSelect,
-  isProcessing,
-}) => {
+const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isProcessing }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isZoomed, setIsZoomed] = useState(false);
@@ -43,51 +41,123 @@ const FileUpload: React.FC<FileUploadProps> = ({
   };
 
   return (
-    <div className="rounded-lg border-2 border-dashed border-[#4d3c63] p-12 text-center hover:border-[var(--primary-color)] transition-colors">
-      <div className="flex flex-col items-center gap-4">
-        {selectedFile && previewUrl ? (
-          <>
-            <img
-              src={previewUrl}
-              alt="Preview"
-              className={`max-w-full ${
-                isZoomed ? "max-h-screen" : "max-h-96"
-              } object-contain rounded-lg cursor-pointer transition-all duration-300`}
-              onClick={() => setIsZoomed(!isZoomed)}
-            />
-            <p className="text-lg font-semibold text-white">
-              {selectedFile.name}
-            </p>
-          </>
-        ) : (
-          <>
-            <span className="material-symbols-outlined text-6xl text-gray-500">
-              upload_file
-            </span>
-            <p className="text-lg font-semibold text-white">
-              Drag & drop a file or click to upload
-            </p>
-            <p className="text-sm text-gray-400">PNG, JPG, or GIF up to 10MB</p>
-          </>
-        )}
-        <button
-          type="button"
-          onClick={handleButtonClick}
-          className="mt-4 flex min-w-[120px] cursor-pointer items-center justify-center overflow-hidden rounded-md h-12 px-6 bg-[var(--primary-color)] text-[#111714] text-base font-bold leading-normal tracking-[0.015em] hover:bg-opacity-90 transition-all"
-          disabled={isProcessing}
+    <Box
+      sx={{
+        border: '2px dashed #4d3c63',
+        borderRadius: '0.5rem',
+        p: 12,
+        textAlign: 'center',
+        transition: 'border-color 0.3s',
+        minHeight: '400px',
+        display: 'flex',
+        flexDirection: 'column',
+        '&:hover': {
+          borderColor: 'var(--primary-color)',
+        },
+      }}
+    >
+      {selectedFile && previewUrl ? (
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flex: 1,
+            width: '100%',
+          }}
         >
-          <span className="truncate">Browse Files</span>
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFileInputChange}
-          className="hidden"
-          disabled={isProcessing}
-        />
-      </div>
-    </div>
+          <img
+            src={previewUrl}
+            alt="Preview"
+            style={{
+              maxWidth: '100%',
+              maxHeight: isZoomed ? '80vh' : '24rem',
+              objectFit: 'contain',
+              borderRadius: '0.5rem',
+              cursor: 'pointer',
+              transition: 'all 0.3s',
+            }}
+            onClick={() => setIsZoomed(!isZoomed)}
+          />
+          <Typography
+            variant="body1"
+            sx={{
+              mt: 4,
+              fontSize: '1.125rem',
+              fontWeight: 600,
+              color: 'white',
+              textAlign: 'center',
+            }}
+          >
+            {selectedFile.name}
+          </Typography>
+        </Box>
+      ) : (
+        <>
+          <span
+            className="material-symbols-outlined"
+            style={{
+              fontSize: '4rem',
+              color: '#6b7280',
+              marginBottom: '1rem',
+            }}
+          >
+            upload_file
+          </span>
+          <Typography
+            variant="body1"
+            sx={{
+              fontSize: '1.125rem',
+              fontWeight: 600,
+              color: 'white',
+              mb: 2,
+            }}
+          >
+            Drag & drop a file or click to upload
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{
+              color: '#9ca3af',
+              mb: 2,
+            }}
+          >
+            PNG, JPG, or GIF up to 10MB
+          </Typography>
+        </>
+      )}
+      <Button
+        onClick={handleButtonClick}
+        disabled={isProcessing}
+        sx={{
+          mt: 4,
+          minWidth: 120,
+          height: '3rem',
+          px: 6,
+          backgroundColor: 'var(--primary-color)',
+          color: '#111714',
+          fontSize: '1rem',
+          fontWeight: 700,
+          borderRadius: '0.5rem',
+          '&:hover': {
+            backgroundColor: 'var(--primary-color)',
+            opacity: 0.9,
+          },
+          transition: 'all 0.2s',
+        }}
+      >
+        Browse Files
+      </Button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileInputChange}
+        style={{ display: 'none' }}
+        disabled={isProcessing}
+      />
+    </Box>
   );
 };
 
