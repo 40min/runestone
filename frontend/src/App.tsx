@@ -6,7 +6,7 @@ import ResultsDisplay from './components/ResultsDisplay';
 import useImageProcessing from './hooks/useImageProcessing';
 
 function App() {
-  const { processImage, result, error, isProcessing, reset } = useImageProcessing();
+  const { processImage, result, error, isProcessing, reset, progress } = useImageProcessing();
 
   const handleFileSelect = async (file: File) => {
     await processImage(file);
@@ -25,7 +25,7 @@ function App() {
 
             <FileUpload onFileSelect={handleFileSelect} isProcessing={isProcessing} onReset={reset} />
 
-            {isProcessing && <ProcessingStatus isProcessing={isProcessing} />}
+            {isProcessing && <ProcessingStatus isProcessing={isProcessing} progress={progress} />}
 
             {(result || error) && <ResultsDisplay result={result} error={error} />}
           </div>

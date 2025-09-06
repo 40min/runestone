@@ -35,6 +35,7 @@ interface UseImageProcessingReturn {
   isProcessing: boolean;
   reset: () => void;
   currentImage: string | null;
+  progress: number;
 }
 
 const useImageProcessing = (): UseImageProcessingReturn => {
@@ -42,20 +43,25 @@ const useImageProcessing = (): UseImageProcessingReturn => {
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentImage, setCurrentImage] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
 
   const processImage = async (file: File) => {
     setIsProcessing(true);
     setError(null);
     setResult(null);
+    setProgress(10);
 
     // Create data URL for the image to display during processing
     const imageUrl = URL.createObjectURL(file);
     setCurrentImage(imageUrl);
+    setProgress(20);
 
     try {
+      setProgress(40);
       const formData = new FormData();
       formData.append('file', file);
 
+      setProgress(60);
       const response = await fetch('http://localhost:8000/api/process', {
         method: 'POST',
         body: formData,
@@ -66,8 +72,10 @@ const useImageProcessing = (): UseImageProcessingReturn => {
         throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
 
+      setProgress(80);
       const data: ProcessingResult = await response.json();
       setResult(data);
+      setProgress(100);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
       setError(errorMessage);
@@ -85,6 +93,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
     setResult(null);
     setError(null);
     setIsProcessing(false);
+    setProgress(0);
   };
 
   return {
@@ -93,6 +102,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
     error,
     isProcessing,
     reset,
+    progress,
   };
 };
 

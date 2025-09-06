@@ -5,7 +5,7 @@ interface ProcessingStatusProps {
   progress?: number;
 }
 
-const ProcessingStatus: React.FC<ProcessingStatusProps> = ({ isProcessing, progress = 50 }) => {
+const ProcessingStatus: React.FC<ProcessingStatusProps> = ({ isProcessing, progress }) => {
   return (
     <div className="space-y-6">
       <h3 className="text-2xl font-bold text-white">Processing Status</h3>
