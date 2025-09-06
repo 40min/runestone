@@ -4,17 +4,18 @@ import { Diamond } from 'lucide-react';
 
 const Header: React.FC = () => {
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        px: 10,
-        py: 3,
-        borderBottom: '1px solid #3a2d4a',
-        backgroundColor: '#1a102b',
-      }}
-    >
+    <header>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          px: 10,
+          py: 3,
+          borderBottom: '1px solid #3a2d4a',
+          backgroundColor: '#1a102b',
+        }}
+      >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <Diamond size={24} style={{ color: 'var(--primary-color)' }} />
         <Typography
@@ -34,7 +35,8 @@ const Header: React.FC = () => {
       <Box sx={{ display: 'flex', gap: 4, alignItems: 'center' }}>
         {/* Additional header content can go here */}
       </Box>
-    </Box>
+      </Box>
+    </header>
   );
 };
 

@@ -70,14 +70,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isProcessing }) =
           <img
             src={previewUrl}
             alt="Preview"
-            style={{
-              maxWidth: '100%',
-              maxHeight: isZoomed ? '80vh' : '24rem',
-              objectFit: 'contain',
-              borderRadius: '0.5rem',
-              cursor: 'pointer',
-              transition: 'all 0.3s',
-            }}
+            className={`max-w-full object-contain rounded-lg cursor-pointer transition-all duration-300 ${
+              isZoomed ? 'max-h-screen' : 'max-h-96'
+            }`}
             onClick={() => setIsZoomed(!isZoomed)}
           />
           <Typography
