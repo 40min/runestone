@@ -1,52 +1,32 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from "react";
 
 interface FileUploadProps {
   onFileSelect: (file: File) => void;
   isProcessing: boolean;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isProcessing }) => {
-  const [dragActive, setDragActive] = useState(false);
+const FileUpload: React.FC<FileUploadProps> = ({
+  onFileSelect,
+  isProcessing,
+}) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isZoomed, setIsZoomed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      handleFileSelect(file);
-    }
-  };
-
   const handleFileSelect = (file: File) => {
-    if (file.type.startsWith('image/')) {
+    if (file.type.startsWith("image/")) {
       setSelectedFile(file);
       setPreviewUrl(URL.createObjectURL(file));
       onFileSelect(file);
     } else {
-      alert('Please select an image file');
+      alert("Please select an image file");
     }
   };
 
-
   useEffect(() => {
     return () => {
-      if (previewUrl && typeof URL !== 'undefined' && URL.revokeObjectURL) {
+      if (previewUrl && typeof URL !== "undefined" && URL.revokeObjectURL) {
         URL.revokeObjectURL(previewUrl);
       }
     };
@@ -70,15 +50,23 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isProcessing }) =
             <img
               src={previewUrl}
               alt="Preview"
-              className={`max-w-full ${isZoomed ? 'max-h-screen' : 'max-h-96'} object-contain rounded-lg cursor-pointer transition-all duration-300`}
+              className={`max-w-full ${
+                isZoomed ? "max-h-screen" : "max-h-96"
+              } object-contain rounded-lg cursor-pointer transition-all duration-300`}
               onClick={() => setIsZoomed(!isZoomed)}
             />
-            <p className="text-lg font-semibold text-white">{selectedFile.name}</p>
+            <p className="text-lg font-semibold text-white">
+              {selectedFile.name}
+            </p>
           </>
         ) : (
           <>
-            <span className="material-symbols-outlined text-6xl text-gray-500">upload_file</span>
-            <p className="text-lg font-semibold text-white">Drag & drop a file or click to upload</p>
+            <span className="material-symbols-outlined text-6xl text-gray-500">
+              upload_file
+            </span>
+            <p className="text-lg font-semibold text-white">
+              Drag & drop a file or click to upload
+            </p>
             <p className="text-sm text-gray-400">PNG, JPG, or GIF up to 10MB</p>
           </>
         )}

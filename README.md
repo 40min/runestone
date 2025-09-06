@@ -15,7 +15,7 @@ A command-line tool and web application for analyzing Swedish textbook pages usi
 - **📝 Export Options**: Output results to console or markdown format
 - **⚙️ Configurable**: Easy provider switching via environment variables or CLI options
 - **🌐 Web API**: REST API for programmatic access to image processing functionality
-- **🖥️ Web Interface**: Planned responsive web application for easy image upload and results viewing (coming soon)
+- **🖥️ Web Interface**: Responsive web application for easy image upload and results viewing
 
 ## 🚀 Quick Start
 
@@ -110,6 +110,33 @@ The API will be available at `http://localhost:8000` with the following endpoint
 
 API documentation is available at `http://localhost:8000/docs`.
 
+### Web Interface Usage
+
+Runestone also provides a responsive web interface for easy image upload and results viewing:
+
+```bash
+# Start both the backend API and frontend web interface
+make run-dev
+
+# Or start them separately
+make run-backend    # Backend API server
+make run-frontend   # Frontend development server
+```
+
+The web interface will be available at `http://localhost:5173` with the following features:
+
+- **📤 File Upload**: Drag and drop or click to select Swedish textbook page images
+- **⚙️ Provider Selection**: Choose between OpenAI GPT-4o or Google Gemini
+- **📊 Real-time Results**: View formatted analysis results with grammar explanations and vocabulary
+- **🔄 Processing Status**: Visual feedback during image processing
+- **📱 Responsive Design**: Works on desktop and mobile devices
+
+**Quick Start:**
+1. Run `make run-dev` to start both servers
+2. Open `http://localhost:5173` in your browser
+3. Upload a Swedish textbook page image
+4. View the structured analysis results
+
 ## 📖 Example Output
 
 When you process a Swedish textbook page, Runestone will provide:
@@ -187,7 +214,7 @@ make test-coverage  # Run tests with coverage report
 make clean          # Clean up temporary files
 make run IMAGE_PATH=/path/to/image.jpg  # Run the CLI application
 make run-backend    # Start the FastAPI server
-make run-dev        # Start both backend and frontend (when available)
+make run-dev        # Start both backend and frontend
 ```
 
 ### Running Tests
@@ -359,8 +386,8 @@ If you encounter issues or have questions:
 
 ---
 
-## 🚧 Planned Features
+## 🚀 Recent Features
 
-- **🖥️ Web Interface**: A responsive React-based frontend for easy image upload and results visualization is currently in development. This will provide a user-friendly alternative to the command-line interface.
+- **🖥️ Web Interface**: A responsive React-based frontend for easy image upload and results visualization is now available! This provides a user-friendly alternative to the command-line interface.
 
 **Happy Swedish learning!** 🇸🇪✨
