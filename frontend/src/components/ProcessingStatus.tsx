@@ -2,25 +2,17 @@ import React from 'react';
 
 interface ProcessingStatusProps {
   isProcessing: boolean;
-  progress?: number;
 }
 
-const ProcessingStatus: React.FC<ProcessingStatusProps> = ({ isProcessing, progress }) => {
+const ProcessingStatus: React.FC<ProcessingStatusProps> = ({ isProcessing }) => {
+  if (!isProcessing) return null;
+
   return (
-    <div className="space-y-6">
-      <h3 className="text-2xl font-bold text-white">Processing Status</h3>
-      <div className="space-y-3">
-        <div className="flex justify-between text-sm font-medium text-gray-300">
-          <p>Analyzing...</p>
-          <p>{progress}%</p>
-        </div>
-        <div className="w-full bg-[#4d3c63] rounded-full h-2.5">
-          <div
-            className="bg-[var(--primary-color)] h-2.5 rounded-full transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          ></div>
-        </div>
+    <div className="flex flex-col items-center justify-center space-y-4 py-8">
+      <div className="relative">
+        <div className="w-16 h-16 border-4 border-[#4d3c63] border-t-[var(--primary-color)] rounded-full animate-spin"></div>
       </div>
+      <p className="text-lg font-semibold text-white">Processing...</p>
     </div>
   );
 };

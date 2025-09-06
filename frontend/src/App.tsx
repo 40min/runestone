@@ -6,7 +6,7 @@ import ResultsDisplay from './components/ResultsDisplay';
 import useImageProcessing from './hooks/useImageProcessing';
 
 function App() {
-  const { processImage, result, error, isProcessing, reset, progress } = useImageProcessing();
+  const { processImage, result, error, isProcessing } = useImageProcessing();
 
   const handleFileSelect = async (file: File) => {
     await processImage(file);
@@ -23,9 +23,9 @@ function App() {
               <p className="mt-4 text-lg leading-8 text-gray-300">Upload an image to get an instant analysis of the text, grammar, and vocabulary.</p>
             </div>
 
-            <FileUpload onFileSelect={handleFileSelect} isProcessing={isProcessing} onReset={reset} />
+            <FileUpload onFileSelect={handleFileSelect} isProcessing={isProcessing} />
 
-            {isProcessing && <ProcessingStatus isProcessing={isProcessing} progress={progress} />}
+            {isProcessing && <ProcessingStatus isProcessing={isProcessing} />}
 
             {(result || error) && <ResultsDisplay result={result} error={error} />}
           </div>
