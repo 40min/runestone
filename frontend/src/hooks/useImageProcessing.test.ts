@@ -1,6 +1,11 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import useImageProcessing from './useImageProcessing';
 
+// Mock config
+vi.mock('../config', () => ({
+  API_BASE_URL: 'http://localhost:8010',
+}));
+
 // Mock fetch
 const mockFetch = vi.fn();
 global.fetch = mockFetch;

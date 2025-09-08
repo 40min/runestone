@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { API_BASE_URL } from '../config';
 
 interface OCRResult {
   text: string;
@@ -62,7 +63,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
       formData.append('file', file);
 
       setProgress(60);
-      const response = await fetch('http://localhost:8010/api/process', {
+      const response = await fetch(`${API_BASE_URL}/api/process`, {
         method: 'POST',
         body: formData,
       });
