@@ -6,7 +6,10 @@ interface FileUploadProps {
   isProcessing: boolean;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isProcessing }) => {
+const FileUpload: React.FC<FileUploadProps> = ({
+  onFileSelect,
+  isProcessing,
+}) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isZoomed, setIsZoomed] = useState(false);
@@ -43,35 +46,35 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isProcessing }) =
   return (
     <Box
       sx={{
-        border: '2px dashed #4d3c63',
-        borderRadius: '0.5rem',
+        border: "2px dashed #4d3c63",
+        borderRadius: "0.5rem",
         p: 12,
-        textAlign: 'center',
-        transition: 'border-color 0.3s',
-        minHeight: '400px',
-        display: 'flex',
-        flexDirection: 'column',
-        '&:hover': {
-          borderColor: 'var(--primary-color)',
+        textAlign: "center",
+        transition: "border-color 0.3s",
+        minHeight: "400px",
+        display: "flex",
+        flexDirection: "column",
+        "&:hover": {
+          borderColor: "var(--primary-color)",
         },
       }}
     >
       {selectedFile && previewUrl ? (
         <Box
           sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
             flex: 1,
-            width: '100%',
+            width: "100%",
           }}
         >
           <img
             src={previewUrl}
             alt="Preview"
             className={`max-w-full object-contain rounded-lg cursor-pointer transition-all duration-300 ${
-              isZoomed ? 'max-h-screen' : 'max-h-96'
+              isZoomed ? "max-h-screen" : "max-h-96"
             }`}
             onClick={() => setIsZoomed(!isZoomed)}
           />
@@ -79,10 +82,10 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isProcessing }) =
             variant="body1"
             sx={{
               mt: 4,
-              fontSize: '1.125rem',
+              fontSize: "1.125rem",
               fontWeight: 600,
-              color: 'white',
-              textAlign: 'center',
+              color: "white",
+              textAlign: "center",
             }}
           >
             {selectedFile.name}
@@ -93,9 +96,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isProcessing }) =
           <span
             className="material-symbols-outlined"
             style={{
-              fontSize: '4rem',
-              color: '#6b7280',
-              marginBottom: '1rem',
+              fontSize: "4rem",
+              color: "#6b7280",
+              marginBottom: "1rem",
             }}
           >
             upload_file
@@ -103,9 +106,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isProcessing }) =
           <Typography
             variant="body1"
             sx={{
-              fontSize: '1.125rem',
+              fontSize: "1.125rem",
               fontWeight: 600,
-              color: 'white',
+              color: "white",
               mb: 2,
             }}
           >
@@ -114,7 +117,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isProcessing }) =
           <Typography
             variant="body2"
             sx={{
-              color: '#9ca3af',
+              color: "#9ca3af",
               mb: 2,
             }}
           >
@@ -126,20 +129,22 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isProcessing }) =
         onClick={handleButtonClick}
         disabled={isProcessing}
         sx={{
-          mt: 4,
-          minWidth: 120,
-          height: '3rem',
-          px: 6,
-          backgroundColor: 'var(--primary-color)',
-          color: '#111714',
-          fontSize: '1rem',
-          fontWeight: 700,
-          borderRadius: '0.5rem',
-          '&:hover': {
-            backgroundColor: 'var(--primary-color)',
+          mt: 2,
+          alignSelf: "center",
+          width: "auto",
+          maxWidth: "200px",
+          height: "2rem",
+          px: 3,
+          backgroundColor: "var(--primary-color)",
+          color: "#111714",
+          fontSize: "0.8rem",
+          fontWeight: 600,
+          borderRadius: "0.375rem",
+          "&:hover": {
+            backgroundColor: "var(--primary-color)",
             opacity: 0.9,
           },
-          transition: 'all 0.2s',
+          transition: "all 0.2s",
         }}
       >
         Browse Files
@@ -149,7 +154,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, isProcessing }) =
         type="file"
         accept="image/*"
         onChange={handleFileInputChange}
-        style={{ display: 'none' }}
+        style={{ display: "none" }}
         disabled={isProcessing}
       />
     </Box>

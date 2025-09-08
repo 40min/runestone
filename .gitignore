@@ -30,4 +30,7 @@ frontend/*.local
 *.ntvs*
 *.njsproj
 *.sln
+# Docker
+.dockerignore
+docker-compose.override.yml
 *.sw?
