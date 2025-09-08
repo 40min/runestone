@@ -48,6 +48,8 @@ services:
       - "3010:3010"
     env_file:
       - .env
+    environment:
+      - VITE_API_BASE_URL=http://backend:8010
     depends_on:
       - backend
     networks:
