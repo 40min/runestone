@@ -62,7 +62,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
       formData.append('file', file);
 
       setProgress(60);
-      const response = await fetch('http://localhost:8000/api/process', {
+      const response = await fetch('http://localhost:8010/api/process', {
         method: 'POST',
         body: formData,
       });

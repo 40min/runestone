@@ -181,9 +181,9 @@ run:
 # Start FastAPI backend server
 run-backend:
 	@echo "🚀 Starting FastAPI backend server..."
-	@echo "📍 Backend will be available at: http://localhost:8000"
-	@echo "📚 API documentation at: http://localhost:8000/docs"
-	@uv run uvicorn runestone.api.main:app --reload --host 0.0.0.0 --port 8000
+	@echo "📍 Backend will be available at: http://localhost:8010"
+	@echo "📚 API documentation at: http://localhost:8010/docs"
+	@uv run uvicorn runestone.api.main:app --reload --host 0.0.0.0 --port 8010
 
 # Start frontend development server
 run-frontend:
@@ -194,12 +194,12 @@ run-frontend:
 # Start both backend and frontend concurrently
 run-dev:
 	@echo "🚀 Starting full development environment..."
-	@echo "📍 Backend: http://localhost:8000"
+	@echo "📍 Backend: http://localhost:8010"
 	@echo "📍 Frontend: http://localhost:5173"
-	@echo "📚 API Docs: http://localhost:8000/docs"
+	@echo "📚 API Docs: http://localhost:8010/docs"
 	@echo "Press Ctrl+C to stop both servers"
 	@(cd frontend && npm run dev) & \
-	uv run uvicorn runestone.api.main:app --reload --host 0.0.0.0 --port 8000
+	uv run uvicorn runestone.api.main:app --reload --host 0.0.0.0 --port 8010
 
 # =============================================================================
 # DEVELOPMENT WORKFLOWS

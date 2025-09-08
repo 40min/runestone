@@ -103,12 +103,12 @@ make run-backend
 uvicorn runestone.api.main:app --reload
 ```
 
-The API will be available at `http://localhost:8000` with the following endpoints:
+The API will be available at `http://localhost:8010` with the following endpoints:
 
 - `POST /api/process`: Upload an image and get analysis results
 - `GET /api/health`: Health check endpoint
 
-API documentation is available at `http://localhost:8000/docs`.
+API documentation is available at `http://localhost:8010/docs`.
 
 ### Web Interface Usage
 

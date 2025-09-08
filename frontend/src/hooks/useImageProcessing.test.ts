@@ -45,7 +45,7 @@ describe('useImageProcessing', () => {
       expect(result.current.isProcessing).toBe(false);
     });
 
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8000/api/process', {
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/process', {
       method: 'POST',
       body: expect.any(FormData),
     });

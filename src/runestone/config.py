@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     # Application Settings
     verbose: bool = False
-    allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000"
+    allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3010,http://127.0.0.1:3010"
 
     class Config:
         """Pydantic configuration."""
