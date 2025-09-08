@@ -1,27 +1,48 @@
-# Use Python 3.13 slim image
+# Build stage
+FROM python:3.13-slim AS builder
+
+# Labels
+LABEL maintainer="runestone-team"
+LABEL version="1.0.0"
+LABEL description="Runestone Swedish textbook analysis service - Backend"
+LABEL org.opencontainers.image.source="https://github.com/your-org/runestone"
+WORKDIR /app
+RUN apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*
+COPY pyproject.toml ./
+RUN pip install --user -e .
+
+# Production stage
 FROM python:3.13-slim
+
+# Labels
+LABEL maintainer="runestone-team"
+LABEL version="1.0.0"
+LABEL description="Runestone Swedish textbook analysis service - Backend"
+LABEL org.opencontainers.image.source="https://github.com/your-org/runestone"
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV PATH=/root/.local/bin:$PATH
 
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+# Create non-root user
+RUN groupadd -r runestone && useradd -r -g runestone runestone
 
-# Copy dependency files and source code
-COPY pyproject.toml ./
+# Copy Python dependencies from builder stage
+COPY --from=builder /root/.local /root/.local
+
+# Copy source code and resources
 COPY src/ ./src/
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -e .
-
-# Copy resources
 COPY res/ ./res/
+
+# Change ownership to non-root user
+RUN chown -R runestone:runestone /app
+
+# Switch to non-root user
+USER runestone
 
 # Expose port
 EXPOSE 8000

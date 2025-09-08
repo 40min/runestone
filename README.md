@@ -410,18 +410,5 @@ If you encounter issues or have questions:
    - Error messages
    - System information
 
----
-
-## 📚 Additional Documentation
-
-For more detailed information about the project:
-
-- **[Product Requirements Document](prd.md)**: Original requirements and specifications for the Runestone MVP
-- **[Web Application Design Plan](webapp.md)**: Detailed design and implementation plan for the web interface and configuration refactoring
-
-## 🚀 Recent Features</search>
-</search_and_replace>
-
-- **🖥️ Web Interface**: A responsive React-based frontend for easy image upload and results visualization is now available! This provides a user-friendly alternative to the command-line interface.
 
 **Happy Swedish learning!** 🇸🇪✨

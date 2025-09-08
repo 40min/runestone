@@ -1,6 +1,12 @@
 # Build stage
 FROM node:20-alpine AS builder
 
+# Labels
+LABEL maintainer="runestone-team"
+LABEL version="1.0.0"
+LABEL description="Runestone Swedish textbook analysis service - Frontend"
+LABEL org.opencontainers.image.source="https://github.com/your-org/runestone"
+
 # Set work directory
 WORKDIR /app
 
@@ -19,6 +25,12 @@ RUN npm run build
 # Production stage
 FROM nginx:alpine
 
+# Labels
+LABEL maintainer="runestone-team"
+LABEL version="1.0.0"
+LABEL description="Runestone Swedish textbook analysis service - Frontend"
+LABEL org.opencontainers.image.source="https://github.com/your-org/runestone"
+
 # Copy built assets from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 
@@ -27,6 +39,9 @@ COPY --from=builder /app/nginx.conf /etc/nginx/conf.d/default.conf
 
 # Expose port
 EXPOSE 80
+
+# Switch to nginx user (already exists in nginx:alpine)
+USER nginx
 
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"]

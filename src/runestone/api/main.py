@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from runestone.api.endpoints import router as api_router
 from runestone.core.logging_config import setup_logging
+from runestone.config import settings
 
 
 @asynccontextmanager
@@ -37,7 +38,7 @@ def create_application() -> FastAPI:
     # Configure CORS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://127.0.0.1:3000"],  # Frontend dev server
+        allow_origins=settings.allowed_origins.split(","),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

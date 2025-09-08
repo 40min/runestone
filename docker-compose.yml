@@ -8,16 +8,38 @@ services:
     container_name: runestone-backend
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       - LLM_PROVIDER=${LLM_PROVIDER}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=${OPENAI_MODEL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
       - VERBOSE=${VERBOSE}
     volumes:
       - ./res:/app/res:ro
     networks:
       - runestone-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   frontend:
     build:
@@ -26,15 +48,32 @@ services:
     container_name: runestone-frontend
     ports:
       - "3000:80"
+    env_file:
+      - .env
     depends_on:
       - backend
     networks:
       - runestone-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   runestone-network:
     driver: bridge
-
-volumes:
-  runestone-data:
