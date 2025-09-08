@@ -203,18 +203,44 @@ pre-commit install
 ### Available Make Commands
 
 ```bash
-make help           # Show all available commands
-make install        # Install production dependencies
-make install-dev    # Install development dependencies
-make setup          # Full development environment setup
-make lint           # Run code formatting and linting
-make lint-check     # Check code formatting (no fixes)
-make test           # Run test suite
-make test-coverage  # Run tests with coverage report
-make clean          # Clean up temporary files
-make run IMAGE_PATH=/path/to/image.jpg  # Run the CLI application
-make run-backend    # Start the FastAPI server
-make run-dev        # Start both backend and frontend
+# Setup & Installation
+make help              # Show all available commands
+make setup             # Set up development environment with pre-commit hooks
+make install           # Install production dependencies only
+make install-dev       # Install all dependencies (production + development)
+make install-backend   # Install backend dependencies
+make install-frontend  # Install frontend dependencies
+make install-all       # Install all dependencies concurrently
+
+# Code Quality
+make lint              # Run all linting and formatting (with fixes)
+make lint-check        # Run linting checks only (no fixes)
+make backend-lint      # Run backend linting and formatting
+make frontend-lint     # Run frontend linting
+
+# Testing
+make test              # Run all test suites
+make test-coverage     # Run tests with coverage report
+make backend-test      # Run backend tests only
+make frontend-test     # Run frontend tests only
+
+# Running Applications
+make run IMAGE_PATH=/path/to/image.jpg GEMINI_API_KEY=your_key  # Run CLI application
+make run-backend       # Start FastAPI backend server
+make run-frontend      # Start frontend development server
+make run-dev           # Start both backend and frontend concurrently
+
+# Development Workflows
+make dev-test          # Quick development test (install-dev + lint-check + test)
+make dev-full          # Full development check (install-dev + lint + test-coverage)
+
+# CI/CD
+make ci-lint           # CI linting pipeline
+make ci-test           # CI testing pipeline
+
+# Utilities
+make clean             # Clean up temporary files and caches
+make info              # Show environment information
 ```
 
 ### Running Tests
@@ -386,7 +412,15 @@ If you encounter issues or have questions:
 
 ---
 
-## 🚀 Recent Features
+## 📚 Additional Documentation
+
+For more detailed information about the project:
+
+- **[Product Requirements Document](prd.md)**: Original requirements and specifications for the Runestone MVP
+- **[Web Application Design Plan](webapp.md)**: Detailed design and implementation plan for the web interface and configuration refactoring
+
+## 🚀 Recent Features</search>
+</search_and_replace>
 
 - **🖥️ Web Interface**: A responsive React-based frontend for easy image upload and results visualization is now available! This provides a user-friendly alternative to the command-line interface.
 
