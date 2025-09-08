@@ -9,6 +9,7 @@ LABEL org.opencontainers.image.source="https://github.com/your-org/runestone"
 
 WORKDIR /app
 RUN apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*
+ENV PYTHONUSERBASE=/tmp/.local
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
 RUN pip install --user -e .
@@ -24,7 +25,8 @@ LABEL org.opencontainers.image.source="https://github.com/your-org/runestone"
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV PATH=/root/.local/bin:$PATH
+ENV PYTHONUSERBASE=/app/.local
+ENV PATH=/app/.local/bin:$PATH
 
 # Set work directory
 WORKDIR /app
@@ -33,7 +35,7 @@ WORKDIR /app
 RUN groupadd -r runestone && useradd -r -g runestone runestone
 
 # Copy Python dependencies from builder stage
-COPY --from=builder /root/.local /root/.local
+COPY --from=builder /tmp/.local /app/.local
 
 # Copy source code and resources
 COPY src/ ./src/
