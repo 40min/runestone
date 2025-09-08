@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Button, Box, Typography } from "@mui/material";
+import { Upload } from "lucide-react";
 
 interface FileUploadProps {
   onFileSelect: (file: File) => void;
@@ -93,16 +94,18 @@ const FileUpload: React.FC<FileUploadProps> = ({
         </Box>
       ) : (
         <>
-          <span
-            className="material-symbols-outlined"
-            style={{
-              fontSize: "4rem",
-              color: "#6b7280",
-              marginBottom: "1rem",
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              mb: 2,
             }}
           >
-            upload_file
-          </span>
+            <Upload
+              size={64}
+              color="#6b7280"
+            />
+          </Box>
           <Typography
             variant="body1"
             sx={{

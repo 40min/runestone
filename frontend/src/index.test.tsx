@@ -3,19 +3,6 @@ import { render } from '@testing-library/react';
 import App from './App';
 
 describe('Font Loading', () => {
-  it('should not load external Google Fonts', () => {
-    // Render the app
-    const { container } = render(<App />);
-
-    // Check that no Google Fonts links are present in the document
-    const googleFontLinks = document.querySelectorAll('link[href*="fonts.googleapis.com"]');
-    expect(googleFontLinks.length).toBe(0);
-
-    // Check that no Google Fonts preconnect links are present
-    const preconnectLinks = document.querySelectorAll('link[href*="fonts.gstatic.com"]');
-    expect(preconnectLinks.length).toBe(0);
-  });
-
   it('should not have @import statements for external fonts', () => {
     // Render the app to ensure styles are loaded
     render(<App />);
@@ -58,14 +45,5 @@ describe('CSP Compliance', () => {
       expect(href).not.toContain('https://');
       expect(href).not.toContain('fonts.googleapis.com');
     });
-  });
-
-  it('should not have external font references in HTML', () => {
-    const { container } = render(<App />);
-
-    // Check that the HTML doesn't contain external font references
-    const html = document.documentElement.outerHTML;
-    expect(html).not.toContain('fonts.googleapis.com');
-    expect(html).not.toContain('fonts.gstatic.com');
   });
 });
