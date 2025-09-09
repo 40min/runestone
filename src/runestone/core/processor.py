@@ -5,6 +5,7 @@ This module coordinates OCR processing, content analysis, resource discovery,
 and output formatting to provide a complete Swedish textbook analysis.
 """
 
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -87,7 +88,11 @@ class RunestoneProcessor:
             if self.verbose:
                 self.logger.info("Step 1: Extracting text from image...")
 
+            start_time = time.time()
             ocr_result = self.ocr_processor.extract_text(image_path)
+            duration = time.time() - start_time
+            if self.verbose:
+                self.logger.info(f"Step 1 took {duration:.2f} seconds")
 
             if self.verbose:
                 char_count = ocr_result.get("character_count", 0)
@@ -101,7 +106,11 @@ class RunestoneProcessor:
             if not extracted_text:
                 raise RunestoneError("No text was extracted from the image")
 
+            start_time = time.time()
             analysis = self.content_analyzer.analyze_content(extracted_text)
+            duration = time.time() - start_time
+            if self.verbose:
+                self.logger.info(f"Step 2 took {duration:.2f} seconds")
 
             if self.verbose:
                 vocab_count = len(analysis.get("vocabulary", []))
@@ -111,7 +120,11 @@ class RunestoneProcessor:
             if self.verbose:
                 self.logger.info("Step 3: Finding learning resources...")
 
+            start_time = time.time()
             extra_info = self.content_analyzer.find_extra_learning_info(analysis)
+            duration = time.time() - start_time
+            if self.verbose:
+                self.logger.info(f"Step 3 took {duration:.2f} seconds")
 
             if self.verbose:
                 if extra_info:
