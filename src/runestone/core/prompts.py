@@ -102,10 +102,12 @@ INSTRUCTIONS:
    - Provide a clear English explanation of the grammatical concept
 
 2. For vocabulary:
-   - Extract key Swedish words, phrases, and important terms
-   - Prioritize nouns, verbs, adjectives, and useful phrases
-   - Provide accurate English translations
-   - List all the words you meet on provided page
+    - Extract up to 100 meaningful Swedish words and phrases from the text.
+ 	- Prioritize nouns, verbs, adjectives, adverbs, and useful phrases.
+ 	- Exclude very basic function words (e.g., och, är, en/ett, jag, du).
+ 	- For each entry, provide the Swedish word/phrase and its most common English translation.
+ 	- Deduplicate words, but keep different forms if they appear (e.g., hund / hunden).
+ 	- Maintain the original order of first appearance in the text.
 
 3. For core_topics:
    - Identify 2-4 main learning topics from this page
@@ -129,7 +131,7 @@ Additional suggestions: {query_suggestions}
 Instructions:
 - Search the web for relevant, high-quality educational resources.
 - Summarize findings into a single structured text, grouped by topic.
-- For each topic, give 2–4 concise bullet points with the most useful rules, explanations, or examples.
+- For each topic, give 2–7 concise bullet points with the most useful rules, explanations, or examples.
 - Keep the text readable and compact (avoid long sections or repeated titles).
 - Prioritize reliable sources such as:  
   - https://swedish-for-all.se/sfi-steg-learning-steps/  
