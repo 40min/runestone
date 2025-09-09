@@ -350,6 +350,22 @@ GEMINI_API_KEY=your_gemini_api_key_here
 # General settings
 VERBOSE=false
 ```
+### Frontend Configuration
+
+For the web interface, create a frontend environment file:
+```bash
+cp frontend/.env.example frontend/.env
+```
+
+The frontend `.env` file contains:
+```env
+# Backend API Configuration
+# The URL where the Runestone backend API is running
+VITE_API_BASE_URL=http://localhost:8010
+```
+
+**Note**: The frontend runs from the `frontend/` directory, so it requires its own `.env` file to access environment variables properly. This ensures the web interface can communicate with the backend API.
+
 
 ### Supported Image Types
 

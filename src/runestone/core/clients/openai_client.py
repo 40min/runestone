@@ -76,7 +76,7 @@ class OpenAIClient(BaseLLMClient):
         """
         try:
             if self.verbose:
-                self.logger.info("Sending image to OpenAI for OCR processing...")
+                self.logger.info(f"Sending image to OpenAI for OCR processing, use model {self._model_name} ...")
 
             # Convert image to base64
             image_b64 = self._image_to_base64(image)

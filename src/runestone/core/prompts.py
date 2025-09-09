@@ -104,8 +104,7 @@ INSTRUCTIONS:
 2. For vocabulary:
    - Extract key Swedish words, phrases, and important terms
    - Prioritize nouns, verbs, adjectives, and useful phrases
-   - Provide accurate English translations
-   - Include 10-20 most important items
+   - Provide accurate English translations   
 
 3. For core_topics:
    - Identify 2-4 main learning topics from this page
@@ -131,12 +130,12 @@ Instructions:
 - Summarize findings into a single structured text, grouped by topic.
 - For each topic, give 2–4 concise bullet points with the most useful rules, explanations, or examples.
 - Keep the text readable and compact (avoid long sections or repeated titles).
-- Prioritize reliable sources such as:
-  - svenska.se
-  - clozemaster.com/blog/
-  - worddive.com/en/grammar/
-  - kielibuusti.fi/en/learn-swedish/
-  - swedishpod101.com/blog/
+- Prioritize reliable sources such as:  
+  - https://swedish-for-all.se/sfi-steg-learning-steps/  
+  - https://sites.google.com/view/swedish-med-papegojan/
+  - http://svenskgrammatik.net/Content.aspx
+  - https://www.worddive.com/en/grammar/swedish-grammar/
+
 
 Return only the structured educational text.
 
@@ -145,4 +144,6 @@ Format:
 - Use emojis for section headers and bullets (e.g., 📌, ❓, 📖, 💡).
 - Keep explanations concise and structured with short lines.
 - Do not use symbols like **bold**, # headers, or markdown tables.
+- Provide links to the sources you used, if applicable.
+- Provide funny examples for grammar rules.
 """
