@@ -120,14 +120,12 @@ class TestOCRProcessor:
 
         assert "Image file not found" in str(exc_info.value)
 
-    @patch("PIL.Image.open")
-    def test_extract_text_success(self, mock_image_open):
+    def test_extract_text_success(self):
         """Test successful text extraction."""
         # Mock image
         mock_image = Mock()
         mock_image.mode = "RGB"
         mock_image.size = (800, 600)
-        mock_image_open.return_value = mock_image
 
         # Mock Gemini response
         mock_response = Mock()
@@ -142,13 +140,11 @@ class TestOCRProcessor:
             mock_model_class.return_value = mock_model
 
             processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
-            result = processor.extract_text(self.test_image_path)
+            result = processor.extract_text(mock_image)
 
         # Verify result structure
         assert isinstance(result, dict)
         assert result["text"] == "Svenska text från läroboken"
-        assert result["image_path"] == str(self.test_image_path)
-        assert result["image_size"] == (800, 600)
         assert result["character_count"] == len("Svenska text från läroboken")
 
         # Verify Gemini was called correctly
@@ -159,14 +155,12 @@ class TestOCRProcessor:
         assert len(content_list) == 2  # prompt and image
         assert "accurately transcribe all readable text" in content_list[0]
 
-    @patch("PIL.Image.open")
-    def test_extract_text_error_response(self, mock_image_open):
+    def test_extract_text_error_response(self):
         """Test handling of OCR error response."""
         # Mock image
         mock_image = Mock()
         mock_image.mode = "RGB"
         mock_image.size = (800, 600)
-        mock_image_open.return_value = mock_image
 
         # Mock Gemini error response
         mock_response = Mock()
@@ -183,18 +177,16 @@ class TestOCRProcessor:
             processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
             with pytest.raises(OCRError) as exc_info:
-                processor.extract_text(self.test_image_path)
+                processor.extract_text(mock_image)
 
         assert "Could not recognise text on the page" in str(exc_info.value)
 
-    @patch("PIL.Image.open")
-    def test_extract_text_too_short(self, mock_image_open):
+    def test_extract_text_too_short(self):
         """Test handling of text that is too short."""
         # Mock image
         mock_image = Mock()
         mock_image.mode = "RGB"
         mock_image.size = (800, 600)
-        mock_image_open.return_value = mock_image
 
         # Mock Gemini response with very short text
         mock_response = Mock()
@@ -211,18 +203,16 @@ class TestOCRProcessor:
             processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
             with pytest.raises(OCRError) as exc_info:
-                processor.extract_text(self.test_image_path)
+                processor.extract_text(mock_image)
 
         assert "too short" in str(exc_info.value)
 
-    @patch("PIL.Image.open")
-    def test_extract_text_no_response(self, mock_image_open):
+    def test_extract_text_no_response(self):
         """Test handling of empty response."""
         # Mock image
         mock_image = Mock()
         mock_image.mode = "RGB"
         mock_image.size = (800, 600)
-        mock_image_open.return_value = mock_image
 
         # Mock empty Gemini response
         mock_response = Mock()
@@ -239,7 +229,7 @@ class TestOCRProcessor:
             processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
             with pytest.raises(OCRError) as exc_info:
-                processor.extract_text(self.test_image_path)
+                processor.extract_text(mock_image)
 
         assert "No text returned" in str(exc_info.value)
 
@@ -363,14 +353,12 @@ Recognition Statistics:
         expected_text = "Content."
         assert result == expected_text
 
-    @patch("PIL.Image.open")
-    def test_extract_text_with_stats_parsing(self, mock_image_open):
+    def test_extract_text_with_stats_parsing(self):
         """Test that extract_text properly parses and removes statistics."""
         # Mock image
         mock_image = Mock()
         mock_image.mode = "RGB"
         mock_image.size = (800, 600)
-        mock_image_open.return_value = mock_image
 
         # Mock response with stats
         mock_response = Mock()
@@ -394,21 +382,19 @@ Recognition Statistics:
             mock_model_class.return_value = mock_model
 
             processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
-            result = processor.extract_text(self.test_image_path)
+            result = processor.extract_text(mock_image)
 
         # Verify result contains cleaned text without stats
         assert result["text"] == "Extracted Swedish text content."
         assert "Recognition Statistics" not in result["text"]
         assert result["character_count"] == len("Extracted Swedish text content.")
 
-    @patch("PIL.Image.open")
-    def test_extract_text_with_low_recognition_raises_error(self, mock_image_open):
+    def test_extract_text_with_low_recognition_raises_error(self):
         """Test that extract_text raises OCRError for low recognition percentage."""
         # Mock image
         mock_image = Mock()
         mock_image.mode = "RGB"
         mock_image.size = (800, 600)
-        mock_image_open.return_value = mock_image
 
         # Mock response with poor stats
         mock_response = Mock()
@@ -434,6 +420,6 @@ Recognition Statistics:
             processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
             with pytest.raises(OCRError) as exc_info:
-                processor.extract_text(self.test_image_path)
+                processor.extract_text(mock_image)
 
         assert "OCR recognition percentage below 90%: 80.0% (80/100)" in str(exc_info.value)

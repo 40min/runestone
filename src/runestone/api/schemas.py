@@ -48,6 +48,24 @@ class ProcessingResult(BaseModel):
     processing_successful: bool = True
 
 
+class AnalysisRequest(BaseModel):
+    """Schema for analysis request payload."""
+
+    text: str
+
+
+class ResourceRequest(BaseModel):
+    """Schema for resource search request payload."""
+
+    analysis: ContentAnalysis
+
+
+class ResourceResponse(BaseModel):
+    """Schema for resource search response."""
+
+    extra_info: str
+
+
 class ErrorResponse(BaseModel):
     """Schema for error responses."""
 

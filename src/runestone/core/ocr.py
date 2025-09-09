@@ -138,12 +138,12 @@ class OCRProcessor:
 
         return text_part
 
-    def extract_text(self, image_path: Path) -> Dict[str, Any]:
+    def extract_text(self, image: Image.Image) -> Dict[str, Any]:
         """
         Extract text from a Swedish textbook page image.
 
         Args:
-            image_path: Path to the image file
+            image: PIL Image object to process
 
         Returns:
             Dictionary containing extracted text and metadata
@@ -152,8 +152,20 @@ class OCRProcessor:
             OCRError: If text extraction fails
         """
         try:
-            # Load and validate image
-            image = self._load_and_validate_image(image_path)
+            # Validate image
+            if image.mode != "RGB":
+                image = image.convert("RGB")
+
+            # Check image size (basic validation)
+            width, height = image.size
+            if width < 100 or height < 100:
+                raise ImageProcessingError("Image is too small (minimum 100x100 pixels)")
+
+            if width > 4096 or height > 4096:
+                # Resize large images to prevent API issues
+                image.thumbnail((4096, 4096), Image.Resampling.LANCZOS)
+                if self.verbose:
+                    self.logger.info(f"Resized large image to {image.size}")
 
             # Prepare the prompt for OCR
             ocr_prompt = OCR_PROMPT
@@ -166,8 +178,6 @@ class OCRProcessor:
 
             return {
                 "text": text_part,
-                "image_path": str(image_path),
-                "image_size": image.size,
                 "character_count": len(text_part),
             }
 

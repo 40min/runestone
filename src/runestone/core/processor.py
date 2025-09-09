@@ -6,8 +6,11 @@ and output formatting to provide a complete Swedish textbook analysis.
 """
 
 import time
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+from PIL import Image
 
 from runestone.config import Settings
 from runestone.core.analyzer import ContentAnalyzer
@@ -67,92 +70,122 @@ class RunestoneProcessor:
         except Exception as e:
             raise RunestoneError(f"Failed to initialize processor: {str(e)}")
 
-    def process_image(self, image_path: Path) -> Dict[str, Any]:
+    def run_ocr(self, image_bytes: bytes) -> Dict[str, Any]:
         """
-        Process a Swedish textbook page image end-to-end.
+        Run OCR on image bytes.
 
         Args:
-            image_path: Path to the image file
+            image_bytes: Raw image bytes
 
         Returns:
-            Complete processing results
+            OCR result dictionary
 
         Raises:
-            RunestoneError: If processing fails at any stage
+            RunestoneError: If OCR processing fails
         """
-        if self.verbose:
-            self.logger.info(f"Starting processing of: {image_path}")
-
         try:
-            # Step 1: Extract text using OCR
+            # Convert bytes to PIL Image
+            image = Image.open(BytesIO(image_bytes))
+
+            # Extract text using OCR
             if self.verbose:
-                self.logger.info("Step 1: Extracting text from image...")
+                self.logger.info("Running OCR on image...")
 
             start_time = time.time()
-            ocr_result = self.ocr_processor.extract_text(image_path)
+            ocr_result = self.ocr_processor.extract_text(image)
             duration = time.time() - start_time
-            if self.verbose:
-                self.logger.info(f"Step 1 took {duration:.2f} seconds")
 
             if self.verbose:
                 char_count = ocr_result.get("character_count", 0)
-                self.logger.info(f"Extracted {char_count} characters")  # noqa: E501
+                self.logger.info(f"OCR completed in {duration:.2f} seconds, extracted {char_count} characters")
 
-            # Step 2: Analyze content
-            if self.verbose:
-                self.logger.info("Step 2: Analyzing content...")
-
-            extracted_text = ocr_result.get("text", "")
-            if not extracted_text:
-                raise RunestoneError("No text was extracted from the image")
-
-            start_time = time.time()
-            analysis = self.content_analyzer.analyze_content(extracted_text)
-            duration = time.time() - start_time
-            if self.verbose:
-                self.logger.info(f"Step 2 took {duration:.2f} seconds")
-
-            if self.verbose:
-                vocab_count = len(analysis.get("vocabulary", []))
-                self.logger.info(f"Found {vocab_count} vocabulary items")  # noqa: E501
-
-            # Step 3: Find learning extra learning info
-            if self.verbose:
-                self.logger.info("Step 3: Finding learning resources...")
-
-            start_time = time.time()
-            extra_info = self.content_analyzer.find_extra_learning_info(analysis)
-            duration = time.time() - start_time
-            if self.verbose:
-                self.logger.info(f"Step 3 took {duration:.2f} seconds")
-
-            if self.verbose:
-                if extra_info:
-                    self.logger.info("Found extra learning information")
-                else:
-                    self.logger.warning("No extra learning information found")
-
-            # Compile complete results
-            results = {
-                "ocr_result": ocr_result,
-                "analysis": analysis,
-                "extra_info": extra_info,
-                "processing_successful": True,
-            }
-
-            if self.verbose:
-                self.logger.info("Processing completed successfully!")  # noqa: E501
-
-            return results
+            return ocr_result
 
         except Exception as e:
             if self.verbose:
-                self.logger.error(f"Processing failed: {str(e)}")
+                self.logger.error(f"OCR processing failed: {str(e)}")
 
             if isinstance(e, RunestoneError):
                 raise
             else:
-                raise RunestoneError(f"Processing failed: {str(e)}")
+                raise RunestoneError(f"OCR processing failed: {str(e)}")
+
+    def run_analysis(self, text: str) -> Dict[str, Any]:
+        """
+        Analyze extracted text content.
+
+        Args:
+            text: Extracted text from OCR
+
+        Returns:
+            Content analysis results
+
+        Raises:
+            RunestoneError: If content analysis fails
+        """
+        try:
+            if not text:
+                raise RunestoneError("No text provided for analysis")
+
+            if self.verbose:
+                self.logger.info("Analyzing content...")
+
+            start_time = time.time()
+            analysis = self.content_analyzer.analyze_content(text)
+            duration = time.time() - start_time
+
+            if self.verbose:
+                vocab_count = len(analysis.get("vocabulary", []))
+                self.logger.info(f"Analysis completed in {duration:.2f} seconds, found {vocab_count} vocabulary items")
+
+            return analysis
+
+        except Exception as e:
+            if self.verbose:
+                self.logger.error(f"Content analysis failed: {str(e)}")
+
+            if isinstance(e, RunestoneError):
+                raise
+            else:
+                raise RunestoneError(f"Content analysis failed: {str(e)}")
+
+    def run_resource_search(self, analysis_data: Dict[str, Any]) -> str:
+        """
+        Find extra learning resources based on analysis.
+
+        Args:
+            analysis_data: Content analysis results
+
+        Returns:
+            Extra learning information as string
+
+        Raises:
+            RunestoneError: If resource search fails
+        """
+        try:
+            if self.verbose:
+                self.logger.info("Searching for learning resources...")
+
+            start_time = time.time()
+            extra_info = self.content_analyzer.find_extra_learning_info(analysis_data)
+            duration = time.time() - start_time
+
+            if self.verbose:
+                if extra_info:
+                    self.logger.info(f"Resource search completed in {duration:.2f} seconds")
+                else:
+                    self.logger.warning(f"Resource search completed in {duration:.2f} seconds, no results found")
+
+            return extra_info
+
+        except Exception as e:
+            if self.verbose:
+                self.logger.error(f"Resource search failed: {str(e)}")
+
+            if isinstance(e, RunestoneError):
+                raise
+            else:
+                raise RunestoneError(f"Resource search failed: {str(e)}")
 
     def display_results_console(self, results: Dict[str, Any]) -> None:
         """
