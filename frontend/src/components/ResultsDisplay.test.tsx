@@ -80,6 +80,9 @@ describe('ResultsDisplay', () => {
     const copyButton = screen.getByText('Copy');
     fireEvent.click(copyButton);
 
+    // Wait for the async operation to complete
+    await new Promise(resolve => setTimeout(resolve, 0));
+
     expect(mockClipboard.writeText).toHaveBeenCalledWith('hej - hello\nbra - good');
   });
 

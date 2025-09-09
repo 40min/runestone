@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Box, Typography, Button } from "@mui/material";
+import { Box, Typography, Button, Snackbar, Alert } from "@mui/material";
 import { Copy, AlertTriangle } from "lucide-react";
 
 interface OCRResult {
@@ -43,6 +43,15 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     resourcesResult && "extra_info",
   ].filter(Boolean) as string[];
   const [activeTab, setActiveTab] = useState(availableTabs[0] || "ocr");
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
 
   if (error) {
     return (
@@ -97,12 +106,33 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     return null;
   }
 
-  const handleCopyVocabulary = () => {
+  const handleCopyVocabulary = async () => {
     if (!analysisResult) return;
+
     const vocabText = analysisResult.vocabulary
       .map((item) => `${item.swedish} - ${item.english}`)
       .join("\n");
-    navigator.clipboard.writeText(vocabText);
+
+    try {
+      // Check if clipboard API is available
+      if (!navigator.clipboard) {
+        // Fallback for older browsers
+        const textArea = document.createElement("textarea");
+        textArea.value = vocabText;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setSnackbar({ open: true, message: 'Vocabulary copied to clipboard!', severity: 'success' });
+        return;
+      }
+
+      await navigator.clipboard.writeText(vocabText);
+      setSnackbar({ open: true, message: 'Vocabulary copied to clipboard!', severity: 'success' });
+    } catch (err) {
+      console.error('Failed to copy vocabulary: ', err);
+      setSnackbar({ open: true, message: 'Failed to copy vocabulary. Please try again.', severity: 'error' });
+    }
   };
 
   const tabs = [
@@ -353,6 +383,20 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
           </Box>
         )}
       </Box>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

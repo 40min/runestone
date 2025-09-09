@@ -104,11 +104,12 @@ INSTRUCTIONS:
 2. For vocabulary:
    - Extract key Swedish words, phrases, and important terms
    - Prioritize nouns, verbs, adjectives, and useful phrases
-   - Provide accurate English translations   
+   - Provide accurate English translations
+   - List all the words you meet on provided page
 
 3. For core_topics:
    - Identify 2-4 main learning topics from this page
-   - Use clear, descriptive terms
+   - Use clear, descriptive terms   
 
 4. For search_needed:
 	- Set should_search = true if the provided page lacks grammar explanations and only contains exercises, examples, or incomplete information.
