@@ -23,20 +23,26 @@ interface ContentAnalysis {
   vocabulary: VocabularyItem[];
 }
 
-interface ProcessingResult {
-  ocr_result: OCRResult;
-  analysis: ContentAnalysis;
-  extra_info?: string;
-  processing_successful: boolean;
-}
-
 interface ResultsDisplayProps {
-  result: ProcessingResult | null;
+  ocrResult: OCRResult | null;
+  analysisResult: ContentAnalysis | null;
+  resourcesResult: string | null;
   error: string | null;
 }
 
-const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
-  const [activeTab, setActiveTab] = useState("ocr");
+const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
+  ocrResult,
+  analysisResult,
+  resourcesResult,
+  error,
+}) => {
+  const availableTabs = [
+    ocrResult && "ocr",
+    analysisResult && "grammar",
+    analysisResult && "vocabulary",
+    resourcesResult && "extra_info",
+  ].filter(Boolean) as string[];
+  const [activeTab, setActiveTab] = useState(availableTabs[0] || "ocr");
 
   if (error) {
     return (
@@ -87,23 +93,24 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
     );
   }
 
-  if (!result) {
+  if (!ocrResult && !analysisResult && !resourcesResult) {
     return null;
   }
 
   const handleCopyVocabulary = () => {
-    const vocabText = result.analysis.vocabulary
+    if (!analysisResult) return;
+    const vocabText = analysisResult.vocabulary
       .map((item) => `${item.swedish} - ${item.english}`)
       .join("\n");
     navigator.clipboard.writeText(vocabText);
   };
 
   const tabs = [
-    { id: "ocr", label: "OCR Text" },
-    { id: "grammar", label: "Grammar" },
-    { id: "vocabulary", label: "Vocabulary" },
-    { id: "extra_info", label: "Extra info" },
-  ];
+    ocrResult && { id: "ocr", label: "OCR Text" },
+    analysisResult && { id: "grammar", label: "Grammar" },
+    analysisResult && { id: "vocabulary", label: "Vocabulary" },
+    resourcesResult && { id: "extra_info", label: "Extra info" },
+  ].filter(Boolean) as { id: string; label: string }[];
 
   return (
     <Box sx={{ py: 8 }}>
@@ -153,7 +160,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
               The OCR text extracted from the image will be displayed here. This
               text can be edited and copied for further use.
             </Typography>
-            {result && (
+            {ocrResult && (
               <Box
                 sx={{
                   mt: 4,
@@ -163,7 +170,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
                 }}
               >
                 <Typography sx={{ color: "white", whiteSpace: "pre-wrap" }}>
-                  {result.ocr_result.text}
+                  {ocrResult.text}
                 </Typography>
               </Box>
             )}
@@ -175,7 +182,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
             <Typography variant="h4" sx={{ mb: 3, color: "white" }}>
               Grammar Analysis
             </Typography>
-            {result && (
+            {analysisResult && (
               <Box
                 sx={{ mt: 4, display: "flex", flexDirection: "column", gap: 4 }}
               >
@@ -196,7 +203,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
                     Topic:
                   </Typography>
                   <Typography sx={{ color: "white" }}>
-                    {result.analysis.grammar_focus.topic}
+                    {analysisResult.grammar_focus.topic}
                   </Typography>
                 </Box>
                 <Box
@@ -216,7 +223,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
                     Explanation:
                   </Typography>
                   <Typography sx={{ color: "white" }}>
-                    {result.analysis.grammar_focus.explanation}
+                    {analysisResult.grammar_focus.explanation}
                   </Typography>
                 </Box>
                 <Box
@@ -236,7 +243,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
                     Has Explicit Rules:
                   </Typography>
                   <Typography sx={{ color: "white" }}>
-                    {result.analysis.grammar_focus.has_explicit_rules
+                    {analysisResult.grammar_focus.has_explicit_rules
                       ? "Yes"
                       : "No"}
                   </Typography>
@@ -259,7 +266,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
               <Typography variant="h4" sx={{ color: "white" }}>
                 Vocabulary Analysis
               </Typography>
-              {result && result.analysis.vocabulary.length > 0 && (
+              {analysisResult && analysisResult.vocabulary.length > 0 && (
                 <Button
                   onClick={handleCopyVocabulary}
                   sx={{
@@ -290,11 +297,11 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
                 </Button>
               )}
             </Box>
-            {result && (
+            {analysisResult && (
               <Box
                 sx={{ mt: 4, display: "flex", flexDirection: "column", gap: 2 }}
               >
-                {result.analysis.vocabulary.map((item, index) => (
+                {analysisResult.vocabulary.map((item, index) => (
                   <Box
                     key={index}
                     sx={{
@@ -324,7 +331,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
             <Typography variant="h4" sx={{ mb: 3, color: "white" }}>
               Extra info
             </Typography>
-            {result && result.extra_info ? (
+            {resourcesResult ? (
               <Box
                 sx={{
                   mt: 4,
@@ -334,7 +341,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, error }) => {
                 }}
               >
                 <Typography sx={{ color: "white", whiteSpace: "pre-wrap" }}>
-                  {result.extra_info}
+                  {resourcesResult}
                 </Typography>
               </Box>
             ) : (

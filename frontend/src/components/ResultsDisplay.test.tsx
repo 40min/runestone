@@ -24,14 +24,14 @@ const mockResult = {
 describe('ResultsDisplay', () => {
   it('renders error state when error is provided', () => {
     const error = 'Processing failed';
-    render(<ResultsDisplay result={null} error={error} />);
+    render(<ResultsDisplay ocrResult={null} analysisResult={null} resourcesResult={null} error={error} />);
 
     expect(screen.getByText('Processing Error')).toBeInTheDocument();
     expect(screen.getByText(error)).toBeInTheDocument();
   });
 
   it('renders OCR tab content by default', () => {
-    render(<ResultsDisplay result={mockResult} error={null} />);
+    render(<ResultsDisplay ocrResult={mockResult.ocr_result} analysisResult={mockResult.analysis} resourcesResult={mockResult.extra_info} error={null} />);
 
     expect(screen.getByText('Analysis Results')).toBeInTheDocument();
     expect(screen.getByText('OCR Text')).toBeInTheDocument();
@@ -39,7 +39,7 @@ describe('ResultsDisplay', () => {
   });
 
   it('switches to grammar tab when clicked', () => {
-    render(<ResultsDisplay result={mockResult} error={null} />);
+    render(<ResultsDisplay ocrResult={mockResult.ocr_result} analysisResult={mockResult.analysis} resourcesResult={mockResult.extra_info} error={null} />);
 
     const grammarTab = screen.getByText('Grammar');
     fireEvent.click(grammarTab);
@@ -54,7 +54,7 @@ describe('ResultsDisplay', () => {
   });
 
   it('switches to vocabulary tab when clicked', () => {
-    render(<ResultsDisplay result={mockResult} error={null} />);
+    render(<ResultsDisplay ocrResult={mockResult.ocr_result} analysisResult={mockResult.analysis} resourcesResult={mockResult.extra_info} error={null} />);
 
     const vocabularyTab = screen.getByText('Vocabulary');
     fireEvent.click(vocabularyTab);
@@ -72,7 +72,7 @@ describe('ResultsDisplay', () => {
     };
     Object.assign(navigator, { clipboard: mockClipboard });
 
-    render(<ResultsDisplay result={mockResult} error={null} />);
+    render(<ResultsDisplay ocrResult={mockResult.ocr_result} analysisResult={mockResult.analysis} resourcesResult={mockResult.extra_info} error={null} />);
 
     const vocabularyTab = screen.getByText('Vocabulary');
     fireEvent.click(vocabularyTab);
@@ -84,7 +84,7 @@ describe('ResultsDisplay', () => {
   });
 
   it('switches to extra info tab when clicked', () => {
-    render(<ResultsDisplay result={mockResult} error={null} />);
+    render(<ResultsDisplay ocrResult={mockResult.ocr_result} analysisResult={mockResult.analysis} resourcesResult={mockResult.extra_info} error={null} />);
 
     const extraInfoTab = screen.getByText('Extra info');
     fireEvent.click(extraInfoTab);
@@ -93,28 +93,26 @@ describe('ResultsDisplay', () => {
     expect(screen.getByText(mockResult.extra_info)).toBeInTheDocument();
   });
 
-  it('shows default message when extra_info is not provided', () => {
+  it('does not show extra info tab when resourcesResult is not provided', () => {
     const resultWithoutExtraInfo = {
       ...mockResult,
       extra_info: undefined,
     };
 
-    render(<ResultsDisplay result={resultWithoutExtraInfo} error={null} />);
+    render(<ResultsDisplay ocrResult={resultWithoutExtraInfo.ocr_result} analysisResult={resultWithoutExtraInfo.analysis} resourcesResult={resultWithoutExtraInfo.extra_info} error={null} />);
 
-    const extraInfoTab = screen.getByText('Extra info');
-    fireEvent.click(extraInfoTab);
-
-    expect(screen.getByText('Additional learning materials and resources will be displayed here.')).toBeInTheDocument();
+    // Extra info tab should not exist when resourcesResult is null/undefined
+    expect(screen.queryByText('Extra info')).not.toBeInTheDocument();
   });
 
   it('does not render when neither result nor error is provided', () => {
-    render(<ResultsDisplay result={null} error={null} />);
+    render(<ResultsDisplay ocrResult={null} analysisResult={null} resourcesResult={null} error={null} />);
 
     expect(screen.queryByText('Analysis Results')).not.toBeInTheDocument();
   });
 
   it('renders all tabs correctly', () => {
-    render(<ResultsDisplay result={mockResult} error={null} />);
+    render(<ResultsDisplay ocrResult={mockResult.ocr_result} analysisResult={mockResult.analysis} resourcesResult={mockResult.extra_info} error={null} />);
 
     expect(screen.getByText('OCR Text')).toBeInTheDocument();
     expect(screen.getByText('Grammar')).toBeInTheDocument();

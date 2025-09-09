@@ -9,7 +9,10 @@ const mockReset = vi.fn();
 vi.mock('./hooks/useImageProcessing', () => ({
   default: () => ({
     processImage: mockProcessImage,
-    result: null,
+    ocrResult: null,
+    analysisResult: null,
+    resourcesResult: null,
+    processingStep: 'IDLE',
     error: null,
     isProcessing: false,
     reset: mockReset,

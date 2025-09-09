@@ -92,8 +92,10 @@ sequenceDiagram
 #### Phase 3: Testing and Finalization
 -   **Objective(s):** Ensure the new implementation is robust and correct.
 -   **Priority:** Medium
+-   **Task 3.0: Ensure cli functionality is still works**
+-   **Task 3.1: Remove stale/not used code**
 
--   **Task 3.1: Update Frontend and Backend Tests**
+-   **Task 3.2: Update Frontend and Backend Tests**
     -   **Rationale/Goal:** Align all tests with the new asynchronous, multi-step, stateless logic.
     -   **Estimated Effort:** M
     -   **Deliverable/Criteria for Completion:**

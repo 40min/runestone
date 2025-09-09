@@ -39,15 +39,6 @@ class ContentAnalysis(BaseModel):
     vocabulary: List[VocabularyItem]
 
 
-class ProcessingResult(BaseModel):
-    """Schema for complete processing results."""
-
-    ocr_result: OCRResult
-    analysis: ContentAnalysis
-    extra_info: Optional[str] = None
-    processing_successful: bool = True
-
-
 class AnalysisRequest(BaseModel):
     """Schema for analysis request payload."""
 

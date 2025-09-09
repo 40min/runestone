@@ -5,19 +5,15 @@ This module defines the FastAPI routes for processing Swedish textbook images
 and returning structured analysis results.
 """
 
-import tempfile
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
 
 from runestone.api.schemas import (
     AnalysisRequest,
     ContentAnalysis,
     ErrorResponse,
     OCRResult,
-    ProcessingResult,
     ResourceRequest,
     ResourceResponse,
 )
