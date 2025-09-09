@@ -143,6 +143,11 @@ class TestAPI:
                 {"swedish": "hej", "english": "hello"},
                 {"swedish": "vad", "english": "what"},
             ],
+            "core_topics": ["questions", "greetings"],
+            "search_needed": {
+                "should_search": True,
+                "query_suggestions": ["Swedish question formation"]
+            }
         }
         mock_processor_instance.run_analysis.return_value = mock_analysis_result
 
@@ -187,17 +192,14 @@ class TestAPI:
         mock_extra_info = "Additional learning resources about Swedish questions"
         mock_processor_instance.run_resource_search.return_value = mock_extra_info
 
-        # Test request payload
+        # Test request payload with minimal required data
         payload = {
             "analysis": {
-                "grammar_focus": {
-                    "topic": "Swedish questions",
-                    "explanation": "Basic question formation",
-                    "has_explicit_rules": False,
-                },
-                "vocabulary": [
-                    {"swedish": "hej", "english": "hello"},
-                ],
+                "core_topics": ["questions", "greetings"],
+                "search_needed": {
+                    "should_search": True,
+                    "query_suggestions": ["Swedish question formation", "Basic Swedish grammar"]
+                }
             }
         }
 
@@ -209,9 +211,15 @@ class TestAPI:
         # Verify response
         assert data["extra_info"] == mock_extra_info
 
-        # Verify processor was called
+        # Verify processor was called with minimal data
         mock_processor.assert_called_once()
-        mock_processor_instance.run_resource_search.assert_called_once()
+        mock_processor_instance.run_resource_search.assert_called_once_with({
+            "search_needed": {
+                "query_suggestions": ["Swedish question formation", "Basic Swedish grammar"],
+                "should_search": True
+            },
+            "core_topics": ["questions", "greetings"]
+        })
 
     @patch("runestone.api.endpoints.settings")
     def test_settings_dependency_injection(self, mock_settings):

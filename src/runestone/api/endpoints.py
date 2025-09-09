@@ -14,7 +14,7 @@ from runestone.api.schemas import (
     ContentAnalysis,
     ErrorResponse,
     OCRResult,
-    ResourceRequest,
+    ResourceRequest,    
     ResourceResponse,
 )
 from runestone.config import Settings, settings
@@ -181,8 +181,17 @@ async def find_resources(
         # Initialize processor with settings
         processor = RunestoneProcessor(settings=settings, verbose=settings.verbose)
 
-        # Run resource search
-        extra_info = processor.run_resource_search(request.analysis.model_dump())
+        # Convert request data to dict format expected by processor
+        analysis_data = {
+            "search_needed": {
+                "query_suggestions": request.analysis.search_needed.query_suggestions,
+                "should_search": request.analysis.search_needed.should_search
+            },
+            "core_topics": request.analysis.core_topics
+        }
+
+        # Run resource search with the data
+        extra_info = processor.run_resource_search(analysis_data)
 
         # Return response
         return ResourceResponse(extra_info=extra_info)
