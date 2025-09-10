@@ -32,20 +32,45 @@ class VocabularyItem(BaseModel):
     english: str
 
 
+class SearchNeeded(BaseModel):
+    """Schema for search requirements."""
+
+    should_search: bool
+    query_suggestions: List[str]
+
+
 class ContentAnalysis(BaseModel):
     """Schema for content analysis results."""
 
     grammar_focus: GrammarFocus
     vocabulary: List[VocabularyItem]
+    core_topics: List[str]
+    search_needed: SearchNeeded
 
 
-class ProcessingResult(BaseModel):
-    """Schema for complete processing results."""
+class AnalysisRequest(BaseModel):
+    """Schema for analysis request payload."""
 
-    ocr_result: OCRResult
-    analysis: ContentAnalysis
-    extra_info: Optional[str] = None
-    processing_successful: bool = True
+    text: str
+
+
+class ResourceRequestData(BaseModel):
+    """Minimal schema for resource search request data."""
+
+    core_topics: List[str]
+    search_needed: SearchNeeded
+
+
+class ResourceRequest(BaseModel):
+    """Schema for resource search request payload."""
+
+    analysis: ResourceRequestData
+
+
+class ResourceResponse(BaseModel):
+    """Schema for resource search response."""
+
+    extra_info: str
 
 
 class ErrorResponse(BaseModel):

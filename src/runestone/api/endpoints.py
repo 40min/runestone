@@ -5,14 +5,18 @@ This module defines the FastAPI routes for processing Swedish textbook images
 and returning structured analysis results.
 """
 
-import tempfile
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
 
-from runestone.api.schemas import ErrorResponse, ProcessingResult
+from runestone.api.schemas import (
+    AnalysisRequest,
+    ContentAnalysis,
+    ErrorResponse,
+    OCRResult,
+    ResourceRequest,    
+    ResourceResponse,
+)
 from runestone.config import Settings, settings
 from runestone.core.exceptions import RunestoneError
 from runestone.core.processor import RunestoneProcessor
@@ -26,32 +30,30 @@ def get_settings() -> Settings:
 
 
 @router.post(
-    "/process",
-    response_model=ProcessingResult,
+    "/ocr",
+    response_model=OCRResult,
     responses={
-        200: {"description": "Successful processing"},
+        200: {"description": "OCR successful"},
         400: {"model": ErrorResponse, "description": "Bad request"},
         422: {"model": ErrorResponse, "description": "Validation error"},
-        500: {"model": ErrorResponse, "description": "Processing error"},
+        500: {"model": ErrorResponse, "description": "OCR error"},
     },
 )
-async def process_image(
+async def process_ocr(
     file: Annotated[UploadFile, File(description="Image file to process")],
     settings: Annotated[Settings, Depends(get_settings)],
-) -> ProcessingResult:
+) -> OCRResult:
     """
-    Process a Swedish textbook image and return analysis results.
+    Extract text from a Swedish textbook image using OCR.
 
-    This endpoint accepts an image file, performs OCR, analyzes the content,
-    and returns structured learning materials including vocabulary, grammar focus,
-    and additional resources.
+    This endpoint accepts an image file and returns the extracted text.
 
     Args:
         file: Uploaded image file (JPG, PNG, etc.)
         settings: Application configuration
 
     Returns:
-        ProcessingResult: Complete analysis results
+        OCRResult: Extracted text and metadata
 
     Raises:
         HTTPException: For various error conditions
@@ -64,7 +66,6 @@ async def process_image(
         )
 
     # Validate file size (max 10MB)
-    file_size = 0
     content = await file.read()
     file_size = len(content)
 
@@ -74,37 +75,137 @@ async def process_image(
             detail="File too large. Maximum size is 10MB.",
         )
 
-    # Save uploaded file to temporary location
-    with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename or "image.jpg").suffix) as temp_file:
-        temp_file.write(content)
-        temp_path = Path(temp_file.name)
-
     try:
         # Initialize processor with settings
         processor = RunestoneProcessor(settings=settings, verbose=settings.verbose)
 
-        # Process the image
-        results = processor.process_image(temp_path)
+        # Run OCR on image bytes
+        ocr_result = processor.run_ocr(content)
 
-        # Convert results to Pydantic model
-        processing_result = ProcessingResult(**results)
-
-        return processing_result
+        # Convert to Pydantic model
+        return OCRResult(**ocr_result)
 
     except RunestoneError as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Processing failed: {str(e)}",
+            detail=f"OCR failed: {str(e)}",
         )
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Unexpected error: {str(e)}",
         )
-    finally:
-        # Clean up temporary file
-        if temp_path.exists():
-            temp_path.unlink()
+
+
+@router.post(
+    "/analyze",
+    response_model=ContentAnalysis,
+    responses={
+        200: {"description": "Analysis successful"},
+        400: {"model": ErrorResponse, "description": "Bad request"},
+        422: {"model": ErrorResponse, "description": "Validation error"},
+        500: {"model": ErrorResponse, "description": "Analysis error"},
+    },
+)
+async def analyze_content(
+    request: AnalysisRequest,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ContentAnalysis:
+    """
+    Analyze extracted text content.
+
+    This endpoint accepts OCR text and returns grammar focus and vocabulary analysis.
+
+    Args:
+        request: Analysis request with extracted text
+        settings: Application configuration
+
+    Returns:
+        ContentAnalysis: Grammar and vocabulary analysis
+
+    Raises:
+        HTTPException: For various error conditions
+    """
+    try:
+        # Initialize processor with settings
+        processor = RunestoneProcessor(settings=settings, verbose=settings.verbose)
+
+        # Run content analysis
+        analysis_result = processor.run_analysis(request.text)
+
+        # Convert to Pydantic model
+        return ContentAnalysis(**analysis_result)
+
+    except RunestoneError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Analysis failed: {str(e)}",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}",
+        )
+
+
+@router.post(
+    "/resources",
+    response_model=ResourceResponse,
+    responses={
+        200: {"description": "Resource search successful"},
+        400: {"model": ErrorResponse, "description": "Bad request"},
+        422: {"model": ErrorResponse, "description": "Validation error"},
+        500: {"model": ErrorResponse, "description": "Resource search error"},
+    },
+)
+async def find_resources(
+    request: ResourceRequest,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ResourceResponse:
+    """
+    Find additional learning resources based on content analysis.
+
+    This endpoint accepts analysis results and returns supplementary learning information.
+
+    Args:
+        request: Resource request with analysis data
+        settings: Application configuration
+
+    Returns:
+        ResourceResponse: Additional learning resources
+
+    Raises:
+        HTTPException: For various error conditions
+    """
+    try:
+        # Initialize processor with settings
+        processor = RunestoneProcessor(settings=settings, verbose=settings.verbose)
+
+        # Convert request data to dict format expected by processor
+        analysis_data = {
+            "search_needed": {
+                "query_suggestions": request.analysis.search_needed.query_suggestions,
+                "should_search": request.analysis.search_needed.should_search
+            },
+            "core_topics": request.analysis.core_topics
+        }
+
+        # Run resource search with the data
+        extra_info = processor.run_resource_search(analysis_data)
+
+        # Return response
+        return ResourceResponse(extra_info=extra_info)
+
+    except RunestoneError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Resource search failed: {str(e)}",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}",
+        )
 
 
 @router.get(

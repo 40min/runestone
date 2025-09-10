@@ -5,6 +5,7 @@ This module handles image processing and text extraction from Swedish textbook p
 using various LLM providers like OpenAI or Gemini.
 """
 
+import json
 import re
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -98,52 +99,55 @@ class OCRProcessor:
 
     def _parse_and_analyze_recognition_stats(self, extracted_text: str) -> str:
         """
-        Parse recognition statistics from extracted text and analyze quality.
+        Parse JSON response from OCR and analyze recognition quality.
 
         Args:
-            extracted_text: Raw text from OCR including statistics
+            extracted_text: JSON string from OCR response
 
         Returns:
-            Cleaned text without statistics
+            Cleaned transcribed text
 
         Raises:
-            OCRError: If recognition percentage is below 90%
+            OCRError: If recognition percentage is below 90% or JSON parsing fails
         """
-        separator = "---\nRecognition Statistics:"
+        try:
+            # Parse JSON response
+            response_data = json.loads(extracted_text)
 
-        if separator in extracted_text:
-            text_part, stats_part = extracted_text.rsplit(separator, 1)
-            text_part = text_part.strip()
-        else:
-            text_part = extracted_text
-            stats_part = None
+            # Check for error response
+            if "error" in response_data:
+                raise OCRError(response_data["error"])
 
-        # Analyze statistics if present
-        if stats_part:
-            total_match = re.search(r"Total text elements identified: (\d+)", stats_part)
-            success_match = re.search(r"Successfully transcribed: (\d+)", stats_part)
+            # Extract transcribed text
+            transcribed_text = response_data.get("transcribed_text", "").strip()
 
-            if total_match and success_match:
-                total = int(total_match.group(1))
-                success = int(success_match.group(1))
+            # Analyze recognition statistics
+            stats = response_data.get("recognition_statistics", {})
+            total = stats.get("total_elements", 0)
+            success = stats.get("successfully_transcribed", 0)
 
-                if total > 0:
-                    percentage = (success / total) * 100
-                    if percentage < 90:
-                        raise OCRError(
-                            f"OCR recognition percentage below 90%: {percentage:.1f}% ({success}/{total})",
-                            details=stats_part.strip(),
-                        )
-                # If total == 0, skip check (assume no text to recognize)
+            if total > 0:
+                percentage = (success / total) * 100
+                if percentage < 90:
+                    raise OCRError(
+                        f"OCR recognition percentage below 90%: {percentage:.1f}% ({success}/{total})",
+                        details=str(stats),
+                    )
+            # If total == 0, skip check (assume no text to recognize)
 
-        return text_part
+            return transcribed_text
 
-    def extract_text(self, image_path: Path) -> Dict[str, Any]:
+        except json.JSONDecodeError as e:
+            raise OCRError(f"Failed to parse OCR response as JSON: {str(e)}")
+        except KeyError as e:
+            raise OCRError(f"Missing required field in OCR response: {str(e)}")
+
+    def extract_text(self, image: Image.Image) -> Dict[str, Any]:
         """
         Extract text from a Swedish textbook page image.
 
         Args:
-            image_path: Path to the image file
+            image: PIL Image object to process
 
         Returns:
             Dictionary containing extracted text and metadata
@@ -152,8 +156,20 @@ class OCRProcessor:
             OCRError: If text extraction fails
         """
         try:
-            # Load and validate image
-            image = self._load_and_validate_image(image_path)
+            # Validate image
+            if image.mode != "RGB":
+                image = image.convert("RGB")
+
+            # Check image size (basic validation)
+            width, height = image.size
+            if width < 100 or height < 100:
+                raise ImageProcessingError("Image is too small (minimum 100x100 pixels)")
+
+            if width > 4096 or height > 4096:
+                # Resize large images to prevent API issues
+                image.thumbnail((4096, 4096), Image.Resampling.LANCZOS)
+                if self.verbose:
+                    self.logger.info(f"Resized large image to {image.size}")
 
             # Prepare the prompt for OCR
             ocr_prompt = OCR_PROMPT
@@ -164,10 +180,12 @@ class OCRProcessor:
             # Parse and analyze recognition statistics
             text_part = self._parse_and_analyze_recognition_stats(extracted_text)
 
+            # Check if extracted text is too short
+            if len(text_part) < 10:
+                raise OCRError("Extracted text is too short - may not be a valid textbook page")
+
             return {
                 "text": text_part,
-                "image_path": str(image_path),
-                "image_size": image.size,
                 "character_count": len(text_part),
             }
 

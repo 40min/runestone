@@ -15,53 +15,96 @@ describe('useImageProcessing', () => {
     mockFetch.mockClear();
   });
 
-  it('should process image successfully', async () => {
-    const mockResponse = {
-      ocr_result: {
-        text: 'Sample text',
-        character_count: 11,
-      },
-      analysis: {
-        grammar_focus: {
-          topic: 'Present tense',
-          explanation: 'Focus on present tense usage',
-          has_explicit_rules: true,
-        },
-        vocabulary: [
-          { swedish: 'hej', english: 'hello' },
-        ],
-      },
-      processing_successful: true,
+  it('should process image successfully through all steps', async () => {
+    const mockOcrResponse = {
+      text: 'Sample text',
+      character_count: 11,
     };
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockResponse),
-    });
+    const mockAnalysisResponse = {
+      grammar_focus: {
+        topic: 'Present tense',
+        explanation: 'Focus on present tense usage',
+        has_explicit_rules: true,
+      },
+      vocabulary: [
+        { swedish: 'hej', english: 'hello' },
+      ],
+      core_topics: ['present tense', 'greetings'],
+      search_needed: {
+        should_search: true,
+        query_suggestions: ['Swedish present tense', 'Basic Swedish grammar']
+      },
+    };
+
+    const mockResourcesResponse = {
+      extra_info: 'Additional learning resources here',
+    };
+
+    // Mock the three API calls
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockOcrResponse),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockAnalysisResponse),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResourcesResponse),
+      });
 
     const { result } = renderHook(() => useImageProcessing());
 
     const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
-    await result.current.processImage(file);
+    await act(async () => {
+      await result.current.processImage(file);
+    });
 
     await waitFor(() => {
-      expect(result.current.result).toEqual(mockResponse);
+      expect(result.current.ocrResult).toEqual(mockOcrResponse);
+      expect(result.current.analysisResult).toEqual(mockAnalysisResponse);
+      expect(result.current.resourcesResult).toBe(mockResourcesResponse.extra_info);
+      expect(result.current.processingStep).toBe('DONE');
       expect(result.current.error).toBeNull();
       expect(result.current.isProcessing).toBe(false);
     });
 
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/process', {
+    // Verify the three API calls were made
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+    expect(mockFetch).toHaveBeenNthCalledWith(1, 'http://localhost:8010/api/ocr', {
       method: 'POST',
       body: expect.any(FormData),
     });
+    expect(mockFetch).toHaveBeenNthCalledWith(2, 'http://localhost:8010/api/analyze', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text: 'Sample text' }),
+    });
+    expect(mockFetch).toHaveBeenNthCalledWith(3, 'http://localhost:8010/api/resources', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        analysis: {
+          core_topics: mockAnalysisResponse.core_topics,
+          search_needed: mockAnalysisResponse.search_needed
+        }
+      }),
+    });
   });
 
-  it('should handle API error', async () => {
+  it('should handle OCR API error', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 500,
       statusText: 'Internal Server Error',
-      json: () => Promise.resolve({ error: 'Processing failed' }),
+      json: () => Promise.resolve({ error: 'OCR failed' }),
     });
 
     const { result } = renderHook(() => useImageProcessing());
@@ -72,8 +115,11 @@ describe('useImageProcessing', () => {
     });
 
     await waitFor(() => {
-      expect(result.current.error).toBe('Processing failed');
-      expect(result.current.result).toBeNull();
+      expect(result.current.error).toBe('OCR failed');
+      expect(result.current.ocrResult).toBeNull();
+      expect(result.current.analysisResult).toBeNull();
+      expect(result.current.resourcesResult).toBeNull();
+      expect(result.current.processingStep).toBe('IDLE');
       expect(result.current.isProcessing).toBe(false);
     });
   });
@@ -90,7 +136,10 @@ describe('useImageProcessing', () => {
 
     await waitFor(() => {
       expect(result.current.error).toBe('Network error');
-      expect(result.current.result).toBeNull();
+      expect(result.current.ocrResult).toBeNull();
+      expect(result.current.analysisResult).toBeNull();
+      expect(result.current.resourcesResult).toBeNull();
+      expect(result.current.processingStep).toBe('IDLE');
       expect(result.current.isProcessing).toBe(false);
     });
   });
@@ -100,20 +149,30 @@ describe('useImageProcessing', () => {
 
     // First set some state by processing an image
     const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        ocr_result: { text: 'test', character_count: 4 },
-        analysis: { grammar_focus: { topic: 'test', explanation: 'test', has_explicit_rules: false }, vocabulary: [] },
-        processing_successful: true,
-      }),
-    });
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ text: 'test', character_count: 4 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          grammar_focus: { topic: 'test', explanation: 'test', has_explicit_rules: false },
+          vocabulary: [],
+          core_topics: ['test topic'],
+          search_needed: { should_search: true, query_suggestions: ['test query'] }
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ extra_info: 'test' }),
+      });
 
     await act(async () => {
       await result.current.processImage(file);
     });
     await waitFor(() => {
-      expect(result.current.result).not.toBeNull();
+      expect(result.current.ocrResult).not.toBeNull();
     });
 
     act(() => {
@@ -121,7 +180,10 @@ describe('useImageProcessing', () => {
     });
 
     await waitFor(() => {
-      expect(result.current.result).toBeNull();
+      expect(result.current.ocrResult).toBeNull();
+      expect(result.current.analysisResult).toBeNull();
+      expect(result.current.resourcesResult).toBeNull();
+      expect(result.current.processingStep).toBe('IDLE');
       expect(result.current.error).toBeNull();
       expect(result.current.isProcessing).toBe(false);
       expect(result.current.progress).toBe(0);
@@ -129,19 +191,28 @@ describe('useImageProcessing', () => {
   });
 
   it('should update progress during processing', async () => {
-    const mockResponse = {
-      ocr_result: { text: 'Sample text', character_count: 11 },
-      analysis: {
-        grammar_focus: { topic: 'Present tense', explanation: 'Focus on present tense usage', has_explicit_rules: true },
-        vocabulary: [{ swedish: 'hej', english: 'hello' }],
-      },
-      processing_successful: true,
+    const mockOcrResponse = { text: 'Sample text', character_count: 11 };
+    const mockAnalysisResponse = {
+      grammar_focus: { topic: 'Present tense', explanation: 'Focus on present tense usage', has_explicit_rules: true },
+      vocabulary: [{ swedish: 'hej', english: 'hello' }],
+      core_topics: ['present tense', 'greetings'],
+      search_needed: { should_search: true, query_suggestions: ['Swedish present tense'] },
     };
+    const mockResourcesResponse = { extra_info: 'Additional resources' };
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockResponse),
-    });
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockOcrResponse),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockAnalysisResponse),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResourcesResponse),
+      });
 
     const { result } = renderHook(() => useImageProcessing());
 
@@ -156,19 +227,28 @@ describe('useImageProcessing', () => {
   });
 
   it('should set currentImage during processing', async () => {
-    const mockResponse = {
-      ocr_result: { text: 'Sample text', character_count: 11 },
-      analysis: {
-        grammar_focus: { topic: 'Present tense', explanation: 'Focus on present tense usage', has_explicit_rules: true },
-        vocabulary: [{ swedish: 'hej', english: 'hello' }],
-      },
-      processing_successful: true,
+    const mockOcrResponse = { text: 'Sample text', character_count: 11 };
+    const mockAnalysisResponse = {
+      grammar_focus: { topic: 'Present tense', explanation: 'Focus on present tense usage', has_explicit_rules: true },
+      vocabulary: [{ swedish: 'hej', english: 'hello' }],
+      core_topics: ['present tense', 'greetings'],
+      search_needed: { should_search: true, query_suggestions: ['Swedish present tense'] },
     };
+    const mockResourcesResponse = { extra_info: 'Additional resources' };
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockResponse),
-    });
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockOcrResponse),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockAnalysisResponse),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResourcesResponse),
+      });
 
     const { result } = renderHook(() => useImageProcessing());
 
@@ -199,7 +279,10 @@ describe('useImageProcessing', () => {
 
     await waitFor(() => {
       expect(result.current.error).toBe('Invalid JSON');
-      expect(result.current.result).toBeNull();
+      expect(result.current.ocrResult).toBeNull();
+      expect(result.current.analysisResult).toBeNull();
+      expect(result.current.resourcesResult).toBeNull();
+      expect(result.current.processingStep).toBe('IDLE');
       expect(result.current.isProcessing).toBe(false);
     });
   });
@@ -219,9 +302,50 @@ describe('useImageProcessing', () => {
     });
 
     await waitFor(() => {
-      expect(result.current.error).toBe('response.json is not a function');
-      expect(result.current.result).toBeNull();
+      expect(result.current.error).toBe('ocrResponse.json is not a function');
+      expect(result.current.ocrResult).toBeNull();
+      expect(result.current.analysisResult).toBeNull();
+      expect(result.current.resourcesResult).toBeNull();
+      expect(result.current.processingStep).toBe('IDLE');
       expect(result.current.isProcessing).toBe(false);
+    });
+  });
+
+  it('should update processingStep during multi-step processing', async () => {
+    const mockOcrResponse = { text: 'Sample text', character_count: 11 };
+    const mockAnalysisResponse = {
+      grammar_focus: { topic: 'Present tense', explanation: 'Focus on present tense usage', has_explicit_rules: true },
+      vocabulary: [{ swedish: 'hej', english: 'hello' }],
+      core_topics: ['present tense', 'greetings'],
+      search_needed: { should_search: true, query_suggestions: ['Swedish present tense'] },
+    };
+    const mockResourcesResponse = { extra_info: 'Additional resources' };
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockOcrResponse),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockAnalysisResponse),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResourcesResponse),
+      });
+
+    const { result } = renderHook(() => useImageProcessing());
+
+    const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
+
+    await act(async () => {
+      await result.current.processImage(file);
+    });
+
+    // Check that processingStep was updated to DONE
+    await waitFor(() => {
+      expect(result.current.processingStep).toBe('DONE');
     });
   });
 });

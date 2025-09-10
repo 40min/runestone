@@ -138,7 +138,7 @@ class OpenAIClient(BaseLLMClient):
             response = self.client.chat.completions.create(
                 model=self._model_name,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=4000,
+                max_tokens=10000,
                 temperature=0.1,
             )
 
@@ -170,7 +170,7 @@ class OpenAIClient(BaseLLMClient):
             response = self.client.chat.completions.create(
                 model=self._model_name,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=2000,
+                max_completion_tokens=10000,
                 temperature=0.3,
             )
 

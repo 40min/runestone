@@ -56,87 +56,85 @@ class TestRunestoneIntegration:
     @patch("runestone.core.processor.OCRProcessor")
     @patch("runestone.core.processor.ContentAnalyzer")
     @patch("runestone.core.processor.ResultFormatter")
-    def test_process_image_complete_workflow(self, mock_formatter, mock_analyzer, mock_ocr, mock_image_open):
-        """Test complete image processing workflow."""
-        # Create a temporary image file
-        with self.runner.isolated_filesystem():
-            self.test_image_path.touch()
+    def test_stateless_workflow_complete(self, mock_formatter, mock_analyzer, mock_ocr, mock_image_open):
+        """Test complete stateless processing workflow."""
+        # Mock PIL Image
+        mock_image = Mock()
+        mock_image.size = (800, 600)
+        mock_image_open.return_value = mock_image
 
-            # Mock PIL Image
-            mock_image = Mock()
-            mock_image.size = (800, 600)
-            mock_image_open.return_value = mock_image
+        # Mock OCR results
+        mock_ocr_result = {
+            "text": "Hej, vad heter du?",
+            "character_count": 17,
+        }
 
-            # Mock OCR results
-            mock_ocr_result = {
-                "text": "Hej, vad heter du?",
-                "image_path": str(self.test_image_path),
-                "image_size": (800, 600),
-                "character_count": 17,
-            }
+        # Mock analysis results
+        mock_analysis = {
+            "grammar_focus": {
+                "has_explicit_rules": False,
+                "topic": "Swedish questions",
+                "explanation": "Basic question formation in Swedish",
+            },
+            "vocabulary": [
+                {"swedish": "hej", "english": "hello"},
+                {"swedish": "vad", "english": "what"},
+            ],
+            "core_topics": ["questions", "greetings"],
+            "search_needed": {
+                "should_search": True,
+                "query_suggestions": ["Swedish questions"],
+            },
+        }
 
-            # Mock analysis results
-            mock_analysis = {
-                "grammar_focus": {
-                    "has_explicit_rules": False,
-                    "topic": "Swedish questions",
-                    "explanation": "Basic question formation in Swedish",
-                },
-                "vocabulary": [
-                    {"swedish": "hej", "english": "hello"},
-                    {"swedish": "vad", "english": "what"},
-                ],
-                "core_topics": ["questions", "greetings"],
-                "search_needed": {
-                    "should_search": True,
-                    "query_suggestions": ["Swedish questions"],
-                },
-            }
+        # Mock resources
+        mock_resources = "Additional learning resources about Swedish questions"
 
-            # Mock resources
-            mock_resources = [
-                {
-                    "title": "Swedish Questions Guide",
-                    "url": "https://svenska.se/questions",
-                    "description": "Guide to Swedish question formation",
-                }
-            ]
+        # Configure mocks
+        mock_ocr_instance = Mock()
+        mock_ocr_instance.extract_text.return_value = mock_ocr_result
+        mock_ocr.return_value = mock_ocr_instance
 
-            # Configure mocks
-            mock_ocr_instance = Mock()
-            mock_ocr_instance.extract_text.return_value = mock_ocr_result
-            mock_ocr.return_value = mock_ocr_instance
+        mock_analyzer_instance = Mock()
+        mock_analyzer_instance.analyze_content.return_value = mock_analysis
+        mock_analyzer_instance.find_extra_learning_info.return_value = mock_resources
+        mock_analyzer.return_value = mock_analyzer_instance
 
-            mock_analyzer_instance = Mock()
-            mock_analyzer_instance.analyze_content.return_value = mock_analysis
-            mock_analyzer_instance.find_extra_learning_info.return_value = mock_resources
-            mock_analyzer.return_value = mock_analyzer_instance
+        mock_formatter_instance = Mock()
+        mock_formatter.return_value = mock_formatter_instance
 
-            mock_formatter_instance = Mock()
-            mock_formatter.return_value = mock_formatter_instance
+        # Run processor with new stateless workflow
+        processor = RunestoneProcessor(
+            settings=self.settings, provider="openai", api_key=self.api_key, model_name=None, verbose=True
+        )
 
-            # Run processor
-            processor = RunestoneProcessor(
-                settings=self.settings, provider="openai", api_key=self.api_key, model_name=None, verbose=True
-            )
-            result = processor.process_image(self.test_image_path)
+        # Simulate the workflow step by step
+        image_bytes = b"fake image data"
+        ocr_result = processor.run_ocr(image_bytes)
+        analysis_result = processor.run_analysis(ocr_result["text"])
+        resources_result = processor.run_resource_search(analysis_result)
 
-            # Verify workflow execution
-            mock_ocr_instance.extract_text.assert_called_once_with(self.test_image_path)
-            mock_analyzer_instance.analyze_content.assert_called_once_with("Hej, vad heter du?")
-            mock_analyzer_instance.find_extra_learning_info.assert_called_once_with(mock_analysis)
+        # Verify workflow execution
+        mock_ocr_instance.extract_text.assert_called_once()
+        mock_analyzer_instance.analyze_content.assert_called_once_with("Hej, vad heter du?")
+        mock_analyzer_instance.find_extra_learning_info.assert_called_once_with(mock_analysis)
 
-            # Verify result structure
-            assert result["processing_successful"] is True
-            assert result["ocr_result"] == mock_ocr_result
-            assert result["analysis"] == mock_analysis
-            assert result["extra_info"] == mock_resources
+        # Verify result structure
+        assert ocr_result == mock_ocr_result
+        assert analysis_result == mock_analysis
+        assert resources_result == mock_resources
 
+    @patch("PIL.Image.open")
     @patch("runestone.core.processor.OCRProcessor")
     @patch("runestone.core.processor.ContentAnalyzer")
     @patch("runestone.core.processor.ResultFormatter")
-    def test_process_image_ocr_failure(self, mock_formatter, mock_analyzer, mock_ocr):
+    def test_process_image_ocr_failure(self, mock_formatter, mock_analyzer, mock_ocr, mock_image_open):
         """Test handling of OCR failure."""
+        # Mock PIL Image
+        mock_image = Mock()
+        mock_image.size = (800, 600)
+        mock_image_open.return_value = mock_image
+
         # Mock OCR failure
         mock_ocr_instance = Mock()
         mock_ocr_instance.extract_text.side_effect = Exception("OCR failed")
@@ -148,9 +146,9 @@ class TestRunestoneIntegration:
         processor = RunestoneProcessor(settings=self.settings, provider="openai", api_key=self.api_key, model_name=None)
 
         with pytest.raises(RunestoneError) as exc_info:
-            processor.process_image(self.test_image_path)
+            processor.run_ocr(b"fake image data")
 
-        assert "Processing failed" in str(exc_info.value)
+        assert "OCR processing failed" in str(exc_info.value)
 
     @patch("PIL.Image.open")
     @patch("runestone.core.processor.OCRProcessor")
@@ -158,33 +156,30 @@ class TestRunestoneIntegration:
     @patch("runestone.core.processor.ResultFormatter")
     def test_process_image_empty_text(self, mock_formatter, mock_analyzer, mock_ocr, mock_image_open):
         """Test handling of empty extracted text."""
-        # Create a temporary image file
-        with self.runner.isolated_filesystem():
-            self.test_image_path.touch()
+        # Mock PIL Image
+        mock_image = Mock()
+        mock_image.size = (800, 600)
+        mock_image_open.return_value = mock_image
 
-            # Mock PIL Image
-            mock_image = Mock()
-            mock_image.size = (800, 600)
-            mock_image_open.return_value = mock_image
+        # Mock empty OCR result
+        mock_ocr_result = {"text": "", "character_count": 0}
 
-            # Mock empty OCR result
-            mock_ocr_result = {"text": "", "character_count": 0}
+        mock_ocr_instance = Mock()
+        mock_ocr_instance.extract_text.return_value = mock_ocr_result
+        mock_ocr.return_value = mock_ocr_instance
 
-            mock_ocr_instance = Mock()
-            mock_ocr_instance.extract_text.return_value = mock_ocr_result
-            mock_ocr.return_value = mock_ocr_instance
+        mock_analyzer.return_value = Mock()
+        mock_formatter.return_value = Mock()
 
-            mock_analyzer.return_value = Mock()
-            mock_formatter.return_value = Mock()
+        processor = RunestoneProcessor(
+            settings=self.settings, provider="openai", api_key=self.api_key, model_name=None
+        )
 
-            processor = RunestoneProcessor(
-                settings=self.settings, provider="openai", api_key=self.api_key, model_name=None
-            )
+        with pytest.raises(RunestoneError) as exc_info:
+            ocr_result = processor.run_ocr(b"fake image data")
+            processor.run_analysis(ocr_result["text"])
 
-            with pytest.raises(RunestoneError) as exc_info:
-                processor.process_image(self.test_image_path)
-
-            assert "No text was extracted" in str(exc_info.value)
+        assert "No text provided for analysis" in str(exc_info.value)
 
     @patch("runestone.core.processor.OCRProcessor")
     @patch("runestone.core.processor.ContentAnalyzer")

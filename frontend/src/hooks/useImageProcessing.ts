@@ -20,18 +20,19 @@ interface VocabularyItem {
 interface ContentAnalysis {
   grammar_focus: GrammarFocus;
   vocabulary: VocabularyItem[];
-}
-
-interface ProcessingResult {
-  ocr_result: OCRResult;
-  analysis: ContentAnalysis;
-  extra_info?: string;
-  processing_successful: boolean;
+  core_topics: string[];
+  search_needed: {
+    should_search: boolean;
+    query_suggestions: string[];
+  };
 }
 
 interface UseImageProcessingReturn {
   processImage: (file: File) => Promise<void>;
-  result: ProcessingResult | null;
+  ocrResult: OCRResult | null;
+  analysisResult: ContentAnalysis | null;
+  resourcesResult: string | null;
+  processingStep: 'IDLE' | 'OCR' | 'ANALYZING' | 'RESOURCES' | 'DONE';
   error: string | null;
   isProcessing: boolean;
   reset: () => void;
@@ -40,7 +41,10 @@ interface UseImageProcessingReturn {
 }
 
 const useImageProcessing = (): UseImageProcessingReturn => {
-  const [result, setResult] = useState<ProcessingResult | null>(null);
+  const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<ContentAnalysis | null>(null);
+  const [resourcesResult, setResourcesResult] = useState<string | null>(null);
+  const [processingStep, setProcessingStep] = useState<'IDLE' | 'OCR' | 'ANALYZING' | 'RESOURCES' | 'DONE'>('IDLE');
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentImage, setCurrentImage] = useState<string | null>(null);
@@ -49,7 +53,10 @@ const useImageProcessing = (): UseImageProcessingReturn => {
   const processImage = async (file: File) => {
     setIsProcessing(true);
     setError(null);
-    setResult(null);
+    setOcrResult(null);
+    setAnalysisResult(null);
+    setResourcesResult(null);
+    setProcessingStep('IDLE');
     setProgress(10);
 
     // Create data URL for the image to display during processing
@@ -58,28 +65,76 @@ const useImageProcessing = (): UseImageProcessingReturn => {
     setProgress(20);
 
     try {
-      setProgress(40);
+      // Step 1: OCR
+      setProcessingStep('OCR');
+      setProgress(30);
       const formData = new FormData();
       formData.append('file', file);
 
-      setProgress(60);
-      const response = await fetch(`${API_BASE_URL}/api/process`, {
+      const ocrResponse = await fetch(`${API_BASE_URL}/api/ocr`, {
         method: 'POST',
         body: formData,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      if (!ocrResponse.ok) {
+        const errorData = await ocrResponse.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `OCR failed: HTTP ${ocrResponse.status}: ${ocrResponse.statusText}`);
       }
 
+      const ocrData: OCRResult = await ocrResponse.json();
+      setOcrResult(ocrData);
+      setProgress(50);
+
+      // Step 2: Analysis
+      setProcessingStep('ANALYZING');
+      setProgress(60);
+      const analyzeResponse = await fetch(`${API_BASE_URL}/api/analyze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: ocrData.text }),
+      });
+
+      if (!analyzeResponse.ok) {
+        const errorData = await analyzeResponse.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Analysis failed: HTTP ${analyzeResponse.status}: ${analyzeResponse.statusText}`);
+      }
+
+      const analysisData: ContentAnalysis = await analyzeResponse.json();
+      setAnalysisResult(analysisData);
       setProgress(80);
-      const data: ProcessingResult = await response.json();
-      setResult(data);
+
+      // Step 3: Resources
+      setProcessingStep('RESOURCES');
+      setProgress(90);
+      const resourcesResponse = await fetch(`${API_BASE_URL}/api/resources`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          analysis: {
+            core_topics: analysisData.core_topics,
+            search_needed: analysisData.search_needed
+          }
+        }),
+      });
+
+      if (!resourcesResponse.ok) {
+        const errorData = await resourcesResponse.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Resources failed: HTTP ${resourcesResponse.status}: ${resourcesResponse.statusText}`);
+      }
+
+      const resourcesData = await resourcesResponse.json();
+      setResourcesResult(resourcesData.extra_info);
       setProgress(100);
+      setProcessingStep('DONE');
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
       setError(errorMessage);
+      setProcessingStep('IDLE');
     } finally {
       setIsProcessing(false);
       // Clean up the object URL to prevent memory leaks
@@ -91,7 +146,10 @@ const useImageProcessing = (): UseImageProcessingReturn => {
   };
 
   const reset = () => {
-    setResult(null);
+    setOcrResult(null);
+    setAnalysisResult(null);
+    setResourcesResult(null);
+    setProcessingStep('IDLE');
     setError(null);
     setIsProcessing(false);
     setProgress(0);
@@ -99,7 +157,10 @@ const useImageProcessing = (): UseImageProcessingReturn => {
 
   return {
     processImage,
-    result,
+    ocrResult,
+    analysisResult,
+    resourcesResult,
+    processingStep,
     error,
     isProcessing,
     reset,

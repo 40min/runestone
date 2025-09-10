@@ -40,21 +40,20 @@ You are an expert OCR transcription assistant. Your task is to accurately transc
    - Ensure no text is accidentally omitted
 
 ## Output Format:
-Provide the transcribed text followed by recognition statistics.
+Return a JSON object with the following structure:
+
+{
+  "transcribed_text": "The complete transcribed text from the image",
+  "recognition_statistics": {
+    "total_elements": N,
+    "successfully_transcribed": X,
+    "unclear_uncertain": Y,
+    "unable_to_recognize": Z
+  }
+}
 
 If no readable text exists, respond with:
-ERROR: Could not recognize text on the page.
-
-End your transcription with:
-```
----
-Recognition Statistics:
-- Total text elements identified: N
-- Successfully transcribed: X
-- Unclear/uncertain: Y
-- Unable to recognize: Z
----
-```
+{"error": "Could not recognize text on the page."}
 
 ## Important Notes:
 - Ignore purely decorative elements, images, and non-text graphics
@@ -102,13 +101,15 @@ INSTRUCTIONS:
    - Provide a clear English explanation of the grammatical concept
 
 2. For vocabulary:
-   - Extract key Swedish words, phrases, and important terms
-   - Prioritize nouns, verbs, adjectives, and useful phrases
-   - Provide accurate English translations   
+   - Extract all meaningful Swedish words and phrases from the text. Prioritize nouns, verbs, adjectives, adverbs, and useful phrases; exclude very basic function words (e.g., och, är, en/ett, jag, du).
+   - Lowercase all words and phrases.
+   - Deduplicate words, but keep different forms if they appear (e.g., hund / hunden).
+ 	- For each entry, provide the Swedish word/phrase and its most common English translation.
+ 	- List translated words in alphabetical order.
 
 3. For core_topics:
    - Identify 2-4 main learning topics from this page
-   - Use clear, descriptive terms
+   - Use clear, descriptive terms   
 
 4. For search_needed:
 	- Set should_search = true if the provided page lacks grammar explanations and only contains exercises, examples, or incomplete information.
@@ -128,7 +129,7 @@ Additional suggestions: {query_suggestions}
 Instructions:
 - Search the web for relevant, high-quality educational resources.
 - Summarize findings into a single structured text, grouped by topic.
-- For each topic, give 2–4 concise bullet points with the most useful rules, explanations, or examples.
+- For each topic, give 2–7 concise bullet points with the most useful rules, explanations, or examples.
 - Keep the text readable and compact (avoid long sections or repeated titles).
 - Prioritize reliable sources such as:  
   - https://swedish-for-all.se/sfi-steg-learning-steps/  
