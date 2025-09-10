@@ -30,6 +30,11 @@ describe('useImageProcessing', () => {
       vocabulary: [
         { swedish: 'hej', english: 'hello' },
       ],
+      core_topics: ['present tense', 'greetings'],
+      search_needed: {
+        should_search: true,
+        query_suggestions: ['Swedish present tense', 'Basic Swedish grammar']
+      },
     };
 
     const mockResourcesResponse = {
@@ -85,7 +90,12 @@ describe('useImageProcessing', () => {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ analysis: mockAnalysisResponse }),
+      body: JSON.stringify({
+        analysis: {
+          core_topics: mockAnalysisResponse.core_topics,
+          search_needed: mockAnalysisResponse.search_needed
+        }
+      }),
     });
   });
 
@@ -146,7 +156,12 @@ describe('useImageProcessing', () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ grammar_focus: { topic: 'test', explanation: 'test', has_explicit_rules: false }, vocabulary: [] }),
+        json: () => Promise.resolve({
+          grammar_focus: { topic: 'test', explanation: 'test', has_explicit_rules: false },
+          vocabulary: [],
+          core_topics: ['test topic'],
+          search_needed: { should_search: true, query_suggestions: ['test query'] }
+        }),
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -180,6 +195,8 @@ describe('useImageProcessing', () => {
     const mockAnalysisResponse = {
       grammar_focus: { topic: 'Present tense', explanation: 'Focus on present tense usage', has_explicit_rules: true },
       vocabulary: [{ swedish: 'hej', english: 'hello' }],
+      core_topics: ['present tense', 'greetings'],
+      search_needed: { should_search: true, query_suggestions: ['Swedish present tense'] },
     };
     const mockResourcesResponse = { extra_info: 'Additional resources' };
 
@@ -214,6 +231,8 @@ describe('useImageProcessing', () => {
     const mockAnalysisResponse = {
       grammar_focus: { topic: 'Present tense', explanation: 'Focus on present tense usage', has_explicit_rules: true },
       vocabulary: [{ swedish: 'hej', english: 'hello' }],
+      core_topics: ['present tense', 'greetings'],
+      search_needed: { should_search: true, query_suggestions: ['Swedish present tense'] },
     };
     const mockResourcesResponse = { extra_info: 'Additional resources' };
 
@@ -297,6 +316,8 @@ describe('useImageProcessing', () => {
     const mockAnalysisResponse = {
       grammar_focus: { topic: 'Present tense', explanation: 'Focus on present tense usage', has_explicit_rules: true },
       vocabulary: [{ swedish: 'hej', english: 'hello' }],
+      core_topics: ['present tense', 'greetings'],
+      search_needed: { should_search: true, query_suggestions: ['Swedish present tense'] },
     };
     const mockResourcesResponse = { extra_info: 'Additional resources' };
 

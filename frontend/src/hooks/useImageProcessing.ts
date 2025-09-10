@@ -20,6 +20,11 @@ interface VocabularyItem {
 interface ContentAnalysis {
   grammar_focus: GrammarFocus;
   vocabulary: VocabularyItem[];
+  core_topics: string[];
+  search_needed: {
+    should_search: boolean;
+    query_suggestions: string[];
+  };
 }
 
 interface UseImageProcessingReturn {
@@ -108,7 +113,12 @@ const useImageProcessing = (): UseImageProcessingReturn => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ analysis: analysisData }),
+        body: JSON.stringify({
+          analysis: {
+            core_topics: analysisData.core_topics,
+            search_needed: analysisData.search_needed
+          }
+        }),
       });
 
       if (!resourcesResponse.ok) {
