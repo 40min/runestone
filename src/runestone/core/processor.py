@@ -220,6 +220,62 @@ class RunestoneProcessor:
         except Exception as e:
             raise RunestoneError(f"Failed to generate markdown output: {str(e)}")
 
+    def process_image(self, image_path: Path) -> Dict[str, Any]:
+        """
+        Process an image file through the complete Runestone workflow.
+
+        Args:
+            image_path: Path to the image file to process
+
+        Returns:
+            Complete processing results dictionary with ocr_result, analysis, and extra_info
+
+        Raises:
+            RunestoneError: If processing fails at any step
+        """
+        try:
+            if self.verbose:
+                self.logger.info(f"Starting processing of image: {image_path}")
+
+            # Read image file
+            with open(image_path, "rb") as f:
+                image_bytes = f.read()
+
+            # Step 1: OCR processing
+            ocr_result = self.run_ocr(image_bytes)
+
+            # Extract text for analysis
+            extracted_text = ocr_result.get("text", "")
+            if not extracted_text:
+                raise RunestoneError("No text extracted from image")
+
+            # Step 2: Content analysis
+            analysis = self.run_analysis(extracted_text)
+
+            # Step 3: Resource search
+            extra_info = self.run_resource_search(analysis)
+
+            # Combine results
+            results = {
+                "ocr_result": ocr_result,
+                "analysis": analysis,
+                "extra_info": extra_info,
+            }
+
+            if self.verbose:
+                self.logger.info("Image processing completed successfully")
+
+            return results
+
+        except Exception as e:
+            if self.verbose:
+                self.logger.error(f"Image processing failed: {str(e)}")
+
+            if isinstance(e, RunestoneError):
+                raise
+            else:
+                raise RunestoneError(f"Image processing failed: {str(e)}")
+
     def save_results_to_file(self, results: Dict[str, Any], output_path: Path) -> None:
         """
         Save processing results to a markdown file. # noqa: E501
