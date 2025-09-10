@@ -101,12 +101,11 @@ INSTRUCTIONS:
    - Provide a clear English explanation of the grammatical concept
 
 2. For vocabulary:
-    - Extract up to 100 meaningful Swedish words and phrases from the text.
- 	- Prioritize nouns, verbs, adjectives, adverbs, and useful phrases.
- 	- Exclude very basic function words (e.g., och, är, en/ett, jag, du).
+   - Extract all meaningful Swedish words and phrases from the text. Prioritize nouns, verbs, adjectives, adverbs, and useful phrases; exclude very basic function words (e.g., och, är, en/ett, jag, du).
+   - Lowercase all words and phrases.
+   - Deduplicate words, but keep different forms if they appear (e.g., hund / hunden).
  	- For each entry, provide the Swedish word/phrase and its most common English translation.
- 	- Deduplicate words, but keep different forms if they appear (e.g., hund / hunden).
- 	- Maintain the original order of first appearance in the text.
+ 	- List translated words in alphabetical order.
 
 3. For core_topics:
    - Identify 2-4 main learning topics from this page
