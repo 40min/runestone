@@ -127,9 +127,17 @@ class TestOCRProcessor:
         mock_image.mode = "RGB"
         mock_image.size = (800, 600)
 
-        # Mock Gemini response
+        # Mock Gemini JSON response
         mock_response = Mock()
-        mock_response.text = "Svenska text från läroboken"
+        mock_response.text = """{
+            "transcribed_text": "Svenska text från läroboken",
+            "recognition_statistics": {
+                "total_elements": 50,
+                "successfully_transcribed": 50,
+                "unclear_uncertain": 0,
+                "unable_to_recognize": 0
+            }
+        }"""
 
         with (
             patch("google.generativeai.configure"),
@@ -164,7 +172,7 @@ class TestOCRProcessor:
 
         # Mock Gemini error response
         mock_response = Mock()
-        mock_response.text = "ERROR: Could not recognise text on the page."
+        mock_response.text = """{"error": "Could not recognize text on the page."}"""
 
         with (
             patch("google.generativeai.configure"),
@@ -179,7 +187,7 @@ class TestOCRProcessor:
             with pytest.raises(OCRError) as exc_info:
                 processor.extract_text(mock_image)
 
-        assert "Could not recognise text on the page" in str(exc_info.value)
+        assert "Could not recognize text on the page." in str(exc_info.value)
 
     def test_extract_text_too_short(self):
         """Test handling of text that is too short."""
@@ -188,9 +196,17 @@ class TestOCRProcessor:
         mock_image.mode = "RGB"
         mock_image.size = (800, 600)
 
-        # Mock Gemini response with very short text
+        # Mock Gemini JSON response with very short text
         mock_response = Mock()
-        mock_response.text = "Hi"  # Too short
+        mock_response.text = """{
+            "transcribed_text": "Hi",
+            "recognition_statistics": {
+                "total_elements": 1,
+                "successfully_transcribed": 1,
+                "unclear_uncertain": 0,
+                "unable_to_recognize": 0
+            }
+        }"""
 
         with (
             patch("google.generativeai.configure"),
@@ -241,21 +257,20 @@ class TestOCRProcessor:
         ):
             processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
-        # Test text with good recognition stats
-        test_text = """This is the main content of the page.
+        # Test JSON response with good recognition stats
+        test_json = """{
+            "transcribed_text": "This is the main content of the page.",
+            "recognition_statistics": {
+                "total_elements": 100,
+                "successfully_transcribed": 95,
+                "unclear_uncertain": 3,
+                "unable_to_recognize": 2
+            }
+        }"""
 
----
-Recognition Statistics:
-- Total text elements identified: 100
-- Successfully transcribed: 95
-- Unclear/uncertain: 3
-- Unable to recognize: 2
----
-"""
+        result = processor._parse_and_analyze_recognition_stats(test_json)
 
-        result = processor._parse_and_analyze_recognition_stats(test_text)
-
-        # Should return cleaned text without stats
+        # Should return cleaned text
         expected_text = "This is the main content of the page."
         assert result == expected_text
 
@@ -267,23 +282,22 @@ Recognition Statistics:
         ):
             processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
-        # Test text with poor recognition stats
-        test_text = """This is the main content.
-
----
-Recognition Statistics:
-- Total text elements identified: 100
-- Successfully transcribed: 85
-- Unclear/uncertain: 10
-- Unable to recognize: 5
----
-"""
+        # Test JSON response with poor recognition stats
+        test_json = """{
+            "transcribed_text": "This is the main content.",
+            "recognition_statistics": {
+                "total_elements": 100,
+                "successfully_transcribed": 85,
+                "unclear_uncertain": 10,
+                "unable_to_recognize": 5
+            }
+        }"""
 
         with pytest.raises(OCRError) as exc_info:
-            processor._parse_and_analyze_recognition_stats(test_text)
+            processor._parse_and_analyze_recognition_stats(test_json)
 
         assert "OCR recognition percentage below 90%: 85.0% (85/100)" in str(exc_info.value)
-        assert "Total text elements identified: 100" in exc_info.value.details
+        assert "total_elements" in exc_info.value.details
 
     def test_parse_and_analyze_recognition_stats_no_stats(self):
         """Test handling when no recognition statistics are present."""
@@ -293,13 +307,16 @@ Recognition Statistics:
         ):
             processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
-        # Test text without stats
-        test_text = "This is plain text without statistics."
+        # Test JSON response without statistics (empty stats object)
+        test_json = """{
+            "transcribed_text": "This is plain text without statistics.",
+            "recognition_statistics": {}
+        }"""
 
-        result = processor._parse_and_analyze_recognition_stats(test_text)
+        result = processor._parse_and_analyze_recognition_stats(test_json)
 
-        # Should return the text as-is
-        assert result == test_text
+        # Should return the transcribed text
+        assert result == "This is plain text without statistics."
 
     def test_parse_and_analyze_recognition_stats_zero_total(self):
         """Test handling when total text elements is zero."""
@@ -309,21 +326,20 @@ Recognition Statistics:
         ):
             processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
-        # Test text with zero total elements
-        test_text = """Some content.
+        # Test JSON response with zero total elements
+        test_json = """{
+            "transcribed_text": "Some content.",
+            "recognition_statistics": {
+                "total_elements": 0,
+                "successfully_transcribed": 0,
+                "unclear_uncertain": 0,
+                "unable_to_recognize": 0
+            }
+        }"""
 
----
-Recognition Statistics:
-- Total text elements identified: 0
-- Successfully transcribed: 0
-- Unclear/uncertain: 0
-- Unable to recognize: 0
----
-"""
+        result = processor._parse_and_analyze_recognition_stats(test_json)
 
-        result = processor._parse_and_analyze_recognition_stats(test_text)
-
-        # Should return cleaned text without raising error
+        # Should return transcribed text without raising error
         expected_text = "Some content."
         assert result == expected_text
 
@@ -335,19 +351,18 @@ Recognition Statistics:
         ):
             processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
 
-        # Test text with exactly 90% recognition
-        test_text = """Content.
+        # Test JSON response with exactly 90% recognition
+        test_json = """{
+            "transcribed_text": "Content.",
+            "recognition_statistics": {
+                "total_elements": 100,
+                "successfully_transcribed": 90,
+                "unclear_uncertain": 5,
+                "unable_to_recognize": 5
+            }
+        }"""
 
----
-Recognition Statistics:
-- Total text elements identified: 100
-- Successfully transcribed: 90
-- Unclear/uncertain: 5
-- Unable to recognize: 5
----
-"""
-
-        result = processor._parse_and_analyze_recognition_stats(test_text)
+        result = processor._parse_and_analyze_recognition_stats(test_json)
 
         # Should succeed (not raise error) since 90% is acceptable
         expected_text = "Content."
@@ -360,18 +375,17 @@ Recognition Statistics:
         mock_image.mode = "RGB"
         mock_image.size = (800, 600)
 
-        # Mock response with stats
+        # Mock JSON response with stats
         mock_response = Mock()
-        mock_response.text = """Extracted Swedish text content.
-
----
-Recognition Statistics:
-- Total text elements identified: 100
-- Successfully transcribed: 95
-- Unclear/uncertain: 3
-- Unable to recognize: 2
----
-"""
+        mock_response.text = """{
+            "transcribed_text": "Extracted Swedish text content.",
+            "recognition_statistics": {
+                "total_elements": 100,
+                "successfully_transcribed": 95,
+                "unclear_uncertain": 3,
+                "unable_to_recognize": 2
+            }
+        }"""
 
         with (
             patch("google.generativeai.configure"),
@@ -384,9 +398,8 @@ Recognition Statistics:
             processor = OCRProcessor(settings=self.settings, provider="gemini", api_key=self.api_key)
             result = processor.extract_text(mock_image)
 
-        # Verify result contains cleaned text without stats
+        # Verify result contains cleaned text
         assert result["text"] == "Extracted Swedish text content."
-        assert "Recognition Statistics" not in result["text"]
         assert result["character_count"] == len("Extracted Swedish text content.")
 
     def test_extract_text_with_low_recognition_raises_error(self):
@@ -396,18 +409,17 @@ Recognition Statistics:
         mock_image.mode = "RGB"
         mock_image.size = (800, 600)
 
-        # Mock response with poor stats
+        # Mock JSON response with poor stats
         mock_response = Mock()
-        mock_response.text = """Some text.
-
----
-Recognition Statistics:
-- Total text elements identified: 100
-- Successfully transcribed: 80
-- Unclear/uncertain: 15
-- Unable to recognize: 5
----
-"""
+        mock_response.text = """{
+            "transcribed_text": "Some text.",
+            "recognition_statistics": {
+                "total_elements": 100,
+                "successfully_transcribed": 80,
+                "unclear_uncertain": 15,
+                "unable_to_recognize": 5
+            }
+        }"""
 
         with (
             patch("google.generativeai.configure"),
