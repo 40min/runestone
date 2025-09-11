@@ -134,6 +134,7 @@ Instructions:
 - Search the web for relevant, high-quality educational resources.
 - Summarize findings into a single structured text, grouped by topic.
 - For each topic, give 2–5 concise bullet points with the most useful rules, explanations, or examples.
+- Explain topics as a tutor, using clear and simple language.
 - Keep the text readable and compact (avoid long sections or repeated titles).
 - Prioritize reliable sources such as:  
   - https://swedish-for-all.se/sfi-steg-learning-steps/  

@@ -1,6 +1,6 @@
 /// <reference types="vitest/globals" />
 /// <reference types="@testing-library/jest-dom" />
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi } from 'vitest';
 import ResultsDisplay from "./ResultsDisplay";
 
@@ -103,7 +103,7 @@ describe("ResultsDisplay", () => {
     expect(screen.getByText("good")).toBeInTheDocument();
   });
 
-  it("copies vocabulary to clipboard when copy button is clicked", async () => {
+  it("copies all vocabulary to clipboard by default when copy button is clicked", async () => {
     const mockClipboard = {
       writeText: vi.fn().mockResolvedValue(undefined),
     };
@@ -125,11 +125,11 @@ describe("ResultsDisplay", () => {
     fireEvent.click(copyButton);
 
     // Wait for the async operation to complete
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(mockClipboard.writeText).toHaveBeenCalledWith(
-      "hej - hello\nbra - good"
-    );
+    await waitFor(() => {
+      expect(mockClipboard.writeText).toHaveBeenCalledWith(
+        "hej - hello\nbra - good"
+      );
+    });
   });
 
   it("switches to extra info tab when clicked", () => {
@@ -312,5 +312,276 @@ describe("ResultsDisplay", () => {
     expect(link2).toHaveAttribute("href", "https://swedishpod101.com");
     expect(link2).toHaveAttribute("target", "_blank");
     expect(link2).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  // New tests for checkbox functionality
+  it("initializes all vocabulary items as checked by default", () => {
+    render(
+      <ResultsDisplay
+        ocrResult={mockResult.ocr_result}
+        analysisResult={mockResult.analysis}
+        resourcesResult={mockResult.extra_info}
+        error={null}
+      />
+    );
+
+    const vocabularyTab = screen.getByText("Vocabulary");
+    fireEvent.click(vocabularyTab);
+
+    // Check that all checkboxes are checked by default
+    const checkboxes = screen.getAllByRole("checkbox");
+    expect(checkboxes).toHaveLength(2);
+    checkboxes.forEach(checkbox => {
+      expect(checkbox).toBeChecked();
+    });
+  });
+
+  it("toggles individual checkbox when clicked", () => {
+    render(
+      <ResultsDisplay
+        ocrResult={mockResult.ocr_result}
+        analysisResult={mockResult.analysis}
+        resourcesResult={mockResult.extra_info}
+        error={null}
+      />
+    );
+
+    const vocabularyTab = screen.getByText("Vocabulary");
+    fireEvent.click(vocabularyTab);
+
+    const checkboxes = screen.getAllByRole("checkbox");
+    const firstCheckbox = checkboxes[0];
+
+    // Initially checked
+    expect(firstCheckbox).toBeChecked();
+
+    // Click to uncheck
+    fireEvent.click(firstCheckbox);
+    expect(firstCheckbox).not.toBeChecked();
+
+    // Click to check again
+    fireEvent.click(firstCheckbox);
+    expect(firstCheckbox).toBeChecked();
+  });
+
+  it("handles check all/uncheck all functionality", () => {
+    render(
+      <ResultsDisplay
+        ocrResult={mockResult.ocr_result}
+        analysisResult={mockResult.analysis}
+        resourcesResult={mockResult.extra_info}
+        error={null}
+      />
+    );
+
+    const vocabularyTab = screen.getByText("Vocabulary");
+    fireEvent.click(vocabularyTab);
+
+    const checkAllButton = screen.getByText("Check/Uncheck All");
+    const checkboxes = screen.getAllByRole("checkbox");
+
+    // Initially all checked
+    checkboxes.forEach(checkbox => {
+      expect(checkbox).toBeChecked();
+    });
+
+    // Click to uncheck all
+    fireEvent.click(checkAllButton);
+    checkboxes.forEach(checkbox => {
+      expect(checkbox).not.toBeChecked();
+    });
+
+    // Click to check all again
+    fireEvent.click(checkAllButton);
+    checkboxes.forEach(checkbox => {
+      expect(checkbox).toBeChecked();
+    });
+  });
+
+  it("copies only selected vocabulary items", async () => {
+    const mockClipboard = {
+      writeText: vi.fn().mockResolvedValue(undefined),
+    };
+    Object.assign(navigator, { clipboard: mockClipboard });
+
+    render(
+      <ResultsDisplay
+        ocrResult={mockResult.ocr_result}
+        analysisResult={mockResult.analysis}
+        resourcesResult={mockResult.extra_info}
+        error={null}
+      />
+    );
+
+    const vocabularyTab = screen.getByText("Vocabulary");
+    fireEvent.click(vocabularyTab);
+
+    const checkboxes = screen.getAllByRole("checkbox");
+    
+    // Uncheck the first item
+    fireEvent.click(checkboxes[0]);
+
+    const copyButton = screen.getByText("Copy");
+    fireEvent.click(copyButton);
+
+    // Should only copy the second item (bra - good)
+    await waitFor(() => {
+      expect(mockClipboard.writeText).toHaveBeenCalledWith("bra - good");
+    });
+  });
+
+  it("shows error snackbar when no vocabulary items are selected", async () => {
+    const mockClipboard = {
+      writeText: vi.fn().mockResolvedValue(undefined),
+    };
+    Object.assign(navigator, { clipboard: mockClipboard });
+
+    render(
+      <ResultsDisplay
+        ocrResult={mockResult.ocr_result}
+        analysisResult={mockResult.analysis}
+        resourcesResult={mockResult.extra_info}
+        error={null}
+      />
+    );
+
+    const vocabularyTab = screen.getByText("Vocabulary");
+    fireEvent.click(vocabularyTab);
+
+    // Uncheck all items
+    const checkAllButton = screen.getByText("Check/Uncheck All");
+    fireEvent.click(checkAllButton);
+
+    const copyButton = screen.getByText("Copy");
+    fireEvent.click(copyButton);
+
+    // Should show error message
+    await waitFor(() => {
+      expect(screen.getByText("No vocabulary items selected!")).toBeInTheDocument();
+    });
+
+    // Clipboard should not be called
+    expect(mockClipboard.writeText).not.toHaveBeenCalled();
+  });
+
+  it("shows success snackbar when vocabulary is copied successfully", async () => {
+    const mockClipboard = {
+      writeText: vi.fn().mockResolvedValue(undefined),
+    };
+    Object.assign(navigator, { clipboard: mockClipboard });
+
+    render(
+      <ResultsDisplay
+        ocrResult={mockResult.ocr_result}
+        analysisResult={mockResult.analysis}
+        resourcesResult={mockResult.extra_info}
+        error={null}
+      />
+    );
+
+    const vocabularyTab = screen.getByText("Vocabulary");
+    fireEvent.click(vocabularyTab);
+
+    const copyButton = screen.getByText("Copy");
+    fireEvent.click(copyButton);
+
+    // Should show success message
+    await waitFor(() => {
+      expect(screen.getByText("Selected vocabulary copied to clipboard!")).toBeInTheDocument();
+    });
+  });
+
+  it("shows error snackbar when clipboard API fails", async () => {
+    const mockClipboard = {
+      writeText: vi.fn().mockRejectedValue(new Error("Clipboard error")),
+    };
+    Object.assign(navigator, { clipboard: mockClipboard });
+
+    render(
+      <ResultsDisplay
+        ocrResult={mockResult.ocr_result}
+        analysisResult={mockResult.analysis}
+        resourcesResult={mockResult.extra_info}
+        error={null}
+      />
+    );
+
+    const vocabularyTab = screen.getByText("Vocabulary");
+    fireEvent.click(vocabularyTab);
+
+    const copyButton = screen.getByText("Copy");
+    fireEvent.click(copyButton);
+
+    // Should show error message
+    await waitFor(() => {
+      expect(screen.getByText("Failed to copy vocabulary. Please try again.")).toBeInTheDocument();
+    });
+  });
+
+  it("handles clipboard API not available by attempting fallback", async () => {
+    // Save original methods
+    const originalClipboard = navigator.clipboard;
+
+    // Mock the absence of clipboard API
+    // @ts-expect-error - Intentionally deleting clipboard for testing fallback
+    delete navigator.clipboard;
+
+    // Spy on console.error to suppress expected error output
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(
+      <ResultsDisplay
+        ocrResult={mockResult.ocr_result}
+        analysisResult={mockResult.analysis}
+        resourcesResult={mockResult.extra_info}
+        error={null}
+      />
+    );
+
+    const vocabularyTab = screen.getByText("Vocabulary");
+    fireEvent.click(vocabularyTab);
+
+    const copyButton = screen.getByText("Copy");
+    fireEvent.click(copyButton);
+
+    // Should show either success or error message - the fallback might not work in test environment
+    await waitFor(() => {
+      const successMessage = screen.queryByText("Selected vocabulary copied to clipboard!");
+      const errorMessage = screen.queryByText("Failed to copy vocabulary. Please try again.");
+      expect(successMessage || errorMessage).toBeTruthy();
+    });
+
+    // Restore original methods
+    Object.assign(navigator, { clipboard: originalClipboard });
+    consoleSpy.mockRestore();
+  });
+
+  it("displays vocabulary items with checkboxes and correct styling", () => {
+    render(
+      <ResultsDisplay
+        ocrResult={mockResult.ocr_result}
+        analysisResult={mockResult.analysis}
+        resourcesResult={mockResult.extra_info}
+        error={null}
+      />
+    );
+
+    const vocabularyTab = screen.getByText("Vocabulary");
+    fireEvent.click(vocabularyTab);
+
+    // Check that vocabulary items are displayed with checkboxes
+    expect(screen.getByText("hej")).toBeInTheDocument();
+    expect(screen.getByText("hello")).toBeInTheDocument();
+    expect(screen.getByText("bra")).toBeInTheDocument();
+    expect(screen.getByText("good")).toBeInTheDocument();
+
+    const checkboxes = screen.getAllByRole("checkbox");
+    expect(checkboxes).toHaveLength(2);
+
+    // Check that the Check/Uncheck All button is present
+    expect(screen.getByText("Check/Uncheck All")).toBeInTheDocument();
+    
+    // Check that the Copy button is present
+    expect(screen.getByText("Copy")).toBeInTheDocument();
   });
 });

@@ -1,16 +1,30 @@
-import React, { useState } from "react";
-import { Box, Typography, Button, Snackbar, Alert } from "@mui/material";
+import React, { useState, useEffect } from "react";
+import { Box, Typography, Button, Snackbar, Alert, Checkbox } from "@mui/material";
+import type { AlertColor } from "@mui/material";
 import { Copy, AlertTriangle } from "lucide-react";
 
 // Utility function to convert URLs in text to HTML links
-const convertUrlsToLinks = (text: string): string => {
-  if (!text) return text;
+const convertUrlsToLinks = (text: string): (string | React.ReactElement)[] => {
+  if (!text) return [text];
 
-  // Regex to match URLs (http, https, ftp, etc.)
   const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
 
-  return text.replace(urlRegex, (url) => {
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--primary-color); text-decoration: underline;">${url}</a>`;
+  return parts.map((part, index) => {
+    if (part.match(urlRegex)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: "var(--primary-color)", textDecoration: "underline" }}
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
   });
 };
 
@@ -59,12 +73,19 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
-    severity: 'success' | 'error';
+    severity: AlertColor;
   }>({
     open: false,
     message: '',
     severity: 'success',
   });
+  const [checkedItems, setCheckedItems] = useState<boolean[]>([]);
+
+  useEffect(() => {
+    if (analysisResult) {
+      setCheckedItems(new Array(analysisResult.vocabulary.length).fill(true));
+    }
+  }, [analysisResult]);
 
   if (error) {
     return (
@@ -122,7 +143,13 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   const handleCopyVocabulary = async () => {
     if (!analysisResult) return;
 
-    const vocabText = analysisResult.vocabulary
+    const checkedVocab = analysisResult.vocabulary.filter((_, index) => checkedItems[index]);
+    if (checkedVocab.length === 0) {
+      setSnackbar({ open: true, message: 'No vocabulary items selected!', severity: 'error' });
+      return;
+    }
+
+    const vocabText = checkedVocab
       .map((item) => `${item.swedish} - ${item.english}`)
       .join("\n");
 
@@ -136,16 +163,29 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
         textArea.select();
         document.execCommand('copy');
         document.body.removeChild(textArea);
-        setSnackbar({ open: true, message: 'Vocabulary copied to clipboard!', severity: 'success' });
+        setSnackbar({ open: true, message: 'Selected vocabulary copied to clipboard!', severity: 'success' });
         return;
       }
 
       await navigator.clipboard.writeText(vocabText);
-      setSnackbar({ open: true, message: 'Vocabulary copied to clipboard!', severity: 'success' });
+      setSnackbar({ open: true, message: 'Selected vocabulary copied to clipboard!', severity: 'success' });
     } catch (err) {
       console.error('Failed to copy vocabulary: ', err);
       setSnackbar({ open: true, message: 'Failed to copy vocabulary. Please try again.', severity: 'error' });
     }
+  };
+
+  const handleCheckboxChange = (index: number) => {
+    const newCheckedItems = [...checkedItems];
+    newCheckedItems[index] = !newCheckedItems[index];
+    setCheckedItems(newCheckedItems);
+  };
+
+  const handleCheckAll = () => {
+    if (!analysisResult) return;
+    const allChecked = checkedItems.every(Boolean);
+    const newCheckedItems = new Array(analysisResult.vocabulary.length).fill(!allChecked);
+    setCheckedItems(newCheckedItems);
   };
 
   const tabs = [
@@ -332,34 +372,53 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                 Vocabulary Analysis
               </Typography>
               {analysisResult && analysisResult.vocabulary.length > 0 && (
-                <Button
-                  onClick={handleCopyVocabulary}
-                  sx={{
-                    px: 4,
-                    py: 2,
-                    backgroundColor: "var(--primary-color)",
-                    color: "white",
-                    borderRadius: "0.5rem",
-                    fontWeight: 700,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 2,
-                    "&:hover": {
+                <Box sx={{ display: "flex", gap: 2 }}>
+                  <Button
+                    onClick={handleCheckAll}
+                    sx={{
+                      px: 3,
+                      py: 2,
+                      backgroundColor: "#6b7280",
+                      color: "white",
+                      borderRadius: "0.5rem",
+                      fontWeight: 600,
+                      "&:hover": {
+                        backgroundColor: "#4b5563",
+                      },
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    Check/Uncheck All
+                  </Button>
+                  <Button
+                    onClick={handleCopyVocabulary}
+                    sx={{
+                      px: 4,
+                      py: 2,
                       backgroundColor: "var(--primary-color)",
-                      opacity: 0.9,
-                      transform: "scale(1.05)",
-                      boxShadow:
-                        "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-                    },
-                    "&:active": {
-                      transform: "scale(0.95)",
-                    },
-                    transition: "all 0.2s",
-                  }}
-                >
-                  <Copy size={16} />
-                  Copy
-                </Button>
+                      color: "white",
+                      borderRadius: "0.5rem",
+                      fontWeight: 700,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 2,
+                      "&:hover": {
+                        backgroundColor: "var(--primary-color)",
+                        opacity: 0.9,
+                        transform: "scale(1.05)",
+                        boxShadow:
+                          "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+                      },
+                      "&:active": {
+                        transform: "scale(0.95)",
+                      },
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    <Copy size={16} />
+                    Copy
+                  </Button>
+                </Box>
               )}
             </Box>
             {analysisResult && (
@@ -378,9 +437,21 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                       alignItems: "center",
                     }}
                   >
-                    <Typography sx={{ color: "white", fontWeight: "bold" }}>
-                      {item.swedish}
-                    </Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <Checkbox
+                        checked={checkedItems[index] || false}
+                        onChange={() => handleCheckboxChange(index)}
+                        sx={{
+                          color: "#9ca3af",
+                          "&.Mui-checked": {
+                            color: "var(--primary-color)",
+                          },
+                        }}
+                      />
+                      <Typography sx={{ color: "white", fontWeight: "bold" }}>
+                        {item.swedish}
+                      </Typography>
+                    </Box>
                     <Typography sx={{ color: "#9ca3af" }}>
                       {item.english}
                     </Typography>
@@ -405,10 +476,9 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                   borderRadius: "0.5rem",
                 }}
               >
-                <Typography
-                  sx={{ color: "white", whiteSpace: "pre-wrap" }}
-                  dangerouslySetInnerHTML={{ __html: convertUrlsToLinks(resourcesResult) }}
-                />
+                <Typography sx={{ color: "white", whiteSpace: "pre-wrap" }}>
+                  {convertUrlsToLinks(resourcesResult)}
+                </Typography>
               </Box>
             ) : (
               <Typography sx={{ color: "#d1d5db" }}>
