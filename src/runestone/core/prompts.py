@@ -56,7 +56,9 @@ If no readable text exists, respond with:
 {"error": "Could not recognize text on the page."}
 
 ## Important Notes:
-- Ignore purely decorative elements, images, and non-text graphics
+- Pay special attention to a text in blue and light-blue boxes -- it is probably important rules or explanations
+- Don't ignore text in light-blue boxes
+- Ignore images, and non-text graphics
 - Focus on text content only, not visual layout descriptions
 - If text appears in multiple columns, transcribe left-to-right, top-to-bottom
 - Maintain the original language of the text (don't translate)

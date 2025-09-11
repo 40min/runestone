@@ -249,10 +249,10 @@ To update the code running in Docker containers after making changes:
 
 ```bash
 # Rebuild the images with updated code
-docker-compose build
+docker compose build --no-cache
 
 # Or if containers are already running, restart them
-docker-compose restart
+docker compose restart
 ```
 
 This will rebuild the backend and frontend images with your latest code changes and restart the containers.
