@@ -54,6 +54,7 @@ class TestContentAnalyzer:
                 "has_explicit_rules": True,
                 "topic": "Swedish greetings",
                 "explanation": "Basic greeting patterns in Swedish",
+                "rules": "Hej [hello] - greeting\nHur mår du? [how are you?] - question form",
             },
             "vocabulary": [
                 {"swedish": "hej", "english": "hello"},
@@ -86,8 +87,12 @@ class TestContentAnalyzer:
 
         # Verify specific content
         assert result["grammar_focus"]["topic"] == "Swedish greetings"
+        assert result["grammar_focus"]["rules"] == "Hej [hello] - greeting\nHur mår du? [how are you?] - question form"
         assert len(result["vocabulary"]) == 2
         assert result["vocabulary"][0]["swedish"] == "hej"
+
+        # Verify rules field is present
+        assert "rules" in result["grammar_focus"]
 
         # Verify Gemini was called correctly
         mock_model.generate_content.assert_called_once()
@@ -252,3 +257,18 @@ class TestContentAnalyzer:
         assert result["raw_response"] == "raw response"
         assert isinstance(result["vocabulary"], list)
         assert isinstance(result["core_topics"], list)
+
+    def test_fallback_analysis_includes_rules_field(self):
+        """Test that fallback analysis includes rules field."""
+        with (
+            patch("google.generativeai.configure"),
+            patch("google.generativeai.GenerativeModel"),
+        ):
+            analyzer = ContentAnalyzer(settings=self.settings, provider="gemini", api_key=self.api_key)
+
+        result = analyzer._fallback_analysis("test text", "raw response")
+
+        # Check that rules field is present and None
+        assert "grammar_focus" in result
+        assert "rules" in result["grammar_focus"]
+        assert result["grammar_focus"]["rules"] is None

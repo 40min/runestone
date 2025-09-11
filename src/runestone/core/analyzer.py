@@ -124,6 +124,7 @@ class ContentAnalyzer:
                 "has_explicit_rules": False,
                 "topic": "Swedish language practice",
                 "explanation": "This page contains Swedish language exercises and examples.",  # noqa: E501
+                "rules": None,
             },
             "vocabulary": [],
             "core_topics": ["Swedish language learning"],

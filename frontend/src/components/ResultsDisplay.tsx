@@ -11,6 +11,7 @@ interface GrammarFocus {
   topic: string;
   explanation: string;
   has_explicit_rules: boolean;
+  rules?: string;
 }
 
 interface VocabularyItem {
@@ -256,6 +257,28 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                     {analysisResult.grammar_focus.explanation}
                   </Typography>
                 </Box>
+                {analysisResult.grammar_focus.rules && (
+                  <Box
+                    sx={{
+                      p: 4,
+                      backgroundColor: "#2a1f35",
+                      borderRadius: "0.5rem",
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        color: "var(--primary-color)",
+                        fontWeight: "bold",
+                        mb: 1,
+                      }}
+                    >
+                      Rules:
+                    </Typography>
+                    <Typography sx={{ color: "white", whiteSpace: "pre-wrap" }}>
+                      {analysisResult.grammar_focus.rules}
+                    </Typography>
+                  </Box>
+                )}
                 <Box
                   sx={{
                     p: 4,

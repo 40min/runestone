@@ -23,6 +23,7 @@ class GrammarFocus(BaseModel):
     topic: str
     explanation: str
     has_explicit_rules: bool
+    rules: Optional[str] = None
 
 
 class VocabularyItem(BaseModel):

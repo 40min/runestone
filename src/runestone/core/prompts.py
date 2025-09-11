@@ -77,6 +77,7 @@ Please provide your analysis in the following JSON format:
     "grammar_focus": {{
         "has_explicit_rules": boolean,
         "topic": "string describing the main grammatical topic",
+        "rules": "rules from a page with translation into English per phrase in brackets"
         "explanation": "English explanation of the grammar rule or pattern"
     }},
     "vocabulary": [
@@ -96,13 +97,15 @@ Please provide your analysis in the following JSON format:
 
 INSTRUCTIONS:
 1. For grammar_focus:
-   - Set has_explicit_rules to true if there's a clear grammar rule box/section
+   - If you recognise rules listed in the text, provide them as is but with translation into English per phrase in brackets. If no rules are explicitly listed, infer them from the text.
+   - Set has_explicit_rules to true if there's a clear grammar rule section
    - Set has_explicit_rules to false if you need to infer the grammar from exercises
-   - Provide a clear English explanation of the grammatical concept
+   - Provide a clear English explanation of the grammatical concept   
 
 2. For vocabulary:
-   - Extract all meaningful Swedish words and phrases from the text. Prioritize nouns, verbs, adjectives, adverbs, and useful phrases; exclude very basic function words (e.g., och, är, en/ett, jag, du).
-   - Lowercase all words and phrases.
+   - Extract all meaningful Swedish words and phrases from the text. 
+   - Prioritize nouns, verbs, adjectives, adverbs, and useful phrases; exclude very basic function words (e.g., och, är, en/ett, jag, du).
+   - Lowercase all words and phrases except personal names and abbreviations.
    - Deduplicate words, but keep different forms if they appear (e.g., hund / hunden).
  	- For each entry, provide the Swedish word/phrase and its most common English translation.
  	- List translated words in alphabetical order.
@@ -129,7 +132,7 @@ Additional suggestions: {query_suggestions}
 Instructions:
 - Search the web for relevant, high-quality educational resources.
 - Summarize findings into a single structured text, grouped by topic.
-- For each topic, give 2–7 concise bullet points with the most useful rules, explanations, or examples.
+- For each topic, give 2–5 concise bullet points with the most useful rules, explanations, or examples.
 - Keep the text readable and compact (avoid long sections or repeated titles).
 - Prioritize reliable sources such as:  
   - https://swedish-for-all.se/sfi-steg-learning-steps/  
