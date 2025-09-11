@@ -188,6 +188,9 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     setCheckedItems(newCheckedItems);
   };
 
+  const allChecked = checkedItems.every(Boolean);
+  const checkAllButtonText = allChecked ? "Uncheck All" : "Check All";
+
   const tabs = [
     ocrResult && { id: "ocr", label: "OCR Text" },
     analysisResult && { id: "grammar", label: "Grammar" },
@@ -388,7 +391,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                       transition: "all 0.2s",
                     }}
                   >
-                    Check/Uncheck All
+                    {checkAllButtonText}
                   </Button>
                   <Button
                     onClick={handleCopyVocabulary}

@@ -377,7 +377,7 @@ describe("ResultsDisplay", () => {
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    const checkAllButton = screen.getByText("Check/Uncheck All");
+    const checkAllButton = screen.getByText("Uncheck All");
     const checkboxes = screen.getAllByRole("checkbox");
 
     // Initially all checked
@@ -391,11 +391,18 @@ describe("ResultsDisplay", () => {
       expect(checkbox).not.toBeChecked();
     });
 
+    // Button should now say "Check All"
+    expect(screen.getByText("Check All")).toBeInTheDocument();
+
     // Click to check all again
-    fireEvent.click(checkAllButton);
+    const checkAllButtonAgain = screen.getByText("Check All");
+    fireEvent.click(checkAllButtonAgain);
     checkboxes.forEach(checkbox => {
       expect(checkbox).toBeChecked();
     });
+
+    // Button should now say "Uncheck All" again
+    expect(screen.getByText("Uncheck All")).toBeInTheDocument();
   });
 
   it("copies only selected vocabulary items", async () => {
@@ -449,7 +456,7 @@ describe("ResultsDisplay", () => {
     fireEvent.click(vocabularyTab);
 
     // Uncheck all items
-    const checkAllButton = screen.getByText("Check/Uncheck All");
+    const checkAllButton = screen.getByText("Uncheck All");
     fireEvent.click(checkAllButton);
 
     const copyButton = screen.getByText("Copy");
@@ -579,9 +586,65 @@ describe("ResultsDisplay", () => {
     expect(checkboxes).toHaveLength(2);
 
     // Check that the Check/Uncheck All button is present
-    expect(screen.getByText("Check/Uncheck All")).toBeInTheDocument();
+    expect(screen.getByText("Uncheck All")).toBeInTheDocument();
     
     // Check that the Copy button is present
     expect(screen.getByText("Copy")).toBeInTheDocument();
+  });
+
+  it("updates button text to 'Check All' when some items are unchecked", () => {
+    render(
+      <ResultsDisplay
+        ocrResult={mockResult.ocr_result}
+        analysisResult={mockResult.analysis}
+        resourcesResult={mockResult.extra_info}
+        error={null}
+      />
+    );
+
+    const vocabularyTab = screen.getByText("Vocabulary");
+    fireEvent.click(vocabularyTab);
+
+    // Initially all checked, button should say "Uncheck All"
+    expect(screen.getByText("Uncheck All")).toBeInTheDocument();
+
+    // Uncheck one item
+    const checkboxes = screen.getAllByRole("checkbox");
+    fireEvent.click(checkboxes[0]);
+
+    // Button should now say "Check All"
+    expect(screen.getByText("Check All")).toBeInTheDocument();
+    expect(screen.queryByText("Uncheck All")).not.toBeInTheDocument();
+  });
+
+  it("updates button text back to 'Uncheck All' when all items are checked again", () => {
+    render(
+      <ResultsDisplay
+        ocrResult={mockResult.ocr_result}
+        analysisResult={mockResult.analysis}
+        resourcesResult={mockResult.extra_info}
+        error={null}
+      />
+    );
+
+    const vocabularyTab = screen.getByText("Vocabulary");
+    fireEvent.click(vocabularyTab);
+
+    // Initially all checked, button should say "Uncheck All"
+    expect(screen.getByText("Uncheck All")).toBeInTheDocument();
+
+    // Uncheck one item
+    const checkboxes = screen.getAllByRole("checkbox");
+    fireEvent.click(checkboxes[0]);
+
+    // Button should say "Check All"
+    expect(screen.getByText("Check All")).toBeInTheDocument();
+
+    // Check the item back
+    fireEvent.click(checkboxes[0]);
+
+    // Button should say "Uncheck All" again
+    expect(screen.getByText("Uncheck All")).toBeInTheDocument();
+    expect(screen.queryByText("Check All")).not.toBeInTheDocument();
   });
 });
