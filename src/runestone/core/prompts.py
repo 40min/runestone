@@ -56,12 +56,18 @@ If no readable text exists, respond with:
 {"error": "Could not recognize text on the page."}
 
 ## Important Notes:
-- Pay special attention to a text in blue and light-blue boxes -- it is probably important rules or explanations
-- Don't ignore text in light-blue boxes
+- Pay special attention to text in blue and light-blue boxes -- it is probably important rules or explanations
+- Don't ignore text in light-blue boxes or any colored boxes (blue, dark-blue, etc.)
+- Dark boxes often contain critical text content - transcribe ALL text within them exactly as it appears
+- NEVER add descriptive text like "[black box with text]" or "[dark area]" - only transcribe the actual readable text
+- Do NOT hallucinate or invent text that isn't clearly visible - transcribe only what you can actually read
+- Be extremely precise with names, numbers, and exercise content - transcribe EXACTLY as shown, don't modify or guess
+- If text is unclear or hard to read, use [unclear: best_guess] rather than changing it
 - Ignore images, and non-text graphics
 - Focus on text content only, not visual layout descriptions
 - If text appears in multiple columns, transcribe left-to-right, top-to-bottom
 - Maintain the original language of the text (don't translate)
+- ACCURACY IS CRITICAL: Copy text exactly as it appears without any modifications, especially names and numbers in exercises
 """
 
 ANALYSIS_PROMPT_TEMPLATE = """
