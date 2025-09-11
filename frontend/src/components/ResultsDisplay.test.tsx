@@ -22,7 +22,7 @@ const mockResult = {
       { swedish: "bra", english: "good" },
     ],
   },
-  extra_info: "Additional learning tips here",
+  extra_info: "Additional learning tips here. Check out https://example.com for more resources.",
   processing_successful: true,
 };
 
@@ -148,7 +148,9 @@ describe("ResultsDisplay", () => {
     expect(
       screen.getByRole("heading", { name: "Extra info" })
     ).toBeInTheDocument();
-    expect(screen.getByText(mockResult.extra_info)).toBeInTheDocument();
+    expect(screen.getByText(/Additional learning tips here. Check out/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "https://example.com" })).toBeInTheDocument();
+    expect(screen.getByText(/for more resources/)).toBeInTheDocument();
   });
 
   it("does not show extra info tab when resourcesResult is not provided", () => {
@@ -277,5 +279,38 @@ describe("ResultsDisplay", () => {
     expect(
       screen.queryByText("Hej [hello] - greeting")
     ).not.toBeInTheDocument();
+  });
+
+  it("converts URLs to clickable links in extra info", () => {
+    const resultWithUrl = {
+      ...mockResult,
+      extra_info: "Check out this resource: https://example.com/learn-swedish and also https://swedishpod101.com",
+    };
+
+    render(
+      <ResultsDisplay
+        ocrResult={resultWithUrl.ocr_result}
+        analysisResult={resultWithUrl.analysis}
+        resourcesResult={resultWithUrl.extra_info}
+        error={null}
+      />
+    );
+
+    const extraInfoTab = screen.getByText("Extra info");
+    fireEvent.click(extraInfoTab);
+
+    // Check that the link elements are present
+    const link1 = screen.getByRole("link", { name: "https://example.com/learn-swedish" });
+    const link2 = screen.getByRole("link", { name: "https://swedishpod101.com" });
+
+    expect(link1).toBeInTheDocument();
+    expect(link1).toHaveAttribute("href", "https://example.com/learn-swedish");
+    expect(link1).toHaveAttribute("target", "_blank");
+    expect(link1).toHaveAttribute("rel", "noopener noreferrer");
+
+    expect(link2).toBeInTheDocument();
+    expect(link2).toHaveAttribute("href", "https://swedishpod101.com");
+    expect(link2).toHaveAttribute("target", "_blank");
+    expect(link2).toHaveAttribute("rel", "noopener noreferrer");
   });
 });

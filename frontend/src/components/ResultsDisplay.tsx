@@ -2,6 +2,18 @@ import React, { useState } from "react";
 import { Box, Typography, Button, Snackbar, Alert } from "@mui/material";
 import { Copy, AlertTriangle } from "lucide-react";
 
+// Utility function to convert URLs in text to HTML links
+const convertUrlsToLinks = (text: string): string => {
+  if (!text) return text;
+
+  // Regex to match URLs (http, https, ftp, etc.)
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+  return text.replace(urlRegex, (url) => {
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--primary-color); text-decoration: underline;">${url}</a>`;
+  });
+};
+
 interface OCRResult {
   text: string;
   character_count: number;
@@ -393,9 +405,10 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                   borderRadius: "0.5rem",
                 }}
               >
-                <Typography sx={{ color: "white", whiteSpace: "pre-wrap" }}>
-                  {resourcesResult}
-                </Typography>
+                <Typography
+                  sx={{ color: "white", whiteSpace: "pre-wrap" }}
+                  dangerouslySetInnerHTML={{ __html: convertUrlsToLinks(resourcesResult) }}
+                />
               </Box>
             ) : (
               <Typography sx={{ color: "#d1d5db" }}>
