@@ -8,10 +8,11 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from runestone.api.schemas import Vocabulary as VocabularySchema
+from runestone.api.schemas import VocabularyItemCreate
 from runestone.db.database import Base
 from runestone.db.models import Vocabulary as VocabularyModel
 from runestone.services.vocabulary_service import VocabularyService
-from runestone.api.schemas import VocabularyItemCreate, Vocabulary as VocabularySchema
 
 
 class TestVocabularyService:
@@ -38,15 +39,9 @@ class TestVocabularyService:
         """Test saving new vocabulary items."""
         items = [
             VocabularyItemCreate(
-                word_phrase="ett äpple",
-                translation="an apple",
-                example_phrase="Jag äter ett äpple varje dag."
+                word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple varje dag."
             ),
-            VocabularyItemCreate(
-                word_phrase="en banan",
-                translation="a banana",
-                example_phrase=None
-            )
+            VocabularyItemCreate(word_phrase="en banan", translation="a banana", example_phrase=None),
         ]
 
         result = service.save_vocabulary(items)
@@ -67,15 +62,11 @@ class TestVocabularyService:
         """Test that duplicate word_phrases are not added."""
         items = [
             VocabularyItemCreate(
-                word_phrase="ett äpple",
-                translation="an apple",
-                example_phrase="Jag äter ett äpple varje dag."
+                word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple varje dag."
             ),
             VocabularyItemCreate(
-                word_phrase="ett äpple",
-                translation="an apple",
-                example_phrase="Ett äpple är rött."
-            )  # Same word_phrase
+                word_phrase="ett äpple", translation="an apple", example_phrase="Ett äpple är rött."
+            ),  # Same word_phrase
         ]
 
         result = service.save_vocabulary(items)
@@ -96,22 +87,10 @@ class TestVocabularyService:
         """Test retrieving all vocabulary items."""
         # Add some test data
         vocab1 = VocabularyModel(
-            user_id=1,
-            word_phrase="ett äpple",
-            translation="an apple",
-            example_phrase="Jag äter ett äpple varje dag."
+            user_id=1, word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple varje dag."
         )
-        vocab2 = VocabularyModel(
-            user_id=1,
-            word_phrase="en banan",
-            translation="a banana",
-            example_phrase=None
-        )
-        vocab3 = VocabularyModel(
-            user_id=2,
-            word_phrase="ett päron",
-            translation="a pear"
-        )
+        vocab2 = VocabularyModel(user_id=1, word_phrase="en banan", translation="a banana", example_phrase=None)
+        vocab3 = VocabularyModel(user_id=2, word_phrase="ett päron", translation="a pear")
 
         db_session.add_all([vocab1, vocab2, vocab3])
         db_session.commit()

@@ -11,8 +11,8 @@ from runestone.config import Settings
 from runestone.core.clients.base import BaseLLMClient
 from runestone.core.clients.gemini_client import GeminiClient
 from runestone.core.clients.openai_client import OpenAIClient
-from runestone.core.logging_config import get_logger
 from runestone.core.exceptions import APIKeyError
+from runestone.core.logging_config import get_logger
 
 
 def create_llm_client(

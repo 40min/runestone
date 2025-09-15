@@ -4,7 +4,7 @@ SQLAlchemy models for the database.
 This module defines the database table models using SQLAlchemy ORM.
 """
 
-from sqlalchemy import Column, Integer, String, Text, DateTime
+from sqlalchemy import Column, DateTime, Integer, String, Text
 from sqlalchemy.sql import func
 
 from .database import Base

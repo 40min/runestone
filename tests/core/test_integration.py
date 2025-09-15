@@ -171,9 +171,7 @@ class TestRunestoneIntegration:
         mock_analyzer.return_value = Mock()
         mock_formatter.return_value = Mock()
 
-        processor = RunestoneProcessor(
-            settings=self.settings, provider="openai", api_key=self.api_key, model_name=None
-        )
+        processor = RunestoneProcessor(settings=self.settings, provider="openai", api_key=self.api_key, model_name=None)
 
         with pytest.raises(RunestoneError) as exc_info:
             ocr_result = processor.run_ocr(b"fake image data")

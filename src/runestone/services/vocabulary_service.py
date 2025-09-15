@@ -6,11 +6,13 @@ for vocabulary-related operations.
 """
 
 from typing import List
+
 from sqlalchemy.orm import Session
 
+from ..api.schemas import Vocabulary as VocabularySchema
+from ..api.schemas import VocabularyItemCreate
 from ..db.models import Vocabulary
 from ..db.repository import VocabularyRepository
-from ..api.schemas import Vocabulary as VocabularySchema, VocabularyItemCreate
 
 
 class VocabularyService:
@@ -49,13 +51,15 @@ class VocabularyService:
         vocabularies = self.repo.get_all_vocabulary(user_id)
         result = []
         for vocab in vocabularies:
-            result.append(VocabularySchema(
-                id=vocab.id,
-                user_id=vocab.user_id,
-                word_phrase=vocab.word_phrase,
-                translation=vocab.translation,
-                example_phrase=vocab.example_phrase,
-                created_at=vocab.created_at.isoformat() if vocab.created_at else None,
-                updated_at=vocab.updated_at.isoformat() if vocab.updated_at else None,
-            ))
+            result.append(
+                VocabularySchema(
+                    id=vocab.id,
+                    user_id=vocab.user_id,
+                    word_phrase=vocab.word_phrase,
+                    translation=vocab.translation,
+                    example_phrase=vocab.example_phrase,
+                    created_at=vocab.created_at.isoformat() if vocab.created_at else None,
+                    updated_at=vocab.updated_at.isoformat() if vocab.updated_at else None,
+                )
+            )
         return result

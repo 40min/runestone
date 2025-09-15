@@ -15,8 +15,8 @@ from PIL import Image, ImageEnhance, ImageOps
 from runestone.config import Settings
 from runestone.core.clients.base import BaseLLMClient
 from runestone.core.clients.factory import create_llm_client
-from runestone.core.logging_config import get_logger
 from runestone.core.exceptions import ImageProcessingError, OCRError
+from runestone.core.logging_config import get_logger
 from runestone.core.prompts import OCR_PROMPT
 
 
@@ -145,17 +145,17 @@ class OCRProcessor:
     def _preprocess_image_for_ocr(self, image: Image.Image) -> Image.Image:
         """
         Minimal preprocessing to preserve accuracy while slightly helping with light-blue text.
-        
+
         Args:
             image: PIL Image object to preprocess
-            
+
         Returns:
             Preprocessed PIL Image object with minimal adjustments
         """
         try:
             if self.verbose:
                 self.logger.info(f"Starting minimal image preprocessing: mode={image.mode}, size={image.size}")
-                
+
             # Only ensure RGB format for LLM compatibility - no aggressive preprocessing
             # Based on user feedback: preprocessing causes more harm than good for accuracy
             if image.mode != "RGB":
@@ -164,20 +164,20 @@ class OCRProcessor:
                     self.logger.info("Converted image to RGB format for LLM compatibility")
             else:
                 final_image = image
-                
+
             if self.verbose:
                 self.logger.info(f"Minimal preprocessing complete: mode={final_image.mode}, size={final_image.size}")
-                
+
             return final_image
-            
+
         except (AttributeError, TypeError) as e:
             # Handle cases where we might be working with a mock object during testing
             if self.verbose:
                 self.logger.warning(f"Image preprocessing failed ({str(e)}), using original image")
-            
+
             # Return original image if preprocessing fails (e.g., during testing with mocks)
             # Ensure it's in RGB format for LLM processing
-            if hasattr(image, 'convert') and hasattr(image, 'mode'):
+            if hasattr(image, "convert") and hasattr(image, "mode"):
                 return image.convert("RGB") if image.mode != "RGB" else image
             else:
                 return image

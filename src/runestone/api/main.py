@@ -12,8 +12,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from runestone.api.endpoints import router as api_router
-from runestone.core.logging_config import setup_logging
 from runestone.config import settings
+from runestone.core.logging_config import setup_logging
 from runestone.db.database import Base, engine
 
 

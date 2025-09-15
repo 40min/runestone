@@ -6,10 +6,11 @@ logic for different entities.
 """
 
 from typing import List
+
 from sqlalchemy.orm import Session
 
-from .models import Vocabulary
 from ..api.schemas import VocabularyItemCreate
+from .models import Vocabulary
 
 
 class VocabularyRepository:
@@ -23,10 +24,11 @@ class VocabularyRepository:
         """Get existing word_phrases for a user from the given batch."""
         if not word_phrases:
             return set()
-        result = self.db.query(Vocabulary.word_phrase).filter(
-            Vocabulary.user_id == user_id,
-            Vocabulary.word_phrase.in_(word_phrases)
-        ).all()
+        result = (
+            self.db.query(Vocabulary.word_phrase)
+            .filter(Vocabulary.user_id == user_id, Vocabulary.word_phrase.in_(word_phrases))
+            .all()
+        )
         return {row[0] for row in result}
 
     def batch_insert_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int = 1):
@@ -36,7 +38,7 @@ class VocabularyRepository:
                 user_id=user_id,
                 word_phrase=item.word_phrase,
                 translation=item.translation,
-                example_phrase=item.example_phrase
+                example_phrase=item.example_phrase,
             )
             for item in items
         ]

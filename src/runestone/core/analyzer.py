@@ -162,7 +162,9 @@ class ContentAnalyzer:
                 return ""
 
             if self.verbose:
-                self.logger.info(f"Searching for educational material on topics: {core_topics} and queries: {search_queries}")
+                self.logger.info(
+                    f"Searching for educational material on topics: {core_topics} and queries: {search_queries}"
+                )
 
             # Use combined queries in one search prompt
             search_prompt = SEARCH_PROMPT_TEMPLATE.format(

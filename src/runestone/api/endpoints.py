@@ -195,9 +195,9 @@ async def find_resources(
         analysis_data = {
             "search_needed": {
                 "query_suggestions": request.analysis.search_needed.query_suggestions,
-                "should_search": request.analysis.search_needed.should_search
+                "should_search": request.analysis.search_needed.should_search,
             },
-            "core_topics": request.analysis.core_topics
+            "core_topics": request.analysis.core_topics,
         }
 
         # Run resource search with the data
