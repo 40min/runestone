@@ -91,7 +91,8 @@ Please provide your analysis in the following JSON format:
     "vocabulary": [
         {{
             "swedish": "Swedish word or phrase",
-            "english": "English translation"
+            "english": "English translation",
+            "example_phrase": "sentence from source text containing the word, or null if not available"
         }}
     ],
     "core_topics": [
@@ -116,8 +117,9 @@ INSTRUCTIONS:
    - Exclude personal names
    - Lowercase all words and phrases except personal names and abbreviations.  
    - Deduplicate words, but keep different forms if they appear (e.g., hund / hunden).  
-   - For each entry, provide the Swedish word/phrase and its most common English translation.  
-   - List translated words in alphabetical order.  
+   - For each entry, provide the Swedish word/phrase and its most common English translation.
+   - For each entry, also provide an example_phrase containing the sentence from the source text where the word appeared, if available. If not available, set to null.
+   - List translated words in alphabetical order.
 
 3. For core_topics:
    - Identify 2-4 main learning topics from this page

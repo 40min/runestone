@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     verbose: bool = False
     allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3010,http://127.0.0.1:3010"
 
+    # Database Configuration
+    database_url: str = "sqlite:///./runestone.db"
+
     class Config:
         """Pydantic configuration."""
 

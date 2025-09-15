@@ -5,21 +5,26 @@ This module defines the FastAPI routes for processing Swedish textbook images
 and returning structured analysis results.
 """
 
-from typing import Annotated
+from typing import Annotated, List
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy.orm import Session
 
 from runestone.api.schemas import (
     AnalysisRequest,
     ContentAnalysis,
     ErrorResponse,
     OCRResult,
-    ResourceRequest,    
+    ResourceRequest,
     ResourceResponse,
+    Vocabulary,
+    VocabularySaveRequest,
 )
 from runestone.config import Settings, settings
 from runestone.core.exceptions import RunestoneError
 from runestone.core.processor import RunestoneProcessor
+from runestone.db.database import get_db
+from runestone.services.vocabulary_service import VocabularyService
 
 router = APIRouter()
 
@@ -27,6 +32,11 @@ router = APIRouter()
 def get_settings() -> Settings:
     """Dependency injection for application settings."""
     return settings
+
+
+def get_vocabulary_service(db: Annotated[Session, Depends(get_db)]) -> VocabularyService:
+    """Dependency injection for vocabulary service."""
+    return VocabularyService(db)
 
 
 @router.post(
@@ -205,6 +215,80 @@ async def find_resources(
         raise HTTPException(
             status_code=500,
             detail=f"Unexpected error: {str(e)}",
+        )
+
+
+@router.post(
+    "/vocabulary",
+    response_model=dict,
+    responses={
+        200: {"description": "Vocabulary saved successfully"},
+        400: {"model": ErrorResponse, "description": "Bad request"},
+        500: {"model": ErrorResponse, "description": "Database error"},
+    },
+)
+async def save_vocabulary(
+    request: VocabularySaveRequest,
+    service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+) -> dict:
+    """
+    Save vocabulary items to the database.
+
+    This endpoint accepts a list of vocabulary items and saves them to the database,
+    ensuring uniqueness based on word_phrase.
+
+    Args:
+        request: Vocabulary save request with items
+        service: Vocabulary service
+
+    Returns:
+        dict: Success message
+
+    Raises:
+        HTTPException: For database errors
+    """
+    try:
+        return service.save_vocabulary(request.items)
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save vocabulary: {str(e)}",
+        )
+
+
+@router.get(
+    "/vocabulary",
+    response_model=List[Vocabulary],
+    responses={
+        200: {"description": "Vocabulary retrieved successfully"},
+        500: {"model": ErrorResponse, "description": "Database error"},
+    },
+)
+async def get_vocabulary(
+    service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+) -> List[Vocabulary]:
+    """
+    Retrieve all saved vocabulary items.
+
+    This endpoint returns all vocabulary items from the database for the current user.
+
+    Args:
+        service: Vocabulary service
+
+    Returns:
+        List[Vocabulary]: List of vocabulary items
+
+    Raises:
+        HTTPException: For database errors
+    """
+    try:
+        return service.get_vocabulary()
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve vocabulary: {str(e)}",
         )
 
 

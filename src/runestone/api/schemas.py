@@ -31,6 +31,7 @@ class VocabularyItem(BaseModel):
 
     swedish: str
     english: str
+    example_phrase: Optional[str] = None
 
 
 class SearchNeeded(BaseModel):
@@ -86,3 +87,29 @@ class HealthResponse(BaseModel):
 
     status: str
     version: str = "1.0.0"
+
+
+class VocabularyItemCreate(BaseModel):
+    """Schema for creating vocabulary items."""
+
+    word_phrase: str
+    translation: str
+    example_phrase: Optional[str] = None
+
+
+class VocabularySaveRequest(BaseModel):
+    """Schema for saving vocabulary request."""
+
+    items: List[VocabularyItemCreate]
+
+
+class Vocabulary(BaseModel):
+    """Schema for vocabulary database records."""
+
+    id: int
+    user_id: int
+    word_phrase: str
+    translation: str
+    example_phrase: Optional[str] = None
+    created_at: str
+    updated_at: str
