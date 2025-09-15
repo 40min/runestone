@@ -51,7 +51,7 @@ class TestGrammarFocus:
             topic="Swedish questions",
             explanation="Basic question formation",
             has_explicit_rules=True,
-            rules="Use 'vad' for what questions"
+            rules="Use 'vad' for what questions",
         )
         assert focus.topic == "Swedish questions"
         assert focus.has_explicit_rules is True
@@ -59,11 +59,7 @@ class TestGrammarFocus:
 
     def test_grammar_focus_optional_rules(self):
         """Test GrammarFocus with optional rules."""
-        focus = GrammarFocus(
-            topic="Greetings",
-            explanation="Common greetings",
-            has_explicit_rules=False
-        )
+        focus = GrammarFocus(topic="Greetings", explanation="Common greetings", has_explicit_rules=False)
         assert focus.rules is None
 
 
@@ -72,11 +68,7 @@ class TestVocabularyItem:
 
     def test_valid_vocabulary_item(self):
         """Test creating a valid VocabularyItem."""
-        item = VocabularyItem(
-            swedish="hej",
-            english="hello",
-            example_phrase="Hej, hur mår du?"
-        )
+        item = VocabularyItem(swedish="hej", english="hello", example_phrase="Hej, hur mår du?")
         assert item.swedish == "hej"
         assert item.english == "hello"
         assert item.example_phrase == "Hej, hur mår du?"
@@ -92,10 +84,7 @@ class TestSearchNeeded:
 
     def test_valid_search_needed(self):
         """Test creating a valid SearchNeeded."""
-        search = SearchNeeded(
-            should_search=True,
-            query_suggestions=["Swedish grammar", "Question formation"]
-        )
+        search = SearchNeeded(should_search=True, query_suggestions=["Swedish grammar", "Question formation"])
         assert search.should_search is True
         assert len(search.query_suggestions) == 2
 
@@ -106,20 +95,13 @@ class TestContentAnalysis:
     def test_valid_content_analysis(self):
         """Test creating a valid ContentAnalysis."""
         analysis = ContentAnalysis(
-            grammar_focus=GrammarFocus(
-                topic="Questions",
-                explanation="Question formation",
-                has_explicit_rules=False
-            ),
+            grammar_focus=GrammarFocus(topic="Questions", explanation="Question formation", has_explicit_rules=False),
             vocabulary=[
                 VocabularyItem(swedish="vad", english="what"),
-                VocabularyItem(swedish="heter", english="called")
+                VocabularyItem(swedish="heter", english="called"),
             ],
             core_topics=["questions", "introductions"],
-            search_needed=SearchNeeded(
-                should_search=True,
-                query_suggestions=["Swedish questions"]
-            )
+            search_needed=SearchNeeded(should_search=True, query_suggestions=["Swedish questions"]),
         )
         assert analysis.grammar_focus.topic == "Questions"
         assert len(analysis.vocabulary) == 2
@@ -148,10 +130,7 @@ class TestResourceRequest:
         """Test creating a valid ResourceRequest."""
         request_data = ResourceRequestData(
             core_topics=["questions"],
-            search_needed=SearchNeeded(
-                should_search=True,
-                query_suggestions=["Swedish questions"]
-            )
+            search_needed=SearchNeeded(should_search=True, query_suggestions=["Swedish questions"]),
         )
         request = ResourceRequest(analysis=request_data)
         assert request.analysis.core_topics == ["questions"]
@@ -202,9 +181,7 @@ class TestVocabularySchemas:
     def test_vocabulary_item_create(self):
         """Test VocabularyItemCreate schema."""
         item = VocabularyItemCreate(
-            word_phrase="ett äpple",
-            translation="an apple",
-            example_phrase="Jag äter ett äpple"
+            word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple"
         )
         assert item.word_phrase == "ett äpple"
         assert item.translation == "an apple"
@@ -214,7 +191,7 @@ class TestVocabularySchemas:
         request = VocabularySaveRequest(
             items=[
                 VocabularyItemCreate(word_phrase="hej", translation="hello"),
-                VocabularyItemCreate(word_phrase="tack", translation="thank you")
+                VocabularyItemCreate(word_phrase="tack", translation="thank you"),
             ]
         )
         assert len(request.items) == 2
@@ -228,7 +205,7 @@ class TestVocabularySchemas:
             translation="hello",
             example_phrase="Hej, hur mår du?",
             created_at="2023-01-01T00:00:00Z",
-            updated_at="2023-01-01T00:00:00Z"
+            updated_at="2023-01-01T00:00:00Z",
         )
         assert vocab.id == 1
         assert vocab.word_phrase == "hej"

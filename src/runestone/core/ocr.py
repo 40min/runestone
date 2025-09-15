@@ -6,11 +6,10 @@ using various LLM providers like OpenAI or Gemini.
 """
 
 import json
-import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from PIL import Image, ImageEnhance, ImageOps
+from PIL import Image
 
 from runestone.config import Settings
 from runestone.core.clients.base import BaseLLMClient

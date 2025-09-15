@@ -8,10 +8,6 @@ including OCR, analysis, resources, and vocabulary endpoints.
 import io
 from unittest.mock import Mock, patch
 
-import pytest
-from fastapi.testclient import TestClient
-
-from runestone.api.main import app
 from runestone.core.exceptions import RunestoneError
 
 

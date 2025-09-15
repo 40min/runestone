@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 
 from ..api.schemas import Vocabulary as VocabularySchema
 from ..api.schemas import VocabularyItemCreate
-from ..db.models import Vocabulary
 from ..db.repository import VocabularyRepository
 
 

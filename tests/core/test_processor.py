@@ -2,7 +2,6 @@
 Tests for the processor module.
 """
 
-import time
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -82,12 +81,6 @@ class TestRunestoneProcessor:
         assert resources_result == "Extra info"
 
         # Verify timing logs were called
-        expected_calls = [
-            ("OCR completed in 1.50 seconds",),
-            ("Analysis completed in 1.70 seconds",),
-            ("Resource search completed in 1.60 seconds",),
-        ]
-
         # Check that logger.info was called with timing messages
         info_calls = [call for call in mock_logger.info.call_args_list if "completed in" in str(call)]
         assert len(info_calls) == 3

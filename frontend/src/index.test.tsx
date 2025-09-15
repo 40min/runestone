@@ -35,7 +35,7 @@ describe('Font Loading', () => {
 
 describe('CSP Compliance', () => {
   it('should only use local stylesheets', () => {
-    const { container } = render(<App />);
+    render(<App />);
 
     // Check that all stylesheets are local (relative paths or same origin)
     const styleLinks = document.querySelectorAll('link[rel="stylesheet"]');

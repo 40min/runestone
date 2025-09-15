@@ -5,7 +5,7 @@ This module handles the presentation of analysis results using Rich for console 
 and markdown for file output.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from rich import box
 from rich.console import Console
@@ -66,7 +66,6 @@ class ResultFormatter:
     def _format_recognized_text(self, ocr_result: Dict[str, Any]) -> None:
         """Format the recognized text section."""
         text = ocr_result.get("text", "No text extracted")
-        char_count = ocr_result.get("character_count", 0)
 
         # Truncate very long text for display
         display_text = text

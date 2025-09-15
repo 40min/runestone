@@ -10,7 +10,7 @@ import pytest
 from runestone.config import Settings
 from runestone.core.analyzer import ContentAnalyzer
 from runestone.core.console import setup_console
-from runestone.core.exceptions import APIKeyError, ContentAnalysisError, LLMError
+from runestone.core.exceptions import APIKeyError, ContentAnalysisError
 
 
 class TestContentAnalyzer:
@@ -193,7 +193,11 @@ class TestContentAnalyzer:
 
         # Mock search response with educational material
         mock_search_response = Mock()
-        mock_search_response.text = "Here is educational material about Swedish greetings and introductions. Swedish greetings include 'Hej' (Hi), 'God morgon' (Good morning), and 'Tack' (Thank you). Use 'Jag heter' (My name is) followed by your name."
+        mock_search_response.text = (
+            "Here is educational material about Swedish greetings and introductions. Swedish greetings include "
+            "'Hej' (Hi), 'God morgon' (Good morning), and 'Tack' (Thank you). Use 'Jag heter' (My name is) "
+            "followed by your name."
+        )
 
         mock_model = Mock()
         mock_model.generate_content.return_value = mock_search_response

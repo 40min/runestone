@@ -6,7 +6,7 @@ grammar rules, vocabulary, and generate learning resources.
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from runestone.config import Settings
 from runestone.core.clients.base import BaseLLMClient
