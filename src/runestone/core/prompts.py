@@ -111,8 +111,9 @@ INSTRUCTIONS:
    - Provide a clear English explanation of the grammatical concept   
 
 2. 2. For vocabulary:  
-   - Extract all meaningful Swedish words and phrases from the text.  
-   - Prioritize nouns, verbs, adjectives, adverbs, and useful phrases; exclude very basic function words (e.g., och, är, en, ett, han, hon, de, hen, jag, du, vi, ni, mig, dig).  
+   - Extract all Swedish words and meaningful phrases from the text (including excercise description)
+   - Prioritize nouns, verbs, adjectives, adverbs, and useful phrases; exclude very basic function words (e.g., och, är, en, ett, han, hon, de, hen, jag, du, vi, ni, mig, dig).
+   - Exclude personal names
    - Allow basic words to appear as part of longer meaningful phrases, but not as single entries.  
    - Lowercase all words and phrases except personal names and abbreviations.  
    - Deduplicate words, but keep different forms if they appear (e.g., hund / hunden).  

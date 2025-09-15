@@ -83,7 +83,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
 
   useEffect(() => {
     if (analysisResult) {
-      setCheckedItems(new Array(analysisResult.vocabulary.length).fill(true));
+      setCheckedItems(new Array(analysisResult.vocabulary.length).fill(false));
     }
   }, [analysisResult]);
 
