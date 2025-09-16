@@ -45,9 +45,9 @@ class VocabularyService:
 
         return {"message": "Vocabulary saved successfully"}
 
-    def get_vocabulary(self, user_id: int = 1) -> List[VocabularySchema]:
-        """Retrieve vocabulary items, converting to Pydantic models."""
-        vocabularies = self.repo.get_all_vocabulary(user_id)
+    def get_vocabulary(self, limit: int, user_id: int = 1) -> List[VocabularySchema]:
+        """Retrieve the most recently added vocabulary items, converting to Pydantic models."""
+        vocabularies = self.repo.get_vocabulary(limit, user_id)
         result = []
         for vocab in vocabularies:
             result.append(
@@ -62,3 +62,4 @@ class VocabularyService:
                 )
             )
         return result
+

@@ -262,34 +262,48 @@ async def save_vocabulary(
     response_model=List[Vocabulary],
     responses={
         200: {"description": "Vocabulary retrieved successfully"},
+        400: {"model": ErrorResponse, "description": "Bad request"},
         500: {"model": ErrorResponse, "description": "Database error"},
     },
 )
 async def get_vocabulary(
     service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+    limit: int = 20,
 ) -> List[Vocabulary]:
     """
-    Retrieve all saved vocabulary items.
+    Retrieve the most recently added vocabulary items.
 
-    This endpoint returns all vocabulary items from the database for the current user.
+    This endpoint returns the most recent vocabulary items from the database
+    for the current user, ordered by creation date (newest first).
 
     Args:
+        limit: Maximum number of items to return (default: 20)
         service: Vocabulary service
 
     Returns:
         List[Vocabulary]: List of vocabulary items
 
     Raises:
-        HTTPException: For database errors
+        HTTPException: For database errors or invalid parameters
     """
     try:
-        return service.get_vocabulary()
+        if limit <= 0 or limit > 100:
+            raise HTTPException(
+                status_code=400,
+                detail="Limit must be between 1 and 100",
+            )
 
+        return service.get_vocabulary(limit)
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve vocabulary: {str(e)}",
         )
+
+
 
 
 @router.get(

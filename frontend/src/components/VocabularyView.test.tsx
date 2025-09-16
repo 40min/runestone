@@ -6,17 +6,18 @@ import { vi } from 'vitest';
 // Mock the useVocabulary hook
 vi.mock('../hooks/useVocabulary', () => ({
   default: vi.fn(),
+  useRecentVocabulary: vi.fn(),
 }));
 
 import VocabularyView from "./VocabularyView";
-import useVocabulary from '../hooks/useVocabulary';
+import { useRecentVocabulary } from '../hooks/useVocabulary';
 
-const mockUseVocabulary = vi.mocked(useVocabulary);
+const mockUseRecentVocabulary = vi.mocked(useRecentVocabulary);
 
 describe("VocabularyView", () => {
   it("renders loading state", () => {
-    mockUseVocabulary.mockReturnValue({
-      vocabulary: [],
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [],
       loading: true,
       error: null,
       refetch: vi.fn(),
@@ -29,8 +30,8 @@ describe("VocabularyView", () => {
 
   it("renders error state", () => {
     const errorMessage = "Failed to fetch vocabulary";
-    mockUseVocabulary.mockReturnValue({
-      vocabulary: [],
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [],
       loading: false,
       error: errorMessage,
       refetch: vi.fn(),
@@ -42,8 +43,8 @@ describe("VocabularyView", () => {
   });
 
   it("renders empty state when no vocabulary is saved", () => {
-    mockUseVocabulary.mockReturnValue({
-      vocabulary: [],
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [],
       loading: false,
       error: null,
       refetch: vi.fn(),
@@ -51,7 +52,7 @@ describe("VocabularyView", () => {
 
     render(<VocabularyView />);
 
-    expect(screen.getByText("Saved Vocabulary")).toBeInTheDocument();
+    expect(screen.getByText("Recent Vocabulary")).toBeInTheDocument();
     expect(screen.getByText("No vocabulary saved yet.")).toBeInTheDocument();
     expect(screen.getByText("Analyze some text and save vocabulary items to see them here.")).toBeInTheDocument();
   });
@@ -76,8 +77,8 @@ describe("VocabularyView", () => {
       },
     ];
 
-    mockUseVocabulary.mockReturnValue({
-      vocabulary: mockVocabulary,
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: mockVocabulary,
       loading: false,
       error: null,
       refetch: vi.fn(),
@@ -85,7 +86,7 @@ describe("VocabularyView", () => {
 
     render(<VocabularyView />);
 
-    expect(screen.getByText("Saved Vocabulary")).toBeInTheDocument();
+    expect(screen.getByText("Recent Vocabulary")).toBeInTheDocument();
 
     // Check table headers
     expect(screen.getByText("Swedish")).toBeInTheDocument();
@@ -119,8 +120,8 @@ describe("VocabularyView", () => {
       },
     ];
 
-    mockUseVocabulary.mockReturnValue({
-      vocabulary: mockVocabulary,
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: mockVocabulary,
       loading: false,
       error: null,
       refetch: vi.fn(),

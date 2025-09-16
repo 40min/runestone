@@ -1,10 +1,10 @@
 import React from "react";
 import { Box, Typography } from "@mui/material";
-import useVocabulary from "../hooks/useVocabulary";
+import { useRecentVocabulary } from "../hooks/useVocabulary";
 import { LoadingSpinner, ErrorAlert, SectionTitle, DataTable } from "./ui";
 
 const VocabularyView: React.FC = () => {
-  const { vocabulary, loading, error } = useVocabulary();
+  const { recentVocabulary, loading, error } = useRecentVocabulary();
 
   if (loading) {
     return <LoadingSpinner />;
@@ -16,9 +16,9 @@ const VocabularyView: React.FC = () => {
 
   return (
     <Box sx={{ py: 8 }}>
-      <SectionTitle>Saved Vocabulary</SectionTitle>
+      <SectionTitle>Recent Vocabulary</SectionTitle>
 
-      {vocabulary.length === 0 ? (
+      {recentVocabulary.length === 0 ? (
         <Box sx={{ textAlign: "center", py: 8 }}>
           <Typography sx={{ color: "#9ca3af", mb: 2 }}>
             No vocabulary saved yet.
@@ -36,10 +36,10 @@ const VocabularyView: React.FC = () => {
             {
               key: 'created_at',
               label: 'Saved',
-              render: (value) => new Date(value).toLocaleDateString()
+              render: (value) => new Date(value as string).toLocaleDateString()
             },
           ]}
-          data={vocabulary}
+          data={recentVocabulary as unknown as Record<string, unknown>[]}
         />
       )}
     </Box>

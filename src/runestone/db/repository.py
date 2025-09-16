@@ -66,6 +66,12 @@ class VocabularyRepository:
         if filtered_items:
             self.batch_insert_vocabulary_items(filtered_items, user_id)
 
-    def get_all_vocabulary(self, user_id: int = 1) -> List[Vocabulary]:
-        """Retrieve all vocabulary items for a user."""
-        return self.db.query(Vocabulary).filter(Vocabulary.user_id == user_id).all()
+    def get_vocabulary(self, limit: int, user_id: int = 1) -> List[Vocabulary]:
+        """Retrieve the most recently added vocabulary items for a user."""
+        return (
+            self.db.query(Vocabulary)
+            .filter(Vocabulary.user_id == user_id)
+            .order_by(Vocabulary.created_at.desc())
+            .limit(limit)
+            .all()
+        )
