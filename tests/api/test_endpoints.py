@@ -300,7 +300,6 @@ class TestVocabularyEndpoints:
         assert "updated_at" in vocab
 
 
-
 class TestSettingsDependency:
     """Test cases for dependency injection."""
 

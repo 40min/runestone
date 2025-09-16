@@ -62,4 +62,3 @@ class VocabularyService:
                 )
             )
         return result
-

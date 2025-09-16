@@ -304,8 +304,6 @@ async def get_vocabulary(
         )
 
 
-
-
 @router.get(
     "/health",
     response_model=dict,

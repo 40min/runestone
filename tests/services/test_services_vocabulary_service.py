@@ -117,26 +117,23 @@ class TestVocabularyService:
             word_phrase="ett äpple",
             translation="an apple",
             example_phrase="Jag äter ett äpple varje dag.",
-            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc)
+            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
         )
         vocab2 = VocabularyModel(
             user_id=1,
             word_phrase="en banan",
             translation="a banana",
             example_phrase=None,
-            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc)
+            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
         )
         vocab3 = VocabularyModel(
             user_id=1,
             word_phrase="ett päron",
             translation="a pear",
-            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc)
+            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
         )
         vocab4 = VocabularyModel(
-            user_id=2,
-            word_phrase="en kiwi",
-            translation="a kiwi",
-            created_at=datetime(2023, 1, 4, tzinfo=timezone.utc)
+            user_id=2, word_phrase="en kiwi", translation="a kiwi", created_at=datetime(2023, 1, 4, tzinfo=timezone.utc)
         )
 
         db_session.add_all([vocab1, vocab2, vocab3, vocab4])
