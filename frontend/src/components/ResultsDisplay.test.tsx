@@ -18,8 +18,8 @@ const mockResult = {
         "Hej [hello] - greeting\nHur mår du? [how are you?] - question form",
     },
     vocabulary: [
-      { swedish: "hej", english: "hello" },
-      { swedish: "bra", english: "good" },
+      { swedish: "hej", english: "hello", example_phrase: "Hej, hur mår du?" },
+      { swedish: "bra", english: "good", example_phrase: "Jag mår bra idag." },
     ],
   },
   extra_info: "Additional learning tips here. Check out https://example.com for more resources.",
@@ -90,6 +90,7 @@ describe("ResultsDisplay", () => {
         analysisResult={mockResult.analysis}
         resourcesResult={mockResult.extra_info}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -101,6 +102,8 @@ describe("ResultsDisplay", () => {
     expect(screen.getByText("hello")).toBeInTheDocument();
     expect(screen.getByText("bra")).toBeInTheDocument();
     expect(screen.getByText("good")).toBeInTheDocument();
+    expect(screen.getByText("Hej, hur mår du?")).toBeInTheDocument();
+    expect(screen.getByText("Jag mår bra idag.")).toBeInTheDocument();
   });
 
   it("copies all vocabulary to clipboard by default when copy button is clicked", async () => {
@@ -330,7 +333,7 @@ describe("ResultsDisplay", () => {
 
     // Check that all checkboxes are checked by default
     const checkboxes = screen.getAllByRole("checkbox");
-    expect(checkboxes).toHaveLength(2);
+    expect(checkboxes).toHaveLength(3);
     checkboxes.forEach(checkbox => {
       expect(checkbox).toBeChecked();
     });
@@ -424,9 +427,9 @@ describe("ResultsDisplay", () => {
     fireEvent.click(vocabularyTab);
 
     const checkboxes = screen.getAllByRole("checkbox");
-    
-    // Uncheck the first item
-    fireEvent.click(checkboxes[0]);
+
+    // Uncheck the first item (skip the master checkbox at index 0)
+    fireEvent.click(checkboxes[1]);
 
     const copyButton = screen.getByText("Copy");
     fireEvent.click(copyButton);
@@ -583,7 +586,7 @@ describe("ResultsDisplay", () => {
     expect(screen.getByText("good")).toBeInTheDocument();
 
     const checkboxes = screen.getAllByRole("checkbox");
-    expect(checkboxes).toHaveLength(2);
+    expect(checkboxes).toHaveLength(3);
 
     // Check that the Check/Uncheck All button is present
     expect(screen.getByText("Uncheck All")).toBeInTheDocument();

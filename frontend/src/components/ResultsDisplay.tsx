@@ -1,7 +1,21 @@
 import React, { useState, useEffect } from "react";
-import { Box, Typography, Button, Snackbar, Alert, Checkbox } from "@mui/material";
+import {
+  Box,
+  Typography,
+  Button,
+  Snackbar,
+  Alert,
+  Checkbox,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+} from "@mui/material";
 import type { AlertColor } from "@mui/material";
-import { Copy, AlertTriangle } from "lucide-react";
+import { Copy, AlertTriangle, Save } from "lucide-react";
 
 // Utility function to convert URLs in text to HTML links
 const convertUrlsToLinks = (text: string): (string | React.ReactElement)[] => {
@@ -43,6 +57,7 @@ interface GrammarFocus {
 interface VocabularyItem {
   swedish: string;
   english: string;
+  example_phrase?: string;
 }
 
 interface ContentAnalysis {
@@ -55,6 +70,7 @@ interface ResultsDisplayProps {
   analysisResult: ContentAnalysis | null;
   resourcesResult: string | null;
   error: string | null;
+  saveVocabulary: (vocabulary: VocabularyItem[]) => Promise<void>;
 }
 
 const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
@@ -62,6 +78,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   analysisResult,
   resourcesResult,
   error,
+  saveVocabulary,
 }) => {
   const availableTabs = [
     ocrResult && "ocr",
@@ -76,8 +93,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     severity: AlertColor;
   }>({
     open: false,
-    message: '',
-    severity: 'success',
+    message: "",
+    severity: "success",
   });
   const [checkedItems, setCheckedItems] = useState<boolean[]>([]);
 
@@ -143,9 +160,15 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   const handleCopyVocabulary = async () => {
     if (!analysisResult) return;
 
-    const checkedVocab = analysisResult.vocabulary.filter((_, index) => checkedItems[index]);
+    const checkedVocab = analysisResult.vocabulary.filter(
+      (_, index) => checkedItems[index]
+    );
     if (checkedVocab.length === 0) {
-      setSnackbar({ open: true, message: 'No vocabulary items selected!', severity: 'error' });
+      setSnackbar({
+        open: true,
+        message: "No vocabulary items selected!",
+        severity: "error",
+      });
       return;
     }
 
@@ -161,17 +184,29 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
         textArea.value = vocabText;
         document.body.appendChild(textArea);
         textArea.select();
-        document.execCommand('copy');
+        document.execCommand("copy");
         document.body.removeChild(textArea);
-        setSnackbar({ open: true, message: 'Selected vocabulary copied to clipboard!', severity: 'success' });
+        setSnackbar({
+          open: true,
+          message: "Selected vocabulary copied to clipboard!",
+          severity: "success",
+        });
         return;
       }
 
       await navigator.clipboard.writeText(vocabText);
-      setSnackbar({ open: true, message: 'Selected vocabulary copied to clipboard!', severity: 'success' });
+      setSnackbar({
+        open: true,
+        message: "Selected vocabulary copied to clipboard!",
+        severity: "success",
+      });
     } catch (err) {
-      console.error('Failed to copy vocabulary: ', err);
-      setSnackbar({ open: true, message: 'Failed to copy vocabulary. Please try again.', severity: 'error' });
+      console.error("Failed to copy vocabulary: ", err);
+      setSnackbar({
+        open: true,
+        message: "Failed to copy vocabulary. Please try again.",
+        severity: "error",
+      });
     }
   };
 
@@ -184,8 +219,42 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   const handleCheckAll = () => {
     if (!analysisResult) return;
     const allChecked = checkedItems.every(Boolean);
-    const newCheckedItems = new Array(analysisResult.vocabulary.length).fill(!allChecked);
+    const newCheckedItems = new Array(analysisResult.vocabulary.length).fill(
+      !allChecked
+    );
     setCheckedItems(newCheckedItems);
+  };
+
+  const handleSaveVocabulary = async () => {
+    if (!analysisResult) return;
+
+    const checkedVocab = analysisResult.vocabulary.filter(
+      (_, index) => checkedItems[index]
+    );
+    if (checkedVocab.length === 0) {
+      setSnackbar({
+        open: true,
+        message: "No vocabulary items selected!",
+        severity: "error",
+      });
+      return;
+    }
+
+    try {
+      await saveVocabulary(checkedVocab);
+      setSnackbar({
+        open: true,
+        message: "Selected vocabulary saved to database!",
+        severity: "success",
+      });
+    } catch (err) {
+      console.error("Failed to save vocabulary: ", err);
+      setSnackbar({
+        open: true,
+        message: "Failed to save vocabulary. Please try again.",
+        severity: "error",
+      });
+    }
   };
 
   const allChecked = checkedItems.every(Boolean);
@@ -377,21 +446,32 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
               {analysisResult && analysisResult.vocabulary.length > 0 && (
                 <Box sx={{ display: "flex", gap: 2 }}>
                   <Button
-                    onClick={handleCheckAll}
+                    onClick={handleSaveVocabulary}
                     sx={{
-                      px: 3,
+                      px: 4,
                       py: 2,
-                      backgroundColor: "#6b7280",
+                      backgroundColor: "#10b981",
                       color: "white",
                       borderRadius: "0.5rem",
-                      fontWeight: 600,
+                      fontWeight: 700,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 2,
                       "&:hover": {
-                        backgroundColor: "#4b5563",
+                        backgroundColor: "#059669",
+                        opacity: 0.9,
+                        transform: "scale(1.05)",
+                        boxShadow:
+                          "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+                      },
+                      "&:active": {
+                        transform: "scale(0.95)",
                       },
                       transition: "all 0.2s",
                     }}
                   >
-                    {checkAllButtonText}
+                    <Save size={16} />
+                    Save to Database
                   </Button>
                   <Button
                     onClick={handleCopyVocabulary}
@@ -425,41 +505,136 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
               )}
             </Box>
             {analysisResult && (
-              <Box
-                sx={{ mt: 4, display: "flex", flexDirection: "column", gap: 2 }}
-              >
-                {analysisResult.vocabulary.map((item, index) => (
-                  <Box
-                    key={index}
-                    sx={{
-                      p: 4,
-                      backgroundColor: "#2a1f35",
-                      borderRadius: "0.5rem",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                      <Checkbox
-                        checked={checkedItems[index] || false}
-                        onChange={() => handleCheckboxChange(index)}
-                        sx={{
-                          color: "#9ca3af",
-                          "&.Mui-checked": {
-                            color: "var(--primary-color)",
-                          },
-                        }}
-                      />
-                      <Typography sx={{ color: "white", fontWeight: "bold" }}>
-                        {item.swedish}
-                      </Typography>
-                    </Box>
-                    <Typography sx={{ color: "#9ca3af" }}>
-                      {item.english}
-                    </Typography>
-                  </Box>
-                ))}
+              <Box sx={{ mt: 4 }}>
+                <TableContainer
+                  component={Paper}
+                  sx={{ backgroundColor: "#2a1f35", borderRadius: "0.5rem" }}
+                >
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell
+                          sx={{
+                            color: "white",
+                            fontWeight: "bold",
+                            borderBottom: "1px solid #4d3c63",
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1,
+                            }}
+                          >
+                            <Checkbox
+                              checked={checkedItems.every(Boolean)}
+                              indeterminate={
+                                checkedItems.some(Boolean) &&
+                                !checkedItems.every(Boolean)
+                              }
+                              onChange={handleCheckAll}
+                              sx={{
+                                color: "#9ca3af",
+                                "&.Mui-checked": {
+                                  color: "var(--primary-color)",
+                                },
+                              }}
+                            />
+                            <Button
+                              onClick={handleCheckAll}
+                              sx={{
+                                color: "var(--primary-color)",
+                                fontSize: "0.75rem",
+                                textTransform: "none",
+                                minWidth: "auto",
+                                p: 0,
+                                "&:hover": {
+                                  backgroundColor: "transparent",
+                                  textDecoration: "underline",
+                                },
+                              }}
+                            >
+                              {checkAllButtonText}
+                            </Button>
+                          </Box>
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            color: "white",
+                            fontWeight: "bold",
+                            borderBottom: "1px solid #4d3c63",
+                          }}
+                        >
+                          Swedish
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            color: "white",
+                            fontWeight: "bold",
+                            borderBottom: "1px solid #4d3c63",
+                          }}
+                        >
+                          English
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            color: "white",
+                            fontWeight: "bold",
+                            borderBottom: "1px solid #4d3c63",
+                          }}
+                        >
+                          Example Phrase
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {analysisResult.vocabulary.map((item, index) => (
+                        <TableRow
+                          key={index}
+                          sx={{ borderBottom: "1px solid #4d3c63" }}
+                        >
+                          <TableCell sx={{ borderBottom: "1px solid #4d3c63" }}>
+                            <Checkbox
+                              checked={checkedItems[index] || false}
+                              onChange={() => handleCheckboxChange(index)}
+                              sx={{
+                                color: "#9ca3af",
+                                "&.Mui-checked": {
+                                  color: "var(--primary-color)",
+                                },
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell
+                            sx={{
+                              color: "white",
+                              borderBottom: "1px solid #4d3c63",
+                            }}
+                          >
+                            {item.swedish}
+                          </TableCell>
+                          <TableCell
+                            sx={{
+                              color: "#9ca3af",
+                              borderBottom: "1px solid #4d3c63",
+                            }}
+                          >
+                            {item.english}
+                          </TableCell>
+                          <TableCell
+                            sx={{
+                              color: "#9ca3af",
+                              borderBottom: "1px solid #4d3c63",
+                            }}
+                          >
+                            {item.example_phrase || "—"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </Box>
             )}
           </Box>
@@ -496,12 +671,12 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
         open={snackbar.open}
         autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
         <Alert
           onClose={() => setSnackbar({ ...snackbar, open: false })}
           severity={snackbar.severity}
-          sx={{ width: '100%' }}
+          sx={{ width: "100%" }}
         >
           {snackbar.message}
         </Alert>

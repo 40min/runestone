@@ -1,8 +1,13 @@
 import React from 'react';
-import { Typography, Box } from '@mui/material';
+import { Typography, Box, Button } from '@mui/material';
 import { Diamond } from 'lucide-react';
 
-const Header: React.FC = () => {
+interface HeaderProps {
+  currentView: 'analyzer' | 'vocabulary';
+  onViewChange: (view: 'analyzer' | 'vocabulary') => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
   return (
     <header>
       <Box
@@ -32,8 +37,47 @@ const Header: React.FC = () => {
           Runestone
         </Typography>
       </Box>
-      <Box sx={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-        {/* Additional header content can go here */}
+      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+        <Button
+          onClick={() => onViewChange('analyzer')}
+          sx={{
+            color: currentView === 'analyzer' ? 'var(--primary-color)' : '#9ca3af',
+            fontWeight: 'medium',
+            fontSize: '0.875rem',
+            textTransform: 'none',
+            px: 2,
+            py: 1,
+            borderRadius: '0.5rem',
+            backgroundColor: currentView === 'analyzer' ? 'rgba(147, 51, 234, 0.1)' : 'transparent',
+            '&:hover': {
+              color: 'white',
+              backgroundColor: currentView === 'analyzer' ? 'rgba(147, 51, 234, 0.2)' : 'rgba(156, 163, 175, 0.1)',
+            },
+            transition: 'all 0.2s',
+          }}
+        >
+          Analyzer
+        </Button>
+        <Button
+          onClick={() => onViewChange('vocabulary')}
+          sx={{
+            color: currentView === 'vocabulary' ? 'var(--primary-color)' : '#9ca3af',
+            fontWeight: 'medium',
+            fontSize: '0.875rem',
+            textTransform: 'none',
+            px: 2,
+            py: 1,
+            borderRadius: '0.5rem',
+            backgroundColor: currentView === 'vocabulary' ? 'rgba(147, 51, 234, 0.1)' : 'transparent',
+            '&:hover': {
+              color: 'white',
+              backgroundColor: currentView === 'vocabulary' ? 'rgba(147, 51, 234, 0.2)' : 'rgba(156, 163, 175, 0.1)',
+            },
+            transition: 'all 0.2s',
+          }}
+        >
+          Vocabulary
+        </Button>
       </Box>
       </Box>
     </header>

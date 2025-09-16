@@ -15,6 +15,7 @@ interface GrammarFocus {
 interface VocabularyItem {
   swedish: string;
   english: string;
+  example_phrase?: string;
 }
 
 interface ContentAnalysis {
@@ -29,6 +30,7 @@ interface ContentAnalysis {
 
 interface UseImageProcessingReturn {
   processImage: (file: File) => Promise<void>;
+  saveVocabulary: (vocabulary: VocabularyItem[]) => Promise<void>;
   ocrResult: OCRResult | null;
   analysisResult: ContentAnalysis | null;
   resourcesResult: string | null;
@@ -145,6 +147,33 @@ const useImageProcessing = (): UseImageProcessingReturn => {
     }
   };
 
+  const saveVocabulary = async (vocabulary: VocabularyItem[]) => {
+    try {
+      // Transform vocabulary items to match backend schema
+      const transformedItems = vocabulary.map(item => ({
+        word_phrase: item.swedish,
+        translation: item.english,
+        example_phrase: item.example_phrase,
+      }));
+
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ items: transformedItems }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Save failed: HTTP ${response.status}: ${response.statusText}`);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save vocabulary';
+      throw new Error(errorMessage);
+    }
+  };
+
   const reset = () => {
     setOcrResult(null);
     setAnalysisResult(null);
@@ -157,6 +186,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
 
   return {
     processImage,
+    saveVocabulary,
     ocrResult,
     analysisResult,
     resourcesResult,
