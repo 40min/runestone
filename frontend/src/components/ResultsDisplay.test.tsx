@@ -4,27 +4,26 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi } from 'vitest';
 import ResultsDisplay from "./ResultsDisplay";
 
-const mockResult = {
-  ocr_result: {
-    text: "Sample Swedish text",
-    character_count: 18,
-  },
-  analysis: {
-    grammar_focus: {
-      topic: "Present tense",
-      explanation: "Focus on present tense usage in sentences",
-      has_explicit_rules: true,
-      rules:
-        "Hej [hello] - greeting\nHur mår du? [how are you?] - question form",
-    },
-    vocabulary: [
-      { swedish: "hej", english: "hello", example_phrase: "Hej, hur mår du?" },
-      { swedish: "bra", english: "good", example_phrase: "Jag mår bra idag." },
-    ],
-  },
-  extra_info: "Additional learning tips here. Check out https://example.com for more resources.",
-  processing_successful: true,
+const mockOcrResult = {
+  text: "Sample Swedish text",
+  character_count: 18,
 };
+
+const mockAnalysisResult = {
+  grammar_focus: {
+    topic: "Present tense",
+    explanation: "Focus on present tense usage in sentences",
+    has_explicit_rules: true,
+    rules:
+      "Hej [hello] - greeting\nHur mår du? [how are you?] - question form",
+  },
+  vocabulary: [
+    { swedish: "hej", english: "hello", example_phrase: "Hej, hur mår du?" },
+    { swedish: "bra", english: "good", example_phrase: "Jag mår bra idag." },
+  ],
+};
+
+const mockResourcesResult = "Additional learning tips here. Check out https://example.com for more resources.";
 
 describe("ResultsDisplay", () => {
   it("renders error state when error is provided", () => {
@@ -38,31 +37,31 @@ describe("ResultsDisplay", () => {
       />
     );
 
-    expect(screen.getByText("Processing Error")).toBeInTheDocument();
+    expect(screen.getByText("Error")).toBeInTheDocument();
     expect(screen.getByText(error)).toBeInTheDocument();
   });
 
   it("renders OCR tab content by default", () => {
     render(
       <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
         error={null}
       />
     );
 
     expect(screen.getByText("Analysis Results")).toBeInTheDocument();
     expect(screen.getByText("OCR Text")).toBeInTheDocument();
-    expect(screen.getByText(mockResult.ocr_result.text)).toBeInTheDocument();
+    expect(screen.getByText(mockOcrResult.text)).toBeInTheDocument();
   });
 
   it("switches to grammar tab when clicked", () => {
     render(
       <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
         error={null}
       />
     );
@@ -73,11 +72,11 @@ describe("ResultsDisplay", () => {
     expect(screen.getByText("Grammar Analysis")).toBeInTheDocument();
     expect(screen.getByText("Topic:")).toBeInTheDocument();
     expect(
-      screen.getByText(mockResult.analysis.grammar_focus.topic)
+      screen.getByText(mockAnalysisResult.grammar_focus.topic)
     ).toBeInTheDocument();
     expect(screen.getByText("Explanation:")).toBeInTheDocument();
     expect(
-      screen.getByText(mockResult.analysis.grammar_focus.explanation)
+      screen.getByText(mockAnalysisResult.grammar_focus.explanation)
     ).toBeInTheDocument();
     expect(screen.getByText("Has Explicit Rules:")).toBeInTheDocument();
     expect(screen.getByText("Yes")).toBeInTheDocument();
@@ -86,9 +85,9 @@ describe("ResultsDisplay", () => {
   it("switches to vocabulary tab when clicked", () => {
     render(
       <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
       />
@@ -106,7 +105,7 @@ describe("ResultsDisplay", () => {
     expect(screen.getByText("Jag mår bra idag.")).toBeInTheDocument();
   });
 
-  it("copies all vocabulary to clipboard by default when copy button is clicked", async () => {
+  it("copies all vocabulary to clipboard when all items are selected and copy button is clicked", async () => {
     const mockClipboard = {
       writeText: vi.fn().mockResolvedValue(undefined),
     };
@@ -114,15 +113,19 @@ describe("ResultsDisplay", () => {
 
     render(
       <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
         error={null}
       />
     );
 
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
+
+    // Check all items first
+    const checkAllButton = screen.getByText("Check All");
+    fireEvent.click(checkAllButton);
 
     const copyButton = screen.getByText("Copy");
     fireEvent.click(copyButton);
@@ -138,9 +141,9 @@ describe("ResultsDisplay", () => {
   it("switches to extra info tab when clicked", () => {
     render(
       <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
         error={null}
       />
     );
@@ -158,7 +161,8 @@ describe("ResultsDisplay", () => {
 
   it("does not show extra info tab when resourcesResult is not provided", () => {
     const resultWithoutExtraInfo = {
-      ...mockResult,
+      ocr_result: mockOcrResult,
+      analysis: mockAnalysisResult,
       extra_info: null,
     };
 
@@ -191,9 +195,9 @@ describe("ResultsDisplay", () => {
   it("renders all tabs correctly", () => {
     render(
       <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
         error={null}
       />
     );
@@ -207,9 +211,9 @@ describe("ResultsDisplay", () => {
   it("displays rules section when rules are present", () => {
     render(
       <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
         error={null}
       />
     );
@@ -226,14 +230,15 @@ describe("ResultsDisplay", () => {
 
   it("does not display rules section when rules are null", () => {
     const resultWithoutRules = {
-      ...mockResult,
+      ocr_result: mockOcrResult,
       analysis: {
-        ...mockResult.analysis,
+        ...mockAnalysisResult,
         grammar_focus: {
-          ...mockResult.analysis.grammar_focus,
+          ...mockAnalysisResult.grammar_focus,
           rules: undefined,
         },
       },
+      extra_info: mockResourcesResult,
     };
 
     render(
@@ -256,14 +261,15 @@ describe("ResultsDisplay", () => {
 
   it("does not display rules section when rules are undefined", () => {
     const resultWithoutRules = {
-      ...mockResult,
+      ocr_result: mockOcrResult,
       analysis: {
-        ...mockResult.analysis,
+        ...mockAnalysisResult,
         grammar_focus: {
-          ...mockResult.analysis.grammar_focus,
+          ...mockAnalysisResult.grammar_focus,
           rules: undefined,
         },
       },
+      extra_info: mockResourcesResult,
     };
 
     render(
@@ -286,7 +292,8 @@ describe("ResultsDisplay", () => {
 
   it("converts URLs to clickable links in extra info", () => {
     const resultWithUrl = {
-      ...mockResult,
+      ocr_result: mockOcrResult,
+      analysis: mockAnalysisResult,
       extra_info: "Check out this resource: https://example.com/learn-swedish and also https://swedishpod101.com",
     };
 
@@ -318,12 +325,12 @@ describe("ResultsDisplay", () => {
   });
 
   // New tests for checkbox functionality
-  it("initializes all vocabulary items as checked by default", () => {
+  it("initializes all vocabulary items as unchecked by default", () => {
     render(
       <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
         error={null}
       />
     );
@@ -331,20 +338,20 @@ describe("ResultsDisplay", () => {
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    // Check that all checkboxes are checked by default
+    // Check that all checkboxes are unchecked by default
     const checkboxes = screen.getAllByRole("checkbox");
     expect(checkboxes).toHaveLength(3);
     checkboxes.forEach(checkbox => {
-      expect(checkbox).toBeChecked();
+      expect(checkbox).not.toBeChecked();
     });
   });
 
   it("toggles individual checkbox when clicked", () => {
     render(
       <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
         error={null}
       />
     );
@@ -353,26 +360,26 @@ describe("ResultsDisplay", () => {
     fireEvent.click(vocabularyTab);
 
     const checkboxes = screen.getAllByRole("checkbox");
-    const firstCheckbox = checkboxes[0];
+    const firstCheckbox = checkboxes[1]; // Skip master checkbox
 
-    // Initially checked
-    expect(firstCheckbox).toBeChecked();
-
-    // Click to uncheck
-    fireEvent.click(firstCheckbox);
+    // Initially unchecked
     expect(firstCheckbox).not.toBeChecked();
 
-    // Click to check again
+    // Click to check
     fireEvent.click(firstCheckbox);
     expect(firstCheckbox).toBeChecked();
+
+    // Click to uncheck again
+    fireEvent.click(firstCheckbox);
+    expect(firstCheckbox).not.toBeChecked();
   });
 
   it("handles check all/uncheck all functionality", () => {
     render(
       <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
         error={null}
       />
     );
@@ -380,32 +387,32 @@ describe("ResultsDisplay", () => {
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    const checkAllButton = screen.getByText("Uncheck All");
+    const checkAllButton = screen.getByText("Check All");
     const checkboxes = screen.getAllByRole("checkbox");
 
-    // Initially all checked
-    checkboxes.forEach(checkbox => {
-      expect(checkbox).toBeChecked();
-    });
-
-    // Click to uncheck all
-    fireEvent.click(checkAllButton);
+    // Initially all unchecked
     checkboxes.forEach(checkbox => {
       expect(checkbox).not.toBeChecked();
     });
 
-    // Button should now say "Check All"
-    expect(screen.getByText("Check All")).toBeInTheDocument();
-
-    // Click to check all again
-    const checkAllButtonAgain = screen.getByText("Check All");
-    fireEvent.click(checkAllButtonAgain);
+    // Click to check all
+    fireEvent.click(checkAllButton);
     checkboxes.forEach(checkbox => {
       expect(checkbox).toBeChecked();
     });
 
-    // Button should now say "Uncheck All" again
+    // Button should now say "Uncheck All"
     expect(screen.getByText("Uncheck All")).toBeInTheDocument();
+
+    // Click to uncheck all again
+    const uncheckAllButton = screen.getByText("Uncheck All");
+    fireEvent.click(uncheckAllButton);
+    checkboxes.forEach(checkbox => {
+      expect(checkbox).not.toBeChecked();
+    });
+
+    // Button should now say "Check All" again
+    expect(screen.getByText("Check All")).toBeInTheDocument();
   });
 
   it("copies only selected vocabulary items", async () => {
@@ -416,9 +423,9 @@ describe("ResultsDisplay", () => {
 
     render(
       <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
         error={null}
       />
     );
@@ -428,8 +435,8 @@ describe("ResultsDisplay", () => {
 
     const checkboxes = screen.getAllByRole("checkbox");
 
-    // Uncheck the first item (skip the master checkbox at index 0)
-    fireEvent.click(checkboxes[1]);
+    // Check the second item
+    fireEvent.click(checkboxes[2]);
 
     const copyButton = screen.getByText("Copy");
     fireEvent.click(copyButton);
@@ -448,9 +455,9 @@ describe("ResultsDisplay", () => {
 
     render(
       <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
         error={null}
       />
     );
@@ -458,10 +465,7 @@ describe("ResultsDisplay", () => {
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    // Uncheck all items
-    const checkAllButton = screen.getByText("Uncheck All");
-    fireEvent.click(checkAllButton);
-
+    // Items are already unchecked by default, so no items are selected
     const copyButton = screen.getByText("Copy");
     fireEvent.click(copyButton);
 
@@ -482,15 +486,19 @@ describe("ResultsDisplay", () => {
 
     render(
       <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
         error={null}
       />
     );
 
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
+
+    // Check all items first
+    const checkAllButton = screen.getByText("Check All");
+    fireEvent.click(checkAllButton);
 
     const copyButton = screen.getByText("Copy");
     fireEvent.click(copyButton);
@@ -509,15 +517,19 @@ describe("ResultsDisplay", () => {
 
     render(
       <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
         error={null}
       />
     );
 
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
+
+    // Check all items first
+    const checkAllButton = screen.getByText("Check All");
+    fireEvent.click(checkAllButton);
 
     const copyButton = screen.getByText("Copy");
     fireEvent.click(copyButton);
@@ -541,15 +553,19 @@ describe("ResultsDisplay", () => {
 
     render(
       <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
         error={null}
       />
     );
 
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
+
+    // Check all items first
+    const checkAllButton = screen.getByText("Check All");
+    fireEvent.click(checkAllButton);
 
     const copyButton = screen.getByText("Copy");
     fireEvent.click(copyButton);
@@ -569,9 +585,9 @@ describe("ResultsDisplay", () => {
   it("displays vocabulary items with checkboxes and correct styling", () => {
     render(
       <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
         error={null}
       />
     );
@@ -589,18 +605,18 @@ describe("ResultsDisplay", () => {
     expect(checkboxes).toHaveLength(3);
 
     // Check that the Check/Uncheck All button is present
-    expect(screen.getByText("Uncheck All")).toBeInTheDocument();
-    
+    expect(screen.getByText("Check All")).toBeInTheDocument();
+
     // Check that the Copy button is present
     expect(screen.getByText("Copy")).toBeInTheDocument();
   });
 
-  it("updates button text to 'Check All' when some items are unchecked", () => {
+  it("updates button text to 'Uncheck All' when all items are checked", () => {
     render(
       <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
         error={null}
       />
     );
@@ -608,46 +624,47 @@ describe("ResultsDisplay", () => {
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    // Initially all checked, button should say "Uncheck All"
-    expect(screen.getByText("Uncheck All")).toBeInTheDocument();
-
-    // Uncheck one item
-    const checkboxes = screen.getAllByRole("checkbox");
-    fireEvent.click(checkboxes[0]);
-
-    // Button should now say "Check All"
-    expect(screen.getByText("Check All")).toBeInTheDocument();
-    expect(screen.queryByText("Uncheck All")).not.toBeInTheDocument();
-  });
-
-  it("updates button text back to 'Uncheck All' when all items are checked again", () => {
-    render(
-      <ResultsDisplay
-        ocrResult={mockResult.ocr_result}
-        analysisResult={mockResult.analysis}
-        resourcesResult={mockResult.extra_info}
-        error={null}
-      />
-    );
-
-    const vocabularyTab = screen.getByText("Vocabulary");
-    fireEvent.click(vocabularyTab);
-
-    // Initially all checked, button should say "Uncheck All"
-    expect(screen.getByText("Uncheck All")).toBeInTheDocument();
-
-    // Uncheck one item
-    const checkboxes = screen.getAllByRole("checkbox");
-    fireEvent.click(checkboxes[0]);
-
-    // Button should say "Check All"
+    // Initially all unchecked, button should say "Check All"
     expect(screen.getByText("Check All")).toBeInTheDocument();
 
-    // Check the item back
-    fireEvent.click(checkboxes[0]);
+    // Check all items
+    const checkAllButton = screen.getByText("Check All");
+    fireEvent.click(checkAllButton);
 
-    // Button should say "Uncheck All" again
+    // Button should now say "Uncheck All"
     expect(screen.getByText("Uncheck All")).toBeInTheDocument();
     expect(screen.queryByText("Check All")).not.toBeInTheDocument();
+  });
+
+  it("updates button text back to 'Check All' when all items are unchecked again", () => {
+    render(
+      <ResultsDisplay
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
+        error={null}
+      />
+    );
+
+    const vocabularyTab = screen.getByText("Vocabulary");
+    fireEvent.click(vocabularyTab);
+
+    // Initially all unchecked, button should say "Check All"
+    expect(screen.getByText("Check All")).toBeInTheDocument();
+
+    // Check all items
+    const checkAllButton = screen.getByText("Check All");
+    fireEvent.click(checkAllButton);
+
+    // Button should say "Uncheck All"
+    expect(screen.getByText("Uncheck All")).toBeInTheDocument();
+
+    // Uncheck all items
+    const uncheckAllButton = screen.getByText("Uncheck All");
+    fireEvent.click(uncheckAllButton);
+
+    // Button should say "Check All" again
+    expect(screen.getByText("Check All")).toBeInTheDocument();
+    expect(screen.queryByText("Uncheck All")).not.toBeInTheDocument();
   });
 });

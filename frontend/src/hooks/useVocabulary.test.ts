@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import useVocabulary from './useVocabulary';
 
 // Mock config
@@ -104,7 +104,9 @@ describe('useVocabulary', () => {
     });
 
     // Call refetch
-    await result.current.refetch();
+    await act(async () => {
+      await result.current.refetch();
+    });
 
     // Should have called fetch twice
     expect(mockFetch).toHaveBeenCalledTimes(2);

@@ -1,6 +1,7 @@
 import React from 'react';
-import { Typography, Box, Button } from '@mui/material';
+import { Typography, Box } from '@mui/material';
 import { Diamond } from 'lucide-react';
+import { CustomButton } from './ui';
 
 interface HeaderProps {
   currentView: 'analyzer' | 'vocabulary';
@@ -38,46 +39,34 @@ const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
         </Typography>
       </Box>
       <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-        <Button
+        <CustomButton
+          variant="secondary"
           onClick={() => onViewChange('analyzer')}
           sx={{
             color: currentView === 'analyzer' ? 'var(--primary-color)' : '#9ca3af',
-            fontWeight: 'medium',
-            fontSize: '0.875rem',
-            textTransform: 'none',
-            px: 2,
-            py: 1,
-            borderRadius: '0.5rem',
             backgroundColor: currentView === 'analyzer' ? 'rgba(147, 51, 234, 0.1)' : 'transparent',
             '&:hover': {
               color: 'white',
               backgroundColor: currentView === 'analyzer' ? 'rgba(147, 51, 234, 0.2)' : 'rgba(156, 163, 175, 0.1)',
             },
-            transition: 'all 0.2s',
           }}
         >
           Analyzer
-        </Button>
-        <Button
+        </CustomButton>
+        <CustomButton
+          variant="secondary"
           onClick={() => onViewChange('vocabulary')}
           sx={{
             color: currentView === 'vocabulary' ? 'var(--primary-color)' : '#9ca3af',
-            fontWeight: 'medium',
-            fontSize: '0.875rem',
-            textTransform: 'none',
-            px: 2,
-            py: 1,
-            borderRadius: '0.5rem',
             backgroundColor: currentView === 'vocabulary' ? 'rgba(147, 51, 234, 0.1)' : 'transparent',
             '&:hover': {
               color: 'white',
               backgroundColor: currentView === 'vocabulary' ? 'rgba(147, 51, 234, 0.2)' : 'rgba(156, 163, 175, 0.1)',
             },
-            transition: 'all 0.2s',
           }}
         >
           Vocabulary
-        </Button>
+        </CustomButton>
       </Box>
       </Box>
     </header>
