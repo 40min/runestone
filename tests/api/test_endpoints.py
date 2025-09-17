@@ -300,6 +300,73 @@ class TestVocabularyEndpoints:
         assert "id" in vocab
         assert "created_at" in vocab
         assert "updated_at" in vocab
+    def test_get_vocabulary_with_search(self, client):
+        """Test getting vocabulary with search query."""
+        # Save some test data
+        payload = {
+            "items": [
+                {
+                    "word_phrase": "ett äpple",
+                    "translation": "an apple",
+                    "example_phrase": "Jag äter ett äpple varje dag.",
+                },
+                {
+                    "word_phrase": "en banan",
+                    "translation": "a banana",
+                    "example_phrase": None,
+                },
+                {
+                    "word_phrase": "ett päron",
+                    "translation": "a pear",
+                    "example_phrase": None,
+                },
+            ]
+        }
+        client.post("/api/vocabulary", json=payload)
+
+        # Search for "banan" - should find one match
+        response = client.get("/api/vocabulary?search_query=banan")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["word_phrase"] == "en banan"
+
+        # Search for "ett" - should find two matches
+        response = client.get("/api/vocabulary?search_query=ett")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        # Should be ordered by created_at descending
+        assert data[0]["word_phrase"] == "ett päron"  # Most recent
+        assert data[1]["word_phrase"] == "ett äpple"
+
+        # Search with wildcard "*" - "ban*" should match "banan"
+        response = client.get("/api/vocabulary?search_query=ban*")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["word_phrase"] == "en banan"
+
+        # Search case-insensitive - "BANAN" should match "banan"
+        response = client.get("/api/vocabulary?search_query=BANAN")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["word_phrase"] == "en banan"
+
+        # Search for non-existent term
+        response = client.get("/api/vocabulary?search_query=xyz")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 0
+
+        # Test with limit
+        response = client.get("/api/vocabulary?search_query=ett&limit=1")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["word_phrase"] == "ett päron"  # Most recent
+
 
 
 class TestSettingsDependency:

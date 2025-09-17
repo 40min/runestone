@@ -68,12 +68,18 @@ class VocabularyRepository:
         if filtered_items:
             self.batch_insert_vocabulary_items(filtered_items, user_id)
 
-    def get_vocabulary(self, limit: int, user_id: int = 1) -> List[Vocabulary]:
-        """Retrieve the most recently added vocabulary items for a user."""
+    def get_vocabulary(self, limit: int, search_query: str | None = None, user_id: int = 1) -> List[Vocabulary]:
+        """Retrieve vocabulary items for a user, optionally filtered by search query."""
+        query = self.db.query(Vocabulary).filter(Vocabulary.user_id == user_id)
+
+        if search_query:
+            # Support wildcard (*) pattern matching, case-insensitive
+            search_pattern = search_query.replace('*', '%').lower()
+            query = query.filter(Vocabulary.word_phrase.ilike(f'%{search_pattern}%'))
+
         return (
-            self.db.query(Vocabulary)
-            .filter(Vocabulary.user_id == user_id)
-            .order_by(Vocabulary.created_at.desc())
+            query
+            .order_by(Vocabulary.created_at.desc(), Vocabulary.id.desc())
             .limit(limit)
             .all()
         )

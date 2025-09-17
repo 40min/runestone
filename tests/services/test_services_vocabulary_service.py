@@ -117,8 +117,9 @@ class TestVocabularyService:
         result = service.get_vocabulary(limit=20, user_id=1)
         assert len(result) == 2
         assert isinstance(result[0], VocabularySchema)
-        assert result[0].word_phrase == "ett äpple"
-        assert result[1].word_phrase == "en banan"
+        # Since timestamps are the same, order by id desc (most recent insertion first)
+        assert result[0].word_phrase == "en banan"  # Higher id
+        assert result[1].word_phrase == "ett äpple"  # Lower id
 
         # Get all for user 2
         result = service.get_vocabulary(limit=20, user_id=2)

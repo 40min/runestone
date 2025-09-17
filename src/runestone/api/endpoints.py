@@ -268,16 +268,20 @@ async def save_vocabulary(
 )
 async def get_vocabulary(
     service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
-    limit: int = 20,
+    limit: int = 100,
+    search_query: str | None = None,
 ) -> List[Vocabulary]:
     """
-    Retrieve the most recently added vocabulary items.
+    Retrieve vocabulary items, optionally filtered by search query.
 
-    This endpoint returns the most recent vocabulary items from the database
-    for the current user, ordered by creation date (newest first).
+    This endpoint returns vocabulary items from the database for the current user.
+    If a search query is provided, it filters items by word_phrase using case-insensitive
+    wildcard (*) pattern matching. Otherwise, returns the most recent items ordered
+    by creation date (newest first).
 
     Args:
-        limit: Maximum number of items to return (default: 20)
+        limit: Maximum number of items to return (default: 100)
+        search_query: Optional search term to filter vocabulary by word_phrase
         service: Vocabulary service
 
     Returns:
@@ -293,7 +297,7 @@ async def get_vocabulary(
                 detail="Limit must be between 1 and 100",
             )
 
-        return service.get_vocabulary(limit)
+        return service.get_vocabulary(limit, search_query)
 
     except HTTPException:
         raise

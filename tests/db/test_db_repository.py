@@ -182,3 +182,79 @@ class TestVocabularyRepository:
         result_user2 = repo.get_vocabulary(limit=20, user_id=2)
         assert len(result_user2) == 1
         assert result_user2[0].word_phrase == "en kiwi"
+
+    def test_get_vocabulary_with_search(self, repo, db_session):
+        """Test retrieving vocabulary items filtered by search query."""
+        from datetime import datetime, timezone
+
+        # Add test data
+        vocab1 = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+            in_learn=True,
+            showed_times=0,
+        )
+        vocab2 = VocabularyModel(
+            user_id=1,
+            word_phrase="en banan",
+            translation="a banana",
+            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+            in_learn=True,
+            showed_times=0,
+        )
+        vocab3 = VocabularyModel(
+            user_id=1,
+            word_phrase="ett päron",
+            translation="a pear",
+            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+            in_learn=True,
+            showed_times=0,
+        )
+        vocab4 = VocabularyModel(
+            user_id=2,
+            word_phrase="en kiwi",
+            translation="a kiwi",
+            created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
+            in_learn=True,
+            showed_times=0,
+        )
+
+        db_session.add_all([vocab1, vocab2, vocab3, vocab4])
+        db_session.commit()
+
+        # Search for "banan" - should find one match
+        result = repo.get_vocabulary(limit=20, search_query="banan", user_id=1)
+        assert len(result) == 1
+        assert result[0].word_phrase == "en banan"
+
+        # Search for "ett" - should find two matches (äpple and päron), most recent first
+        result = repo.get_vocabulary(limit=20, search_query="ett", user_id=1)
+        assert len(result) == 2
+        assert result[0].word_phrase == "ett päron"  # Most recent
+        assert result[1].word_phrase == "ett äpple"
+
+        # Search with wildcard "*" - "ban*" should match "banan"
+        result = repo.get_vocabulary(limit=20, search_query="ban*", user_id=1)
+        assert len(result) == 1
+        assert result[0].word_phrase == "en banan"
+
+        # Search case-insensitive - "BANAN" should match "banan"
+        result = repo.get_vocabulary(limit=20, search_query="BANAN", user_id=1)
+        assert len(result) == 1
+        assert result[0].word_phrase == "en banan"
+
+        # Search for non-existent term
+        result = repo.get_vocabulary(limit=20, search_query="xyz", user_id=1)
+        assert len(result) == 0
+
+        # Search for user 2
+        result = repo.get_vocabulary(limit=20, search_query="kiwi", user_id=2)
+        assert len(result) == 1
+        assert result[0].word_phrase == "en kiwi"
+
+        # Test with limit
+        result = repo.get_vocabulary(limit=1, search_query="ett", user_id=1)
+        assert len(result) == 1
+        assert result[0].word_phrase == "ett päron"  # Most recent
