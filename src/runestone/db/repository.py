@@ -79,17 +79,17 @@ class VocabularyRepository:
 
         return query.order_by(Vocabulary.created_at.desc(), Vocabulary.id.desc()).limit(limit).all()
 
-    def update_vocabulary_item(self, item_id: int, user_id: int, updates: dict) -> Vocabulary:
-        """Update a vocabulary item by ID and user_id."""
+    def get_vocabulary_item(self, item_id: int, user_id: int) -> Vocabulary:
+        """Get a vocabulary item by ID and user_id."""
         vocab = self.db.query(Vocabulary).filter(Vocabulary.id == item_id, Vocabulary.user_id == user_id).first()
 
         if not vocab:
             raise ValueError(f"Vocabulary item with id {item_id} not found for user {user_id}")
 
-        for key, value in updates.items():
-            if value is not None:
-                setattr(vocab, key, value)
+        return vocab
 
+    def update_vocabulary_item(self, vocab: Vocabulary) -> Vocabulary:
+        """Commit and refresh a vocabulary item."""
         self.db.commit()
         self.db.refresh(vocab)
         return vocab

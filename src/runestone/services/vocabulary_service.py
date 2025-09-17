@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from ..api.schemas import Vocabulary as VocabularySchema
 from ..api.schemas import VocabularyItemCreate, VocabularyUpdate
+from ..db.models import Vocabulary
 from ..db.repository import VocabularyRepository
 
 
@@ -67,7 +68,13 @@ class VocabularyService:
 
     def update_vocabulary_item(self, item_id: int, update: VocabularyUpdate, user_id: int = 1) -> VocabularySchema:
         """Update a vocabulary item and return the updated record."""
-        updated_vocab = self.repo.update_vocabulary_item(item_id, user_id, update.dict(exclude_unset=True))
+        vocab = self.repo.get_vocabulary_item(item_id, user_id)
+        updates = update.model_dump(exclude_unset=True)
+        allowed_fields = Vocabulary.UPDATABLE_FIELDS
+        for key, value in updates.items():
+            if key in allowed_fields and value is not None:
+                setattr(vocab, key, value)
+        updated_vocab = self.repo.update_vocabulary_item(vocab)
         return VocabularySchema(
             id=updated_vocab.id,
             user_id=updated_vocab.user_id,

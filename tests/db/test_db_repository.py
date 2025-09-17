@@ -259,8 +259,8 @@ class TestVocabularyRepository:
         assert len(result) == 1
         assert result[0].word_phrase == "ett päron"  # Most recent
 
-    def test_update_vocabulary_item(self, repo, db_session):
-        """Test updating a vocabulary item."""
+    def test_get_vocabulary_item(self, repo, db_session):
+        """Test getting a vocabulary item."""
         # Add a test item
         vocab = VocabularyModel(
             user_id=1,
@@ -273,13 +273,38 @@ class TestVocabularyRepository:
         db_session.add(vocab)
         db_session.commit()
 
-        # Update the item
-        updates = {
-            "word_phrase": "ett rött äpple",
-            "translation": "a red apple",
-            "in_learn": False,
-        }
-        updated_vocab = repo.update_vocabulary_item(vocab.id, user_id=1, updates=updates)
+        # Get the item
+        retrieved_vocab = repo.get_vocabulary_item(vocab.id, user_id=1)
+
+        # Verify
+        assert retrieved_vocab.id == vocab.id
+        assert retrieved_vocab.word_phrase == "ett äpple"
+        assert retrieved_vocab.translation == "an apple"
+
+    def test_get_vocabulary_item_not_found(self, repo, db_session):
+        """Test getting a non-existent vocabulary item."""
+        with pytest.raises(ValueError, match="Vocabulary item with id 999 not found for user 1"):
+            repo.get_vocabulary_item(999, user_id=1)
+
+    def test_update_vocabulary_item(self, repo, db_session):
+        """Test committing and refreshing a vocabulary item."""
+        # Add a test item
+        vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            example_phrase="Jag äter ett äpple varje dag.",
+            in_learn=True,
+            showed_times=0,
+        )
+        db_session.add(vocab)
+        db_session.commit()
+
+        # Update the item manually
+        vocab.word_phrase = "ett rött äpple"
+        vocab.translation = "a red apple"
+        vocab.in_learn = False
+        updated_vocab = repo.update_vocabulary_item(vocab)
 
         # Verify the update
         assert updated_vocab.word_phrase == "ett rött äpple"
@@ -295,7 +320,7 @@ class TestVocabularyRepository:
         assert db_vocab.in_learn is False
 
     def test_update_vocabulary_item_partial(self, repo, db_session):
-        """Test updating a vocabulary item with partial fields."""
+        """Test committing and refreshing a vocabulary item with partial changes."""
         # Add a test item
         vocab = VocabularyModel(
             user_id=1,
@@ -309,23 +334,21 @@ class TestVocabularyRepository:
         db_session.commit()
 
         # Update only one field
-        updates = {"in_learn": False}
-        updated_vocab = repo.update_vocabulary_item(vocab.id, user_id=1, updates=updates)
+        vocab.in_learn = False
+        updated_vocab = repo.update_vocabulary_item(vocab)
 
         # Verify only in_learn changed
         assert updated_vocab.word_phrase == "ett äpple"
         assert updated_vocab.translation == "an apple"
         assert updated_vocab.in_learn is False
 
-    def test_update_vocabulary_item_not_found(self, repo, db_session):
-        """Test updating a non-existent vocabulary item."""
-        updates = {"word_phrase": "new phrase"}
-
+    def test_get_vocabulary_item_not_found_existing(self, repo, db_session):
+        """Test getting a non-existent vocabulary item."""
         with pytest.raises(ValueError, match="Vocabulary item with id 999 not found for user 1"):
-            repo.update_vocabulary_item(999, user_id=1, updates=updates)
+            repo.get_vocabulary_item(999, user_id=1)
 
-    def test_update_vocabulary_item_wrong_user(self, repo, db_session):
-        """Test updating a vocabulary item for wrong user."""
+    def test_get_vocabulary_item_wrong_user(self, repo, db_session):
+        """Test getting a vocabulary item for wrong user."""
         # Add a test item for user 1
         vocab = VocabularyModel(
             user_id=1,
@@ -337,7 +360,6 @@ class TestVocabularyRepository:
         db_session.add(vocab)
         db_session.commit()
 
-        # Try to update as user 2
-        updates = {"word_phrase": "new phrase"}
+        # Try to get as user 2
         with pytest.raises(ValueError, match="Vocabulary item with id 1 not found for user 2"):
-            repo.update_vocabulary_item(vocab.id, user_id=2, updates=updates)
+            repo.get_vocabulary_item(vocab.id, user_id=2)
