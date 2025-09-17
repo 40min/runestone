@@ -5,7 +5,7 @@
 .PHONY: install install-dev install-backend install-frontend install-all
 .PHONY: lint lint-check backend-lint frontend-lint
 .PHONY: test test-coverage backend-test frontend-test
-.PHONY: run run-backend run-frontend run-dev
+.PHONY: run run-backend run-frontend run-dev load-vocab
 .PHONY: dev-test dev-full ci-lint ci-test
 
 # =============================================================================
@@ -39,6 +39,7 @@ help:
 	@echo ""
 	@echo "Running Applications:"
 	@echo "  run              - Run CLI application (requires IMAGE_PATH and GEMINI_API_KEY)"
+	@echo "  load-vocab       - Load vocabulary from CSV file (requires CSV_PATH)"
 	@echo "  run-backend      - Start FastAPI backend server"
 	@echo "  run-frontend     - Start frontend development server"
 	@echo "  run-dev          - Start both backend and frontend concurrently"
@@ -177,6 +178,19 @@ run:
 	fi
 	@echo "🚀 Running Runestone with image: $(IMAGE_PATH)"
 	@uv run runestone process "$(IMAGE_PATH)" --verbose
+
+# Load vocabulary from CSV file
+load-vocab:
+	@if [ -z "$(CSV_PATH)" ]; then \
+		echo "❌ Error: CSV_PATH is required. Usage: make load-vocab CSV_PATH=path/to/vocab.csv"; \
+		exit 1; \
+	fi
+	@echo "📚 Loading vocabulary from CSV: $(CSV_PATH)"
+	@if [ -n "$(DB_NAME)" ]; then \
+		uv run runestone load-vocab "$(CSV_PATH)" --db-name "$(DB_NAME)"; \
+	else \
+		uv run runestone load-vocab "$(CSV_PATH)"; \
+	fi
 
 # Start FastAPI backend server
 run-backend:
