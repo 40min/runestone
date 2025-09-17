@@ -16,9 +16,9 @@ from runestone.config import Settings
 from runestone.core.analyzer import ContentAnalyzer
 from runestone.core.clients.base import BaseLLMClient
 from runestone.core.clients.factory import create_llm_client
-from runestone.core.logging_config import get_logger
 from runestone.core.exceptions import RunestoneError
 from runestone.core.formatter import ResultFormatter
+from runestone.core.logging_config import get_logger
 from runestone.core.ocr import OCRProcessor
 
 

@@ -9,7 +9,8 @@ A command-line tool and web application for analyzing Swedish textbook pages usi
 - **🔄 Multi-Provider Support**: Choose between OpenAI (GPT-4o) or Google Gemini for LLM processing
 - **📸 OCR Processing**: Extract text from Swedish textbook page images using vision-enabled LLMs
 - **🎓 Grammar Analysis**: Identify and explain grammatical patterns and rules
-- **🔑 Vocabulary Extraction**: Generate word banks with English translations
+- **🔑 Vocabulary Extraction**: Generate word banks with English translations and contextual examples
+- **💾 Vocabulary Persistence**: Save vocabulary to SQLite database for long-term learning tracking
 - **🔗 Resource Discovery**: Find relevant learning resources from trusted Swedish language sites
 - **✨ Rich Output**: Beautiful console output with emojis and formatting
 - **📝 Export Options**: Output results to console or markdown format
@@ -106,6 +107,8 @@ uvicorn runestone.api.main:app --reload
 The API will be available at `http://localhost:8010` with the following endpoints:
 
 - `POST /api/process`: Upload an image and get analysis results
+- `POST /api/vocabulary`: Save vocabulary items to the database
+- `GET /api/vocabulary`: Retrieve all saved vocabulary items
 - `GET /api/health`: Health check endpoint
 
 API documentation is available at `http://localhost:8010/docs`.
@@ -162,14 +165,14 @@ When you process a Swedish textbook page, Runestone will provide:
 └────────────────────────────────────────────────────────────────┘
 
 🔑 Word Bank
-┌─────────────┬───────────────────────────────────────────────────┐
-│   Svenska   │                     English                      │
-├─────────────┼───────────────────────────────────────────────────┤
-│ hej         │ hello                                            │
-│ jag heter   │ my name is                                       │
-│ vad         │ what                                             │
-│ kommer från │ come from                                        │
-└─────────────┴───────────────────────────────────────────────────┘
+┌─────────────┬───────────────────────────────────────────────────┬───────────────────────────────────────────────────┐
+│   Svenska   │                     English                      │                Example Phrase                 │
+├─────────────┼───────────────────────────────────────────────────┼───────────────────────────────────────────────────┤
+│ hej         │ hello                                            │ Hej, jag heter Anna.                         │
+│ jag heter   │ my name is                                       │ Jag heter Anna.                               │
+│ vad         │ what                                             │ Vad heter du?                                 │
+│ kommer från │ come from                                        │ Jag kommer från Sverige.                      │
+└─────────────┴───────────────────────────────────────────────────┴───────────────────────────────────────────────────┘
 
 🔗 Extra Resources
 ┌────────────────────────────────────────────────────────────────┐
@@ -289,6 +292,11 @@ The project uses several tools for code quality:
 src/runestone/
 ├── cli.py              # Command-line interface
 ├── config.py           # Centralized configuration management
+├── db/                 # Database layer
+│   ├── __init__.py
+│   ├── database.py     # SQLAlchemy engine and session management
+│   ├── models.py       # Database table models
+│   └── repository.py   # Data access layer for vocabulary operations
 ├── api/                # REST API layer
 │   ├── __init__.py
 │   ├── main.py         # FastAPI application setup
@@ -313,12 +321,14 @@ tests/
 ├── test_api.py        # API tests
 ├── test_ocr.py        # OCR processing tests
 ├── test_analyzer.py   # Content analysis tests
+├── test_vocabulary.py # Vocabulary database tests
 └── test_integration.py # Integration tests
 ```
 
 ## 📋 Requirements
 
 - **Python**: 3.13+
+- **Database**: SQLite (built-in) or PostgreSQL/MySQL (optional)
 - **API Key**: Choose one:
   - OpenAI API key with GPT-4o access (recommended)
   - Google Gemini API key with vision capabilities
@@ -338,6 +348,9 @@ tests/
 
 **Gemini Configuration:**
 - `GEMINI_API_KEY`: Your Google Gemini API key (required for Gemini provider)
+
+**Database Configuration:**
+- `DATABASE_URL`: Database connection URL (default: `sqlite:///./runestone.db`)
 
 **General Settings:**
 - `VERBOSE`: Enable verbose logging (`true` or `false`, default: `false`)
@@ -360,6 +373,9 @@ OPENAI_MODEL=gpt-4o-mini
 
 # Gemini settings (if using Gemini)
 GEMINI_API_KEY=your_gemini_api_key_here
+
+# Database settings
+DATABASE_URL=sqlite:///./runestone.db
 
 # General settings
 VERBOSE=false

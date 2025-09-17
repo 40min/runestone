@@ -2,10 +2,13 @@ import Header from './components/Header';
 import FileUpload from './components/FileUpload';
 import ProcessingStatus from './components/ProcessingStatus';
 import ResultsDisplay from './components/ResultsDisplay';
+import VocabularyView from './components/VocabularyView';
 import useImageProcessing from './hooks/useImageProcessing';
+import { useState } from 'react';
 
 function App() {
-  const { processImage, ocrResult, analysisResult, resourcesResult, processingStep, error, isProcessing } = useImageProcessing();
+  const [currentView, setCurrentView] = useState<'analyzer' | 'vocabulary'>('analyzer');
+  const { processImage, saveVocabulary, ocrResult, analysisResult, resourcesResult, processingStep, error, isProcessing } = useImageProcessing();
 
   const handleFileSelect = async (file: File) => {
     await processImage(file);
@@ -14,19 +17,25 @@ function App() {
   return (
     <div className="bg-[#1a102b] min-h-screen">
       <div className="layout-container flex h-full grow flex-col">
-        <Header />
+        <Header currentView={currentView} onViewChange={setCurrentView} />
         <main className="flex flex-1 justify-center py-12 px-4 sm:px-6 lg:px-8">
           <div className="w-full max-w-4xl space-y-10">
-            <div className="text-center">
-              <h2 className="text-4xl font-bold text-white tracking-tight sm:text-5xl">Analyze Your Swedish Textbook Page</h2>
-              <p className="mt-4 text-lg leading-8 text-gray-300">Upload an image to get an instant analysis of the text, grammar, and vocabulary.</p>
-            </div>
+            {currentView === 'analyzer' ? (
+              <>
+                <div className="text-center">
+                  <h2 className="text-4xl font-bold text-white tracking-tight sm:text-5xl">Analyze Your Swedish Textbook Page</h2>
+                  <p className="mt-4 text-lg leading-8 text-gray-300">Upload an image to get an instant analysis of the text, grammar, and vocabulary.</p>
+                </div>
 
-            <FileUpload onFileSelect={handleFileSelect} isProcessing={isProcessing} />
+                <FileUpload onFileSelect={handleFileSelect} isProcessing={isProcessing} />
 
-            {isProcessing && <ProcessingStatus isProcessing={isProcessing} processingStep={processingStep} />}
+                {isProcessing && <ProcessingStatus isProcessing={isProcessing} processingStep={processingStep} />}
 
-            {((ocrResult || analysisResult || resourcesResult) || error) && <ResultsDisplay ocrResult={ocrResult} analysisResult={analysisResult} resourcesResult={resourcesResult} error={error} />}
+                {((ocrResult || analysisResult || resourcesResult) || error) && <ResultsDisplay ocrResult={ocrResult} analysisResult={analysisResult} resourcesResult={resourcesResult} error={error} saveVocabulary={saveVocabulary} />}
+              </>
+            ) : (
+              <VocabularyView />
+            )}
           </div>
         </main>
       </div>

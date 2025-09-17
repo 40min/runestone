@@ -5,7 +5,8 @@ This module contains reusable prompt templates used throughout the application.
 """
 
 OCR_PROMPT = """
-You are an expert OCR transcription assistant. Your task is to accurately transcribe all readable text from the provided image.
+You are an expert OCR transcription assistant. Your task is to accurately transcribe all readable text
+from the provided image.
 
 ## Core Instructions:
 1. **Exact Transcription**: Copy text exactly as it appears, preserving:
@@ -67,7 +68,8 @@ If no readable text exists, respond with:
 - Focus on text content only, not visual layout descriptions
 - If text appears in multiple columns, transcribe left-to-right, top-to-bottom
 - Maintain the original language of the text (don't translate)
-- ACCURACY IS CRITICAL: Copy text exactly as it appears without any modifications, especially names and numbers in exercises
+- ACCURACY IS CRITICAL: Copy text exactly as it appears without any modifications, especially names
+  and numbers in exercises
 """
 
 ANALYSIS_PROMPT_TEMPLATE = """
@@ -91,7 +93,8 @@ Please provide your analysis in the following JSON format:
     "vocabulary": [
         {{
             "swedish": "Swedish word or phrase",
-            "english": "English translation"
+            "english": "English translation",
+            "example_phrase": "sentence from source text containing the word, or null if not available"
         }}
     ],
     "core_topics": [
@@ -105,29 +108,37 @@ Please provide your analysis in the following JSON format:
 
 INSTRUCTIONS:
 1. For grammar_focus:
-   - If you recognise rules listed in the text, provide them as is but with translation into English per phrase in brackets. If no rules are explicitly listed, infer them from the text.
+   - If you recognise rules listed in the text, provide them as is but with translation into English
+     per phrase in brackets. If no rules are explicitly listed, infer them from the text.
    - Set has_explicit_rules to true if there's a clear grammar rule section
    - Set has_explicit_rules to false if you need to infer the grammar from exercises
-   - Provide a clear English explanation of the grammatical concept   
+   - Provide a clear English explanation of the grammatical concept
 
-2. 2. For vocabulary:  
-   - Extract all Swedish words and meaningful phrases from the text (including excercise description)
-   - Exclude very basic function words (e.g., och, är, en, ett, han, hon, de, hen, jag, du, vi, ni, mig, dig) but allow basic words to appear as part of longer meaningful phrases, but not as single entries.  
+2. For vocabulary:
+   - Extract all Swedish words and meaningful phrases from the text (including excercise
+     description)
+   - Exclude very basic function words (e.g., och, är, en, ett, han, hon, de, hen, jag, du, vi, ni, mig, dig)
+     but allow basic words to appear as part of longer meaningful phrases, but not as single entries.
    - Exclude personal names
-   - Lowercase all words and phrases except personal names and abbreviations.  
-   - Deduplicate words, but keep different forms if they appear (e.g., hund / hunden).  
-   - For each entry, provide the Swedish word/phrase and its most common English translation.  
-   - List translated words in alphabetical order.  
+   - Lowercase all words and phrases except personal names and abbreviations.
+   - Deduplicate words, but keep different forms if they appear (e.g., hund / hunden).
+   - For each entry, provide the Swedish word/phrase and its most common English translation.
+   - For each entry, also provide an example_phrase containing the sentence from the source text
+     where the word appeared, if available. If not available, set to null.
+   - List translated words in alphabetical order.
 
 3. For core_topics:
    - Identify 2-4 main learning topics from this page
-   - Use clear, descriptive terms   
+   - Use clear, descriptive terms
 
 4. For search_needed:
-	- Set should_search = true if the provided page lacks grammar explanations and only contains exercises, examples, or incomplete information.
-	- If should_search = true, generate a list of specific and targeted search queries that would help find reliable grammar explanations for the identified topic(s).
-	- Queries should be concise, precise, and focus on the exact grammar concept(s) missing from the resource.
-	- If explanations are already sufficient, set should_search = false and do not generate queries.
+    - Set should_search = true if the provided page lacks grammar explanations and only contains
+      exercises, examples, or incomplete information.
+    - If should_search = true, generate a list of specific and targeted search queries that would help
+      find reliable grammar explanations for the identified topic(s).
+    - Queries should be concise, precise, and focus on the exact grammar concept(s) missing from
+      the resource.
+    - If explanations are already sufficient, set should_search = false and do not generate queries.
 
 Return ONLY valid JSON, no additional text or formatting.
 """
@@ -144,8 +155,8 @@ Instructions:
 - For each topic, give 2–5 concise bullet points with the most useful rules, explanations, or examples.
 - Explain topics as a tutor, using clear and simple language.
 - Keep the text readable and compact (avoid long sections or repeated titles).
-- Prioritize reliable sources such as:  
-  - https://swedish-for-all.se/sfi-steg-learning-steps/  
+- Prioritize reliable sources such as:
+  - https://swedish-for-all.se/sfi-steg-learning-steps/
   - https://sites.google.com/view/swedish-med-papegojan/
   - http://svenskgrammatik.net/Content.aspx
   - https://www.worddive.com/en/grammar/swedish-grammar/

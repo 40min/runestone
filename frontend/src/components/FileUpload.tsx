@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Button, Box, Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { Upload } from "lucide-react";
+import { CustomButton } from "./ui";
 
 interface FileUploadProps {
   onFileSelect: (file: File) => void;
@@ -128,7 +129,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
           </Typography>
         </>
       )}
-      <Button
+      <CustomButton
         onClick={handleButtonClick}
         disabled={isProcessing}
         sx={{
@@ -137,21 +138,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
           width: "auto",
           maxWidth: "200px",
           height: "2rem",
-          px: 3,
-          backgroundColor: "var(--primary-color)",
-          color: "#111714",
-          fontSize: "0.8rem",
-          fontWeight: 600,
-          borderRadius: "0.375rem",
-          "&:hover": {
-            backgroundColor: "var(--primary-color)",
-            opacity: 0.9,
-          },
-          transition: "all 0.2s",
         }}
       >
         Browse Files
-      </Button>
+      </CustomButton>
       <input
         ref={fileInputRef}
         type="file"

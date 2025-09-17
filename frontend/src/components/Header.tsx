@@ -1,8 +1,14 @@
 import React from 'react';
 import { Typography, Box } from '@mui/material';
 import { Diamond } from 'lucide-react';
+import { CustomButton } from './ui';
 
-const Header: React.FC = () => {
+interface HeaderProps {
+  currentView: 'analyzer' | 'vocabulary';
+  onViewChange: (view: 'analyzer' | 'vocabulary') => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
   return (
     <header>
       <Box
@@ -32,8 +38,35 @@ const Header: React.FC = () => {
           Runestone
         </Typography>
       </Box>
-      <Box sx={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-        {/* Additional header content can go here */}
+      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+        <CustomButton
+          variant="secondary"
+          onClick={() => onViewChange('analyzer')}
+          sx={{
+            color: currentView === 'analyzer' ? 'var(--primary-color)' : '#9ca3af',
+            backgroundColor: currentView === 'analyzer' ? 'rgba(147, 51, 234, 0.1)' : 'transparent',
+            '&:hover': {
+              color: 'white',
+              backgroundColor: currentView === 'analyzer' ? 'rgba(147, 51, 234, 0.2)' : 'rgba(156, 163, 175, 0.1)',
+            },
+          }}
+        >
+          Analyzer
+        </CustomButton>
+        <CustomButton
+          variant="secondary"
+          onClick={() => onViewChange('vocabulary')}
+          sx={{
+            color: currentView === 'vocabulary' ? 'var(--primary-color)' : '#9ca3af',
+            backgroundColor: currentView === 'vocabulary' ? 'rgba(147, 51, 234, 0.1)' : 'transparent',
+            '&:hover': {
+              color: 'white',
+              backgroundColor: currentView === 'vocabulary' ? 'rgba(147, 51, 234, 0.2)' : 'rgba(156, 163, 175, 0.1)',
+            },
+          }}
+        >
+          Vocabulary
+        </CustomButton>
       </Box>
       </Box>
     </header>

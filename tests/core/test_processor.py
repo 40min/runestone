@@ -2,16 +2,15 @@
 Tests for the processor module.
 """
 
-import time
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
 
 from runestone.config import Settings
-from runestone.core.processor import RunestoneProcessor
 from runestone.core.console import setup_console
 from runestone.core.exceptions import RunestoneError
+from runestone.core.processor import RunestoneProcessor
 
 
 class TestRunestoneProcessor:
@@ -28,7 +27,9 @@ class TestRunestoneProcessor:
     @patch("runestone.core.processor.OCRProcessor")
     @patch("runestone.core.processor.ContentAnalyzer")
     @patch("runestone.core.processor.ResultFormatter")
-    def test_stateless_workflow_timing_logs(self, mock_formatter, mock_analyzer, mock_ocr, mock_get_logger, mock_image_open):
+    def test_stateless_workflow_timing_logs(
+        self, mock_formatter, mock_analyzer, mock_ocr, mock_get_logger, mock_image_open
+    ):
         """Test that timing logs are generated for each step in stateless workflow."""
         # Mock PIL Image
         mock_image = Mock()
@@ -40,10 +41,7 @@ class TestRunestoneProcessor:
         mock_get_logger.return_value = mock_logger
 
         # Mock OCR result
-        mock_ocr_result = {
-            "text": "Sample Swedish text",
-            "character_count": 20
-        }
+        mock_ocr_result = {"text": "Sample Swedish text", "character_count": 20}
         mock_ocr_instance = Mock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
         mock_ocr.return_value = mock_ocr_instance
@@ -53,7 +51,7 @@ class TestRunestoneProcessor:
             "vocabulary": [{"swedish": "hej", "english": "hello"}],
             "grammar_focus": {"topic": "greetings"},
             "core_topics": ["greetings"],
-            "search_needed": {"should_search": False}
+            "search_needed": {"should_search": False},
         }
         mock_analyzer_instance = Mock()
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
@@ -61,7 +59,14 @@ class TestRunestoneProcessor:
         mock_analyzer.return_value = mock_analyzer_instance
 
         # Mock time.time to simulate durations
-        time_values = [0.0, 1.5, 1.5, 3.2, 3.2, 4.8]  # Start OCR, end OCR, start analysis, end analysis, start extra, end extra
+        time_values = [
+            0.0,
+            1.5,
+            1.5,
+            3.2,
+            3.2,
+            4.8,
+        ]  # Start OCR, end OCR, start analysis, end analysis, start extra, end extra
         with patch("runestone.core.processor.time.time", side_effect=time_values):
             processor = RunestoneProcessor(settings=self.settings, verbose=True)
 
@@ -76,12 +81,6 @@ class TestRunestoneProcessor:
         assert resources_result == "Extra info"
 
         # Verify timing logs were called
-        expected_calls = [
-            ("OCR completed in 1.50 seconds",),
-            ("Analysis completed in 1.70 seconds",),
-            ("Resource search completed in 1.60 seconds",)
-        ]
-
         # Check that logger.info was called with timing messages
         info_calls = [call for call in mock_logger.info.call_args_list if "completed in" in str(call)]
         assert len(info_calls) == 3
@@ -98,7 +97,9 @@ class TestRunestoneProcessor:
     @patch("runestone.core.processor.OCRProcessor")
     @patch("runestone.core.processor.ContentAnalyzer")
     @patch("runestone.core.processor.ResultFormatter")
-    def test_stateless_workflow_no_verbose_no_timing_logs(self, mock_formatter, mock_analyzer, mock_ocr, mock_get_logger, mock_image_open):
+    def test_stateless_workflow_no_verbose_no_timing_logs(
+        self, mock_formatter, mock_analyzer, mock_ocr, mock_get_logger, mock_image_open
+    ):
         """Test that timing logs are not generated when verbose is False."""
         # Mock PIL Image
         mock_image = Mock()
@@ -110,10 +111,7 @@ class TestRunestoneProcessor:
         mock_get_logger.return_value = mock_logger
 
         # Mock OCR result
-        mock_ocr_result = {
-            "text": "Sample Swedish text",
-            "character_count": 20
-        }
+        mock_ocr_result = {"text": "Sample Swedish text", "character_count": 20}
         mock_ocr_instance = Mock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
         mock_ocr.return_value = mock_ocr_instance
@@ -123,7 +121,7 @@ class TestRunestoneProcessor:
             "vocabulary": [{"swedish": "hej", "english": "hello"}],
             "grammar_focus": {"topic": "greetings"},
             "core_topics": ["greetings"],
-            "search_needed": {"should_search": False}
+            "search_needed": {"should_search": False},
         }
         mock_analyzer_instance = Mock()
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
@@ -151,7 +149,9 @@ class TestRunestoneProcessor:
     @patch("runestone.core.processor.OCRProcessor")
     @patch("runestone.core.processor.ContentAnalyzer")
     @patch("runestone.core.processor.ResultFormatter")
-    def test_stateless_workflow_exception_handling(self, mock_formatter, mock_analyzer, mock_ocr, mock_get_logger, mock_image_open):
+    def test_stateless_workflow_exception_handling(
+        self, mock_formatter, mock_analyzer, mock_ocr, mock_get_logger, mock_image_open
+    ):
         """Test exception handling in stateless workflow."""
         # Mock PIL Image
         mock_image = Mock()
@@ -189,10 +189,7 @@ class TestRunestoneProcessor:
         mock_image_open.return_value = mock_image
 
         # Mock OCR result
-        mock_ocr_result = {
-            "text": "Sample Swedish text",
-            "character_count": 20
-        }
+        mock_ocr_result = {"text": "Sample Swedish text", "character_count": 20}
         mock_ocr_instance = Mock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
         mock_ocr.return_value = mock_ocr_instance
@@ -213,7 +210,7 @@ class TestRunestoneProcessor:
             "vocabulary": [{"swedish": "hej", "english": "hello"}],
             "grammar_focus": {"topic": "greetings"},
             "core_topics": ["greetings"],
-            "search_needed": {"should_search": False}
+            "search_needed": {"should_search": False},
         }
         mock_analyzer_instance = Mock()
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
@@ -239,20 +236,23 @@ class TestRunestoneProcessor:
             "vocabulary": [{"swedish": "hej", "english": "hello"}],
             "grammar_focus": {"topic": "greetings"},
             "core_topics": ["greetings"],
-            "search_needed": {"should_search": True}
+            "search_needed": {"should_search": True},
         }
 
         processor = RunestoneProcessor(settings=self.settings, verbose=False)
         result = processor.run_resource_search(mock_analysis_data)
 
         assert result == mock_resources
+
     @patch("PIL.Image.open")
     @patch("runestone.core.processor.get_logger")
     @patch("runestone.core.processor.OCRProcessor")
     @patch("runestone.core.processor.ContentAnalyzer")
     @patch("runestone.core.processor.ResultFormatter")
     @patch("builtins.open")
-    def test_process_image_success(self, mock_open, mock_formatter, mock_analyzer, mock_ocr, mock_get_logger, mock_image_open):
+    def test_process_image_success(
+        self, mock_open, mock_formatter, mock_analyzer, mock_ocr, mock_get_logger, mock_image_open
+    ):
         """Test successful image processing through complete workflow."""
         # Mock file reading with context manager
         mock_file = Mock()
@@ -270,10 +270,7 @@ class TestRunestoneProcessor:
         mock_get_logger.return_value = mock_logger
 
         # Mock OCR result
-        mock_ocr_result = {
-            "text": "Sample Swedish text",
-            "character_count": 20
-        }
+        mock_ocr_result = {"text": "Sample Swedish text", "character_count": 20}
         mock_ocr_instance = Mock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
         mock_ocr.return_value = mock_ocr_instance
@@ -283,7 +280,7 @@ class TestRunestoneProcessor:
             "vocabulary": [{"swedish": "hej", "english": "hello"}],
             "grammar_focus": {"topic": "greetings"},
             "core_topics": ["greetings"],
-            "search_needed": {"should_search": False}
+            "search_needed": {"should_search": False},
         }
         mock_analyzer_instance = Mock()
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
@@ -317,7 +314,9 @@ class TestRunestoneProcessor:
     @patch("runestone.core.processor.ContentAnalyzer")
     @patch("runestone.core.processor.ResultFormatter")
     @patch("builtins.open")
-    def test_process_image_no_text_extracted(self, mock_open, mock_formatter, mock_analyzer, mock_ocr, mock_get_logger, mock_image_open):
+    def test_process_image_no_text_extracted(
+        self, mock_open, mock_formatter, mock_analyzer, mock_ocr, mock_get_logger, mock_image_open
+    ):
         """Test process_image when no text is extracted from image."""
         # Mock file reading with context manager
         mock_file = Mock()
@@ -335,10 +334,7 @@ class TestRunestoneProcessor:
         mock_get_logger.return_value = mock_logger
 
         # Mock OCR result with empty text
-        mock_ocr_result = {
-            "text": "",
-            "character_count": 0
-        }
+        mock_ocr_result = {"text": "", "character_count": 0}
         mock_ocr_instance = Mock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
         mock_ocr.return_value = mock_ocr_instance
@@ -356,7 +352,9 @@ class TestRunestoneProcessor:
     @patch("runestone.core.processor.ContentAnalyzer")
     @patch("runestone.core.processor.ResultFormatter")
     @patch("builtins.open")
-    def test_process_image_ocr_failure(self, mock_open, mock_formatter, mock_analyzer, mock_ocr, mock_get_logger, mock_image_open):
+    def test_process_image_ocr_failure(
+        self, mock_open, mock_formatter, mock_analyzer, mock_ocr, mock_get_logger, mock_image_open
+    ):
         """Test process_image when OCR processing fails."""
         # Mock file reading with context manager
         mock_file = Mock()
