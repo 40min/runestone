@@ -1,10 +1,20 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Box, Typography } from "@mui/material";
 import { useRecentVocabulary } from "../hooks/useVocabulary";
-import { LoadingSpinner, ErrorAlert, SectionTitle, DataTable, StyledCheckbox } from "./ui";
+import { LoadingSpinner, ErrorAlert, SectionTitle, DataTable, StyledCheckbox, SearchInput } from "./ui";
 
 const VocabularyView: React.FC = () => {
-  const { recentVocabulary, loading, error } = useRecentVocabulary();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const { recentVocabulary, loading, error } = useRecentVocabulary(debouncedSearchTerm);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -18,13 +28,21 @@ const VocabularyView: React.FC = () => {
     <Box sx={{ py: 8 }}>
       <SectionTitle>Recent Vocabulary</SectionTitle>
 
+      <SearchInput
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        placeholder="Search vocabulary..."
+      />
+
       {recentVocabulary.length === 0 ? (
         <Box sx={{ textAlign: "center", py: 8 }}>
           <Typography sx={{ color: "#9ca3af", mb: 2 }}>
-            No vocabulary saved yet.
+            {debouncedSearchTerm ? "No vocabulary matches your search." : "No vocabulary saved yet."}
           </Typography>
           <Typography sx={{ color: "#6b7280" }}>
-            Analyze some text and save vocabulary items to see them here.
+            {debouncedSearchTerm
+              ? "Try a different search term."
+              : "Analyze some text and save vocabulary items to see them here."}
           </Typography>
         </Box>
       ) : (

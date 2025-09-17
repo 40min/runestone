@@ -1,12 +1,17 @@
 /// <reference types="vitest/globals" />
 /// <reference types="@testing-library/jest-dom" />
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi } from 'vitest';
 
 // Mock the useVocabulary hook
 vi.mock('../hooks/useVocabulary', () => ({
   default: vi.fn(),
-  useRecentVocabulary: vi.fn(),
+  useRecentVocabulary: vi.fn(() => ({
+    recentVocabulary: [],
+    loading: false,
+    error: null,
+    refetch: vi.fn(),
+  })),
 }));
 
 import VocabularyView from "./VocabularyView";
@@ -15,6 +20,10 @@ import { useRecentVocabulary } from '../hooks/useVocabulary';
 const mockUseRecentVocabulary = vi.mocked(useRecentVocabulary);
 
 describe("VocabularyView", () => {
+  beforeEach(() => {
+    mockUseRecentVocabulary.mockClear();
+  });
+
   it("renders loading state", () => {
     mockUseRecentVocabulary.mockReturnValue({
       recentVocabulary: [],
@@ -55,6 +64,59 @@ describe("VocabularyView", () => {
     expect(screen.getByText("Recent Vocabulary")).toBeInTheDocument();
     expect(screen.getByText("No vocabulary saved yet.")).toBeInTheDocument();
     expect(screen.getByText("Analyze some text and save vocabulary items to see them here.")).toBeInTheDocument();
+  });
+
+  it("renders search input", () => {
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<VocabularyView />);
+
+    const searchInput = screen.getByPlaceholderText("Search vocabulary...");
+    expect(searchInput).toBeInTheDocument();
+  });
+
+  it("calls useRecentVocabulary with search term after debouncing", async () => {
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<VocabularyView />);
+
+    const searchInput = screen.getByPlaceholderText("Search vocabulary...");
+    fireEvent.change(searchInput, { target: { value: 'hej' } });
+
+    // Wait for debouncing
+    await waitFor(() => {
+      expect(mockUseRecentVocabulary).toHaveBeenCalledWith('hej');
+    }, { timeout: 400 });
+  });
+
+    it("renders empty search state when search returns no results", async () => {
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<VocabularyView />);
+
+    const searchInput = screen.getByPlaceholderText("Search vocabulary...");
+    fireEvent.change(searchInput, { target: { value: 'nonexistent' } });
+
+    // Wait for debouncing to complete
+    await waitFor(() => {
+      expect(screen.getByText("No vocabulary matches your search.")).toBeInTheDocument();
+      expect(screen.getByText("Try a different search term.")).toBeInTheDocument();
+    }, { timeout: 400 });
   });
 
   it("renders vocabulary table with data", () => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { API_BASE_URL } from '../config';
 
 interface SavedVocabularyItem {
@@ -67,17 +67,23 @@ const useVocabulary = (): UseVocabularyReturn => {
 
 export default useVocabulary;
 
-export const useRecentVocabulary = (): UseRecentVocabularyReturn => {
+export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyReturn => {
   const [recentVocabulary, setRecentVocabulary] = useState<SavedVocabularyItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const hasFetchedRef = useRef(false);
 
-  const fetchRecentVocabulary = async () => {
+  const fetchRecentVocabulary = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/vocabulary?limit=20`);
+      const params = new URLSearchParams();
+      if (searchQuery) {
+        params.append('search_query', searchQuery);
+        params.append('limit', '100');
+      } else {
+        params.append('limit', '20');
+      }
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary?${params.toString()}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch recent vocabulary: HTTP ${response.status}`);
       }
@@ -89,14 +95,11 @@ export const useRecentVocabulary = (): UseRecentVocabularyReturn => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchQuery]);
 
   useEffect(() => {
-    if (!hasFetchedRef.current) {
-      hasFetchedRef.current = true;
-      fetchRecentVocabulary();
-    }
-  }, []);
+    fetchRecentVocabulary();
+  }, [searchQuery, fetchRecentVocabulary]);
 
   return {
     recentVocabulary,

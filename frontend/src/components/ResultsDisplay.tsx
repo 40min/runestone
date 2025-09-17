@@ -88,7 +88,9 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     message: "",
     severity: "success",
   });
-  const [checkedItems, setCheckedItems] = useState<boolean[]>([]);
+  const [checkedItems, setCheckedItems] = useState<boolean[]>(() =>
+    analysisResult ? new Array(analysisResult.vocabulary.length).fill(false) : []
+  );
 
   useEffect(() => {
     if (analysisResult) {
