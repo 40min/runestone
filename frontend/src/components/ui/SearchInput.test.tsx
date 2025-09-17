@@ -47,4 +47,28 @@ describe("SearchInput", () => {
     const input = screen.getByPlaceholderText("Search...");
     expect(input).toBeInTheDocument();
   });
+
+  it("renders search button when onSearch is provided", () => {
+    render(<SearchInput value="" onChange={vi.fn()} onSearch={vi.fn()} />);
+
+    const button = screen.getByRole("button", { name: /search/i });
+    expect(button).toBeInTheDocument();
+  });
+
+  it("does not render search button when onSearch is not provided", () => {
+    render(<SearchInput value="" onChange={vi.fn()} />);
+
+    const button = screen.queryByRole("button", { name: /search/i });
+    expect(button).not.toBeInTheDocument();
+  });
+
+  it("calls onSearch when search button is clicked", () => {
+    const mockOnSearch = vi.fn();
+    render(<SearchInput value="" onChange={vi.fn()} onSearch={mockOnSearch} />);
+
+    const button = screen.getByRole("button", { name: /search/i });
+    fireEvent.click(button);
+
+    expect(mockOnSearch).toHaveBeenCalledTimes(1);
+  });
 });

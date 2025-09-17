@@ -80,7 +80,21 @@ describe("VocabularyView", () => {
     expect(searchInput).toBeInTheDocument();
   });
 
-  it("calls useRecentVocabulary with search term after debouncing", async () => {
+  it("renders search button", () => {
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<VocabularyView />);
+
+    const searchButton = screen.getByRole("button", { name: /search/i });
+    expect(searchButton).toBeInTheDocument();
+  });
+
+  it("calls useRecentVocabulary when search button is clicked", () => {
     mockUseRecentVocabulary.mockReturnValue({
       recentVocabulary: [],
       loading: false,
@@ -91,15 +105,34 @@ describe("VocabularyView", () => {
     render(<VocabularyView />);
 
     const searchInput = screen.getByPlaceholderText("Search vocabulary...");
-    fireEvent.change(searchInput, { target: { value: 'hej' } });
+    const searchButton = screen.getByRole("button", { name: /search/i });
 
-    // Wait for debouncing
-    await waitFor(() => {
-      expect(mockUseRecentVocabulary).toHaveBeenCalledWith('hej');
-    }, { timeout: 400 });
+    fireEvent.change(searchInput, { target: { value: 'test' } });
+    fireEvent.click(searchButton);
+
+    expect(mockUseRecentVocabulary).toHaveBeenCalledWith('test');
   });
 
-    it("renders empty search state when search returns no results", async () => {
+  it("calls useRecentVocabulary with search term when >3 characters", async () => {
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    render(<VocabularyView />);
+
+    const searchInput = screen.getByPlaceholderText("Search vocabulary...");
+    fireEvent.change(searchInput, { target: { value: 'hello' } });
+
+    // Should call immediately when >3 chars
+    await waitFor(() => {
+      expect(mockUseRecentVocabulary).toHaveBeenCalledWith('hello');
+    });
+  });
+
+  it("renders empty search state when search returns no results", async () => {
     mockUseRecentVocabulary.mockReturnValue({
       recentVocabulary: [],
       loading: false,
@@ -112,11 +145,11 @@ describe("VocabularyView", () => {
     const searchInput = screen.getByPlaceholderText("Search vocabulary...");
     fireEvent.change(searchInput, { target: { value: 'nonexistent' } });
 
-    // Wait for debouncing to complete
+    // Should trigger search immediately since >3 chars
     await waitFor(() => {
       expect(screen.getByText("No vocabulary matches your search.")).toBeInTheDocument();
       expect(screen.getByText("Try a different search term.")).toBeInTheDocument();
-    }, { timeout: 400 });
+    });
   });
 
   it("renders vocabulary table with data", () => {

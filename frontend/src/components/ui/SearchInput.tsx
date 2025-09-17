@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, TextField } from '@mui/material';
+import { Box, TextField, Button } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
 
 interface SearchInputProps {
@@ -8,6 +8,7 @@ interface SearchInputProps {
   placeholder?: string;
   fullWidth?: boolean;
   sx?: SxProps<Theme>;
+  onSearch?: () => void;
 }
 
 const SearchInput: React.FC<SearchInputProps> = ({
@@ -16,9 +17,10 @@ const SearchInput: React.FC<SearchInputProps> = ({
   placeholder = "Search...",
   fullWidth = true,
   sx = {},
+  onSearch,
 }) => {
   return (
-    <Box sx={{ mb: 4, maxWidth: 400, ...sx }}>
+    <Box sx={{ mb: 4, maxWidth: 400, display: 'flex', alignItems: 'center', ...sx }}>
       <TextField
         fullWidth={fullWidth}
         variant="outlined"
@@ -44,6 +46,22 @@ const SearchInput: React.FC<SearchInputProps> = ({
           },
         }}
       />
+      {onSearch && (
+        <Button
+          variant="contained"
+          onClick={onSearch}
+          sx={{
+            ml: 1,
+            backgroundColor: "#60a5fa",
+            color: "white",
+            "&:hover": {
+              backgroundColor: "#3b82f6",
+            },
+          }}
+        >
+          Search
+        </Button>
+      )}
     </Box>
   );
 };
