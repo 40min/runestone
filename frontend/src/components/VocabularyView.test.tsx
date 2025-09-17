@@ -65,6 +65,8 @@ describe("VocabularyView", () => {
         word_phrase: "hej",
         translation: "hello",
         example_phrase: "Hej, hur mår du?",
+        in_learn: true,
+        showed_times: 5,
         created_at: "2023-10-27T10:00:00Z",
       },
       {
@@ -73,6 +75,8 @@ describe("VocabularyView", () => {
         word_phrase: "bra",
         translation: "good",
         example_phrase: null,
+        in_learn: false,
+        showed_times: 0,
         created_at: "2023-10-28T10:05:00Z",
       },
     ];
@@ -92,6 +96,8 @@ describe("VocabularyView", () => {
     expect(screen.getByText("Swedish")).toBeInTheDocument();
     expect(screen.getByText("English")).toBeInTheDocument();
     expect(screen.getByText("Example Phrase")).toBeInTheDocument();
+    expect(screen.getByText("In Learning")).toBeInTheDocument();
+    expect(screen.getByText("Shown Times")).toBeInTheDocument();
     expect(screen.getByText("Saved")).toBeInTheDocument();
 
     // Check vocabulary data
@@ -116,6 +122,8 @@ describe("VocabularyView", () => {
         word_phrase: "test",
         translation: "test translation",
         example_phrase: null,
+        in_learn: true,
+        showed_times: 2,
         created_at: "2023-10-27T10:00:00Z",
       },
     ];

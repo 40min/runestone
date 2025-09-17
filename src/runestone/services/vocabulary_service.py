@@ -57,6 +57,8 @@ class VocabularyService:
                     word_phrase=vocab.word_phrase,
                     translation=vocab.translation,
                     example_phrase=vocab.example_phrase,
+                    in_learn=vocab.in_learn,
+                    showed_times=vocab.showed_times,
                     created_at=vocab.created_at.isoformat() if vocab.created_at else None,
                     updated_at=vocab.updated_at.isoformat() if vocab.updated_at else None,
                 )

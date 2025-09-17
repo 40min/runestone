@@ -111,5 +111,7 @@ class Vocabulary(BaseModel):
     word_phrase: str
     translation: str
     example_phrase: Optional[str] = None
+    in_learn: bool = True
+    showed_times: int = 0
     created_at: str
     updated_at: str

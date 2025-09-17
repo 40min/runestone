@@ -57,6 +57,8 @@ class TestVocabularyService:
         assert apple_vocab.translation == "an apple"
         assert apple_vocab.example_phrase == "Jag äter ett äpple varje dag."
         assert apple_vocab.user_id == 1
+        assert apple_vocab.in_learn is True
+        assert apple_vocab.showed_times == 0
 
     def test_save_vocabulary_duplicate(self, service, db_session):
         """Test that duplicate word_phrases are not added."""
@@ -82,15 +84,31 @@ class TestVocabularyService:
         assert apple_vocab.word_phrase == "ett äpple"
         assert apple_vocab.translation == "an apple"
         assert apple_vocab.example_phrase == "Jag äter ett äpple varje dag."
+        assert apple_vocab.in_learn is True
+        assert apple_vocab.showed_times == 0
 
     def test_get_vocabulary(self, service, db_session):
         """Test retrieving all vocabulary items."""
         # Add some test data
         vocab1 = VocabularyModel(
-            user_id=1, word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple varje dag."
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            example_phrase="Jag äter ett äpple varje dag.",
+            in_learn=True,
+            showed_times=0,
         )
-        vocab2 = VocabularyModel(user_id=1, word_phrase="en banan", translation="a banana", example_phrase=None)
-        vocab3 = VocabularyModel(user_id=2, word_phrase="ett päron", translation="a pear")
+        vocab2 = VocabularyModel(
+            user_id=1,
+            word_phrase="en banan",
+            translation="a banana",
+            example_phrase=None,
+            in_learn=True,
+            showed_times=0,
+        )
+        vocab3 = VocabularyModel(
+            user_id=2, word_phrase="ett päron", translation="a pear", in_learn=True, showed_times=0
+        )
 
         db_session.add_all([vocab1, vocab2, vocab3])
         db_session.commit()
@@ -118,6 +136,8 @@ class TestVocabularyService:
             translation="an apple",
             example_phrase="Jag äter ett äpple varje dag.",
             created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+            in_learn=True,
+            showed_times=0,
         )
         vocab2 = VocabularyModel(
             user_id=1,
@@ -125,15 +145,24 @@ class TestVocabularyService:
             translation="a banana",
             example_phrase=None,
             created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+            in_learn=True,
+            showed_times=0,
         )
         vocab3 = VocabularyModel(
             user_id=1,
             word_phrase="ett päron",
             translation="a pear",
             created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+            in_learn=True,
+            showed_times=0,
         )
         vocab4 = VocabularyModel(
-            user_id=2, word_phrase="en kiwi", translation="a kiwi", created_at=datetime(2023, 1, 4, tzinfo=timezone.utc)
+            user_id=2,
+            word_phrase="en kiwi",
+            translation="a kiwi",
+            created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
+            in_learn=True,
+            showed_times=0,
         )
 
         db_session.add_all([vocab1, vocab2, vocab3, vocab4])

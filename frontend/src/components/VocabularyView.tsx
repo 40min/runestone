@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Typography } from "@mui/material";
 import { useRecentVocabulary } from "../hooks/useVocabulary";
-import { LoadingSpinner, ErrorAlert, SectionTitle, DataTable } from "./ui";
+import { LoadingSpinner, ErrorAlert, SectionTitle, DataTable, StyledCheckbox } from "./ui";
 
 const VocabularyView: React.FC = () => {
   const { recentVocabulary, loading, error } = useRecentVocabulary();
@@ -33,6 +33,26 @@ const VocabularyView: React.FC = () => {
             { key: 'word_phrase', label: 'Swedish' },
             { key: 'translation', label: 'English' },
             { key: 'example_phrase', label: 'Example Phrase' },
+            {
+              key: 'in_learn',
+              label: 'In Learning',
+              render: (value) => (
+                <StyledCheckbox
+                  checked={value as boolean}
+                  onChange={() => {}} // TODO: Implement update functionality
+                  sx={{ pointerEvents: 'none' }} // Make it read-only for now
+                />
+              )
+            },
+            {
+              key: 'showed_times',
+              label: 'Shown Times',
+              render: (value) => (
+                <Typography sx={{ color: 'white', textAlign: 'center' }}>
+                  {value as number}
+                </Typography>
+              )
+            },
             {
               key: 'created_at',
               label: 'Saved',

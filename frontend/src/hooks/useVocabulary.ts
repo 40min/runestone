@@ -7,6 +7,8 @@ interface SavedVocabularyItem {
   word_phrase: string;
   translation: string;
   example_phrase: string | null;
+  in_learn: boolean;
+  showed_times: number;
   created_at: string;
 }
 

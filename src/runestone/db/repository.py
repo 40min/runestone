@@ -39,6 +39,8 @@ class VocabularyRepository:
                 word_phrase=item.word_phrase,
                 translation=item.translation,
                 example_phrase=item.example_phrase,
+                in_learn=True,
+                showed_times=0,
             )
             for item in items
         ]

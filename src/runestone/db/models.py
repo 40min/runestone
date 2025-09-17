@@ -4,7 +4,7 @@ SQLAlchemy models for the database.
 This module defines the database table models using SQLAlchemy ORM.
 """
 
-from sqlalchemy import Column, DateTime, Integer, Text
+from sqlalchemy import Boolean, Column, DateTime, Integer, Text
 from sqlalchemy.sql import func
 
 from .database import Base
@@ -20,5 +20,7 @@ class Vocabulary(Base):
     word_phrase = Column(Text, nullable=False, unique=True, index=True)
     translation = Column(Text, nullable=False)
     example_phrase = Column(Text, nullable=True)
+    in_learn = Column(Boolean, default=True)
+    showed_times = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
