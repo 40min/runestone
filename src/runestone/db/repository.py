@@ -74,12 +74,7 @@ class VocabularyRepository:
 
         if search_query:
             # Support wildcard (*) pattern matching, case-insensitive
-            search_pattern = search_query.replace('*', '%').lower()
-            query = query.filter(Vocabulary.word_phrase.ilike(f'%{search_pattern}%'))
+            search_pattern = search_query.replace("*", "%").lower()
+            query = query.filter(Vocabulary.word_phrase.ilike(f"%{search_pattern}%"))
 
-        return (
-            query
-            .order_by(Vocabulary.created_at.desc(), Vocabulary.id.desc())
-            .limit(limit)
-            .all()
-        )
+        return query.order_by(Vocabulary.created_at.desc(), Vocabulary.id.desc()).limit(limit).all()

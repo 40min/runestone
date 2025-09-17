@@ -300,6 +300,7 @@ class TestVocabularyEndpoints:
         assert "id" in vocab
         assert "created_at" in vocab
         assert "updated_at" in vocab
+
     def test_get_vocabulary_with_search(self, client):
         """Test getting vocabulary with search query."""
         # Save some test data
@@ -366,7 +367,6 @@ class TestVocabularyEndpoints:
         data = response.json()
         assert len(data) == 1
         assert data[0]["word_phrase"] == "ett päron"  # Most recent
-
 
 
 class TestSettingsDependency:
