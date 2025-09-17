@@ -384,3 +384,100 @@ class TestSettingsDependency:
 
         result = get_settings()
         assert result == mock_settings
+
+    def test_update_vocabulary_success(self, client):
+        """Test successful vocabulary update."""
+        # First, save some vocabulary
+        payload = {
+            "items": [
+                {
+                    "word_phrase": "ett äpple",
+                    "translation": "an apple",
+                    "example_phrase": "Jag äter ett äpple varje dag.",
+                }
+            ]
+        }
+        client.post("/api/vocabulary", json=payload)
+
+        # Get the item to find its ID
+        response = client.get("/api/vocabulary")
+        data = response.json()
+        item_id = data[0]["id"]
+
+        # Update the item
+        update_payload = {
+            "word_phrase": "ett rött äpple",
+            "translation": "a red apple",
+            "in_learn": False,
+        }
+        response = client.put(f"/api/vocabulary/{item_id}", json=update_payload)
+
+        assert response.status_code == 200
+        updated_data = response.json()
+        assert updated_data["word_phrase"] == "ett rött äpple"
+        assert updated_data["translation"] == "a red apple"
+        assert updated_data["example_phrase"] == "Jag äter ett äpple varje dag."  # Unchanged
+        assert updated_data["in_learn"] is False
+
+    def test_update_vocabulary_partial(self, client):
+        """Test updating vocabulary with partial fields."""
+        # First, save some vocabulary
+        payload = {
+            "items": [
+                {
+                    "word_phrase": "ett äpple",
+                    "translation": "an apple",
+                    "example_phrase": "Jag äter ett äpple varje dag.",
+                }
+            ]
+        }
+        client.post("/api/vocabulary", json=payload)
+
+        # Get the item to find its ID
+        response = client.get("/api/vocabulary")
+        data = response.json()
+        item_id = data[0]["id"]
+
+        # Update only one field
+        update_payload = {"in_learn": False}
+        response = client.put(f"/api/vocabulary/{item_id}", json=update_payload)
+
+        assert response.status_code == 200
+        updated_data = response.json()
+        assert updated_data["word_phrase"] == "ett äpple"  # Unchanged
+        assert updated_data["translation"] == "an apple"  # Unchanged
+        assert updated_data["in_learn"] is False
+
+    def test_update_vocabulary_not_found(self, client):
+        """Test updating a non-existent vocabulary item."""
+        update_payload = {"word_phrase": "new phrase"}
+        response = client.put("/api/vocabulary/999", json=update_payload)
+
+        assert response.status_code == 404
+        data = response.json()
+        assert "not found" in data["detail"]
+
+    def test_update_vocabulary_invalid_data(self, client):
+        """Test updating vocabulary with invalid data."""
+        # First, save some vocabulary
+        payload = {
+            "items": [
+                {
+                    "word_phrase": "ett äpple",
+                    "translation": "an apple",
+                }
+            ]
+        }
+        client.post("/api/vocabulary", json=payload)
+
+        # Get the item to find its ID
+        response = client.get("/api/vocabulary")
+        data = response.json()
+        item_id = data[0]["id"]
+
+        # Try to update with invalid data (empty word_phrase)
+        update_payload = {"word_phrase": ""}
+        response = client.put(f"/api/vocabulary/{item_id}", json=update_payload)
+
+        # Should still succeed since word_phrase is optional in update
+        assert response.status_code == 200

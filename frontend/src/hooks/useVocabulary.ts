@@ -24,6 +24,11 @@ interface UseRecentVocabularyReturn {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
+  isEditModalOpen: boolean;
+  editingItem: SavedVocabularyItem | null;
+  openEditModal: (item: SavedVocabularyItem) => void;
+  closeEditModal: () => void;
+  updateVocabularyItem: (id: number, updates: Partial<SavedVocabularyItem>) => Promise<void>;
 }
 
 const useVocabulary = (): UseVocabularyReturn => {
@@ -71,6 +76,8 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
   const [recentVocabulary, setRecentVocabulary] = useState<SavedVocabularyItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<SavedVocabularyItem | null>(null);
 
   const fetchRecentVocabulary = useCallback(async () => {
     setLoading(true);
@@ -97,6 +104,39 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
     }
   }, [searchQuery]);
 
+  const openEditModal = useCallback((item: SavedVocabularyItem) => {
+    setEditingItem(item);
+    setIsEditModalOpen(true);
+  }, []);
+
+  const closeEditModal = useCallback(() => {
+    setIsEditModalOpen(false);
+    setEditingItem(null);
+  }, []);
+
+  const updateVocabularyItem = useCallback(async (id: number, updates: Partial<SavedVocabularyItem>) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to update vocabulary item: HTTP ${response.status}`);
+      }
+
+      // Refetch the vocabulary list to reflect changes
+      await fetchRecentVocabulary();
+      closeEditModal();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update vocabulary item';
+      setError(errorMessage);
+    }
+  }, [fetchRecentVocabulary, closeEditModal]);
+
   useEffect(() => {
     fetchRecentVocabulary();
   }, [searchQuery, fetchRecentVocabulary]);
@@ -106,5 +146,10 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
     loading,
     error,
     refetch: fetchRecentVocabulary,
+    isEditModalOpen,
+    editingItem,
+    openEditModal,
+    closeEditModal,
+    updateVocabularyItem,
   };
 };

@@ -1,0 +1,220 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Modal,
+  Box,
+  TextField,
+  Typography,
+  IconButton,
+} from '@mui/material';
+import { CustomButton, StyledCheckbox } from './ui';
+
+interface SavedVocabularyItem {
+  id: number;
+  user_id: number;
+  word_phrase: string;
+  translation: string;
+  example_phrase: string | null;
+  in_learn: boolean;
+  showed_times: number;
+  created_at: string;
+}
+
+interface EditVocabularyModalProps {
+  open: boolean;
+  item: SavedVocabularyItem | null;
+  onClose: () => void;
+  onSave: (updatedItem: Partial<SavedVocabularyItem>) => void;
+}
+
+const EditVocabularyModal: React.FC<EditVocabularyModalProps> = ({
+  open,
+  item,
+  onClose,
+  onSave,
+}) => {
+  const [wordPhrase, setWordPhrase] = useState('');
+  const [translation, setTranslation] = useState('');
+  const [examplePhrase, setExamplePhrase] = useState('');
+  const [inLearn, setInLearn] = useState(false);
+
+  useEffect(() => {
+    if (item) {
+      setWordPhrase(item.word_phrase);
+      setTranslation(item.translation);
+      setExamplePhrase(item.example_phrase || '');
+      setInLearn(item.in_learn);
+    }
+  }, [item]);
+
+  const handleSave = () => {
+    if (!wordPhrase.trim() || !translation.trim()) {
+      return; // Basic validation
+    }
+
+    onSave({
+      word_phrase: wordPhrase.trim(),
+      translation: translation.trim(),
+      example_phrase: examplePhrase.trim() || null,
+      in_learn: inLearn,
+    });
+  };
+
+  const handleClose = () => {
+    onClose();
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={handleClose}
+      aria-labelledby="edit-vocabulary-modal"
+      aria-describedby="edit-vocabulary-modal-description"
+    >
+      <Box
+        sx={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: { xs: '90%', sm: 500 },
+          bgcolor: '#1f2937',
+          border: '1px solid #374151',
+          borderRadius: '0.5rem',
+          boxShadow: 24,
+          p: 4,
+          color: 'white',
+        }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mb: 3,
+          }}
+        >
+          <Typography variant="h6" component="h2">
+            Edit Vocabulary Item
+          </Typography>
+          <IconButton
+            onClick={handleClose}
+            sx={{ color: '#9ca3af', fontSize: '1.5rem' }}
+          >
+            ×
+          </IconButton>
+        </Box>
+
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <TextField
+            label="Swedish Word/Phrase"
+            value={wordPhrase}
+            onChange={(e) => setWordPhrase(e.target.value)}
+            fullWidth
+            variant="outlined"
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                color: 'white',
+                '& fieldset': {
+                  borderColor: '#374151',
+                },
+                '&:hover fieldset': {
+                  borderColor: '#6b7280',
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: 'var(--primary-color)',
+                },
+              },
+              '& .MuiInputLabel-root': {
+                color: '#9ca3af',
+                '&.Mui-focused': {
+                  color: 'var(--primary-color)',
+                },
+              },
+            }}
+          />
+
+          <TextField
+            label="English Translation"
+            value={translation}
+            onChange={(e) => setTranslation(e.target.value)}
+            fullWidth
+            variant="outlined"
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                color: 'white',
+                '& fieldset': {
+                  borderColor: '#374151',
+                },
+                '&:hover fieldset': {
+                  borderColor: '#6b7280',
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: 'var(--primary-color)',
+                },
+              },
+              '& .MuiInputLabel-root': {
+                color: '#9ca3af',
+                '&.Mui-focused': {
+                  color: 'var(--primary-color)',
+                },
+              },
+            }}
+          />
+
+          <TextField
+            label="Example Phrase (Optional)"
+            value={examplePhrase}
+            onChange={(e) => setExamplePhrase(e.target.value)}
+            fullWidth
+            variant="outlined"
+            multiline
+            rows={2}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                color: 'white',
+                '& fieldset': {
+                  borderColor: '#374151',
+                },
+                '&:hover fieldset': {
+                  borderColor: '#6b7280',
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: 'var(--primary-color)',
+                },
+              },
+              '& .MuiInputLabel-root': {
+                color: '#9ca3af',
+                '&.Mui-focused': {
+                  color: 'var(--primary-color)',
+                },
+              },
+            }}
+          />
+
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <StyledCheckbox
+              checked={inLearn}
+              onChange={setInLearn}
+              label="In Learning"
+            />
+          </Box>
+
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 2 }}>
+            <CustomButton variant="secondary" onClick={handleClose}>
+              Cancel
+            </CustomButton>
+            <CustomButton
+              variant="save"
+              onClick={handleSave}
+              disabled={!wordPhrase.trim() || !translation.trim()}
+            >
+              Save Changes
+            </CustomButton>
+          </Box>
+        </Box>
+      </Box>
+    </Modal>
+  );
+};
+
+export default EditVocabularyModal;

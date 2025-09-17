@@ -2,11 +2,21 @@ import React, { useState, useEffect } from "react";
 import { Box, Typography } from "@mui/material";
 import { useRecentVocabulary } from "../hooks/useVocabulary";
 import { LoadingSpinner, ErrorAlert, SectionTitle, DataTable, StyledCheckbox, SearchInput } from "./ui";
+import EditVocabularyModal from "./EditVocabularyModal";
 
 const VocabularyView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeSearchTerm, setActiveSearchTerm] = useState("");
-  const { recentVocabulary, loading, error } = useRecentVocabulary(activeSearchTerm);
+  const {
+    recentVocabulary,
+    loading,
+    error,
+    isEditModalOpen,
+    editingItem,
+    openEditModal,
+    closeEditModal,
+    updateVocabularyItem,
+  } = useRecentVocabulary(activeSearchTerm);
 
   useEffect(() => {
     if (searchTerm.length > 3) {
@@ -18,6 +28,17 @@ const VocabularyView: React.FC = () => {
 
   const handleSearch = () => {
     setActiveSearchTerm(searchTerm);
+  };
+
+  const handleRowClick = (row: unknown) => {
+    const item = row as typeof recentVocabulary[0];
+    openEditModal(item);
+  };
+
+  const handleSaveEdit = (updatedItem: Partial<typeof recentVocabulary[0]>) => {
+    if (editingItem) {
+      updateVocabularyItem(editingItem.id, updatedItem);
+    }
   };
 
   if (loading) {
@@ -83,8 +104,16 @@ const VocabularyView: React.FC = () => {
             },
           ]}
           data={recentVocabulary as unknown as Record<string, unknown>[]}
+          onRowClick={handleRowClick}
         />
       )}
+
+      <EditVocabularyModal
+        open={isEditModalOpen}
+        item={editingItem}
+        onClose={closeEditModal}
+        onSave={handleSaveEdit}
+      />
     </Box>
   );
 };

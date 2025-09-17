@@ -97,6 +97,15 @@ class VocabularyItemCreate(BaseModel):
     example_phrase: Optional[str] = None
 
 
+class VocabularyUpdate(BaseModel):
+    """Schema for updating vocabulary items."""
+
+    word_phrase: Optional[str] = None
+    translation: Optional[str] = None
+    example_phrase: Optional[str] = None
+    in_learn: Optional[bool] = None
+
+
 class VocabularySaveRequest(BaseModel):
     """Schema for saving vocabulary request."""
 

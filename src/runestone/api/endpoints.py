@@ -19,6 +19,7 @@ from runestone.api.schemas import (
     ResourceResponse,
     Vocabulary,
     VocabularySaveRequest,
+    VocabularyUpdate,
 )
 from runestone.config import Settings, settings
 from runestone.core.exceptions import RunestoneError
@@ -305,6 +306,53 @@ async def get_vocabulary(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve vocabulary: {str(e)}",
+        )
+
+
+@router.put(
+    "/vocabulary/{item_id}",
+    response_model=Vocabulary,
+    responses={
+        200: {"description": "Vocabulary item updated successfully"},
+        404: {"model": ErrorResponse, "description": "Vocabulary item not found"},
+        422: {"model": ErrorResponse, "description": "Validation error"},
+        500: {"model": ErrorResponse, "description": "Database error"},
+    },
+)
+async def update_vocabulary(
+    item_id: int,
+    request: VocabularyUpdate,
+    service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+) -> Vocabulary:
+    """
+    Update a vocabulary item.
+
+    This endpoint updates a specific vocabulary item by its ID.
+    Only the provided fields will be updated.
+
+    Args:
+        item_id: The ID of the vocabulary item to update
+        request: The update data
+        service: Vocabulary service
+
+    Returns:
+        Vocabulary: The updated vocabulary item
+
+    Raises:
+        HTTPException: For not found or database errors
+    """
+    try:
+        return service.update_vocabulary_item(item_id, request)
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update vocabulary: {str(e)}",
         )
 
 

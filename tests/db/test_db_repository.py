@@ -258,3 +258,86 @@ class TestVocabularyRepository:
         result = repo.get_vocabulary(limit=1, search_query="ett", user_id=1)
         assert len(result) == 1
         assert result[0].word_phrase == "ett päron"  # Most recent
+
+    def test_update_vocabulary_item(self, repo, db_session):
+        """Test updating a vocabulary item."""
+        # Add a test item
+        vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            example_phrase="Jag äter ett äpple varje dag.",
+            in_learn=True,
+            showed_times=0,
+        )
+        db_session.add(vocab)
+        db_session.commit()
+
+        # Update the item
+        updates = {
+            "word_phrase": "ett rött äpple",
+            "translation": "a red apple",
+            "in_learn": False,
+        }
+        updated_vocab = repo.update_vocabulary_item(vocab.id, user_id=1, updates=updates)
+
+        # Verify the update
+        assert updated_vocab.word_phrase == "ett rött äpple"
+        assert updated_vocab.translation == "a red apple"
+        assert updated_vocab.example_phrase == "Jag äter ett äpple varje dag."  # Unchanged
+        assert updated_vocab.in_learn is False
+        assert updated_vocab.showed_times == 0  # Unchanged
+
+        # Verify in database
+        db_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab.id).first()
+        assert db_vocab.word_phrase == "ett rött äpple"
+        assert db_vocab.translation == "a red apple"
+        assert db_vocab.in_learn is False
+
+    def test_update_vocabulary_item_partial(self, repo, db_session):
+        """Test updating a vocabulary item with partial fields."""
+        # Add a test item
+        vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            example_phrase="Jag äter ett äpple varje dag.",
+            in_learn=True,
+            showed_times=0,
+        )
+        db_session.add(vocab)
+        db_session.commit()
+
+        # Update only one field
+        updates = {"in_learn": False}
+        updated_vocab = repo.update_vocabulary_item(vocab.id, user_id=1, updates=updates)
+
+        # Verify only in_learn changed
+        assert updated_vocab.word_phrase == "ett äpple"
+        assert updated_vocab.translation == "an apple"
+        assert updated_vocab.in_learn is False
+
+    def test_update_vocabulary_item_not_found(self, repo, db_session):
+        """Test updating a non-existent vocabulary item."""
+        updates = {"word_phrase": "new phrase"}
+
+        with pytest.raises(ValueError, match="Vocabulary item with id 999 not found for user 1"):
+            repo.update_vocabulary_item(999, user_id=1, updates=updates)
+
+    def test_update_vocabulary_item_wrong_user(self, repo, db_session):
+        """Test updating a vocabulary item for wrong user."""
+        # Add a test item for user 1
+        vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            in_learn=True,
+            showed_times=0,
+        )
+        db_session.add(vocab)
+        db_session.commit()
+
+        # Try to update as user 2
+        updates = {"word_phrase": "new phrase"}
+        with pytest.raises(ValueError, match="Vocabulary item with id 1 not found for user 2"):
+            repo.update_vocabulary_item(vocab.id, user_id=2, updates=updates)

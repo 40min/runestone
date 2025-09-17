@@ -188,3 +188,60 @@ class TestVocabularyService:
         result_user2 = service.get_vocabulary(limit=20, user_id=2)
         assert len(result_user2) == 1
         assert result_user2[0].word_phrase == "en kiwi"
+
+    def test_update_vocabulary_item(self, service, db_session):
+        """Test updating a vocabulary item."""
+        from runestone.api.schemas import VocabularyUpdate
+
+        # Add a test item
+        vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            example_phrase="Jag äter ett äpple varje dag.",
+            in_learn=True,
+            showed_times=0,
+        )
+        db_session.add(vocab)
+        db_session.commit()
+
+        # Update the item
+        update_data = VocabularyUpdate(
+            word_phrase="ett rött äpple",
+            translation="a red apple",
+            in_learn=False,
+        )
+        updated_vocab = service.update_vocabulary_item(vocab.id, update_data)
+
+        # Verify the update
+        assert isinstance(updated_vocab, VocabularySchema)
+        assert updated_vocab.word_phrase == "ett rött äpple"
+        assert updated_vocab.translation == "a red apple"
+        assert updated_vocab.example_phrase == "Jag äter ett äpple varje dag."  # Unchanged
+        assert updated_vocab.in_learn is False
+        assert updated_vocab.showed_times == 0  # Unchanged
+
+    def test_update_vocabulary_item_partial(self, service, db_session):
+        """Test updating a vocabulary item with partial fields."""
+        from runestone.api.schemas import VocabularyUpdate
+
+        # Add a test item
+        vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            example_phrase="Jag äter ett äpple varje dag.",
+            in_learn=True,
+            showed_times=0,
+        )
+        db_session.add(vocab)
+        db_session.commit()
+
+        # Update only one field
+        update_data = VocabularyUpdate(in_learn=False)
+        updated_vocab = service.update_vocabulary_item(vocab.id, update_data)
+
+        # Verify only in_learn changed
+        assert updated_vocab.word_phrase == "ett äpple"
+        assert updated_vocab.translation == "an apple"
+        assert updated_vocab.in_learn is False

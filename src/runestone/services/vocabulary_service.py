@@ -10,7 +10,7 @@ from typing import List
 from sqlalchemy.orm import Session
 
 from ..api.schemas import Vocabulary as VocabularySchema
-from ..api.schemas import VocabularyItemCreate
+from ..api.schemas import VocabularyItemCreate, VocabularyUpdate
 from ..db.repository import VocabularyRepository
 
 
@@ -64,3 +64,18 @@ class VocabularyService:
                 )
             )
         return result
+
+    def update_vocabulary_item(self, item_id: int, update: VocabularyUpdate, user_id: int = 1) -> VocabularySchema:
+        """Update a vocabulary item and return the updated record."""
+        updated_vocab = self.repo.update_vocabulary_item(item_id, user_id, update.dict(exclude_unset=True))
+        return VocabularySchema(
+            id=updated_vocab.id,
+            user_id=updated_vocab.user_id,
+            word_phrase=updated_vocab.word_phrase,
+            translation=updated_vocab.translation,
+            example_phrase=updated_vocab.example_phrase,
+            in_learn=updated_vocab.in_learn,
+            showed_times=updated_vocab.showed_times,
+            created_at=updated_vocab.created_at.isoformat() if updated_vocab.created_at else None,
+            updated_at=updated_vocab.updated_at.isoformat() if updated_vocab.updated_at else None,
+        )
