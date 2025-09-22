@@ -114,17 +114,16 @@ class RuneRecallService:
         # Get the selected IDs for today
         selected_ids = daily_selection[today]
         if next_word_index >= len(selected_ids):
-            # todo: this is new change, update tests according to it
             next_word_index = 0
 
         # Fetch the next word from database
         word_id = selected_ids[next_word_index]
         db = SessionLocal()
         try:
-            # todo: move to repository level, also filter on "in_learn"
-            word = db.query(Vocabulary).filter(Vocabulary.id == word_id).first()
+            repo = VocabularyRepository(db)
+            word = repo.get_vocabulary_item_for_recall(word_id, db_user_id)
             if not word:
-                logger.error(f"Word {word_id} not found in database")
+                logger.error(f"Word {word_id} not found in database or not in learning")
                 return
 
             word_to_send = {
@@ -135,6 +134,8 @@ class RuneRecallService:
             }
 
             if self._send_word_message(chat_id, word_to_send):
+                # Update last_learned timestamp
+                repo.update_last_learned(word)
                 # Update the next word index
                 user_data.next_word_index = next_word_index + 1
                 self.state_manager.update_user(username, user_data)
@@ -147,44 +148,27 @@ class RuneRecallService:
 
     def _select_daily_portion(self, db_user_id: int, daily_selection: Dict[str, List[int]]) -> List[Dict]:
         """
-        Select a daily portion of words for recall based on user's vocabulary and recent history.
+        Select a daily portion of words for recall based on user's vocabulary and cooldown.
 
         Args:
             db_user_id: Database user ID
-            daily_selection: Dictionary of previously sent words by date
+            daily_selection: Dictionary of previously sent words by date (kept for backward compatibility)
 
         Returns:
             List of word dictionaries for the daily portion
         """
-        # Get all recently sent word IDs (within cooldown period)
-        cutoff_date = (datetime.now() - timedelta(days=self.cooldown_days)).date()
-        recently_sent_ids = set()
-
-        for date_str, word_ids in daily_selection.items():
-            try:
-                date = datetime.fromisoformat(date_str).date()
-                if date >= cutoff_date:
-                    recently_sent_ids.update(word_ids)
-            except ValueError:
-                logger.warning(f"Invalid date format in daily_selection: {date_str}")
-
-        # todo: move to repository level, also filter on "in_learn" 
-        # todo: change logic to not collect all recent words in state. Just use min(showed_times) in select
-        # Get available words from database
         db = SessionLocal()
         try:
             repo = VocabularyRepository(db)
-            available_word_ids = repo.select_new_daily_word_ids(db_user_id)
-
-            # Filter out recently sent words
-            available_word_ids = [wid for wid in available_word_ids if wid not in recently_sent_ids]
+            # Repository method now handles cooldown filtering based on last_learned
+            available_word_ids = repo.select_new_daily_word_ids(db_user_id, self.cooldown_days)
 
             # Limit to words_per_day
             selected_ids = available_word_ids[: self.words_per_day]
 
-            # Fetch full word details
+            # Fetch full word details using repository method
             if selected_ids:
-                words = db.query(Vocabulary).filter(Vocabulary.id.in_(selected_ids)).all()
+                words = repo.get_vocabulary_items_by_ids(selected_ids, db_user_id)
                 return [
                     {
                         "id": word.id,

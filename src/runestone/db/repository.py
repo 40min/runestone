@@ -6,7 +6,9 @@ logic for different entities.
 """
 
 from typing import List
+from datetime import datetime, timedelta
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..api.schemas import VocabularyItemCreate
@@ -40,7 +42,7 @@ class VocabularyRepository:
                 translation=item.translation,
                 example_phrase=item.example_phrase,
                 in_learn=True,
-                showed_times=0,
+                last_learned=None,
             )
             for item in items
         ]
@@ -94,12 +96,46 @@ class VocabularyRepository:
         self.db.refresh(vocab)
         return vocab
 
-    def select_new_daily_word_ids(self, user_id: int) -> List[int]:
-        """Select new daily word IDs for a user."""
+    def select_new_daily_word_ids(self, user_id: int, cooldown_days: int = 7) -> List[int]:
+        """Select new daily word IDs for a user, excluding recently learned words."""
+        cutoff_date = datetime.now() - timedelta(days=cooldown_days)
         result = (
             self.db.query(Vocabulary.id)
-            .filter(Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True))
+            .filter(
+                Vocabulary.user_id == user_id,
+                Vocabulary.in_learn.is_(True),
+                or_(Vocabulary.last_learned.is_(None), Vocabulary.last_learned < cutoff_date)
+            )
             .order_by(Vocabulary.created_at.desc())
             .all()
         )
+        return [row[0] for row in result]
+
+    def get_vocabulary_item_for_recall(self, item_id: int, user_id: int) -> Vocabulary:
+        """Get a vocabulary item by ID and user_id, ensuring it's in learning."""
+        vocab = self.db.query(Vocabulary).filter(
+            Vocabulary.id == item_id,
+            Vocabulary.user_id == user_id,
+            Vocabulary.in_learn.is_(True)
+        ).first()
+
+        if not vocab:
+            raise ValueError(f"Vocabulary item with id {item_id} not found for user {user_id} or not in learning")
+
+        return vocab
+
+    def get_vocabulary_items_by_ids(self, item_ids: List[int], user_id: int) -> List[Vocabulary]:
+        """Get vocabulary items by IDs and user_id, ensuring they're in learning."""
+        if not item_ids:
+            return []
+        return self.db.query(Vocabulary).filter(
+            Vocabulary.id.in_(item_ids),
+            Vocabulary.user_id == user_id,
+            Vocabulary.in_learn.is_(True)
+        ).all()
+
+    def update_last_learned(self, vocab: Vocabulary) -> Vocabulary:
+        """Update the last_learned timestamp for a vocabulary item."""
+        vocab.last_learned = datetime.now()
+        return self.update_vocabulary_item(vocab)
         return [row[0] for row in result]

@@ -296,7 +296,7 @@ class TestVocabularyEndpoints:
         assert vocab["example_phrase"] == "Jag äter ett äpple varje dag."
         assert vocab["user_id"] == 1
         assert vocab["in_learn"] is True
-        assert vocab["showed_times"] == 0
+        assert vocab["last_learned"] is None
         assert "id" in vocab
         assert "created_at" in vocab
         assert "updated_at" in vocab

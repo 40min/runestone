@@ -24,6 +24,6 @@ class Vocabulary(Base):
     translation = Column(Text, nullable=False)
     example_phrase = Column(Text, nullable=True)
     in_learn = Column(Boolean, default=True)
-    showed_times = Column(Integer, default=0)
+    last_learned = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

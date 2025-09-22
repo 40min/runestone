@@ -55,7 +55,7 @@ def test_db():
                 translation="hej",
                 example_phrase="Hello, how are you?",
                 in_learn=True,
-                showed_times=0,
+                last_learned=None,
             ),
             Vocabulary(
                 user_id=1,
@@ -63,7 +63,7 @@ def test_db():
                 translation="hej då",
                 example_phrase="Goodbye, see you later!",
                 in_learn=True,
-                showed_times=0,
+                last_learned=None,
             ),
             Vocabulary(
                 user_id=1,
@@ -71,7 +71,7 @@ def test_db():
                 translation="tack",
                 example_phrase="Thank you for your help.",
                 in_learn=True,
-                showed_times=0,
+                last_learned=None,
             ),
             Vocabulary(
                 user_id=2,
@@ -79,7 +79,7 @@ def test_db():
                 translation="vatten",
                 example_phrase="I need water.",
                 in_learn=True,
-                showed_times=0,
+                last_learned=None,
             ),
         ]
         db.add_all(words)
@@ -196,15 +196,16 @@ def test_select_daily_portion_with_recent_history(mock_session_local, rune_recal
     # Mock the database session
     mock_session_local.return_value = test_db
 
-    # Simulate that word with id 1 was sent recently
-    yesterday = (datetime.now() - timedelta(days=1)).date().isoformat()
-    daily_selection = {yesterday: [1]}  # Word ID 1 was sent yesterday
+    # Simulate that the first word was learned recently by setting last_learned
+    hello_word = test_db.query(Vocabulary).filter(Vocabulary.word_phrase == "hello").first()
+    hello_word.last_learned = datetime.now() - timedelta(days=1)  # Learned yesterday
+    test_db.commit()
 
-    words = rune_recall_service._select_daily_portion(1, daily_selection)
+    words = rune_recall_service._select_daily_portion(1, {})
 
-    assert len(words) == 2  # Should exclude the recently sent word
+    assert len(words) == 2  # Should exclude the recently learned word
     word_phrases = [w["word_phrase"] for w in words]
-    assert "hello" not in word_phrases  # Should not include recently sent word
+    assert "hello" not in word_phrases  # Should not include recently learned word
 
 
 @patch("src.runestone.services.rune_recall_service.SessionLocal")
@@ -310,15 +311,19 @@ def test_send_next_recall_word_multiple_users(mock_client_class, rune_recall_ser
     mock_client.post.assert_not_called()
 
 
+@patch("src.runestone.services.rune_recall_service.SessionLocal")
 @patch("src.runestone.services.rune_recall_service.httpx.Client")
-def test_send_next_recall_word_with_errors(mock_client_class, rune_recall_service, state_manager):
+def test_send_next_recall_word_with_errors(mock_client_class, mock_session_local, rune_recall_service, test_db, state_manager):
+    # Mock the database session
+    mock_session_local.return_value = test_db
+
     # Mock HTTP client to fail
     mock_client = MagicMock()
     mock_client.post.side_effect = httpx.RequestError("Network error")
     mock_client_class.return_value.__enter__.return_value = mock_client
 
-    # Mock word selection to return some words
-    mock_words = [{"id": 1, "word_phrase": "test", "translation": "test", "example_phrase": None}]
+    # Mock word selection to return some words (using existing word ID from test_db)
+    mock_words = [{"id": 1, "word_phrase": "hello", "translation": "hej", "example_phrase": "Hello, how are you?"}]
 
     user_data = state_manager.get_user("active_user")
 
@@ -330,8 +335,12 @@ def test_send_next_recall_word_with_errors(mock_client_class, rune_recall_servic
     mock_client.post.assert_called_once()
 
 
-def test_daily_selection_cleanup(rune_recall_service, state_manager):
+@patch("src.runestone.services.rune_recall_service.SessionLocal")
+def test_daily_selection_cleanup(mock_session_local, rune_recall_service, test_db, state_manager):
     """Test that old daily selection entries are cleaned up."""
+    # Mock the database session
+    mock_session_local.return_value = test_db
+
     # Add user with old daily selection data
     old_date = (datetime.now() - timedelta(days=40)).date().isoformat()
     recent_date = (datetime.now() - timedelta(days=5)).date().isoformat()
@@ -346,8 +355,8 @@ def test_daily_selection_cleanup(rune_recall_service, state_manager):
         },
     )
 
-    # Mock word selection and message sending
-    mock_words = [{"id": 5, "word_phrase": "new", "translation": "new", "example_phrase": None}]
+    # Mock word selection and message sending (using existing word ID from test_db)
+    mock_words = [{"id": 1, "word_phrase": "hello", "translation": "hej", "example_phrase": "Hello, how are you?"}]
 
     user_data = state_manager.get_user("active_user")
 

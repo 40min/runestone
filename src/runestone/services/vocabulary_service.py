@@ -59,7 +59,7 @@ class VocabularyService:
                     translation=vocab.translation,
                     example_phrase=vocab.example_phrase,
                     in_learn=vocab.in_learn,
-                    showed_times=vocab.showed_times,
+                    last_learned=vocab.last_learned.isoformat() if vocab.last_learned else None,
                     created_at=vocab.created_at.isoformat() if vocab.created_at else None,
                     updated_at=vocab.updated_at.isoformat() if vocab.updated_at else None,
                 )
@@ -82,7 +82,7 @@ class VocabularyService:
             translation=updated_vocab.translation,
             example_phrase=updated_vocab.example_phrase,
             in_learn=updated_vocab.in_learn,
-            showed_times=updated_vocab.showed_times,
+            last_learned=updated_vocab.last_learned.isoformat() if updated_vocab.last_learned else None,
             created_at=updated_vocab.created_at.isoformat() if updated_vocab.created_at else None,
             updated_at=updated_vocab.updated_at.isoformat() if updated_vocab.updated_at else None,
         )

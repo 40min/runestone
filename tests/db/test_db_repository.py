@@ -55,7 +55,7 @@ class TestVocabularyRepository:
         assert apple_vocab.example_phrase == "Jag äter ett äpple varje dag."
         assert apple_vocab.user_id == 1
         assert apple_vocab.in_learn is True
-        assert apple_vocab.showed_times == 0
+        assert apple_vocab.last_learned is None
 
     def test_add_vocabulary_items_duplicate(self, repo, db_session):
         """Test that duplicate word_phrases are not added."""
@@ -80,7 +80,7 @@ class TestVocabularyRepository:
         assert apple_vocab.translation == "an apple"
         assert apple_vocab.example_phrase == "Jag äter ett äpple varje dag."
         assert apple_vocab.in_learn is True
-        assert apple_vocab.showed_times == 0
+        assert apple_vocab.last_learned is None
 
     def test_get_all_vocabulary(self, repo, db_session):
         """Test retrieving all vocabulary items."""
@@ -91,7 +91,7 @@ class TestVocabularyRepository:
             translation="an apple",
             example_phrase="Jag äter ett äpple varje dag.",
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         vocab2 = VocabularyModel(
             user_id=1,
@@ -99,10 +99,10 @@ class TestVocabularyRepository:
             translation="a banana",
             example_phrase=None,
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         vocab3 = VocabularyModel(
-            user_id=2, word_phrase="ett päron", translation="a pear", in_learn=True, showed_times=0
+            user_id=2, word_phrase="ett päron", translation="a pear", in_learn=True, last_learned=None
         )
 
         db_session.add_all([vocab1, vocab2, vocab3])
@@ -133,7 +133,7 @@ class TestVocabularyRepository:
             example_phrase="Jag äter ett äpple varje dag.",
             created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         vocab2 = VocabularyModel(
             user_id=1,
@@ -142,7 +142,7 @@ class TestVocabularyRepository:
             example_phrase=None,
             created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         vocab3 = VocabularyModel(
             user_id=1,
@@ -150,7 +150,7 @@ class TestVocabularyRepository:
             translation="a pear",
             created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         vocab4 = VocabularyModel(
             user_id=2,
@@ -158,7 +158,7 @@ class TestVocabularyRepository:
             translation="a kiwi",
             created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
 
         db_session.add_all([vocab1, vocab2, vocab3, vocab4])
@@ -194,7 +194,7 @@ class TestVocabularyRepository:
             translation="an apple",
             created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         vocab2 = VocabularyModel(
             user_id=1,
@@ -202,7 +202,7 @@ class TestVocabularyRepository:
             translation="a banana",
             created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         vocab3 = VocabularyModel(
             user_id=1,
@@ -210,7 +210,7 @@ class TestVocabularyRepository:
             translation="a pear",
             created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         vocab4 = VocabularyModel(
             user_id=2,
@@ -218,7 +218,7 @@ class TestVocabularyRepository:
             translation="a kiwi",
             created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
 
         db_session.add_all([vocab1, vocab2, vocab3, vocab4])
@@ -268,7 +268,7 @@ class TestVocabularyRepository:
             translation="an apple",
             example_phrase="Jag äter ett äpple varje dag.",
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         db_session.add(vocab)
         db_session.commit()
@@ -295,7 +295,7 @@ class TestVocabularyRepository:
             translation="an apple",
             example_phrase="Jag äter ett äpple varje dag.",
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         db_session.add(vocab)
         db_session.commit()
@@ -311,7 +311,7 @@ class TestVocabularyRepository:
         assert updated_vocab.translation == "a red apple"
         assert updated_vocab.example_phrase == "Jag äter ett äpple varje dag."  # Unchanged
         assert updated_vocab.in_learn is False
-        assert updated_vocab.showed_times == 0  # Unchanged
+        assert updated_vocab.last_learned is None  # Unchanged
 
         # Verify in database
         db_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab.id).first()
@@ -328,7 +328,7 @@ class TestVocabularyRepository:
             translation="an apple",
             example_phrase="Jag äter ett äpple varje dag.",
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         db_session.add(vocab)
         db_session.commit()
@@ -355,7 +355,7 @@ class TestVocabularyRepository:
             word_phrase="ett äpple",
             translation="an apple",
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         db_session.add(vocab)
         db_session.commit()
