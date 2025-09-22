@@ -145,23 +145,29 @@ class TestRecallMain:
         assert daily_call[1]["name"] == "Send Recall Vocabulary Words"
         assert daily_call[1]["max_instances"] == 1
         assert daily_call[1]["replace_existing"] is True
-        # Verify trigger is CronTrigger at 9:00
+        # Verify trigger is IntervalTrigger
         trigger = daily_call[1]["trigger"]
-        # CronTrigger doesn't have direct hour/minute attributes, check the string representation
-        assert "cron" in str(trigger).lower()
-        assert "hour='9'" in str(trigger) or "hour=9" in str(trigger)
-        assert "minute='0'" in str(trigger) or "minute=0" in str(trigger)
+        assert hasattr(trigger, "interval")
 
-    @patch("recall_main.Base")
-    @patch("recall_main.engine")
-    def test_setup_database(self, mock_engine, mock_base):
+    @patch("runestone.db.database.inspect")
+    @patch("runestone.db.database.engine")
+    def test_setup_database(self, mock_engine, mock_inspect):
         """Test database setup."""
         from recall_main import setup_database
 
-        setup_database()
+        # Mock inspector
+        mock_inspector = Mock()
+        mock_inspector.get_table_names.return_value = ["vocabulary"]
+        mock_inspect.return_value = mock_inspector
 
-        # Verify create_all was called
-        mock_base.metadata.create_all.assert_called_once_with(bind=mock_engine)
+        # Mock Base metadata
+        with patch("runestone.db.database.Base") as mock_base:
+            mock_base.metadata.tables.keys.return_value = ["vocabulary"]
+
+            setup_database()
+
+        # Verify inspect was called
+        mock_inspect.assert_called_once_with(mock_engine)
 
     @patch("recall_main.signal")
     @patch("recall_main.settings")

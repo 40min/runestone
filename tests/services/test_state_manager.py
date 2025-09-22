@@ -61,7 +61,7 @@ def test_update_user_new_raises_exception(state_manager):
 
 def test_get_active_users(state_manager):
     active_users = state_manager.get_active_users()
-    assert active_users == ["user1"]
+    assert list(active_users.keys()) == ["user1"]
 
 
 def test_get_update_offset(state_manager):

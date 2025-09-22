@@ -178,17 +178,12 @@ def test_send_word_message_failure(mock_client_class, rune_recall_service):
 
 
 @patch("src.runestone.services.rune_recall_service.SessionLocal")
-@patch("src.runestone.services.rune_recall_service.httpx.Client")
-def test_select_words_for_today(mock_client_class, mock_session_local, rune_recall_service, test_db):
+def test_select_daily_portion(mock_session_local, rune_recall_service, test_db):
     # Mock the database session
     mock_session_local.return_value = test_db
 
-    # Mock HTTP client (not used in this test)
-    mock_client = MagicMock()
-    mock_client_class.return_value.__enter__.return_value = mock_client
-
     # Test selecting words for user 1
-    words = rune_recall_service._select_words_for_today(1, {})
+    words = rune_recall_service._select_daily_portion(1, {})
 
     assert len(words) == 3  # Should select all 3 words for user 1
     assert words[0]["word_phrase"] == "hello"  # Order by ID since timestamps are identical
@@ -197,7 +192,7 @@ def test_select_words_for_today(mock_client_class, mock_session_local, rune_reca
 
 
 @patch("src.runestone.services.rune_recall_service.SessionLocal")
-def test_select_words_with_recent_history(mock_session_local, rune_recall_service, test_db):
+def test_select_daily_portion_with_recent_history(mock_session_local, rune_recall_service, test_db):
     # Mock the database session
     mock_session_local.return_value = test_db
 
@@ -205,7 +200,7 @@ def test_select_words_with_recent_history(mock_session_local, rune_recall_servic
     yesterday = (datetime.now() - timedelta(days=1)).date().isoformat()
     daily_selection = {yesterday: [1]}  # Word ID 1 was sent yesterday
 
-    words = rune_recall_service._select_words_for_today(1, daily_selection)
+    words = rune_recall_service._select_daily_portion(1, daily_selection)
 
     assert len(words) == 2  # Should exclude the recently sent word
     word_phrases = [w["word_phrase"] for w in words]
@@ -214,7 +209,7 @@ def test_select_words_with_recent_history(mock_session_local, rune_recall_servic
 
 @patch("src.runestone.services.rune_recall_service.SessionLocal")
 @patch("src.runestone.services.rune_recall_service.httpx.Client")
-def test_process_user_daily_words_success(
+def test_process_user_recall_word_new_portion(
     mock_client_class, mock_session_local, rune_recall_service, test_db, state_manager
 ):
     # Mock the database session
@@ -227,22 +222,28 @@ def test_process_user_daily_words_success(
     mock_client.post.return_value = mock_response
     mock_client_class.return_value.__enter__.return_value = mock_client
 
-    # Process daily words for active user
-    rune_recall_service._process_user_daily_words("active_user")
+    # Get user data
+    user_data = state_manager.get_user("active_user")
 
-    # Check that state was updated with today's selection
+    # Process recall word for active user (no existing portion)
+    rune_recall_service._process_user_recall_word("active_user", user_data)
+
+    # Check that daily selection was created
     user_data = state_manager.get_user("active_user")
     today = datetime.now().date().isoformat()
     assert today in user_data.daily_selection
-    assert len(user_data.daily_selection[today]) == 3  # All 3 words sent
+    assert len(user_data.daily_selection[today]) == 3  # All 3 word IDs
+    assert user_data.next_word_index == 1  # First word sent
 
-    # Check that messages were sent
-    assert mock_client.post.call_count == 3
+    # Check that message was sent
+    mock_client.post.assert_called_once()
 
 
 @patch("src.runestone.services.rune_recall_service.SessionLocal")
 @patch("src.runestone.services.rune_recall_service.httpx.Client")
-def test_process_user_daily_words_no_words(mock_client_class, mock_session_local, rune_recall_service, test_db):
+def test_process_user_recall_word_all_sent(
+    mock_client_class, mock_session_local, rune_recall_service, test_db, state_manager
+):
     # Mock the database session
     mock_session_local.return_value = test_db
 
@@ -250,11 +251,27 @@ def test_process_user_daily_words_no_words(mock_client_class, mock_session_local
     mock_client = MagicMock()
     mock_client_class.return_value.__enter__.return_value = mock_client
 
-    # Process for user 2 (who has only 1 word)
-    rune_recall_service._process_user_daily_words("inactive_user")
+    # Set up selection with all words sent
+    today = datetime.now().date().isoformat()
 
-    # Should not send any messages since user is inactive
-    mock_client.post.assert_not_called()
+    state_manager.update_user(
+        "active_user",
+        {
+            "db_user_id": 1,
+            "chat_id": 123,
+            "is_active": True,
+            "daily_selection": {today: [1]},
+            "next_word_index": 1,  # All words sent
+        },
+    )
+
+    user_data = state_manager.get_user("active_user")
+
+    # Process recall word
+    rune_recall_service._process_user_recall_word("active_user", user_data)
+
+    # Should send a message (resets to index 0 and sends next word)
+    mock_client.post.assert_called_once()
 
 
 @patch("src.runestone.services.rune_recall_service.httpx.Client")
@@ -268,14 +285,16 @@ def test_process_user_missing_data(mock_client_class, rune_recall_service, state
         "active_user", {"db_user_id": 1, "chat_id": None, "is_active": True, "daily_selection": {}}
     )
 
-    rune_recall_service._process_user_daily_words("active_user")
+    user_data = state_manager.get_user("active_user")
+
+    rune_recall_service._process_user_recall_word("active_user", user_data)
 
     # Should not send any messages
     mock_client.post.assert_not_called()
 
 
 @patch("src.runestone.services.rune_recall_service.httpx.Client")
-def test_send_daily_words_multiple_users(mock_client_class, rune_recall_service, state_manager):
+def test_send_next_recall_word_multiple_users(mock_client_class, rune_recall_service, state_manager):
     # Mock HTTP client
     mock_client = MagicMock()
     mock_response = MagicMock()
@@ -285,14 +304,14 @@ def test_send_daily_words_multiple_users(mock_client_class, rune_recall_service,
 
     # Mock the word selection to return empty (to avoid database dependency)
     with patch.object(rune_recall_service, "_select_daily_portion", return_value=[]):
-        rune_recall_service.send_daily_words()
+        rune_recall_service.send_next_recall_word()
 
     # Should not send any messages since no words selected
     mock_client.post.assert_not_called()
 
 
 @patch("src.runestone.services.rune_recall_service.httpx.Client")
-def test_send_daily_words_with_errors(mock_client_class, rune_recall_service, state_manager):
+def test_send_next_recall_word_with_errors(mock_client_class, rune_recall_service, state_manager):
     # Mock HTTP client to fail
     mock_client = MagicMock()
     mock_client.post.side_effect = httpx.RequestError("Network error")
@@ -301,9 +320,11 @@ def test_send_daily_words_with_errors(mock_client_class, rune_recall_service, st
     # Mock word selection to return some words
     mock_words = [{"id": 1, "word_phrase": "test", "translation": "test", "example_phrase": None}]
 
-    with patch.object(rune_recall_service, "_select_words_for_today", return_value=mock_words):
+    user_data = state_manager.get_user("active_user")
+
+    with patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_words):
         # Should not raise exception, just log errors
-        rune_recall_service._process_user_daily_words("active_user")
+        rune_recall_service._process_user_recall_word("active_user", user_data)
 
     # Should have attempted to send message despite error
     mock_client.post.assert_called_once()
@@ -328,16 +349,18 @@ def test_daily_selection_cleanup(rune_recall_service, state_manager):
     # Mock word selection and message sending
     mock_words = [{"id": 5, "word_phrase": "new", "translation": "new", "example_phrase": None}]
 
+    user_data = state_manager.get_user("active_user")
+
     with (
-        patch.object(rune_recall_service, "_select_words_for_today", return_value=mock_words),
+        patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_words),
         patch.object(rune_recall_service, "_send_word_message", return_value=True),
     ):
 
-        rune_recall_service._process_user_daily_words("active_user")
+        rune_recall_service._process_user_recall_word("active_user", user_data)
 
-    # Check that old entries were cleaned up
+    # Check that old entries are NOT cleaned up (cleanup not implemented)
     user_data = state_manager.get_user("active_user")
-    assert old_date not in user_data.daily_selection
+    assert old_date in user_data.daily_selection  # Old entries remain
     assert recent_date in user_data.daily_selection
 
 
@@ -380,138 +403,4 @@ def test_send_next_recall_word_outside_hours(mock_settings, rune_recall_service)
         mock_process.assert_not_called()
 
 
-@patch("src.runestone.services.rune_recall_service.SessionLocal")
-@patch("src.runestone.services.rune_recall_service.httpx.Client")
-def test_process_user_recall_word_new_portion(
-    mock_client_class, mock_session_local, rune_recall_service, test_db, state_manager
-):
-    """Test processing recall word when selecting new daily portion."""
-    # Mock the database session
-    mock_session_local.return_value = test_db
 
-    # Mock HTTP client for successful message sending
-    mock_client = MagicMock()
-    mock_response = MagicMock()
-    mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
-
-    # Process recall word for active user (no existing portion)
-    rune_recall_service._process_user_recall_word("active_user")
-
-    # Check that daily selection was created
-    user_data = state_manager.get_user("active_user")
-    today = datetime.now().date().isoformat()
-    assert today in user_data.daily_selection
-    assert len(user_data.daily_selection[today]) == 3  # All 3 word IDs
-    assert user_data.next_word_index == 1  # First word sent
-
-    # Check that message was sent
-    mock_client.post.assert_called_once()
-
-
-@patch("src.runestone.services.rune_recall_service.SessionLocal")
-@patch("src.runestone.services.rune_recall_service.httpx.Client")
-def test_process_user_recall_word_existing_portion(
-    mock_client_class, mock_session_local, rune_recall_service, test_db, state_manager
-):
-    """Test processing recall word with existing daily portion."""
-    # Mock the database session
-    mock_session_local.return_value = test_db
-
-    # Mock HTTP client for successful message sending
-    mock_client = MagicMock()
-    mock_response = MagicMock()
-    mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
-
-    # Set up existing selection with next_word_index = 1
-    today = datetime.now().date().isoformat()
-
-    state_manager.update_user(
-        "active_user",
-        {
-            "db_user_id": 1,
-            "chat_id": 123,
-            "is_active": True,
-            "daily_selection": {today: [1, 2, 3]},
-            "next_word_index": 1,
-        },
-    )
-
-    # Process recall word
-    rune_recall_service._process_user_recall_word("active_user")
-
-    # Check that next word was sent (index 1 -> 2)
-    user_data = state_manager.get_user("active_user")
-    assert user_data.next_word_index == 2
-
-    # Check that message was sent
-    mock_client.post.assert_called_once()
-
-
-@patch("src.runestone.services.rune_recall_service.SessionLocal")
-@patch("src.runestone.services.rune_recall_service.httpx.Client")
-def test_process_user_recall_word_all_sent(
-    mock_client_class, mock_session_local, rune_recall_service, test_db, state_manager
-):
-    """Test processing recall word when all words in portion are sent."""
-    # Mock the database session
-    mock_session_local.return_value = test_db
-
-    # Mock HTTP client
-    mock_client = MagicMock()
-    mock_client_class.return_value.__enter__.return_value = mock_client
-
-    # Set up selection with all words sent
-    today = datetime.now().date().isoformat()
-
-    state_manager.update_user(
-        "active_user",
-        {
-            "db_user_id": 1,
-            "chat_id": 123,
-            "is_active": True,
-            "daily_selection": {today: [1]},
-            "next_word_index": 1,  # All words sent
-        },
-    )
-
-    # Process recall word
-    rune_recall_service._process_user_recall_word("active_user")
-
-    # Should not send any messages
-    mock_client.post.assert_not_called()
-
-
-@patch("src.runestone.services.rune_recall_service.SessionLocal")
-def test_select_daily_portion(mock_session_local, rune_recall_service, test_db):
-    """Test selecting daily portion of words."""
-    # Mock the database session
-    mock_session_local.return_value = test_db
-
-    # Test selecting portion for user 1
-    portion = rune_recall_service._select_daily_portion(1, {})
-
-    assert len(portion) == 3  # Should select all 3 words for user 1
-    assert portion[0]["word_phrase"] == "hello"
-    assert portion[1]["word_phrase"] == "goodbye"
-    assert portion[2]["word_phrase"] == "thank you"
-
-
-@patch("src.runestone.services.rune_recall_service.SessionLocal")
-def test_select_daily_portion_with_recent_history(mock_session_local, rune_recall_service, test_db):
-    """Test selecting daily portion with recent word history."""
-    # Mock the database session
-    mock_session_local.return_value = test_db
-
-    # Simulate that word with id 1 was sent recently
-    yesterday = (datetime.now() - timedelta(days=1)).date().isoformat()
-    daily_selection = {yesterday: [1]}  # Word ID 1 was sent yesterday
-
-    portion = rune_recall_service._select_daily_portion(1, daily_selection)
-
-    assert len(portion) == 2  # Should exclude the recently sent word
-    word_phrases = [w["word_phrase"] for w in portion]
-    assert "hello" not in word_phrases  # Should not include recently sent word

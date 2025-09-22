@@ -114,6 +114,7 @@ class RuneRecallService:
         # Get the selected IDs for today
         selected_ids = daily_selection[today]
         if next_word_index >= len(selected_ids):
+            # todo: this is new change, update tests according to it
             next_word_index = 0
 
         # Fetch the next word from database
