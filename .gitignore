@@ -16,6 +16,7 @@ wheels/
 .env
 tasks/
 csv/
+state/
 
 # Frontend
 frontend/node_modules

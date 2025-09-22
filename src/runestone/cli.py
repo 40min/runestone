@@ -197,19 +197,17 @@ def load_vocab(csv_path: Path, db_name: str):
     try:
         # Parse CSV file
         items = []
-        with open(csv_path, 'r', encoding='utf-8') as f:
-            reader = csv.reader(f, delimiter=';')
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.reader(f, delimiter=";")
             for row in reader:
                 if len(row) >= 2:
                     word = row[0].strip()
                     translation = row[1].strip()
                     example = row[2].strip() if len(row) > 2 else None
                     if word and translation:
-                        items.append(VocabularyItemCreate(
-                            word_phrase=word,
-                            translation=translation,
-                            example_phrase=example
-                        ))
+                        items.append(
+                            VocabularyItemCreate(word_phrase=word, translation=translation, example_phrase=example)
+                        )
 
         if not items:
             console.print("[yellow]Warning:[/yellow] No valid items found in CSV file.")
@@ -218,7 +216,7 @@ def load_vocab(csv_path: Path, db_name: str):
         # Create database backup
         db_path = Path(db_name)
         if db_path.exists():
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_path = db_path.with_name(f"{db_path.stem}_backup_{timestamp}.db")
             shutil.copy2(db_path, backup_path)
             console.print(f"Database backup created: {backup_path}")
@@ -240,7 +238,6 @@ def load_vocab(csv_path: Path, db_name: str):
 
             # Count duplicates within the batch itself
             unique_in_batch = set(item.word_phrase for item in items)
-            duplicates_in_batch = len(items) - len(unique_in_batch)
 
             # Use add_vocabulary_items which handles duplicates properly
             repo.add_vocabulary_items(items, user_id=1)

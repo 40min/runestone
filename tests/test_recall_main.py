@@ -1,0 +1,213 @@
+"""
+Tests for the recall_main module.
+"""
+
+from unittest.mock import Mock, patch
+
+import pytest
+
+from runestone.services.rune_recall_service import RuneRecallService
+from runestone.services.telegram_command_service import TelegramCommandService
+
+
+class TestRecallMain:
+    """Test cases for recall_main functionality."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.test_token = "test_bot_token"
+        self.test_state_file = "test_state.json"
+
+    @patch("recall_main.settings")
+    @patch("recall_main.setup_logging")
+    @patch("recall_main.setup_database")
+    @patch("recall_main.StateManager")
+    @patch("recall_main.TelegramCommandService")
+    @patch("recall_main.RuneRecallService")
+    @patch("recall_main.create_scheduler")
+    @patch("recall_main.BlockingScheduler")
+    def test_main_success(
+        self,
+        mock_blocking_scheduler,
+        mock_create_scheduler,
+        mock_recall_service,
+        mock_telegram_service,
+        mock_state_manager,
+        mock_setup_database,
+        mock_setup_logging,
+        mock_settings,
+    ):
+        """Test successful main execution."""
+        # Setup mocks
+        mock_settings.telegram_bot_token = self.test_token
+        mock_settings.verbose = False
+
+        mock_scheduler = Mock()
+        mock_scheduler.get_jobs.return_value = []  # Mock get_jobs to return empty list
+        mock_blocking_scheduler.return_value = mock_scheduler
+        mock_create_scheduler.return_value = mock_scheduler
+
+        # Mock the scheduler start method to avoid infinite loop
+        mock_scheduler.start.side_effect = KeyboardInterrupt()
+
+        # Import and call main
+        from recall_main import main
+
+        # Should raise KeyboardInterrupt from scheduler.start()
+        with pytest.raises(KeyboardInterrupt):
+            main(self.test_state_file)
+
+        # Verify calls
+        mock_setup_logging.assert_called_once_with(level="INFO")
+        mock_setup_database.assert_called_once()
+        mock_state_manager.assert_called_once_with(self.test_state_file)
+        mock_telegram_service.assert_called_once()
+        mock_recall_service.assert_called_once()
+        mock_create_scheduler.assert_called_once()
+        mock_scheduler.start.assert_called_once()
+
+    @patch("recall_main.settings")
+    def test_main_missing_token(self, mock_settings):
+        """Test main with missing telegram bot token."""
+        mock_settings.telegram_bot_token = None
+
+        from recall_main import main
+
+        with pytest.raises(SystemExit, match="1"):
+            main()
+
+    @patch("recall_main.settings")
+    @patch("recall_main.setup_logging")
+    @patch("recall_main.setup_database")
+    @patch("recall_main.StateManager")
+    @patch("recall_main.TelegramCommandService")
+    @patch("recall_main.RuneRecallService")
+    @patch("recall_main.create_scheduler")
+    @patch("recall_main.BlockingScheduler")
+    def test_main_unexpected_error(
+        self,
+        mock_blocking_scheduler,
+        mock_create_scheduler,
+        mock_recall_service,
+        mock_telegram_service,
+        mock_state_manager,
+        mock_setup_database,
+        mock_setup_logging,
+        mock_settings,
+    ):
+        """Test main with unexpected error."""
+        mock_settings.telegram_bot_token = self.test_token
+        mock_settings.verbose = False
+
+        # Make setup_database raise an exception
+        mock_setup_database.side_effect = RuntimeError("Database error")
+
+        from recall_main import main
+
+        with pytest.raises(SystemExit, match="1"):
+            main()
+
+    @patch("recall_main.BlockingScheduler")
+    def test_create_scheduler(self, mock_blocking_scheduler):
+        """Test scheduler creation and job configuration."""
+        from recall_main import create_scheduler
+
+        # Create mock services
+        mock_telegram_service = Mock(spec=TelegramCommandService)
+        mock_recall_service = Mock(spec=RuneRecallService)
+        mock_scheduler = Mock()
+        mock_blocking_scheduler.return_value = mock_scheduler
+
+        # Create scheduler
+        scheduler = create_scheduler(mock_telegram_service, mock_recall_service)
+
+        # Verify scheduler creation
+        mock_blocking_scheduler.assert_called_once()
+        assert scheduler == mock_scheduler
+
+        # Verify jobs were added
+        assert mock_scheduler.add_job.call_count == 2
+
+        # Check first job (poll commands)
+        poll_call = mock_scheduler.add_job.call_args_list[0]
+        assert poll_call[1]["id"] == "poll_commands"
+        assert poll_call[1]["name"] == "Poll Telegram Commands"
+        assert poll_call[1]["max_instances"] == 1
+        assert poll_call[1]["replace_existing"] is True
+        # Verify trigger is IntervalTrigger with 5 seconds
+        trigger = poll_call[1]["trigger"]
+        assert hasattr(trigger, "interval")
+        assert trigger.interval.total_seconds() == 5
+
+        # Check second job (recall words)
+        daily_call = mock_scheduler.add_job.call_args_list[1]
+        assert daily_call[1]["id"] == "send_recall_words"
+        assert daily_call[1]["name"] == "Send Recall Vocabulary Words"
+        assert daily_call[1]["max_instances"] == 1
+        assert daily_call[1]["replace_existing"] is True
+        # Verify trigger is CronTrigger at 9:00
+        trigger = daily_call[1]["trigger"]
+        # CronTrigger doesn't have direct hour/minute attributes, check the string representation
+        assert "cron" in str(trigger).lower()
+        assert "hour='9'" in str(trigger) or "hour=9" in str(trigger)
+        assert "minute='0'" in str(trigger) or "minute=0" in str(trigger)
+
+    @patch("recall_main.Base")
+    @patch("recall_main.engine")
+    def test_setup_database(self, mock_engine, mock_base):
+        """Test database setup."""
+        from recall_main import setup_database
+
+        setup_database()
+
+        # Verify create_all was called
+        mock_base.metadata.create_all.assert_called_once_with(bind=mock_engine)
+
+    @patch("recall_main.signal")
+    @patch("recall_main.settings")
+    @patch("recall_main.setup_logging")
+    @patch("recall_main.setup_database")
+    @patch("recall_main.StateManager")
+    @patch("recall_main.TelegramCommandService")
+    @patch("recall_main.RuneRecallService")
+    @patch("recall_main.create_scheduler")
+    @patch("recall_main.BlockingScheduler")
+    def test_signal_handlers(
+        self,
+        mock_blocking_scheduler,
+        mock_create_scheduler,
+        mock_recall_service,
+        mock_telegram_service,
+        mock_state_manager,
+        mock_setup_database,
+        mock_setup_logging,
+        mock_settings,
+        mock_signal,
+    ):
+        """Test signal handler setup."""
+        mock_settings.telegram_bot_token = self.test_token
+        mock_settings.verbose = False
+
+        mock_scheduler = Mock()
+        mock_scheduler.get_jobs.return_value = []  # Mock get_jobs to return empty list
+        mock_blocking_scheduler.return_value = mock_scheduler
+        mock_create_scheduler.return_value = mock_scheduler
+
+        # Mock the scheduler start method to avoid infinite loop
+        mock_scheduler.start.side_effect = KeyboardInterrupt()
+
+        from recall_main import main
+
+        with pytest.raises(KeyboardInterrupt):
+            main()
+
+        # Verify signal handlers were set
+        assert mock_signal.signal.call_count == 2
+        # Check that signal.signal was called with the mocked signal constants
+        calls = mock_signal.signal.call_args_list
+        assert len(calls) == 2
+        # The first argument should be the signal constant (mocked), second should be the handler function
+        assert calls[0][0][0] is not None  # First signal constant
+        assert calls[1][0][0] is not None  # Second signal constant
+        assert callable(calls[0][0][1])  # Handler function
+        assert callable(calls[1][0][1])  # Handler function

@@ -93,3 +93,13 @@ class VocabularyRepository:
         self.db.commit()
         self.db.refresh(vocab)
         return vocab
+
+    def select_new_daily_word_ids(self, user_id: int) -> List[int]:
+        """Select new daily word IDs for a user."""
+        result = (
+            self.db.query(Vocabulary.id)
+            .filter(Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True))
+            .order_by(Vocabulary.created_at.desc())
+            .all()
+        )
+        return [row[0] for row in result]
