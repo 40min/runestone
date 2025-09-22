@@ -313,7 +313,9 @@ def test_send_next_recall_word_multiple_users(mock_client_class, rune_recall_ser
 
 @patch("src.runestone.services.rune_recall_service.SessionLocal")
 @patch("src.runestone.services.rune_recall_service.httpx.Client")
-def test_send_next_recall_word_with_errors(mock_client_class, mock_session_local, rune_recall_service, test_db, state_manager):
+def test_send_next_recall_word_with_errors(
+    mock_client_class, mock_session_local, rune_recall_service, test_db, state_manager
+):
     # Mock the database session
     mock_session_local.return_value = test_db
 
@@ -412,4 +414,151 @@ def test_send_next_recall_word_outside_hours(mock_settings, rune_recall_service)
         mock_process.assert_not_called()
 
 
+# Tests for cooldown functionality
 
+
+def test_rune_recall_service_different_cooldown_periods():
+    """Test RuneRecallService with different cooldown periods."""
+    state_manager = MagicMock()
+
+    # Test default cooldown (7 days)
+    service_default = RuneRecallService(state_manager, bot_token="test_token")
+    assert service_default.cooldown_days == 7
+
+    # Test custom cooldown
+    service_custom = RuneRecallService(state_manager, bot_token="test_token", cooldown_days=3)
+    assert service_custom.cooldown_days == 3
+
+    # Test zero cooldown (should allow immediate repetition)
+    service_zero = RuneRecallService(state_manager, bot_token="test_token", cooldown_days=0)
+    assert service_zero.cooldown_days == 0
+
+
+@patch("src.runestone.services.rune_recall_service.SessionLocal")
+def test_select_daily_portion_different_cooldown_periods(mock_session_local, test_db):
+    """Test daily portion selection with different cooldown periods."""
+    # Mock the database session
+    mock_session_local.return_value = test_db
+
+    # Create service with 3-day cooldown
+    state_manager = MagicMock()
+    service = RuneRecallService(state_manager, bot_token="test_token", cooldown_days=3)
+
+    # Set up test data: word learned 2 days ago
+    hello_word = test_db.query(Vocabulary).filter(Vocabulary.word_phrase == "hello").first()
+    hello_word.last_learned = datetime.now() - timedelta(days=2)
+    test_db.commit()
+
+    # With 3-day cooldown, word should be excluded
+    words = service._select_daily_portion(1, {})
+    word_phrases = [w["word_phrase"] for w in words]
+    assert "hello" not in word_phrases
+
+    # Create service with 1-day cooldown
+    service_short = RuneRecallService(state_manager, bot_token="test_token", cooldown_days=1)
+
+    # With 1-day cooldown, word should be included
+    words = service_short._select_daily_portion(1, {})
+    word_phrases = [w["word_phrase"] for w in words]
+    assert "hello" in word_phrases
+
+
+@patch("src.runestone.services.rune_recall_service.SessionLocal")
+@patch("src.runestone.services.rune_recall_service.httpx.Client")
+def test_process_user_recall_word_updates_last_learned(
+    mock_client_class, mock_session_local, rune_recall_service, test_db, state_manager
+):
+    """Test that processing recall word updates last_learned timestamp."""
+    # Mock the database session
+    mock_session_local.return_value = test_db
+
+    # Mock HTTP client for successful message sending
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    mock_client.post.return_value = mock_response
+    mock_client_class.return_value.__enter__.return_value = mock_client
+
+    # Get initial state of a word
+    hello_word = test_db.query(Vocabulary).filter(Vocabulary.word_phrase == "hello").first()
+    initial_last_learned = hello_word.last_learned
+    word_id = hello_word.id
+
+    # Get user data and process recall word
+    user_data = state_manager.get_user("active_user")
+    rune_recall_service._process_user_recall_word("active_user", user_data)
+
+    # Query the word again from database to see updated state
+    updated_word = test_db.query(Vocabulary).filter(Vocabulary.id == word_id).first()
+
+    # Verify last_learned was updated
+    assert updated_word.last_learned is not None
+    if initial_last_learned is not None:
+        assert updated_word.last_learned > initial_last_learned
+    # If initial was None, just verify it's now set
+
+    # Verify message was sent
+    mock_client.post.assert_called_once()
+
+
+@patch("src.runestone.services.rune_recall_service.SessionLocal")
+def test_select_daily_portion_no_words_available(mock_session_local, rune_recall_service, test_db):
+    """Test daily portion selection when no words are available due to cooldown."""
+    # Mock the database session
+    mock_session_local.return_value = test_db
+
+    # Mark all words as recently learned
+    words = test_db.query(Vocabulary).filter(Vocabulary.user_id == 1).all()
+    recent_time = datetime.now() - timedelta(days=1)  # Learned yesterday
+    for word in words:
+        word.last_learned = recent_time
+    test_db.commit()
+
+    # Try to select daily portion
+    result = rune_recall_service._select_daily_portion(1, {})
+
+    # Should return empty list since all words are on cooldown
+    assert result == []
+
+
+@patch("src.runestone.services.rune_recall_service.SessionLocal")
+def test_select_daily_portion_words_per_day_limit(mock_session_local, rune_recall_service, test_db):
+    """Test that daily portion respects words_per_day limit."""
+    # Mock the database session
+    mock_session_local.return_value = test_db
+
+    # Create service with limit of 2 words per day
+    state_manager = MagicMock()
+    service = RuneRecallService(state_manager, bot_token="test_token", words_per_day=2)
+
+    # Ensure all words are available (not on cooldown)
+    words = test_db.query(Vocabulary).filter(Vocabulary.user_id == 1).all()
+    for word in words:
+        word.last_learned = datetime.now() - timedelta(days=10)  # Old enough
+    test_db.commit()
+
+    # Select daily portion
+    result = service._select_daily_portion(1, {})
+
+    # Should return only 2 words despite having 3 available
+    assert len(result) == 2
+
+
+@patch("src.runestone.services.rune_recall_service.SessionLocal")
+def test_select_daily_portion_in_learn_filtering(mock_session_local, rune_recall_service, test_db):
+    """Test that daily portion only includes words marked as in_learn."""
+    # Mock the database session
+    mock_session_local.return_value = test_db
+
+    # Mark one word as not in learning
+    hello_word = test_db.query(Vocabulary).filter(Vocabulary.word_phrase == "hello").first()
+    hello_word.in_learn = False
+    test_db.commit()
+
+    # Select daily portion
+    words = rune_recall_service._select_daily_portion(1, {})
+
+    # Should exclude the word not in learning
+    word_phrases = [w["word_phrase"] for w in words]
+    assert "hello" not in word_phrases
+    assert len(words) == 2  # Should have goodbye and thank you

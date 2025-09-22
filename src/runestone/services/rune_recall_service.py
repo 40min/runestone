@@ -6,14 +6,13 @@ portion logic for multiple concurrent users.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, List, Optional
 
 import httpx
 
 from runestone.config import settings
 from runestone.db.database import SessionLocal
-from runestone.db.models import Vocabulary
 from runestone.db.repository import VocabularyRepository
 from runestone.state.state_manager import StateManager
 from runestone.state.state_types import UserData
@@ -76,15 +75,14 @@ class RuneRecallService:
                 # Continue with other users even if one fails
 
         logger.info("Completed recall word sending process")
-    
 
     def _process_user_recall_word(self, username: str, user_data: UserData) -> None:
         """
         Process and send the next word from the daily portion for a specific user.
 
         Args:
-            user_data: UserData object for the user            
-        """                
+            user_data: UserData object for the user
+        """
         db_user_id = user_data.db_user_id
         chat_id = user_data.chat_id
 
@@ -144,7 +142,6 @@ class RuneRecallService:
                 logger.error(f"Failed to send recall word to user {username}")
         finally:
             db.close()
-    
 
     def _select_daily_portion(self, db_user_id: int, daily_selection: Dict[str, List[int]]) -> List[Dict]:
         """

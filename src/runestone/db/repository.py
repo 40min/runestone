@@ -5,8 +5,8 @@ This module contains repository classes that encapsulate database
 logic for different entities.
 """
 
-from typing import List
 from datetime import datetime, timedelta
+from typing import List
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -104,7 +104,7 @@ class VocabularyRepository:
             .filter(
                 Vocabulary.user_id == user_id,
                 Vocabulary.in_learn.is_(True),
-                or_(Vocabulary.last_learned.is_(None), Vocabulary.last_learned < cutoff_date)
+                or_(Vocabulary.last_learned.is_(None), Vocabulary.last_learned < cutoff_date),
             )
             .order_by(Vocabulary.created_at.desc())
             .all()
@@ -113,11 +113,11 @@ class VocabularyRepository:
 
     def get_vocabulary_item_for_recall(self, item_id: int, user_id: int) -> Vocabulary:
         """Get a vocabulary item by ID and user_id, ensuring it's in learning."""
-        vocab = self.db.query(Vocabulary).filter(
-            Vocabulary.id == item_id,
-            Vocabulary.user_id == user_id,
-            Vocabulary.in_learn.is_(True)
-        ).first()
+        vocab = (
+            self.db.query(Vocabulary)
+            .filter(Vocabulary.id == item_id, Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True))
+            .first()
+        )
 
         if not vocab:
             raise ValueError(f"Vocabulary item with id {item_id} not found for user {user_id} or not in learning")
@@ -128,14 +128,13 @@ class VocabularyRepository:
         """Get vocabulary items by IDs and user_id, ensuring they're in learning."""
         if not item_ids:
             return []
-        return self.db.query(Vocabulary).filter(
-            Vocabulary.id.in_(item_ids),
-            Vocabulary.user_id == user_id,
-            Vocabulary.in_learn.is_(True)
-        ).all()
+        return (
+            self.db.query(Vocabulary)
+            .filter(Vocabulary.id.in_(item_ids), Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True))
+            .all()
+        )
 
     def update_last_learned(self, vocab: Vocabulary) -> Vocabulary:
         """Update the last_learned timestamp for a vocabulary item."""
         vocab.last_learned = datetime.now()
         return self.update_vocabulary_item(vocab)
-        return [row[0] for row in result]
