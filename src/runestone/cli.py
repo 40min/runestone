@@ -186,7 +186,13 @@ def process(
     default="runestone.db",
     help="Database file name (default: runestone.db)",
 )
-def load_vocab(csv_path: Path, db_name: str):
+@click.option(
+    "--skip-existence-check",
+    is_flag=True,
+    default=False,
+    help="Skip checking for existing words before adding (allow duplicates)",
+)
+def load_vocab(csv_path: Path, db_name: str, skip_existence_check: bool):
     """
     Load vocabulary data from a CSV file into the database.
 
@@ -232,25 +238,56 @@ def load_vocab(csv_path: Path, db_name: str):
             repo = VocabularyRepository(db)
             original_count = len(items)
 
-            # Get existing word_phrases before insertion to calculate statistics
-            batch_word_phrases = [item.word_phrase for item in items]
-            existing_word_phrases = repo.get_existing_word_phrases_for_batch(batch_word_phrases, user_id=1)
-            existing_count = len(existing_word_phrases)
+            # Filter duplicates within the batch
+            seen = set()
+            filtered_items = []
+            for item in items:
+                if item.word_phrase not in seen:
+                    filtered_items.append(item)
+                    seen.add(item.word_phrase)
+            items = filtered_items
 
-            # Count duplicates within the batch itself
-            unique_in_batch = set(item.word_phrase for item in items)
+            if skip_existence_check:
+                # Skip existence check, upsert all items (update if exists, insert if not)
+                try:
+                    repo.upsert_vocabulary_items(items, user_id=1)
+                    added_count = len(items)
+                    skipped_count = original_count - added_count
+                    if skipped_count > 0:
+                        console.print(
+                            f"[yellow]Warning:[/yellow] Skipped {skipped_count} duplicate items within the batch."
+                        )
+                    console.print(
+                        f"[green]Success:[/green] Processed {added_count} vocabulary items (inserted or updated)."
+                    )
+                    console.print(
+                        f"Total processed: {original_count} items (processed: {added_count}, skipped: {skipped_count})"
+                    )
+                except Exception as e:
+                    console.print(f"[red]Error:[/red] Failed to process items: {e}")
+                    sys.exit(1)
+            else:
+                # Get existing word_phrases before insertion to calculate statistics
+                batch_word_phrases = [item.word_phrase for item in items]
+                existing_word_phrases = repo.get_existing_word_phrases_for_batch(batch_word_phrases, user_id=1)
+                existing_count = len(existing_word_phrases)
 
-            # Use add_vocabulary_items which handles duplicates properly
-            repo.add_vocabulary_items(items, user_id=1)
+                # Count duplicates within the batch itself
+                unique_in_batch = set(item.word_phrase for item in items)
 
-            # Calculate final statistics
-            added_count = len(unique_in_batch) - existing_count
-            skipped_count = original_count - added_count
+                # Use add_vocabulary_items which handles duplicates properly
+                repo.add_vocabulary_items(items, user_id=1)
 
-            if skipped_count > 0:
-                console.print(f"[yellow]Warning:[/yellow] Skipped {skipped_count} duplicate vocabulary items.")
-            console.print(f"[green]Success:[/green] Added {added_count} new vocabulary items.")
-            console.print(f"Total processed: {original_count} items (added: {added_count}, skipped: {skipped_count})")
+                # Calculate final statistics
+                added_count = len(unique_in_batch) - existing_count
+                skipped_count = original_count - added_count
+
+                if skipped_count > 0:
+                    console.print(f"[yellow]Warning:[/yellow] Skipped {skipped_count} duplicate vocabulary items.")
+                console.print(f"[green]Success:[/green] Added {added_count} new vocabulary items.")
+                console.print(
+                    f"Total processed: {original_count} items (added: {added_count}, skipped: {skipped_count})"
+                )
         finally:
             db.close()
 

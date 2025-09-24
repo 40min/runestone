@@ -49,6 +49,35 @@ class VocabularyRepository:
         self.db.add_all(vocab_objects)
         self.db.commit()
 
+    def upsert_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int = 1):
+        """Upsert vocabulary items: update if exists, insert if not."""
+        for item in items:
+            # Check if exists for this user
+            existing = (
+                self.db.query(Vocabulary)
+                .filter(Vocabulary.user_id == user_id, Vocabulary.word_phrase == item.word_phrase)
+                .first()
+            )
+
+            if existing:
+                # Update existing
+                existing.translation = item.translation
+                existing.example_phrase = item.example_phrase
+                existing.updated_at = datetime.now()
+            else:
+                # Insert new
+                vocab = Vocabulary(
+                    user_id=user_id,
+                    word_phrase=item.word_phrase,
+                    translation=item.translation,
+                    example_phrase=item.example_phrase,
+                    in_learn=True,
+                    last_learned=None,
+                )
+                self.db.add(vocab)
+
+        self.db.commit()
+
     def add_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int = 1):
         """Add vocabulary items to the database, handling uniqueness (legacy method)."""
         # Get unique word_phrases from the batch

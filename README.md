@@ -90,6 +90,15 @@ runestone process /path/to/textbook_page.jpg --output-format markdown
 
 # Specify API key directly
 runestone process --provider openai --api-key YOUR_API_KEY /path/to/textbook_page.jpg
+
+# Load vocabulary from CSV file
+runestone load-vocab /path/to/vocabulary.csv
+
+# Load vocabulary with custom database name
+runestone load-vocab /path/to/vocabulary.csv --db-name my_vocab.db
+
+# Load vocabulary skipping existence check (allow duplicates)
+runestone load-vocab /path/to/vocabulary.csv --skip-existence-check
 ```
 
 ### Web API Usage
