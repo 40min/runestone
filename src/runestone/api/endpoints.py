@@ -25,6 +25,7 @@ from runestone.config import Settings, settings
 from runestone.core.exceptions import RunestoneError
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.database import get_db
+from runestone.db.repository import VocabularyRepository
 from runestone.services.vocabulary_service import VocabularyService
 
 router = APIRouter()
@@ -35,9 +36,16 @@ def get_settings() -> Settings:
     return settings
 
 
-def get_vocabulary_service(db: Annotated[Session, Depends(get_db)]) -> VocabularyService:
+def get_vocabulary_repository(db: Annotated[Session, Depends(get_db)]) -> VocabularyRepository:
+    """Dependency injection for vocabulary repository."""
+    return VocabularyRepository(db)
+
+
+def get_vocabulary_service(
+    repo: Annotated[VocabularyRepository, Depends(get_vocabulary_repository)],
+) -> VocabularyService:
     """Dependency injection for vocabulary service."""
-    return VocabularyService(db)
+    return VocabularyService(repo)
 
 
 @router.post(

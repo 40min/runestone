@@ -12,6 +12,7 @@ from runestone.api.schemas import Vocabulary as VocabularySchema
 from runestone.api.schemas import VocabularyItemCreate
 from runestone.db.database import Base
 from runestone.db.models import Vocabulary as VocabularyModel
+from runestone.db.repository import VocabularyRepository
 from runestone.services.vocabulary_service import VocabularyService
 
 
@@ -31,9 +32,14 @@ class TestVocabularyService:
             db.close()
 
     @pytest.fixture
-    def service(self, db_session):
+    def vocabulary_repository(self, db_session):
+        """Create a VocabularyRepository instance."""
+        return VocabularyRepository(db_session)
+
+    @pytest.fixture
+    def service(self, vocabulary_repository):
         """Create a VocabularyService instance."""
-        return VocabularyService(db_session)
+        return VocabularyService(vocabulary_repository)
 
     def test_save_vocabulary_new(self, service, db_session):
         """Test saving new vocabulary items."""

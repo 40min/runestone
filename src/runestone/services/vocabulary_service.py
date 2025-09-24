@@ -7,8 +7,6 @@ for vocabulary-related operations.
 
 from typing import List
 
-from sqlalchemy.orm import Session
-
 from ..api.schemas import Vocabulary as VocabularySchema
 from ..api.schemas import VocabularyItemCreate, VocabularyUpdate
 from ..db.models import Vocabulary
@@ -18,10 +16,9 @@ from ..db.repository import VocabularyRepository
 class VocabularyService:
     """Service for vocabulary-related business logic."""
 
-    def __init__(self, db: Session):
-        """Initialize service with database session."""
-        self.db = db
-        self.repo = VocabularyRepository(db)
+    def __init__(self, vocabulary_repository: VocabularyRepository):
+        """Initialize service with vocabulary repository."""
+        self.repo = vocabulary_repository
 
     def save_vocabulary(self, items: List[VocabularyItemCreate], user_id: int = 1) -> dict:
         """Save vocabulary items, handling business logic."""

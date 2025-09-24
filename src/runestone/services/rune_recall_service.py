@@ -12,7 +12,6 @@ from typing import Dict, List, Optional
 import httpx
 
 from runestone.config import settings
-from runestone.db.database import SessionLocal
 from runestone.db.repository import VocabularyRepository
 from runestone.state.state_manager import StateManager
 from runestone.state.state_types import UserData
@@ -25,6 +24,7 @@ class RuneRecallService:
 
     def __init__(
         self,
+        vocabulary_repository: VocabularyRepository,
         state_manager: StateManager,
         bot_token: Optional[str] = None,
         words_per_day: int = 5,
@@ -34,11 +34,13 @@ class RuneRecallService:
         Initialize the RuneRecallService.
 
         Args:
+            vocabulary_repository: VocabularyRepository instance for database operations
             state_manager: StateManager instance for user state management
             bot_token: Telegram bot token (optional, uses settings if not provided)
             words_per_day: Maximum number of words to send per day per user
             cooldown_days: Number of days before a word can be repeated
         """
+        self.vocabulary_repository = vocabulary_repository
         self.state_manager = state_manager
         self.bot_token = bot_token or settings.telegram_bot_token
         if not self.bot_token:
@@ -116,32 +118,27 @@ class RuneRecallService:
 
         # Fetch the next word from database
         word_id = selected_ids[next_word_index]
-        db = SessionLocal()
-        try:
-            repo = VocabularyRepository(db)
-            word = repo.get_vocabulary_item_for_recall(word_id, db_user_id)
-            if not word:
-                logger.error(f"Word {word_id} not found in database or not in learning")
-                return
+        word = self.vocabulary_repository.get_vocabulary_item_for_recall(word_id, db_user_id)
+        if not word:
+            logger.error(f"Word {word_id} not found in database or not in learning")
+            return
 
-            word_to_send = {
-                "id": word.id,
-                "word_phrase": word.word_phrase,
-                "translation": word.translation,
-                "example_phrase": word.example_phrase,
-            }
+        word_to_send = {
+            "id": word.id,
+            "word_phrase": word.word_phrase,
+            "translation": word.translation,
+            "example_phrase": word.example_phrase,
+        }
 
-            if self._send_word_message(chat_id, word_to_send):
-                # Update last_learned timestamp
-                repo.update_last_learned(word)
-                # Update the next word index
-                user_data.next_word_index = next_word_index + 1
-                self.state_manager.update_user(username, user_data)
-                logger.info(f"Sent recall word {next_word_index + 1}/{len(selected_ids)} to user {username}")
-            else:
-                logger.error(f"Failed to send recall word to user {username}")
-        finally:
-            db.close()
+        if self._send_word_message(chat_id, word_to_send):
+            # Update last_learned timestamp
+            self.vocabulary_repository.update_last_learned(word)
+            # Update the next word index
+            user_data.next_word_index = next_word_index + 1
+            self.state_manager.update_user(username, user_data)
+            logger.info(f"Sent recall word {next_word_index + 1}/{len(selected_ids)} to user {username}")
+        else:
+            logger.error(f"Failed to send recall word to user {username}")
 
     def _select_daily_portion(self, db_user_id: int, daily_selection: Dict[str, List[int]]) -> List[Dict]:
         """
@@ -154,32 +151,26 @@ class RuneRecallService:
         Returns:
             List of word dictionaries for the daily portion
         """
-        db = SessionLocal()
-        try:
-            repo = VocabularyRepository(db)
-            # Repository method now handles cooldown filtering based on last_learned
-            available_word_ids = repo.select_new_daily_word_ids(db_user_id, self.cooldown_days)
+        # Repository method now handles cooldown filtering based on last_learned
+        available_word_ids = self.vocabulary_repository.select_new_daily_word_ids(db_user_id, self.cooldown_days)
 
-            # Limit to words_per_day
-            selected_ids = available_word_ids[: self.words_per_day]
+        # Limit to words_per_day
+        selected_ids = available_word_ids[: self.words_per_day]
 
-            # Fetch full word details using repository method
-            if selected_ids:
-                words = repo.get_vocabulary_items_by_ids(selected_ids, db_user_id)
-                return [
-                    {
-                        "id": word.id,
-                        "word_phrase": word.word_phrase,
-                        "translation": word.translation,
-                        "example_phrase": word.example_phrase,
-                    }
-                    for word in words
-                ]
+        # Fetch full word details using repository method
+        if selected_ids:
+            words = self.vocabulary_repository.get_vocabulary_items_by_ids(selected_ids, db_user_id)
+            return [
+                {
+                    "id": word.id,
+                    "word_phrase": word.word_phrase,
+                    "translation": word.translation,
+                    "example_phrase": word.example_phrase,
+                }
+                for word in words
+            ]
 
-            return []
-
-        finally:
-            db.close()
+        return []
 
     def _send_word_message(self, chat_id: int, word: Dict) -> bool:
         """

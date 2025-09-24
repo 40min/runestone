@@ -228,6 +228,7 @@ def load_vocab(csv_path: Path, db_name: str):
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         db = SessionLocal()
         try:
+            # Create repository with database session
             repo = VocabularyRepository(db)
             original_count = len(items)
 

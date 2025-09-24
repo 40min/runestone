@@ -20,7 +20,8 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from runestone.config import settings
 from runestone.core.logging_config import setup_logging
-from runestone.db.database import setup_database
+from runestone.db.database import setup_database, SessionLocal
+from runestone.db.repository import VocabularyRepository
 from runestone.services.rune_recall_service import RuneRecallService
 from runestone.state.state_manager import StateManager
 from runestone.services.telegram_command_service import TelegramCommandService
@@ -76,8 +77,13 @@ def main(state_file_path: Optional[str] = None) -> None:
 
         # Initialize services
         state_manager = StateManager(state_file_path or "state/state.json")
+        
+        # Create database session and repository
+        db = SessionLocal()
+        vocabulary_repository = VocabularyRepository(db)
+        
         telegram_service = TelegramCommandService(state_manager)
-        recall_service = RuneRecallService(state_manager)
+        recall_service = RuneRecallService(vocabulary_repository, state_manager)
 
         # Create and configure scheduler
         scheduler = create_scheduler(telegram_service, recall_service)
@@ -86,6 +92,7 @@ def main(state_file_path: Optional[str] = None) -> None:
         def shutdown_handler(signum, frame):
             logger.info(f"Received signal {signum}, shutting down scheduler...")
             scheduler.shutdown(wait=True)
+            db.close()  # Close database connection
             logger.info("Scheduler shutdown complete")
             sys.exit(0)
 
