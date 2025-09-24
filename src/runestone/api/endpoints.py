@@ -8,7 +8,6 @@ and returning structured analysis results.
 from typing import Annotated, List
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from sqlalchemy.orm import Session
 
 from runestone.api.schemas import (
     AnalysisRequest,
@@ -21,31 +20,13 @@ from runestone.api.schemas import (
     VocabularySaveRequest,
     VocabularyUpdate,
 )
-from runestone.config import Settings, settings
+from runestone.config import Settings
 from runestone.core.exceptions import RunestoneError
 from runestone.core.processor import RunestoneProcessor
-from runestone.db.database import get_db
-from runestone.db.repository import VocabularyRepository
+from runestone.dependencies import get_settings, get_vocabulary_service
 from runestone.services.vocabulary_service import VocabularyService
 
 router = APIRouter()
-
-
-def get_settings() -> Settings:
-    """Dependency injection for application settings."""
-    return settings
-
-
-def get_vocabulary_repository(db: Annotated[Session, Depends(get_db)]) -> VocabularyRepository:
-    """Dependency injection for vocabulary repository."""
-    return VocabularyRepository(db)
-
-
-def get_vocabulary_service(
-    repo: Annotated[VocabularyRepository, Depends(get_vocabulary_repository)],
-) -> VocabularyService:
-    """Dependency injection for vocabulary service."""
-    return VocabularyService(repo)
 
 
 @router.post(

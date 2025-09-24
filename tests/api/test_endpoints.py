@@ -372,7 +372,7 @@ class TestVocabularyEndpoints:
 class TestSettingsDependency:
     """Test cases for dependency injection."""
 
-    @patch("runestone.api.endpoints.settings")
+    @patch("runestone.dependencies.settings")
     def test_settings_dependency_injection(self, mock_settings, client_no_db):
         """Test that settings are properly injected."""
         mock_settings.llm_provider = "test_provider"
@@ -380,7 +380,7 @@ class TestSettingsDependency:
 
         # This test verifies that the settings dependency injection works
         # by checking that our mock settings are used
-        from runestone.api.endpoints import get_settings
+        from runestone.dependencies import get_settings
 
         result = get_settings()
         assert result == mock_settings
