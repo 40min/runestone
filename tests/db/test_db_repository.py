@@ -7,34 +7,18 @@ This module contains tests for the vocabulary repository.
 from datetime import datetime, timedelta
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from runestone.api.schemas import VocabularyItemCreate
-from runestone.db.database import Base
 from runestone.db.models import Vocabulary as VocabularyModel
-from runestone.db.repository import VocabularyRepository
 
 
 class TestVocabularyRepository:
     """Test cases for VocabularyRepository."""
 
     @pytest.fixture
-    def db_session(self):
-        """Create an in-memory SQLite database for testing."""
-        engine = create_engine("sqlite:///:memory:")
-        Base.metadata.create_all(bind=engine)
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-        db = SessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    @pytest.fixture
-    def repo(self, db_session):
+    def repo(self, vocabulary_repository):
         """Create a VocabularyRepository instance."""
-        return VocabularyRepository(db_session)
+        return vocabulary_repository
 
     def test_add_vocabulary_items_new(self, repo, db_session):
         """Test adding new vocabulary items."""
