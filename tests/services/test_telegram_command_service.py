@@ -41,7 +41,9 @@ def mock_rune_recall_service():
 
 @pytest.fixture
 def telegram_service(state_manager, mock_rune_recall_service):
-    return TelegramCommandService(state_manager, mock_rune_recall_service)
+    with patch("src.runestone.services.telegram_command_service.settings") as mock_settings:
+        mock_settings.telegram_bot_token = "test_token"
+        return TelegramCommandService(state_manager, mock_rune_recall_service)
 
 
 @pytest.fixture
@@ -52,7 +54,9 @@ def telegram_service_with_deps(state_manager, mock_rune_recall_service):
     )
 
 
-def test_init_with_token(state_manager, mock_rune_recall_service):
+@patch("src.runestone.services.telegram_command_service.settings")
+def test_init_with_token(mock_settings, state_manager, mock_rune_recall_service):
+    mock_settings.telegram_bot_token = "test_token"
     service = TelegramCommandService(state_manager, mock_rune_recall_service)
     assert service.bot_token == "test_token"
     assert service.base_url == "https://api.telegram.org/bottest_token"
@@ -381,9 +385,14 @@ def test_handle_remove_command_success(
 
 
 @patch("src.runestone.services.telegram_command_service.httpx.Client")
-def test_handle_remove_command_no_service(mock_client_class, telegram_service, state_manager):
-    """Test /remove command without rune recall service"""
-    user_data = state_manager.get_user("authorized_user")
+def test_handle_remove_command_success(mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service):
+    """Test successful /remove command"""
+    # Mock RuneRecallService response
+    mock_rune_recall_service.remove_word_completely.return_value = {
+        "success": True,
+        "message": "Word 'kontanter' removed from vocabulary and daily selection.",
+        "removed_from_selection": True
+    }
 
     # Mock HTTP client
     mock_client = MagicMock()
@@ -394,12 +403,13 @@ def test_handle_remove_command_no_service(mock_client_class, telegram_service, s
 
     message = {"reply_to_message": {"text": "🇸🇪 kontanter\n🇬🇧 cash"}}
 
-    telegram_service._handle_remove_command(message, "authorized_user", user_data, 123)
+    telegram_service_with_deps._handle_remove_command(message, "authorized_user", None, 123)
 
-    # Should send error message
+    # Should send success message
     mock_client.post.assert_called_once()
     call_args = mock_client.post.call_args[1]["json"]
-    assert "not available" in call_args["text"]
+    assert "kontanter" in call_args["text"]
+    assert "removed from vocabulary and daily selection" in call_args["text"]
 
 
 @patch("src.runestone.services.telegram_command_service.httpx.Client")

@@ -138,7 +138,7 @@ class TelegramCommandService:
             logger.error(f"Unexpected error in process_updates: {e}")
 
     def _handle_remove_command(self, message: dict, username: str, user_data, chat_id: int) -> None:
-        """Handle the /remove command to completely remove a word from database and daily_selection."""        
+        """Handle the /remove command to completely remove a word from database and daily_selection."""
 
         reply_to_message = message.get("reply_to_message")
         if not reply_to_message:
@@ -154,7 +154,7 @@ class TelegramCommandService:
 
         # Delegate to RuneRecallService
         result = self.rune_recall_service.remove_word_completely(username, word_phrase)
-        
+
         # Send response based on result
         self._send_message(chat_id, result["message"])
 
