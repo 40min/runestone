@@ -82,8 +82,8 @@ def main(state_file_path: Optional[str] = None) -> None:
         db = SessionLocal()
         vocabulary_repository = VocabularyRepository(db)
         
-        telegram_service = TelegramCommandService(state_manager)
         recall_service = RuneRecallService(vocabulary_repository, state_manager)
+        telegram_service = TelegramCommandService(state_manager, recall_service)
 
         # Create and configure scheduler
         scheduler = create_scheduler(telegram_service, recall_service)

@@ -6,7 +6,7 @@ logic for different entities.
 """
 
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -167,3 +167,37 @@ class VocabularyRepository:
         """Update the last_learned timestamp for a vocabulary item."""
         vocab.last_learned = datetime.now()
         return self.update_vocabulary_item(vocab)
+
+    def get_vocabulary_item_by_word_phrase(self, word_phrase: str, user_id: int) -> Optional[Vocabulary]:
+        """Get a vocabulary item by word_phrase and user_id."""
+        return (
+            self.db.query(Vocabulary)
+            .filter(Vocabulary.word_phrase == word_phrase, Vocabulary.user_id == user_id)
+            .first()
+        )
+
+    def delete_vocabulary_item_by_word_phrase(self, word_phrase: str, user_id: int) -> bool:
+        """Mark a vocabulary item as not in learning (soft delete) by word phrase."""
+        vocab = self.get_vocabulary_item_by_word_phrase(word_phrase, user_id)
+        if vocab:
+            # Use update query instead of direct attribute assignment
+            updated_rows = (
+                self.db.query(Vocabulary)
+                .filter(Vocabulary.word_phrase == word_phrase, Vocabulary.user_id == user_id)
+                .update({"in_learn": False})
+            )
+            self.db.commit()
+            return updated_rows > 0
+        return False
+
+    def delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
+        """Mark a vocabulary item as not in learning (soft delete)."""
+        vocab = self.db.query(Vocabulary).filter(Vocabulary.id == item_id, Vocabulary.user_id == user_id).first()
+        if vocab:
+            # Use update query instead of direct attribute assignment
+            self.db.query(Vocabulary).filter(Vocabulary.id == item_id, Vocabulary.user_id == user_id).update(
+                {"in_learn": False}
+            )
+            self.db.commit()
+            return True
+        return False

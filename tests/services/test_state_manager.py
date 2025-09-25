@@ -34,7 +34,11 @@ def state_manager(temp_state_file):
 def test_get_user_existing(state_manager):
     user = state_manager.get_user("user1")
     expected = UserData(
-        db_user_id=1, chat_id=123, is_active=True, daily_selection=[WordOfDay(id_=1, word_phrase="test")], next_word_index=0
+        db_user_id=1,
+        chat_id=123,
+        is_active=True,
+        daily_selection=[WordOfDay(id_=1, word_phrase="test")],
+        next_word_index=0,
     )
     assert user == expected
 
@@ -49,7 +53,13 @@ def test_update_user_existing(state_manager, temp_state_file):
     state_manager.update_user("user1", new_data)
     with open(temp_state_file, "r") as f:
         state = json.load(f)
-    expected = {"db_user_id": 1, "chat_id": 456, "is_active": False, "daily_selection": [{"id_": 2, "word_phrase": "updated"}], "next_word_index": 0}
+    expected = {
+        "db_user_id": 1,
+        "chat_id": 456,
+        "is_active": False,
+        "daily_selection": [{"id_": 2, "word_phrase": "updated"}],
+        "next_word_index": 0,
+    }
     assert state["users"]["user1"] == expected
 
 

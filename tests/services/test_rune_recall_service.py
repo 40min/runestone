@@ -536,3 +536,194 @@ def test_select_daily_portion_in_learn_filtering(rune_recall_service, test_db):
     word_phrases = [w["word_phrase"] for w in words]
     assert "hello" not in word_phrases
     assert len(words) == 2  # Should have goodbye and thank you
+
+
+# Tests for new vocabulary management methods
+
+def test_remove_word_from_daily_selection(rune_recall_service, state_manager):
+    """Test removing a word from user's daily_selection."""
+    from src.runestone.state.state_types import WordOfDay
+    
+    # Setup user with daily selection
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [
+        WordOfDay(id_=1, word_phrase="kontanter"),
+        WordOfDay(id_=2, word_phrase="hej"),
+        WordOfDay(id_=3, word_phrase="tack"),
+    ]
+    user_data.next_word_index = 1
+
+    # Remove middle word
+    result = rune_recall_service.remove_word_from_daily_selection(user_data, "hej")
+    assert result is True
+    assert len(user_data.daily_selection) == 2
+    assert user_data.daily_selection[0].word_phrase == "kontanter"
+    assert user_data.daily_selection[1].word_phrase == "tack"
+    assert user_data.next_word_index == 1
+
+    # Remove word that doesn't exist
+    result = rune_recall_service.remove_word_from_daily_selection(user_data, "nonexistent")
+    assert result is False
+    assert len(user_data.daily_selection) == 2
+
+    # Remove word that would make index out of bounds
+    user_data.next_word_index = 2
+    result = rune_recall_service.remove_word_from_daily_selection(user_data, "tack")
+    assert result is True
+    assert len(user_data.daily_selection) == 1
+    assert user_data.next_word_index == 0  # Should reset
+
+
+def test_replenish_daily_selection_if_empty(rune_recall_service, state_manager):
+    """Test replenishing daily_selection when it becomes empty."""
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = []
+    user_data.db_user_id = 1
+
+    # Mock new portion selection
+    mock_portion = [{"id": 4, "word_phrase": "ny"}, {"id": 5, "word_phrase": "gammal"}]
+    
+    with patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_portion):
+        rune_recall_service.replenish_daily_selection_if_empty("active_user", user_data)
+
+    assert len(user_data.daily_selection) == 2
+    assert user_data.daily_selection[0].id_ == 4
+    assert user_data.daily_selection[0].word_phrase == "ny"
+    assert user_data.next_word_index == 0
+
+
+def test_replenish_daily_selection_not_empty(rune_recall_service, state_manager):
+    """Test that replenishment doesn't happen when selection is not empty."""
+    from src.runestone.state.state_types import WordOfDay
+    
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="existing")]
+
+    with patch.object(rune_recall_service, "_select_daily_portion") as mock_select:
+        rune_recall_service.replenish_daily_selection_if_empty("active_user", user_data)
+
+    # Should not call the service
+    mock_select.assert_not_called()
+    assert len(user_data.daily_selection) == 1
+
+
+def test_update_user_daily_selection(rune_recall_service, state_manager):
+    """Test updating user's daily_selection in state."""
+    from src.runestone.state.state_types import WordOfDay
+    
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="test")]
+
+    # Mock state manager update
+    with patch.object(state_manager, "update_user") as mock_update:
+        rune_recall_service.update_user_daily_selection("active_user", user_data)
+
+    mock_update.assert_called_once_with("active_user", user_data)
+
+
+def test_remove_word_completely_success(rune_recall_service, state_manager):
+    """Test successful complete word removal."""
+    from src.runestone.state.state_types import WordOfDay
+    from unittest.mock import MagicMock, patch
+    
+    # Setup user data
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="kontanter")]
+    user_data.db_user_id = 1
+
+    # Mock vocabulary repository responses
+    mock_word = MagicMock(id=1, word_phrase="kontanter")
+    
+    with patch.object(rune_recall_service.vocabulary_repository, 'get_vocabulary_item_by_word_phrase', return_value=mock_word), \
+         patch.object(rune_recall_service.vocabulary_repository, 'delete_vocabulary_item_by_word_phrase', return_value=True):
+
+        result = rune_recall_service.remove_word_completely("active_user", "kontanter")
+
+        assert result["success"] is True
+        assert "kontanter" in result["message"]
+        assert "removed from vocabulary" in result["message"]
+        assert result["removed_from_selection"] is True
+
+        # Verify repository calls
+        rune_recall_service.vocabulary_repository.get_vocabulary_item_by_word_phrase.assert_called_once_with("kontanter", 1)
+        rune_recall_service.vocabulary_repository.delete_vocabulary_item_by_word_phrase.assert_called_once_with("kontanter", 1)
+
+
+def test_remove_word_completely_word_not_found(rune_recall_service, state_manager):
+    """Test complete word removal when word is not found."""
+    from unittest.mock import patch
+    
+    user_data = state_manager.get_user("active_user")
+    user_data.db_user_id = 1
+
+    # Mock vocabulary repository to return None (word not found)
+    with patch.object(rune_recall_service.vocabulary_repository, 'get_vocabulary_item_by_word_phrase', return_value=None):
+        result = rune_recall_service.remove_word_completely("active_user", "nonexistent")
+
+        assert result["success"] is False
+        assert "not found in your vocabulary" in result["message"]
+
+
+def test_remove_word_completely_db_failure(rune_recall_service, state_manager):
+    """Test complete word removal when database deletion fails."""
+    from unittest.mock import MagicMock, patch
+    
+    user_data = state_manager.get_user("active_user")
+    user_data.db_user_id = 1
+
+    # Mock vocabulary repository responses
+    mock_word = MagicMock(id=1, word_phrase="kontanter")
+    
+    with patch.object(rune_recall_service.vocabulary_repository, 'get_vocabulary_item_by_word_phrase', return_value=mock_word), \
+         patch.object(rune_recall_service.vocabulary_repository, 'delete_vocabulary_item_by_word_phrase', return_value=False):
+
+        result = rune_recall_service.remove_word_completely("active_user", "kontanter")
+
+        assert result["success"] is False
+        assert "Failed to remove word" in result["message"]
+
+
+def test_remove_word_completely_user_not_found(rune_recall_service, state_manager):
+    """Test complete word removal when user is not found."""
+    result = rune_recall_service.remove_word_completely("nonexistent_user", "kontanter")
+
+    assert result["success"] is False
+    assert "User 'nonexistent_user' not found" in result["message"]
+
+
+def test_postpone_word_success(rune_recall_service, state_manager):
+    """Test successful word postponement."""
+    from src.runestone.state.state_types import WordOfDay
+    
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [
+        WordOfDay(id_=1, word_phrase="kontanter"),
+        WordOfDay(id_=2, word_phrase="hej")
+    ]
+
+    result = rune_recall_service.postpone_word("active_user", "kontanter")
+
+    assert result["success"] is True
+    assert "postponed" in result["message"]
+    assert "kontanter" in result["message"]
+
+
+def test_postpone_word_not_in_selection(rune_recall_service, state_manager):
+    """Test postponing word that's not in daily selection."""
+    from src.runestone.state.state_types import WordOfDay
+    
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="hej")]
+
+    result = rune_recall_service.postpone_word("active_user", "kontanter")
+
+    assert result["success"] is False
+    assert "was not in today's selection" in result["message"]
+
+
+def test_postpone_word_user_not_found(rune_recall_service, state_manager):
+    """Test postponing word when user is not found."""
+    result = rune_recall_service.postpone_word("nonexistent_user", "kontanter")
+
+    assert result["success"] is False
+    assert "User 'nonexistent_user' not found" in result["message"]

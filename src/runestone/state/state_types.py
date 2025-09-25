@@ -21,17 +21,17 @@ class UserData(BaseModel):
     daily_selection: List[WordOfDay] = Field(default_factory=list)
     next_word_index: int = 0  # Added for rune_recall_service compatibility
 
-    @field_validator('daily_selection', mode='before')
+    @field_validator("daily_selection", mode="before")
     @classmethod
     def validate_daily_selection(cls, v: Any) -> List[WordOfDay]:
         """Convert old format (list of lists) to new format (list of WordOfDay)."""
         if not v:
             return []
-        
+
         # If already a list of WordOfDay objects, return as-is
         if v and isinstance(v[0], WordOfDay):
             return v
-        
+
         # Convert old format [[id, word_phrase], ...] to [WordOfDay(...), ...]
         result = []
         for item in v:

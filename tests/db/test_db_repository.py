@@ -573,3 +573,103 @@ class TestVocabularyRepository:
         db_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab.id).first()
         assert db_vocab.last_learned is not None
         assert before_update <= db_vocab.last_learned <= after_update
+
+    def test_get_vocabulary_item_by_word_phrase(self, repo, db_session):
+        """Test getting a vocabulary item by word phrase."""
+        # Add test items
+        vocab1 = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            in_learn=True,
+            last_learned=None,
+        )
+        vocab2 = VocabularyModel(
+            user_id=2,
+            word_phrase="en banan",  # Different word phrase for user 2
+            translation="a banana",
+            in_learn=True,
+            last_learned=None,
+        )
+
+        db_session.add_all([vocab1, vocab2])
+        db_session.commit()
+
+        # Test successful retrieval for user 1
+        result = repo.get_vocabulary_item_by_word_phrase("ett äpple", user_id=1)
+        assert result is not None
+        assert result.id == vocab1.id
+        assert result.word_phrase == "ett äpple"
+        assert result.user_id == 1
+
+        # Test successful retrieval for user 2
+        result = repo.get_vocabulary_item_by_word_phrase("en banan", user_id=2)
+        assert result is not None
+        assert result.id == vocab2.id
+        assert result.word_phrase == "en banan"
+        assert result.user_id == 2
+
+        # Test non-existent word phrase
+        result = repo.get_vocabulary_item_by_word_phrase("nonexistent", user_id=1)
+        assert result is None
+
+        # Test wrong user (user 1 looking for user 2's word)
+        result = repo.get_vocabulary_item_by_word_phrase("en banan", user_id=1)
+        assert result is None
+
+        # Test wrong user (user 2 looking for user 1's word)
+        result = repo.get_vocabulary_item_by_word_phrase("ett äpple", user_id=2)
+        assert result is None
+
+    def test_delete_vocabulary_item_by_word_phrase(self, repo, db_session):
+        """Test deleting (marking as not in learning) a vocabulary item by word phrase."""
+        # Add test items
+        vocab1 = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            in_learn=True,
+            last_learned=None,
+        )
+        vocab2 = VocabularyModel(
+            user_id=1,
+            word_phrase="en banan",
+            translation="a banana",
+            in_learn=False,  # Already not in learning
+            last_learned=None,
+        )
+        vocab3 = VocabularyModel(
+            user_id=2,
+            word_phrase="ett päron",  # Different word phrase for user 2
+            translation="a pear",
+            in_learn=True,
+            last_learned=None,
+        )
+
+        db_session.add_all([vocab1, vocab2, vocab3])
+        db_session.commit()
+
+        # Test successful deletion
+        result = repo.delete_vocabulary_item_by_word_phrase("ett äpple", user_id=1)
+        assert result is True
+
+        # Verify item is marked as not in learning
+        db_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab1.id).first()
+        assert db_vocab.in_learn is False
+        assert db_vocab.word_phrase == "ett äpple"  # Other fields unchanged
+
+        # Verify other user's item is unchanged
+        db_vocab_user2 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab3.id).first()
+        assert db_vocab_user2.in_learn is True
+
+        # Test deleting item already not in learning (should still return True but no change)
+        result = repo.delete_vocabulary_item_by_word_phrase("en banan", user_id=1)
+        assert result is True
+
+        # Test deleting non-existent word phrase
+        result = repo.delete_vocabulary_item_by_word_phrase("nonexistent", user_id=1)
+        assert result is False
+
+        # Test deleting with wrong user
+        result = repo.delete_vocabulary_item_by_word_phrase("ett päron", user_id=1)
+        assert result is False
