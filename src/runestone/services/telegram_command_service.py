@@ -43,7 +43,7 @@ class TelegramCommandService:
                 return
 
             updates = data.get("result", [])
-            max_update_id = offset
+            max_update_id = 0
 
             for update in updates:
                 update_id = update.get("update_id")
@@ -90,7 +90,7 @@ class TelegramCommandService:
                     logger.warning(f"Unauthorized user {username} tried to access the bot")
 
             # Update offset to the next one if any updates were received
-            if updates:
+            if updates and max_update_id > 0:
                 self.state_manager.set_update_offset(max_update_id + 1)
 
         except httpx.RequestError as e:

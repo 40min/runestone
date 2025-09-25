@@ -178,10 +178,10 @@ class StateManager:
             if os.path.exists(offset_file):
                 with open(offset_file, 'r') as f:
                     return int(f.read().strip())
-            return 0
+            return -1
         except Exception as e:
             logger.error(f"Failed to get update offset: {e}")
-            return 0
+            return -1
 
     @with_lock
     def set_update_offset(self, offset: int):
