@@ -188,7 +188,7 @@ class RuneRecallService:
         example_phrase = word.get("example_phrase", "")
 
         # Format the message
-        message = f"📖 **{word_phrase}**\n🇸🇪 {translation}"
+        message = f"🇸🇪 **{word_phrase}**\n🇬🇧 {translation}"
         if example_phrase:
             message += f"\n\n💡 *Example:* {example_phrase}"
 

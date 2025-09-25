@@ -67,11 +67,15 @@ class TelegramCommandService:
                 if user_data:
                     # Authorized user
                     if text == "/start":
+                        was_inactive = not user_data.is_active
                         user_data.is_active = True
                         user_data.chat_id = chat_id
                         self.state_manager.update_user(username, user_data)
-                        self._send_message(chat_id, "Bot started! You will receive daily vocabulary words.")
-                        logger.info(f"User {username} started the bot")
+                        if was_inactive:
+                            self._send_message(chat_id, "Bot started! You will receive daily vocabulary words.")
+                            logger.info(f"User {username} started the bot")
+                        else:
+                            logger.info(f"User {username} sent /start but was already active")
                     elif text == "/stop":
                         user_data.is_active = False
                         self.state_manager.update_user(username, user_data)
@@ -85,8 +89,8 @@ class TelegramCommandService:
                     self._send_message(chat_id, "Sorry, you are not authorized to use this bot.")
                     logger.warning(f"Unauthorized user {username} tried to access the bot")
 
-            # Update offset to the next one only if updates were processed
-            if max_update_id > offset:
+            # Update offset to the next one if any updates were received
+            if updates:
                 self.state_manager.set_update_offset(max_update_id + 1)
 
         except httpx.RequestError as e:

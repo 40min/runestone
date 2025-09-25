@@ -16,7 +16,7 @@ wheels/
 .env
 tasks/
 csv/
-state/
+state/*
 
 # Frontend
 frontend/node_modules
@@ -39,3 +39,4 @@ docker-compose.override.yml
 *.sw?
 runestone.db
 vocab_db.md
+*.offset

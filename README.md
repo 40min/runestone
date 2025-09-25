@@ -17,6 +17,7 @@ A command-line tool and web application for analyzing Swedish textbook pages usi
 - **⚙️ Configurable**: Easy provider switching via environment variables or CLI options
 - **🌐 Web API**: REST API for programmatic access to image processing functionality
 - **🖥️ Web Interface**: Responsive web application for easy image upload and results viewing
+- **🤖 Rune Recall**: Telegram bot for daily vocabulary recall and command processing
 
 ## 🚀 Quick Start
 
@@ -27,6 +28,7 @@ A command-line tool and web application for analyzing Swedish textbook pages usi
 - API key for your chosen LLM provider:
   - **OpenAI**: API key with GPT-4o access (recommended, default)
   - **Gemini**: Google Gemini API key with vision capabilities
+- Telegram Bot Token (for Rune Recall feature): Obtain from @BotFather on Telegram
 - UV package manager (recommended) or pip
 
 ### Installation
@@ -149,6 +151,30 @@ The web interface will be available at `http://localhost:5173` with the followin
 3. Upload a Swedish textbook page image
 4. View the structured analysis results
 
+### Rune Recall Feature
+
+Runestone includes a Telegram bot for automated vocabulary recall and command processing:
+
+```bash
+# Start the Rune Recall Telegram Bot Worker
+make run-recall
+
+# Or run directly
+uv run python recall_main.py
+```
+
+The bot will:
+- Poll for incoming commands every 5 seconds
+- Send vocabulary recall words at configured intervals (default: every 60 minutes)
+- Process user interactions via Telegram
+
+**Prerequisites:**
+- Set `TELEGRAM_BOT_TOKEN` environment variable with your bot token from @BotFather
+- Ensure vocabulary data is available in the database
+
+**Configuration:**
+- `RECALL_INTERVAL_MINUTES`: Interval between recall messages (default: 60)
+
 ## 📖 Example Output
 
 When you process a Swedish textbook page, Runestone will provide:
@@ -241,6 +267,7 @@ make run IMAGE_PATH=/path/to/image.jpg GEMINI_API_KEY=your_key  # Run CLI applic
 make run-backend       # Start FastAPI backend server
 make run-frontend      # Start frontend development server
 make run-dev           # Start both backend and frontend concurrently
+make run-recall        # Start the Rune Recall Telegram Bot Worker
 
 # Development Workflows
 make dev-test          # Quick development test (install-dev + lint-check + test)
@@ -364,6 +391,11 @@ tests/
 **General Settings:**
 - `VERBOSE`: Enable verbose logging (`true` or `false`, default: `false`)
 
+**Telegram Configuration:**
+- `TELEGRAM_BOT_TOKEN`: Your Telegram bot token from @BotFather (required for Rune Recall)
+- `RECALL_INTERVAL_MINUTES`: Interval between recall messages in minutes (default: 60)
+- `TELEGRAM_OFFSET_FILENAME`: Filename for storing Telegram update offset (default: offset.txt)
+
 ### Configuration File
 
 Create a `.env` file from the example:
@@ -385,6 +417,10 @@ GEMINI_API_KEY=your_gemini_api_key_here
 
 # Database settings
 DATABASE_URL=sqlite:///./runestone.db
+
+# Telegram settings (for Rune Recall)
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+RECALL_INTERVAL_MINUTES=60
 
 # General settings
 VERBOSE=false

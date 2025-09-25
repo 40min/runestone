@@ -5,7 +5,7 @@
 .PHONY: install install-dev install-backend install-frontend install-all
 .PHONY: lint lint-check backend-lint frontend-lint
 .PHONY: test test-coverage backend-test frontend-test
-.PHONY: run run-backend run-frontend run-dev load-vocab
+.PHONY: run run-backend run-frontend run-dev run-recall load-vocab
 .PHONY: dev-test dev-full ci-lint ci-test
 
 # =============================================================================
@@ -43,6 +43,7 @@ help:
 	@echo "  run-backend      - Start FastAPI backend server"
 	@echo "  run-frontend     - Start frontend development server"
 	@echo "  run-dev          - Start both backend and frontend concurrently"
+	@echo "  run-recall       - Start the Rune Recall Telegram Bot Worker"
 	@echo ""
 	@echo "Development Workflows:"
 	@echo "  dev-test         - Quick development test (install-dev + lint-check + test)"
@@ -222,6 +223,11 @@ run-dev:
 	@echo "Press Ctrl+C to stop both servers"
 	@(cd frontend && npm run dev) & \
 	uv run uvicorn runestone.api.main:app --reload --host 0.0.0.0 --port 8010
+
+# Start Rune Recall Telegram Bot Worker
+run-recall:
+	@echo "🚀 Starting Rune Recall Telegram Bot Worker..."
+	@uv run python recall_main.py
 
 # =============================================================================
 # DEVELOPMENT WORKFLOWS

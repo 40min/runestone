@@ -14,7 +14,6 @@ from src.runestone.state.state_types import UserData
 def temp_state_file():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         default_state = {
-            "update_offset": 0,
             "users": {
                 "user1": {"db_user_id": 1, "chat_id": 123, "is_active": True, "daily_selection": {"word": "test"}},
                 "user2": {"db_user_id": 2, "chat_id": None, "is_active": False, "daily_selection": {}},
@@ -64,28 +63,51 @@ def test_get_active_users(state_manager):
     assert list(active_users.keys()) == ["user1"]
 
 
-def test_get_update_offset(state_manager):
+def test_get_update_offset(state_manager, temp_state_file):
+    # Initially should be 0 since no offset file exists
     offset = state_manager.get_update_offset()
     assert offset == 0
+
+    # Set offset and check it can be retrieved
+    state_manager.set_update_offset(42)
+    offset = state_manager.get_update_offset()
+    assert offset == 42
+
+    # Check offset file was created
+    offset_file = os.path.join(os.path.dirname(temp_state_file), 'offset.txt')
+    assert os.path.exists(offset_file)
+    with open(offset_file, 'r') as f:
+        assert f.read().strip() == '42'
 
 
 def test_set_update_offset(state_manager, temp_state_file):
     state_manager.set_update_offset(100)
+
+    # Check offset is not in state.json anymore
     with open(temp_state_file, "r") as f:
         state = json.load(f)
-    assert state["update_offset"] == 100
+    assert "update_offset" not in state
+
+    # Check offset is in separate file
     assert state_manager.get_update_offset() == 100
+    offset_file = os.path.join(os.path.dirname(temp_state_file), 'offset.txt')
+    assert os.path.exists(offset_file)
+    with open(offset_file, 'r') as f:
+        assert f.read().strip() == '100'
 
 
 def test_file_creation():
     StateManager._reset_for_testing()
     with tempfile.TemporaryDirectory() as temp_dir:
         state_file = os.path.join(temp_dir, "state.json")
-        StateManager(state_file)
+        manager = StateManager(state_file)
         assert os.path.exists(state_file)
         with open(state_file, "r") as f:
             state = json.load(f)
-        assert state == {"update_offset": 0, "users": {}}
+        assert state == {"users": {}}
+
+        # Check offset starts at 0
+        assert manager.get_update_offset() == 0
 
 
 def test_load_state_invalid_json():

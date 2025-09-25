@@ -14,7 +14,6 @@ from src.runestone.state.state_manager import StateManager
 def temp_state_file():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         default_state = {
-            "update_offset": 0,
             "users": {"authorized_user": {"db_user_id": 1, "chat_id": None, "is_active": False, "daily_selection": {}}},
         }
         json.dump(default_state, f)
@@ -26,7 +25,10 @@ def temp_state_file():
 @pytest.fixture
 def state_manager(temp_state_file):
     StateManager._reset_for_testing()
-    return StateManager(temp_state_file)
+    manager = StateManager(temp_state_file)
+    # Ensure offset starts at 0 for each test
+    manager.set_update_offset(0)
+    return manager
 
 
 @pytest.fixture

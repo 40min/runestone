@@ -147,7 +147,7 @@ def test_send_word_message_success(mock_client_class, rune_recall_service):
     result = rune_recall_service._send_word_message(123, word)
     assert result is True
 
-    expected_message = "📖 **hello**\n🇸🇪 hej\n\n💡 *Example:* Hello, how are you?"
+    expected_message = "🇸🇪 **hello**\n🇬🇧 hej\n\n💡 *Example:* Hello, how are you?"
     mock_client.post.assert_called_once_with(
         "https://api.telegram.org/bottest_token/sendMessage",
         json={"chat_id": 123, "text": expected_message, "parse_mode": "Markdown"},
@@ -167,7 +167,7 @@ def test_send_word_message_without_example(mock_client_class, rune_recall_servic
     result = rune_recall_service._send_word_message(123, word)
     assert result is True
 
-    expected_message = "📖 **hello**\n🇸🇪 hej"
+    expected_message = "🇸🇪 **hello**\n🇬🇧 hej"
     mock_client.post.assert_called_once_with(
         "https://api.telegram.org/bottest_token/sendMessage",
         json={"chat_id": 123, "text": expected_message, "parse_mode": "Markdown"},
