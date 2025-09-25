@@ -1,0 +1,12 @@
+{
+  "_comment": "This is a template for the state.json file used by the RuneRecall Telegram bot. Administrators should copy this file to state.json and configure the users object with authorized Telegram usernames. Each user entry contains: db_user_id (integer, links to vocabulary database user), chat_id (integer or null, Telegram chat ID), is_active (boolean, whether user is receiving words), daily_selection (object, tracks daily word selections). The update_offset tracks the last processed Telegram update ID.",
+  "update_offset": 0,
+  "users": {
+    "telegram_username": {
+      "db_user_id": 1,
+      "chat_id": null,
+      "is_active": false,
+      "daily_selection": {}
+    }
+  }
+}

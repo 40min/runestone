@@ -30,6 +30,14 @@ class Settings(BaseSettings):
     # Database Configuration
     database_url: str = "sqlite:///./runestone.db"
 
+    # Telegram Configuration
+    telegram_bot_token: Optional[str] = None
+
+    # Recall Configuration
+    recall_start_hour: int = 9
+    recall_end_hour: int = 22  # 10 PM
+    recall_interval_minutes: int = 60
+
     class Config:
         """Pydantic configuration."""
 

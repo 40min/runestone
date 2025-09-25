@@ -7,8 +7,6 @@ for vocabulary-related operations.
 
 from typing import List
 
-from sqlalchemy.orm import Session
-
 from ..api.schemas import Vocabulary as VocabularySchema
 from ..api.schemas import VocabularyItemCreate, VocabularyUpdate
 from ..db.models import Vocabulary
@@ -18,10 +16,9 @@ from ..db.repository import VocabularyRepository
 class VocabularyService:
     """Service for vocabulary-related business logic."""
 
-    def __init__(self, db: Session):
-        """Initialize service with database session."""
-        self.db = db
-        self.repo = VocabularyRepository(db)
+    def __init__(self, vocabulary_repository: VocabularyRepository):
+        """Initialize service with vocabulary repository."""
+        self.repo = vocabulary_repository
 
     def save_vocabulary(self, items: List[VocabularyItemCreate], user_id: int = 1) -> dict:
         """Save vocabulary items, handling business logic."""
@@ -59,7 +56,7 @@ class VocabularyService:
                     translation=vocab.translation,
                     example_phrase=vocab.example_phrase,
                     in_learn=vocab.in_learn,
-                    showed_times=vocab.showed_times,
+                    last_learned=vocab.last_learned.isoformat() if vocab.last_learned else None,
                     created_at=vocab.created_at.isoformat() if vocab.created_at else None,
                     updated_at=vocab.updated_at.isoformat() if vocab.updated_at else None,
                 )
@@ -82,7 +79,7 @@ class VocabularyService:
             translation=updated_vocab.translation,
             example_phrase=updated_vocab.example_phrase,
             in_learn=updated_vocab.in_learn,
-            showed_times=updated_vocab.showed_times,
+            last_learned=updated_vocab.last_learned.isoformat() if updated_vocab.last_learned else None,
             created_at=updated_vocab.created_at.isoformat() if updated_vocab.created_at else None,
             updated_at=updated_vocab.updated_at.isoformat() if updated_vocab.updated_at else None,
         )

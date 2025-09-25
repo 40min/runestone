@@ -89,11 +89,11 @@ const VocabularyView: React.FC = () => {
               )
             },
             {
-              key: 'showed_times',
-              label: 'Shown Times',
+              key: 'last_learned',
+              label: 'Last Learned',
               render: (value) => (
                 <Typography sx={{ color: 'white', textAlign: 'center' }}>
-                  {value as number}
+                  {value ? new Date(value as string).toLocaleDateString() : 'Never'}
                 </Typography>
               )
             },

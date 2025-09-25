@@ -5,7 +5,7 @@
 .PHONY: install install-dev install-backend install-frontend install-all
 .PHONY: lint lint-check backend-lint frontend-lint
 .PHONY: test test-coverage backend-test frontend-test
-.PHONY: run run-backend run-frontend run-dev load-vocab
+.PHONY: run run-backend run-frontend run-dev run-recall load-vocab
 .PHONY: dev-test dev-full ci-lint ci-test
 
 # =============================================================================
@@ -39,10 +39,11 @@ help:
 	@echo ""
 	@echo "Running Applications:"
 	@echo "  run              - Run CLI application (requires IMAGE_PATH and GEMINI_API_KEY)"
-	@echo "  load-vocab       - Load vocabulary from CSV file (requires CSV_PATH)"
+	@echo "  load-vocab       - Load vocabulary from CSV file (requires CSV_PATH, optional: DB_NAME, SKIP_EXISTENCE_CHECK)"
 	@echo "  run-backend      - Start FastAPI backend server"
 	@echo "  run-frontend     - Start frontend development server"
 	@echo "  run-dev          - Start both backend and frontend concurrently"
+	@echo "  run-recall       - Start the Rune Recall Telegram Bot Worker"
 	@echo ""
 	@echo "Development Workflows:"
 	@echo "  dev-test         - Quick development test (install-dev + lint-check + test)"
@@ -182,14 +183,22 @@ run:
 # Load vocabulary from CSV file
 load-vocab:
 	@if [ -z "$(CSV_PATH)" ]; then \
-		echo "❌ Error: CSV_PATH is required. Usage: make load-vocab CSV_PATH=path/to/vocab.csv"; \
+		echo "❌ Error: CSV_PATH is required. Usage: make load-vocab CSV_PATH=path/to/vocab.csv [DB_NAME=name.db] [SKIP_EXISTENCE_CHECK=true]"; \
 		exit 1; \
 	fi
 	@echo "📚 Loading vocabulary from CSV: $(CSV_PATH)"
-	@if [ -n "$(DB_NAME)" ]; then \
-		uv run runestone load-vocab "$(CSV_PATH)" --db-name "$(DB_NAME)"; \
+	@if [ -n "$(SKIP_EXISTENCE_CHECK)" ] && [ "$(SKIP_EXISTENCE_CHECK)" = "true" ]; then \
+		if [ -n "$(DB_NAME)" ]; then \
+			uv run runestone load-vocab "$(CSV_PATH)" --db-name "$(DB_NAME)" --skip-existence-check; \
+		else \
+			uv run runestone load-vocab "$(CSV_PATH)" --skip-existence-check; \
+		fi \
 	else \
-		uv run runestone load-vocab "$(CSV_PATH)"; \
+		if [ -n "$(DB_NAME)" ]; then \
+			uv run runestone load-vocab "$(CSV_PATH)" --db-name "$(DB_NAME)"; \
+		else \
+			uv run runestone load-vocab "$(CSV_PATH)"; \
+		fi \
 	fi
 
 # Start FastAPI backend server
@@ -214,6 +223,11 @@ run-dev:
 	@echo "Press Ctrl+C to stop both servers"
 	@(cd frontend && npm run dev) & \
 	uv run uvicorn runestone.api.main:app --reload --host 0.0.0.0 --port 8010
+
+# Start Rune Recall Telegram Bot Worker
+run-recall:
+	@echo "🚀 Starting Rune Recall Telegram Bot Worker..."
+	@uv run python recall_main.py
 
 # =============================================================================
 # DEVELOPMENT WORKFLOWS

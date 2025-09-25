@@ -48,3 +48,9 @@ class ContentAnalysisError(RunestoneError):
     """Raised when content analysis fails."""
 
     pass
+
+
+class UserNotAuthorised(RunestoneError):
+    """Raised when attempting to update a non-existing user."""
+
+    pass

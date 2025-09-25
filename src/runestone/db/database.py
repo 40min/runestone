@@ -5,7 +5,10 @@ This module sets up SQLAlchemy engine, session factory, and base class
 for database operations in the Runestone application.
 """
 
-from sqlalchemy import create_engine
+import logging
+import os
+
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -16,6 +19,8 @@ engine = create_engine(
     settings.database_url,
     connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {},
 )
+
+logger = logging.getLogger(__name__)
 
 # Create SessionLocal class
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -31,3 +36,29 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def setup_database() -> None:
+    """Check if database and tables exist, raise exception if not."""
+
+    # For SQLite, check if database file exists
+    if "sqlite" in str(engine.url):
+        db_path = engine.url.database
+        if db_path and not os.path.exists(db_path):
+            logger.error(f"Database file '{db_path}' does not exist")
+            raise FileNotFoundError(f"Database file '{db_path}' does not exist")
+
+    # Check if required tables exist
+    inspector = inspect(engine)
+    existing_tables = inspector.get_table_names()
+
+    # Get expected table names from Base metadata
+    expected_tables = Base.metadata.tables.keys()
+
+    missing_tables = [table for table in expected_tables if table not in existing_tables]
+
+    if missing_tables:
+        logger.error(f"Missing database tables: {', '.join(missing_tables)}")
+        raise ValueError(f"Missing database tables: {', '.join(missing_tables)}")
+
+    logger.info("Database and tables verified successfully.")

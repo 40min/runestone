@@ -14,8 +14,11 @@ services:
       - OPENAI_MODEL=${OPENAI_MODEL}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - VERBOSE=${VERBOSE}
+      - DATABASE_URL=sqlite:///./runestone.db
     volumes:
       - ./res:/app/res:ro
+      - ./runestone.db:/app/runestone.db
+      - ./state.json:/app/state.json
     networks:
       - runestone-network
     restart: unless-stopped
@@ -33,6 +36,37 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  recall:
+    build:
+      context: .
+      dockerfile: Dockerfile.recall
+    container_name: runestone-recall
+    env_file:
+      - .env
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DATABASE_URL=sqlite:///./runestone.db
+      - VERBOSE=${VERBOSE}
+    volumes:
+      - ./runestone.db:/app/runestone.db
+      - ./state.json:/app/state.json
+    networks:
+      - runestone-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
     logging:
       driver: "json-file"
       options:
