@@ -14,7 +14,7 @@ import httpx
 from runestone.config import settings
 from runestone.db.repository import VocabularyRepository
 from runestone.state.state_manager import StateManager
-from runestone.state.state_types import UserData
+from runestone.state.state_types import UserData, WordOfDay
 
 logger = logging.getLogger(__name__)
 
@@ -92,27 +92,26 @@ class RuneRecallService:
             logger.warning(f"Missing chat_id for user {username}, skipping recall")
             return
 
-        today = datetime.now().date().isoformat()
         daily_selection = user_data.daily_selection
         next_word_index = user_data.next_word_index
 
         # Check if we need to select a new daily portion
-        if today not in daily_selection or not daily_selection[today]:
+        if not daily_selection:
             logger.info(f"Selecting new daily portion for user {username}")
-            portion_words = self._select_daily_portion(db_user_id, daily_selection)
+            portion_words = self._select_daily_portion(db_user_id)
             if not portion_words:
                 logger.info(f"No words available for daily portion for user {username}")
                 return
 
-            selected_ids = [word["id"] for word in portion_words]
-            daily_selection[today] = selected_ids
+            daily_selection_list = [WordOfDay(id_=word["id"], word_phrase=word["word_phrase"]) for word in portion_words]
             next_word_index = 0
-            user_data.daily_selection = daily_selection
+            user_data.daily_selection = daily_selection_list
             user_data.next_word_index = next_word_index
             self.state_manager.update_user(username, user_data)
 
-        # Get the selected IDs for today
-        selected_ids = daily_selection[today]
+        # Get the selected items for today
+        selected_items = user_data.daily_selection
+        selected_ids = [item.id_ for item in selected_items]
         if next_word_index >= len(selected_ids):
             next_word_index = 0
 
@@ -140,13 +139,12 @@ class RuneRecallService:
         else:
             logger.error(f"Failed to send recall word to user {username}")
 
-    def _select_daily_portion(self, db_user_id: int, daily_selection: Dict[str, List[int]]) -> List[Dict]:
+    def _select_daily_portion(self, db_user_id: int) -> List[Dict]:
         """
         Select a daily portion of words for recall based on user's vocabulary and cooldown.
 
         Args:
             db_user_id: Database user ID
-            daily_selection: Dictionary of previously sent words by date (kept for backward compatibility)
 
         Returns:
             List of word dictionaries for the daily portion

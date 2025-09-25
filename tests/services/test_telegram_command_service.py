@@ -14,7 +14,7 @@ from src.runestone.state.state_manager import StateManager
 def temp_state_file():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         default_state = {
-            "users": {"authorized_user": {"db_user_id": 1, "chat_id": None, "is_active": False, "daily_selection": {}}},
+            "users": {"authorized_user": {"db_user_id": 1, "chat_id": None, "is_active": False, "daily_selection": []}},
         }
         json.dump(default_state, f)
         f.flush()
@@ -97,6 +97,7 @@ def test_process_updates_authorized_start(mock_client_class, telegram_service, s
                     "from": {"username": "authorized_user"},
                     "chat": {"id": 123},
                     "text": "/start",
+                    "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
                 },
             }
         ],
@@ -132,7 +133,7 @@ def test_process_updates_authorized_start(mock_client_class, telegram_service, s
 def test_process_updates_authorized_stop(mock_client_class, telegram_service, state_manager):
     # First activate user
     state_manager.update_user(
-        "authorized_user", {"db_user_id": 1, "chat_id": 123, "is_active": True, "daily_selection": {}}
+        "authorized_user", {"db_user_id": 1, "chat_id": 123, "is_active": True, "daily_selection": []}
     )
 
     mock_client = MagicMock()
@@ -149,6 +150,7 @@ def test_process_updates_authorized_stop(mock_client_class, telegram_service, st
                     "from": {"username": "authorized_user"},
                     "chat": {"id": 123},
                     "text": "/stop",
+                    "entities": [{"offset": 0, "length": 5, "type": "bot_command"}],
                 },
             }
         ],
@@ -195,6 +197,7 @@ def test_process_updates_unauthorized(mock_client_class, telegram_service):
                     "from": {"username": "unauthorized_user"},
                     "chat": {"id": 456},
                     "text": "/start",
+                    "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
                 },
             }
         ],
@@ -258,3 +261,47 @@ def test_process_updates_empty_updates(mock_client_class, telegram_service, stat
 
     # Offset should not change
     assert state_manager.get_update_offset() == initial_offset
+
+
+@patch("src.runestone.services.telegram_command_service.httpx.Client")
+def test_process_updates_non_bot_command_ignored(mock_client_class, telegram_service, state_manager):
+    mock_client = MagicMock()
+
+    # Mock getUpdates response with a message that is not a bot command
+    mock_get_response = MagicMock()
+    mock_get_response.json.return_value = {
+        "ok": True,
+        "result": [
+            {
+                "update_id": 4,
+                "message": {
+                    "message_id": 4,
+                    "from": {"username": "authorized_user"},
+                    "chat": {"id": 123},
+                    "text": "Hello bot",  # Not a command
+                    "entities": [],  # No entities
+                },
+            }
+        ],
+    }
+    mock_get_response.raise_for_status.return_value = None
+    mock_client.get.return_value = mock_get_response
+
+    # Mock sendMessage response (should not be called)
+    mock_post_response = MagicMock()
+    mock_post_response.raise_for_status.return_value = None
+    mock_client.post.return_value = mock_post_response
+
+    mock_client_class.return_value.__enter__.return_value = mock_client
+
+    telegram_service.process_updates()
+
+    # Check offset updated
+    assert state_manager.get_update_offset() == 5
+
+    # Check no message sent (since it's not a bot command)
+    mock_client.post.assert_not_called()
+
+    # Check state not updated
+    user_data = state_manager.get_user("authorized_user")
+    assert user_data.is_active is False  # Should remain inactive

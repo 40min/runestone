@@ -86,12 +86,12 @@ class StateManager:
                 raw_state = self.file_handler.load_state()
 
                 # Handle migration: extract update_offset from state.json to separate file
-                if 'update_offset' in raw_state:
-                    offset_value = raw_state.pop('update_offset')
+                if "update_offset" in raw_state:
+                    offset_value = raw_state.pop("update_offset")
                     try:
                         offset_file = self._get_offset_file_path()
                         os.makedirs(os.path.dirname(offset_file), exist_ok=True)
-                        with open(offset_file, 'w') as f:
+                        with open(offset_file, "w") as f:
                             f.write(str(offset_value))
                         logger.info(f"Migrated update_offset {offset_value} to separate file")
                     except Exception as e:
@@ -176,12 +176,12 @@ class StateManager:
         try:
             offset_file = self._get_offset_file_path()
             if os.path.exists(offset_file):
-                with open(offset_file, 'r') as f:
+                with open(offset_file, "r") as f:
                     return int(f.read().strip())
-            return -1
+            return 0
         except Exception as e:
             logger.error(f"Failed to get update offset: {e}")
-            return -1
+            return 0
 
     @with_lock
     def set_update_offset(self, offset: int):
@@ -191,7 +191,7 @@ class StateManager:
             # Ensure directory exists
             os.makedirs(os.path.dirname(offset_file), exist_ok=True)
 
-            with open(offset_file, 'w') as f:
+            with open(offset_file, "w") as f:
                 f.write(str(offset))
             logger.debug(f"Set update offset to {offset}")
         except Exception as e:

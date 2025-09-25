@@ -7,7 +7,7 @@ import pytest
 from src.runestone.core.exceptions import UserNotAuthorised
 from src.runestone.state.state_exceptions import StateCorruptionError
 from src.runestone.state.state_manager import StateManager
-from src.runestone.state.state_types import UserData
+from src.runestone.state.state_types import UserData, WordOfDay
 
 
 @pytest.fixture
@@ -15,8 +15,8 @@ def temp_state_file():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         default_state = {
             "users": {
-                "user1": {"db_user_id": 1, "chat_id": 123, "is_active": True, "daily_selection": {"word": "test"}},
-                "user2": {"db_user_id": 2, "chat_id": None, "is_active": False, "daily_selection": {}},
+                "user1": {"db_user_id": 1, "chat_id": 123, "is_active": True, "daily_selection": [[1, "test"]]},
+                "user2": {"db_user_id": 2, "chat_id": None, "is_active": False, "daily_selection": []},
             },
         }
         json.dump(default_state, f)
@@ -33,7 +33,9 @@ def state_manager(temp_state_file):
 
 def test_get_user_existing(state_manager):
     user = state_manager.get_user("user1")
-    expected = UserData(db_user_id=1, chat_id=123, is_active=True, daily_selection={"word": "test"}, next_word_index=0)
+    expected = UserData(
+        db_user_id=1, chat_id=123, is_active=True, daily_selection=[WordOfDay(id_=1, word_phrase="test")], next_word_index=0
+    )
     assert user == expected
 
 
@@ -43,17 +45,16 @@ def test_get_user_non_existing(state_manager):
 
 
 def test_update_user_existing(state_manager, temp_state_file):
-    new_data = {"db_user_id": 1, "chat_id": 456, "is_active": False, "daily_selection": {"word": "updated"}}
+    new_data = {"db_user_id": 1, "chat_id": 456, "is_active": False, "daily_selection": [[2, "updated"]]}
     state_manager.update_user("user1", new_data)
     with open(temp_state_file, "r") as f:
         state = json.load(f)
-    expected = new_data.copy()
-    expected["next_word_index"] = 0  # Default value from UserData model
+    expected = {"db_user_id": 1, "chat_id": 456, "is_active": False, "daily_selection": [{"id_": 2, "word_phrase": "updated"}], "next_word_index": 0}
     assert state["users"]["user1"] == expected
 
 
 def test_update_user_new_raises_exception(state_manager):
-    new_data = {"db_user_id": 3, "chat_id": 789, "is_active": True, "daily_selection": {}}
+    new_data = {"db_user_id": 3, "chat_id": 789, "is_active": True, "daily_selection": []}
     with pytest.raises(UserNotAuthorised, match="User 'user3' does not exist and cannot be updated."):
         state_manager.update_user("user3", new_data)
 
@@ -74,10 +75,10 @@ def test_get_update_offset(state_manager, temp_state_file):
     assert offset == 42
 
     # Check offset file was created
-    offset_file = os.path.join(os.path.dirname(temp_state_file), 'offset.txt')
+    offset_file = os.path.join(os.path.dirname(temp_state_file), "offset.txt")
     assert os.path.exists(offset_file)
-    with open(offset_file, 'r') as f:
-        assert f.read().strip() == '42'
+    with open(offset_file, "r") as f:
+        assert f.read().strip() == "42"
 
 
 def test_set_update_offset(state_manager, temp_state_file):
@@ -90,10 +91,10 @@ def test_set_update_offset(state_manager, temp_state_file):
 
     # Check offset is in separate file
     assert state_manager.get_update_offset() == 100
-    offset_file = os.path.join(os.path.dirname(temp_state_file), 'offset.txt')
+    offset_file = os.path.join(os.path.dirname(temp_state_file), "offset.txt")
     assert os.path.exists(offset_file)
-    with open(offset_file, 'r') as f:
-        assert f.read().strip() == '100'
+    with open(offset_file, "r") as f:
+        assert f.read().strip() == "100"
 
 
 def test_file_creation():

@@ -22,8 +22,8 @@ def temp_state_file():
         default_state = {
             "update_offset": 0,
             "users": {
-                "active_user": {"db_user_id": 1, "chat_id": 123, "is_active": True, "daily_selection": {}},
-                "inactive_user": {"db_user_id": 2, "chat_id": 456, "is_active": False, "daily_selection": {}},
+                "active_user": {"db_user_id": 1, "chat_id": 123, "is_active": True, "daily_selection": []},
+                "inactive_user": {"db_user_id": 2, "chat_id": 456, "is_active": False, "daily_selection": []},
             },
         }
         json.dump(default_state, f)
@@ -188,7 +188,7 @@ def test_send_word_message_failure(mock_client_class, rune_recall_service):
 
 def test_select_daily_portion(rune_recall_service):
     # Test selecting words for user 1
-    words = rune_recall_service._select_daily_portion(1, {})
+    words = rune_recall_service._select_daily_portion(1)
 
     assert len(words) == 3  # Should select all 3 words for user 1
     assert words[0]["word_phrase"] == "hello"  # Order by ID since timestamps are identical
@@ -202,7 +202,7 @@ def test_select_daily_portion_with_recent_history(rune_recall_service, test_db):
     hello_word.last_learned = datetime.now() - timedelta(days=1)  # Learned yesterday
     test_db.commit()
 
-    words = rune_recall_service._select_daily_portion(1, {})
+    words = rune_recall_service._select_daily_portion(1)
 
     assert len(words) == 2  # Should exclude the recently learned word
     word_phrases = [w["word_phrase"] for w in words]
@@ -219,17 +219,23 @@ def test_process_user_recall_word_new_portion(mock_client_class, rune_recall_ser
     mock_client.post.return_value = mock_response
     mock_client_class.return_value.__enter__.return_value = mock_client
 
+    # Mock word selection to return 3 words
+    mock_words = [
+        {"id": 1, "word_phrase": "hello", "translation": "hej", "example_phrase": "Hello"},
+        {"id": 2, "word_phrase": "goodbye", "translation": "hej då", "example_phrase": "Goodbye"},
+        {"id": 3, "word_phrase": "thank you", "translation": "tack", "example_phrase": "Thank you"},
+    ]
+
     # Get user data
     user_data = state_manager.get_user("active_user")
 
     # Process recall word for active user (no existing portion)
-    rune_recall_service._process_user_recall_word("active_user", user_data)
+    with patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_words):
+        rune_recall_service._process_user_recall_word("active_user", user_data)
 
     # Check that daily selection was created
     user_data = state_manager.get_user("active_user")
-    today = datetime.now().date().isoformat()
-    assert today in user_data.daily_selection
-    assert len(user_data.daily_selection[today]) == 3  # All 3 word IDs
+    assert len(user_data.daily_selection) == 3  # All 3 word items
     assert user_data.next_word_index == 1  # First word sent
 
     # Check that message was sent
@@ -244,15 +250,13 @@ def test_process_user_recall_word_all_sent(mock_client_class, rune_recall_servic
     mock_client_class.return_value.__enter__.return_value = mock_client
 
     # Set up selection with all words sent
-    today = datetime.now().date().isoformat()
-
     state_manager.update_user(
         "active_user",
         {
             "db_user_id": 1,
             "chat_id": 123,
             "is_active": True,
-            "daily_selection": {today: [1]},
+            "daily_selection": [[1, "hello"]],
             "next_word_index": 1,  # All words sent
         },
     )
@@ -274,7 +278,7 @@ def test_process_user_missing_data(mock_client_class, rune_recall_service, state
 
     # Update existing user to have missing chat_id
     state_manager.update_user(
-        "active_user", {"db_user_id": 1, "chat_id": None, "is_active": True, "daily_selection": {}}
+        "active_user", {"db_user_id": 1, "chat_id": None, "is_active": True, "daily_selection": []}
     )
 
     user_data = state_manager.get_user("active_user")
@@ -326,17 +330,14 @@ def test_send_next_recall_word_with_errors(mock_client_class, rune_recall_servic
 def test_daily_selection_cleanup(rune_recall_service, test_db, state_manager):
     """Test that old daily selection entries are cleaned up."""
 
-    # Add user with old daily selection data
-    old_date = (datetime.now() - timedelta(days=40)).date().isoformat()
-    recent_date = (datetime.now() - timedelta(days=5)).date().isoformat()
-
+    # Add user with daily selection data
     state_manager.update_user(
         "active_user",
         {
             "db_user_id": 1,
             "chat_id": 123,
             "is_active": True,
-            "daily_selection": {old_date: [1, 2], recent_date: [3, 4]},  # Should be cleaned up  # Should be kept
+            "daily_selection": [[1, "word1"], [2, "word2"]],  # Existing selection
         },
     )
 
@@ -352,10 +353,9 @@ def test_daily_selection_cleanup(rune_recall_service, test_db, state_manager):
 
         rune_recall_service._process_user_recall_word("active_user", user_data)
 
-    # Check that old entries are NOT cleaned up (cleanup not implemented)
+    # Check that selection is not updated since it already exists
     user_data = state_manager.get_user("active_user")
-    assert old_date in user_data.daily_selection  # Old entries remain
-    assert recent_date in user_data.daily_selection
+    assert len(user_data.daily_selection) == 2  # Existing selection remains
 
 
 # Tests for new recall functionality
@@ -430,7 +430,7 @@ def test_select_daily_portion_different_cooldown_periods(test_db):
     test_db.commit()
 
     # With 3-day cooldown, word should be excluded
-    words = service._select_daily_portion(1, {})
+    words = service._select_daily_portion(1)
     word_phrases = [w["word_phrase"] for w in words]
     assert "hello" not in word_phrases
 
@@ -438,7 +438,7 @@ def test_select_daily_portion_different_cooldown_periods(test_db):
     service_short = RuneRecallService(vocabulary_repository, state_manager, bot_token="test_token", cooldown_days=1)
 
     # With 1-day cooldown, word should be included
-    words = service_short._select_daily_portion(1, {})
+    words = service_short._select_daily_portion(1)
     word_phrases = [w["word_phrase"] for w in words]
     assert "hello" in word_phrases
 
@@ -454,6 +454,13 @@ def test_process_user_recall_word_updates_last_learned(mock_client_class, rune_r
     mock_client.post.return_value = mock_response
     mock_client_class.return_value.__enter__.return_value = mock_client
 
+    # Mock word selection to return 3 words
+    mock_words = [
+        {"id": 1, "word_phrase": "hello", "translation": "hej", "example_phrase": "Hello"},
+        {"id": 2, "word_phrase": "goodbye", "translation": "hej då", "example_phrase": "Goodbye"},
+        {"id": 3, "word_phrase": "thank you", "translation": "tack", "example_phrase": "Thank you"},
+    ]
+
     # Get initial state of a word
     hello_word = test_db.query(Vocabulary).filter(Vocabulary.word_phrase == "hello").first()
     initial_last_learned = hello_word.last_learned
@@ -461,7 +468,8 @@ def test_process_user_recall_word_updates_last_learned(mock_client_class, rune_r
 
     # Get user data and process recall word
     user_data = state_manager.get_user("active_user")
-    rune_recall_service._process_user_recall_word("active_user", user_data)
+    with patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_words):
+        rune_recall_service._process_user_recall_word("active_user", user_data)
 
     # Query the word again from database to see updated state
     updated_word = test_db.query(Vocabulary).filter(Vocabulary.id == word_id).first()
@@ -487,7 +495,7 @@ def test_select_daily_portion_no_words_available(rune_recall_service, test_db):
     test_db.commit()
 
     # Try to select daily portion
-    result = rune_recall_service._select_daily_portion(1, {})
+    result = rune_recall_service._select_daily_portion(1)
 
     # Should return empty list since all words are on cooldown
     assert result == []
@@ -507,7 +515,7 @@ def test_select_daily_portion_words_per_day_limit(test_db):
     test_db.commit()
 
     # Select daily portion
-    result = service._select_daily_portion(1, {})
+    result = service._select_daily_portion(1)
 
     # Should return only 2 words despite having 3 available
     assert len(result) == 2
@@ -522,7 +530,7 @@ def test_select_daily_portion_in_learn_filtering(rune_recall_service, test_db):
     test_db.commit()
 
     # Select daily portion
-    words = rune_recall_service._select_daily_portion(1, {})
+    words = rune_recall_service._select_daily_portion(1)
 
     # Should exclude the word not in learning
     word_phrases = [w["word_phrase"] for w in words]

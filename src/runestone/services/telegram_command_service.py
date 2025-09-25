@@ -64,6 +64,13 @@ class TelegramCommandService:
                     continue
 
                 user_data = self.state_manager.get_user(username)
+                logger.info(f"Received update: {update} from {username} in chat {chat_id}")
+
+                # Check if message contains bot command
+                entities = message.get("entities", [])
+                if not any(entity.get("type") == "bot_command" for entity in entities):
+                    continue
+
                 if user_data:
                     # Authorized user
                     if text == "/start":
