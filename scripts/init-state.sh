@@ -34,9 +34,9 @@ EOF
 fi
 
 # Set permissions to allow container access
-# Use 777 for the directory to ensure containers can write regardless of UID mapping
+# Use 777 for the directory to ensure containers can create backup files regardless of UID mapping
 echo "🔐 Setting permissions for container access..."
-chmod 755 "$STATE_DIR"
+chmod 777 "$STATE_DIR"
 chmod 666 "$STATE_FILE"
 
 # Create offset.txt file if it doesn't exist (used by StateManager)
