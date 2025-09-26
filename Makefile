@@ -7,6 +7,7 @@
 .PHONY: test test-coverage backend-test frontend-test
 .PHONY: run run-backend run-frontend run-dev run-recall load-vocab
 .PHONY: dev-test dev-full ci-lint ci-test
+.PHONY: init-state docker-up docker-down docker-build
 
 # =============================================================================
 # HELP AND INFO
@@ -52,6 +53,12 @@ help:
 	@echo "CI/CD:"
 	@echo "  ci-lint          - CI linting pipeline"
 	@echo "  ci-test          - CI testing pipeline"
+	@echo ""
+	@echo "Docker:"
+	@echo "  init-state       - Initialize state directory with proper permissions"
+	@echo "  docker-up        - Initialize state and start Docker services"
+	@echo "  docker-down      - Stop and remove Docker services"
+	@echo "  docker-build     - Build Docker images without cache"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  clean            - Clean temporary files and caches"
@@ -267,3 +274,34 @@ clean:
 	@find . -type f -name "*.pyo" -delete 2>/dev/null || true
 	@cd frontend && npm run clean 2>/dev/null || true
 	@echo "✅ Cleanup complete!"
+
+# =============================================================================
+# DOCKER COMMANDS
+# =============================================================================
+
+# Initialize state directory with proper permissions for Docker containers
+init-state:
+	@echo "🔧 Initializing state directory for Docker containers..."
+	@./scripts/init-state.sh
+	@echo "✅ State directory initialized!"
+
+# Initialize state and start all Docker services
+docker-up: init-state
+	@echo "🐳 Starting Docker services..."
+	@docker compose up -d
+	@echo "✅ Docker services started!"
+	@echo "📍 Backend: http://localhost:8010"
+	@echo "📍 Frontend: http://localhost:3010"
+	@echo "📚 API Docs: http://localhost:8010/docs"
+
+# Stop and remove Docker services
+docker-down:
+	@echo "🛑 Stopping Docker services..."
+	@docker compose down
+	@echo "✅ Docker services stopped!"
+
+# Build Docker images without cache
+docker-build:
+	@echo "🔨 Building Docker images..."
+	@docker compose build --no-cache
+	@echo "✅ Docker images built!"

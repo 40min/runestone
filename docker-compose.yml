@@ -20,8 +20,7 @@ services:
     volumes:
       - ./res:/app/res:ro
       - ./runestone.db:/app/runestone.db
-      - ./state.json:/app/state.json
-      - ./src/runestone/state:/app/src/runestone/state
+      - ./state:/app/state      
     networks:
       - runestone-network
     restart: unless-stopped
