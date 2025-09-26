@@ -23,7 +23,7 @@ class TestSettings:
             gemini_api_key: str
             verbose: bool = False
             allowed_origins: str
-            database_url: str = "sqlite:///./runestone.db"
+            database_url: str = "sqlite:///./state/runestone.db"
             telegram_bot_token: str
             recall_start_hour: int = 9
             recall_end_hour: int = 22
@@ -73,7 +73,7 @@ class TestSettings:
             gemini_api_key: str
             verbose: bool = False
             allowed_origins: str
-            database_url: str = "sqlite:///./runestone.db"
+            database_url: str = "sqlite:///./state/runestone.db"
             telegram_bot_token: str
             recall_start_hour: int = 9
             recall_end_hour: int = 22

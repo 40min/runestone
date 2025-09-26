@@ -282,7 +282,22 @@ make clean             # Clean up temporary files and caches
 make info              # Show environment information
 ```
 
-## 🐳 Updating Code in Containers
+## 🐳 Docker
+
+### Quick Start with Docker
+
+```bash
+# Start all services (automatically handles permissions)
+make docker-up
+
+# Stop all services
+make docker-down
+
+# Rebuild containers
+make docker-build
+```
+
+### Updating Code in Containers
 
 To update the code running in Docker containers after making changes:
 
@@ -295,6 +310,21 @@ docker compose restart
 ```
 
 This will rebuild the backend and frontend images with your latest code changes and restart the containers.
+
+### Database Permissions (SQLite)
+
+The Docker setup automatically handles SQLite database permissions to prevent "attempt to write a readonly database" errors:
+
+- **Database in State Directory**: The SQLite database is stored in the `state/` directory (`sqlite:///./state/runestone.db`)
+- **Automatic Permissions**: The `init-state.sh` script ensures the state directory has proper permissions (`777`) for container access
+- **No Manual Configuration**: Works across all development machines without user ID mapping
+
+**Technical Details:**
+- Database file: `./state/runestone.db` (inherits directory permissions)
+- State directory permissions: `drwxrwxrwx` (777) - allows container write access
+- The `init-state.sh` script automatically sets permissions during `make docker-up`
+
+This clean solution eliminates the need for complex user ID mapping while maintaining security and portability.
 
 ### Running Tests
 
@@ -386,7 +416,7 @@ tests/
 - `GEMINI_API_KEY`: Your Google Gemini API key (required for Gemini provider)
 
 **Database Configuration:**
-- `DATABASE_URL`: Database connection URL (default: `sqlite:///./runestone.db`)
+- `DATABASE_URL`: Database connection URL (default: `sqlite:///./state/runestone.db`)
 
 **General Settings:**
 - `VERBOSE`: Enable verbose logging (`true` or `false`, default: `false`)
@@ -416,7 +446,7 @@ OPENAI_MODEL=gpt-4o-mini
 GEMINI_API_KEY=your_gemini_api_key_here
 
 # Database settings
-DATABASE_URL=sqlite:///./runestone.db
+DATABASE_URL=sqlite:///./state/runestone.db
 
 # Telegram settings (for Rune Recall)
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here

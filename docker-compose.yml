@@ -16,11 +16,11 @@ services:
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - VERBOSE=${VERBOSE}
-      - DATABASE_URL=sqlite:///./runestone.db
+      - DATABASE_URL=sqlite:///./state/runestone.db
     volumes:
       - ./res:/app/res:ro
-      - ./runestone.db:/app/runestone.db
-      - ./state:/app/state      
+      - ./state/runestone.db:/app/state/runestone.db
+      - ./state:/app/state
     networks:
       - runestone-network
     restart: unless-stopped
@@ -53,10 +53,9 @@ services:
       - .env
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - DATABASE_URL=sqlite:///./runestone.db
+      - DATABASE_URL=sqlite:///./state/runestone.db
       - VERBOSE=${VERBOSE}
     volumes:
-      - ./runestone.db:/app/runestone.db
       - ./state:/app/state
     networks:
       - runestone-network

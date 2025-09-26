@@ -183,8 +183,8 @@ def process(
 @click.argument("csv_path", type=click.Path(exists=True, path_type=Path))
 @click.option(
     "--db-name",
-    default="runestone.db",
-    help="Database file name (default: runestone.db)",
+    default="state/runestone.db",
+    help="Database file name (default: state/runestone.db)",
 )
 @click.option(
     "--skip-existence-check",

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Bootstrap script to initialize state directory with proper permissions
-# This script ensures containers can write to the state directory without manual configuration
+# This script ensures containers can write to the state directory and database without manual configuration
 
 set -e
 
@@ -9,7 +9,7 @@ STATE_DIR="./state"
 STATE_FILE="$STATE_DIR/state.json"
 STATE_EXAMPLE="./state.example.json"
 
-echo "🔧 Initializing state directory..."
+echo "🔧 Initializing state directory and database..."
 
 # Create state directory if it doesn't exist
 if [ ! -d "$STATE_DIR" ]; then
@@ -47,7 +47,17 @@ if [ ! -f "$OFFSET_FILE" ]; then
     chmod 666 "$OFFSET_FILE"
 fi
 
-echo "✅ State directory initialization complete"
+# Note: Database is now stored in state directory, so it inherits proper permissions automatically
+DB_FILE="$STATE_DIR/runestone.db"
+if [ -f "$DB_FILE" ]; then
+    echo "🗃️  Database found in state directory"
+    chmod 666 "$DB_FILE"
+fi
+
+echo "✅ State directory and database initialization complete"
 echo "   - Directory: $STATE_DIR (permissions: $(stat -c %a "$STATE_DIR" 2>/dev/null || stat -f %A "$STATE_DIR"))"
 echo "   - State file: $STATE_FILE (permissions: $(stat -c %a "$STATE_FILE" 2>/dev/null || stat -f %A "$STATE_FILE"))"
 echo "   - Offset file: $OFFSET_FILE (permissions: $(stat -c %a "$OFFSET_FILE" 2>/dev/null || stat -f %A "$OFFSET_FILE"))"
+if [ -f "$DB_FILE" ]; then
+    echo "   - Database: $DB_FILE (permissions: $(stat -c %a "$DB_FILE" 2>/dev/null || stat -f %A "$DB_FILE"))"
+fi

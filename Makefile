@@ -55,7 +55,7 @@ help:
 	@echo "  ci-test          - CI testing pipeline"
 	@echo ""
 	@echo "Docker:"
-	@echo "  init-state       - Initialize state directory with proper permissions"
+	@echo "  init-state       - Initialize state directory and database with proper permissions"
 	@echo "  docker-up        - Initialize state and start Docker services"
 	@echo "  docker-down      - Stop and remove Docker services"
 	@echo "  docker-build     - Build Docker images without cache"
@@ -279,11 +279,11 @@ clean:
 # DOCKER COMMANDS
 # =============================================================================
 
-# Initialize state directory with proper permissions for Docker containers
+# Initialize state directory and database with proper permissions for Docker containers
 init-state:
-	@echo "🔧 Initializing state directory for Docker containers..."
+	@echo "🔧 Initializing state directory and database for Docker containers..."
 	@./scripts/init-state.sh
-	@echo "✅ State directory initialized!"
+	@echo "✅ State directory and database initialized!"
 
 # Initialize state and start all Docker services
 docker-up: init-state

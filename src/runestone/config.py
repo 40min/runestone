@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     verbose: bool = False
 
     # Database Configuration
-    database_url: str = "sqlite:///./runestone.db"
+    database_url: str = "sqlite:///./state/runestone.db"
     
     # Recall Configuration
     recall_start_hour: int = 9
