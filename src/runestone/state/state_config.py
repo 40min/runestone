@@ -17,7 +17,7 @@ class StateManagerConfig:
     backup_file_pattern: str = "{path}.backup.{timestamp}"
 
     # File settings
-    file_permissions: int = 0o600
+    file_permissions: int = 0o666
     create_missing_directories: bool = True
     offset_filename: str = "offset.txt"
 
