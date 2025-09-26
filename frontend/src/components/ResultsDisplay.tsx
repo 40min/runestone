@@ -395,10 +395,10 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                     {
                       key: 'example_phrase',
                       label: 'Example Phrase',
-                      render: (value) => value || "—"
+                      render: (value, _, __) => (value as string) || "—"
                     },
                   ]}
-                  data={analysisResult.vocabulary}
+                  data={analysisResult.vocabulary as unknown as Record<string, unknown>[]}
                 />
               </Box>
             )}

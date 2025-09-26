@@ -22,7 +22,7 @@ const CustomButton: React.FC<CustomButtonProps> = ({
   disabled = false,
   startIcon,
   fullWidth = false,
-  sx = {},
+  sx,
   active = false,
 }) => {
   const getVariantStyles = (): SxProps<Theme> => {
@@ -113,8 +113,8 @@ const CustomButton: React.FC<CustomButtonProps> = ({
       fullWidth={fullWidth}
       sx={{
         ...getVariantStyles(),
-        ...(sx as SxProps<Theme>),
-      }}
+        ...(sx || {}),
+      } as SxProps<Theme>}
     >
       {children}
     </Button>
