@@ -19,6 +19,9 @@ RUN npm ci
 # Copy source code
 COPY frontend/ ./
 
+# Remove .env file for Docker build (we want empty API_BASE_URL for nginx proxy)
+RUN rm -f .env
+
 # Build the application
 RUN npm run build
 
