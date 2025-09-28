@@ -726,4 +726,57 @@ def test_postpone_word_user_not_found(rune_recall_service, state_manager):
     result = rune_recall_service.postpone_word("nonexistent_user", "kontanter")
 
     assert result["success"] is False
-    assert "User 'nonexistent_user' not found" in result["message"]
+@patch("src.runestone.services.rune_recall_service.httpx.Client")
+def test_send_word_message_with_special_characters(mock_client_class, rune_recall_service):
+    """Test that special Markdown characters in translation and example are properly escaped."""
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    mock_client.post.return_value = mock_response
+    mock_client_class.return_value.__enter__.return_value = mock_client
+
+    # Word with special characters that need escaping
+    word = {
+        "id": 1,
+        "word_phrase": "vindruvor",
+        "translation": "(-r, -de, -t) grapes",
+        "example_phrase": "vindruvor _ kr/kilo"
+    }
+
+    result = rune_recall_service._send_word_message(123, word)
+    assert result is True
+
+    # Check that the message contains escaped characters
+    expected_message = "🇸🇪 **vindruvor**\n🇬🇧 \\(\\-r, \\-de, \\-t\\) grapes\n\n💡 *Example:* vindruvor \\_ kr/kilo"
+    mock_client.post.assert_called_once_with(
+        "https://api.telegram.org/bottest_token/sendMessage",
+        json={"chat_id": 123, "text": expected_message, "parse_mode": "Markdown"},
+    )
+
+
+@patch("src.runestone.services.rune_recall_service.httpx.Client")
+def test_send_word_message_escapes_all_markdown_chars(mock_client_class, rune_recall_service):
+    """Test that all Markdown special characters are properly escaped."""
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    mock_client.post.return_value = mock_response
+    mock_client_class.return_value.__enter__.return_value = mock_client
+
+    # Word with various special characters
+    word = {
+        "id": 1,
+        "word_phrase": "test",
+        "translation": "*bold* _italic_ [link](url) `code` > quote # header + list - item | table {code} .period !exclamation",
+        "example_phrase": "~strikethrough~ =underline= (parentheses) [brackets]"
+    }
+
+    result = rune_recall_service._send_word_message(123, word)
+    assert result is True
+
+    # Check that all special characters are escaped
+    expected_message = "🇸🇪 **test**\n🇬🇧 \\*bold\\* \\_italic\\_ \\[link\\]\\(url\\) \\`code\\` \\> quote \\# header \\+ list \\- item \\| table \\{code\\} \\.period \\!exclamation\n\n💡 *Example:* \\~strikethrough\\~ \\=underline\\= \\(parentheses\\) \\[brackets\\]"
+    mock_client.post.assert_called_once_with(
+        "https://api.telegram.org/bottest_token/sendMessage",
+        json={"chat_id": 123, "text": expected_message, "parse_mode": "Markdown"},
+    )

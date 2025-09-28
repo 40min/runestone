@@ -171,6 +171,13 @@ class RuneRecallService:
             ]
 
         return []
+    
+    def _escape_markdown(self, text: str) -> str:
+        """Escape special Markdown characters."""
+        escape_chars = ['*', '_', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+        for char in escape_chars:
+            text = text.replace(char, f'\\{char}')
+        return text
 
     def _send_word_message(self, chat_id: int, word: Dict) -> bool:
         """
@@ -186,6 +193,10 @@ class RuneRecallService:
         word_phrase = word.get("word_phrase", "Unknown")
         translation = word.get("translation", "Unknown")
         example_phrase = word.get("example_phrase", "")
+
+        translation = self._escape_markdown(translation)
+        if example_phrase:
+            example_phrase = self._escape_markdown(example_phrase)
 
         # Format the message
         message = f"🇸🇪 **{word_phrase}**\n🇬🇧 {translation}"
