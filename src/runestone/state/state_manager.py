@@ -128,6 +128,7 @@ class StateManager:
 
     # Public API methods
 
+    @with_lock
     def get_user(self, username: str) -> Optional[UserData]:
         """Get user data by username."""
         try:
@@ -137,6 +138,7 @@ class StateManager:
             logger.error(f"Failed to get user '{username}': {e}")
             raise
 
+    @with_lock
     def update_user(self, username: str, user_data: UserData):
         """Update existing user data."""
         try:

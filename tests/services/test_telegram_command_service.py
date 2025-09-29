@@ -607,3 +607,144 @@ def test_process_updates_postpone_command(
     mock_rune_recall_service.postpone_word.assert_called_once_with("authorized_user", "kontanter")
     call_args = mock_client.post.call_args[1]["json"]
     assert "postponed" in call_args["text"]
+
+
+@patch("src.runestone.services.telegram_command_service.httpx.Client")
+def test_process_updates_single_update_error_continues_processing(mock_client_class, telegram_service, state_manager):
+    """Test that an error processing one update doesn't prevent processing other updates"""
+    mock_client = MagicMock()
+
+    # Mock getUpdates response with two updates - first one will cause error, second should still process
+    mock_get_response = MagicMock()
+    mock_get_response.json.return_value = {
+        "ok": True,
+        "result": [
+            {
+                "update_id": 1,
+                "message": {
+                    "message_id": 1,
+                    "from": {"username": "authorized_user"},
+                    "chat": {"id": 123},
+                    "text": "/start",
+                    "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
+                },
+            },
+            {
+                "update_id": 2,
+                "message": {
+                    "message_id": 2,
+                    "from": {"username": "authorized_user"},
+                    "chat": {"id": 123},
+                    "text": "/stop",
+                    "entities": [{"offset": 0, "length": 5, "type": "bot_command"}],
+                },
+            },
+        ],
+    }
+    mock_get_response.raise_for_status.return_value = None
+    mock_client.get.return_value = mock_get_response
+
+    # Mock sendMessage to fail on first call but succeed on second
+    mock_post_response_fail = MagicMock()
+    mock_post_response_fail.raise_for_status.side_effect = httpx.RequestError("Network error")
+    mock_post_response_success = MagicMock()
+    mock_post_response_success.raise_for_status.return_value = None
+    mock_client.post.side_effect = [mock_post_response_fail, mock_post_response_success]
+
+    mock_client_class.return_value.__enter__.return_value = mock_client
+
+    # Mock state_manager.get_user to work for the first call but make update_user fail for first update
+    original_update_user = state_manager.update_user
+    call_count = [0]
+
+    def mock_update_user(username, user_data):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            # First call fails
+            raise Exception("State update error")
+        return original_update_user(username, user_data)
+
+    with patch.object(state_manager, "update_user", side_effect=mock_update_user):
+        telegram_service.process_updates()
+
+    # Check that offset was still updated despite first update failure
+    assert state_manager.get_update_offset() == 3
+
+    # Both send_message calls should have been attempted
+    assert mock_client.post.call_count == 2
+
+
+@patch("src.runestone.services.telegram_command_service.httpx.Client")
+def test_fetch_updates_state_manager_error(mock_client_class, telegram_service, state_manager):
+    """Test that _fetch_updates handles state manager errors gracefully"""
+    # Mock state_manager.get_update_offset to raise an error
+    with patch.object(state_manager, "get_update_offset", side_effect=Exception("State error")):
+        telegram_service.process_updates()
+
+    # Should not have made any HTTP requests
+    mock_client_class.assert_not_called()
+
+
+def test_process_single_update_handles_malformed_update(telegram_service):
+    """Test that _process_single_update handles malformed updates gracefully"""
+    malformed_updates = [
+        {},  # Empty update
+        {"update_id": 1},  # No message
+        {"update_id": 2, "message": {}},  # Empty message
+        {"update_id": 3, "message": {"from": {}}},  # Missing chat
+        {"update_id": 4, "message": {"chat": {"id": 123}}},  # Missing from
+    ]
+
+    for update in malformed_updates:
+        # Should not raise exception
+        telegram_service._process_single_update(update)
+
+
+def test_handle_authorized_user_command_unknown_command(telegram_service):
+    """Test that unknown commands are handled gracefully"""
+    user_data = MagicMock()
+    user_data.is_active = True
+
+    # Should not raise exception for unknown command
+    telegram_service._handle_authorized_user_command("/unknown", {}, "test_user", user_data, 123)
+
+
+@patch("src.runestone.services.telegram_command_service.httpx.Client")
+def test_process_updates_offset_update_error(mock_client_class, telegram_service, state_manager):
+    """Test that offset update errors are handled gracefully"""
+    mock_client = MagicMock()
+
+    # Mock successful getUpdates response
+    mock_get_response = MagicMock()
+    mock_get_response.json.return_value = {
+        "ok": True,
+        "result": [
+            {
+                "update_id": 1,
+                "message": {
+                    "message_id": 1,
+                    "from": {"username": "authorized_user"},
+                    "chat": {"id": 123},
+                    "text": "/start",
+                    "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
+                },
+            }
+        ],
+    }
+    mock_get_response.raise_for_status.return_value = None
+    mock_client.get.return_value = mock_get_response
+
+    # Mock sendMessage response
+    mock_post_response = MagicMock()
+    mock_post_response.raise_for_status.return_value = None
+    mock_client.post.return_value = mock_post_response
+
+    mock_client_class.return_value.__enter__.return_value = mock_client
+
+    # Mock state_manager.set_update_offset to raise an error
+    with patch.object(state_manager, "set_update_offset", side_effect=Exception("Offset update error")):
+        # Should not raise exception, just log the error
+        telegram_service.process_updates()
+
+    # Update should still have been processed successfully
+    mock_client.post.assert_called_once()
