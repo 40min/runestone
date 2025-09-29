@@ -24,6 +24,7 @@ from runestone.core.exceptions import RunestoneError
 from runestone.core.logging_config import setup_logging
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.repository import VocabularyRepository
+from runestone.services.vocabulary_service import VocabularyService
 
 # Load environment variables from .env file
 load_dotenv()
@@ -183,10 +184,16 @@ def process(
 @click.argument("csv_path", type=click.Path(exists=True, path_type=Path))
 @click.option(
     "--db-name",
-    default="runestone.db",
-    help="Database file name (default: runestone.db)",
+    default="state/runestone.db",
+    help="Database file name (default: state/runestone.db)",
 )
-def load_vocab(csv_path: Path, db_name: str):
+@click.option(
+    "--skip-existence-check",
+    is_flag=True,
+    default=False,
+    help="Skip checking for existing words before adding (allow duplicates)",
+)
+def load_vocab(csv_path: Path, db_name: str, skip_existence_check: bool):
     """
     Load vocabulary data from a CSV file into the database.
 
@@ -197,19 +204,17 @@ def load_vocab(csv_path: Path, db_name: str):
     try:
         # Parse CSV file
         items = []
-        with open(csv_path, 'r', encoding='utf-8') as f:
-            reader = csv.reader(f, delimiter=';')
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.reader(f, delimiter=";")
             for row in reader:
                 if len(row) >= 2:
                     word = row[0].strip()
                     translation = row[1].strip()
                     example = row[2].strip() if len(row) > 2 else None
                     if word and translation:
-                        items.append(VocabularyItemCreate(
-                            word_phrase=word,
-                            translation=translation,
-                            example_phrase=example
-                        ))
+                        items.append(
+                            VocabularyItemCreate(word_phrase=word, translation=translation, example_phrase=example)
+                        )
 
         if not items:
             console.print("[yellow]Warning:[/yellow] No valid items found in CSV file.")
@@ -218,40 +223,42 @@ def load_vocab(csv_path: Path, db_name: str):
         # Create database backup
         db_path = Path(db_name)
         if db_path.exists():
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_path = db_path.with_name(f"{db_path.stem}_backup_{timestamp}.db")
             shutil.copy2(db_path, backup_path)
             console.print(f"Database backup created: {backup_path}")
         else:
             console.print("[yellow]Warning:[/yellow] Database file does not exist, skipping backup.")
 
-        # Insert data into database
+        # Insert data into database using service
         engine = create_engine(f"sqlite:///{db_name}", connect_args={"check_same_thread": False})
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         db = SessionLocal()
         try:
+            # Create service with database session
             repo = VocabularyRepository(db)
-            original_count = len(items)
+            service = VocabularyService(repo)
 
-            # Get existing word_phrases before insertion to calculate statistics
-            batch_word_phrases = [item.word_phrase for item in items]
-            existing_word_phrases = repo.get_existing_word_phrases_for_batch(batch_word_phrases, user_id=1)
-            existing_count = len(existing_word_phrases)
+            # Load vocabulary using service
+            stats = service.load_vocab_from_csv(items, skip_existence_check, user_id=1)
 
-            # Count duplicates within the batch itself
-            unique_in_batch = set(item.word_phrase for item in items)
-            duplicates_in_batch = len(items) - len(unique_in_batch)
+            original_count = stats["original_count"]
+            added_count = stats["added_count"]
+            skipped_count = stats["skipped_count"]
 
-            # Use add_vocabulary_items which handles duplicates properly
-            repo.add_vocabulary_items(items, user_id=1)
+            if skip_existence_check:
+                if skipped_count > 0:
+                    console.print(
+                        f"[yellow]Warning:[/yellow] Skipped {skipped_count} duplicate items within the batch."
+                    )
+                console.print(
+                    f"[green]Success:[/green] Processed {added_count} vocabulary items (inserted or updated)."
+                )
+            else:
+                if skipped_count > 0:
+                    console.print(f"[yellow]Warning:[/yellow] Skipped {skipped_count} duplicate vocabulary items.")
+                console.print(f"[green]Success:[/green] Added {added_count} new vocabulary items.")
 
-            # Calculate final statistics
-            added_count = len(unique_in_batch) - existing_count
-            skipped_count = original_count - added_count
-
-            if skipped_count > 0:
-                console.print(f"[yellow]Warning:[/yellow] Skipped {skipped_count} duplicate vocabulary items.")
-            console.print(f"[green]Success:[/green] Added {added_count} new vocabulary items.")
             console.print(f"Total processed: {original_count} items (added: {added_count}, skipped: {skipped_count})")
         finally:
             db.close()

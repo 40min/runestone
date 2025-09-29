@@ -5,8 +5,9 @@
 .PHONY: install install-dev install-backend install-frontend install-all
 .PHONY: lint lint-check backend-lint frontend-lint
 .PHONY: test test-coverage backend-test frontend-test
-.PHONY: run run-backend run-frontend run-dev load-vocab
+.PHONY: run run-backend run-frontend run-dev run-recall load-vocab
 .PHONY: dev-test dev-full ci-lint ci-test
+.PHONY: init-state docker-up docker-down docker-build
 
 # =============================================================================
 # HELP AND INFO
@@ -39,10 +40,11 @@ help:
 	@echo ""
 	@echo "Running Applications:"
 	@echo "  run              - Run CLI application (requires IMAGE_PATH and GEMINI_API_KEY)"
-	@echo "  load-vocab       - Load vocabulary from CSV file (requires CSV_PATH)"
+	@echo "  load-vocab       - Load vocabulary from CSV file (requires CSV_PATH, optional: DB_NAME, SKIP_EXISTENCE_CHECK)"
 	@echo "  run-backend      - Start FastAPI backend server"
 	@echo "  run-frontend     - Start frontend development server"
 	@echo "  run-dev          - Start both backend and frontend concurrently"
+	@echo "  run-recall       - Start the Rune Recall Telegram Bot Worker"
 	@echo ""
 	@echo "Development Workflows:"
 	@echo "  dev-test         - Quick development test (install-dev + lint-check + test)"
@@ -51,6 +53,12 @@ help:
 	@echo "CI/CD:"
 	@echo "  ci-lint          - CI linting pipeline"
 	@echo "  ci-test          - CI testing pipeline"
+	@echo ""
+	@echo "Docker:"
+	@echo "  init-state       - Initialize state directory and database with proper permissions"
+	@echo "  docker-up        - Initialize state and start Docker services"
+	@echo "  docker-down      - Stop and remove Docker services"
+	@echo "  docker-build     - Build Docker images without cache"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  clean            - Clean temporary files and caches"
@@ -182,15 +190,13 @@ run:
 # Load vocabulary from CSV file
 load-vocab:
 	@if [ -z "$(CSV_PATH)" ]; then \
-		echo "❌ Error: CSV_PATH is required. Usage: make load-vocab CSV_PATH=path/to/vocab.csv"; \
+		echo "❌ Error: CSV_PATH is required. Usage: make load-vocab CSV_PATH=path/to/vocab.csv [DB_NAME=name.db] [SKIP_EXISTENCE_CHECK=true]"; \
 		exit 1; \
 	fi
 	@echo "📚 Loading vocabulary from CSV: $(CSV_PATH)"
-	@if [ -n "$(DB_NAME)" ]; then \
-		uv run runestone load-vocab "$(CSV_PATH)" --db-name "$(DB_NAME)"; \
-	else \
-		uv run runestone load-vocab "$(CSV_PATH)"; \
-	fi
+	@uv run runestone load-vocab "$(CSV_PATH)" \
+		$(if $(DB_NAME),--db-name "$(DB_NAME)") \
+		$(if $(filter true,$(SKIP_EXISTENCE_CHECK)),--skip-existence-check)
 
 # Start FastAPI backend server
 run-backend:
@@ -214,6 +220,11 @@ run-dev:
 	@echo "Press Ctrl+C to stop both servers"
 	@(cd frontend && npm run dev) & \
 	uv run uvicorn runestone.api.main:app --reload --host 0.0.0.0 --port 8010
+
+# Start Rune Recall Telegram Bot Worker
+run-recall:
+	@echo "🚀 Starting Rune Recall Telegram Bot Worker..."
+	@uv run python recall_main.py
 
 # =============================================================================
 # DEVELOPMENT WORKFLOWS
@@ -253,3 +264,34 @@ clean:
 	@find . -type f -name "*.pyo" -delete 2>/dev/null || true
 	@cd frontend && npm run clean 2>/dev/null || true
 	@echo "✅ Cleanup complete!"
+
+# =============================================================================
+# DOCKER COMMANDS
+# =============================================================================
+
+# Initialize state directory and database with proper permissions for Docker containers
+init-state:
+	@echo "🔧 Initializing state directory and database for Docker containers..."
+	@./scripts/init-state.sh
+	@echo "✅ State directory and database initialized!"
+
+# Initialize state and start all Docker services
+docker-up: init-state
+	@echo "🐳 Starting Docker services..."
+	@docker compose up -d
+	@echo "✅ Docker services started!"
+	@echo "📍 Backend: http://localhost:8010"
+	@echo "📍 Frontend: http://localhost:3010"
+	@echo "📚 API Docs: http://localhost:8010/docs"
+
+# Stop and remove Docker services
+docker-down:
+	@echo "🛑 Stopping Docker services..."
+	@docker compose down
+	@echo "✅ Docker services stopped!"
+
+# Build Docker images without cache
+docker-build:
+	@echo "🔨 Building Docker images..."
+	@docker compose build --no-cache
+	@echo "✅ Docker images built!"

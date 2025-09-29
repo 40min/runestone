@@ -241,3 +241,51 @@ class TestCLI:
             assert call_args[1]["model_name"] is None
             assert call_args[1]["verbose"] is True
             assert "settings" in call_args[1]
+
+    def test_load_vocab_command_help(self):
+        """Test load_vocab command help message."""
+        result = self.runner.invoke(cli, ["load-vocab", "--help"])
+
+        assert result.exit_code == 0
+        assert "Load vocabulary data" in result.output
+        assert "--skip-existence-check" in result.output
+
+    @patch("runestone.cli.VocabularyService")
+    def test_load_vocab_command_skip_check(self, mock_service_class):
+        """Test load_vocab command with skip existence check."""
+        with self.runner.isolated_filesystem():
+            # Create a test CSV file
+            csv_content = "word1;translation1;example1\nword2;translation2;example2\n"
+            csv_path = "test_vocab.csv"
+            with open(csv_path, "w") as f:
+                f.write(csv_content)
+
+            mock_service = Mock()
+            mock_service_class.return_value = mock_service
+            mock_service.load_vocab_from_csv.return_value = {"original_count": 2, "added_count": 2, "skipped_count": 0}
+
+            result = self.runner.invoke(cli, ["load-vocab", csv_path, "--skip-existence-check"])
+
+            assert result.exit_code == 0
+            mock_service.load_vocab_from_csv.assert_called_once()
+            assert "Processed 2 vocabulary items" in result.output
+
+    @patch("runestone.cli.VocabularyService")
+    def test_load_vocab_command_default_check(self, mock_service_class):
+        """Test load_vocab command with default existence check."""
+        with self.runner.isolated_filesystem():
+            # Create a test CSV file
+            csv_content = "word1;translation1;example1\nword2;translation2;example2\n"
+            csv_path = "test_vocab.csv"
+            with open(csv_path, "w") as f:
+                f.write(csv_content)
+
+            mock_service = Mock()
+            mock_service_class.return_value = mock_service
+            mock_service.load_vocab_from_csv.return_value = {"original_count": 2, "added_count": 2, "skipped_count": 0}
+
+            result = self.runner.invoke(cli, ["load-vocab", csv_path])
+
+            assert result.exit_code == 0
+            mock_service.load_vocab_from_csv.assert_called_once()
+            assert "Added 2 new vocabulary items" in result.output

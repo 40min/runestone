@@ -7,8 +7,6 @@ for vocabulary-related operations.
 
 from typing import List
 
-from sqlalchemy.orm import Session
-
 from ..api.schemas import Vocabulary as VocabularySchema
 from ..api.schemas import VocabularyItemCreate, VocabularyUpdate
 from ..db.models import Vocabulary
@@ -18,10 +16,9 @@ from ..db.repository import VocabularyRepository
 class VocabularyService:
     """Service for vocabulary-related business logic."""
 
-    def __init__(self, db: Session):
-        """Initialize service with database session."""
-        self.db = db
-        self.repo = VocabularyRepository(db)
+    def __init__(self, vocabulary_repository: VocabularyRepository):
+        """Initialize service with vocabulary repository."""
+        self.repo = vocabulary_repository
 
     def save_vocabulary(self, items: List[VocabularyItemCreate], user_id: int = 1) -> dict:
         """Save vocabulary items, handling business logic."""
@@ -59,7 +56,7 @@ class VocabularyService:
                     translation=vocab.translation,
                     example_phrase=vocab.example_phrase,
                     in_learn=vocab.in_learn,
-                    showed_times=vocab.showed_times,
+                    last_learned=vocab.last_learned.isoformat() if vocab.last_learned else None,
                     created_at=vocab.created_at.isoformat() if vocab.created_at else None,
                     updated_at=vocab.updated_at.isoformat() if vocab.updated_at else None,
                 )
@@ -82,7 +79,44 @@ class VocabularyService:
             translation=updated_vocab.translation,
             example_phrase=updated_vocab.example_phrase,
             in_learn=updated_vocab.in_learn,
-            showed_times=updated_vocab.showed_times,
+            last_learned=updated_vocab.last_learned.isoformat() if updated_vocab.last_learned else None,
             created_at=updated_vocab.created_at.isoformat() if updated_vocab.created_at else None,
             updated_at=updated_vocab.updated_at.isoformat() if updated_vocab.updated_at else None,
         )
+
+    def load_vocab_from_csv(
+        self, items: List[VocabularyItemCreate], skip_existence_check: bool, user_id: int = 1
+    ) -> dict:
+        """Load vocabulary items from CSV data, handling parsing, filtering, and insertion logic."""
+        original_count = len(items)
+
+        if skip_existence_check:
+            # Upsert all items (update if exists, insert if not) - no filtering
+            self.repo.upsert_vocabulary_items(items, user_id)
+            added_count = len(items)
+            skipped_count = 0  # No skipping in upsert mode
+        else:
+            # Filter duplicates within the batch
+            seen = set()
+            filtered_items = []
+            for item in items:
+                if item.word_phrase not in seen:
+                    filtered_items.append(item)
+                    seen.add(item.word_phrase)
+            items = filtered_items
+
+            # Get existing word_phrases before insertion
+            batch_word_phrases = [item.word_phrase for item in items]
+            existing_word_phrases = self.repo.get_existing_word_phrases_for_batch(batch_word_phrases, user_id)
+
+            # Filter items: remove existing in DB
+            final_items = [item for item in items if item.word_phrase not in existing_word_phrases]
+
+            # Batch insert the filtered items
+            if final_items:
+                self.repo.batch_insert_vocabulary_items(final_items, user_id)
+
+            added_count = len(final_items)
+            skipped_count = original_count - added_count
+
+        return {"original_count": original_count, "added_count": added_count, "skipped_count": skipped_count}

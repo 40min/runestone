@@ -13,9 +13,13 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=${OPENAI_MODEL}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - VERBOSE=${VERBOSE}
+      - DATABASE_URL=sqlite:///./state/runestone.db
     volumes:
-      - ./res:/app/res:ro
+      - ./res:/app/res:ro      
+      - ./state:/app/state
     networks:
       - runestone-network
     restart: unless-stopped
@@ -39,6 +43,36 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  recall:
+    build:
+      context: .
+      dockerfile: Dockerfile.recall
+    container_name: runestone-recall
+    env_file:
+      - .env
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DATABASE_URL=sqlite:///./state/runestone.db
+      - VERBOSE=${VERBOSE}
+    volumes:
+      - ./state:/app/state
+    networks:
+      - runestone-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   frontend:
     build:
       context: .
@@ -48,8 +82,6 @@ services:
       - "3010:3010"
     env_file:
       - .env
-    environment:
-      - VITE_API_BASE_URL=http://backend:8010
     depends_on:
       - backend
     networks:

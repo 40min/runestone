@@ -8,7 +8,7 @@ interface SavedVocabularyItem {
   translation: string;
   example_phrase: string | null;
   in_learn: boolean;
-  showed_times: number;
+  last_learned: string | null;
   created_at: string;
 }
 

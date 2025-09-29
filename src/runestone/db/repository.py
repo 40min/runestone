@@ -5,8 +5,11 @@ This module contains repository classes that encapsulate database
 logic for different entities.
 """
 
-from typing import List
+from datetime import datetime, timedelta
+from typing import List, Optional
 
+from sqlalchemy import or_
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
 from ..api.schemas import VocabularyItemCreate
@@ -40,11 +43,40 @@ class VocabularyRepository:
                 translation=item.translation,
                 example_phrase=item.example_phrase,
                 in_learn=True,
-                showed_times=0,
+                last_learned=None,
             )
             for item in items
         ]
         self.db.add_all(vocab_objects)
+        self.db.commit()
+
+    def upsert_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int = 1):
+        """Upsert vocabulary items: update if exists, insert if not."""
+        if not items:
+            return
+
+        data = [
+            {
+                "user_id": user_id,
+                "word_phrase": item.word_phrase,
+                "translation": item.translation,
+                "example_phrase": item.example_phrase,
+                "in_learn": True,
+                "last_learned": None,
+            }
+            for item in items
+        ]
+
+        stmt = insert(Vocabulary).values(data)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["user_id", "word_phrase"],
+            set_={
+                "translation": stmt.excluded.translation,
+                "example_phrase": stmt.excluded.example_phrase,
+                "updated_at": datetime.now(),
+            },
+        )
+        self.db.execute(stmt)
         self.db.commit()
 
     def add_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int = 1):
@@ -93,3 +125,74 @@ class VocabularyRepository:
         self.db.commit()
         self.db.refresh(vocab)
         return vocab
+
+    def select_new_daily_word_ids(self, user_id: int, cooldown_days: int = 7) -> List[int]:
+        """Select new daily word IDs for a user, excluding recently learned words."""
+        cutoff_date = datetime.now() - timedelta(days=cooldown_days)
+        result = (
+            self.db.query(Vocabulary.id)
+            .filter(
+                Vocabulary.user_id == user_id,
+                Vocabulary.in_learn.is_(True),
+                or_(Vocabulary.last_learned.is_(None), Vocabulary.last_learned < cutoff_date),
+            )
+            .order_by(Vocabulary.created_at.desc())
+            .all()
+        )
+        return [row[0] for row in result]
+
+    def get_vocabulary_item_for_recall(self, item_id: int, user_id: int) -> Vocabulary:
+        """Get a vocabulary item by ID and user_id, ensuring it's in learning."""
+        vocab = (
+            self.db.query(Vocabulary)
+            .filter(Vocabulary.id == item_id, Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True))
+            .first()
+        )
+
+        if not vocab:
+            raise ValueError(f"Vocabulary item with id {item_id} not found for user {user_id} or not in learning")
+
+        return vocab
+
+    def get_vocabulary_items_by_ids(self, item_ids: List[int], user_id: int) -> List[Vocabulary]:
+        """Get vocabulary items by IDs and user_id, ensuring they're in learning."""
+        if not item_ids:
+            return []
+        return (
+            self.db.query(Vocabulary)
+            .filter(Vocabulary.id.in_(item_ids), Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True))
+            .all()
+        )
+
+    def update_last_learned(self, vocab: Vocabulary) -> Vocabulary:
+        """Update the last_learned timestamp for a vocabulary item."""
+        vocab.last_learned = datetime.now()
+        return self.update_vocabulary_item(vocab)
+
+    def get_vocabulary_item_by_word_phrase(self, word_phrase: str, user_id: int) -> Optional[Vocabulary]:
+        """Get a vocabulary item by word_phrase and user_id."""
+        return (
+            self.db.query(Vocabulary)
+            .filter(Vocabulary.word_phrase == word_phrase, Vocabulary.user_id == user_id)
+            .first()
+        )
+
+    def delete_vocabulary_item_by_word_phrase(self, word_phrase: str, user_id: int) -> bool:
+        """Mark a vocabulary item as not in learning (soft delete) by word phrase."""
+        updated_rows = (
+            self.db.query(Vocabulary)
+            .filter(Vocabulary.word_phrase == word_phrase, Vocabulary.user_id == user_id)
+            .update({"in_learn": False})
+        )
+        self.db.commit()
+        return updated_rows > 0
+
+    def delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
+        """Mark a vocabulary item as not in learning (soft delete)."""
+        updated_rows = (
+            self.db.query(Vocabulary)
+            .filter(Vocabulary.id == item_id, Vocabulary.user_id == user_id)
+            .update({"in_learn": False})
+        )
+        self.db.commit()
+        return updated_rows > 0

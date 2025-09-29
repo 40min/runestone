@@ -4,35 +4,21 @@ Tests for vocabulary database repository functionality.
 This module contains tests for the vocabulary repository.
 """
 
+from datetime import datetime, timedelta
+
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from runestone.api.schemas import VocabularyItemCreate
-from runestone.db.database import Base
 from runestone.db.models import Vocabulary as VocabularyModel
-from runestone.db.repository import VocabularyRepository
 
 
 class TestVocabularyRepository:
     """Test cases for VocabularyRepository."""
 
     @pytest.fixture
-    def db_session(self):
-        """Create an in-memory SQLite database for testing."""
-        engine = create_engine("sqlite:///:memory:")
-        Base.metadata.create_all(bind=engine)
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-        db = SessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    @pytest.fixture
-    def repo(self, db_session):
+    def repo(self, vocabulary_repository):
         """Create a VocabularyRepository instance."""
-        return VocabularyRepository(db_session)
+        return vocabulary_repository
 
     def test_add_vocabulary_items_new(self, repo, db_session):
         """Test adding new vocabulary items."""
@@ -55,7 +41,7 @@ class TestVocabularyRepository:
         assert apple_vocab.example_phrase == "Jag äter ett äpple varje dag."
         assert apple_vocab.user_id == 1
         assert apple_vocab.in_learn is True
-        assert apple_vocab.showed_times == 0
+        assert apple_vocab.last_learned is None
 
     def test_add_vocabulary_items_duplicate(self, repo, db_session):
         """Test that duplicate word_phrases are not added."""
@@ -80,7 +66,67 @@ class TestVocabularyRepository:
         assert apple_vocab.translation == "an apple"
         assert apple_vocab.example_phrase == "Jag äter ett äpple varje dag."
         assert apple_vocab.in_learn is True
-        assert apple_vocab.showed_times == 0
+        assert apple_vocab.last_learned is None
+
+    def test_upsert_vocabulary_items(self, repo, db_session):
+        """Test upserting vocabulary items (bulk insert/update)."""
+        # Add an initial item
+        initial_vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            example_phrase="Jag äter ett äpple varje dag.",
+            in_learn=True,
+            last_learned=None,
+        )
+        db_session.add(initial_vocab)
+        db_session.commit()
+
+        # Record initial updated_at
+        initial_updated_at = initial_vocab.updated_at
+
+        # Upsert: update existing and add new
+        items = [
+            VocabularyItemCreate(
+                word_phrase="ett äpple",  # Existing - should update
+                translation="a red apple",  # Changed
+                example_phrase="Ett äpple är rött.",  # Changed
+            ),
+            VocabularyItemCreate(
+                word_phrase="en banan",  # New - should insert
+                translation="a banana",
+                example_phrase=None,
+            ),
+        ]
+
+        repo.upsert_vocabulary_items(items)
+        db_session.commit()
+
+        # Verify existing item was updated
+        updated_vocab = (
+            db_session.query(VocabularyModel)
+            .filter(VocabularyModel.word_phrase == "ett äpple", VocabularyModel.user_id == 1)
+            .first()
+        )
+        assert updated_vocab.translation == "a red apple"
+        assert updated_vocab.example_phrase == "Ett äpple är rött."
+        assert updated_vocab.in_learn is True  # Unchanged
+        assert updated_vocab.updated_at > initial_updated_at  # Should be updated
+
+        # Verify new item was inserted
+        new_vocab = (
+            db_session.query(VocabularyModel)
+            .filter(VocabularyModel.word_phrase == "en banan", VocabularyModel.user_id == 1)
+            .first()
+        )
+        assert new_vocab.translation == "a banana"
+        assert new_vocab.example_phrase is None
+        assert new_vocab.in_learn is True
+        assert new_vocab.last_learned is None
+
+        # Verify total count
+        all_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.user_id == 1).all()
+        assert len(all_vocab) == 2
 
     def test_get_all_vocabulary(self, repo, db_session):
         """Test retrieving all vocabulary items."""
@@ -91,7 +137,7 @@ class TestVocabularyRepository:
             translation="an apple",
             example_phrase="Jag äter ett äpple varje dag.",
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         vocab2 = VocabularyModel(
             user_id=1,
@@ -99,10 +145,10 @@ class TestVocabularyRepository:
             translation="a banana",
             example_phrase=None,
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         vocab3 = VocabularyModel(
-            user_id=2, word_phrase="ett päron", translation="a pear", in_learn=True, showed_times=0
+            user_id=2, word_phrase="ett päron", translation="a pear", in_learn=True, last_learned=None
         )
 
         db_session.add_all([vocab1, vocab2, vocab3])
@@ -133,7 +179,7 @@ class TestVocabularyRepository:
             example_phrase="Jag äter ett äpple varje dag.",
             created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         vocab2 = VocabularyModel(
             user_id=1,
@@ -142,7 +188,7 @@ class TestVocabularyRepository:
             example_phrase=None,
             created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         vocab3 = VocabularyModel(
             user_id=1,
@@ -150,7 +196,7 @@ class TestVocabularyRepository:
             translation="a pear",
             created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         vocab4 = VocabularyModel(
             user_id=2,
@@ -158,7 +204,7 @@ class TestVocabularyRepository:
             translation="a kiwi",
             created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
 
         db_session.add_all([vocab1, vocab2, vocab3, vocab4])
@@ -194,7 +240,7 @@ class TestVocabularyRepository:
             translation="an apple",
             created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         vocab2 = VocabularyModel(
             user_id=1,
@@ -202,7 +248,7 @@ class TestVocabularyRepository:
             translation="a banana",
             created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         vocab3 = VocabularyModel(
             user_id=1,
@@ -210,7 +256,7 @@ class TestVocabularyRepository:
             translation="a pear",
             created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         vocab4 = VocabularyModel(
             user_id=2,
@@ -218,7 +264,7 @@ class TestVocabularyRepository:
             translation="a kiwi",
             created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
 
         db_session.add_all([vocab1, vocab2, vocab3, vocab4])
@@ -268,7 +314,7 @@ class TestVocabularyRepository:
             translation="an apple",
             example_phrase="Jag äter ett äpple varje dag.",
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         db_session.add(vocab)
         db_session.commit()
@@ -295,7 +341,7 @@ class TestVocabularyRepository:
             translation="an apple",
             example_phrase="Jag äter ett äpple varje dag.",
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         db_session.add(vocab)
         db_session.commit()
@@ -311,7 +357,7 @@ class TestVocabularyRepository:
         assert updated_vocab.translation == "a red apple"
         assert updated_vocab.example_phrase == "Jag äter ett äpple varje dag."  # Unchanged
         assert updated_vocab.in_learn is False
-        assert updated_vocab.showed_times == 0  # Unchanged
+        assert updated_vocab.last_learned is None  # Unchanged
 
         # Verify in database
         db_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab.id).first()
@@ -328,7 +374,7 @@ class TestVocabularyRepository:
             translation="an apple",
             example_phrase="Jag äter ett äpple varje dag.",
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         db_session.add(vocab)
         db_session.commit()
@@ -355,7 +401,7 @@ class TestVocabularyRepository:
             word_phrase="ett äpple",
             translation="an apple",
             in_learn=True,
-            showed_times=0,
+            last_learned=None,
         )
         db_session.add(vocab)
         db_session.commit()
@@ -363,3 +409,384 @@ class TestVocabularyRepository:
         # Try to get as user 2
         with pytest.raises(ValueError, match="Vocabulary item with id 1 not found for user 2"):
             repo.get_vocabulary_item(vocab.id, user_id=2)
+
+    def test_select_new_daily_word_ids(self, repo, db_session):
+        """Test selecting new daily word IDs with cooldown logic."""
+
+        # Add test vocabulary items
+        vocab1 = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            in_learn=True,
+            last_learned=None,
+        )
+        vocab2 = VocabularyModel(
+            user_id=1,
+            word_phrase="en banan",
+            translation="a banana",
+            in_learn=True,
+            last_learned=datetime.now() - timedelta(days=10),  # Old enough
+        )
+        vocab3 = VocabularyModel(
+            user_id=1,
+            word_phrase="ett päron",
+            translation="a pear",
+            in_learn=True,
+            last_learned=datetime.now() - timedelta(days=1),  # Too recent
+        )
+        vocab4 = VocabularyModel(
+            user_id=1,
+            word_phrase="en kiwi",
+            translation="a kiwi",
+            in_learn=False,  # Not in learning
+            last_learned=None,
+        )
+        vocab5 = VocabularyModel(
+            user_id=2,
+            word_phrase="ett plommon",
+            translation="a plum",
+            in_learn=True,
+            last_learned=None,
+        )
+
+        db_session.add_all([vocab1, vocab2, vocab3, vocab4, vocab5])
+        db_session.commit()
+
+        # Test for user 1 with default cooldown (7 days)
+        result = repo.select_new_daily_word_ids(user_id=1)
+        assert len(result) == 2  # vocab1 and vocab2
+        assert vocab1.id in result
+        assert vocab2.id in result
+        assert vocab3.id not in result  # Too recent
+        assert vocab4.id not in result  # Not in learning
+        assert vocab5.id not in result  # Wrong user
+
+    def test_select_new_daily_word_ids_custom_cooldown(self, repo, db_session):
+        """Test selecting new daily word IDs with custom cooldown period."""
+        from datetime import datetime, timedelta
+
+        # Add test vocabulary items
+        vocab1 = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            in_learn=True,
+            last_learned=datetime.now() - timedelta(days=3),  # 3 days ago
+        )
+        vocab2 = VocabularyModel(
+            user_id=1,
+            word_phrase="en banan",
+            translation="a banana",
+            in_learn=True,
+            last_learned=datetime.now() - timedelta(days=2),  # 2 days ago
+        )
+
+        db_session.add_all([vocab1, vocab2])
+        db_session.commit()
+
+        # Test with 5-day cooldown - both should be excluded
+        result = repo.select_new_daily_word_ids(user_id=1, cooldown_days=5)
+        assert len(result) == 0
+
+        # Test with 1-day cooldown - both should be included
+        result = repo.select_new_daily_word_ids(user_id=1, cooldown_days=1)
+        assert len(result) == 2
+        assert vocab1.id in result
+        assert vocab2.id in result
+
+    def test_get_vocabulary_item_for_recall(self, repo, db_session):
+        """Test getting a vocabulary item for recall (ensures in_learn=True)."""
+        # Add test items
+        vocab1 = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            in_learn=True,
+            last_learned=None,
+        )
+        vocab2 = VocabularyModel(
+            user_id=1,
+            word_phrase="en banan",
+            translation="a banana",
+            in_learn=False,  # Not in learning
+            last_learned=None,
+        )
+        vocab3 = VocabularyModel(
+            user_id=2,
+            word_phrase="ett päron",
+            translation="a pear",
+            in_learn=True,
+            last_learned=None,
+        )
+
+        db_session.add_all([vocab1, vocab2, vocab3])
+        db_session.commit()
+
+        # Test successful retrieval
+        result = repo.get_vocabulary_item_for_recall(vocab1.id, user_id=1)
+        assert result.id == vocab1.id
+        assert result.word_phrase == "ett äpple"
+        assert result.in_learn is True
+
+        # Test item not in learning
+        with pytest.raises(ValueError, match="not found for user 1 or not in learning"):
+            repo.get_vocabulary_item_for_recall(vocab2.id, user_id=1)
+
+        # Test wrong user
+        with pytest.raises(ValueError, match="not found for user 1 or not in learning"):
+            repo.get_vocabulary_item_for_recall(vocab3.id, user_id=1)
+
+        # Test non-existent item
+        with pytest.raises(ValueError, match="not found for user 1 or not in learning"):
+            repo.get_vocabulary_item_for_recall(999, user_id=1)
+
+    def test_get_vocabulary_items_by_ids(self, repo, db_session):
+        """Test getting vocabulary items by IDs (ensures in_learn=True)."""
+        # Add test items
+        vocab1 = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            in_learn=True,
+            last_learned=None,
+        )
+        vocab2 = VocabularyModel(
+            user_id=1,
+            word_phrase="en banan",
+            translation="a banana",
+            in_learn=True,
+            last_learned=None,
+        )
+        vocab3 = VocabularyModel(
+            user_id=1,
+            word_phrase="ett päron",
+            translation="a pear",
+            in_learn=False,  # Not in learning
+            last_learned=None,
+        )
+        vocab4 = VocabularyModel(
+            user_id=2,
+            word_phrase="en kiwi",
+            translation="a kiwi",
+            in_learn=True,
+            last_learned=None,
+        )
+
+        db_session.add_all([vocab1, vocab2, vocab3, vocab4])
+        db_session.commit()
+
+        # Test successful retrieval
+        result = repo.get_vocabulary_items_by_ids([vocab1.id, vocab2.id], user_id=1)
+        assert len(result) == 2
+        word_phrases = [v.word_phrase for v in result]
+        assert "ett äpple" in word_phrases
+        assert "en banan" in word_phrases
+
+        # Test with item not in learning (should be excluded)
+        result = repo.get_vocabulary_items_by_ids([vocab1.id, vocab3.id], user_id=1)
+        assert len(result) == 1
+        assert result[0].word_phrase == "ett äpple"
+
+        # Test with wrong user (should be excluded)
+        result = repo.get_vocabulary_items_by_ids([vocab4.id], user_id=1)
+        assert len(result) == 0
+
+        # Test empty list
+        result = repo.get_vocabulary_items_by_ids([], user_id=1)
+        assert len(result) == 0
+
+        # Test non-existent IDs
+        result = repo.get_vocabulary_items_by_ids([999, 1000], user_id=1)
+        assert len(result) == 0
+
+    def test_update_last_learned(self, repo, db_session):
+        """Test updating the last_learned timestamp."""
+        from datetime import datetime
+
+        # Add a test item
+        vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            in_learn=True,
+            last_learned=None,
+        )
+        db_session.add(vocab)
+        db_session.commit()
+
+        # Record time before update
+        before_update = datetime.now()
+
+        # Update last_learned
+        updated_vocab = repo.update_last_learned(vocab)
+
+        # Record time after update
+        after_update = datetime.now()
+
+        # Verify the update
+        assert updated_vocab.last_learned is not None
+        assert before_update <= updated_vocab.last_learned <= after_update
+        assert updated_vocab.word_phrase == "ett äpple"  # Other fields unchanged
+
+        # Verify in database
+        db_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab.id).first()
+        assert db_vocab.last_learned is not None
+        assert before_update <= db_vocab.last_learned <= after_update
+
+    def test_get_vocabulary_item_by_word_phrase(self, repo, db_session):
+        """Test getting a vocabulary item by word phrase."""
+        # Add test items
+        vocab1 = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            in_learn=True,
+            last_learned=None,
+        )
+        vocab2 = VocabularyModel(
+            user_id=2,
+            word_phrase="en banan",  # Different word phrase for user 2
+            translation="a banana",
+            in_learn=True,
+            last_learned=None,
+        )
+
+        db_session.add_all([vocab1, vocab2])
+        db_session.commit()
+
+        # Test successful retrieval for user 1
+        result = repo.get_vocabulary_item_by_word_phrase("ett äpple", user_id=1)
+        assert result is not None
+        assert result.id == vocab1.id
+        assert result.word_phrase == "ett äpple"
+        assert result.user_id == 1
+
+        # Test successful retrieval for user 2
+        result = repo.get_vocabulary_item_by_word_phrase("en banan", user_id=2)
+        assert result is not None
+        assert result.id == vocab2.id
+        assert result.word_phrase == "en banan"
+        assert result.user_id == 2
+
+        # Test non-existent word phrase
+        result = repo.get_vocabulary_item_by_word_phrase("nonexistent", user_id=1)
+        assert result is None
+
+        # Test wrong user (user 1 looking for user 2's word)
+        result = repo.get_vocabulary_item_by_word_phrase("en banan", user_id=1)
+        assert result is None
+
+        # Test wrong user (user 2 looking for user 1's word)
+        result = repo.get_vocabulary_item_by_word_phrase("ett äpple", user_id=2)
+        assert result is None
+
+    def test_delete_vocabulary_item_by_word_phrase(self, repo, db_session):
+        """Test deleting (marking as not in learning) a vocabulary item by word phrase."""
+        # Add test items
+        vocab1 = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            in_learn=True,
+            last_learned=None,
+        )
+        vocab2 = VocabularyModel(
+            user_id=1,
+            word_phrase="en banan",
+            translation="a banana",
+            in_learn=False,  # Already not in learning
+            last_learned=None,
+        )
+        vocab3 = VocabularyModel(
+            user_id=2,
+            word_phrase="ett päron",  # Different word phrase for user 2
+            translation="a pear",
+            in_learn=True,
+            last_learned=None,
+        )
+
+        db_session.add_all([vocab1, vocab2, vocab3])
+        db_session.commit()
+
+        # Test successful deletion
+        result = repo.delete_vocabulary_item_by_word_phrase("ett äpple", user_id=1)
+        assert result is True
+
+        # Verify item is marked as not in learning
+        db_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab1.id).first()
+        assert db_vocab.in_learn is False
+        assert db_vocab.word_phrase == "ett äpple"  # Other fields unchanged
+
+        # Verify other user's item is unchanged
+        db_vocab_user2 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab3.id).first()
+        assert db_vocab_user2.in_learn is True
+
+        # Test deleting item already not in learning (should still return True but no change)
+        result = repo.delete_vocabulary_item_by_word_phrase("en banan", user_id=1)
+        assert result is True
+
+        # Test deleting non-existent word phrase
+        result = repo.delete_vocabulary_item_by_word_phrase("nonexistent", user_id=1)
+        assert result is False
+
+        # Test deleting with wrong user
+        result = repo.delete_vocabulary_item_by_word_phrase("ett päron", user_id=1)
+
+    def test_delete_vocabulary_item(self, repo, db_session):
+        """Test deleting (marking as not in learning) a vocabulary item by ID."""
+        # Add test items
+        vocab1 = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            in_learn=True,
+            last_learned=None,
+        )
+        vocab2 = VocabularyModel(
+            user_id=1,
+            word_phrase="en banan",
+            translation="a banana",
+            in_learn=False,  # Already not in learning
+            last_learned=None,
+        )
+        vocab3 = VocabularyModel(
+            user_id=2,
+            word_phrase="ett päron",
+            translation="a pear",
+            in_learn=True,
+            last_learned=None,
+        )
+
+        db_session.add_all([vocab1, vocab2, vocab3])
+        db_session.commit()
+
+        # Test successful deletion
+        result = repo.delete_vocabulary_item(vocab1.id, user_id=1)
+        assert result is True
+
+        # Verify item is marked as not in learning
+        db_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab1.id).first()
+        assert db_vocab.in_learn is False
+        assert db_vocab.word_phrase == "ett äpple"  # Other fields unchanged
+
+        # Verify other user's item is unchanged
+        db_vocab_user2 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab3.id).first()
+        assert db_vocab_user2.in_learn is True
+
+        # Test deleting item already not in learning (should still return True)
+        result = repo.delete_vocabulary_item(vocab2.id, user_id=1)
+        assert result is True
+
+        # Test deleting non-existent item
+        result = repo.delete_vocabulary_item(999, user_id=1)
+        assert result is False
+
+        # Test deleting with wrong user
+        result = repo.delete_vocabulary_item(vocab3.id, user_id=1)
+        assert result is False
+
+        # Verify user 2's item is still in learning
+        db_vocab_user2 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab3.id).first()
+        assert db_vocab_user2.in_learn is True
+        assert result is False

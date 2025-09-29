@@ -17,6 +17,7 @@ A command-line tool and web application for analyzing Swedish textbook pages usi
 - **⚙️ Configurable**: Easy provider switching via environment variables or CLI options
 - **🌐 Web API**: REST API for programmatic access to image processing functionality
 - **🖥️ Web Interface**: Responsive web application for easy image upload and results viewing
+- **🤖 Rune Recall**: Telegram bot for daily vocabulary recall and command processing
 
 ## 🚀 Quick Start
 
@@ -27,6 +28,7 @@ A command-line tool and web application for analyzing Swedish textbook pages usi
 - API key for your chosen LLM provider:
   - **OpenAI**: API key with GPT-4o access (recommended, default)
   - **Gemini**: Google Gemini API key with vision capabilities
+- Telegram Bot Token (for Rune Recall feature): Obtain from @BotFather on Telegram
 - UV package manager (recommended) or pip
 
 ### Installation
@@ -90,6 +92,15 @@ runestone process /path/to/textbook_page.jpg --output-format markdown
 
 # Specify API key directly
 runestone process --provider openai --api-key YOUR_API_KEY /path/to/textbook_page.jpg
+
+# Load vocabulary from CSV file
+runestone load-vocab /path/to/vocabulary.csv
+
+# Load vocabulary with custom database name
+runestone load-vocab /path/to/vocabulary.csv --db-name my_vocab.db
+
+# Load vocabulary skipping existence check (allow duplicates)
+runestone load-vocab /path/to/vocabulary.csv --skip-existence-check
 ```
 
 ### Web API Usage
@@ -139,6 +150,30 @@ The web interface will be available at `http://localhost:5173` with the followin
 2. Open `http://localhost:5173` in your browser
 3. Upload a Swedish textbook page image
 4. View the structured analysis results
+
+### Rune Recall Feature
+
+Runestone includes a Telegram bot for automated vocabulary recall and command processing:
+
+```bash
+# Start the Rune Recall Telegram Bot Worker
+make run-recall
+
+# Or run directly
+uv run python recall_main.py
+```
+
+The bot will:
+- Poll for incoming commands every 5 seconds
+- Send vocabulary recall words at configured intervals (default: every 60 minutes)
+- Process user interactions via Telegram
+
+**Prerequisites:**
+- Set `TELEGRAM_BOT_TOKEN` environment variable with your bot token from @BotFather
+- Ensure vocabulary data is available in the database
+
+**Configuration:**
+- `RECALL_INTERVAL_MINUTES`: Interval between recall messages (default: 60)
 
 ## 📖 Example Output
 
@@ -232,6 +267,7 @@ make run IMAGE_PATH=/path/to/image.jpg GEMINI_API_KEY=your_key  # Run CLI applic
 make run-backend       # Start FastAPI backend server
 make run-frontend      # Start frontend development server
 make run-dev           # Start both backend and frontend concurrently
+make run-recall        # Start the Rune Recall Telegram Bot Worker
 
 # Development Workflows
 make dev-test          # Quick development test (install-dev + lint-check + test)
@@ -246,7 +282,22 @@ make clean             # Clean up temporary files and caches
 make info              # Show environment information
 ```
 
-## 🐳 Updating Code in Containers
+## 🐳 Docker
+
+### Quick Start with Docker
+
+```bash
+# Start all services (automatically handles permissions)
+make docker-up
+
+# Stop all services
+make docker-down
+
+# Rebuild containers
+make docker-build
+```
+
+### Updating Code in Containers
 
 To update the code running in Docker containers after making changes:
 
@@ -259,6 +310,21 @@ docker compose restart
 ```
 
 This will rebuild the backend and frontend images with your latest code changes and restart the containers.
+
+### Database Permissions (SQLite)
+
+The Docker setup automatically handles SQLite database permissions to prevent "attempt to write a readonly database" errors:
+
+- **Database in State Directory**: The SQLite database is stored in the `state/` directory (`sqlite:///./state/runestone.db`)
+- **Automatic Permissions**: The `init-state.sh` script ensures the state directory has proper permissions (`777`) for container access
+- **No Manual Configuration**: Works across all development machines without user ID mapping
+
+**Technical Details:**
+- Database file: `./state/runestone.db` (inherits directory permissions)
+- State directory permissions: `drwxrwxrwx` (777) - allows container write access
+- The `init-state.sh` script automatically sets permissions during `make docker-up`
+
+This clean solution eliminates the need for complex user ID mapping while maintaining security and portability.
 
 ### Running Tests
 
@@ -350,10 +416,15 @@ tests/
 - `GEMINI_API_KEY`: Your Google Gemini API key (required for Gemini provider)
 
 **Database Configuration:**
-- `DATABASE_URL`: Database connection URL (default: `sqlite:///./runestone.db`)
+- `DATABASE_URL`: Database connection URL (default: `sqlite:///./state/runestone.db`)
 
 **General Settings:**
 - `VERBOSE`: Enable verbose logging (`true` or `false`, default: `false`)
+
+**Telegram Configuration:**
+- `TELEGRAM_BOT_TOKEN`: Your Telegram bot token from @BotFather (required for Rune Recall)
+- `RECALL_INTERVAL_MINUTES`: Interval between recall messages in minutes (default: 60)
+- `TELEGRAM_OFFSET_FILENAME`: Filename for storing Telegram update offset (default: offset.txt)
 
 ### Configuration File
 
@@ -375,7 +446,11 @@ OPENAI_MODEL=gpt-4o-mini
 GEMINI_API_KEY=your_gemini_api_key_here
 
 # Database settings
-DATABASE_URL=sqlite:///./runestone.db
+DATABASE_URL=sqlite:///./state/runestone.db
+
+# Telegram settings (for Rune Recall)
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+RECALL_INTERVAL_MINUTES=60
 
 # General settings
 VERBOSE=false

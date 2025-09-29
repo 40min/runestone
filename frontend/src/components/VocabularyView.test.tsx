@@ -192,7 +192,7 @@ describe("VocabularyView", () => {
     expect(screen.getByText("English")).toBeInTheDocument();
     expect(screen.getByText("Example Phrase")).toBeInTheDocument();
     expect(screen.getByText("In Learning")).toBeInTheDocument();
-    expect(screen.getByText("Shown Times")).toBeInTheDocument();
+    expect(screen.getByText("Last Learned")).toBeInTheDocument();
     expect(screen.getByText("Saved")).toBeInTheDocument();
 
     // Check vocabulary data

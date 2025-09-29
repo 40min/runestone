@@ -5,8 +5,7 @@ This module provides a single source of truth for all application settings,
 loaded from environment variables using Pydantic BaseSettings.
 """
 
-from typing import Optional
-
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 
 
@@ -14,21 +13,31 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # LLM Provider Configuration
-    llm_provider: str = "openai"
+    llm_provider: str
 
     # OpenAI Configuration
-    openai_api_key: Optional[str] = None
-    openai_model: str = "gpt-4o-mini"
+    openai_api_key: str
+    openai_model: str
 
     # Gemini Configuration
-    gemini_api_key: Optional[str] = None
+    gemini_api_key: str
 
     # Application Settings
+    allowed_origins: str
+    # Telegram Configuration
+    telegram_bot_token: str
     verbose: bool = False
-    allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3010,http://127.0.0.1:3010"
 
     # Database Configuration
-    database_url: str = "sqlite:///./runestone.db"
+    database_url: str = "sqlite:///./state/runestone.db"
+
+    # State Management Configuration
+    state_file_path: str = "state/state.json"
+
+    # Recall Configuration
+    recall_start_hour: int = 9
+    recall_end_hour: int = 22  # 10 PM
+    recall_interval_minutes: int = 60
 
     class Config:
         """Pydantic configuration."""
@@ -39,5 +48,8 @@ class Settings(BaseSettings):
         extra = "ignore"
 
 
+# Load environment variables from .env file
+load_dotenv()
+
 # Global settings instance
-settings = Settings()
+settings = Settings()  # type: ignore

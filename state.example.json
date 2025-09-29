@@ -1,0 +1,10 @@
+{
+  "users": {
+    "telegram_username": {
+      "db_user_id": 1,
+      "chat_id": null,
+      "is_active": false,
+      "daily_selection": {}
+    }
+  }
+}
