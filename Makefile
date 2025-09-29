@@ -7,7 +7,7 @@
 .PHONY: test test-coverage backend-test frontend-test
 .PHONY: run run-backend run-frontend run-dev run-recall load-vocab
 .PHONY: dev-test dev-full ci-lint ci-test
-.PHONY: init-state docker-up docker-down docker-build
+.PHONY: init-state docker-up docker-down docker-build restart-recall rebuild-restart-recall
 
 # =============================================================================
 # HELP AND INFO
@@ -59,6 +59,8 @@ help:
 	@echo "  docker-up        - Initialize state and start Docker services"
 	@echo "  docker-down      - Stop and remove Docker services"
 	@echo "  docker-build     - Build Docker images without cache"
+	@echo "  restart-recall   - Restart the recall container"
+	@echo "  rebuild-restart-recall - Rebuild and restart the recall container"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  clean            - Clean temporary files and caches"
@@ -295,3 +297,15 @@ docker-build:
 	@echo "🔨 Building Docker images..."
 	@docker compose build --no-cache
 	@echo "✅ Docker images built!"
+
+# Restart the recall container
+restart-recall:
+	@echo "🔄 Restarting recall container..."
+	@docker compose restart recall
+	@echo "✅ Recall container restarted!"
+
+# Rebuild and restart the recall container
+rebuild-restart-recall:
+	@echo "🔨 Rebuilding and restarting recall container..."
+	@docker compose up --build --force-recreate -d recall
+	@echo "✅ Recall container rebuilt and restarted!"
