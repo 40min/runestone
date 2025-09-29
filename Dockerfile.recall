@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*
 ENV PYTHONUSERBASE=/tmp/.local
 COPY pyproject.toml ./
 COPY src/ ./src/
-RUN pip install --user -e .
+RUN pip install --user .
 
 # Production stage
 FROM python:3.13-slim
