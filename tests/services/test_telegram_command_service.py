@@ -337,7 +337,7 @@ def test_parse_word_from_reply_text(telegram_service):
     # Test with bold formatting
     reply_text_with_bold = "🇸🇪 **kontanter**\n🇬🇧 cash\n\n💡 Example: - Tår ni kontanter?"
     result = telegram_service._parse_word_from_reply_text(reply_text_with_bold)
-    assert result == "**kontanter**"
+    assert result == "kontanter"
 
     # Test edge cases
     assert telegram_service._parse_word_from_reply_text("") is None

@@ -234,12 +234,8 @@ class TestVocabularyService:
     def test_load_vocab_from_csv_skip_check(self, service, db_session):
         """Test loading vocabulary from CSV with skip existence check (upsert)."""
         items = [
-            VocabularyItemCreate(
-                word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple."
-            ),
-            VocabularyItemCreate(
-                word_phrase="en banan", translation="a banana", example_phrase=None
-            ),
+            VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple."),
+            VocabularyItemCreate(word_phrase="en banan", translation="a banana", example_phrase=None),
             VocabularyItemCreate(
                 word_phrase="ett äpple", translation="an apple updated", example_phrase="Ett äpple är rött."
             ),  # Duplicate in batch - will upsert last
@@ -251,7 +247,7 @@ class TestVocabularyService:
         assert result == {
             "original_count": 3,
             "added_count": 3,  # All items processed (upsert)
-            "skipped_count": 0  # No skipping in upsert mode
+            "skipped_count": 0,  # No skipping in upsert mode
         }
 
         # Verify items in DB
@@ -282,12 +278,8 @@ class TestVocabularyService:
             VocabularyItemCreate(
                 word_phrase="ett äpple", translation="an apple updated", example_phrase="Ett äpple är rött."
             ),  # Existing
-            VocabularyItemCreate(
-                word_phrase="en banan", translation="a banana", example_phrase=None
-            ),  # New
-            VocabularyItemCreate(
-                word_phrase="ett päron", translation="a pear", example_phrase=None
-            ),  # New
+            VocabularyItemCreate(word_phrase="en banan", translation="a banana", example_phrase=None),  # New
+            VocabularyItemCreate(word_phrase="ett päron", translation="a pear", example_phrase=None),  # New
             VocabularyItemCreate(
                 word_phrase="ett päron", translation="a pear updated", example_phrase="Ett päron är gult."
             ),  # Duplicate in batch
@@ -299,7 +291,7 @@ class TestVocabularyService:
         assert result == {
             "original_count": 4,
             "added_count": 2,  # en banan and ett päron (first occurrence)
-            "skipped_count": 2  # existing äpple and duplicate päron
+            "skipped_count": 2,  # existing äpple and duplicate päron
         }
 
         # Verify items in DB

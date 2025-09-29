@@ -259,9 +259,7 @@ def load_vocab(csv_path: Path, db_name: str, skip_existence_check: bool):
                     console.print(f"[yellow]Warning:[/yellow] Skipped {skipped_count} duplicate vocabulary items.")
                 console.print(f"[green]Success:[/green] Added {added_count} new vocabulary items.")
 
-            console.print(
-                f"Total processed: {original_count} items (added: {added_count}, skipped: {skipped_count})"
-            )
+            console.print(f"Total processed: {original_count} items (added: {added_count}, skipped: {skipped_count})")
         finally:
             db.close()
 

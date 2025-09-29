@@ -262,11 +262,7 @@ class TestCLI:
 
             mock_service = Mock()
             mock_service_class.return_value = mock_service
-            mock_service.load_vocab_from_csv.return_value = {
-                "original_count": 2,
-                "added_count": 2,
-                "skipped_count": 0
-            }
+            mock_service.load_vocab_from_csv.return_value = {"original_count": 2, "added_count": 2, "skipped_count": 0}
 
             result = self.runner.invoke(cli, ["load-vocab", csv_path, "--skip-existence-check"])
 
@@ -286,11 +282,7 @@ class TestCLI:
 
             mock_service = Mock()
             mock_service_class.return_value = mock_service
-            mock_service.load_vocab_from_csv.return_value = {
-                "original_count": 2,
-                "added_count": 2,
-                "skipped_count": 0
-            }
+            mock_service.load_vocab_from_csv.return_value = {"original_count": 2, "added_count": 2, "skipped_count": 0}
 
             result = self.runner.invoke(cli, ["load-vocab", csv_path])
 

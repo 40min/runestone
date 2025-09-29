@@ -179,17 +179,13 @@ class VocabularyRepository:
 
     def delete_vocabulary_item_by_word_phrase(self, word_phrase: str, user_id: int) -> bool:
         """Mark a vocabulary item as not in learning (soft delete) by word phrase."""
-        vocab = self.get_vocabulary_item_by_word_phrase(word_phrase, user_id)
-        if vocab:
-            # Use update query instead of direct attribute assignment
-            updated_rows = (
-                self.db.query(Vocabulary)
-                .filter(Vocabulary.word_phrase == word_phrase, Vocabulary.user_id == user_id)
-                .update({"in_learn": False})
-            )
-            self.db.commit()
-            return updated_rows > 0
-        return False
+        updated_rows = (
+            self.db.query(Vocabulary)
+            .filter(Vocabulary.word_phrase == word_phrase, Vocabulary.user_id == user_id)
+            .update({"in_learn": False})
+        )
+        self.db.commit()
+        return updated_rows > 0
 
     def delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
         """Mark a vocabulary item as not in learning (soft delete)."""
