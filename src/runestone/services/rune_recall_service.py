@@ -205,6 +205,7 @@ class RuneRecallService:
         translation = word.get("translation", "Unknown")
         example_phrase = word.get("example_phrase", "")
 
+        word_phrase = self._escape_markdown(word_phrase)
         translation = self._escape_markdown(translation)
         if example_phrase:
             example_phrase = self._escape_markdown(example_phrase)

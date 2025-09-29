@@ -776,6 +776,34 @@ def test_send_word_message_with_special_characters(mock_client_class, rune_recal
 
 
 @patch("src.runestone.services.rune_recall_service.httpx.Client")
+def test_send_word_message_with_special_characters_in_word_phrase(mock_client_class, rune_recall_service):
+    """Test that special Markdown characters in word_phrase are properly escaped."""
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    mock_client.post.return_value = mock_response
+    mock_client_class.return_value.__enter__.return_value = mock_client
+
+    # Word with special characters in word_phrase that need escaping
+    word = {
+        "id": 1,
+        "word_phrase": "glas (-et, -, -en)",
+        "translation": "glass",
+        "example_phrase": None,
+    }
+
+    result = rune_recall_service._send_word_message(123, word)
+    assert result is True
+
+    # Check that the word_phrase is properly escaped
+    expected_message = "🇸🇪 **glas \\(\\-et, \\-, \\-en\\)**\n🇬🇧 glass"
+    mock_client.post.assert_called_once_with(
+        "https://api.telegram.org/bottest_token/sendMessage",
+        json={"chat_id": 123, "text": expected_message, "parse_mode": "MarkdownV2"},
+    )
+
+
+@patch("src.runestone.services.rune_recall_service.httpx.Client")
 def test_send_word_message_escapes_all_markdown_chars(mock_client_class, rune_recall_service):
     """Test that all Markdown special characters are properly escaped."""
     mock_client = MagicMock()
