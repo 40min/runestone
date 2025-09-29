@@ -194,14 +194,9 @@ load-vocab:
 		exit 1; \
 	fi
 	@echo "📚 Loading vocabulary from CSV: $(CSV_PATH)"
-	@CMD="uv run runestone load-vocab \"$(CSV_PATH)\""
-	@if [ -n "$(DB_NAME)" ]; then \
-		CMD="$$CMD --db-name \"$(DB_NAME)\""; \
-	fi
-	@if [ -n "$(SKIP_EXISTENCE_CHECK)" ] && [ "$(SKIP_EXISTENCE_CHECK)" = "true" ]; then \
-		CMD="$$CMD --skip-existence-check"; \
-	fi
-	@eval $$CMD
+	@uv run runestone load-vocab "$(CSV_PATH)" \
+		$(if $(DB_NAME),--db-name "$(DB_NAME)") \
+		$(if $(filter true,$(SKIP_EXISTENCE_CHECK)),--skip-existence-check)
 
 # Start FastAPI backend server
 run-backend:
