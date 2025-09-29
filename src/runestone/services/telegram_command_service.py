@@ -37,7 +37,7 @@ class TelegramCommandService:
         match = re.search(pattern, reply_text)
 
         if match:
-            return match.group(1).strip().strip('*_')
+            return match.group(1).strip().strip("*_")
 
         return None
 

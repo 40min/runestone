@@ -103,7 +103,10 @@ def main(state_file_path: Optional[str] = None) -> None:
             logger.info(f"  - {job.name}: {job.trigger}")
 
         logger.info("Starting scheduler...")
-        scheduler.start()
+        try:
+            scheduler.start()
+        finally:
+            db.close()  # Ensure database connection is always closed
 
     except Exception as e:
         logger.error(f"Failed to start worker: {e}")

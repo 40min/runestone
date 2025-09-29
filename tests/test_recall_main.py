@@ -18,6 +18,7 @@ class TestRecallMain:
         self.test_token = "test_bot_token"
         self.test_state_file = "test_state.json"
 
+    @patch("recall_main.SessionLocal")
     @patch("recall_main.settings")
     @patch("recall_main.setup_logging")
     @patch("recall_main.setup_database")
@@ -36,11 +37,15 @@ class TestRecallMain:
         mock_setup_database,
         mock_setup_logging,
         mock_settings,
+        mock_session_local,
     ):
         """Test successful main execution."""
         # Setup mocks
         mock_settings.telegram_bot_token = self.test_token
         mock_settings.verbose = False
+
+        mock_db = Mock()
+        mock_session_local.return_value = mock_db
 
         mock_scheduler = Mock()
         mock_scheduler.get_jobs.return_value = []  # Mock get_jobs to return empty list
@@ -65,6 +70,7 @@ class TestRecallMain:
         mock_recall_service.assert_called_once()
         mock_create_scheduler.assert_called_once()
         mock_scheduler.start.assert_called_once()
+        mock_db.close.assert_called_once()
 
     @patch("recall_main.settings")
     def test_main_missing_token(self, mock_settings):
@@ -169,6 +175,7 @@ class TestRecallMain:
         # Verify inspect was called
         mock_inspect.assert_called_once_with(mock_engine)
 
+    @patch("recall_main.SessionLocal")
     @patch("recall_main.signal")
     @patch("recall_main.settings")
     @patch("recall_main.setup_logging")
@@ -189,10 +196,14 @@ class TestRecallMain:
         mock_setup_logging,
         mock_settings,
         mock_signal,
+        mock_session_local,
     ):
         """Test signal handler setup."""
         mock_settings.telegram_bot_token = self.test_token
         mock_settings.verbose = False
+
+        mock_db = Mock()
+        mock_session_local.return_value = mock_db
 
         mock_scheduler = Mock()
         mock_scheduler.get_jobs.return_value = []  # Mock get_jobs to return empty list
@@ -217,3 +228,4 @@ class TestRecallMain:
         assert calls[1][0][0] is not None  # Second signal constant
         assert callable(calls[0][0][1])  # Handler function
         assert callable(calls[1][0][1])  # Handler function
+        mock_db.close.assert_called_once()
