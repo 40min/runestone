@@ -230,3 +230,91 @@ class TestVocabularyService:
         assert updated_vocab.word_phrase == "ett äpple"
         assert updated_vocab.translation == "an apple"
         assert updated_vocab.in_learn is False
+
+    def test_load_vocab_from_csv_skip_check(self, service, db_session):
+        """Test loading vocabulary from CSV with skip existence check (upsert)."""
+        items = [
+            VocabularyItemCreate(
+                word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple."
+            ),
+            VocabularyItemCreate(
+                word_phrase="en banan", translation="a banana", example_phrase=None
+            ),
+            VocabularyItemCreate(
+                word_phrase="ett äpple", translation="an apple updated", example_phrase="Ett äpple är rött."
+            ),  # Duplicate in batch - will upsert last
+        ]
+
+        result = service.load_vocab_from_csv(items, skip_existence_check=True, user_id=1)
+        db_session.commit()
+
+        assert result == {
+            "original_count": 3,
+            "added_count": 3,  # All items processed (upsert)
+            "skipped_count": 0  # No skipping in upsert mode
+        }
+
+        # Verify items in DB
+        vocabularies = db_session.query(VocabularyModel).all()
+        assert len(vocabularies) == 2  # ett äpple and en banan
+
+        apple_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "ett äpple").first()
+        assert apple_vocab.translation == "an apple updated"  # Last upsert wins
+        assert apple_vocab.example_phrase == "Ett äpple är rött."
+
+        banana_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "en banan").first()
+        assert banana_vocab.translation == "a banana"
+
+    def test_load_vocab_from_csv_with_check(self, service, db_session):
+        """Test loading vocabulary from CSV with existence check (add only new)."""
+        # Pre-add one item
+        existing_vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            example_phrase="Jag äter ett äpple.",
+            in_learn=True,
+        )
+        db_session.add(existing_vocab)
+        db_session.commit()
+
+        items = [
+            VocabularyItemCreate(
+                word_phrase="ett äpple", translation="an apple updated", example_phrase="Ett äpple är rött."
+            ),  # Existing
+            VocabularyItemCreate(
+                word_phrase="en banan", translation="a banana", example_phrase=None
+            ),  # New
+            VocabularyItemCreate(
+                word_phrase="ett päron", translation="a pear", example_phrase=None
+            ),  # New
+            VocabularyItemCreate(
+                word_phrase="ett päron", translation="a pear updated", example_phrase="Ett päron är gult."
+            ),  # Duplicate in batch
+        ]
+
+        result = service.load_vocab_from_csv(items, skip_existence_check=False, user_id=1)
+        db_session.commit()
+
+        assert result == {
+            "original_count": 4,
+            "added_count": 2,  # en banan and ett päron (first occurrence)
+            "skipped_count": 2  # existing äpple and duplicate päron
+        }
+
+        # Verify items in DB
+        vocabularies = db_session.query(VocabularyModel).all()
+        assert len(vocabularies) == 3  # Original + 2 new
+
+        # Existing äpple unchanged
+        apple_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "ett äpple").first()
+        assert apple_vocab.translation == "an apple"
+        assert apple_vocab.example_phrase == "Jag äter ett äpple."
+
+        # New items added
+        banana_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "en banan").first()
+        assert banana_vocab.translation == "a banana"
+
+        pear_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "ett päron").first()
+        assert pear_vocab.translation == "a pear"
+        assert pear_vocab.example_phrase is None

@@ -83,3 +83,42 @@ class VocabularyService:
             created_at=updated_vocab.created_at.isoformat() if updated_vocab.created_at else None,
             updated_at=updated_vocab.updated_at.isoformat() if updated_vocab.updated_at else None,
         )
+
+    def load_vocab_from_csv(self, items: List[VocabularyItemCreate], skip_existence_check: bool, user_id: int = 1) -> dict:
+        """Load vocabulary items from CSV data, handling parsing, filtering, and insertion logic."""
+        original_count = len(items)
+
+        if skip_existence_check:
+            # Upsert all items (update if exists, insert if not) - no filtering
+            self.repo.upsert_vocabulary_items(items, user_id)
+            added_count = len(items)
+            skipped_count = 0  # No skipping in upsert mode
+        else:
+            # Filter duplicates within the batch
+            seen = set()
+            filtered_items = []
+            for item in items:
+                if item.word_phrase not in seen:
+                    filtered_items.append(item)
+                    seen.add(item.word_phrase)
+            items = filtered_items            
+
+            # Get existing word_phrases before insertion
+            batch_word_phrases = [item.word_phrase for item in items]
+            existing_word_phrases = self.repo.get_existing_word_phrases_for_batch(batch_word_phrases, user_id)            
+
+            # Filter items: remove existing in DB
+            final_items = [item for item in items if item.word_phrase not in existing_word_phrases]
+
+            # Batch insert the filtered items
+            if final_items:
+                self.repo.batch_insert_vocabulary_items(final_items, user_id)
+
+            added_count = len(final_items)
+            skipped_count = original_count - added_count
+
+        return {
+            "original_count": original_count,
+            "added_count": added_count,
+            "skipped_count": skipped_count
+        }

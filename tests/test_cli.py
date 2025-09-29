@@ -250,8 +250,8 @@ class TestCLI:
         assert "Load vocabulary data" in result.output
         assert "--skip-existence-check" in result.output
 
-    @patch("runestone.cli.VocabularyRepository")
-    def test_load_vocab_command_skip_check(self, mock_repo_class):
+    @patch("runestone.cli.VocabularyService")
+    def test_load_vocab_command_skip_check(self, mock_service_class):
         """Test load_vocab command with skip existence check."""
         with self.runner.isolated_filesystem():
             # Create a test CSV file
@@ -260,18 +260,22 @@ class TestCLI:
             with open(csv_path, "w") as f:
                 f.write(csv_content)
 
-            mock_repo = Mock()
-            mock_repo_class.return_value = mock_repo
-            mock_repo.upsert_vocabulary_items = Mock()
+            mock_service = Mock()
+            mock_service_class.return_value = mock_service
+            mock_service.load_vocab_from_csv.return_value = {
+                "original_count": 2,
+                "added_count": 2,
+                "skipped_count": 0
+            }
 
             result = self.runner.invoke(cli, ["load-vocab", csv_path, "--skip-existence-check"])
 
             assert result.exit_code == 0
-            mock_repo.upsert_vocabulary_items.assert_called_once()
+            mock_service.load_vocab_from_csv.assert_called_once()
             assert "Processed 2 vocabulary items" in result.output
 
-    @patch("runestone.cli.VocabularyRepository")
-    def test_load_vocab_command_default_check(self, mock_repo_class):
+    @patch("runestone.cli.VocabularyService")
+    def test_load_vocab_command_default_check(self, mock_service_class):
         """Test load_vocab command with default existence check."""
         with self.runner.isolated_filesystem():
             # Create a test CSV file
@@ -280,14 +284,16 @@ class TestCLI:
             with open(csv_path, "w") as f:
                 f.write(csv_content)
 
-            mock_repo = Mock()
-            mock_repo_class.return_value = mock_repo
-            mock_repo.get_existing_word_phrases_for_batch.return_value = set()
-            mock_repo.add_vocabulary_items = Mock()
+            mock_service = Mock()
+            mock_service_class.return_value = mock_service
+            mock_service.load_vocab_from_csv.return_value = {
+                "original_count": 2,
+                "added_count": 2,
+                "skipped_count": 0
+            }
 
             result = self.runner.invoke(cli, ["load-vocab", csv_path])
 
             assert result.exit_code == 0
-            mock_repo.get_existing_word_phrases_for_batch.assert_called_once()
-            mock_repo.add_vocabulary_items.assert_called_once()
+            mock_service.load_vocab_from_csv.assert_called_once()
             assert "Added 2 new vocabulary items" in result.output
