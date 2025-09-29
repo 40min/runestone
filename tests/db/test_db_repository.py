@@ -411,7 +411,7 @@ class TestVocabularyRepository:
             repo.get_vocabulary_item(vocab.id, user_id=2)
 
     def test_select_new_daily_word_ids(self, repo, db_session):
-        """Test selecting new daily word IDs with cooldown logic."""
+        """Test selecting new daily word IDs with cooldown logic (random order)."""
 
         # Add test vocabulary items
         vocab1 = VocabularyModel(
@@ -455,15 +455,17 @@ class TestVocabularyRepository:
 
         # Test for user 1 with default cooldown (7 days)
         result = repo.select_new_daily_word_ids(user_id=1)
+        result_set = set(result)
+        expected_set = {vocab1.id, vocab2.id}
+
         assert len(result) == 2  # vocab1 and vocab2
-        assert vocab1.id in result
-        assert vocab2.id in result
-        assert vocab3.id not in result  # Too recent
-        assert vocab4.id not in result  # Not in learning
-        assert vocab5.id not in result  # Wrong user
+        assert result_set == expected_set
+        assert vocab3.id not in result_set  # Too recent
+        assert vocab4.id not in result_set  # Not in learning
+        assert vocab5.id not in result_set  # Wrong user
 
     def test_select_new_daily_word_ids_custom_cooldown(self, repo, db_session):
-        """Test selecting new daily word IDs with custom cooldown period."""
+        """Test selecting new daily word IDs with custom cooldown period (random order)."""
         from datetime import datetime, timedelta
 
         # Add test vocabulary items
@@ -491,9 +493,11 @@ class TestVocabularyRepository:
 
         # Test with 1-day cooldown - both should be included
         result = repo.select_new_daily_word_ids(user_id=1, cooldown_days=1)
+        result_set = set(result)
+        expected_set = {vocab1.id, vocab2.id}
+
         assert len(result) == 2
-        assert vocab1.id in result
-        assert vocab2.id in result
+        assert result_set == expected_set
 
     def test_get_vocabulary_item_for_recall(self, repo, db_session):
         """Test getting a vocabulary item for recall (ensures in_learn=True)."""

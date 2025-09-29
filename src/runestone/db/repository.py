@@ -8,7 +8,7 @@ logic for different entities.
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
@@ -127,7 +127,7 @@ class VocabularyRepository:
         return vocab
 
     def select_new_daily_word_ids(self, user_id: int, cooldown_days: int = 7) -> List[int]:
-        """Select new daily word IDs for a user, excluding recently learned words."""
+        """Select new daily word IDs for a user randomly, excluding recently learned words."""
         cutoff_date = datetime.now() - timedelta(days=cooldown_days)
         result = (
             self.db.query(Vocabulary.id)
@@ -136,7 +136,7 @@ class VocabularyRepository:
                 Vocabulary.in_learn.is_(True),
                 or_(Vocabulary.last_learned.is_(None), Vocabulary.last_learned < cutoff_date),
             )
-            .order_by(Vocabulary.created_at.desc())
+            .order_by(func.random())
             .all()
         )
         return [row[0] for row in result]
