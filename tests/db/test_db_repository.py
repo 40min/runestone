@@ -732,4 +732,61 @@ class TestVocabularyRepository:
 
         # Test deleting with wrong user
         result = repo.delete_vocabulary_item_by_word_phrase("ett päron", user_id=1)
+
+    def test_delete_vocabulary_item(self, repo, db_session):
+        """Test deleting (marking as not in learning) a vocabulary item by ID."""
+        # Add test items
+        vocab1 = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            in_learn=True,
+            last_learned=None,
+        )
+        vocab2 = VocabularyModel(
+            user_id=1,
+            word_phrase="en banan",
+            translation="a banana",
+            in_learn=False,  # Already not in learning
+            last_learned=None,
+        )
+        vocab3 = VocabularyModel(
+            user_id=2,
+            word_phrase="ett päron",
+            translation="a pear",
+            in_learn=True,
+            last_learned=None,
+        )
+
+        db_session.add_all([vocab1, vocab2, vocab3])
+        db_session.commit()
+
+        # Test successful deletion
+        result = repo.delete_vocabulary_item(vocab1.id, user_id=1)
+        assert result is True
+
+        # Verify item is marked as not in learning
+        db_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab1.id).first()
+        assert db_vocab.in_learn is False
+        assert db_vocab.word_phrase == "ett äpple"  # Other fields unchanged
+
+        # Verify other user's item is unchanged
+        db_vocab_user2 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab3.id).first()
+        assert db_vocab_user2.in_learn is True
+
+        # Test deleting item already not in learning (should still return True)
+        result = repo.delete_vocabulary_item(vocab2.id, user_id=1)
+        assert result is True
+
+        # Test deleting non-existent item
+        result = repo.delete_vocabulary_item(999, user_id=1)
+        assert result is False
+
+        # Test deleting with wrong user
+        result = repo.delete_vocabulary_item(vocab3.id, user_id=1)
+        assert result is False
+
+        # Verify user 2's item is still in learning
+        db_vocab_user2 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab3.id).first()
+        assert db_vocab_user2.in_learn is True
         assert result is False
