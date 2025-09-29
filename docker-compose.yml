@@ -18,8 +18,7 @@ services:
       - VERBOSE=${VERBOSE}
       - DATABASE_URL=sqlite:///./state/runestone.db
     volumes:
-      - ./res:/app/res:ro
-      - ./state/runestone.db:/app/state/runestone.db
+      - ./res:/app/res:ro      
       - ./state:/app/state
     networks:
       - runestone-network

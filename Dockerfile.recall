@@ -10,7 +10,7 @@ LABEL org.opencontainers.image.source="https://github.com/your-org/runestone"
 WORKDIR /app
 RUN apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*
 ENV PYTHONUSERBASE=/tmp/.local
-COPY pyproject.toml README.md ./
+COPY pyproject.toml ./
 COPY src/ ./src/
 RUN pip install --user -e .
 

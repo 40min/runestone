@@ -26,16 +26,37 @@ from runestone.state.state_manager import StateManager
 from runestone.services.telegram_command_service import TelegramCommandService
 
 
-def create_scheduler(
-    telegram_service: TelegramCommandService,
-    recall_service: RuneRecallService
-) -> BlockingScheduler:
+def process_updates_job(state_manager: StateManager) -> None:
+    """Wrapper function for processing Telegram updates with fresh session."""
+    db = SessionLocal()
+    try:
+        vocabulary_repository = VocabularyRepository(db)
+        recall_service = RuneRecallService(vocabulary_repository, state_manager)
+        telegram_service = TelegramCommandService(state_manager, recall_service)
+        telegram_service.process_updates()
+    finally:
+        db.close()
+
+
+def send_recall_word_job(state_manager: StateManager) -> None:
+    """Wrapper function for sending recall words with fresh session."""
+    db = SessionLocal()
+    try:
+        vocabulary_repository = VocabularyRepository(db)
+        recall_service = RuneRecallService(vocabulary_repository, state_manager)
+        recall_service.send_next_recall_word()
+    finally:
+        db.close()
+
+
+def create_scheduler(state_manager: StateManager) -> BlockingScheduler:
     """Create and configure the APScheduler instance."""
     scheduler = BlockingScheduler()
 
     # Poll for Telegram commands every 5 seconds
     scheduler.add_job(
-        telegram_service.process_updates,
+        process_updates_job,
+        args=[state_manager],
         trigger=IntervalTrigger(seconds=5),
         id="poll_commands",
         name="Poll Telegram Commands",
@@ -45,7 +66,8 @@ def create_scheduler(
 
     # Send recall words periodically during the day
     scheduler.add_job(
-        recall_service.send_next_recall_word,
+        send_recall_word_job,
+        args=[state_manager],
         trigger=IntervalTrigger(minutes=settings.recall_interval_minutes),
         id="send_recall_words",
         name="Send Recall Vocabulary Words",
@@ -74,24 +96,16 @@ def main(state_file_path: Optional[str] = None) -> None:
         logger.info("Setting up database...")
         setup_database()
 
-        # Initialize services
+        # Initialize state manager (no long-lived database session needed)
         state_manager = StateManager(state_file_path or "state/state.json")
-        
-        # Create database session and repository
-        db = SessionLocal()
-        vocabulary_repository = VocabularyRepository(db)
-        
-        recall_service = RuneRecallService(vocabulary_repository, state_manager)
-        telegram_service = TelegramCommandService(state_manager, recall_service)
 
-        # Create and configure scheduler
-        scheduler = create_scheduler(telegram_service, recall_service)
+        # Create and configure scheduler with wrapper functions
+        scheduler = create_scheduler(state_manager)
 
         # Setup signal handlers for graceful shutdown
         def shutdown_handler(signum, frame):
             logger.info(f"Received signal {signum}, shutting down scheduler...")
             scheduler.shutdown(wait=True)
-            db.close()  # Close database connection
             logger.info("Scheduler shutdown complete")
             sys.exit(0)
 
@@ -103,10 +117,7 @@ def main(state_file_path: Optional[str] = None) -> None:
             logger.info(f"  - {job.name}: {job.trigger}")
 
         logger.info("Starting scheduler...")
-        try:
-            scheduler.start()
-        finally:
-            db.close()  # Ensure database connection is always closed
+        scheduler.start()
 
     except Exception as e:
         logger.error(f"Failed to start worker: {e}")
