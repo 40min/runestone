@@ -26,9 +26,10 @@ interface UseRecentVocabularyReturn {
   refetch: () => Promise<void>;
   isEditModalOpen: boolean;
   editingItem: SavedVocabularyItem | null;
-  openEditModal: (item: SavedVocabularyItem) => void;
+  openEditModal: (item: SavedVocabularyItem | null) => void;
   closeEditModal: () => void;
   updateVocabularyItem: (id: number, updates: Partial<SavedVocabularyItem>) => Promise<void>;
+  createVocabularyItem: (item: Partial<SavedVocabularyItem>) => Promise<void>;
 }
 
 const useVocabulary = (): UseVocabularyReturn => {
@@ -104,7 +105,7 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
     }
   }, [searchQuery]);
 
-  const openEditModal = useCallback((item: SavedVocabularyItem) => {
+  const openEditModal = useCallback((item: SavedVocabularyItem | null) => {
     setEditingItem(item);
     setIsEditModalOpen(true);
   }, []);
@@ -137,6 +138,29 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
     }
   }, [fetchRecentVocabulary, closeEditModal]);
 
+  const createVocabularyItem = useCallback(async (item: Partial<SavedVocabularyItem>) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ items: [item] }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to create vocabulary item: HTTP ${response.status}`);
+      }
+
+      // Refetch the vocabulary list to reflect changes
+      await fetchRecentVocabulary();
+      closeEditModal();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create vocabulary item';
+      setError(errorMessage);
+    }
+  }, [fetchRecentVocabulary, closeEditModal]);
+
   useEffect(() => {
     fetchRecentVocabulary();
   }, [searchQuery, fetchRecentVocabulary]);
@@ -151,5 +175,6 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
     openEditModal,
     closeEditModal,
     updateVocabularyItem,
+    createVocabularyItem,
   };
 };

@@ -19,14 +19,14 @@ interface SavedVocabularyItem {
   created_at: string;
 }
 
-interface EditVocabularyModalProps {
+interface AddEditVocabularyModalProps {
   open: boolean;
   item: SavedVocabularyItem | null;
   onClose: () => void;
   onSave: (updatedItem: Partial<SavedVocabularyItem>) => void;
 }
 
-const EditVocabularyModal: React.FC<EditVocabularyModalProps> = ({
+const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   open,
   item,
   onClose,
@@ -43,6 +43,11 @@ const EditVocabularyModal: React.FC<EditVocabularyModalProps> = ({
       setTranslation(item.translation);
       setExamplePhrase(item.example_phrase || '');
       setInLearn(item.in_learn);
+    } else {
+      setWordPhrase('');
+      setTranslation('');
+      setExamplePhrase('');
+      setInLearn(false);
     }
   }, [item]);
 
@@ -94,7 +99,7 @@ const EditVocabularyModal: React.FC<EditVocabularyModalProps> = ({
           }}
         >
           <Typography variant="h6" component="h2">
-            Edit Vocabulary Item
+            {item ? 'Edit Vocabulary Item' : 'Add Vocabulary Item'}
           </Typography>
           <IconButton
             onClick={handleClose}
@@ -208,7 +213,7 @@ const EditVocabularyModal: React.FC<EditVocabularyModalProps> = ({
               onClick={handleSave}
               disabled={!wordPhrase.trim() || !translation.trim()}
             >
-              Save Changes
+              {item ? 'Save Changes' : 'Add Item'}
             </CustomButton>
           </Box>
         </Box>
@@ -217,4 +222,4 @@ const EditVocabularyModal: React.FC<EditVocabularyModalProps> = ({
   );
 };
 
-export default EditVocabularyModal;
+export default AddEditVocabularyModal;

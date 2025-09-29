@@ -52,10 +52,22 @@ const SearchInput: React.FC<SearchInputProps> = ({
           onClick={onSearch}
           sx={{
             ml: 1,
-            backgroundColor: "#60a5fa",
-            color: "white",
-            "&:hover": {
-              backgroundColor: "#3b82f6",
+            backgroundColor: 'var(--primary-color)',
+            color: '#111714',
+            fontWeight: 'medium',
+            textTransform: 'none',
+            borderRadius: '0.5rem',
+            transition: 'all 0.2s',
+            px: 3,
+            py: 1.5,
+            fontSize: '0.875rem',
+            '&:hover': {
+              backgroundColor: 'var(--primary-color)',
+              opacity: 0.9,
+              transform: 'scale(1.02)',
+            },
+            '&:active': {
+              transform: 'scale(0.98)',
             },
           }}
         >
