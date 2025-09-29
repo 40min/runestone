@@ -6,6 +6,7 @@ portion logic for multiple concurrent users.
 """
 
 import logging
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -178,10 +179,15 @@ class RuneRecallService:
         return []
 
     def _escape_markdown(self, text: str) -> str:
-        """Escape special Markdown characters."""
+        """Escape special Markdown characters that are not already escaped."""
         escape_chars = ["*", "_", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"]
+
         for char in escape_chars:
-            text = text.replace(char, f"\\{char}")
+            # Only escape characters that are not already preceded by a backslash
+            # Use negative lookbehind (?<!\\) to check if the character is not already escaped
+            pattern = f"(?<!\\\\){re.escape(char)}"
+            text = re.sub(pattern, f"\\{char}", text)
+
         return text
 
     def _send_word_message(self, chat_id: int, word: Dict) -> bool:
