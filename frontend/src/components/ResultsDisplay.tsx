@@ -395,7 +395,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                     {
                       key: 'example_phrase',
                       label: 'Example Phrase',
-                      render: (value, _, __) => (value as string) || "—"
+                      render: (value) => (value as string) || "—"
                     },
                   ]}
                   data={analysisResult.vocabulary as unknown as Record<string, unknown>[]}
