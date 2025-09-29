@@ -788,7 +788,9 @@ def test_send_word_message_escapes_all_markdown_chars(mock_client_class, rune_re
     word = {
         "id": 1,
         "word_phrase": "test",
-        "translation": "*bold* _italic_ [link](url) `code` > quote # header + list - item | table {code} .period !exclamation",
+        "translation": (
+            "*bold* _italic_ [link](url) `code` > quote # header + list - item | table {code} .period !exclamation"
+        ),
         "example_phrase": "~strikethrough~ =underline= (parentheses) [brackets]",
     }
 
@@ -798,7 +800,8 @@ def test_send_word_message_escapes_all_markdown_chars(mock_client_class, rune_re
     # Check that all special characters are escaped
     expected_message = (
         "🇸🇪 **test**\n"
-        "🇬🇧 \\*bold\\* \\_italic\\_ \\[link\\]\\(url\\) \\`code\\` \\> quote \\# header \\+ list \\- item \\| table \\{code\\} \\.period \\!exclamation\n"
+        "🇬🇧 \\*bold\\* \\_italic\\_ \\[link\\]\\(url\\) \\`code\\` \\> quote \\# header \\+ list \\- item \\| table \\{code\\} \\.period \\!exclamation\n" +
+        ""
         "\n"
         "💡 *Example:* \\~strikethrough\\~ \\=underline\\= \\(parentheses\\) \\[brackets\\]"
     )

@@ -114,6 +114,11 @@ class RuneRecallService:
         # Get the selected items for today
         selected_items = user_data.daily_selection
         selected_ids = [item.id_ for item in selected_items]
+        if not selected_ids:
+            logger.warning(f"No selected words available for user {username}, clearing daily selection")
+            user_data.daily_selection = []
+            self.state_manager.update_user(username, user_data)
+            return
         if next_word_index >= len(selected_ids):
             next_word_index = 0
 
