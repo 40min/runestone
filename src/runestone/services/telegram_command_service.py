@@ -12,11 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class TelegramCommandService:
-    def __init__(
-        self,
-        state_manager: StateManager,
-        rune_recall_service: RuneRecallService
-    ):
+    def __init__(self, state_manager: StateManager, rune_recall_service: RuneRecallService):
         self.state_manager = state_manager
         self.rune_recall_service = rune_recall_service
         self.bot_token = settings.telegram_bot_token
@@ -44,7 +40,6 @@ class TelegramCommandService:
             return match.group(1).strip()
 
         return None
-
 
     def _send_message(self, chat_id: int, text: str) -> bool:
         """Send a message to a Telegram chat."""
@@ -178,6 +173,6 @@ class TelegramCommandService:
 
         # Delegate to RuneRecallService
         result = self.rune_recall_service.postpone_word(username, word_phrase)
-        
+
         # Send response based on result
         self._send_message(chat_id, result["message"])

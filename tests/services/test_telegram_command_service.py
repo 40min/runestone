@@ -50,7 +50,7 @@ def telegram_service(state_manager, mock_rune_recall_service):
 def telegram_service_with_deps(state_manager, mock_rune_recall_service):
     return TelegramCommandService(
         state_manager,
-        rune_recall_service=mock_rune_recall_service,        
+        rune_recall_service=mock_rune_recall_service,
     )
 
 
@@ -359,7 +359,7 @@ def test_handle_remove_command_success(
     mock_rune_recall_service.remove_word_completely.return_value = {
         "success": True,
         "message": "Word 'kontanter' removed from vocabulary and daily selection.",
-        "removed_from_selection": True
+        "removed_from_selection": True,
     }
 
     # Mock HTTP client for sending response
@@ -378,34 +378,6 @@ def test_handle_remove_command_success(
     mock_rune_recall_service.remove_word_completely.assert_called_once_with("authorized_user", "kontanter")
 
     # Verify success message sent
-    mock_client.post.assert_called_once()
-    call_args = mock_client.post.call_args[1]["json"]
-    assert "kontanter" in call_args["text"]
-    assert "removed from vocabulary and daily selection" in call_args["text"]
-
-
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
-def test_handle_remove_command_success(mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service):
-    """Test successful /remove command"""
-    # Mock RuneRecallService response
-    mock_rune_recall_service.remove_word_completely.return_value = {
-        "success": True,
-        "message": "Word 'kontanter' removed from vocabulary and daily selection.",
-        "removed_from_selection": True
-    }
-
-    # Mock HTTP client
-    mock_client = MagicMock()
-    mock_response = MagicMock()
-    mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
-
-    message = {"reply_to_message": {"text": "🇸🇪 kontanter\n🇬🇧 cash"}}
-
-    telegram_service_with_deps._handle_remove_command(message, "authorized_user", None, 123)
-
-    # Should send success message
     mock_client.post.assert_called_once()
     call_args = mock_client.post.call_args[1]["json"]
     assert "kontanter" in call_args["text"]
@@ -442,7 +414,7 @@ def test_handle_remove_command_word_not_found(
     # Mock RuneRecallService response (word not found)
     mock_rune_recall_service.remove_word_completely.return_value = {
         "success": False,
-        "message": "Word 'nonexistent' not found in your vocabulary"
+        "message": "Word 'nonexistent' not found in your vocabulary",
     }
 
     # Mock HTTP client
@@ -470,7 +442,7 @@ def test_handle_postpone_command_success(
     # Mock RuneRecallService response
     mock_rune_recall_service.postpone_word.return_value = {
         "success": True,
-        "message": "Word 'kontanter' postponed (removed from today's selection)."
+        "message": "Word 'kontanter' postponed (removed from today's selection).",
     }
 
     # Mock HTTP client
@@ -496,12 +468,14 @@ def test_handle_postpone_command_success(
 
 
 @patch("src.runestone.services.telegram_command_service.httpx.Client")
-def test_handle_postpone_command_not_in_selection(mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service):
+def test_handle_postpone_command_not_in_selection(
+    mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
+):
     """Test /postpone command when word is not in daily selection"""
     # Mock RuneRecallService response (word not in selection)
     mock_rune_recall_service.postpone_word.return_value = {
         "success": False,
-        "message": "Word 'kontanter' was not in today's selection."
+        "message": "Word 'kontanter' was not in today's selection.",
     }
 
     # Mock HTTP client
@@ -538,7 +512,7 @@ def test_process_updates_remove_command(
     mock_rune_recall_service.remove_word_completely.return_value = {
         "success": True,
         "message": "Word 'kontanter' removed from vocabulary and daily selection.",
-        "removed_from_selection": True
+        "removed_from_selection": True,
     }
 
     mock_client = MagicMock()
@@ -579,7 +553,9 @@ def test_process_updates_remove_command(
 
 
 @patch("src.runestone.services.telegram_command_service.httpx.Client")
-def test_process_updates_postpone_command(mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service):
+def test_process_updates_postpone_command(
+    mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
+):
     """Test processing /postpone command through main update handler"""
     # Setup user state
     user_data = state_manager.get_user("authorized_user")
@@ -591,7 +567,7 @@ def test_process_updates_postpone_command(mock_client_class, telegram_service_wi
     # Mock RuneRecallService response
     mock_rune_recall_service.postpone_word.return_value = {
         "success": True,
-        "message": "Word 'kontanter' postponed (removed from today's selection)."
+        "message": "Word 'kontanter' postponed (removed from today's selection).",
     }
 
     mock_client = MagicMock()

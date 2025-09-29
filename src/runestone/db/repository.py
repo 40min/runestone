@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from sqlalchemy import or_
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
 from ..api.schemas import VocabularyItemCreate
@@ -51,31 +52,31 @@ class VocabularyRepository:
 
     def upsert_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int = 1):
         """Upsert vocabulary items: update if exists, insert if not."""
-        for item in items:
-            # Check if exists for this user
-            existing = (
-                self.db.query(Vocabulary)
-                .filter(Vocabulary.user_id == user_id, Vocabulary.word_phrase == item.word_phrase)
-                .first()
-            )
+        if not items:
+            return
 
-            if existing:
-                # Update existing
-                existing.translation = item.translation
-                existing.example_phrase = item.example_phrase
-                existing.updated_at = datetime.now()
-            else:
-                # Insert new
-                vocab = Vocabulary(
-                    user_id=user_id,
-                    word_phrase=item.word_phrase,
-                    translation=item.translation,
-                    example_phrase=item.example_phrase,
-                    in_learn=True,
-                    last_learned=None,
-                )
-                self.db.add(vocab)
+        data = [
+            {
+                "user_id": user_id,
+                "word_phrase": item.word_phrase,
+                "translation": item.translation,
+                "example_phrase": item.example_phrase,
+                "in_learn": True,
+                "last_learned": None,
+            }
+            for item in items
+        ]
 
+        stmt = insert(Vocabulary).values(data)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["user_id", "word_phrase"],
+            set_={
+                "translation": stmt.excluded.translation,
+                "example_phrase": stmt.excluded.example_phrase,
+                "updated_at": datetime.now(),
+            },
+        )
+        self.db.execute(stmt)
         self.db.commit()
 
     def add_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int = 1):

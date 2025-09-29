@@ -30,7 +30,7 @@ class Settings(BaseSettings):
 
     # Database Configuration
     database_url: str = "sqlite:///./state/runestone.db"
-    
+
     # Recall Configuration
     recall_start_hour: int = 9
     recall_end_hour: int = 22  # 10 PM

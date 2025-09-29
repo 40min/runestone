@@ -171,12 +171,12 @@ class RuneRecallService:
             ]
 
         return []
-    
+
     def _escape_markdown(self, text: str) -> str:
         """Escape special Markdown characters."""
-        escape_chars = ['*', '_', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+        escape_chars = ["*", "_", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"]
         for char in escape_chars:
-            text = text.replace(char, f'\\{char}')
+            text = text.replace(char, f"\\{char}")
         return text
 
     def _send_word_message(self, chat_id: int, word: Dict) -> bool:
@@ -223,11 +223,11 @@ class RuneRecallService:
     def remove_word_from_daily_selection(self, user_data: UserData, word_phrase: str) -> bool:
         """
         Remove a word from user's daily_selection by word_phrase.
-        
+
         Args:
             user_data: UserData object for the user
             word_phrase: Word phrase to remove from daily selection
-            
+
         Returns:
             True if word was found and removed, False otherwise
         """
@@ -243,7 +243,7 @@ class RuneRecallService:
     def replenish_daily_selection_if_empty(self, username: str, user_data: UserData) -> None:
         """
         Replenish daily_selection if it becomes empty.
-        
+
         Args:
             username: Username for logging purposes
             user_data: UserData object for the user
@@ -262,7 +262,7 @@ class RuneRecallService:
     def update_user_daily_selection(self, username: str, user_data: UserData) -> None:
         """
         Centralized method for updating user's daily_selection in state.
-        
+
         Args:
             username: Username to update
             user_data: UserData object with updated daily_selection
@@ -272,21 +272,18 @@ class RuneRecallService:
     def remove_word_completely(self, username: str, word_phrase: str) -> Dict[str, Any]:
         """
         Remove word from both database and daily_selection.
-        
+
         Args:
             username: Username of the user
             word_phrase: Word phrase to remove completely
-            
+
         Returns:
             Dictionary with 'success' bool, 'message' str, and optional 'removed_from_selection' bool
         """
         try:
             user_data = self.state_manager.get_user(username)
             if not user_data:
-                return {
-                    "success": False,
-                    "message": f"User '{username}' not found"
-                }
+                return {"success": False, "message": f"User '{username}' not found"}
 
             # Find the word in database by word_phrase and user_id
             matching_word = self.vocabulary_repository.get_vocabulary_item_by_word_phrase(
@@ -294,10 +291,7 @@ class RuneRecallService:
             )
 
             if not matching_word:
-                return {
-                    "success": False,
-                    "message": f"Word '{word_phrase}' not found in your vocabulary"
-                }
+                return {"success": False, "message": f"Word '{word_phrase}' not found in your vocabulary"}
 
             # Remove from database (set in_learn = False)
             db_success = self.vocabulary_repository.delete_vocabulary_item_by_word_phrase(
@@ -305,10 +299,7 @@ class RuneRecallService:
             )
 
             if not db_success:
-                return {
-                    "success": False,
-                    "message": f"Failed to remove word '{word_phrase}' from vocabulary"
-                }
+                return {"success": False, "message": f"Failed to remove word '{word_phrase}' from vocabulary"}
 
             # Remove from daily_selection
             removed_from_selection = self.remove_word_from_daily_selection(user_data, word_phrase)
@@ -325,38 +316,32 @@ class RuneRecallService:
                 status_msg += " and daily selection"
 
             logger.info(f"User {username} removed word '{word_phrase}' from vocabulary")
-            
+
             return {
                 "success": True,
                 "message": f"Word '{word_phrase}' {status_msg}.",
-                "removed_from_selection": removed_from_selection
+                "removed_from_selection": removed_from_selection,
             }
 
         except Exception as e:
             logger.error(f"Error removing word '{word_phrase}' for user {username}: {e}")
-            return {
-                "success": False,
-                "message": "An error occurred while removing the word"
-            }
+            return {"success": False, "message": "An error occurred while removing the word"}
 
     def postpone_word(self, username: str, word_phrase: str) -> Dict[str, Any]:
         """
         Remove word from daily_selection only (postpone learning).
-        
+
         Args:
             username: Username of the user
             word_phrase: Word phrase to postpone
-            
+
         Returns:
             Dictionary with 'success' bool and 'message' str
         """
         try:
             user_data = self.state_manager.get_user(username)
             if not user_data:
-                return {
-                    "success": False,
-                    "message": f"User '{username}' not found"
-                }
+                return {"success": False, "message": f"User '{username}' not found"}
 
             # Remove from daily_selection
             removed_from_selection = self.remove_word_from_daily_selection(user_data, word_phrase)
@@ -369,19 +354,10 @@ class RuneRecallService:
                 self.update_user_daily_selection(username, user_data)
 
                 logger.info(f"User {username} postponed word '{word_phrase}'")
-                return {
-                    "success": True,
-                    "message": f"Word '{word_phrase}' postponed (removed from today's selection)."
-                }
+                return {"success": True, "message": f"Word '{word_phrase}' postponed (removed from today's selection)."}
             else:
-                return {
-                    "success": False,
-                    "message": f"Word '{word_phrase}' was not in today's selection."
-                }
+                return {"success": False, "message": f"Word '{word_phrase}' was not in today's selection."}
 
         except Exception as e:
             logger.error(f"Error postponing word '{word_phrase}' for user {username}: {e}")
-            return {
-                "success": False,
-                "message": "An error occurred while postponing the word"
-            }
+            return {"success": False, "message": "An error occurred while postponing the word"}

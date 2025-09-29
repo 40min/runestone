@@ -15,7 +15,6 @@ import sys
 from typing import Optional
 
 from apscheduler.schedulers.blocking import BlockingScheduler
-from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from runestone.config import settings

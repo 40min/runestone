@@ -68,6 +68,66 @@ class TestVocabularyRepository:
         assert apple_vocab.in_learn is True
         assert apple_vocab.last_learned is None
 
+    def test_upsert_vocabulary_items(self, repo, db_session):
+        """Test upserting vocabulary items (bulk insert/update)."""
+        # Add an initial item
+        initial_vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            example_phrase="Jag äter ett äpple varje dag.",
+            in_learn=True,
+            last_learned=None,
+        )
+        db_session.add(initial_vocab)
+        db_session.commit()
+
+        # Record initial updated_at
+        initial_updated_at = initial_vocab.updated_at
+
+        # Upsert: update existing and add new
+        items = [
+            VocabularyItemCreate(
+                word_phrase="ett äpple",  # Existing - should update
+                translation="a red apple",  # Changed
+                example_phrase="Ett äpple är rött.",  # Changed
+            ),
+            VocabularyItemCreate(
+                word_phrase="en banan",  # New - should insert
+                translation="a banana",
+                example_phrase=None,
+            ),
+        ]
+
+        repo.upsert_vocabulary_items(items)
+        db_session.commit()
+
+        # Verify existing item was updated
+        updated_vocab = (
+            db_session.query(VocabularyModel)
+            .filter(VocabularyModel.word_phrase == "ett äpple", VocabularyModel.user_id == 1)
+            .first()
+        )
+        assert updated_vocab.translation == "a red apple"
+        assert updated_vocab.example_phrase == "Ett äpple är rött."
+        assert updated_vocab.in_learn is True  # Unchanged
+        assert updated_vocab.updated_at > initial_updated_at  # Should be updated
+
+        # Verify new item was inserted
+        new_vocab = (
+            db_session.query(VocabularyModel)
+            .filter(VocabularyModel.word_phrase == "en banan", VocabularyModel.user_id == 1)
+            .first()
+        )
+        assert new_vocab.translation == "a banana"
+        assert new_vocab.example_phrase is None
+        assert new_vocab.in_learn is True
+        assert new_vocab.last_learned is None
+
+        # Verify total count
+        all_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.user_id == 1).all()
+        assert len(all_vocab) == 2
+
     def test_get_all_vocabulary(self, repo, db_session):
         """Test retrieving all vocabulary items."""
         # Add some test data

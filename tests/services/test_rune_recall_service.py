@@ -540,10 +540,11 @@ def test_select_daily_portion_in_learn_filtering(rune_recall_service, test_db):
 
 # Tests for new vocabulary management methods
 
+
 def test_remove_word_from_daily_selection(rune_recall_service, state_manager):
     """Test removing a word from user's daily_selection."""
     from src.runestone.state.state_types import WordOfDay
-    
+
     # Setup user with daily selection
     user_data = state_manager.get_user("active_user")
     user_data.daily_selection = [
@@ -582,7 +583,7 @@ def test_replenish_daily_selection_if_empty(rune_recall_service, state_manager):
 
     # Mock new portion selection
     mock_portion = [{"id": 4, "word_phrase": "ny"}, {"id": 5, "word_phrase": "gammal"}]
-    
+
     with patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_portion):
         rune_recall_service.replenish_daily_selection_if_empty("active_user", user_data)
 
@@ -595,7 +596,7 @@ def test_replenish_daily_selection_if_empty(rune_recall_service, state_manager):
 def test_replenish_daily_selection_not_empty(rune_recall_service, state_manager):
     """Test that replenishment doesn't happen when selection is not empty."""
     from src.runestone.state.state_types import WordOfDay
-    
+
     user_data = state_manager.get_user("active_user")
     user_data.daily_selection = [WordOfDay(id_=1, word_phrase="existing")]
 
@@ -610,7 +611,7 @@ def test_replenish_daily_selection_not_empty(rune_recall_service, state_manager)
 def test_update_user_daily_selection(rune_recall_service, state_manager):
     """Test updating user's daily_selection in state."""
     from src.runestone.state.state_types import WordOfDay
-    
+
     user_data = state_manager.get_user("active_user")
     user_data.daily_selection = [WordOfDay(id_=1, word_phrase="test")]
 
@@ -623,9 +624,10 @@ def test_update_user_daily_selection(rune_recall_service, state_manager):
 
 def test_remove_word_completely_success(rune_recall_service, state_manager):
     """Test successful complete word removal."""
-    from src.runestone.state.state_types import WordOfDay
     from unittest.mock import MagicMock, patch
-    
+
+    from src.runestone.state.state_types import WordOfDay
+
     # Setup user data
     user_data = state_manager.get_user("active_user")
     user_data.daily_selection = [WordOfDay(id_=1, word_phrase="kontanter")]
@@ -633,9 +635,15 @@ def test_remove_word_completely_success(rune_recall_service, state_manager):
 
     # Mock vocabulary repository responses
     mock_word = MagicMock(id=1, word_phrase="kontanter")
-    
-    with patch.object(rune_recall_service.vocabulary_repository, 'get_vocabulary_item_by_word_phrase', return_value=mock_word), \
-         patch.object(rune_recall_service.vocabulary_repository, 'delete_vocabulary_item_by_word_phrase', return_value=True):
+
+    with (
+        patch.object(
+            rune_recall_service.vocabulary_repository, "get_vocabulary_item_by_word_phrase", return_value=mock_word
+        ),
+        patch.object(
+            rune_recall_service.vocabulary_repository, "delete_vocabulary_item_by_word_phrase", return_value=True
+        ),
+    ):
 
         result = rune_recall_service.remove_word_completely("active_user", "kontanter")
 
@@ -645,19 +653,25 @@ def test_remove_word_completely_success(rune_recall_service, state_manager):
         assert result["removed_from_selection"] is True
 
         # Verify repository calls
-        rune_recall_service.vocabulary_repository.get_vocabulary_item_by_word_phrase.assert_called_once_with("kontanter", 1)
-        rune_recall_service.vocabulary_repository.delete_vocabulary_item_by_word_phrase.assert_called_once_with("kontanter", 1)
+        rune_recall_service.vocabulary_repository.get_vocabulary_item_by_word_phrase.assert_called_once_with(
+            "kontanter", 1
+        )
+        rune_recall_service.vocabulary_repository.delete_vocabulary_item_by_word_phrase.assert_called_once_with(
+            "kontanter", 1
+        )
 
 
 def test_remove_word_completely_word_not_found(rune_recall_service, state_manager):
     """Test complete word removal when word is not found."""
     from unittest.mock import patch
-    
+
     user_data = state_manager.get_user("active_user")
     user_data.db_user_id = 1
 
     # Mock vocabulary repository to return None (word not found)
-    with patch.object(rune_recall_service.vocabulary_repository, 'get_vocabulary_item_by_word_phrase', return_value=None):
+    with patch.object(
+        rune_recall_service.vocabulary_repository, "get_vocabulary_item_by_word_phrase", return_value=None
+    ):
         result = rune_recall_service.remove_word_completely("active_user", "nonexistent")
 
         assert result["success"] is False
@@ -667,15 +681,21 @@ def test_remove_word_completely_word_not_found(rune_recall_service, state_manage
 def test_remove_word_completely_db_failure(rune_recall_service, state_manager):
     """Test complete word removal when database deletion fails."""
     from unittest.mock import MagicMock, patch
-    
+
     user_data = state_manager.get_user("active_user")
     user_data.db_user_id = 1
 
     # Mock vocabulary repository responses
     mock_word = MagicMock(id=1, word_phrase="kontanter")
-    
-    with patch.object(rune_recall_service.vocabulary_repository, 'get_vocabulary_item_by_word_phrase', return_value=mock_word), \
-         patch.object(rune_recall_service.vocabulary_repository, 'delete_vocabulary_item_by_word_phrase', return_value=False):
+
+    with (
+        patch.object(
+            rune_recall_service.vocabulary_repository, "get_vocabulary_item_by_word_phrase", return_value=mock_word
+        ),
+        patch.object(
+            rune_recall_service.vocabulary_repository, "delete_vocabulary_item_by_word_phrase", return_value=False
+        ),
+    ):
 
         result = rune_recall_service.remove_word_completely("active_user", "kontanter")
 
@@ -694,12 +714,9 @@ def test_remove_word_completely_user_not_found(rune_recall_service, state_manage
 def test_postpone_word_success(rune_recall_service, state_manager):
     """Test successful word postponement."""
     from src.runestone.state.state_types import WordOfDay
-    
+
     user_data = state_manager.get_user("active_user")
-    user_data.daily_selection = [
-        WordOfDay(id_=1, word_phrase="kontanter"),
-        WordOfDay(id_=2, word_phrase="hej")
-    ]
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="kontanter"), WordOfDay(id_=2, word_phrase="hej")]
 
     result = rune_recall_service.postpone_word("active_user", "kontanter")
 
@@ -711,7 +728,7 @@ def test_postpone_word_success(rune_recall_service, state_manager):
 def test_postpone_word_not_in_selection(rune_recall_service, state_manager):
     """Test postponing word that's not in daily selection."""
     from src.runestone.state.state_types import WordOfDay
-    
+
     user_data = state_manager.get_user("active_user")
     user_data.daily_selection = [WordOfDay(id_=1, word_phrase="hej")]
 
@@ -726,6 +743,8 @@ def test_postpone_word_user_not_found(rune_recall_service, state_manager):
     result = rune_recall_service.postpone_word("nonexistent_user", "kontanter")
 
     assert result["success"] is False
+
+
 @patch("src.runestone.services.rune_recall_service.httpx.Client")
 def test_send_word_message_with_special_characters(mock_client_class, rune_recall_service):
     """Test that special Markdown characters in translation and example are properly escaped."""
@@ -740,14 +759,16 @@ def test_send_word_message_with_special_characters(mock_client_class, rune_recal
         "id": 1,
         "word_phrase": "vindruvor",
         "translation": "(-r, -de, -t) grapes",
-        "example_phrase": "vindruvor _ kr/kilo"
+        "example_phrase": "vindruvor _ kr/kilo",
     }
 
     result = rune_recall_service._send_word_message(123, word)
     assert result is True
 
     # Check that the message contains escaped characters
-    expected_message = "🇸🇪 **vindruvor**\n🇬🇧 \\(\\-r, \\-de, \\-t\\) grapes\n\n💡 *Example:* vindruvor \\_ kr/kilo"
+    expected_message = (
+        "🇸🇪 **vindruvor**\n" "🇬🇧 \\(\\-r, \\-de, \\-t\\) grapes\n" "\n" "💡 *Example:* vindruvor \\_ kr/kilo"
+    )
     mock_client.post.assert_called_once_with(
         "https://api.telegram.org/bottest_token/sendMessage",
         json={"chat_id": 123, "text": expected_message, "parse_mode": "Markdown"},
@@ -768,14 +789,19 @@ def test_send_word_message_escapes_all_markdown_chars(mock_client_class, rune_re
         "id": 1,
         "word_phrase": "test",
         "translation": "*bold* _italic_ [link](url) `code` > quote # header + list - item | table {code} .period !exclamation",
-        "example_phrase": "~strikethrough~ =underline= (parentheses) [brackets]"
+        "example_phrase": "~strikethrough~ =underline= (parentheses) [brackets]",
     }
 
     result = rune_recall_service._send_word_message(123, word)
     assert result is True
 
     # Check that all special characters are escaped
-    expected_message = "🇸🇪 **test**\n🇬🇧 \\*bold\\* \\_italic\\_ \\[link\\]\\(url\\) \\`code\\` \\> quote \\# header \\+ list \\- item \\| table \\{code\\} \\.period \\!exclamation\n\n💡 *Example:* \\~strikethrough\\~ \\=underline\\= \\(parentheses\\) \\[brackets\\]"
+    expected_message = (
+        "🇸🇪 **test**\n"
+        "🇬🇧 \\*bold\\* \\_italic\\_ \\[link\\]\\(url\\) \\`code\\` \\> quote \\# header \\+ list \\- item \\| table \\{code\\} \\.period \\!exclamation\n"
+        "\n"
+        "💡 *Example:* \\~strikethrough\\~ \\=underline\\= \\(parentheses\\) \\[brackets\\]"
+    )
     mock_client.post.assert_called_once_with(
         "https://api.telegram.org/bottest_token/sendMessage",
         json={"chat_id": 123, "text": expected_message, "parse_mode": "Markdown"},

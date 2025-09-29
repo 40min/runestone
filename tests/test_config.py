@@ -7,8 +7,6 @@ import pytest
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings
 
-from runestone.config import Settings
-
 
 class TestSettings:
     """Test the Settings class."""
