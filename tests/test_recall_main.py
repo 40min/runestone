@@ -58,6 +58,45 @@ class TestRecallMain:
         mock_scheduler.start.assert_called_once()
 
     @patch("recall_main.settings")
+    @patch("recall_main.setup_logging")
+    @patch("recall_main.setup_database")
+    @patch("recall_main.StateManager")
+    @patch("recall_main.create_scheduler")
+    @patch("recall_main.BlockingScheduler")
+    def test_main_uses_settings_state_file_path(
+        self,
+        mock_blocking_scheduler,
+        mock_create_scheduler,
+        mock_state_manager,
+        mock_setup_database,
+        mock_setup_logging,
+        mock_settings,
+    ):
+        """Test main uses settings.state_file_path when no path provided."""
+        # Setup mocks
+        mock_settings.telegram_bot_token = self.test_token
+        mock_settings.verbose = False
+        mock_settings.state_file_path = "custom/state.json"
+
+        mock_scheduler = Mock()
+        mock_scheduler.get_jobs.return_value = []
+        mock_blocking_scheduler.return_value = mock_scheduler
+        mock_create_scheduler.return_value = mock_scheduler
+
+        # Mock the scheduler start method to avoid infinite loop
+        mock_scheduler.start.side_effect = KeyboardInterrupt()
+
+        # Import and call main without state_file_path parameter
+        from recall_main import main
+
+        # Should raise KeyboardInterrupt from scheduler.start()
+        with pytest.raises(KeyboardInterrupt):
+            main()  # No state_file_path parameter
+
+        # Verify StateManager was called with settings.state_file_path
+        mock_state_manager.assert_called_once_with("custom/state.json")
+
+    @patch("recall_main.settings")
     def test_main_missing_token(self, mock_settings):
         """Test main with missing telegram bot token."""
         mock_settings.telegram_bot_token = None

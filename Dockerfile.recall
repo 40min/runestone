@@ -5,7 +5,7 @@ FROM python:3.13-slim AS builder
 LABEL maintainer="runestone-team"
 LABEL version="1.0.0"
 LABEL description="Runestone Swedish textbook analysis service - Recall Worker"
-LABEL org.opencontainers.image.source="https://github.com/your-org/runestone"
+LABEL org.opencontainers.image.source="https://github.com/40min/runestone"
 
 WORKDIR /app
 RUN apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*

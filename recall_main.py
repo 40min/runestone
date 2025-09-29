@@ -97,7 +97,7 @@ def main(state_file_path: Optional[str] = None) -> None:
         setup_database()
 
         # Initialize state manager (no long-lived database session needed)
-        state_manager = StateManager(state_file_path or "state/state.json")
+        state_manager = StateManager(state_file_path or settings.state_file_path)
 
         # Create and configure scheduler with wrapper functions
         scheduler = create_scheduler(state_manager)

@@ -22,6 +22,7 @@ class TestSettings:
             verbose: bool = False
             allowed_origins: str
             database_url: str = "sqlite:///./state/runestone.db"
+            state_file_path: str = "state/state.json"
             telegram_bot_token: str
             recall_start_hour: int = 9
             recall_end_hour: int = 22
@@ -40,6 +41,7 @@ class TestSettings:
             "VERBOSE": "true",
             "ALLOWED_ORIGINS": "http://localhost:3000",
             "DATABASE_URL": "sqlite:///./test.db",
+            "STATE_FILE_PATH": "custom/state.json",
             "TELEGRAM_BOT_TOKEN": "test-token",
             "RECALL_START_HOUR": "8",
             "RECALL_END_HOUR": "23",
@@ -56,6 +58,7 @@ class TestSettings:
             assert test_settings.verbose is True
             assert test_settings.allowed_origins == "http://localhost:3000"
             assert test_settings.database_url == "sqlite:///./test.db"
+            assert test_settings.state_file_path == "custom/state.json"
             assert test_settings.telegram_bot_token == "test-token"
             assert test_settings.recall_start_hour == 8
             assert test_settings.recall_end_hour == 23
@@ -72,6 +75,7 @@ class TestSettings:
             verbose: bool = False
             allowed_origins: str
             database_url: str = "sqlite:///./state/runestone.db"
+            state_file_path: str = "state/state.json"
             telegram_bot_token: str
             recall_start_hour: int = 9
             recall_end_hour: int = 22

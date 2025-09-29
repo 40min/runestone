@@ -211,7 +211,8 @@ class RuneRecallService:
         try:
             with httpx.Client(timeout=10.0) as client:
                 response = client.post(
-                    f"{self.base_url}/sendMessage", json={"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
+                    f"{self.base_url}/sendMessage",
+                    json={"chat_id": chat_id, "text": message, "parse_mode": "MarkdownV2"},
                 )
                 response.raise_for_status()
                 return True

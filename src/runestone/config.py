@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # Database Configuration
     database_url: str = "sqlite:///./state/runestone.db"
 
+    # State Management Configuration
+    state_file_path: str = "state/state.json"
+
     # Recall Configuration
     recall_start_hour: int = 9
     recall_end_hour: int = 22  # 10 PM
