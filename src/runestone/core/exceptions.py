@@ -54,3 +54,9 @@ class UserNotAuthorised(RunestoneError):
     """Raised when attempting to update a non-existing user."""
 
     pass
+
+
+class VocabularyItemExists(RunestoneError):
+    """Raised when attempting to create or update a vocabulary item with a duplicate word_phrase."""
+
+    pass

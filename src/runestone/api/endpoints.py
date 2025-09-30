@@ -22,7 +22,7 @@ from runestone.api.schemas import (
     VocabularyUpdate,
 )
 from runestone.config import Settings
-from runestone.core.exceptions import RunestoneError
+from runestone.core.exceptions import RunestoneError, VocabularyItemExists
 from runestone.core.processor import RunestoneProcessor
 from runestone.dependencies import get_settings, get_vocabulary_service
 from runestone.services.vocabulary_service import VocabularyService
@@ -281,6 +281,11 @@ async def save_vocabulary_item(
     try:
         return service.save_vocabulary_item(request)
 
+    except VocabularyItemExists as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -374,6 +379,11 @@ async def update_vocabulary(
     try:
         return service.update_vocabulary_item(item_id, request)
 
+    except VocabularyItemExists as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=404,

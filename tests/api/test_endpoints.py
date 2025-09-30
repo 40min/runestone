@@ -324,7 +324,7 @@ class TestVocabularyEndpoints:
         assert "updated_at" in data
 
     def test_save_vocabulary_item_duplicate(self, client):
-        """Test saving a duplicate vocabulary item returns existing."""
+        """Test saving a duplicate vocabulary item raises an error."""
         # First save
         payload = {
             "word_phrase": "ett äpple",
@@ -344,13 +344,18 @@ class TestVocabularyEndpoints:
         }
         response2 = client.post("/api/vocabulary/item", json=payload2)
 
-        assert response2.status_code == 200
+        assert response2.status_code == 400
         data2 = response2.json()
-        # Should return the existing item, not create a new one
-        assert data2["id"] == item_id
-        assert data2["word_phrase"] == "ett äpple"
-        # Should keep the original example_phrase
-        assert data2["example_phrase"] == "Jag äter ett äpple varje dag."
+        assert "already exists" in data2["detail"]
+
+        # Verify no new item was created and existing item remains unchanged
+        response3 = client.get("/api/vocabulary")
+        data3 = response3.json()
+        assert len(data3) == 1
+        existing_item = data3[0]
+        assert existing_item["id"] == item_id
+        assert existing_item["word_phrase"] == "ett äpple"
+        assert existing_item["example_phrase"] == "Jag äter ett äpple varje dag."
 
     def test_save_vocabulary_item_without_example(self, client):
         """Test saving a vocabulary item without example phrase."""

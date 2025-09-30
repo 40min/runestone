@@ -127,7 +127,9 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to update vocabulary item: HTTP ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.detail || `Failed to update vocabulary item: HTTP ${response.status}`;
+      throw new Error(errorMessage);
     }
 
     const updatedItem: SavedVocabularyItem = await response.json();
@@ -145,7 +147,9 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to create vocabulary item: HTTP ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.detail || `Failed to create vocabulary item: HTTP ${response.status}`;
+      throw new Error(errorMessage);
     }
 
     const newItem: SavedVocabularyItem = await response.json();

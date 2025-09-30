@@ -8,6 +8,7 @@ import pytest
 
 from runestone.api.schemas import Vocabulary as VocabularySchema
 from runestone.api.schemas import VocabularyItemCreate
+from runestone.core.exceptions import VocabularyItemExists
 from runestone.db.models import Vocabulary as VocabularyModel
 from runestone.services.vocabulary_service import VocabularyService
 
@@ -230,6 +231,46 @@ class TestVocabularyService:
         assert updated_vocab.word_phrase == "ett äpple"
         assert updated_vocab.translation == "an apple"
         assert updated_vocab.in_learn is False
+    def test_update_vocabulary_item_duplicate_word_phrase(self, service, db_session):
+        """Test that updating to a duplicate word_phrase raises an error."""
+        from runestone.api.schemas import VocabularyUpdate
+
+        # Add two test items
+        vocab1 = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            example_phrase="Jag äter ett äpple varje dag.",
+            in_learn=True,
+            last_learned=None,
+        )
+        vocab2 = VocabularyModel(
+            user_id=1,
+            word_phrase="en banan",
+            translation="a banana",
+            example_phrase=None,
+            in_learn=True,
+            last_learned=None,
+        )
+        db_session.add_all([vocab1, vocab2])
+        db_session.commit()
+
+        # Try to update vocab1's word_phrase to match vocab2's word_phrase
+        update_data = VocabularyUpdate(word_phrase="en banan")
+
+        with pytest.raises(VocabularyItemExists, match="Vocabulary item with word_phrase 'en banan' already exists"):
+            service.update_vocabulary_item(vocab1.id, update_data)
+
+        # Verify vocab1 was not updated
+        db_vocab1 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab1.id).first()
+        assert db_vocab1.word_phrase == "ett äpple"
+        assert db_vocab1.translation == "an apple"
+
+        # Verify vocab2 remains unchanged
+        db_vocab2 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab2.id).first()
+        assert db_vocab2.word_phrase == "en banan"
+        assert db_vocab2.translation == "a banana"
+
 
     def test_save_vocabulary_item_new(self, service, db_session):
         """Test saving a new single vocabulary item."""
@@ -254,7 +295,7 @@ class TestVocabularyService:
         assert vocab.translation == "an apple"
 
     def test_save_vocabulary_item_duplicate(self, service, db_session):
-        """Test that saving duplicate word_phrase returns existing item."""
+        """Test that saving duplicate word_phrase raises an error."""
         # Pre-add an item
         existing_vocab = VocabularyModel(
             user_id=1,
@@ -272,20 +313,16 @@ class TestVocabularyService:
             word_phrase="ett äpple", translation="an apple updated", example_phrase="Ett äpple är rött."
         )
 
-        result = service.save_vocabulary_item(item, user_id=1)
-        db_session.commit()
+        with pytest.raises(VocabularyItemExists, match="Vocabulary item with word_phrase 'ett äpple' already exists"):
+            service.save_vocabulary_item(item, user_id=1)
 
-        # Should return existing item, not create new one
-        assert isinstance(result, VocabularySchema)
-        assert result.id == existing_id
-        assert result.word_phrase == "ett äpple"
-        # Should keep original values
-        assert result.translation == "an apple"
-        assert result.example_phrase == "Jag äter ett äpple."
-
-        # Verify only one item exists in DB
+        # Verify no new item was added and existing item remains unchanged
         vocabularies = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "ett äpple").all()
         assert len(vocabularies) == 1
+        existing_vocab = vocabularies[0]
+        assert existing_vocab.id == existing_id
+        assert existing_vocab.translation == "an apple"
+        assert existing_vocab.example_phrase == "Jag äter ett äpple."
 
     def test_save_vocabulary_item_without_example(self, service, db_session):
         """Test saving a vocabulary item without example phrase."""

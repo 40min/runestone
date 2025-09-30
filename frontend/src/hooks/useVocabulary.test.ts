@@ -317,6 +317,7 @@ describe('useRecentVocabulary', () => {
       .mockResolvedValueOnce({
         ok: false,
         status: 500,
+        json: () => Promise.resolve({}),
       });
 
     const { result } = renderHook(() => useRecentVocabulary());
@@ -427,6 +428,7 @@ describe('useRecentVocabulary', () => {
       .mockResolvedValueOnce({
         ok: false,
         status: 500,
+        json: () => Promise.resolve({}),
       });
 
     const { result } = renderHook(() => useRecentVocabulary());
@@ -532,6 +534,7 @@ describe('useRecentVocabulary', () => {
       .mockResolvedValueOnce({
         ok: false,
         status: 500,
+        json: () => Promise.resolve({}),
       });
 
     const { result } = renderHook(() => useRecentVocabulary());
