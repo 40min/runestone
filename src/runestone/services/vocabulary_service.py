@@ -42,6 +42,7 @@ class VocabularyService:
             self.repo.batch_insert_vocabulary_items(filtered_items, user_id)
 
         return {"message": "Vocabulary saved successfully"}
+
     def save_vocabulary_item(self, item: VocabularyItemCreate, user_id: int = 1) -> VocabularySchema:
         """Save a single vocabulary item, handling business logic."""
         # Check if the word_phrase already exists for the user

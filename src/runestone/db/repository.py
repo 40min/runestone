@@ -49,6 +49,7 @@ class VocabularyRepository:
         ]
         self.db.add_all(vocab_objects)
         self.db.commit()
+
     def insert_vocabulary_item(self, item: VocabularyItemCreate, user_id: int = 1) -> Vocabulary:
         """Insert a single vocabulary item."""
         vocab = Vocabulary(

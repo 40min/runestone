@@ -10,6 +10,7 @@ interface SavedVocabularyItem {
   in_learn: boolean;
   last_learned: string | null;
   created_at: string;
+  updated_at: string;
 }
 
 interface UseVocabularyReturn {
@@ -129,14 +130,14 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
         throw new Error(`Failed to update vocabulary item: HTTP ${response.status}`);
       }
 
-      // Refetch the vocabulary list to reflect changes
-      await fetchRecentVocabulary();
+      const updatedItem: SavedVocabularyItem = await response.json();
+      setRecentVocabulary(prev => prev.map(item => item.id === id ? updatedItem : item));
       closeEditModal();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update vocabulary item';
       setError(errorMessage);
     }
-  }, [fetchRecentVocabulary, closeEditModal]);
+  }, [closeEditModal]);
 
   const createVocabularyItem = useCallback(async (item: Partial<SavedVocabularyItem>) => {
     try {
@@ -152,14 +153,14 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
         throw new Error(`Failed to create vocabulary item: HTTP ${response.status}`);
       }
 
-      // Refetch the vocabulary list to reflect changes
-      await fetchRecentVocabulary();
+      const newItem: SavedVocabularyItem = await response.json();
+      setRecentVocabulary(prev => [newItem, ...prev]);
       closeEditModal();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create vocabulary item';
       setError(errorMessage);
     }
-  }, [fetchRecentVocabulary, closeEditModal]);
+  }, [closeEditModal]);
 
   useEffect(() => {
     fetchRecentVocabulary();

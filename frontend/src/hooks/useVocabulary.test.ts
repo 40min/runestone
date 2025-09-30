@@ -258,8 +258,6 @@ describe('useRecentVocabulary', () => {
       updated_at: '2023-10-27T10:10:00Z',
     };
 
-    const mockVocabularyResponse = [mockCreatedItem];
-
     // Mock initial fetch response
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -270,12 +268,6 @@ describe('useRecentVocabulary', () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve(mockCreatedItem),
-    });
-
-    // Mock refetch response
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockVocabularyResponse),
     });
 
     const { result } = renderHook(() => useRecentVocabulary());
@@ -310,9 +302,9 @@ describe('useRecentVocabulary', () => {
       })
     );
 
-    // Verify refetch was called
+    // Verify state was updated directly with the new item
     await waitFor(() => {
-      expect(result.current.recentVocabulary).toEqual(mockVocabularyResponse);
+      expect(result.current.recentVocabulary).toEqual([mockCreatedItem]);
     });
   });
 
@@ -344,6 +336,117 @@ describe('useRecentVocabulary', () => {
 
     await waitFor(() => {
       expect(result.current.error).toBe('Failed to create vocabulary item: HTTP 500');
+    });
+  });
+
+  it('should update vocabulary item successfully', async () => {
+    const initialItem = {
+      id: 1,
+      user_id: 1,
+      word_phrase: 'hej',
+      translation: 'hello',
+      example_phrase: 'Hej, hur mår du?',
+      in_learn: true,
+      last_learned: null,
+      created_at: '2023-10-27T10:00:00Z',
+      updated_at: '2023-10-27T10:00:00Z',
+    };
+
+    const updatedItem = {
+      ...initialItem,
+      word_phrase: 'hej då',
+      translation: 'goodbye',
+      updated_at: '2023-10-27T10:05:00Z',
+    };
+
+    // Mock initial fetch response
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([initialItem]),
+    });
+
+    // Mock update response
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(updatedItem),
+    });
+
+    const { result } = renderHook(() => useRecentVocabulary());
+
+    // Wait for initial load
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(result.current.recentVocabulary).toEqual([initialItem]);
+    });
+
+    // Update item
+    await act(async () => {
+      await result.current.updateVocabularyItem(1, {
+        word_phrase: 'hej då',
+        translation: 'goodbye',
+      });
+    });
+
+    // Verify API was called with correct data
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:8010/api/vocabulary/1',
+      expect.objectContaining({
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          word_phrase: 'hej då',
+          translation: 'goodbye',
+        }),
+      })
+    );
+
+    // Verify state was updated directly with the updated item
+    await waitFor(() => {
+      expect(result.current.recentVocabulary).toEqual([updatedItem]);
+    });
+  });
+
+  it('should handle update vocabulary item error', async () => {
+    const initialItem = {
+      id: 1,
+      user_id: 1,
+      word_phrase: 'hej',
+      translation: 'hello',
+      example_phrase: 'Hej, hur mår du?',
+      in_learn: true,
+      last_learned: null,
+      created_at: '2023-10-27T10:00:00Z',
+      updated_at: '2023-10-27T10:00:00Z',
+    };
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([initialItem]),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+      });
+
+    const { result } = renderHook(() => useRecentVocabulary());
+
+    // Wait for initial load
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Try to update item
+    await act(async () => {
+      await result.current.updateVocabularyItem(1, {
+        word_phrase: 'hej då',
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.error).toBe('Failed to update vocabulary item: HTTP 500');
     });
   });
 });

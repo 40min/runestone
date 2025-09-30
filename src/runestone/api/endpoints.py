@@ -246,6 +246,8 @@ async def save_vocabulary(
             status_code=500,
             detail=f"Failed to save vocabulary: {str(e)}",
         )
+
+
 @router.post(
     "/vocabulary/item",
     response_model=Vocabulary,
