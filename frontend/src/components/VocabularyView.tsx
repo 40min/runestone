@@ -7,6 +7,7 @@ import AddEditVocabularyModal from "./AddEditVocabularyModal";
 const VocabularyView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeSearchTerm, setActiveSearchTerm] = useState("");
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const {
     recentVocabulary,
     loading,
@@ -18,6 +19,12 @@ const VocabularyView: React.FC = () => {
     updateVocabularyItem,
     createVocabularyItem,
   } = useRecentVocabulary(activeSearchTerm);
+
+  useEffect(() => {
+    if (!loading && isInitialLoad) {
+      setIsInitialLoad(false);
+    }
+  }, [loading, isInitialLoad]);
 
   useEffect(() => {
     if (searchTerm.length > 3) {
@@ -44,7 +51,8 @@ const VocabularyView: React.FC = () => {
     }
   };
 
-  if (loading) {
+  // Only show full-page loading spinner on initial load
+  if (loading && isInitialLoad) {
     return <LoadingSpinner />;
   }
 
@@ -68,7 +76,13 @@ const VocabularyView: React.FC = () => {
         </CustomButton>
       </Box>
 
-      {recentVocabulary.length === 0 ? (
+      {loading && !isInitialLoad && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+          <Typography sx={{ color: "#9ca3af" }}>Loading...</Typography>
+        </Box>
+      )}
+      
+      {recentVocabulary.length === 0 && !loading ? (
         <Box sx={{ textAlign: "center", py: 8 }}>
           <Typography sx={{ color: "#9ca3af", mb: 2 }}>
             {activeSearchTerm ? "No vocabulary matches your search." : "No vocabulary saved yet."}
@@ -80,40 +94,42 @@ const VocabularyView: React.FC = () => {
           </Typography>
         </Box>
       ) : (
-        <DataTable
-          columns={[
-            { key: 'word_phrase', label: 'Swedish' },
-            { key: 'translation', label: 'English' },
-            { key: 'example_phrase', label: 'Example Phrase' },
-            {
-              key: 'in_learn',
-              label: 'In Learning',
-              render: (value) => (
-                <StyledCheckbox
-                  checked={value as boolean}
-                  onChange={() => {}} // TODO: Implement update functionality
-                  sx={{ pointerEvents: 'none' }} // Make it read-only for now
-                />
-              )
-            },
-            {
-              key: 'last_learned',
-              label: 'Last Learned',
-              render: (value) => (
-                <Typography sx={{ color: 'white', textAlign: 'center' }}>
-                  {value ? new Date(value as string).toLocaleDateString() : 'Never'}
-                </Typography>
-              )
-            },
-            {
-              key: 'created_at',
-              label: 'Saved',
-              render: (value) => new Date(value as string).toLocaleDateString()
-            },
-          ]}
-          data={recentVocabulary as unknown as Record<string, unknown>[]}
-          onRowClick={handleRowClick}
-        />
+        recentVocabulary.length > 0 && (
+          <DataTable
+            columns={[
+              { key: 'word_phrase', label: 'Swedish' },
+              { key: 'translation', label: 'English' },
+              { key: 'example_phrase', label: 'Example Phrase' },
+              {
+                key: 'in_learn',
+                label: 'In Learning',
+                render: (value) => (
+                  <StyledCheckbox
+                    checked={value as boolean}
+                    onChange={() => {}} // TODO: Implement update functionality
+                    sx={{ pointerEvents: 'none' }} // Make it read-only for now
+                  />
+                )
+              },
+              {
+                key: 'last_learned',
+                label: 'Last Learned',
+                render: (value) => (
+                  <Typography sx={{ color: 'white', textAlign: 'center' }}>
+                    {value ? new Date(value as string).toLocaleDateString() : 'Never'}
+                  </Typography>
+                )
+              },
+              {
+                key: 'created_at',
+                label: 'Saved',
+                render: (value) => new Date(value as string).toLocaleDateString()
+              },
+            ]}
+            data={recentVocabulary as unknown as Record<string, unknown>[]}
+            onRowClick={handleRowClick}
+          />
+        )
       )}
 
       <AddEditVocabularyModal

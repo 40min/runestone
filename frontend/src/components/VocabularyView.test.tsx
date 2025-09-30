@@ -11,6 +11,12 @@ vi.mock('../hooks/useVocabulary', () => ({
     loading: false,
     error: null,
     refetch: vi.fn(),
+    isEditModalOpen: false,
+    editingItem: null,
+    openEditModal: vi.fn(),
+    closeEditModal: vi.fn(),
+    updateVocabularyItem: vi.fn(),
+    createVocabularyItem: vi.fn(),
   })),
 }));
 
@@ -24,17 +30,73 @@ describe("VocabularyView", () => {
     mockUseRecentVocabulary.mockClear();
   });
 
-  it("renders loading state", () => {
+  it("renders loading state on initial load", () => {
     mockUseRecentVocabulary.mockReturnValue({
       recentVocabulary: [],
       loading: true,
       error: null,
       refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
 
     expect(screen.getByRole("progressbar")).toBeInTheDocument();
+  });
+
+  it("renders inline loading indicator after initial load", async () => {
+    // First render with data to complete initial load
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [{
+        id: 1,
+        user_id: 1,
+        word_phrase: "hej",
+        translation: "hello",
+        example_phrase: null,
+        in_learn: false,
+        last_learned: null,
+        created_at: "2023-10-27T10:00:00Z",
+        updated_at: "2023-10-27T10:00:00Z",
+      }],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
+    });
+
+    const { rerender } = render(<VocabularyView />);
+
+    // Now simulate a search that triggers loading
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [],
+      loading: true,
+      error: null,
+      refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
+    });
+
+    rerender(<VocabularyView />);
+
+    // Should show inline loading text, not full-page spinner
+    await waitFor(() => {
+      expect(screen.getByText("Loading...")).toBeInTheDocument();
+      expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    });
   });
 
   it("renders error state", () => {
@@ -44,6 +106,12 @@ describe("VocabularyView", () => {
       loading: false,
       error: errorMessage,
       refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
@@ -57,6 +125,12 @@ describe("VocabularyView", () => {
       loading: false,
       error: null,
       refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
@@ -72,6 +146,12 @@ describe("VocabularyView", () => {
       loading: false,
       error: null,
       refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
@@ -86,6 +166,12 @@ describe("VocabularyView", () => {
       loading: false,
       error: null,
       refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
@@ -100,6 +186,12 @@ describe("VocabularyView", () => {
       loading: false,
       error: null,
       refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
@@ -119,6 +211,12 @@ describe("VocabularyView", () => {
       loading: false,
       error: null,
       refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
@@ -138,6 +236,12 @@ describe("VocabularyView", () => {
       loading: false,
       error: null,
       refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
@@ -161,8 +265,10 @@ describe("VocabularyView", () => {
         translation: "hello",
         example_phrase: "Hej, hur mår du?",
         in_learn: true,
+        last_learned: null,
         showed_times: 5,
         created_at: "2023-10-27T10:00:00Z",
+        updated_at: "2023-10-27T10:00:00Z",
       },
       {
         id: 2,
@@ -171,8 +277,10 @@ describe("VocabularyView", () => {
         translation: "good",
         example_phrase: null,
         in_learn: false,
+        last_learned: null,
         showed_times: 0,
         created_at: "2023-10-28T10:05:00Z",
+        updated_at: "2023-10-28T10:05:00Z",
       },
     ];
 
@@ -181,6 +289,12 @@ describe("VocabularyView", () => {
       loading: false,
       error: null,
       refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
@@ -218,8 +332,10 @@ describe("VocabularyView", () => {
         translation: "test translation",
         example_phrase: null,
         in_learn: true,
+        last_learned: null,
         showed_times: 2,
         created_at: "2023-10-27T10:00:00Z",
+        updated_at: "2023-10-27T10:00:00Z",
       },
     ];
 
@@ -228,6 +344,12 @@ describe("VocabularyView", () => {
       loading: false,
       error: null,
       refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
