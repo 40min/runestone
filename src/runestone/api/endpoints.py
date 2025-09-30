@@ -386,6 +386,55 @@ async def update_vocabulary(
         )
 
 
+@router.delete(
+    "/vocabulary/{item_id}",
+    response_model=dict,
+    responses={
+        200: {"description": "Vocabulary item deleted successfully"},
+        404: {"model": ErrorResponse, "description": "Vocabulary item not found"},
+        500: {"model": ErrorResponse, "description": "Database error"},
+    },
+)
+async def delete_vocabulary(
+    item_id: int,
+    service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+) -> dict:
+    """
+    Delete a vocabulary item completely from the database.
+
+    This endpoint completely removes a vocabulary item by its ID.
+    This is a hard delete operation.
+
+    Args:
+        item_id: The ID of the vocabulary item to delete
+        service: Vocabulary service
+
+    Returns:
+        dict: Success message
+
+    Raises:
+        HTTPException: For not found or database errors
+    """
+    try:
+        deleted = service.delete_vocabulary_item(item_id)
+
+        if not deleted:
+            raise ValueError(f"Vocabulary item with id {item_id} not found")
+
+        return {"message": "Vocabulary item deleted successfully"}
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete vocabulary item: {str(e)}",
+        )
+
+
 @router.get(
     "/health",
     response_model=dict,

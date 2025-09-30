@@ -445,4 +445,107 @@ describe('useRecentVocabulary', () => {
       })
     ).rejects.toThrow('Failed to update vocabulary item: HTTP 500');
   });
+
+  it('should delete vocabulary item successfully', async () => {
+    const initialItems = [
+      {
+        id: 1,
+        user_id: 1,
+        word_phrase: 'hej',
+        translation: 'hello',
+        example_phrase: 'Hej, hur mår du?',
+        in_learn: true,
+        last_learned: null,
+        created_at: '2023-10-27T10:00:00Z',
+        updated_at: '2023-10-27T10:00:00Z',
+      },
+      {
+        id: 2,
+        user_id: 1,
+        word_phrase: 'bra',
+        translation: 'good',
+        example_phrase: 'Jag mår bra idag.',
+        in_learn: true,
+        last_learned: null,
+        created_at: '2023-10-27T10:05:00Z',
+        updated_at: '2023-10-27T10:05:00Z',
+      },
+    ];
+
+    // Mock initial fetch response
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(initialItems),
+    });
+
+    // Mock delete response
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ message: 'Vocabulary item deleted successfully' }),
+    });
+
+    const { result } = renderHook(() => useRecentVocabulary());
+
+    // Wait for initial load
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(result.current.recentVocabulary).toEqual(initialItems);
+    });
+
+    // Delete item
+    await act(async () => {
+      await result.current.deleteVocabularyItem(1);
+    });
+
+    // Verify API was called with correct data
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:8010/api/vocabulary/1',
+      expect.objectContaining({
+        method: 'DELETE',
+      })
+    );
+
+    // Verify state was updated directly (item removed)
+    await waitFor(() => {
+      expect(result.current.recentVocabulary).toEqual([initialItems[1]]);
+    });
+  });
+
+  it('should handle delete vocabulary item error', async () => {
+    const initialItem = {
+      id: 1,
+      user_id: 1,
+      word_phrase: 'hej',
+      translation: 'hello',
+      example_phrase: 'Hej, hur mår du?',
+      in_learn: true,
+      last_learned: null,
+      created_at: '2023-10-27T10:00:00Z',
+      updated_at: '2023-10-27T10:00:00Z',
+    };
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([initialItem]),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+      });
+
+    const { result } = renderHook(() => useRecentVocabulary());
+
+    // Wait for initial load
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Try to delete item - should throw
+    await expect(
+      act(async () => {
+        await result.current.deleteVocabularyItem(1);
+      })
+    ).rejects.toThrow('Failed to delete vocabulary item: HTTP 500');
+  });
 });

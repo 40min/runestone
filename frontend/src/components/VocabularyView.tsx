@@ -18,6 +18,7 @@ const VocabularyView: React.FC = () => {
     closeEditModal,
     updateVocabularyItem,
     createVocabularyItem,
+    deleteVocabularyItem,
   } = useRecentVocabulary(activeSearchTerm);
 
   useEffect(() => {
@@ -48,6 +49,12 @@ const VocabularyView: React.FC = () => {
       await updateVocabularyItem(editingItem.id, updatedItem);
     } else {
       await createVocabularyItem(updatedItem);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (editingItem) {
+      await deleteVocabularyItem(editingItem.id);
     }
   };
 
@@ -137,6 +144,7 @@ const VocabularyView: React.FC = () => {
         item={editingItem}
         onClose={closeEditModal}
         onSave={handleSaveEdit}
+        onDelete={handleDelete}
       />
     </Box>
   );

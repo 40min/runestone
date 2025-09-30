@@ -24,6 +24,7 @@ interface AddEditVocabularyModalProps {
   item: SavedVocabularyItem | null;
   onClose: () => void;
   onSave: (updatedItem: Partial<SavedVocabularyItem>) => Promise<void>;
+  onDelete?: () => Promise<void>;
 }
 
 const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
@@ -31,6 +32,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   item,
   onClose,
   onSave,
+  onDelete,
 }) => {
   const [wordPhrase, setWordPhrase] = useState('');
   const [translation, setTranslation] = useState('');
@@ -217,17 +219,34 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
             </Typography>
           )}
 
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 2 }}>
-            <CustomButton variant="secondary" onClick={handleClose}>
-              Cancel
-            </CustomButton>
-            <CustomButton
-              variant="save"
-              onClick={handleSave}
-              disabled={!wordPhrase.trim() || !translation.trim()}
-            >
-              {item ? 'Save Changes' : 'Add Item'}
-            </CustomButton>
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'space-between', mt: 2 }}>
+            {item && onDelete && (
+              <CustomButton
+                variant="secondary"
+                onClick={onDelete}
+                sx={{
+                  color: '#ef4444',
+                  '&:hover': {
+                    color: '#dc2626',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  },
+                }}
+              >
+                Delete
+              </CustomButton>
+            )}
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <CustomButton variant="secondary" onClick={handleClose}>
+                Cancel
+              </CustomButton>
+              <CustomButton
+                variant="save"
+                onClick={handleSave}
+                disabled={!wordPhrase.trim() || !translation.trim()}
+              >
+                {item ? 'Save Changes' : 'Add Item'}
+              </CustomButton>
+            </Box>
           </Box>
         </Box>
       </Box>

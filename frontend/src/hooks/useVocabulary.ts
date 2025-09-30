@@ -31,6 +31,7 @@ interface UseRecentVocabularyReturn {
   closeEditModal: () => void;
   updateVocabularyItem: (id: number, updates: Partial<SavedVocabularyItem>) => Promise<void>;
   createVocabularyItem: (item: Partial<SavedVocabularyItem>) => Promise<void>;
+  deleteVocabularyItem: (id: number) => Promise<void>;
 }
 
 const useVocabulary = (): UseVocabularyReturn => {
@@ -152,6 +153,19 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
     closeEditModal();
   }, [closeEditModal]);
 
+  const deleteVocabularyItem = useCallback(async (id: number) => {
+    const response = await fetch(`${API_BASE_URL}/api/vocabulary/${id}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete vocabulary item: HTTP ${response.status}`);
+    }
+
+    setRecentVocabulary(prev => prev.filter(item => item.id !== id));
+    closeEditModal();
+  }, [closeEditModal]);
+
   useEffect(() => {
     fetchRecentVocabulary();
   }, [searchQuery, fetchRecentVocabulary]);
@@ -167,5 +181,6 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
     closeEditModal,
     updateVocabularyItem,
     createVocabularyItem,
+    deleteVocabularyItem,
   };
 };

@@ -547,3 +547,42 @@ class TestSettingsDependency:
 
         # Should still succeed since word_phrase is optional in update
         assert response.status_code == 200
+
+    def test_delete_vocabulary_success(self, client):
+        """Test successful vocabulary item deletion."""
+        # First, save some vocabulary
+        payload = {
+            "items": [
+                {
+                    "word_phrase": "ett äpple",
+                    "translation": "an apple",
+                    "example_phrase": "Jag äter ett äpple varje dag.",
+                }
+            ]
+        }
+        client.post("/api/vocabulary", json=payload)
+
+        # Get the item to find its ID
+        response = client.get("/api/vocabulary")
+        data = response.json()
+        item_id = data[0]["id"]
+
+        # Delete the item
+        response = client.delete(f"/api/vocabulary/{item_id}")
+
+        assert response.status_code == 200
+        delete_data = response.json()
+        assert delete_data["message"] == "Vocabulary item deleted successfully"
+
+        # Verify item is completely removed
+        response = client.get("/api/vocabulary")
+        data = response.json()
+        assert len(data) == 0
+
+    def test_delete_vocabulary_not_found(self, client):
+        """Test deleting a non-existent vocabulary item."""
+        response = client.delete("/api/vocabulary/999")
+
+        assert response.status_code == 404
+        data = response.json()
+        assert "not found" in data["detail"]

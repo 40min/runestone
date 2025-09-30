@@ -154,3 +154,7 @@ class VocabularyService:
             skipped_count = original_count - added_count
 
         return {"original_count": original_count, "added_count": added_count, "skipped_count": skipped_count}
+
+    def delete_vocabulary_item(self, item_id: int, user_id: int = 1) -> bool:
+        """Completely delete a vocabulary item from the database."""
+        return self.repo.hard_delete_vocabulary_item(item_id, user_id)

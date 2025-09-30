@@ -211,3 +211,11 @@ class VocabularyRepository:
         )
         self.db.commit()
         return updated_rows > 0
+
+    def hard_delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
+        """Completely delete a vocabulary item from the database."""
+        deleted_rows = (
+            self.db.query(Vocabulary).filter(Vocabulary.id == item_id, Vocabulary.user_id == user_id).delete()
+        )
+        self.db.commit()
+        return deleted_rows > 0

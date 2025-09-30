@@ -17,6 +17,7 @@ vi.mock('../hooks/useVocabulary', () => ({
     closeEditModal: vi.fn(),
     updateVocabularyItem: vi.fn(),
     createVocabularyItem: vi.fn(),
+    deleteVocabularyItem: vi.fn(),
   })),
 }));
 
@@ -42,6 +43,7 @@ describe("VocabularyView", () => {
       closeEditModal: vi.fn(),
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
@@ -72,6 +74,7 @@ describe("VocabularyView", () => {
       closeEditModal: vi.fn(),
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
     });
 
     const { rerender } = render(<VocabularyView />);
@@ -88,6 +91,7 @@ describe("VocabularyView", () => {
       closeEditModal: vi.fn(),
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
     });
 
     rerender(<VocabularyView />);
@@ -112,6 +116,7 @@ describe("VocabularyView", () => {
       closeEditModal: vi.fn(),
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
@@ -131,6 +136,7 @@ describe("VocabularyView", () => {
       closeEditModal: vi.fn(),
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
@@ -152,6 +158,7 @@ describe("VocabularyView", () => {
       closeEditModal: vi.fn(),
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
@@ -172,6 +179,7 @@ describe("VocabularyView", () => {
       closeEditModal: vi.fn(),
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
@@ -192,6 +200,7 @@ describe("VocabularyView", () => {
       closeEditModal: vi.fn(),
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
@@ -217,6 +226,7 @@ describe("VocabularyView", () => {
       closeEditModal: vi.fn(),
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
@@ -242,6 +252,7 @@ describe("VocabularyView", () => {
       closeEditModal: vi.fn(),
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
@@ -295,6 +306,7 @@ describe("VocabularyView", () => {
       closeEditModal: vi.fn(),
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
@@ -350,6 +362,7 @@ describe("VocabularyView", () => {
       closeEditModal: vi.fn(),
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
     });
 
     render(<VocabularyView />);
