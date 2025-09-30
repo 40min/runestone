@@ -56,7 +56,7 @@ const VocabularyView: React.FC = () => {
     <Box sx={{ py: 8 }}>
       <SectionTitle>Recent Vocabulary</SectionTitle>
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
         <SearchInput
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
