@@ -36,11 +36,11 @@ const VocabularyView: React.FC = () => {
     openEditModal(item);
   };
 
-  const handleSaveEdit = (updatedItem: Partial<typeof recentVocabulary[0]>) => {
+  const handleSaveEdit = async (updatedItem: Partial<typeof recentVocabulary[0]>) => {
     if (editingItem) {
-      updateVocabularyItem(editingItem.id, updatedItem);
+      await updateVocabularyItem(editingItem.id, updatedItem);
     } else {
-      createVocabularyItem(updatedItem);
+      await createVocabularyItem(updatedItem);
     }
   };
 

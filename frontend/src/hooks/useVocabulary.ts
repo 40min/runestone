@@ -117,49 +117,39 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
   }, []);
 
   const updateVocabularyItem = useCallback(async (id: number, updates: Partial<SavedVocabularyItem>) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/vocabulary/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updates),
-      });
+    const response = await fetch(`${API_BASE_URL}/api/vocabulary/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates),
+    });
 
-      if (!response.ok) {
-        throw new Error(`Failed to update vocabulary item: HTTP ${response.status}`);
-      }
-
-      const updatedItem: SavedVocabularyItem = await response.json();
-      setRecentVocabulary(prev => prev.map(item => item.id === id ? updatedItem : item));
-      closeEditModal();
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update vocabulary item';
-      setError(errorMessage);
+    if (!response.ok) {
+      throw new Error(`Failed to update vocabulary item: HTTP ${response.status}`);
     }
+
+    const updatedItem: SavedVocabularyItem = await response.json();
+    setRecentVocabulary(prev => prev.map(item => item.id === id ? updatedItem : item));
+    closeEditModal();
   }, [closeEditModal]);
 
   const createVocabularyItem = useCallback(async (item: Partial<SavedVocabularyItem>) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/vocabulary/item`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(item),
-      });
+    const response = await fetch(`${API_BASE_URL}/api/vocabulary/item`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(item),
+    });
 
-      if (!response.ok) {
-        throw new Error(`Failed to create vocabulary item: HTTP ${response.status}`);
-      }
-
-      const newItem: SavedVocabularyItem = await response.json();
-      setRecentVocabulary(prev => [newItem, ...prev]);
-      closeEditModal();
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to create vocabulary item';
-      setError(errorMessage);
+    if (!response.ok) {
+      throw new Error(`Failed to create vocabulary item: HTTP ${response.status}`);
     }
+
+    const newItem: SavedVocabularyItem = await response.json();
+    setRecentVocabulary(prev => [newItem, ...prev]);
+    closeEditModal();
   }, [closeEditModal]);
 
   useEffect(() => {

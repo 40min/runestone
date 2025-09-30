@@ -326,17 +326,15 @@ describe('useRecentVocabulary', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    // Try to create item
-    await act(async () => {
-      await result.current.createVocabularyItem({
-        word_phrase: 'tack',
-        translation: 'thanks',
-      });
-    });
-
-    await waitFor(() => {
-      expect(result.current.error).toBe('Failed to create vocabulary item: HTTP 500');
-    });
+    // Try to create item - should throw
+    await expect(
+      act(async () => {
+        await result.current.createVocabularyItem({
+          word_phrase: 'tack',
+          translation: 'thanks',
+        });
+      })
+    ).rejects.toThrow('Failed to create vocabulary item: HTTP 500');
   });
 
   it('should update vocabulary item successfully', async () => {
@@ -438,15 +436,13 @@ describe('useRecentVocabulary', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    // Try to update item
-    await act(async () => {
-      await result.current.updateVocabularyItem(1, {
-        word_phrase: 'hej då',
-      });
-    });
-
-    await waitFor(() => {
-      expect(result.current.error).toBe('Failed to update vocabulary item: HTTP 500');
-    });
+    // Try to update item - should throw
+    await expect(
+      act(async () => {
+        await result.current.updateVocabularyItem(1, {
+          word_phrase: 'hej då',
+        });
+      })
+    ).rejects.toThrow('Failed to update vocabulary item: HTTP 500');
   });
 });

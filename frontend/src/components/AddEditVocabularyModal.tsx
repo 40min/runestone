@@ -23,7 +23,7 @@ interface AddEditVocabularyModalProps {
   open: boolean;
   item: SavedVocabularyItem | null;
   onClose: () => void;
-  onSave: (updatedItem: Partial<SavedVocabularyItem>) => void;
+  onSave: (updatedItem: Partial<SavedVocabularyItem>) => Promise<void>;
 }
 
 const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
@@ -36,8 +36,10 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   const [translation, setTranslation] = useState('');
   const [examplePhrase, setExamplePhrase] = useState('');
   const [inLearn, setInLearn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setError(null);
     if (item) {
       setWordPhrase(item.word_phrase);
       setTranslation(item.translation);
@@ -49,19 +51,24 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
       setExamplePhrase('');
       setInLearn(false);
     }
-  }, [item]);
+  }, [item, open]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!wordPhrase.trim() || !translation.trim()) {
       return; // Basic validation
     }
 
-    onSave({
-      word_phrase: wordPhrase.trim(),
-      translation: translation.trim(),
-      example_phrase: examplePhrase.trim() || null,
-      in_learn: inLearn,
-    });
+    try {
+      await onSave({
+        word_phrase: wordPhrase.trim(),
+        translation: translation.trim(),
+        example_phrase: examplePhrase.trim() || null,
+        in_learn: inLearn,
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save vocabulary item';
+      setError(errorMessage);
+    }
   };
 
   const handleClose = () => {
@@ -203,6 +210,12 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
               label="In Learning"
             />
           </Box>
+
+          {error && (
+            <Typography sx={{ color: '#ef4444', fontSize: '0.875rem', mt: 1 }}>
+              {error}
+            </Typography>
+          )}
 
           <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 2 }}>
             <CustomButton variant="secondary" onClick={handleClose}>
