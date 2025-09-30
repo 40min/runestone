@@ -301,6 +301,72 @@ class TestVocabularyEndpoints:
         assert "created_at" in vocab
         assert "updated_at" in vocab
 
+    def test_save_vocabulary_item_success(self, client):
+        """Test successful saving of a single vocabulary item."""
+        payload = {
+            "word_phrase": "ett äpple",
+            "translation": "an apple",
+            "example_phrase": "Jag äter ett äpple varje dag.",
+        }
+
+        response = client.post("/api/vocabulary/item", json=payload)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["word_phrase"] == "ett äpple"
+        assert data["translation"] == "an apple"
+        assert data["example_phrase"] == "Jag äter ett äpple varje dag."
+        assert data["user_id"] == 1
+        assert data["in_learn"] is True
+        assert data["last_learned"] is None
+        assert "id" in data
+        assert "created_at" in data
+        assert "updated_at" in data
+
+    def test_save_vocabulary_item_duplicate(self, client):
+        """Test saving a duplicate vocabulary item returns existing."""
+        # First save
+        payload = {
+            "word_phrase": "ett äpple",
+            "translation": "an apple",
+            "example_phrase": "Jag äter ett äpple varje dag.",
+        }
+        response1 = client.post("/api/vocabulary/item", json=payload)
+        assert response1.status_code == 200
+        data1 = response1.json()
+        item_id = data1["id"]
+
+        # Second save with same word_phrase
+        payload2 = {
+            "word_phrase": "ett äpple",
+            "translation": "an apple",
+            "example_phrase": "Ett äpple är rött.",
+        }
+        response2 = client.post("/api/vocabulary/item", json=payload2)
+
+        assert response2.status_code == 200
+        data2 = response2.json()
+        # Should return the existing item, not create a new one
+        assert data2["id"] == item_id
+        assert data2["word_phrase"] == "ett äpple"
+        # Should keep the original example_phrase
+        assert data2["example_phrase"] == "Jag äter ett äpple varje dag."
+
+    def test_save_vocabulary_item_without_example(self, client):
+        """Test saving a vocabulary item without example phrase."""
+        payload = {
+            "word_phrase": "en banan",
+            "translation": "a banana",
+        }
+
+        response = client.post("/api/vocabulary/item", json=payload)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["word_phrase"] == "en banan"
+        assert data["translation"] == "a banana"
+        assert data["example_phrase"] is None
+
     def test_get_vocabulary_with_search(self, client):
         """Test getting vocabulary with search query."""
         # Save some test data

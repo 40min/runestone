@@ -140,12 +140,12 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
 
   const createVocabularyItem = useCallback(async (item: Partial<SavedVocabularyItem>) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary/item`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ items: [item] }),
+        body: JSON.stringify(item),
       });
 
       if (!response.ok) {

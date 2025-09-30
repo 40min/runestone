@@ -49,6 +49,20 @@ class VocabularyRepository:
         ]
         self.db.add_all(vocab_objects)
         self.db.commit()
+    def insert_vocabulary_item(self, item: VocabularyItemCreate, user_id: int = 1) -> Vocabulary:
+        """Insert a single vocabulary item."""
+        vocab = Vocabulary(
+            user_id=user_id,
+            word_phrase=item.word_phrase,
+            translation=item.translation,
+            example_phrase=item.example_phrase,
+            in_learn=True,
+            last_learned=None,
+        )
+        self.db.add(vocab)
+        self.db.commit()
+        self.db.refresh(vocab)
+        return vocab
 
     def upsert_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int = 1):
         """Upsert vocabulary items: update if exists, insert if not."""
