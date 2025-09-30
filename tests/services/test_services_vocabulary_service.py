@@ -231,6 +231,74 @@ class TestVocabularyService:
         assert updated_vocab.translation == "an apple"
         assert updated_vocab.in_learn is False
 
+    def test_save_vocabulary_item_new(self, service, db_session):
+        """Test saving a new single vocabulary item."""
+        item = VocabularyItemCreate(
+            word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple varje dag."
+        )
+
+        result = service.save_vocabulary_item(item, user_id=1)
+        db_session.commit()
+
+        assert isinstance(result, VocabularySchema)
+        assert result.word_phrase == "ett äpple"
+        assert result.translation == "an apple"
+        assert result.example_phrase == "Jag äter ett äpple varje dag."
+        assert result.user_id == 1
+        assert result.in_learn is True
+        assert result.last_learned is None
+
+        # Verify item was added to DB
+        vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "ett äpple").first()
+        assert vocab is not None
+        assert vocab.translation == "an apple"
+
+    def test_save_vocabulary_item_duplicate(self, service, db_session):
+        """Test that saving duplicate word_phrase returns existing item."""
+        # Pre-add an item
+        existing_vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            example_phrase="Jag äter ett äpple.",
+            in_learn=True,
+        )
+        db_session.add(existing_vocab)
+        db_session.commit()
+        existing_id = existing_vocab.id
+
+        # Try to save same word_phrase
+        item = VocabularyItemCreate(
+            word_phrase="ett äpple", translation="an apple updated", example_phrase="Ett äpple är rött."
+        )
+
+        result = service.save_vocabulary_item(item, user_id=1)
+        db_session.commit()
+
+        # Should return existing item, not create new one
+        assert isinstance(result, VocabularySchema)
+        assert result.id == existing_id
+        assert result.word_phrase == "ett äpple"
+        # Should keep original values
+        assert result.translation == "an apple"
+        assert result.example_phrase == "Jag äter ett äpple."
+
+        # Verify only one item exists in DB
+        vocabularies = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "ett äpple").all()
+        assert len(vocabularies) == 1
+
+    def test_save_vocabulary_item_without_example(self, service, db_session):
+        """Test saving a vocabulary item without example phrase."""
+        item = VocabularyItemCreate(word_phrase="en banan", translation="a banana", example_phrase=None)
+
+        result = service.save_vocabulary_item(item, user_id=1)
+        db_session.commit()
+
+        assert isinstance(result, VocabularySchema)
+        assert result.word_phrase == "en banan"
+        assert result.translation == "a banana"
+        assert result.example_phrase is None
+
     def test_load_vocab_from_csv_skip_check(self, service, db_session):
         """Test loading vocabulary from CSV with skip existence check (upsert)."""
         items = [

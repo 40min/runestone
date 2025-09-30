@@ -10,6 +10,7 @@ interface SavedVocabularyItem {
   in_learn: boolean;
   last_learned: string | null;
   created_at: string;
+  updated_at: string;
 }
 
 interface UseVocabularyReturn {
@@ -26,9 +27,10 @@ interface UseRecentVocabularyReturn {
   refetch: () => Promise<void>;
   isEditModalOpen: boolean;
   editingItem: SavedVocabularyItem | null;
-  openEditModal: (item: SavedVocabularyItem) => void;
+  openEditModal: (item: SavedVocabularyItem | null) => void;
   closeEditModal: () => void;
   updateVocabularyItem: (id: number, updates: Partial<SavedVocabularyItem>) => Promise<void>;
+  createVocabularyItem: (item: Partial<SavedVocabularyItem>) => Promise<void>;
 }
 
 const useVocabulary = (): UseVocabularyReturn => {
@@ -104,7 +106,7 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
     }
   }, [searchQuery]);
 
-  const openEditModal = useCallback((item: SavedVocabularyItem) => {
+  const openEditModal = useCallback((item: SavedVocabularyItem | null) => {
     setEditingItem(item);
     setIsEditModalOpen(true);
   }, []);
@@ -115,27 +117,40 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
   }, []);
 
   const updateVocabularyItem = useCallback(async (id: number, updates: Partial<SavedVocabularyItem>) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/vocabulary/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updates),
-      });
+    const response = await fetch(`${API_BASE_URL}/api/vocabulary/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates),
+    });
 
-      if (!response.ok) {
-        throw new Error(`Failed to update vocabulary item: HTTP ${response.status}`);
-      }
-
-      // Refetch the vocabulary list to reflect changes
-      await fetchRecentVocabulary();
-      closeEditModal();
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update vocabulary item';
-      setError(errorMessage);
+    if (!response.ok) {
+      throw new Error(`Failed to update vocabulary item: HTTP ${response.status}`);
     }
-  }, [fetchRecentVocabulary, closeEditModal]);
+
+    const updatedItem: SavedVocabularyItem = await response.json();
+    setRecentVocabulary(prev => prev.map(item => item.id === id ? updatedItem : item));
+    closeEditModal();
+  }, [closeEditModal]);
+
+  const createVocabularyItem = useCallback(async (item: Partial<SavedVocabularyItem>) => {
+    const response = await fetch(`${API_BASE_URL}/api/vocabulary/item`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(item),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to create vocabulary item: HTTP ${response.status}`);
+    }
+
+    const newItem: SavedVocabularyItem = await response.json();
+    setRecentVocabulary(prev => [newItem, ...prev]);
+    closeEditModal();
+  }, [closeEditModal]);
 
   useEffect(() => {
     fetchRecentVocabulary();
@@ -151,5 +166,6 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
     openEditModal,
     closeEditModal,
     updateVocabularyItem,
+    createVocabularyItem,
   };
 };

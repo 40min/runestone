@@ -43,6 +43,40 @@ class VocabularyService:
 
         return {"message": "Vocabulary saved successfully"}
 
+    def save_vocabulary_item(self, item: VocabularyItemCreate, user_id: int = 1) -> VocabularySchema:
+        """Save a single vocabulary item, handling business logic."""
+        # Check if the word_phrase already exists for the user
+        existing = self.repo.get_existing_word_phrases_for_batch([item.word_phrase], user_id)
+        if existing:
+            # If it exists, return the existing item instead of creating duplicate
+            existing_vocab = self.repo.get_vocabulary_item_by_word_phrase(item.word_phrase, user_id)
+            if existing_vocab:
+                return VocabularySchema(
+                    id=existing_vocab.id,
+                    user_id=existing_vocab.user_id,
+                    word_phrase=existing_vocab.word_phrase,
+                    translation=existing_vocab.translation,
+                    example_phrase=existing_vocab.example_phrase,
+                    in_learn=existing_vocab.in_learn,
+                    last_learned=existing_vocab.last_learned.isoformat() if existing_vocab.last_learned else None,
+                    created_at=existing_vocab.created_at.isoformat() if existing_vocab.created_at else None,
+                    updated_at=existing_vocab.updated_at.isoformat() if existing_vocab.updated_at else None,
+                )
+
+        # Insert the new item
+        vocab = self.repo.insert_vocabulary_item(item, user_id)
+        return VocabularySchema(
+            id=vocab.id,
+            user_id=vocab.user_id,
+            word_phrase=vocab.word_phrase,
+            translation=vocab.translation,
+            example_phrase=vocab.example_phrase,
+            in_learn=vocab.in_learn,
+            last_learned=vocab.last_learned.isoformat() if vocab.last_learned else None,
+            created_at=vocab.created_at.isoformat() if vocab.created_at else None,
+            updated_at=vocab.updated_at.isoformat() if vocab.updated_at else None,
+        )
+
     def get_vocabulary(self, limit: int, search_query: str | None = None, user_id: int = 1) -> List[VocabularySchema]:
         """Retrieve vocabulary items, optionally filtered by search query, converting to Pydantic models."""
         vocabularies = self.repo.get_vocabulary(limit, search_query, user_id)

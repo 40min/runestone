@@ -1,6 +1,7 @@
 import React from 'react';
-import { Box, TextField, Button } from '@mui/material';
+import { Box, TextField } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
+import CustomButton from './CustomButton';
 
 interface SearchInputProps {
   value: string;
@@ -47,20 +48,9 @@ const SearchInput: React.FC<SearchInputProps> = ({
         }}
       />
       {onSearch && (
-        <Button
-          variant="contained"
-          onClick={onSearch}
-          sx={{
-            ml: 1,
-            backgroundColor: "#60a5fa",
-            color: "white",
-            "&:hover": {
-              backgroundColor: "#3b82f6",
-            },
-          }}
-        >
+        <CustomButton variant="primary" onClick={onSearch} sx={{ ml: 1 }}>
           Search
-        </Button>
+        </CustomButton>
       )}
     </Box>
   );

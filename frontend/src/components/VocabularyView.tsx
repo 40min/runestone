@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Box, Typography } from "@mui/material";
 import { useRecentVocabulary } from "../hooks/useVocabulary";
-import { LoadingSpinner, ErrorAlert, SectionTitle, DataTable, StyledCheckbox, SearchInput } from "./ui";
-import EditVocabularyModal from "./EditVocabularyModal";
+import { LoadingSpinner, ErrorAlert, SectionTitle, DataTable, StyledCheckbox, SearchInput, CustomButton } from "./ui";
+import AddEditVocabularyModal from "./AddEditVocabularyModal";
 
 const VocabularyView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -16,6 +16,7 @@ const VocabularyView: React.FC = () => {
     openEditModal,
     closeEditModal,
     updateVocabularyItem,
+    createVocabularyItem,
   } = useRecentVocabulary(activeSearchTerm);
 
   useEffect(() => {
@@ -35,9 +36,11 @@ const VocabularyView: React.FC = () => {
     openEditModal(item);
   };
 
-  const handleSaveEdit = (updatedItem: Partial<typeof recentVocabulary[0]>) => {
+  const handleSaveEdit = async (updatedItem: Partial<typeof recentVocabulary[0]>) => {
     if (editingItem) {
-      updateVocabularyItem(editingItem.id, updatedItem);
+      await updateVocabularyItem(editingItem.id, updatedItem);
+    } else {
+      await createVocabularyItem(updatedItem);
     }
   };
 
@@ -53,12 +56,17 @@ const VocabularyView: React.FC = () => {
     <Box sx={{ py: 8 }}>
       <SectionTitle>Recent Vocabulary</SectionTitle>
 
-      <SearchInput
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        placeholder="Search vocabulary..."
-        onSearch={handleSearch}
-      />
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+        <SearchInput
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Search vocabulary..."
+          onSearch={handleSearch}
+        />
+        <CustomButton variant="primary" onClick={() => openEditModal(null)}>
+          Add New Word
+        </CustomButton>
+      </Box>
 
       {recentVocabulary.length === 0 ? (
         <Box sx={{ textAlign: "center", py: 8 }}>
@@ -108,7 +116,7 @@ const VocabularyView: React.FC = () => {
         />
       )}
 
-      <EditVocabularyModal
+      <AddEditVocabularyModal
         open={isEditModalOpen}
         item={editingItem}
         onClose={closeEditModal}

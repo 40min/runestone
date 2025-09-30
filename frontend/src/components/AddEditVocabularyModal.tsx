@@ -19,14 +19,14 @@ interface SavedVocabularyItem {
   created_at: string;
 }
 
-interface EditVocabularyModalProps {
+interface AddEditVocabularyModalProps {
   open: boolean;
   item: SavedVocabularyItem | null;
   onClose: () => void;
-  onSave: (updatedItem: Partial<SavedVocabularyItem>) => void;
+  onSave: (updatedItem: Partial<SavedVocabularyItem>) => Promise<void>;
 }
 
-const EditVocabularyModal: React.FC<EditVocabularyModalProps> = ({
+const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   open,
   item,
   onClose,
@@ -36,27 +36,39 @@ const EditVocabularyModal: React.FC<EditVocabularyModalProps> = ({
   const [translation, setTranslation] = useState('');
   const [examplePhrase, setExamplePhrase] = useState('');
   const [inLearn, setInLearn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setError(null);
     if (item) {
       setWordPhrase(item.word_phrase);
       setTranslation(item.translation);
       setExamplePhrase(item.example_phrase || '');
       setInLearn(item.in_learn);
+    } else {
+      setWordPhrase('');
+      setTranslation('');
+      setExamplePhrase('');
+      setInLearn(false);
     }
-  }, [item]);
+  }, [item, open]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!wordPhrase.trim() || !translation.trim()) {
       return; // Basic validation
     }
 
-    onSave({
-      word_phrase: wordPhrase.trim(),
-      translation: translation.trim(),
-      example_phrase: examplePhrase.trim() || null,
-      in_learn: inLearn,
-    });
+    try {
+      await onSave({
+        word_phrase: wordPhrase.trim(),
+        translation: translation.trim(),
+        example_phrase: examplePhrase.trim() || null,
+        in_learn: inLearn,
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save vocabulary item';
+      setError(errorMessage);
+    }
   };
 
   const handleClose = () => {
@@ -94,7 +106,7 @@ const EditVocabularyModal: React.FC<EditVocabularyModalProps> = ({
           }}
         >
           <Typography variant="h6" component="h2">
-            Edit Vocabulary Item
+            {item ? 'Edit Vocabulary Item' : 'Add Vocabulary Item'}
           </Typography>
           <IconButton
             onClick={handleClose}
@@ -199,6 +211,12 @@ const EditVocabularyModal: React.FC<EditVocabularyModalProps> = ({
             />
           </Box>
 
+          {error && (
+            <Typography sx={{ color: '#ef4444', fontSize: '0.875rem', mt: 1 }}>
+              {error}
+            </Typography>
+          )}
+
           <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 2 }}>
             <CustomButton variant="secondary" onClick={handleClose}>
               Cancel
@@ -208,7 +226,7 @@ const EditVocabularyModal: React.FC<EditVocabularyModalProps> = ({
               onClick={handleSave}
               disabled={!wordPhrase.trim() || !translation.trim()}
             >
-              Save Changes
+              {item ? 'Save Changes' : 'Add Item'}
             </CustomButton>
           </Box>
         </Box>
@@ -217,4 +235,4 @@ const EditVocabularyModal: React.FC<EditVocabularyModalProps> = ({
   );
 };
 
-export default EditVocabularyModal;
+export default AddEditVocabularyModal;

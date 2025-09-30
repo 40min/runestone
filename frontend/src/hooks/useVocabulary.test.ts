@@ -244,4 +244,205 @@ describe('useRecentVocabulary', () => {
       expect(result.current.recentVocabulary).toEqual([]);
     });
   });
+
+  it('should create vocabulary item successfully', async () => {
+    const mockCreatedItem = {
+      id: 3,
+      user_id: 1,
+      word_phrase: 'tack',
+      translation: 'thanks',
+      example_phrase: 'Tack så mycket!',
+      in_learn: true,
+      last_learned: null,
+      created_at: '2023-10-27T10:10:00Z',
+      updated_at: '2023-10-27T10:10:00Z',
+    };
+
+    // Mock initial fetch response
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([]),
+    });
+
+    // Mock create response
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockCreatedItem),
+    });
+
+    const { result } = renderHook(() => useRecentVocabulary());
+
+    // Wait for initial load
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Create new item
+    await act(async () => {
+      await result.current.createVocabularyItem({
+        word_phrase: 'tack',
+        translation: 'thanks',
+        example_phrase: 'Tack så mycket!',
+      });
+    });
+
+    // Verify API was called with correct data
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:8010/api/vocabulary/item',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          word_phrase: 'tack',
+          translation: 'thanks',
+          example_phrase: 'Tack så mycket!',
+        }),
+      })
+    );
+
+    // Verify state was updated directly with the new item
+    await waitFor(() => {
+      expect(result.current.recentVocabulary).toEqual([mockCreatedItem]);
+    });
+  });
+
+  it('should handle create vocabulary item error', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+      });
+
+    const { result } = renderHook(() => useRecentVocabulary());
+
+    // Wait for initial load
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Try to create item - should throw
+    await expect(
+      act(async () => {
+        await result.current.createVocabularyItem({
+          word_phrase: 'tack',
+          translation: 'thanks',
+        });
+      })
+    ).rejects.toThrow('Failed to create vocabulary item: HTTP 500');
+  });
+
+  it('should update vocabulary item successfully', async () => {
+    const initialItem = {
+      id: 1,
+      user_id: 1,
+      word_phrase: 'hej',
+      translation: 'hello',
+      example_phrase: 'Hej, hur mår du?',
+      in_learn: true,
+      last_learned: null,
+      created_at: '2023-10-27T10:00:00Z',
+      updated_at: '2023-10-27T10:00:00Z',
+    };
+
+    const updatedItem = {
+      ...initialItem,
+      word_phrase: 'hej då',
+      translation: 'goodbye',
+      updated_at: '2023-10-27T10:05:00Z',
+    };
+
+    // Mock initial fetch response
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([initialItem]),
+    });
+
+    // Mock update response
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(updatedItem),
+    });
+
+    const { result } = renderHook(() => useRecentVocabulary());
+
+    // Wait for initial load
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(result.current.recentVocabulary).toEqual([initialItem]);
+    });
+
+    // Update item
+    await act(async () => {
+      await result.current.updateVocabularyItem(1, {
+        word_phrase: 'hej då',
+        translation: 'goodbye',
+      });
+    });
+
+    // Verify API was called with correct data
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:8010/api/vocabulary/1',
+      expect.objectContaining({
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          word_phrase: 'hej då',
+          translation: 'goodbye',
+        }),
+      })
+    );
+
+    // Verify state was updated directly with the updated item
+    await waitFor(() => {
+      expect(result.current.recentVocabulary).toEqual([updatedItem]);
+    });
+  });
+
+  it('should handle update vocabulary item error', async () => {
+    const initialItem = {
+      id: 1,
+      user_id: 1,
+      word_phrase: 'hej',
+      translation: 'hello',
+      example_phrase: 'Hej, hur mår du?',
+      in_learn: true,
+      last_learned: null,
+      created_at: '2023-10-27T10:00:00Z',
+      updated_at: '2023-10-27T10:00:00Z',
+    };
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([initialItem]),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+      });
+
+    const { result } = renderHook(() => useRecentVocabulary());
+
+    // Wait for initial load
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // Try to update item - should throw
+    await expect(
+      act(async () => {
+        await result.current.updateVocabularyItem(1, {
+          word_phrase: 'hej då',
+        });
+      })
+    ).rejects.toThrow('Failed to update vocabulary item: HTTP 500');
+  });
 });

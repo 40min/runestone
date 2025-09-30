@@ -17,6 +17,7 @@ from runestone.api.schemas import (
     ResourceRequest,
     ResourceResponse,
     Vocabulary,
+    VocabularyItemCreate,
     VocabularySaveRequest,
     VocabularyUpdate,
 )
@@ -244,6 +245,46 @@ async def save_vocabulary(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to save vocabulary: {str(e)}",
+        )
+
+
+@router.post(
+    "/vocabulary/item",
+    response_model=Vocabulary,
+    responses={
+        200: {"description": "Vocabulary item created successfully"},
+        400: {"model": ErrorResponse, "description": "Bad request"},
+        422: {"model": ErrorResponse, "description": "Validation error"},
+        500: {"model": ErrorResponse, "description": "Database error"},
+    },
+)
+async def save_vocabulary_item(
+    request: VocabularyItemCreate,
+    service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+) -> Vocabulary:
+    """
+    Save a single vocabulary item to the database.
+
+    This endpoint accepts a single vocabulary item and saves it to the database,
+    ensuring uniqueness based on word_phrase.
+
+    Args:
+        request: Vocabulary item create request
+        service: Vocabulary service
+
+    Returns:
+        Vocabulary: The created vocabulary item
+
+    Raises:
+        HTTPException: For database errors
+    """
+    try:
+        return service.save_vocabulary_item(request)
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save vocabulary item: {str(e)}",
         )
 
 
