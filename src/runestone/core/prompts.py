@@ -172,3 +172,28 @@ Format:
 - Provide links to the sources you used, if applicable.
 - Provide funny examples for grammar rules.
 """
+
+VOCABULARY_IMPROVE_PROMPT_TEMPLATE = """
+You are a Swedish language learning expert. Your task is to help improve a vocabulary entry by providing {content_type}.
+
+SWEDISH WORD/PHRASE: {word_phrase}
+
+Please provide your response in the following JSON format:
+
+{{
+    "translation": {translation_instruction},
+    "example_phrase": "A natural Swedish sentence using the word/phrase in context"
+}}
+
+INSTRUCTIONS:
+1. For translation:
+   {translation_detail}
+
+2. For example_phrase:
+   - Create a natural, conversational Swedish sentence that uses the word/phrase
+   - The sentence should clearly demonstrate the meaning and usage
+   - Keep it simple and appropriate for language learners
+   - The example should be practical and realistic
+
+Return ONLY valid JSON, no additional text or formatting.
+"""

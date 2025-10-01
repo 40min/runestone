@@ -5,9 +5,11 @@ This module contains tests for the vocabulary service.
 """
 
 import pytest
+from unittest.mock import Mock, patch
 
 from runestone.api.schemas import Vocabulary as VocabularySchema
-from runestone.api.schemas import VocabularyItemCreate
+from runestone.api.schemas import VocabularyImproveRequest, VocabularyImproveResponse, VocabularyItemCreate
+from runestone.config import Settings
 from runestone.core.exceptions import VocabularyItemExists
 from runestone.db.models import Vocabulary as VocabularyModel
 from runestone.services.vocabulary_service import VocabularyService
@@ -18,8 +20,10 @@ class TestVocabularyService:
 
     @pytest.fixture
     def service(self, vocabulary_repository):
-        """Create a VocabularyService instance."""
-        return VocabularyService(vocabulary_repository)
+        """Create a VocabularyService instance."""        
+        mock_settings = Mock(spec=Settings)
+        mock_settings.llm_provider = "openai"
+        return VocabularyService(vocabulary_repository, mock_settings)
 
     def test_save_vocabulary_new(self, service, db_session):
         """Test saving new vocabulary items."""
@@ -476,3 +480,97 @@ class TestVocabularyService:
         # Verify user 2's item still exists
         db_vocab_user2 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab3.id).first()
         assert db_vocab_user2 is not None
+
+    @patch("runestone.services.vocabulary_service.create_llm_client")
+    def test_improve_item_success(self, mock_factory, vocabulary_repository):
+        """Test successful vocabulary item improvement."""
+        from runestone.config import Settings
+
+        # Mock settings
+        mock_settings = Mock(spec=Settings)
+        mock_settings.llm_provider = "openai"
+
+        # Mock LLM client
+        mock_client = Mock()
+        mock_client.improve_vocabulary_item.return_value = '{"translation": "an apple", "example_phrase": "Jag äter ett äpple varje dag."}'
+        mock_factory.return_value = mock_client
+
+        # Create service with mocked settings
+        service = VocabularyService(vocabulary_repository, mock_settings)
+
+        # Test request
+        request = VocabularyImproveRequest(
+            word_phrase="ett äpple",
+            include_translation=True
+        )
+
+        result = service.improve_item(request)
+
+        # Verify result
+        assert isinstance(result, VocabularyImproveResponse)
+        assert result.translation == "an apple"
+        assert result.example_phrase == "Jag äter ett äpple varje dag."
+
+        # Verify LLM client was called correctly
+        mock_factory.assert_called_once_with(mock_settings)
+        mock_client.improve_vocabulary_item.assert_called_once()
+        prompt_arg = mock_client.improve_vocabulary_item.call_args[0][0]
+        assert "ett äpple" in prompt_arg
+
+    @patch("runestone.services.vocabulary_service.create_llm_client")
+    def test_improve_item_without_translation(self, mock_factory, vocabulary_repository):
+        """Test vocabulary improvement without translation."""
+        from runestone.config import Settings
+
+        # Mock settings
+        mock_settings = Mock(spec=Settings)
+
+        # Mock LLM client
+        mock_client = Mock()
+        mock_client.improve_vocabulary_item.return_value = '{"example_phrase": "Jag äter ett äpple varje dag."}'
+        mock_factory.return_value = mock_client
+
+        # Create service with mocked settings
+        service = VocabularyService(vocabulary_repository, mock_settings)
+
+        # Test request without translation
+        request = VocabularyImproveRequest(
+            word_phrase="ett äpple",
+            include_translation=False
+        )
+
+        result = service.improve_item(request)
+
+        # Verify result
+        assert isinstance(result, VocabularyImproveResponse)
+        assert result.translation is None
+        assert result.example_phrase == "Jag äter ett äpple varje dag."
+
+    @patch("runestone.services.vocabulary_service.create_llm_client")
+    def test_improve_item_json_parse_error(self, mock_factory, vocabulary_repository):
+        """Test vocabulary improvement with invalid JSON response."""
+        from runestone.config import Settings
+
+        # Mock settings
+        mock_settings = Mock(spec=Settings)
+
+        # Mock LLM client with invalid JSON
+        mock_client = Mock()
+        mock_client.improve_vocabulary_item.return_value = "invalid json response"
+        mock_factory.return_value = mock_client
+
+        # Create service with mocked settings
+        service = VocabularyService(vocabulary_repository, mock_settings)
+
+        # Test request
+        request = VocabularyImproveRequest(
+            word_phrase="ett äpple",
+            include_translation=True
+        )
+
+        result = service.improve_item(request)
+
+        # Should return empty response on parse error
+        assert isinstance(result, VocabularyImproveResponse)
+        assert result.translation is None
+        assert result.example_phrase == ""

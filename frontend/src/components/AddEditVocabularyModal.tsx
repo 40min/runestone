@@ -7,6 +7,7 @@ import {
   IconButton,
 } from '@mui/material';
 import { CustomButton, StyledCheckbox } from './ui';
+import { improveVocabularyItem } from '../hooks/useVocabulary';
 
 interface SavedVocabularyItem {
   id: number;
@@ -38,6 +39,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   const [translation, setTranslation] = useState('');
   const [examplePhrase, setExamplePhrase] = useState('');
   const [inLearn, setInLearn] = useState(false);
+  const [isImproving, setIsImproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -75,6 +77,37 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
 
   const handleClose = () => {
     onClose();
+  };
+
+  const handleFillAll = async () => {
+    if (!wordPhrase.trim()) return;
+
+    setIsImproving(true);
+    try {
+      const result = await improveVocabularyItem(wordPhrase.trim(), true);
+      setTranslation(result.translation || '');
+      setExamplePhrase(result.example_phrase);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to improve vocabulary item';
+      setError(errorMessage);
+    } finally {
+      setIsImproving(false);
+    }
+  };
+
+  const handleFillExample = async () => {
+    if (!wordPhrase.trim()) return;
+
+    setIsImproving(true);
+    try {
+      const result = await improveVocabularyItem(wordPhrase.trim(), false);
+      setExamplePhrase(result.example_phrase);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to improve vocabulary item';
+      setError(errorMessage);
+    } finally {
+      setIsImproving(false);
+    }
   };
 
   return (
@@ -146,6 +179,25 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
               },
             }}
           />
+
+          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+            <CustomButton
+              variant="secondary"
+              onClick={handleFillAll}
+              disabled={!wordPhrase.trim() || isImproving}
+              size="small"
+            >
+              Fill All
+            </CustomButton>
+            <CustomButton
+              variant="secondary"
+              onClick={handleFillExample}
+              disabled={!wordPhrase.trim() || isImproving}
+              size="small"
+            >
+              Fill Example
+            </CustomButton>
+          </Box>
 
           <TextField
             label="English Translation"

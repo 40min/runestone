@@ -182,6 +182,35 @@ class OpenAIClient(BaseLLMClient):
         except Exception as e:
             raise LLMError(f"Resource search failed: {str(e)}")
 
+    def improve_vocabulary_item(self, prompt: str) -> str:
+        """
+        Improve a vocabulary item using OpenAI.
+
+        Args:
+            prompt: Vocabulary improvement prompt
+
+        Returns:
+            Improved vocabulary data as string
+
+        Raises:
+            LLMError: If vocabulary improvement fails
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model=self._model_name,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=10000,
+                temperature=0.1,
+            )
+
+            if not response.choices or not response.choices[0].message.content:
+                raise LLMError("No vocabulary improvement returned from OpenAI")
+
+            return response.choices[0].message.content.strip()
+
+        except Exception as e:
+            raise LLMError(f"Vocabulary improvement failed: {str(e)}")
+
     @property
     def provider_name(self) -> str:
         """Return the name of the LLM provider."""

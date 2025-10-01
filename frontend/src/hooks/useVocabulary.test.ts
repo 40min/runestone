@@ -1,5 +1,5 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
-import useVocabulary, { useRecentVocabulary } from './useVocabulary';
+import useVocabulary, { useRecentVocabulary, improveVocabularyItem } from './useVocabulary';
 
 // Mock config
 vi.mock('../config', () => ({
@@ -550,5 +550,87 @@ describe('useRecentVocabulary', () => {
         await result.current.deleteVocabularyItem(1);
       })
     ).rejects.toThrow('Failed to delete vocabulary item: HTTP 500');
+  });
+});
+
+describe('improveVocabularyItem', () => {
+  beforeEach(() => {
+    mockFetch.mockClear();
+  });
+
+  it('should improve vocabulary item with includeTranslation=true successfully', async () => {
+    const mockResponse = {
+      translation: 'hello',
+      example_phrase: 'Hej, hur mår du?',
+    };
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockResponse),
+    });
+
+    const result = await improveVocabularyItem('hej', true);
+
+    expect(result).toEqual(mockResponse);
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:8010/api/vocabulary/improve',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          word_phrase: 'hej',
+          include_translation: true,
+        }),
+      })
+    );
+  });
+
+  it('should improve vocabulary item with includeTranslation=false successfully', async () => {
+    const mockResponse = {
+      example_phrase: 'Hej, hur mår du?',
+    };
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockResponse),
+    });
+
+    const result = await improveVocabularyItem('hej', false);
+
+    expect(result).toEqual(mockResponse);
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:8010/api/vocabulary/improve',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          word_phrase: 'hej',
+          include_translation: false,
+        }),
+      })
+    );
+  });
+
+  it('should handle improve vocabulary item error', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      json: () => Promise.resolve({}),
+    });
+
+    await expect(improveVocabularyItem('hej', true)).rejects.toThrow(
+      'Failed to improve vocabulary item: HTTP 500'
+    );
+  });
+
+  it('should handle network error', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+    await expect(improveVocabularyItem('hej', true)).rejects.toThrow('Network error');
   });
 });

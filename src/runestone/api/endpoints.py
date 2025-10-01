@@ -17,6 +17,8 @@ from runestone.api.schemas import (
     ResourceRequest,
     ResourceResponse,
     Vocabulary,
+    VocabularyImproveRequest,
+    VocabularyImproveResponse,
     VocabularyItemCreate,
     VocabularySaveRequest,
     VocabularyUpdate,
@@ -442,6 +444,46 @@ async def delete_vocabulary(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete vocabulary item: {str(e)}",
+        )
+
+
+@router.post(
+    "/vocabulary/improve",
+    response_model=VocabularyImproveResponse,
+    responses={
+        200: {"description": "Vocabulary improvement successful"},
+        400: {"model": ErrorResponse, "description": "Bad request"},
+        422: {"model": ErrorResponse, "description": "Validation error"},
+        500: {"model": ErrorResponse, "description": "LLM error"},
+    },
+)
+async def improve_vocabulary(
+    request: VocabularyImproveRequest,
+    service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+) -> VocabularyImproveResponse:
+    """
+    Improve a vocabulary item using LLM.
+
+    This endpoint accepts a word/phrase and uses LLM to generate translation
+    and example phrase for vocabulary improvement.
+
+    Args:
+        request: Vocabulary improvement request with word/phrase
+        service: Vocabulary service
+
+    Returns:
+        VocabularyImproveResponse: Improved vocabulary data
+
+    Raises:
+        HTTPException: For LLM errors
+    """
+    try:
+        return service.improve_item(request)
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to improve vocabulary: {str(e)}",
         )
 
 

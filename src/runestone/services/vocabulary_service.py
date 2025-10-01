@@ -6,10 +6,14 @@ for vocabulary-related operations.
 """
 
 from typing import List
+import json
 
 from ..api.schemas import Vocabulary as VocabularySchema
-from ..api.schemas import VocabularyItemCreate, VocabularyUpdate
+from ..api.schemas import VocabularyImproveRequest, VocabularyImproveResponse, VocabularyItemCreate, VocabularyUpdate
+from ..config import Settings
+from ..core.clients.factory import create_llm_client
 from ..core.exceptions import VocabularyItemExists
+from ..core.prompts import VOCABULARY_IMPROVE_PROMPT_TEMPLATE
 from ..db.models import Vocabulary
 from ..db.repository import VocabularyRepository
 
@@ -17,9 +21,10 @@ from ..db.repository import VocabularyRepository
 class VocabularyService:
     """Service for vocabulary-related business logic."""
 
-    def __init__(self, vocabulary_repository: VocabularyRepository):
-        """Initialize service with vocabulary repository."""
+    def __init__(self, vocabulary_repository: VocabularyRepository, settings: Settings):
+        """Initialize service with vocabulary repository and settings."""
         self.repo = vocabulary_repository
+        self.settings = settings
 
     def save_vocabulary(self, items: List[VocabularyItemCreate], user_id: int = 1) -> dict:
         """Save vocabulary items, handling business logic."""
@@ -149,6 +154,50 @@ class VocabularyService:
             skipped_count = original_count - added_count
 
         return {"original_count": original_count, "added_count": added_count, "skipped_count": skipped_count}
+
+    def improve_item(self, request: VocabularyImproveRequest) -> VocabularyImproveResponse:
+        """Improve a vocabulary item using LLM to generate translation and example phrase."""        
+
+        # Create LLM client
+        llm_client = create_llm_client(self.settings)
+
+        # Prepare prompt parameters
+        if request.include_translation:
+            content_type = "both translation and example phrase"
+            translation_instruction = '"English translation of the word/phrase"'
+            translation_detail = "Provide the most common and accurate English translation."
+        else:
+            content_type = "an example phrase"
+            translation_instruction = "null"
+            translation_detail = "Set translation to null since only example phrase is requested."
+
+        # Format the prompt with all required parameters
+        prompt = VOCABULARY_IMPROVE_PROMPT_TEMPLATE.format(
+            word_phrase=request.word_phrase,
+            content_type=content_type,
+            translation_instruction=translation_instruction,
+            translation_detail=translation_detail
+        )
+
+        # Get improvement from LLM
+        response_text = llm_client.improve_vocabulary_item(prompt)
+
+        # Parse JSON response
+        try:
+            result = json.loads(response_text)
+            translation = result.get("translation") if request.include_translation else None
+            example_phrase = result.get("example_phrase", "")
+
+            return VocabularyImproveResponse(
+                translation=translation,
+                example_phrase=example_phrase
+            )
+        except (json.JSONDecodeError, KeyError) as e:
+            # Fallback: return empty response if parsing fails
+            return VocabularyImproveResponse(
+                translation=None,
+                example_phrase=""
+            )
 
     def delete_vocabulary_item(self, item_id: int, user_id: int = 1) -> bool:
         """Completely delete a vocabulary item from the database."""
