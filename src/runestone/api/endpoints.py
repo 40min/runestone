@@ -25,12 +25,13 @@ from runestone.api.schemas import (
 )
 from runestone.config import Settings
 from runestone.core.exceptions import RunestoneError, VocabularyItemExists
+from runestone.core.logging_config import get_logger
 from runestone.core.processor import RunestoneProcessor
 from runestone.dependencies import get_settings, get_vocabulary_service
 from runestone.services.vocabulary_service import VocabularyService
 
 router = APIRouter()
-
+logger = get_logger(__name__)
 
 @router.post(
     "/ocr",
@@ -476,14 +477,15 @@ async def improve_vocabulary(
 
     Raises:
         HTTPException: For LLM errors
-    """
+    """    
     try:
         return service.improve_item(request)
 
     except Exception as e:
+        logger.exception("Failed to improve vocabulary")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to improve vocabulary: {str(e)}",
+            detail="An internal error occurred while improving vocabulary.",
         )
 
 

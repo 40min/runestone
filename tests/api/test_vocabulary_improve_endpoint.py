@@ -104,7 +104,7 @@ def test_improve_vocabulary_service_error(client_with_mock_service):
     assert response.status_code == 500
     response_data = response.json()
     assert "detail" in response_data
-    assert "LLM service error" in response_data["detail"]
+    assert response_data["detail"] == "An internal error occurred while improving vocabulary."
 
 
 def test_improve_vocabulary_invalid_request(client_with_mock_service):

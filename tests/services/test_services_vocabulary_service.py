@@ -4,6 +4,7 @@ Tests for vocabulary service functionality.
 This module contains tests for the vocabulary service.
 """
 
+import json
 import pytest
 from unittest.mock import Mock, patch
 
@@ -548,8 +549,7 @@ class TestVocabularyService:
 
     @patch("runestone.services.vocabulary_service.create_llm_client")
     def test_improve_item_json_parse_error(self, mock_factory, vocabulary_repository):
-        """Test vocabulary improvement with invalid JSON response."""
-        from runestone.config import Settings
+        """Test vocabulary improvement with invalid JSON response."""        
 
         # Mock settings
         mock_settings = Mock(spec=Settings)
@@ -568,9 +568,6 @@ class TestVocabularyService:
             include_translation=True
         )
 
-        result = service.improve_item(request)
-
-        # Should return empty response on parse error
-        assert isinstance(result, VocabularyImproveResponse)
-        assert result.translation is None
-        assert result.example_phrase == ""
+        # Should raise JSONDecodeError on parse error
+        with pytest.raises(json.JSONDecodeError):
+            service.improve_item(request)

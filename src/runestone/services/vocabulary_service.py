@@ -183,21 +183,14 @@ class VocabularyService:
         response_text = llm_client.improve_vocabulary_item(prompt)
 
         # Parse JSON response
-        try:
-            result = json.loads(response_text)
-            translation = result.get("translation") if request.include_translation else None
-            example_phrase = result.get("example_phrase", "")
+        result = json.loads(response_text)
+        translation = result.get("translation") if request.include_translation else None
+        example_phrase = result.get("example_phrase", "")
 
-            return VocabularyImproveResponse(
-                translation=translation,
-                example_phrase=example_phrase
-            )
-        except (json.JSONDecodeError, KeyError) as e:
-            # Fallback: return empty response if parsing fails
-            return VocabularyImproveResponse(
-                translation=None,
-                example_phrase=""
-            )
+        return VocabularyImproveResponse(
+            translation=translation,
+            example_phrase=example_phrase
+        )
 
     def delete_vocabulary_item(self, item_id: int, user_id: int = 1) -> bool:
         """Completely delete a vocabulary item from the database."""
