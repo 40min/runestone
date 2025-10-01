@@ -79,13 +79,16 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
     onClose();
   };
 
-  const handleFillAll = async () => {
+  const handleImproveVocabulary = async (includeTranslation: boolean) => {
     if (!wordPhrase.trim()) return;
 
+    setError('');
     setIsImproving(true);
     try {
-      const result = await improveVocabularyItem(wordPhrase.trim(), true);
-      setTranslation(result.translation || '');
+      const result = await improveVocabularyItem(wordPhrase.trim(), includeTranslation);
+      if (includeTranslation) {
+        setTranslation(result.translation || '');
+      }
       setExamplePhrase(result.example_phrase);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to improve vocabulary item';
@@ -95,20 +98,9 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
     }
   };
 
-  const handleFillExample = async () => {
-    if (!wordPhrase.trim()) return;
+  const handleFillAll = () => handleImproveVocabulary(true);
 
-    setIsImproving(true);
-    try {
-      const result = await improveVocabularyItem(wordPhrase.trim(), false);
-      setExamplePhrase(result.example_phrase);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to improve vocabulary item';
-      setError(errorMessage);
-    } finally {
-      setIsImproving(false);
-    }
-  };
+  const handleFillExample = () => handleImproveVocabulary(false);
 
   return (
     <Modal
