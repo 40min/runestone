@@ -72,7 +72,7 @@ class TestGeminiClient:
         with pytest.raises(LLMError) as exc_info:
             client.improve_vocabulary_item(self.prompt)
 
-        assert "Gemini API call failed: API error" in str(exc_info.value)
+        assert "Gemini API call failed" in str(exc_info.value) and "API error" in str(exc_info.value)
 
     @patch("google.generativeai.configure")
     @patch("google.generativeai.GenerativeModel")

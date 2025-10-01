@@ -6,6 +6,7 @@ for vocabulary-related operations.
 """
 
 import json
+import re
 from typing import List
 
 from ..api.schemas import Vocabulary as VocabularySchema
@@ -13,6 +14,7 @@ from ..api.schemas import VocabularyImproveRequest, VocabularyImproveResponse, V
 from ..config import Settings
 from ..core.clients.factory import create_llm_client
 from ..core.exceptions import VocabularyItemExists
+from ..core.logging_config import get_logger
 from ..core.prompts import VOCABULARY_IMPROVE_PROMPT_TEMPLATE
 from ..db.models import Vocabulary
 from ..db.repository import VocabularyRepository
@@ -25,6 +27,7 @@ class VocabularyService:
         """Initialize service with vocabulary repository and settings."""
         self.repo = vocabulary_repository
         self.settings = settings
+        self.logger = get_logger(__name__)
 
     def save_vocabulary(self, items: List[VocabularyItemCreate], user_id: int = 1) -> dict:
         """Save vocabulary items, handling business logic."""
@@ -184,8 +187,13 @@ class VocabularyService:
         # Get improvement from LLM
         response_text = llm_client.improve_vocabulary_item(prompt)
 
-        # Parse JSON response
-        result = json.loads(response_text)
+        # Parse JSON response with fallback for malformed responses
+        try:
+            result = json.loads(response_text)
+        except json.JSONDecodeError as e:
+            self.logger.warning(f"Failed to parse LLM response as JSON: {response_text}. Error: {e}")
+            # Try to extract information from malformed response
+            result = self._parse_malformed_llm_response(response_text, request.include_translation)
         translation = result.get("translation") if request.include_translation else None
         example_phrase = result.get("example_phrase", "")
 
@@ -194,3 +202,106 @@ class VocabularyService:
     def delete_vocabulary_item(self, item_id: int, user_id: int = 1) -> bool:
         """Completely delete a vocabulary item from the database."""
         return self.repo.hard_delete_vocabulary_item(item_id, user_id)
+
+    def _parse_malformed_llm_response(self, response_text: str, include_translation: bool) -> dict:
+        """
+        Parse a malformed LLM response that is not valid JSON.
+
+        Attempts to extract translation and example_phrase from various formats.
+        Returns a dict with 'translation' and 'example_phrase' keys.
+        """
+
+        result = {"translation": None, "example_phrase": ""}
+
+        # Clean the response text
+        response_text = response_text.strip()
+
+        # Try to find JSON-like structure even if malformed
+        if response_text.startswith("{") and response_text.endswith("}"):
+            # Try to fix common JSON issues
+            fixed_text = response_text
+            # Fix trailing commas
+            fixed_text = re.sub(r",(\s*[}\]])", r"\1", fixed_text)
+            # Fix missing quotes around keys
+            fixed_text = re.sub(r"(\w+):", r'"\1":', fixed_text)
+            try:
+                return json.loads(fixed_text)
+            except json.JSONDecodeError:
+                pass  # Continue with other parsing methods
+
+        # Try to extract using regex patterns
+        # Look for translation: "value" (with or without quotes around key)
+        translation_match = re.search(r'(?:"translation"|\btranslation)\s*:\s*"([^"]*)"', response_text, re.IGNORECASE)
+        if translation_match:
+            result["translation"] = translation_match.group(1)
+
+        # Look for example_phrase: "value" (with or without quotes around key)
+        example_match = re.search(
+            r'(?:"example_phrase"|\bexample_phrase)\s*:\s*"([^"]*)"', response_text, re.IGNORECASE
+        )
+        if example_match:
+            result["example_phrase"] = example_match.group(1)
+
+        # If no structured data found, try to extract from plain text
+        if not result["translation"] and not result["example_phrase"]:
+            # Split by common separators and take the first meaningful part as example
+            lines = [line.strip() for line in response_text.split("\n") if line.strip()]
+            if lines:
+                # Assume the first line is the example phrase
+                result["example_phrase"] = lines[0]
+
+        # If translation was requested but not found, try to infer it
+        if include_translation and not result["translation"]:
+            # Look for English words that might be translations
+            words = re.findall(r"\b[a-zA-Z]+\b", response_text)
+            english_words = [
+                w
+                for w in words
+                if len(w) > 2
+                and w.lower()
+                not in [
+                    "the",
+                    "and",
+                    "for",
+                    "are",
+                    "but",
+                    "not",
+                    "you",
+                    "all",
+                    "can",
+                    "had",
+                    "her",
+                    "was",
+                    "one",
+                    "our",
+                    "out",
+                    "day",
+                    "get",
+                    "has",
+                    "him",
+                    "his",
+                    "how",
+                    "its",
+                    "may",
+                    "new",
+                    "now",
+                    "old",
+                    "see",
+                    "two",
+                    "way",
+                    "who",
+                    "boy",
+                    "did",
+                    "has",
+                    "let",
+                    "put",
+                    "say",
+                    "she",
+                    "too",
+                    "use",
+                ]
+            ]
+            if english_words:
+                result["translation"] = " ".join(english_words[:3])  # Take first few words
+
+        return result

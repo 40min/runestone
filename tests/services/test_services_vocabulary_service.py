@@ -4,7 +4,6 @@ Tests for vocabulary service functionality.
 This module contains tests for the vocabulary service.
 """
 
-import json
 from unittest.mock import Mock, patch
 
 import pytest
@@ -545,23 +544,30 @@ class TestVocabularyService:
         assert result.example_phrase == "Jag äter ett äpple varje dag."
 
     @patch("runestone.services.vocabulary_service.create_llm_client")
-    def test_improve_item_json_parse_error(self, mock_factory, vocabulary_repository):
-        """Test vocabulary improvement with invalid JSON response."""
+    def test_improve_item_malformed_response_handling(self, mock_factory, vocabulary_repository):
+        """Test vocabulary improvement with malformed LLM response that gets parsed gracefully."""
 
         # Mock settings
         mock_settings = Mock(spec=Settings)
 
-        # Mock LLM client with invalid JSON
+        # Mock LLM client with malformed response containing some extractable data
         mock_client = Mock()
-        mock_client.improve_vocabulary_item.return_value = "invalid json response"
+        mock_client.improve_vocabulary_item.return_value = (
+            'translation: "clear", example_phrase: "Det är tydliga instruktioner."'
+        )
         mock_factory.return_value = mock_client
 
         # Create service with mocked settings
         service = VocabularyService(vocabulary_repository, mock_settings)
 
         # Test request
-        request = VocabularyImproveRequest(word_phrase="ett äpple", include_translation=True)
+        request = VocabularyImproveRequest(word_phrase="tydliga", include_translation=True)
 
-        # Should raise JSONDecodeError on parse error
-        with pytest.raises(json.JSONDecodeError):
-            service.improve_item(request)
+        result = service.improve_item(request)
+
+        # Should handle malformed response gracefully and extract what it can
+        assert isinstance(result, VocabularyImproveResponse)
+        # The parser should extract "clear" from the translation field
+        assert result.translation == "clear"
+        # The parser should extract the example phrase from the example_phrase field
+        assert result.example_phrase == "Det är tydliga instruktioner."
