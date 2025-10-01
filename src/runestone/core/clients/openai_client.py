@@ -8,7 +8,7 @@ interface, handling OCR and content analysis using OpenAI's GPT-4o API.
 import base64
 import io
 
-from openai import OpenAI, APIError
+from openai import APIError, OpenAI
 from PIL import Image
 
 from runestone.core.clients.base import BaseLLMClient

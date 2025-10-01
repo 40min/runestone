@@ -5,8 +5,8 @@ This module provides a Gemini-specific implementation of the BaseLLMClient
 interface, handling OCR and content analysis using Google's Gemini API.
 """
 
-import google.generativeai as genai
 import google.api_core.exceptions
+import google.generativeai as genai
 from PIL import Image
 
 from runestone.core.clients.base import BaseLLMClient

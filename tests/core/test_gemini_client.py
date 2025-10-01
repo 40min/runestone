@@ -2,10 +2,10 @@
 Tests for the Gemini client module.
 """
 
-import pytest
 from unittest.mock import Mock, patch
 
 import google.api_core.exceptions
+import pytest
 
 from runestone.core.clients.gemini_client import GeminiClient
 from runestone.core.exceptions import LLMError

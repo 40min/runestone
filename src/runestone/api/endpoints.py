@@ -33,6 +33,7 @@ from runestone.services.vocabulary_service import VocabularyService
 router = APIRouter()
 logger = get_logger(__name__)
 
+
 @router.post(
     "/ocr",
     response_model=OCRResult,
@@ -477,11 +478,11 @@ async def improve_vocabulary(
 
     Raises:
         HTTPException: For LLM errors
-    """    
+    """
     try:
         return service.improve_item(request)
 
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to improve vocabulary")
         raise HTTPException(
             status_code=500,

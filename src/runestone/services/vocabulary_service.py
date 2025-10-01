@@ -5,8 +5,8 @@ This module contains service classes that handle business logic
 for vocabulary-related operations.
 """
 
-from typing import List
 import json
+from typing import List
 
 from ..api.schemas import Vocabulary as VocabularySchema
 from ..api.schemas import VocabularyImproveRequest, VocabularyImproveResponse, VocabularyItemCreate, VocabularyUpdate
@@ -99,7 +99,9 @@ class VocabularyService:
         if "word_phrase" in updates and updates["word_phrase"] != vocab.word_phrase:
             existing = self.repo.get_existing_word_phrases_for_batch([updates["word_phrase"]], user_id)
             if existing:
-                raise VocabularyItemExists(f"Vocabulary item with word_phrase '{updates['word_phrase']}' already exists")
+                raise VocabularyItemExists(
+                    f"Vocabulary item with word_phrase '{updates['word_phrase']}' already exists"
+                )
 
         allowed_fields = Vocabulary.UPDATABLE_FIELDS
         for key, value in updates.items():
@@ -156,7 +158,7 @@ class VocabularyService:
         return {"original_count": original_count, "added_count": added_count, "skipped_count": skipped_count}
 
     def improve_item(self, request: VocabularyImproveRequest) -> VocabularyImproveResponse:
-        """Improve a vocabulary item using LLM to generate translation and example phrase."""        
+        """Improve a vocabulary item using LLM to generate translation and example phrase."""
 
         # Create LLM client
         llm_client = create_llm_client(self.settings)
@@ -176,7 +178,7 @@ class VocabularyService:
             word_phrase=request.word_phrase,
             content_type=content_type,
             translation_instruction=translation_instruction,
-            translation_detail=translation_detail
+            translation_detail=translation_detail,
         )
 
         # Get improvement from LLM
@@ -187,10 +189,7 @@ class VocabularyService:
         translation = result.get("translation") if request.include_translation else None
         example_phrase = result.get("example_phrase", "")
 
-        return VocabularyImproveResponse(
-            translation=translation,
-            example_phrase=example_phrase
-        )
+        return VocabularyImproveResponse(translation=translation, example_phrase=example_phrase)
 
     def delete_vocabulary_item(self, item_id: int, user_id: int = 1) -> bool:
         """Completely delete a vocabulary item from the database."""

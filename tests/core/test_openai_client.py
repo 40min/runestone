@@ -2,9 +2,9 @@
 Tests for the OpenAI client module.
 """
 
-import pytest
 from unittest.mock import Mock, patch
 
+import pytest
 from openai import APIError
 
 from runestone.core.clients.openai_client import OpenAIClient

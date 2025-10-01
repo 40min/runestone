@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import Mock
+
+import pytest
 from fastapi.testclient import TestClient
 
 from runestone.api.main import app
@@ -12,16 +13,16 @@ def client_with_mock_service():
     """Create a test client with mocked vocabulary service."""
     # Create mock service
     mock_service = Mock()
-    
+
     # Override the dependency
     def override_get_vocabulary_service():
         return mock_service
-    
+
     app.dependency_overrides[get_vocabulary_service] = override_get_vocabulary_service
     client = TestClient(app)
-    
+
     yield client, mock_service
-    
+
     # Clean up
     app.dependency_overrides.clear()
 
@@ -29,19 +30,13 @@ def client_with_mock_service():
 def test_improve_vocabulary_success(client_with_mock_service):
     """Test successful vocabulary improvement endpoint."""
     client, mock_service = client_with_mock_service
-    
+
     # Mock service response
-    mock_response = VocabularyImproveResponse(
-        translation="an apple",
-        example_phrase="Jag äter ett äpple varje dag."
-    )
+    mock_response = VocabularyImproveResponse(translation="an apple", example_phrase="Jag äter ett äpple varje dag.")
     mock_service.improve_item.return_value = mock_response
 
     # Test request
-    request_data = {
-        "word_phrase": "ett äpple",
-        "include_translation": True
-    }
+    request_data = {"word_phrase": "ett äpple", "include_translation": True}
 
     response = client.post("/api/vocabulary/improve", json=request_data)
 
@@ -62,19 +57,13 @@ def test_improve_vocabulary_success(client_with_mock_service):
 def test_improve_vocabulary_without_translation(client_with_mock_service):
     """Test vocabulary improvement endpoint without translation."""
     client, mock_service = client_with_mock_service
-    
+
     # Mock service response
-    mock_response = VocabularyImproveResponse(
-        translation=None,
-        example_phrase="Jag äter ett äpple varje dag."
-    )
+    mock_response = VocabularyImproveResponse(translation=None, example_phrase="Jag äter ett äpple varje dag.")
     mock_service.improve_item.return_value = mock_response
 
     # Test request
-    request_data = {
-        "word_phrase": "ett äpple",
-        "include_translation": False
-    }
+    request_data = {"word_phrase": "ett äpple", "include_translation": False}
 
     response = client.post("/api/vocabulary/improve", json=request_data)
 
@@ -88,15 +77,12 @@ def test_improve_vocabulary_without_translation(client_with_mock_service):
 def test_improve_vocabulary_service_error(client_with_mock_service):
     """Test vocabulary improvement endpoint with service error."""
     client, mock_service = client_with_mock_service
-    
+
     # Mock service to raise exception
     mock_service.improve_item.side_effect = Exception("LLM service error")
 
     # Test request
-    request_data = {
-        "word_phrase": "ett äpple",
-        "include_translation": True
-    }
+    request_data = {"word_phrase": "ett äpple", "include_translation": True}
 
     response = client.post("/api/vocabulary/improve", json=request_data)
 
@@ -110,7 +96,7 @@ def test_improve_vocabulary_service_error(client_with_mock_service):
 def test_improve_vocabulary_invalid_request(client_with_mock_service):
     """Test vocabulary improvement endpoint with invalid request."""
     client, mock_service = client_with_mock_service
-    
+
     # Test with missing required field
     request_data = {
         "include_translation": True
@@ -128,19 +114,13 @@ def test_improve_vocabulary_invalid_request(client_with_mock_service):
 def test_improve_vocabulary_empty_response(client_with_mock_service):
     """Test vocabulary improvement endpoint with empty response."""
     client, mock_service = client_with_mock_service
-    
+
     # Mock service response with empty fields
-    mock_response = VocabularyImproveResponse(
-        translation=None,
-        example_phrase=""
-    )
+    mock_response = VocabularyImproveResponse(translation=None, example_phrase="")
     mock_service.improve_item.return_value = mock_response
 
     # Test request
-    request_data = {
-        "word_phrase": "ett äpple",
-        "include_translation": True
-    }
+    request_data = {"word_phrase": "ett äpple", "include_translation": True}
 
     response = client.post("/api/vocabulary/improve", json=request_data)
 

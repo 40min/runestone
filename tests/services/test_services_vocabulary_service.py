@@ -5,8 +5,9 @@ This module contains tests for the vocabulary service.
 """
 
 import json
-import pytest
 from unittest.mock import Mock, patch
+
+import pytest
 
 from runestone.api.schemas import Vocabulary as VocabularySchema
 from runestone.api.schemas import VocabularyImproveRequest, VocabularyImproveResponse, VocabularyItemCreate
@@ -21,7 +22,7 @@ class TestVocabularyService:
 
     @pytest.fixture
     def service(self, vocabulary_repository):
-        """Create a VocabularyService instance."""        
+        """Create a VocabularyService instance."""
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "openai"
         return VocabularyService(vocabulary_repository, mock_settings)
@@ -236,6 +237,7 @@ class TestVocabularyService:
         assert updated_vocab.word_phrase == "ett äpple"
         assert updated_vocab.translation == "an apple"
         assert updated_vocab.in_learn is False
+
     def test_update_vocabulary_item_duplicate_word_phrase(self, service, db_session):
         """Test that updating to a duplicate word_phrase raises an error."""
         from runestone.api.schemas import VocabularyUpdate
@@ -275,7 +277,6 @@ class TestVocabularyService:
         db_vocab2 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab2.id).first()
         assert db_vocab2.word_phrase == "en banan"
         assert db_vocab2.translation == "a banana"
-
 
     def test_save_vocabulary_item_new(self, service, db_session):
         """Test saving a new single vocabulary item."""
@@ -493,17 +494,16 @@ class TestVocabularyService:
 
         # Mock LLM client
         mock_client = Mock()
-        mock_client.improve_vocabulary_item.return_value = '{"translation": "an apple", "example_phrase": "Jag äter ett äpple varje dag."}'
+        mock_client.improve_vocabulary_item.return_value = (
+            '{"translation": "an apple", "example_phrase": "Jag äter ett äpple varje dag."}'
+        )
         mock_factory.return_value = mock_client
 
         # Create service with mocked settings
         service = VocabularyService(vocabulary_repository, mock_settings)
 
         # Test request
-        request = VocabularyImproveRequest(
-            word_phrase="ett äpple",
-            include_translation=True
-        )
+        request = VocabularyImproveRequest(word_phrase="ett äpple", include_translation=True)
 
         result = service.improve_item(request)
 
@@ -535,10 +535,7 @@ class TestVocabularyService:
         service = VocabularyService(vocabulary_repository, mock_settings)
 
         # Test request without translation
-        request = VocabularyImproveRequest(
-            word_phrase="ett äpple",
-            include_translation=False
-        )
+        request = VocabularyImproveRequest(word_phrase="ett äpple", include_translation=False)
 
         result = service.improve_item(request)
 
@@ -549,7 +546,7 @@ class TestVocabularyService:
 
     @patch("runestone.services.vocabulary_service.create_llm_client")
     def test_improve_item_json_parse_error(self, mock_factory, vocabulary_repository):
-        """Test vocabulary improvement with invalid JSON response."""        
+        """Test vocabulary improvement with invalid JSON response."""
 
         # Mock settings
         mock_settings = Mock(spec=Settings)
@@ -563,10 +560,7 @@ class TestVocabularyService:
         service = VocabularyService(vocabulary_repository, mock_settings)
 
         # Test request
-        request = VocabularyImproveRequest(
-            word_phrase="ett äpple",
-            include_translation=True
-        )
+        request = VocabularyImproveRequest(word_phrase="ett äpple", include_translation=True)
 
         # Should raise JSONDecodeError on parse error
         with pytest.raises(json.JSONDecodeError):
