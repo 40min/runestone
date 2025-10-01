@@ -1,12 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Modal,
-  Box,
-  TextField,
-  Typography,
-  IconButton,
-} from '@mui/material';
-import { CustomButton, StyledCheckbox } from './ui';
+import React, { useState, useEffect } from "react";
+import { Modal, Box, TextField, Typography, IconButton } from "@mui/material";
+import AutoFixNormal from "@mui/icons-material/AutoFixNormal";
+import AutoFixHigh from "@mui/icons-material/AutoFixHigh";
+import { CustomButton, StyledCheckbox } from "./ui";
+import { improveVocabularyItem } from "../hooks/useVocabulary";
 
 interface SavedVocabularyItem {
   id: number;
@@ -34,10 +31,11 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   onSave,
   onDelete,
 }) => {
-  const [wordPhrase, setWordPhrase] = useState('');
-  const [translation, setTranslation] = useState('');
-  const [examplePhrase, setExamplePhrase] = useState('');
+  const [wordPhrase, setWordPhrase] = useState("");
+  const [translation, setTranslation] = useState("");
+  const [examplePhrase, setExamplePhrase] = useState("");
   const [inLearn, setInLearn] = useState(false);
+  const [isImproving, setIsImproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,12 +43,12 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
     if (item) {
       setWordPhrase(item.word_phrase);
       setTranslation(item.translation);
-      setExamplePhrase(item.example_phrase || '');
+      setExamplePhrase(item.example_phrase || "");
       setInLearn(item.in_learn);
     } else {
-      setWordPhrase('');
-      setTranslation('');
-      setExamplePhrase('');
+      setWordPhrase("");
+      setTranslation("");
+      setExamplePhrase("");
       setInLearn(false);
     }
   }, [item, open]);
@@ -68,7 +66,8 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
         in_learn: inLearn,
       });
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to save vocabulary item';
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to save vocabulary item";
       setError(errorMessage);
     }
   };
@@ -76,6 +75,35 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   const handleClose = () => {
     onClose();
   };
+
+  const handleImproveVocabulary = async (includeTranslation: boolean) => {
+    if (!wordPhrase.trim()) return;
+
+    setError("");
+    setIsImproving(true);
+    try {
+      const result = await improveVocabularyItem(
+        wordPhrase.trim(),
+        includeTranslation
+      );
+      if (includeTranslation) {
+        setTranslation(result.translation || "");
+      }
+      setExamplePhrase(result.example_phrase);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Failed to improve vocabulary item";
+      setError(errorMessage);
+    } finally {
+      setIsImproving(false);
+    }
+  };
+
+  const handleFillAll = () => handleImproveVocabulary(true);
+
+  const handleFillExample = () => handleImproveVocabulary(false);
 
   return (
     <Modal
@@ -86,39 +114,39 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
     >
       <Box
         sx={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          width: { xs: '90%', sm: 500 },
-          bgcolor: '#1f2937',
-          border: '1px solid #374151',
-          borderRadius: '0.5rem',
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: { xs: "90%", sm: 500 },
+          bgcolor: "#1f2937",
+          border: "1px solid #374151",
+          borderRadius: "0.5rem",
           boxShadow: 24,
           p: 4,
-          color: 'white',
+          color: "white",
         }}
       >
         <Box
           sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
             mb: 3,
           }}
         >
           <Typography variant="h6" component="h2">
-            {item ? 'Edit Vocabulary Item' : 'Add Vocabulary Item'}
+            {item ? "Edit Vocabulary Item" : "Add Vocabulary Item"}
           </Typography>
           <IconButton
             onClick={handleClose}
-            sx={{ color: '#9ca3af', fontSize: '1.5rem' }}
+            sx={{ color: "#9ca3af", fontSize: "1.5rem" }}
           >
             ×
           </IconButton>
         </Box>
 
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <TextField
             label="Swedish Word/Phrase"
             value={wordPhrase}
@@ -126,22 +154,22 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
             fullWidth
             variant="outlined"
             sx={{
-              '& .MuiOutlinedInput-root': {
-                color: 'white',
-                '& fieldset': {
-                  borderColor: '#374151',
+              "& .MuiOutlinedInput-root": {
+                color: "white",
+                "& fieldset": {
+                  borderColor: "#374151",
                 },
-                '&:hover fieldset': {
-                  borderColor: '#6b7280',
+                "&:hover fieldset": {
+                  borderColor: "#6b7280",
                 },
-                '&.Mui-focused fieldset': {
-                  borderColor: 'var(--primary-color)',
+                "&.Mui-focused fieldset": {
+                  borderColor: "var(--primary-color)",
                 },
               },
-              '& .MuiInputLabel-root': {
-                color: '#9ca3af',
-                '&.Mui-focused': {
-                  color: 'var(--primary-color)',
+              "& .MuiInputLabel-root": {
+                color: "#9ca3af",
+                "&.Mui-focused": {
+                  color: "var(--primary-color)",
                 },
               },
             }}
@@ -154,88 +182,134 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
             fullWidth
             variant="outlined"
             sx={{
-              '& .MuiOutlinedInput-root': {
-                color: 'white',
-                '& fieldset': {
-                  borderColor: '#374151',
+              "& .MuiOutlinedInput-root": {
+                color: "white",
+                "& fieldset": {
+                  borderColor: "#374151",
                 },
-                '&:hover fieldset': {
-                  borderColor: '#6b7280',
+                "&:hover fieldset": {
+                  borderColor: "#6b7280",
                 },
-                '&.Mui-focused fieldset': {
-                  borderColor: 'var(--primary-color)',
-                },
-              },
-              '& .MuiInputLabel-root': {
-                color: '#9ca3af',
-                '&.Mui-focused': {
-                  color: 'var(--primary-color)',
+                "&.Mui-focused fieldset": {
+                  borderColor: "var(--primary-color)",
                 },
               },
-            }}
-          />
-
-          <TextField
-            label="Example Phrase (Optional)"
-            value={examplePhrase}
-            onChange={(e) => setExamplePhrase(e.target.value)}
-            fullWidth
-            variant="outlined"
-            multiline
-            rows={2}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                color: 'white',
-                '& fieldset': {
-                  borderColor: '#374151',
-                },
-                '&:hover fieldset': {
-                  borderColor: '#6b7280',
-                },
-                '&.Mui-focused fieldset': {
-                  borderColor: 'var(--primary-color)',
-                },
-              },
-              '& .MuiInputLabel-root': {
-                color: '#9ca3af',
-                '&.Mui-focused': {
-                  color: 'var(--primary-color)',
+              "& .MuiInputLabel-root": {
+                color: "#9ca3af",
+                "&.Mui-focused": {
+                  color: "var(--primary-color)",
                 },
               },
             }}
           />
 
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box sx={{ position: "relative" }}>
+            <TextField
+              label="Example Phrase (Optional)"
+              value={examplePhrase}
+              onChange={(e) => setExamplePhrase(e.target.value)}
+              fullWidth
+              variant="outlined"
+              multiline
+              rows={2}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  color: "white",
+                  "& fieldset": {
+                    borderColor: "#374151",
+                  },
+                  "&:hover fieldset": {
+                    borderColor: "#6b7280",
+                  },
+                  "&.Mui-focused fieldset": {
+                    borderColor: "var(--primary-color)",
+                  },
+                },
+                "& .MuiInputLabel-root": {
+                  color: "#9ca3af",
+                  "&.Mui-focused": {
+                    color: "var(--primary-color)",
+                  },
+                },
+              }}
+            />
+            <IconButton
+              onClick={handleFillExample}
+              disabled={!wordPhrase.trim() || isImproving}
+              sx={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                fontSize: "0.75em",
+                color: "var(--primary-color)",
+                "&:hover": {
+                  backgroundColor: "rgba(59, 130, 246, 0.1)",
+                },
+                "&:disabled": {
+                  color: "#6b7280",
+                },
+              }}
+              title="Fill Example"
+            >
+              <AutoFixNormal />
+            </IconButton>
+          </Box>
+
+
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <StyledCheckbox
               checked={inLearn}
               onChange={setInLearn}
               label="In Learning"
             />
+            <IconButton
+              onClick={handleFillAll}
+              disabled={!wordPhrase.trim() || isImproving}
+              sx={{
+                color: "var(--primary-color)",
+                "&:hover": {
+                  backgroundColor: "rgba(59, 130, 246, 0.1)",
+                },
+                "&:disabled": {
+                  color: "#6b7280",
+                },
+              }}
+              title="Fill All"
+            >
+              <AutoFixHigh />
+            </IconButton>
           </Box>
 
           {error && (
-            <Typography sx={{ color: '#ef4444', fontSize: '0.875rem', mt: 1 }}>
+            <Typography sx={{ color: "#ef4444", fontSize: "0.875rem", mt: 1 }}>
               {error}
             </Typography>
           )}
 
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'space-between', mt: 2 }}>
+          <Box
+            sx={{
+              display: "flex",
+              gap: 2,
+              justifyContent: "space-between",
+              mt: 2,
+            }}
+          >
             {item && onDelete && (
               <CustomButton
                 variant="secondary"
                 onClick={onDelete}
                 sx={{
-                  color: '#ef4444',
-                  '&:hover': {
-                    color: '#dc2626',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  color: "#ef4444",
+                  "&:hover": {
+                    color: "#dc2626",
+                    backgroundColor: "rgba(239, 68, 68, 0.1)",
                   },
                 }}
               >
                 Delete
               </CustomButton>
             )}
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: "flex", gap: 2 }}>
               <CustomButton variant="secondary" onClick={handleClose}>
                 Cancel
               </CustomButton>
@@ -244,7 +318,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
                 onClick={handleSave}
                 disabled={!wordPhrase.trim() || !translation.trim()}
               >
-                {item ? 'Save Changes' : 'Add Item'}
+                {item ? "Save Changes" : "Add Item"}
               </CustomButton>
             </Box>
           </Box>

@@ -188,3 +188,27 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
     deleteVocabularyItem,
   };
 };
+
+export const improveVocabularyItem = async (
+  wordPhrase: string,
+  includeTranslation: boolean
+): Promise<{ translation?: string; example_phrase: string }> => {
+  const response = await fetch(`${API_BASE_URL}/api/vocabulary/improve`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      word_phrase: wordPhrase,
+      include_translation: includeTranslation,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage = errorData.detail || `Failed to improve vocabulary item: HTTP ${response.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+};

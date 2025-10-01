@@ -5,6 +5,7 @@ This module provides a Gemini-specific implementation of the BaseLLMClient
 interface, handling OCR and content analysis using Google's Gemini API.
 """
 
+import google.api_core.exceptions
 import google.generativeai as genai
 from PIL import Image
 
@@ -151,6 +152,35 @@ class GeminiClient(BaseLLMClient):
 
         except Exception as e:
             raise LLMError(f"Resource search failed: {str(e)}")
+
+    def improve_vocabulary_item(self, prompt: str) -> str:
+        """
+        Improve a vocabulary item using Gemini.
+
+        Args:
+            prompt: Vocabulary improvement prompt
+
+        Returns:
+            Improved vocabulary data as string
+
+        Raises:
+            LLMError: If vocabulary improvement fails
+        """
+        try:
+            if self.verbose:
+                self.logger.info("Improving vocabulary item with Gemini...")
+
+            response = self.analysis_model.generate_content(prompt)
+
+            if not response.text:
+                raise LLMError("No vocabulary improvement returned from Gemini")
+
+            return response.text.strip()
+
+        except google.api_core.exceptions.GoogleAPICallError as e:
+            raise LLMError(f"Gemini API call failed: {str(e)}")
+        except Exception as e:
+            raise LLMError(f"Vocabulary improvement failed: {str(e)}")
 
     @property
     def provider_name(self) -> str:

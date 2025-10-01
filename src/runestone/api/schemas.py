@@ -124,3 +124,17 @@ class Vocabulary(BaseModel):
     last_learned: Optional[str] = None
     created_at: str
     updated_at: str
+
+
+class VocabularyImproveRequest(BaseModel):
+    """Schema for vocabulary improvement request."""
+
+    word_phrase: str
+    include_translation: bool
+
+
+class VocabularyImproveResponse(BaseModel):
+    """Schema for vocabulary improvement response."""
+
+    translation: Optional[str] = None
+    example_phrase: str

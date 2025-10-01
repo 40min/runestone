@@ -42,14 +42,16 @@ def get_vocabulary_repository(db: Annotated[Session, Depends(get_db)]) -> Vocabu
 
 def get_vocabulary_service(
     repo: Annotated[VocabularyRepository, Depends(get_vocabulary_repository)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> VocabularyService:
     """
     Dependency injection for vocabulary service.
 
     Args:
         repo: VocabularyRepository from dependency injection
+        settings: Application settings from dependency injection
 
     Returns:
-        VocabularyService: Service instance with repository dependency
+        VocabularyService: Service instance with repository and settings dependencies
     """
-    return VocabularyService(repo)
+    return VocabularyService(repo, settings)

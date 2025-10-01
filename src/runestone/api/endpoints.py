@@ -17,17 +17,21 @@ from runestone.api.schemas import (
     ResourceRequest,
     ResourceResponse,
     Vocabulary,
+    VocabularyImproveRequest,
+    VocabularyImproveResponse,
     VocabularyItemCreate,
     VocabularySaveRequest,
     VocabularyUpdate,
 )
 from runestone.config import Settings
 from runestone.core.exceptions import RunestoneError, VocabularyItemExists
+from runestone.core.logging_config import get_logger
 from runestone.core.processor import RunestoneProcessor
 from runestone.dependencies import get_settings, get_vocabulary_service
 from runestone.services.vocabulary_service import VocabularyService
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 
 @router.post(
@@ -442,6 +446,47 @@ async def delete_vocabulary(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete vocabulary item: {str(e)}",
+        )
+
+
+@router.post(
+    "/vocabulary/improve",
+    response_model=VocabularyImproveResponse,
+    responses={
+        200: {"description": "Vocabulary improvement successful"},
+        400: {"model": ErrorResponse, "description": "Bad request"},
+        422: {"model": ErrorResponse, "description": "Validation error"},
+        500: {"model": ErrorResponse, "description": "LLM error"},
+    },
+)
+async def improve_vocabulary(
+    request: VocabularyImproveRequest,
+    service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+) -> VocabularyImproveResponse:
+    """
+    Improve a vocabulary item using LLM.
+
+    This endpoint accepts a word/phrase and uses LLM to generate translation
+    and example phrase for vocabulary improvement.
+
+    Args:
+        request: Vocabulary improvement request with word/phrase
+        service: Vocabulary service
+
+    Returns:
+        VocabularyImproveResponse: Improved vocabulary data
+
+    Raises:
+        HTTPException: For LLM errors
+    """
+    try:
+        return service.improve_item(request)
+
+    except Exception:
+        logger.exception("Failed to improve vocabulary")
+        raise HTTPException(
+            status_code=500,
+            detail="An internal error occurred while improving vocabulary.",
         )
 
 

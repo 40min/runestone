@@ -76,6 +76,22 @@ class BaseLLMClient(ABC):
         """
         pass
 
+    @abstractmethod
+    def improve_vocabulary_item(self, prompt: str) -> str:
+        """
+        Improve a vocabulary item using the LLM.
+
+        Args:
+            prompt: Vocabulary improvement prompt
+
+        Returns:
+            Improved vocabulary data as string
+
+        Raises:
+            Exception: If vocabulary improvement fails
+        """
+        pass
+
     @property
     @abstractmethod
     def provider_name(self) -> str:
