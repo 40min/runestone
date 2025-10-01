@@ -8,7 +8,7 @@ interface, handling OCR and content analysis using OpenAI's GPT-4o API.
 import base64
 import io
 
-from openai import OpenAI
+from openai import OpenAI, APIError
 from PIL import Image
 
 from runestone.core.clients.base import BaseLLMClient
@@ -208,6 +208,8 @@ class OpenAIClient(BaseLLMClient):
 
             return response.choices[0].message.content.strip()
 
+        except APIError as e:
+            raise LLMError(f"OpenAI API error during vocabulary improvement: {str(e)}")
         except Exception as e:
             raise LLMError(f"Vocabulary improvement failed: {str(e)}")
 

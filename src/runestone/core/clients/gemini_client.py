@@ -6,6 +6,7 @@ interface, handling OCR and content analysis using Google's Gemini API.
 """
 
 import google.generativeai as genai
+import google.api_core.exceptions
 from PIL import Image
 
 from runestone.core.clients.base import BaseLLMClient
@@ -176,6 +177,8 @@ class GeminiClient(BaseLLMClient):
 
             return response.text.strip()
 
+        except google.api_core.exceptions.GoogleAPICallError as e:
+            raise LLMError(f"Gemini API call failed: {str(e)}")
         except Exception as e:
             raise LLMError(f"Vocabulary improvement failed: {str(e)}")
 
