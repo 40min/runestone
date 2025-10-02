@@ -64,7 +64,7 @@ def create_llm_client(
 
     # Create client
     if provider == "openai":
-        model_name = model_name or settings.openai_model
+        model_name = model_name or settings.llm_model_name
         return OpenAIClient(api_key=str(api_key), model_name=model_name, verbose=verbose)
 
     elif provider == "gemini":

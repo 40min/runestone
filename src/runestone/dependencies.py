@@ -12,6 +12,11 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from runestone.config import Settings, settings
+from runestone.core.analyzer import ContentAnalyzer
+from runestone.core.clients.base import BaseLLMClient
+from runestone.core.clients.factory import create_llm_client
+from runestone.core.ocr import OCRProcessor
+from runestone.core.processor import RunestoneProcessor
 from runestone.db.database import get_db
 from runestone.db.repository import VocabularyRepository
 from runestone.services.vocabulary_service import VocabularyService
@@ -40,9 +45,28 @@ def get_vocabulary_repository(db: Annotated[Session, Depends(get_db)]) -> Vocabu
     return VocabularyRepository(db)
 
 
+def get_llm_client(settings: Annotated[Settings, Depends(get_settings)]) -> BaseLLMClient:
+    """
+    Dependency injection for LLM client.
+
+    Args:
+        settings: Application settings from dependency injection
+
+    Returns:
+        BaseLLMClient: LLM client instance
+    """
+    return create_llm_client(
+        settings=settings,
+        provider=settings.llm_provider,
+        api_key=settings.openai_api_key if settings.llm_provider == "openai" else settings.google_api_key,
+        model_name=settings.llm_model_name,
+    )
+
+
 def get_vocabulary_service(
     repo: Annotated[VocabularyRepository, Depends(get_vocabulary_repository)],
     settings: Annotated[Settings, Depends(get_settings)],
+    llm_client: Annotated[BaseLLMClient, Depends(get_llm_client)],
 ) -> VocabularyService:
     """
     Dependency injection for vocabulary service.
@@ -50,8 +74,62 @@ def get_vocabulary_service(
     Args:
         repo: VocabularyRepository from dependency injection
         settings: Application settings from dependency injection
+        llm_client: LLM client from dependency injection
 
     Returns:
         VocabularyService: Service instance with repository and settings dependencies
     """
-    return VocabularyService(repo, settings)
+    return VocabularyService(repo, settings, llm_client)
+
+
+def get_ocr_processor(
+    settings: Annotated[Settings, Depends(get_settings)],
+    llm_client: Annotated[BaseLLMClient, Depends(get_llm_client)],
+) -> OCRProcessor:
+    """
+    Dependency injection for OCR processor.
+
+    Args:
+        settings: Application settings from dependency injection
+        llm_client: LLM client from dependency injection
+
+    Returns:
+        OCRProcessor: OCR processor instance
+    """
+    return OCRProcessor(settings, llm_client)
+
+
+def get_content_analyzer(
+    settings: Annotated[Settings, Depends(get_settings)],
+    llm_client: Annotated[BaseLLMClient, Depends(get_llm_client)],
+) -> ContentAnalyzer:
+    """
+    Dependency injection for content analyzer.
+
+    Args:
+        settings: Application settings from dependency injection
+        llm_client: LLM client from dependency injection
+
+    Returns:
+        ContentAnalyzer: Content analyzer instance
+    """
+    return ContentAnalyzer(settings, llm_client)
+
+
+def get_runestone_processor(
+    settings: Annotated[Settings, Depends(get_settings)],
+    ocr_processor: Annotated[OCRProcessor, Depends(get_ocr_processor)],
+    content_analyzer: Annotated[ContentAnalyzer, Depends(get_content_analyzer)],
+) -> RunestoneProcessor:
+    """
+    Dependency injection for Runestone processor.
+
+    Args:
+        settings: Application settings from dependency injection
+        ocr_processor: OCR processor from dependency injection
+        content_analyzer: Content analyzer from dependency injection
+
+    Returns:
+        RunestoneProcessor: Runestone processor instance
+    """
+    return RunestoneProcessor(settings, ocr_processor, content_analyzer)

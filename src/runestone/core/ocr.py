@@ -13,7 +13,6 @@ from PIL import Image
 
 from runestone.config import Settings
 from runestone.core.clients.base import BaseLLMClient
-from runestone.core.clients.factory import create_llm_client
 from runestone.core.exceptions import ImageProcessingError, OCRError
 from runestone.core.logging_config import get_logger
 from runestone.core.prompts import OCR_PROMPT
@@ -25,10 +24,7 @@ class OCRProcessor:
     def __init__(
         self,
         settings: Settings,
-        client: Optional[BaseLLMClient] = None,
-        provider: Optional[str] = None,
-        api_key: Optional[str] = None,
-        model_name: Optional[str] = None,
+        client: BaseLLMClient,
         verbose: Optional[bool] = None,
     ):
         """
@@ -36,10 +32,7 @@ class OCRProcessor:
 
         Args:
             settings: application settings
-            client: Pre-configured LLM client (if provided, other params are ignored)
-            provider: LLM provider name ("openai" or "gemini")
-            api_key: API key for the provider
-            model_name: Model name to use
+            client: LLM client for processing
             verbose: Enable verbose logging. If None, uses settings.verbose
         """
         # Use provided settings or create default
@@ -47,16 +40,7 @@ class OCRProcessor:
         self.verbose = verbose if verbose is not None else self.settings.verbose
         self.logger = get_logger(__name__)
 
-        if client is not None:
-            self.client = client
-        else:
-            self.client = create_llm_client(
-                settings=self.settings,
-                provider=provider,
-                api_key=api_key,
-                model_name=model_name,
-                verbose=self.verbose,
-            )
+        self.client = client
 
     def _load_and_validate_image(self, image_path: Path) -> Image.Image:
         """
@@ -222,6 +206,10 @@ class OCRProcessor:
 
             # Use the client for OCR processing with preprocessed image
             extracted_text = self.client.extract_text_from_image(preprocessed_image, ocr_prompt)
+
+            # Check if we got a valid response
+            if not extracted_text:
+                raise OCRError("No text returned from OCR processing")
 
             # Parse and analyze recognition statistics
             text_part = self._parse_and_analyze_recognition_stats(extracted_text)

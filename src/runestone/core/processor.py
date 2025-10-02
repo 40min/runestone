@@ -14,8 +14,6 @@ from PIL import Image
 
 from runestone.config import Settings
 from runestone.core.analyzer import ContentAnalyzer
-from runestone.core.clients.base import BaseLLMClient
-from runestone.core.clients.factory import create_llm_client
 from runestone.core.exceptions import RunestoneError
 from runestone.core.formatter import ResultFormatter
 from runestone.core.logging_config import get_logger
@@ -28,10 +26,8 @@ class RunestoneProcessor:
     def __init__(
         self,
         settings: Settings,
-        client: Optional[BaseLLMClient] = None,
-        provider: Optional[str] = None,
-        api_key: Optional[str] = None,
-        model_name: Optional[str] = None,
+        ocr_processor: OCRProcessor,
+        content_analyzer: ContentAnalyzer,
         verbose: Optional[bool] = None,
     ):
         """
@@ -39,10 +35,8 @@ class RunestoneProcessor:
 
         Args:
             settings: Centralized application settings
-            client: Pre-configured LLM client (if provided, other params are ignored)
-            provider: LLM provider name ("openai" or "gemini")
-            api_key: API key for the provider
-            model_name: Model name to use
+            ocr_processor: OCR processor instance
+            content_analyzer: Content analyzer instance
             verbose: Enable verbose logging. If None, uses settings.verbose
         """
         # Use provided settings or create default
@@ -50,22 +44,15 @@ class RunestoneProcessor:
         self.verbose = verbose if verbose is not None else self.settings.verbose
         self.logger = get_logger(__name__)
 
-        # Create or use provided client
-        if client is not None:
-            self.client = client
-        else:
-            self.client = create_llm_client(
-                settings=self.settings,
-                provider=provider,
-                api_key=api_key,
-                model_name=model_name,
-                verbose=self.verbose,
-            )
-
-        # Initialize components with the client
+        # Initialize components
         try:
-            self.ocr_processor = OCRProcessor(settings=self.settings, client=self.client, verbose=self.verbose)
-            self.content_analyzer = ContentAnalyzer(settings=self.settings, client=self.client, verbose=self.verbose)
+            if ocr_processor is None:
+                raise RunestoneError("OCR processor cannot be None")
+            if content_analyzer is None:
+                raise RunestoneError("Content analyzer cannot be None")
+
+            self.ocr_processor = ocr_processor
+            self.content_analyzer = content_analyzer
             self.formatter = ResultFormatter()
         except Exception as e:
             raise RunestoneError(f"Failed to initialize processor: {str(e)}")

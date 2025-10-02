@@ -4,7 +4,7 @@ Tests for vocabulary service functionality.
 This module contains tests for the vocabulary service.
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
 
@@ -24,7 +24,8 @@ class TestVocabularyService:
         """Create a VocabularyService instance."""
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "openai"
-        return VocabularyService(vocabulary_repository, mock_settings)
+        mock_llm_client = Mock()
+        return VocabularyService(vocabulary_repository, mock_settings, mock_llm_client)
 
     def test_save_vocabulary_new(self, service, db_session):
         """Test saving new vocabulary items."""
@@ -482,24 +483,12 @@ class TestVocabularyService:
         db_vocab_user2 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab3.id).first()
         assert db_vocab_user2 is not None
 
-    @patch("runestone.services.vocabulary_service.create_llm_client")
-    def test_improve_item_success(self, mock_factory, vocabulary_repository):
+    def test_improve_item_success(self, service):
         """Test successful vocabulary item improvement."""
-        from runestone.config import Settings
-
-        # Mock settings
-        mock_settings = Mock(spec=Settings)
-        mock_settings.llm_provider = "openai"
-
-        # Mock LLM client
-        mock_client = Mock()
-        mock_client.improve_vocabulary_item.return_value = (
+        # Mock LLM client from the service fixture
+        service.llm_client.improve_vocabulary_item.return_value = (
             '{"translation": "an apple", "example_phrase": "Jag äter ett äpple varje dag."}'
         )
-        mock_factory.return_value = mock_client
-
-        # Create service with mocked settings
-        service = VocabularyService(vocabulary_repository, mock_settings)
 
         # Test request
         request = VocabularyImproveRequest(word_phrase="ett äpple", include_translation=True)
@@ -512,26 +501,14 @@ class TestVocabularyService:
         assert result.example_phrase == "Jag äter ett äpple varje dag."
 
         # Verify LLM client was called correctly
-        mock_factory.assert_called_once_with(mock_settings)
-        mock_client.improve_vocabulary_item.assert_called_once()
-        prompt_arg = mock_client.improve_vocabulary_item.call_args[0][0]
+        service.llm_client.improve_vocabulary_item.assert_called_once()
+        prompt_arg = service.llm_client.improve_vocabulary_item.call_args[0][0]
         assert "ett äpple" in prompt_arg
 
-    @patch("runestone.services.vocabulary_service.create_llm_client")
-    def test_improve_item_without_translation(self, mock_factory, vocabulary_repository):
+    def test_improve_item_without_translation(self, service):
         """Test vocabulary improvement without translation."""
-        from runestone.config import Settings
-
-        # Mock settings
-        mock_settings = Mock(spec=Settings)
-
-        # Mock LLM client
-        mock_client = Mock()
-        mock_client.improve_vocabulary_item.return_value = '{"example_phrase": "Jag äter ett äpple varje dag."}'
-        mock_factory.return_value = mock_client
-
-        # Create service with mocked settings
-        service = VocabularyService(vocabulary_repository, mock_settings)
+        # Mock LLM client from the service fixture
+        service.llm_client.improve_vocabulary_item.return_value = '{"example_phrase": "Jag äter ett äpple varje dag."}'
 
         # Test request without translation
         request = VocabularyImproveRequest(word_phrase="ett äpple", include_translation=False)
@@ -543,22 +520,13 @@ class TestVocabularyService:
         assert result.translation is None
         assert result.example_phrase == "Jag äter ett äpple varje dag."
 
-    @patch("runestone.services.vocabulary_service.create_llm_client")
-    def test_improve_item_malformed_response_handling(self, mock_factory, vocabulary_repository):
+    def test_improve_item_malformed_response_handling(self, service):
         """Test vocabulary improvement with malformed LLM response that gets parsed gracefully."""
 
-        # Mock settings
-        mock_settings = Mock(spec=Settings)
-
-        # Mock LLM client with malformed response containing some extractable data
-        mock_client = Mock()
-        mock_client.improve_vocabulary_item.return_value = (
+        # Mock LLM client from the service fixture
+        service.llm_client.improve_vocabulary_item.return_value = (
             'translation: "clear", example_phrase: "Det är tydliga instruktioner."'
         )
-        mock_factory.return_value = mock_client
-
-        # Create service with mocked settings
-        service = VocabularyService(vocabulary_repository, mock_settings)
 
         # Test request
         request = VocabularyImproveRequest(word_phrase="tydliga", include_translation=True)
