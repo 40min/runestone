@@ -8,7 +8,7 @@ portion logic for multiple concurrent users.
 import logging
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import httpx
 

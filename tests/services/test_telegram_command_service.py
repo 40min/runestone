@@ -748,3 +748,108 @@ def test_process_updates_offset_update_error(mock_client_class, telegram_service
 
     # Update should still have been processed successfully
     mock_client.post.assert_called_once()
+
+    # Update should still have been processed successfully
+    mock_client.post.assert_called_once()
+
+
+@patch("src.runestone.services.telegram_command_service.httpx.Client")
+def test_process_updates_state_command_active_with_words(mock_client_class, telegram_service_with_deps, state_manager):
+    """Test processing /state command for active user with daily selection"""
+    # Setup user state
+    user_data = state_manager.get_user("authorized_user")
+    user_data.is_active = True
+    user_data.chat_id = 123
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="kontanter"), WordOfDay(id_=2, word_phrase="biljett")]
+    state_manager.update_user("authorized_user", user_data)
+
+    mock_client = MagicMock()
+
+    # Mock getUpdates response with /state command
+    mock_get_response = MagicMock()
+    mock_get_response.json.return_value = {
+        "ok": True,
+        "result": [
+            {
+                "update_id": 1,
+                "message": {
+                    "message_id": 1,
+                    "from": {"username": "authorized_user"},
+                    "chat": {"id": 123},
+                    "text": "/state",
+                    "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
+                },
+            }
+        ],
+    }
+    mock_get_response.raise_for_status.return_value = None
+    mock_client.get.return_value = mock_get_response
+
+    # Mock sendMessage response
+    mock_post_response = MagicMock()
+    mock_post_response.raise_for_status.return_value = None
+    mock_client.post.return_value = mock_post_response
+
+    mock_client_class.return_value.__enter__.return_value = mock_client
+
+    telegram_service_with_deps.process_updates()
+
+    # Verify the command was processed
+    mock_client.post.assert_called_once()
+    call_args = mock_client.post.call_args[1]["json"]
+    expected_text = (
+        "**Current State**\n\n" "**Is Active:** ✅ Yes\n\n" "**Daily Selection:**\n" "- kontanter\n" "- biljett"
+    )
+    assert call_args["text"] == expected_text
+    assert call_args["parse_mode"] == "MarkdownV2"
+
+
+@patch("src.runestone.services.telegram_command_service.httpx.Client")
+def test_process_updates_state_command_inactive_no_words(mock_client_class, telegram_service_with_deps, state_manager):
+    """Test processing /state command for inactive user with no daily selection"""
+    # Setup user state
+    user_data = state_manager.get_user("authorized_user")
+    user_data.is_active = False
+    user_data.chat_id = 123
+    user_data.daily_selection = []
+    state_manager.update_user("authorized_user", user_data)
+
+    mock_client = MagicMock()
+
+    # Mock getUpdates response with /state command
+    mock_get_response = MagicMock()
+    mock_get_response.json.return_value = {
+        "ok": True,
+        "result": [
+            {
+                "update_id": 1,
+                "message": {
+                    "message_id": 1,
+                    "from": {"username": "authorized_user"},
+                    "chat": {"id": 123},
+                    "text": "/state",
+                    "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
+                },
+            }
+        ],
+    }
+    mock_get_response.raise_for_status.return_value = None
+    mock_client.get.return_value = mock_get_response
+
+    # Mock sendMessage response
+    mock_post_response = MagicMock()
+    mock_post_response.raise_for_status.return_value = None
+    mock_client.post.return_value = mock_post_response
+
+    mock_client_class.return_value.__enter__.return_value = mock_client
+
+    telegram_service_with_deps.process_updates()
+
+    # Verify the command was processed
+    mock_client.post.assert_called_once()
+    call_args = mock_client.post.call_args[1]["json"]
+    expected_text = (
+        "**Current State**\n\n" "**Is Active:** ❌ No\n\n" "**Daily Selection:**\n" "No words selected for today."
+    )
+    assert call_args["text"] == expected_text
+    assert call_args["parse_mode"] == "MarkdownV2"
