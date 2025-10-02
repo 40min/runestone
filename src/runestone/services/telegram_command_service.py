@@ -7,6 +7,7 @@ import httpx
 from runestone.config import settings
 from runestone.services.rune_recall_service import RuneRecallService
 from runestone.state.state_manager import StateManager
+from runestone.utils.markdown import escape_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -221,11 +222,11 @@ class TelegramCommandService:
         is_active_text = "✅ Yes" if user_data.is_active else "❌ No"
 
         if user_data.daily_selection:
-            words_list = "\n".join(f"- {word.word_phrase}" for word in user_data.daily_selection)
+            words_list = "\n".join(f"- {escape_markdown(word.word_phrase)}" for word in user_data.daily_selection)
         else:
             words_list = "No words selected for today."
 
-        message = "**Current State**\n\n" f"**Is Active:** {is_active_text}\n\n" f"**Daily Selection:**\n{words_list}"
+        message = f"**Current State**\n\n**Is Active:** {is_active_text}\n\n**Daily Selection:**\n{words_list}"
 
         self._send_message(chat_id, message, parse_mode="MarkdownV2")
 

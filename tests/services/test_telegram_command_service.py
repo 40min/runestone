@@ -10,6 +10,7 @@ from src.runestone.services.rune_recall_service import RuneRecallService
 from src.runestone.services.telegram_command_service import TelegramCommandService
 from src.runestone.state.state_manager import StateManager
 from src.runestone.state.state_types import WordOfDay
+from src.runestone.utils.markdown import escape_markdown
 
 
 @pytest.fixture
@@ -348,6 +349,32 @@ def test_parse_word_from_reply_text(telegram_service):
     reply_text_spaces = "🇸🇪   hej  \n🇬🇧 hello"
     result = telegram_service._parse_word_from_reply_text(reply_text_spaces)
     assert result == "hej"
+
+
+def test_escape_markdown_v2():
+    """Test MarkdownV2 escaping function"""
+    # Test special characters
+    assert escape_markdown("word_with_underscore") == r"word\_with\_underscore"
+    assert escape_markdown("*bold*") == r"\*bold\*"
+    assert escape_markdown("[link](url)") == r"\[link\]\(url\)"
+    assert escape_markdown("~strikethrough~") == r"\~strikethrough\~"
+    assert escape_markdown("`code`") == r"\`code\`"
+    assert escape_markdown("> quote") == r"\> quote"
+    assert escape_markdown("# header") == r"\# header"
+    assert escape_markdown("+ list") == r"\+ list"
+    assert escape_markdown("- item") == r"\- item"
+    assert escape_markdown("= equals") == r"\= equals"
+    assert escape_markdown("| table |") == r"\| table \|"
+    assert escape_markdown("{code}") == r"\{code\}"
+    assert escape_markdown("}") == r"\}"
+    assert escape_markdown(".dot") == r"\.dot"
+    assert escape_markdown("!") == r"\!"
+
+    # Test no special characters
+    assert escape_markdown("normalword") == "normalword"
+
+    # Test mixed
+    assert escape_markdown("word-with*special.chars!") == r"word\-with\*special\.chars\!"
 
 
 @patch("src.runestone.services.telegram_command_service.httpx.Client")
@@ -749,9 +776,6 @@ def test_process_updates_offset_update_error(mock_client_class, telegram_service
     # Update should still have been processed successfully
     mock_client.post.assert_called_once()
 
-    # Update should still have been processed successfully
-    mock_client.post.assert_called_once()
-
 
 @patch("src.runestone.services.telegram_command_service.httpx.Client")
 def test_process_updates_state_command_active_with_words(mock_client_class, telegram_service_with_deps, state_manager):
@@ -850,6 +874,65 @@ def test_process_updates_state_command_inactive_no_words(mock_client_class, tele
     call_args = mock_client.post.call_args[1]["json"]
     expected_text = (
         "**Current State**\n\n" "**Is Active:** ❌ No\n\n" "**Daily Selection:**\n" "No words selected for today."
+    )
+    assert call_args["text"] == expected_text
+    assert call_args["parse_mode"] == "MarkdownV2"
+
+
+@patch("src.runestone.services.telegram_command_service.httpx.Client")
+def test_process_updates_state_command_with_special_chars(mock_client_class, telegram_service_with_deps, state_manager):
+    """Test processing /state command with words containing special Markdown characters"""
+    # Setup user state with words that have special characters
+    user_data = state_manager.get_user("authorized_user")
+    user_data.is_active = True
+    user_data.chat_id = 123
+    user_data.daily_selection = [
+        WordOfDay(id_=1, word_phrase="word-with*dots.and!special"),
+        WordOfDay(id_=2, word_phrase="normal_word"),
+    ]
+    state_manager.update_user("authorized_user", user_data)
+
+    mock_client = MagicMock()
+
+    # Mock getUpdates response with /state command
+    mock_get_response = MagicMock()
+    mock_get_response.json.return_value = {
+        "ok": True,
+        "result": [
+            {
+                "update_id": 1,
+                "message": {
+                    "message_id": 1,
+                    "from": {"username": "authorized_user"},
+                    "chat": {"id": 123},
+                    "text": "/state",
+                    "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
+                },
+            }
+        ],
+    }
+    mock_get_response.raise_for_status.return_value = None
+    mock_client.get.return_value = mock_get_response
+
+    # Mock sendMessage response
+    mock_post_response = MagicMock()
+    mock_post_response.raise_for_status.return_value = None
+    mock_client.post.return_value = mock_post_response
+
+    mock_client_class.return_value.__enter__.return_value = mock_client
+
+    telegram_service_with_deps.process_updates()
+
+    # Verify the command was processed
+    mock_client.post.assert_called_once()
+    call_args = mock_client.post.call_args[1]["json"]
+    expected_text = (
+        "**Current State**\n\n"
+        "**Is Active:** ✅ Yes\n\n"
+        "**Daily Selection:**\n"
+        r"- word\-with\*dots\.and\!special"
+        "\n"
+        r"- normal\_word"
     )
     assert call_args["text"] == expected_text
     assert call_args["parse_mode"] == "MarkdownV2"
