@@ -23,11 +23,13 @@ def client() -> Generator[TestClient, None, None]:
     # Use a temporary database file for testing
     test_db_url = "sqlite:///./test_vocabulary.db"
 
+    # Create a single engine for all tests in this fixture
+    engine = create_engine(test_db_url, connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
     # Override the database dependency for testing
     def override_get_db():
-        engine = create_engine(test_db_url, connect_args={"check_same_thread": False})
-        Base.metadata.create_all(bind=engine)
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         db = SessionLocal()
         try:
             yield db
@@ -38,6 +40,9 @@ def client() -> Generator[TestClient, None, None]:
     client = TestClient(app)
     yield client
     app.dependency_overrides.clear()
+
+    # Dispose the engine to close all connections
+    engine.dispose()
 
     # Clean up the test database file
     if os.path.exists("./test_vocabulary.db"):

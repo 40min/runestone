@@ -24,6 +24,8 @@ def db_session():
         yield db
     finally:
         db.close()
+        # Dispose the engine to close all connections
+        engine.dispose()
 
 
 @pytest.fixture

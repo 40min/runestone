@@ -90,6 +90,8 @@ def test_db():
         yield db
     finally:
         db.close()
+        # Dispose the engine to close all connections
+        engine.dispose()
         if os.path.exists("./test_recall.db"):
             os.remove("./test_recall.db")
 
