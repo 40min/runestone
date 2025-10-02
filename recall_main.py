@@ -31,7 +31,11 @@ def process_updates_job(state_manager: StateManager) -> None:
     db = SessionLocal()
     try:
         vocabulary_repository = VocabularyRepository(db)
-        recall_service = RuneRecallService(vocabulary_repository, state_manager)
+        recall_service = RuneRecallService(
+            vocabulary_repository,
+            state_manager,
+            settings
+        )
         telegram_service = TelegramCommandService(state_manager, recall_service)
         telegram_service.process_updates()
     finally:
@@ -43,7 +47,11 @@ def send_recall_word_job(state_manager: StateManager) -> None:
     db = SessionLocal()
     try:
         vocabulary_repository = VocabularyRepository(db)
-        recall_service = RuneRecallService(vocabulary_repository, state_manager)
+        recall_service = RuneRecallService(
+            vocabulary_repository,
+            state_manager,
+            settings
+        )
         recall_service.send_next_recall_word()
     finally:
         db.close()

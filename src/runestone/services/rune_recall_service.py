@@ -12,7 +12,6 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from runestone.config import settings
 from runestone.db.repository import VocabularyRepository
 from runestone.state.state_manager import StateManager
 from runestone.state.state_types import UserData, WordOfDay
@@ -27,9 +26,7 @@ class RuneRecallService:
         self,
         vocabulary_repository: VocabularyRepository,
         state_manager: StateManager,
-        bot_token: Optional[str] = None,
-        words_per_day: int = 5,
-        cooldown_days: int = 7,
+        settings,
     ):
         """
         Initialize the RuneRecallService.
@@ -37,19 +34,19 @@ class RuneRecallService:
         Args:
             vocabulary_repository: VocabularyRepository instance for database operations
             state_manager: StateManager instance for user state management
-            bot_token: Telegram bot token (optional, uses settings if not provided)
-            words_per_day: Maximum number of words to send per day per user
-            cooldown_days: Number of days before a word can be repeated
+            settings: Application settings object
         """
         self.vocabulary_repository = vocabulary_repository
         self.state_manager = state_manager
-        self.bot_token = bot_token or settings.telegram_bot_token
+        self.bot_token = settings.telegram_bot_token
         if not self.bot_token:
             raise ValueError("Telegram bot token is required")
 
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
-        self.words_per_day = words_per_day
-        self.cooldown_days = cooldown_days
+        self.words_per_day = settings.words_per_day
+        self.cooldown_days = settings.cooldown_days
+        self.recall_start_hour = settings.recall_start_hour
+        self.recall_end_hour = settings.recall_end_hour
 
     def send_next_recall_word(self) -> None:
         """
@@ -61,10 +58,8 @@ class RuneRecallService:
         current_hour = datetime.now().hour
 
         # Check if we're within recall hours
-        if not (settings.recall_start_hour <= current_hour < settings.recall_end_hour):
-            logger.info(
-                f"Outside recall hours ({settings.recall_start_hour}-{settings.recall_end_hour}), skipping recall"
-            )
+        if not (self.recall_start_hour <= current_hour < self.recall_end_hour):
+            logger.info(f"Outside recall hours ({self.recall_start_hour}-{self.recall_end_hour}), skipping recall")
             return
 
         active_users = self.state_manager.get_active_users()

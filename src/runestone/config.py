@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     recall_end_hour: int = 22  # 10 PM
     recall_interval_minutes: int = 60
 
+    # Vocabulary Learning Configuration
+    words_per_day: int = 5
+    cooldown_days: int = 7
+
     class Config:
         """Pydantic configuration."""
 

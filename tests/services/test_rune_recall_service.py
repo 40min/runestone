@@ -100,38 +100,55 @@ def vocabulary_repository(test_db):
 
 
 @pytest.fixture
-def rune_recall_service(vocabulary_repository, state_manager):
-    return RuneRecallService(vocabulary_repository, state_manager, bot_token="test_token")
+def mock_settings():
+    settings = MagicMock()
+    settings.words_per_day = 5
+    settings.cooldown_days = 7
+    settings.telegram_bot_token = "test_token"
+    settings.recall_start_hour = 9
+    settings.recall_end_hour = 22
+    settings.recall_interval_minutes = 60
+    return settings
 
 
-def test_init_with_token(vocabulary_repository, state_manager):
-    service = RuneRecallService(vocabulary_repository, state_manager, bot_token="test_token")
+@pytest.fixture
+def rune_recall_service(vocabulary_repository, state_manager, mock_settings):
+    return RuneRecallService(vocabulary_repository, state_manager, mock_settings)
+
+
+def test_init_uses_settings_values(vocabulary_repository, state_manager, mock_settings):
+    service = RuneRecallService(vocabulary_repository, state_manager, mock_settings)
     assert service.bot_token == "test_token"
     assert service.base_url == "https://api.telegram.org/bottest_token"
     assert service.words_per_day == 5
     assert service.cooldown_days == 7
 
 
-def test_init_with_custom_params(vocabulary_repository, state_manager):
-    service = RuneRecallService(
-        vocabulary_repository, state_manager, bot_token="test_token", words_per_day=3, cooldown_days=5
-    )
+def test_init_with_different_settings_values(vocabulary_repository, state_manager, mock_settings):
+    mock_settings.words_per_day = 3
+    mock_settings.cooldown_days = 5
+    service = RuneRecallService(vocabulary_repository, state_manager, mock_settings)
     assert service.words_per_day == 3
     assert service.cooldown_days == 5
 
 
-def test_init_without_token(vocabulary_repository, state_manager):
-    with patch("src.runestone.services.rune_recall_service.settings") as mock_settings:
-        mock_settings.telegram_bot_token = "config_token"
-        service = RuneRecallService(vocabulary_repository, state_manager)
-        assert service.bot_token == "config_token"
+def test_init_no_token_raises_error(vocabulary_repository, state_manager, mock_settings):
+    mock_settings.telegram_bot_token = None
+    with pytest.raises(ValueError, match="Telegram bot token is required"):
+        RuneRecallService(vocabulary_repository, state_manager, mock_settings)
 
 
-def test_init_no_token_raises_error(vocabulary_repository, state_manager):
-    with patch("src.runestone.services.rune_recall_service.settings") as mock_settings:
-        mock_settings.telegram_bot_token = None
-        with pytest.raises(ValueError, match="Telegram bot token is required"):
-            RuneRecallService(vocabulary_repository, state_manager)
+def test_init_uses_config_values(vocabulary_repository, state_manager, mock_settings):
+    """Test that RuneRecallService uses configuration values from settings."""
+    mock_settings.telegram_bot_token = "config_token"
+    mock_settings.words_per_day = 10
+    mock_settings.cooldown_days = 14
+
+    service = RuneRecallService(vocabulary_repository, state_manager, mock_settings)
+
+    assert service.bot_token == "config_token"
+    assert service.words_per_day == 10
+    assert service.cooldown_days == 14
 
 
 @patch("src.runestone.services.rune_recall_service.httpx.Client")
@@ -362,15 +379,10 @@ def test_daily_selection_cleanup(rune_recall_service, test_db, state_manager):
 
 
 @patch("src.runestone.services.rune_recall_service.datetime")
-@patch("src.runestone.services.rune_recall_service.settings")
-def test_send_next_recall_word_within_hours(mock_settings, mock_datetime, rune_recall_service):
+def test_send_next_recall_word_within_hours(mock_datetime, rune_recall_service):
     """Test that recall words are sent when within recall hours."""
     # Mock current time to be 10 AM
     mock_datetime.now.return_value.hour = 10
-
-    # Mock settings
-    mock_settings.recall_start_hour = 9
-    mock_settings.recall_end_hour = 22
 
     with patch.object(rune_recall_service, "_process_user_recall_word") as mock_process:
         rune_recall_service.send_next_recall_word()
@@ -379,13 +391,8 @@ def test_send_next_recall_word_within_hours(mock_settings, mock_datetime, rune_r
     mock_process.assert_called()
 
 
-@patch("src.runestone.services.rune_recall_service.settings")
-def test_send_next_recall_word_outside_hours(mock_settings, rune_recall_service):
+def test_send_next_recall_word_outside_hours(rune_recall_service):
     """Test that recall words are not sent when outside recall hours."""
-    # Mock settings
-    mock_settings.recall_start_hour = 9
-    mock_settings.recall_end_hour = 22
-
     with patch("src.runestone.services.rune_recall_service.datetime") as mock_datetime:
         # Mock current time to be 2 AM
         mock_datetime.now.return_value.hour = 2
@@ -400,29 +407,32 @@ def test_send_next_recall_word_outside_hours(mock_settings, rune_recall_service)
 # Tests for cooldown functionality
 
 
-def test_rune_recall_service_different_cooldown_periods(vocabulary_repository):
+def test_rune_recall_service_different_cooldown_periods(vocabulary_repository, mock_settings):
     """Test RuneRecallService with different cooldown periods."""
     state_manager = MagicMock()
 
     # Test default cooldown (7 days)
-    service_default = RuneRecallService(vocabulary_repository, state_manager, bot_token="test_token")
+    service_default = RuneRecallService(vocabulary_repository, state_manager, mock_settings)
     assert service_default.cooldown_days == 7
 
-    # Test custom cooldown
-    service_custom = RuneRecallService(vocabulary_repository, state_manager, bot_token="test_token", cooldown_days=3)
+    # Test custom cooldown via settings
+    mock_settings.cooldown_days = 3
+    service_custom = RuneRecallService(vocabulary_repository, state_manager, mock_settings)
     assert service_custom.cooldown_days == 3
 
     # Test zero cooldown (should allow immediate repetition)
-    service_zero = RuneRecallService(vocabulary_repository, state_manager, bot_token="test_token", cooldown_days=0)
+    mock_settings.cooldown_days = 0
+    service_zero = RuneRecallService(vocabulary_repository, state_manager, mock_settings)
     assert service_zero.cooldown_days == 0
 
 
-def test_select_daily_portion_different_cooldown_periods(test_db):
+def test_select_daily_portion_different_cooldown_periods(test_db, mock_settings):
     """Test daily portion selection with different cooldown periods."""
     # Create VocabularyRepository and services with different cooldown periods
     vocabulary_repository = VocabularyRepository(test_db)
     state_manager = MagicMock()
-    service = RuneRecallService(vocabulary_repository, state_manager, bot_token="test_token", cooldown_days=3)
+    mock_settings.cooldown_days = 3
+    service = RuneRecallService(vocabulary_repository, state_manager, mock_settings)
 
     # Set up test data: word learned 2 days ago
     hello_word = test_db.query(Vocabulary).filter(Vocabulary.word_phrase == "hello").first()
@@ -435,7 +445,8 @@ def test_select_daily_portion_different_cooldown_periods(test_db):
     assert "hello" not in word_phrases
 
     # Create service with 1-day cooldown
-    service_short = RuneRecallService(vocabulary_repository, state_manager, bot_token="test_token", cooldown_days=1)
+    mock_settings.cooldown_days = 1
+    service_short = RuneRecallService(vocabulary_repository, state_manager, mock_settings)
 
     # With 1-day cooldown, word should be included
     words = service_short._select_daily_portion(1)
@@ -501,12 +512,13 @@ def test_select_daily_portion_no_words_available(rune_recall_service, test_db):
     assert result == []
 
 
-def test_select_daily_portion_words_per_day_limit(test_db):
+def test_select_daily_portion_words_per_day_limit(test_db, mock_settings):
     """Test that daily portion respects words_per_day limit."""
     # Create service with limit of 2 words per day
     vocabulary_repository = VocabularyRepository(test_db)
     state_manager = MagicMock()
-    service = RuneRecallService(vocabulary_repository, state_manager, bot_token="test_token", words_per_day=2)
+    mock_settings.words_per_day = 2
+    service = RuneRecallService(vocabulary_repository, state_manager, mock_settings)
 
     # Ensure all words are available (not on cooldown)
     words = test_db.query(Vocabulary).filter(Vocabulary.user_id == 1).all()
