@@ -10,7 +10,6 @@ from typing import Any, Dict, Optional
 
 from runestone.config import Settings
 from runestone.core.clients.base import BaseLLMClient
-from runestone.core.clients.factory import create_llm_client
 from runestone.core.exceptions import ContentAnalysisError
 from runestone.core.logging_config import get_logger
 from runestone.core.prompts import ANALYSIS_PROMPT_TEMPLATE, SEARCH_PROMPT_TEMPLATE
@@ -22,10 +21,7 @@ class ContentAnalyzer:
     def __init__(
         self,
         settings: Settings,
-        client: Optional[BaseLLMClient] = None,
-        provider: Optional[str] = None,
-        api_key: Optional[str] = None,
-        model_name: Optional[str] = None,
+        client: BaseLLMClient,
         verbose: Optional[bool] = None,
     ):
         """
@@ -33,10 +29,7 @@ class ContentAnalyzer:
 
         Args:
             settings: Centralized application settings
-            client: Pre-configured LLM client (if provided, other params are ignored)
-            provider: LLM provider name ("openai" or "gemini")
-            api_key: API key for the provider
-            model_name: Model name to use
+            client: LLM client for processing
             verbose: Enable verbose logging. If None, uses settings.verbose
         """
         # Use provided settings or create default
@@ -44,16 +37,7 @@ class ContentAnalyzer:
         self.verbose = verbose if verbose is not None else self.settings.verbose
         self.logger = get_logger(__name__)
 
-        if client is not None:
-            self.client = client
-        else:
-            self.client = create_llm_client(
-                settings=self.settings,
-                provider=provider,
-                api_key=api_key,
-                model_name=model_name,
-                verbose=self.verbose,
-            )
+        self.client = client
 
     def analyze_content(self, extracted_text: str) -> Dict[str, Any]:
         """

@@ -23,11 +23,10 @@ from runestone.api.schemas import (
     VocabularySaveRequest,
     VocabularyUpdate,
 )
-from runestone.config import Settings
 from runestone.core.exceptions import RunestoneError, VocabularyItemExists
 from runestone.core.logging_config import get_logger
 from runestone.core.processor import RunestoneProcessor
-from runestone.dependencies import get_settings, get_vocabulary_service
+from runestone.dependencies import get_runestone_processor, get_vocabulary_service
 from runestone.services.vocabulary_service import VocabularyService
 
 router = APIRouter()
@@ -46,7 +45,7 @@ logger = get_logger(__name__)
 )
 async def process_ocr(
     file: Annotated[UploadFile, File(description="Image file to process")],
-    settings: Annotated[Settings, Depends(get_settings)],
+    processor: Annotated[RunestoneProcessor, Depends(get_runestone_processor)],
 ) -> OCRResult:
     """
     Extract text from a Swedish textbook image using OCR.
@@ -55,7 +54,7 @@ async def process_ocr(
 
     Args:
         file: Uploaded image file (JPG, PNG, etc.)
-        settings: Application configuration
+        processor: Runestone processor
 
     Returns:
         OCRResult: Extracted text and metadata
@@ -81,9 +80,6 @@ async def process_ocr(
         )
 
     try:
-        # Initialize processor with settings
-        processor = RunestoneProcessor(settings=settings, verbose=settings.verbose)
-
         # Run OCR on image bytes
         ocr_result = processor.run_ocr(content)
 
@@ -114,7 +110,7 @@ async def process_ocr(
 )
 async def analyze_content(
     request: AnalysisRequest,
-    settings: Annotated[Settings, Depends(get_settings)],
+    processor: Annotated[RunestoneProcessor, Depends(get_runestone_processor)],
 ) -> ContentAnalysis:
     """
     Analyze extracted text content.
@@ -123,7 +119,7 @@ async def analyze_content(
 
     Args:
         request: Analysis request with extracted text
-        settings: Application configuration
+        processor: Runestone processor
 
     Returns:
         ContentAnalysis: Grammar and vocabulary analysis
@@ -132,9 +128,6 @@ async def analyze_content(
         HTTPException: For various error conditions
     """
     try:
-        # Initialize processor with settings
-        processor = RunestoneProcessor(settings=settings, verbose=settings.verbose)
-
         # Run content analysis
         analysis_result = processor.run_analysis(request.text)
 
@@ -165,7 +158,7 @@ async def analyze_content(
 )
 async def find_resources(
     request: ResourceRequest,
-    settings: Annotated[Settings, Depends(get_settings)],
+    processor: Annotated[RunestoneProcessor, Depends(get_runestone_processor)],
 ) -> ResourceResponse:
     """
     Find additional learning resources based on content analysis.
@@ -174,7 +167,7 @@ async def find_resources(
 
     Args:
         request: Resource request with analysis data
-        settings: Application configuration
+        processor: Runestone processor
 
     Returns:
         ResourceResponse: Additional learning resources
@@ -183,9 +176,6 @@ async def find_resources(
         HTTPException: For various error conditions
     """
     try:
-        # Initialize processor with settings
-        processor = RunestoneProcessor(settings=settings, verbose=settings.verbose)
-
         # Convert request data to dict format expected by processor
         analysis_data = {
             "search_needed": {
