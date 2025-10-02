@@ -14,6 +14,7 @@ from src.runestone.db.models import Vocabulary
 from src.runestone.db.repository import VocabularyRepository
 from src.runestone.services.rune_recall_service import RuneRecallService
 from src.runestone.state.state_manager import StateManager
+from src.runestone.utils.markdown import escape_markdown
 
 
 @pytest.fixture
@@ -850,52 +851,52 @@ def test_send_word_message_escapes_all_markdown_chars(mock_client_class, rune_re
     )
 
 
-def test_escape_markdown_no_double_escaping(rune_recall_service):
-    """Test that _escape_markdown doesn't double-escape already escaped characters."""
+def test_escape_markdown_no_double_escaping():
+    """Test that escape_markdown doesn't double-escape already escaped characters."""
     # Test with already escaped characters
     text_with_escaped = "This is \\*already escaped\\* and this is *not escaped*"
-    result = rune_recall_service._escape_markdown(text_with_escaped)
+    result = escape_markdown(text_with_escaped)
     expected = "This is \\*already escaped\\* and this is \\*not escaped\\*"
     assert result == expected
 
     # Test with mixed escaped and unescaped characters
     mixed_text = "Some \\[escaped\\] and some [unescaped] brackets"
-    result = rune_recall_service._escape_markdown(mixed_text)
+    result = escape_markdown(mixed_text)
     expected = "Some \\[escaped\\] and some \\[unescaped\\] brackets"
     assert result == expected
 
     # Test with multiple escape characters
     multi_escape = "\\*bold\\* and _italic_ and \\`code\\` and `more code`"
-    result = rune_recall_service._escape_markdown(multi_escape)
+    result = escape_markdown(multi_escape)
     expected = "\\*bold\\* and \\_italic\\_ and \\`code\\` and \\`more code\\`"
     assert result == expected
 
 
-def test_escape_markdown_all_special_chars(rune_recall_service):
+def test_escape_markdown_all_special_chars():
     """Test that all special characters are properly escaped."""
     special_chars = "*_[]()~`>#+-=|{}.!"
-    result = rune_recall_service._escape_markdown(special_chars)
+    result = escape_markdown(special_chars)
     expected = "\\*\\_\\[\\]\\(\\)\\~\\`\\>\\#\\+\\-\\=\\|\\{\\}\\.\\!"
     assert result == expected
 
 
-def test_escape_markdown_already_fully_escaped(rune_recall_service):
+def test_escape_markdown_already_fully_escaped():
     """Test that fully escaped text remains unchanged."""
     fully_escaped = "\\*\\_\\[\\]\\(\\)\\~\\`\\>\\#\\+\\-\\=\\|\\{\\}\\.\\!"
-    result = rune_recall_service._escape_markdown(fully_escaped)
+    result = escape_markdown(fully_escaped)
     # Should remain the same since all characters are already escaped
     assert result == fully_escaped
 
 
-def test_escape_markdown_empty_and_normal_text(rune_recall_service):
+def test_escape_markdown_empty_and_normal_text():
     """Test edge cases with empty strings and normal text."""
     # Empty string
-    assert rune_recall_service._escape_markdown("") == ""
+    assert escape_markdown("") == ""
 
     # Normal text without special characters
     normal_text = "Hello world this is normal text"
-    assert rune_recall_service._escape_markdown(normal_text) == normal_text
+    assert escape_markdown(normal_text) == normal_text
 
     # Text with only spaces and alphanumeric characters
     simple_text = "abc 123 def"
-    assert rune_recall_service._escape_markdown(simple_text) == simple_text
+    assert escape_markdown(simple_text) == simple_text

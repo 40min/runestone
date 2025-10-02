@@ -7,6 +7,7 @@ import httpx
 from runestone.config import settings
 from runestone.services.rune_recall_service import RuneRecallService
 from runestone.state.state_manager import StateManager
+from runestone.utils.markdown import escape_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -41,11 +42,14 @@ class TelegramCommandService:
 
         return None
 
-    def _send_message(self, chat_id: int, text: str) -> bool:
+    def _send_message(self, chat_id: int, text: str, parse_mode: Optional[str] = None) -> bool:
         """Send a message to a Telegram chat."""
         try:
+            payload = {"chat_id": chat_id, "text": text}
+            if parse_mode:
+                payload["parse_mode"] = parse_mode
             with httpx.Client(timeout=10.0) as client:
-                response = client.post(f"{self.base_url}/sendMessage", json={"chat_id": chat_id, "text": text})
+                response = client.post(f"{self.base_url}/sendMessage", json=payload)
                 response.raise_for_status()
                 return True
         except httpx.RequestError as e:
@@ -186,6 +190,8 @@ class TelegramCommandService:
             self._handle_remove_command(message, username, user_data, chat_id)
         elif text == "/postpone":
             self._handle_postpone_command(message, username, user_data, chat_id)
+        elif text == "/state":
+            self._handle_state_command(username, user_data, chat_id)
         else:
             # Unknown command, ignore or send help
             logger.debug(f"Unknown command '{text}' from user {username}")
@@ -210,6 +216,19 @@ class TelegramCommandService:
 
         # Send response based on result
         self._send_message(chat_id, result["message"])
+
+    def _handle_state_command(self, username: str, user_data, chat_id: int) -> None:
+        """Handle the /state command to show user's current state."""
+        is_active_text = "✅ Yes" if user_data.is_active else "❌ No"
+
+        if user_data.daily_selection:
+            words_list = "\n".join(f"- {escape_markdown(word.word_phrase)}" for word in user_data.daily_selection)
+        else:
+            words_list = "No words selected for today."
+
+        message = f"**Current State**\n\n**Is Active:** {is_active_text}\n\n**Daily Selection:**\n{words_list}"
+
+        self._send_message(chat_id, message, parse_mode="MarkdownV2")
 
     def _handle_postpone_command(self, message: dict, username: str, user_data, chat_id: int) -> None:
         """Handle the /postpone command to remove a word from daily_selection only."""

@@ -6,15 +6,15 @@ portion logic for multiple concurrent users.
 """
 
 import logging
-import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import httpx
 
 from runestone.db.repository import VocabularyRepository
 from runestone.state.state_manager import StateManager
 from runestone.state.state_types import UserData, WordOfDay
+from runestone.utils.markdown import escape_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -173,18 +173,6 @@ class RuneRecallService:
 
         return []
 
-    def _escape_markdown(self, text: str) -> str:
-        """Escape special Markdown characters that are not already escaped."""
-        escape_chars = ["*", "_", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"]
-
-        for char in escape_chars:
-            # Only escape characters that are not already preceded by a backslash
-            # Use negative lookbehind (?<!\\) to check if the character is not already escaped
-            pattern = f"(?<!\\\\){re.escape(char)}"
-            text = re.sub(pattern, f"\\{char}", text)
-
-        return text
-
     def _send_word_message(self, chat_id: int, word: Dict) -> bool:
         """
         Send a vocabulary word message to a Telegram chat.
@@ -200,10 +188,10 @@ class RuneRecallService:
         translation = word.get("translation", "Unknown")
         example_phrase = word.get("example_phrase", "")
 
-        word_phrase = self._escape_markdown(word_phrase)
-        translation = self._escape_markdown(translation)
+        word_phrase = escape_markdown(word_phrase)
+        translation = escape_markdown(translation)
         if example_phrase:
-            example_phrase = self._escape_markdown(example_phrase)
+            example_phrase = escape_markdown(example_phrase)
 
         # Format the message
         message = f"🇸🇪 **{word_phrase}**\n🇬🇧 {translation}"
