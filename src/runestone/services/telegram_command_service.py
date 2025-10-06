@@ -191,6 +191,8 @@ class TelegramCommandService:
             self._handle_postpone_command(message, username, user_data, chat_id)
         elif text == "/state":
             self._handle_state_command(username, user_data, chat_id)
+        elif text == "/bump_words":
+            self._handle_bump_words_command(username, user_data, chat_id)
         else:
             # Unknown command, ignore or send help
             logger.debug(f"Unknown command '{text}' from user {username}")
@@ -212,6 +214,14 @@ class TelegramCommandService:
 
         # Delegate to RuneRecallService
         result = self.rune_recall_service.remove_word_completely(username, word_phrase)
+
+        # Send response based on result
+        self._send_message(chat_id, result["message"])
+
+    def _handle_bump_words_command(self, username: str, user_data, chat_id: int) -> None:
+        """Handle the /bump_words command to replace current daily selection with new words."""
+        # Delegate to RuneRecallService
+        result = self.rune_recall_service.bump_words(username, user_data)
 
         # Send response based on result
         self._send_message(chat_id, result["message"])

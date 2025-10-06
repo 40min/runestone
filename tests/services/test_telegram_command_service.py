@@ -932,3 +932,115 @@ def test_process_updates_state_command_with_special_chars(mock_client_class, tel
     )
     assert call_args["text"] == expected_text
     assert "parse_mode" not in call_args
+
+
+@patch("src.runestone.services.telegram_command_service.httpx.Client")
+def test_process_updates_bump_words_command_success(
+    mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
+):
+    """Test processing /bump_words command through main update handler"""
+    # Setup user state
+    user_data = state_manager.get_user("authorized_user")
+    user_data.is_active = True
+    user_data.chat_id = 123
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="old_word")]
+    state_manager.update_user("authorized_user", user_data)
+
+    # Mock RuneRecallService response
+    mock_rune_recall_service.bump_words.return_value = {
+        "success": True,
+        "message": "Daily selection updated! Selected 3 new words for today.",
+    }
+
+    mock_client = MagicMock()
+
+    # Mock getUpdates response with /bump_words command
+    mock_get_response = MagicMock()
+    mock_get_response.json.return_value = {
+        "ok": True,
+        "result": [
+            {
+                "update_id": 1,
+                "message": {
+                    "message_id": 1,
+                    "from": {"username": "authorized_user"},
+                    "chat": {"id": 123},
+                    "text": "/bump_words",
+                    "entities": [{"offset": 0, "length": 11, "type": "bot_command"}],
+                },
+            }
+        ],
+    }
+    mock_get_response.raise_for_status.return_value = None
+    mock_client.get.return_value = mock_get_response
+
+    # Mock sendMessage response
+    mock_post_response = MagicMock()
+    mock_post_response.raise_for_status.return_value = None
+    mock_client.post.return_value = mock_post_response
+
+    mock_client_class.return_value.__enter__.return_value = mock_client
+
+    telegram_service_with_deps.process_updates()
+
+    # Verify the command was processed
+    mock_client.post.assert_called_once()
+    mock_rune_recall_service.bump_words.assert_called_once_with("authorized_user", user_data)
+    call_args = mock_client.post.call_args[1]["json"]
+    assert "Daily selection updated! Selected 3 new words for today." in call_args["text"]
+
+
+@patch("src.runestone.services.telegram_command_service.httpx.Client")
+def test_process_updates_bump_words_command_no_words_available(
+    mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
+):
+    """Test processing /bump_words command when no words are available"""
+    # Setup user state
+    user_data = state_manager.get_user("authorized_user")
+    user_data.is_active = True
+    user_data.chat_id = 123
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="old_word")]
+    state_manager.update_user("authorized_user", user_data)
+
+    # Mock RuneRecallService response (no words available)
+    mock_rune_recall_service.bump_words.return_value = {
+        "success": True,
+        "message": "Daily selection cleared. No new words available at this time.",
+    }
+
+    mock_client = MagicMock()
+
+    # Mock getUpdates response with /bump_words command
+    mock_get_response = MagicMock()
+    mock_get_response.json.return_value = {
+        "ok": True,
+        "result": [
+            {
+                "update_id": 1,
+                "message": {
+                    "message_id": 1,
+                    "from": {"username": "authorized_user"},
+                    "chat": {"id": 123},
+                    "text": "/bump_words",
+                    "entities": [{"offset": 0, "length": 11, "type": "bot_command"}],
+                },
+            }
+        ],
+    }
+    mock_get_response.raise_for_status.return_value = None
+    mock_client.get.return_value = mock_get_response
+
+    # Mock sendMessage response
+    mock_post_response = MagicMock()
+    mock_post_response.raise_for_status.return_value = None
+    mock_client.post.return_value = mock_post_response
+
+    mock_client_class.return_value.__enter__.return_value = mock_client
+
+    telegram_service_with_deps.process_updates()
+
+    # Verify the command was processed
+    mock_client.post.assert_called_once()
+    mock_rune_recall_service.bump_words.assert_called_once_with("authorized_user", user_data)
+    call_args = mock_client.post.call_args[1]["json"]
+    assert "Daily selection cleared. No new words available at this time." in call_args["text"]
