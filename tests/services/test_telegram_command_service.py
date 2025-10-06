@@ -821,11 +821,9 @@ def test_process_updates_state_command_active_with_words(mock_client_class, tele
     # Verify the command was processed
     mock_client.post.assert_called_once()
     call_args = mock_client.post.call_args[1]["json"]
-    expected_text = (
-        "**Current State**\n\n" "**Is Active:** ✅ Yes\n\n" "**Daily Selection:**\n" "- kontanter\n" "- biljett"
-    )
+    expected_text = "Current State\n\n" "Is Active: ✅ Yes\n\n" "Daily Selection:\n" "- kontanter\n" "- biljett"
     assert call_args["text"] == expected_text
-    assert call_args["parse_mode"] == "MarkdownV2"
+    assert "parse_mode" not in call_args
 
 
 @patch("src.runestone.services.telegram_command_service.httpx.Client")
@@ -872,11 +870,9 @@ def test_process_updates_state_command_inactive_no_words(mock_client_class, tele
     # Verify the command was processed
     mock_client.post.assert_called_once()
     call_args = mock_client.post.call_args[1]["json"]
-    expected_text = (
-        "**Current State**\n\n" "**Is Active:** ❌ No\n\n" "**Daily Selection:**\n" "No words selected for today."
-    )
+    expected_text = "Current State\n\n" "Is Active: ❌ No\n\n" "Daily Selection:\n" "No words selected for today."
     assert call_args["text"] == expected_text
-    assert call_args["parse_mode"] == "MarkdownV2"
+    assert "parse_mode" not in call_args
 
 
 @patch("src.runestone.services.telegram_command_service.httpx.Client")
@@ -927,12 +923,12 @@ def test_process_updates_state_command_with_special_chars(mock_client_class, tel
     mock_client.post.assert_called_once()
     call_args = mock_client.post.call_args[1]["json"]
     expected_text = (
-        "**Current State**\n\n"
-        "**Is Active:** ✅ Yes\n\n"
-        "**Daily Selection:**\n"
-        r"- word\-with\*dots\.and\!special"
+        "Current State\n\n"
+        "Is Active: ✅ Yes\n\n"
+        "Daily Selection:\n"
+        "- word-with*dots.and!special"
         "\n"
-        r"- normal\_word"
+        "- normal_word"
     )
     assert call_args["text"] == expected_text
-    assert call_args["parse_mode"] == "MarkdownV2"
+    assert "parse_mode" not in call_args
