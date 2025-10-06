@@ -1,7 +1,3 @@
-Of course! Here is a cheatsheet based on the rules in your photo, with extra examples for the special verbs as requested.
-
----
-
 ### 🇸🇪 Swedish Verbs: Preteritum (Past Tense) Cheatsheet 🇸🇪
 
 This is a quick guide to forming the simple past tense (_preteritum_) in Swedish. Groups 1-3 are regular, while Group 4 verbs are special and must be learned by heart!
@@ -76,6 +72,21 @@ This group is split into two based on the final consonant sound.
     *   `sova` (sleep) → `sov` (slept)
     *   `kommer` (come) → `kom` (came)
     *   `bli` (become) → `blev` (became)
+    *   `heter` (name) → `hette` (named)
+    *   `vet` (know) → `visste` (knew)
+    *   `ligger` (locate)  `låg` (located)
+    *   `sjunger` (sing) → `sjöng` (sang)
+    *   `springer` (run) → `sprang` (ran)
+    *   `förstår` (understand) → `förstod` (understood)
+    *   `skriver` (write) → `skrev` (wrote)
+    *   `ger` (give) → `gav` (gave)
+    *   `gör` (do) → `gjorde` (did)
+    *   `finns` (exist) → `fanns` (existed)
+
+
+
+
+
    
 
 Here is a list of some of the most essential Group 4 verbs:
