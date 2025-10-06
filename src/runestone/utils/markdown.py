@@ -7,11 +7,10 @@ import re
 
 def escape_markdown(text: str) -> str:
     """
-    Escape special Markdown characters that are not already escaped.
+    Escape special Markdown characters for Telegram's MarkdownV2 format.
 
-    This function escapes Markdown special characters for Telegram's MarkdownV2 format,
-    but only escapes characters that are not already preceded by a backslash to avoid
-    double-escaping.
+    This function escapes all special characters, even if they are already escaped.
+    This is a simple approach that ensures all special characters are escaped.
 
     Args:
         text: The text to escape
@@ -19,12 +18,7 @@ def escape_markdown(text: str) -> str:
     Returns:
         The text with special characters escaped
     """
-    escape_chars = ["*", "_", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"]
+    # Use alternation to avoid issues with [ and ] in character class
+    escape_pattern = r"(\_|\*|\[|\]|\(|\)|\~|\`|\>|\#|\+|\-|\=|\||\{|\}|\.|\!)"
 
-    for char in escape_chars:
-        # Only escape characters that are not already preceded by a backslash
-        # Use negative lookbehind (?<!\\) to check if the character is not already escaped
-        pattern = f"(?<!\\\\){re.escape(char)}"
-        text = re.sub(pattern, f"\\{char}", text)
-
-    return text
+    return re.sub(escape_pattern, r"\\\1", text)
