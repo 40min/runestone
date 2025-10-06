@@ -357,3 +357,46 @@ class RuneRecallService:
         except Exception as e:
             logger.error(f"Error postponing word '{word_phrase}' for user {username}: {e}")
             return {"success": False, "message": "An error occurred while postponing the word"}
+
+    def bump_words(self, username: str, user_data) -> Dict[str, Any]:
+        """
+        Replace current daily selection with a new portion of words.
+
+        Args:
+            username: Username of the user
+            user_data: UserData object for the user
+
+        Returns:
+            Dictionary with 'success' bool and 'message' str
+        """
+        try:
+            logger.info(f"User {username} requested to bump words")
+
+            # Clear current daily selection
+            user_data.daily_selection = []
+            user_data.next_word_index = 0
+
+            # Select new daily portion
+            portion_words = self._select_daily_portion(user_data.db_user_id)
+
+            if portion_words:
+                daily_selection_list = [
+                    WordOfDay(id_=word["id"], word_phrase=word["word_phrase"]) for word in portion_words
+                ]
+                user_data.daily_selection = daily_selection_list
+                self.state_manager.update_user(username, user_data)
+
+                logger.info(f"User {username} bumped words - selected {len(portion_words)} new words")
+                return {
+                    "success": True,
+                    "message": f"Daily selection updated! Selected {len(portion_words)} new words for today.",
+                }
+            else:
+                # No words available, still update the state
+                self.state_manager.update_user(username, user_data)
+                logger.info(f"User {username} bumped words but no words available")
+                return {"success": True, "message": "Daily selection cleared. No new words available at this time."}
+
+        except Exception as e:
+            logger.error(f"Error bumping words for user {username}: {e}")
+            return {"success": False, "message": "An error occurred while updating your word selection"}

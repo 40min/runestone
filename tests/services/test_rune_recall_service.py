@@ -14,6 +14,7 @@ from src.runestone.db.models import Vocabulary
 from src.runestone.db.repository import VocabularyRepository
 from src.runestone.services.rune_recall_service import RuneRecallService
 from src.runestone.state.state_manager import StateManager
+from src.runestone.state.state_types import WordOfDay
 from src.runestone.utils.markdown import escape_markdown
 
 
@@ -902,3 +903,76 @@ def test_escape_markdown_empty_and_normal_text():
     # Text with only spaces and alphanumeric characters
     simple_text = "abc 123 def"
     assert escape_markdown(simple_text) == simple_text
+
+
+def test_bump_words_success(rune_recall_service, state_manager):
+    """Test successful bump_words operation."""
+
+    # Setup user data with existing daily selection
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="old_word")]
+    user_data.next_word_index = 1
+    user_data.db_user_id = 1
+
+    # Mock new portion selection
+    mock_portion = [
+        {"id": 2, "word_phrase": "new_word1"},
+        {"id": 3, "word_phrase": "new_word2"},
+    ]
+
+    with patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_portion):
+        result = rune_recall_service.bump_words("active_user", user_data)
+
+    assert result["success"] is True
+    assert "Daily selection updated! Selected 2 new words for today." in result["message"]
+
+    # Verify daily selection was replaced
+    assert len(user_data.daily_selection) == 2
+    assert user_data.daily_selection[0].word_phrase == "new_word1"
+    assert user_data.daily_selection[1].word_phrase == "new_word2"
+    assert user_data.next_word_index == 0
+
+    # Verify state was updated
+    updated_user_data = state_manager.get_user("active_user")
+    assert len(updated_user_data.daily_selection) == 2
+
+
+def test_bump_words_no_words_available(rune_recall_service, state_manager):
+    """Test bump_words when no new words are available."""
+
+    # Setup user data with existing daily selection
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="old_word")]
+    user_data.db_user_id = 1
+
+    # Mock empty portion selection
+    with patch.object(rune_recall_service, "_select_daily_portion", return_value=[]):
+        result = rune_recall_service.bump_words("active_user", user_data)
+
+    assert result["success"] is True
+    assert "Daily selection cleared. No new words available at this time." in result["message"]
+
+    # Verify daily selection was cleared
+    assert len(user_data.daily_selection) == 0
+    assert user_data.next_word_index == 0
+
+    # Verify state was updated
+    updated_user_data = state_manager.get_user("active_user")
+    assert len(updated_user_data.daily_selection) == 0
+
+
+def test_bump_words_error_handling(rune_recall_service, state_manager):
+    """Test bump_words error handling."""
+    from src.runestone.state.state_types import WordOfDay
+
+    # Setup user data
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="old_word")]
+    user_data.db_user_id = 1
+
+    # Mock _select_daily_portion to raise an exception
+    with patch.object(rune_recall_service, "_select_daily_portion", side_effect=Exception("Database error")):
+        result = rune_recall_service.bump_words("active_user", user_data)
+
+    assert result["success"] is False
+    assert "An error occurred while updating your word selection" in result["message"]
