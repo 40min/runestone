@@ -46,25 +46,25 @@ class TestEscapeMarkdown:
         result = escape_markdown(input_text)
         assert result == expected
 
-    def test_no_double_escaping(self):
-        """Test that already escaped characters are not double-escaped."""
+    def test_double_escaping(self):
+        """Test that already escaped characters are double-escaped with the new implementation."""
         test_cases = [
-            (r"\*", r"\*"),  # Already escaped asterisk
-            (r"\_", r"\_"),  # Already escaped underscore
-            (r"\\[", r"\\["),  # Already escaped bracket
-            (r"\\]", r"\\]"),  # Already escaped bracket
-            (r"\(", r"\("),  # Already escaped parenthesis
-            (r"\)", r"\)"),  # Already escaped parenthesis
+            (r"\*", r"\\*"),  # Already escaped asterisk becomes double-escaped
+            (r"\_", r"\\_"),  # Already escaped underscore becomes double-escaped
+            (r"\\[", r"\\\["),  # Bracket after backslash gets escaped
+            (r"\\]", r"\\\]"),  # Bracket after backslash gets escaped
+            (r"\(", r"\\("),  # Already escaped parenthesis becomes double-escaped
+            (r"\)", r"\\)"),  # Already escaped parenthesis becomes double-escaped
         ]
 
         for input_text, expected in test_cases:
             result = escape_markdown(input_text)
-            assert result == expected, f"Double-escaped '{input_text}': got '{result}', expected '{expected}'"
+            assert result == expected, f"Failed to double-escape '{input_text}': got '{result}', expected '{expected}'"
 
     def test_mixed_escaped_and_unescaped(self):
         """Test strings with both escaped and unescaped special characters."""
         input_text = r"Already \*escaped\* but _not_ this [or] this"
-        expected = r"Already \*escaped\* but \_not\_ this \[or\] this"
+        expected = r"Already \\*escaped\\* but \_not\_ this \[or\] this"
 
         result = escape_markdown(input_text)
         assert result == expected

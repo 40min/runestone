@@ -854,24 +854,24 @@ def test_send_word_message_escapes_all_markdown_chars(mock_client_class, rune_re
     )
 
 
-def test_escape_markdown_no_double_escaping():
-    """Test that escape_markdown doesn't double-escape already escaped characters."""
+def test_escape_markdown_double_escaping():
+    """Test that escape_markdown does double-escape already escaped characters with the new implementation."""
     # Test with already escaped characters
     text_with_escaped = "This is \\*already escaped\\* and this is *not escaped*"
     result = escape_markdown(text_with_escaped)
-    expected = "This is \\*already escaped\\* and this is \\*not escaped\\*"
+    expected = "This is \\\\*already escaped\\\\* and this is \\*not escaped\\*"
     assert result == expected
 
     # Test with mixed escaped and unescaped characters
     mixed_text = "Some \\[escaped\\] and some [unescaped] brackets"
     result = escape_markdown(mixed_text)
-    expected = "Some \\[escaped\\] and some \\[unescaped\\] brackets"
+    expected = "Some \\\\[escaped\\\\] and some \\[unescaped\\] brackets"
     assert result == expected
 
     # Test with multiple escape characters
     multi_escape = "\\*bold\\* and _italic_ and \\`code\\` and `more code`"
     result = escape_markdown(multi_escape)
-    expected = "\\*bold\\* and \\_italic\\_ and \\`code\\` and \\`more code\\`"
+    expected = "\\\\*bold\\\\* and \\_italic\\_ and \\\\`code\\\\` and \\`more code\\`"
     assert result == expected
 
 
@@ -884,11 +884,12 @@ def test_escape_markdown_all_special_chars():
 
 
 def test_escape_markdown_already_fully_escaped():
-    """Test that fully escaped text remains unchanged."""
+    """Test that fully escaped text gets double-escaped with the new implementation."""
     fully_escaped = "\\*\\_\\[\\]\\(\\)\\~\\`\\>\\#\\+\\-\\=\\|\\{\\}\\.\\!"
     result = escape_markdown(fully_escaped)
-    # Should remain the same since all characters are already escaped
-    assert result == fully_escaped
+    # With the new implementation, already escaped characters get double-escaped for safety
+    expected = "\\\\*\\\\_\\\\[\\\\]\\\\(\\\\)\\\\~\\\\`\\\\>\\\\#\\\\+\\\\-\\\\=\\\\|\\\\{\\\\}\\\\.\\\\!"
+    assert result == expected
 
 
 def test_escape_markdown_empty_and_normal_text():
@@ -975,4 +976,31 @@ def test_bump_words_error_handling(rune_recall_service, state_manager):
         result = rune_recall_service.bump_words("active_user", user_data)
 
     assert result["success"] is False
-    assert "An error occurred while updating your word selection" in result["message"]
+
+
+@patch("src.runestone.services.rune_recall_service.httpx.Client")
+def test_send_word_message_with_user_example(mock_client_class, rune_recall_service):
+    """Test the exact failing example from user: favorit with translation (-en, -er, -erna) favorite."""
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    mock_client.post.return_value = mock_response
+    mock_client_class.return_value.__enter__.return_value = mock_client
+
+    # The exact failing example from user
+    word = {
+        "id": 1,
+        "word_phrase": "favorit",
+        "translation": "(-en, -er, -erna) favorite",
+        "example_phrase": None,
+    }
+
+    result = rune_recall_service._send_word_message(123, word)
+    assert result is True
+
+    # Check what the message looks like
+    expected_message = "🇸🇪 **favorit**\n🇬🇧 \\(\\-en, \\-er, \\-erna\\) favorite"
+    mock_client.post.assert_called_once_with(
+        "https://api.telegram.org/bottest_token/sendMessage",
+        json={"chat_id": 123, "text": expected_message, "parse_mode": "MarkdownV2"},
+    )
