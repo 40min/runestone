@@ -9,23 +9,24 @@ import io
 from unittest.mock import Mock, patch
 
 from runestone.core.exceptions import RunestoneError
+from runestone.dependencies import get_runestone_processor
 
 
 class TestOCREndpoints:
     """Test cases for OCR-related endpoints."""
 
-    @patch("runestone.api.endpoints.RunestoneProcessor")
-    def test_ocr_success(self, mock_processor, client_no_db):
+    def test_ocr_success(self, client_no_db):
         """Test successful OCR processing."""
         # Mock processor
         mock_processor_instance = Mock()
-        mock_processor.return_value = mock_processor_instance
-
         mock_ocr_result = {
             "text": "Hej, vad heter du?",
             "character_count": 17,
         }
         mock_processor_instance.run_ocr.return_value = mock_ocr_result
+
+        # Override the dependency
+        client_no_db.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
 
         # Create a mock image file
         image_content = b"fake image data"
@@ -41,8 +42,10 @@ class TestOCREndpoints:
         assert data["character_count"] == 17
 
         # Verify processor was called with image bytes
-        mock_processor.assert_called_once()
         mock_processor_instance.run_ocr.assert_called_once_with(image_content)
+
+        # Clean up
+        client_no_db.app.dependency_overrides.clear()
 
     def test_ocr_invalid_file_type(self, client_no_db):
         """Test OCR with invalid file type."""
@@ -67,12 +70,13 @@ class TestOCREndpoints:
         data = response.json()
         assert "File too large" in data["detail"]
 
-    @patch("runestone.api.endpoints.RunestoneProcessor")
-    def test_ocr_processing_failure(self, mock_processor, client_no_db):
+    def test_ocr_processing_failure(self, client_no_db):
         """Test handling of OCR failure."""
         mock_processor_instance = Mock()
-        mock_processor.return_value = mock_processor_instance
         mock_processor_instance.run_ocr.side_effect = RunestoneError("OCR failed")
+
+        # Override the dependency
+        client_no_db.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
 
         # Create a mock image file
         image_content = b"fake image data"
@@ -84,12 +88,16 @@ class TestOCREndpoints:
         data = response.json()
         assert "OCR failed" in data["detail"]
 
-    @patch("runestone.api.endpoints.RunestoneProcessor")
-    def test_ocr_unexpected_error(self, mock_processor, client_no_db):
+        # Clean up
+        client_no_db.app.dependency_overrides.clear()
+
+    def test_ocr_unexpected_error(self, client_no_db):
         """Test handling of unexpected OCR errors."""
         mock_processor_instance = Mock()
-        mock_processor.return_value = mock_processor_instance
         mock_processor_instance.run_ocr.side_effect = Exception("Unexpected error")
+
+        # Override the dependency
+        client_no_db.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
 
         # Create a mock image file
         image_content = b"fake image data"
@@ -101,6 +109,9 @@ class TestOCREndpoints:
         data = response.json()
         assert "Unexpected error" in data["detail"]
 
+        # Clean up
+        client_no_db.app.dependency_overrides.clear()
+
     def test_ocr_no_file(self, client_no_db):
         """Test OCR without file upload."""
         response = client_no_db.post("/api/ocr")
@@ -111,12 +122,10 @@ class TestOCREndpoints:
 class TestAnalysisEndpoints:
     """Test cases for content analysis endpoints."""
 
-    @patch("runestone.api.endpoints.RunestoneProcessor")
-    def test_analyze_success(self, mock_processor, client_no_db):
+    def test_analyze_success(self, client_no_db):
         """Test successful content analysis."""
         # Mock processor
         mock_processor_instance = Mock()
-        mock_processor.return_value = mock_processor_instance
 
         mock_analysis_result = {
             "grammar_focus": {
@@ -133,6 +142,9 @@ class TestAnalysisEndpoints:
         }
         mock_processor_instance.run_analysis.return_value = mock_analysis_result
 
+        # Override the dependency
+        client_no_db.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
+
         # Test request payload
         payload = {"text": "Hej, vad heter du?"}
 
@@ -146,15 +158,18 @@ class TestAnalysisEndpoints:
         assert len(data["vocabulary"]) == 2
 
         # Verify processor was called
-        mock_processor.assert_called_once()
         mock_processor_instance.run_analysis.assert_called_once_with("Hej, vad heter du?")
 
-    @patch("runestone.api.endpoints.RunestoneProcessor")
-    def test_analyze_empty_text(self, mock_processor, client_no_db):
+        # Clean up
+        client_no_db.app.dependency_overrides.clear()
+
+    def test_analyze_empty_text(self, client_no_db):
         """Test analysis with empty text."""
         mock_processor_instance = Mock()
-        mock_processor.return_value = mock_processor_instance
         mock_processor_instance.run_analysis.side_effect = RunestoneError("No text provided for analysis")
+
+        # Override the dependency
+        client_no_db.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
 
         payload = {"text": ""}
 
@@ -164,16 +179,16 @@ class TestAnalysisEndpoints:
         data = response.json()
         assert "No text provided for analysis" in data["detail"]
 
+        # Clean up
+        client_no_db.app.dependency_overrides.clear()
+
 
 class TestResourceEndpoints:
     """Test cases for resource search endpoints."""
 
-    @patch("runestone.api.endpoints.RunestoneProcessor")
-    def test_resources_success(self, mock_processor, client_no_db):
+    def test_resources_success(self, client_with_mock_processor):
         """Test successful resource search."""
-        # Mock processor
-        mock_processor_instance = Mock()
-        mock_processor.return_value = mock_processor_instance
+        client, mock_processor_instance = client_with_mock_processor
 
         mock_extra_info = "Additional learning resources about Swedish questions"
         mock_processor_instance.run_resource_search.return_value = mock_extra_info
@@ -189,7 +204,7 @@ class TestResourceEndpoints:
             }
         }
 
-        response = client_no_db.post("/api/resources", json=payload)
+        response = client.post("/api/resources", json=payload)
 
         assert response.status_code == 200
         data = response.json()
@@ -198,7 +213,6 @@ class TestResourceEndpoints:
         assert data["extra_info"] == mock_extra_info
 
         # Verify processor was called with minimal data
-        mock_processor.assert_called_once()
         mock_processor_instance.run_resource_search.assert_called_once_with(
             {
                 "search_needed": {

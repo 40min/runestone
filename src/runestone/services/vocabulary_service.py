@@ -12,7 +12,7 @@ from typing import List
 from ..api.schemas import Vocabulary as VocabularySchema
 from ..api.schemas import VocabularyImproveRequest, VocabularyImproveResponse, VocabularyItemCreate, VocabularyUpdate
 from ..config import Settings
-from ..core.clients.factory import create_llm_client
+from ..core.clients.base import BaseLLMClient
 from ..core.exceptions import VocabularyItemExists
 from ..core.logging_config import get_logger
 from ..core.prompts import VOCABULARY_IMPROVE_PROMPT_TEMPLATE
@@ -23,10 +23,11 @@ from ..db.repository import VocabularyRepository
 class VocabularyService:
     """Service for vocabulary-related business logic."""
 
-    def __init__(self, vocabulary_repository: VocabularyRepository, settings: Settings):
-        """Initialize service with vocabulary repository and settings."""
+    def __init__(self, vocabulary_repository: VocabularyRepository, settings: Settings, llm_client: BaseLLMClient):
+        """Initialize service with vocabulary repository, settings, and LLM client."""
         self.repo = vocabulary_repository
         self.settings = settings
+        self.llm_client = llm_client
         self.logger = get_logger(__name__)
 
     def save_vocabulary(self, items: List[VocabularyItemCreate], user_id: int = 1) -> dict:
@@ -163,9 +164,6 @@ class VocabularyService:
     def improve_item(self, request: VocabularyImproveRequest) -> VocabularyImproveResponse:
         """Improve a vocabulary item using LLM to generate translation and example phrase."""
 
-        # Create LLM client
-        llm_client = create_llm_client(self.settings)
-
         # Prepare prompt parameters
         if request.include_translation:
             content_type = "both translation and example phrase"
@@ -185,7 +183,7 @@ class VocabularyService:
         )
 
         # Get improvement from LLM
-        response_text = llm_client.improve_vocabulary_item(prompt)
+        response_text = self.llm_client.improve_vocabulary_item(prompt)
 
         # Parse JSON response with fallback for malformed responses
         try:

@@ -5,6 +5,8 @@ This module provides a single source of truth for all application settings,
 loaded from environment variables using Pydantic BaseSettings.
 """
 
+from typing import Optional
+
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 
@@ -14,10 +16,10 @@ class Settings(BaseSettings):
 
     # LLM Provider Configuration
     llm_provider: str
+    llm_model_name: Optional[str] = None
 
     # OpenAI Configuration
     openai_api_key: str
-    openai_model: str
 
     # Gemini Configuration
     gemini_api_key: str
