@@ -55,12 +55,7 @@ def get_llm_client(settings: Annotated[Settings, Depends(get_settings)]) -> Base
     Returns:
         BaseLLMClient: LLM client instance
     """
-    return create_llm_client(
-        settings=settings,
-        provider=settings.llm_provider,
-        api_key=settings.openai_api_key if settings.llm_provider == "openai" else settings.google_api_key,
-        model_name=settings.llm_model_name,
-    )
+    return create_llm_client(settings=settings)
 
 
 def get_vocabulary_service(

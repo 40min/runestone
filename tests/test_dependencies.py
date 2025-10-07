@@ -7,6 +7,8 @@ ensuring they create and return the correct instances with proper dependencies.
 
 from unittest.mock import Mock, patch
 
+import pytest
+
 from runestone.config import Settings
 from runestone.core.analyzer import ContentAnalyzer
 from runestone.core.clients.base import BaseLLMClient
@@ -25,29 +27,22 @@ from runestone.services.vocabulary_service import VocabularyService
 class TestDependencyProviders:
     """Test cases for dependency injection providers."""
 
+    @pytest.mark.parametrize(
+        "provider, key_attr, key_value",
+        [
+            ("openai", "openai_api_key", "openai-test-key"),
+            ("gemini", "gemini_api_key", "gemini-test-key"),
+        ],
+    )
     @patch("runestone.dependencies.create_llm_client")
-    def test_get_llm_client(self, mock_create_client):
-        """Test get_llm_client provider creates client correctly."""
-        # Setup
-        mock_settings = Mock(spec=Settings)
-        mock_settings.llm_provider = "openai"
-        mock_settings.openai_api_key = "test-key"
-        mock_settings.llm_model_name = "gpt-4"
+    def test_get_llm_client(self, mock_create_client, provider, key_attr, key_value):
+        """Test get_llm_client provider creates client correctly for all providers."""
+        mock_settings = Mock(spec=Settings, llm_provider=provider, llm_model_name="test-model")
+        setattr(mock_settings, key_attr, key_value)
 
-        mock_client = Mock(spec=BaseLLMClient)
-        mock_create_client.return_value = mock_client
+        get_llm_client(mock_settings)
 
-        # Execute
-        result = get_llm_client(mock_settings)
-
-        # Assert
-        assert result == mock_client
-        mock_create_client.assert_called_once_with(
-            settings=mock_settings,
-            provider="openai",
-            api_key="test-key",
-            model_name="gpt-4",
-        )
+        mock_create_client.assert_called_once_with(settings=mock_settings)
 
     @patch("runestone.dependencies.ContentAnalyzer")
     def test_get_content_analyzer(self, mock_content_analyzer_class):
