@@ -113,11 +113,11 @@ class RuneRecallService:
                 self._remove_word_by_id_from_selection(user_data, word_id)
                 self.state_manager.update_user(username, user_data)
                 # Continue loop to try next word
-        
+
         logger.info(f"All words in daily selection were invalid for user {username}, getting new selection")
         self.bump_words(username, user_data)
 
-        if max_attempts > 0:            
+        if max_attempts > 0:
             # Retry with new selection, but limit attempts to prevent infinite recursion
             logger.info(f"Retrying with new selection for user {username} (attempts left: {max_attempts})")
             self._process_user_recall_word(username, user_data, max_attempts=max_attempts - 1)
@@ -247,26 +247,20 @@ class RuneRecallService:
         Returns:
             List of word dictionaries for the daily portion
         """
-        # Repository method now handles cooldown filtering based on last_learned
-        available_word_ids = self.vocabulary_repository.select_new_daily_word_ids(db_user_id, self.cooldown_days)
+        # Repository method now handles cooldown filtering based on last_learned and returns full word objects
+        words = self.vocabulary_repository.select_new_daily_words(
+            db_user_id, self.cooldown_days, limit=self.words_per_day
+        )
 
-        # Limit to words_per_day
-        selected_ids = available_word_ids[: self.words_per_day]
-
-        # Fetch full word details using repository method
-        if selected_ids:
-            words = self.vocabulary_repository.get_vocabulary_items_by_ids(selected_ids, db_user_id)
-            return [
-                {
-                    "id": word.id,
-                    "word_phrase": word.word_phrase,
-                    "translation": word.translation,
-                    "example_phrase": word.example_phrase,
-                }
-                for word in words
-            ]
-
-        return []
+        return [
+            {
+                "id": word.id,
+                "word_phrase": word.word_phrase,
+                "translation": word.translation,
+                "example_phrase": word.example_phrase,
+            }
+            for word in words
+        ]
 
     def _send_word_message(self, chat_id: int, word: Dict) -> bool:
         """

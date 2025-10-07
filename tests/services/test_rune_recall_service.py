@@ -212,9 +212,10 @@ def test_select_daily_portion(rune_recall_service):
     words = rune_recall_service._select_daily_portion(1)
 
     assert len(words) == 3  # Should select all 3 words for user 1
-    assert words[0]["word_phrase"] == "hello"  # Order by ID since timestamps are identical
-    assert words[1]["word_phrase"] == "goodbye"
-    assert words[2]["word_phrase"] == "thank you"
+    selected_words = [w["word_phrase"] for w in words]
+    assert "hello" in selected_words
+    assert "goodbye" in selected_words
+    assert "thank you" in selected_words
 
 
 def test_select_daily_portion_with_recent_history(rune_recall_service, test_db):
