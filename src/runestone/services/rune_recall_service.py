@@ -74,13 +74,14 @@ class RuneRecallService:
 
         logger.info("Completed recall word sending process")
 
-    def _process_user_recall_word(self, username: str, user_data: UserData) -> None:
+    def _process_user_recall_word(self, username: str, user_data: UserData, max_attempts: int = 3) -> None:
         """
         Process and send the next word from the daily portion for a specific user.
 
         Args:
             username: Username for logging purposes
             user_data: UserData object for the user
+            max_attempts: Maximum number of attempts to retry with new selection (default: 3)
         """
         if not user_data.chat_id:
             logger.warning(f"Missing chat_id for user {username}, skipping recall")
@@ -91,30 +92,37 @@ class RuneRecallService:
             return
 
         # Try to send a word, handling missing words by removing them from selection
-        max_attempts = len(user_data.daily_selection)
-        for _ in range(max_attempts):
+        max_word_attempts = len(user_data.daily_selection)
+        for _ in range(max_word_attempts):
             word_id = self._get_next_word_id_to_send(user_data)
             if word_id is None:
                 logger.warning(f"No more words to send for user {username}")
                 return
 
             word = self._fetch_valid_word(word_id, user_data.db_user_id)
-            
+
             if word:
                 # Successfully fetched word, send it
                 self._send_and_update_word(username, user_data, word)
                 return
             else:
                 # Word not found or not in learning - remove from daily selection
-                logger.warning(f"Word {word_id} not found or not in learning for user {username}, removing from selection")
+                logger.warning(
+                    f"Word {word_id} not found or not in learning for user {username}, removing from selection"
+                )
                 self._remove_word_by_id_from_selection(user_data, word_id)
                 self.state_manager.update_user(username, user_data)
                 # Continue loop to try next word
+        
+        logger.info(f"All words in daily selection were invalid for user {username}, getting new selection")
+        self.bump_words(username, user_data)
 
-        # If we exhausted all attempts, replenish selection
-        logger.info(f"All words in daily selection were invalid for user {username}, replenishing")
-        self.replenish_daily_selection_if_empty(username, user_data)
-        self.state_manager.update_user(username, user_data)
+        if max_attempts > 0:            
+            # Retry with new selection, but limit attempts to prevent infinite recursion
+            logger.info(f"Retrying with new selection for user {username} (attempts left: {max_attempts})")
+            self._process_user_recall_word(username, user_data, max_attempts=max_attempts - 1)
+        else:
+            logger.warning(f"Max retry attempts reached for user {username}, giving up")
 
     def _ensure_daily_selection(self, username: str, user_data: UserData) -> bool:
         """
