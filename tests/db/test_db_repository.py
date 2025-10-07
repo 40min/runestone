@@ -410,8 +410,8 @@ class TestVocabularyRepository:
         with pytest.raises(ValueError, match="Vocabulary item with id 1 not found for user 2"):
             repo.get_vocabulary_item(vocab.id, user_id=2)
 
-    def test_select_new_daily_word_ids(self, repo, db_session):
-        """Test selecting new daily word IDs with cooldown logic (random order)."""
+    def test_select_new_daily_words(self, repo, db_session):
+        """Test selecting new daily words with cooldown logic (random order)."""
 
         # Add test vocabulary items
         vocab1 = VocabularyModel(
@@ -454,8 +454,9 @@ class TestVocabularyRepository:
         db_session.commit()
 
         # Test for user 1 with default cooldown (7 days)
-        result = repo.select_new_daily_word_ids(user_id=1)
-        result_set = set(result)
+        result = repo.select_new_daily_words(user_id=1)
+        result_ids = [word.id for word in result]
+        result_set = set(result_ids)
         expected_set = {vocab1.id, vocab2.id}
 
         assert len(result) == 2  # vocab1 and vocab2
@@ -464,8 +465,8 @@ class TestVocabularyRepository:
         assert vocab4.id not in result_set  # Not in learning
         assert vocab5.id not in result_set  # Wrong user
 
-    def test_select_new_daily_word_ids_custom_cooldown(self, repo, db_session):
-        """Test selecting new daily word IDs with custom cooldown period (random order)."""
+    def test_select_new_daily_words_custom_cooldown(self, repo, db_session):
+        """Test selecting new daily words with custom cooldown period (random order)."""
         from datetime import datetime, timedelta
 
         # Add test vocabulary items
@@ -488,12 +489,13 @@ class TestVocabularyRepository:
         db_session.commit()
 
         # Test with 5-day cooldown - both should be excluded
-        result = repo.select_new_daily_word_ids(user_id=1, cooldown_days=5)
+        result = repo.select_new_daily_words(user_id=1, cooldown_days=5)
         assert len(result) == 0
 
         # Test with 1-day cooldown - both should be included
-        result = repo.select_new_daily_word_ids(user_id=1, cooldown_days=1)
-        result_set = set(result)
+        result = repo.select_new_daily_words(user_id=1, cooldown_days=1)
+        result_ids = [word.id for word in result]
+        result_set = set(result_ids)
         expected_set = {vocab1.id, vocab2.id}
 
         assert len(result) == 2

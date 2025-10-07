@@ -141,20 +141,21 @@ class VocabularyRepository:
         self.db.refresh(vocab)
         return vocab
 
-    def select_new_daily_word_ids(self, user_id: int, cooldown_days: int = 7) -> List[int]:
-        """Select new daily word IDs for a user randomly, excluding recently learned words."""
+    def select_new_daily_words(self, user_id: int, cooldown_days: int = 7, limit: int = 100) -> List[Vocabulary]:
+        """Select new daily words for a user randomly, excluding recently learned words."""
         cutoff_date = datetime.now() - timedelta(days=cooldown_days)
         result = (
-            self.db.query(Vocabulary.id)
+            self.db.query(Vocabulary)
             .filter(
                 Vocabulary.user_id == user_id,
                 Vocabulary.in_learn.is_(True),
                 or_(Vocabulary.last_learned.is_(None), Vocabulary.last_learned < cutoff_date),
             )
             .order_by(func.random())
+            .limit(limit)
             .all()
         )
-        return [row[0] for row in result]
+        return result
 
     def get_vocabulary_item_for_recall(self, item_id: int, user_id: int) -> Vocabulary:
         """Get a vocabulary item by ID and user_id, ensuring it's in learning."""
