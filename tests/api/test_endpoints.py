@@ -186,16 +186,12 @@ class TestAnalysisEndpoints:
 class TestResourceEndpoints:
     """Test cases for resource search endpoints."""
 
-    def test_resources_success(self, client_no_db):
+    def test_resources_success(self, client_with_mock_processor):
         """Test successful resource search."""
-        # Mock processor
-        mock_processor_instance = Mock()
+        client, mock_processor_instance = client_with_mock_processor
 
         mock_extra_info = "Additional learning resources about Swedish questions"
         mock_processor_instance.run_resource_search.return_value = mock_extra_info
-
-        # Override the dependency
-        client_no_db.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
 
         # Test request payload with minimal required data
         payload = {
@@ -208,7 +204,7 @@ class TestResourceEndpoints:
             }
         }
 
-        response = client_no_db.post("/api/resources", json=payload)
+        response = client.post("/api/resources", json=payload)
 
         assert response.status_code == 200
         data = response.json()
@@ -226,9 +222,6 @@ class TestResourceEndpoints:
                 "core_topics": ["questions", "greetings"],
             }
         )
-
-        # Clean up
-        client_no_db.app.dependency_overrides.clear()
 
 
 class TestVocabularyEndpoints:
