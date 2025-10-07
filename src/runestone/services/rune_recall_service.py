@@ -79,52 +79,115 @@ class RuneRecallService:
         Process and send the next word from the daily portion for a specific user.
 
         Args:
+            username: Username for logging purposes
             user_data: UserData object for the user
         """
-        db_user_id = user_data.db_user_id
-        chat_id = user_data.chat_id
-
-        if not chat_id:
+        if not user_data.chat_id:
             logger.warning(f"Missing chat_id for user {username}, skipping recall")
             return
 
-        daily_selection = user_data.daily_selection
-        next_word_index = user_data.next_word_index
+        # Ensure we have a daily selection
+        if not self._ensure_daily_selection(username, user_data):
+            return
 
-        # Check if we need to select a new daily portion
-        if not daily_selection:
-            logger.info(f"Selecting new daily portion for user {username}")
-            portion_words = self._select_daily_portion(db_user_id)
-            if not portion_words:
-                logger.info(f"No words available for daily portion for user {username}")
+        # Try to send a word, handling missing words by removing them from selection
+        max_attempts = len(user_data.daily_selection)
+        for _ in range(max_attempts):
+            word_id = self._get_next_word_id_to_send(user_data)
+            if word_id is None:
+                logger.warning(f"No more words to send for user {username}")
                 return
 
-            daily_selection_list = [
-                WordOfDay(id_=word["id"], word_phrase=word["word_phrase"]) for word in portion_words
-            ]
-            next_word_index = 0
-            user_data.daily_selection = daily_selection_list
-            user_data.next_word_index = next_word_index
-            self.state_manager.update_user(username, user_data)
+            word = self._fetch_valid_word(word_id, user_data.db_user_id)
+            
+            if word:
+                # Successfully fetched word, send it
+                self._send_and_update_word(username, user_data, word)
+                return
+            else:
+                # Word not found or not in learning - remove from daily selection
+                logger.warning(f"Word {word_id} not found or not in learning for user {username}, removing from selection")
+                self._remove_word_by_id_from_selection(user_data, word_id)
+                self.state_manager.update_user(username, user_data)
+                # Continue loop to try next word
 
-        # Get the selected items for today
-        selected_items = user_data.daily_selection
-        selected_ids = [item.id_ for item in selected_items]
-        if not selected_ids:
-            logger.warning(f"No selected words available for user {username}, clearing daily selection")
-            user_data.daily_selection = []
-            self.state_manager.update_user(username, user_data)
-            return
-        if next_word_index >= len(selected_ids):
-            next_word_index = 0
+        # If we exhausted all attempts, replenish selection
+        logger.info(f"All words in daily selection were invalid for user {username}, replenishing")
+        self.replenish_daily_selection_if_empty(username, user_data)
+        self.state_manager.update_user(username, user_data)
 
-        # Fetch the next word from database
-        word_id = selected_ids[next_word_index]
-        word = self.vocabulary_repository.get_vocabulary_item_for_recall(word_id, db_user_id)
-        if not word:
-            logger.error(f"Word {word_id} not found in database or not in learning")
-            return
+    def _ensure_daily_selection(self, username: str, user_data: UserData) -> bool:
+        """
+        Ensure user has a daily selection, creating one if needed.
 
+        Args:
+            username: Username for logging purposes
+            user_data: UserData object for the user
+
+        Returns:
+            True if daily selection exists or was successfully created, False otherwise
+        """
+        if user_data.daily_selection:
+            return True
+
+        logger.info(f"Selecting new daily portion for user {username}")
+        portion_words = self._select_daily_portion(user_data.db_user_id)
+        if not portion_words:
+            logger.info(f"No words available for daily portion for user {username}")
+            return False
+
+        user_data.daily_selection = [
+            WordOfDay(id_=word["id"], word_phrase=word["word_phrase"]) for word in portion_words
+        ]
+        user_data.next_word_index = 0
+        self.state_manager.update_user(username, user_data)
+        return True
+
+    def _get_next_word_id_to_send(self, user_data: UserData) -> int | None:
+        """
+        Get the ID of the next word to send based on next_word_index.
+
+        Args:
+            user_data: UserData object for the user
+
+        Returns:
+            Word ID to send, or None if no words available
+        """
+        if not user_data.daily_selection:
+            return None
+
+        # Reset index if it exceeds the selection length
+        if user_data.next_word_index >= len(user_data.daily_selection):
+            user_data.next_word_index = 0
+
+        return user_data.daily_selection[user_data.next_word_index].id_
+
+    def _fetch_valid_word(self, word_id: int, db_user_id: int):
+        """
+        Fetch a word from the database if it exists and is valid for recall.
+
+        Args:
+            word_id: ID of the word to fetch
+            db_user_id: Database user ID
+
+        Returns:
+            Word object if found and valid, None otherwise
+        """
+        try:
+            return self.vocabulary_repository.get_vocabulary_item_for_recall(word_id, db_user_id)
+        except ValueError:
+            # Word not found or not in learning
+            return None
+
+    def _send_and_update_word(self, username: str, user_data: UserData, word) -> None:
+        """
+        Send a word message and update state on success.
+
+        Args:
+            username: Username for logging purposes
+            user_data: UserData object for the user
+            word: Word object to send
+        """
         word_to_send = {
             "id": word.id,
             "word_phrase": word.word_phrase,
@@ -132,15 +195,39 @@ class RuneRecallService:
             "example_phrase": word.example_phrase,
         }
 
-        if self._send_word_message(chat_id, word_to_send):
+        # chat_id is guaranteed to be non-None due to check in _process_user_recall_word
+        assert user_data.chat_id is not None
+        if self._send_word_message(user_data.chat_id, word_to_send):
             # Update last_learned timestamp
             self.vocabulary_repository.update_last_learned(word)
             # Update the next word index
-            user_data.next_word_index = next_word_index + 1
+            user_data.next_word_index += 1
             self.state_manager.update_user(username, user_data)
-            logger.info(f"Sent recall word {next_word_index + 1}/{len(selected_ids)} to user {username}")
+            logger.info(
+                f"Sent recall word {user_data.next_word_index}/{len(user_data.daily_selection)} to user {username}"
+            )
         else:
             logger.error(f"Failed to send recall word to user {username}")
+
+    def _remove_word_by_id_from_selection(self, user_data: UserData, word_id: int) -> bool:
+        """
+        Remove a word from daily_selection by its ID.
+
+        Args:
+            user_data: UserData object for the user
+            word_id: ID of the word to remove
+
+        Returns:
+            True if word was found and removed, False otherwise
+        """
+        original_length = len(user_data.daily_selection)
+        user_data.daily_selection = [word for word in user_data.daily_selection if word.id_ != word_id]
+
+        # Adjust next_word_index if needed
+        if user_data.next_word_index >= len(user_data.daily_selection):
+            user_data.next_word_index = 0
+
+        return len(user_data.daily_selection) < original_length
 
     def _select_daily_portion(self, db_user_id: int) -> List[Dict]:
         """

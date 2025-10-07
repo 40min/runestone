@@ -979,6 +979,146 @@ def test_bump_words_error_handling(rune_recall_service, state_manager):
 
 
 @patch("src.runestone.services.rune_recall_service.httpx.Client")
+def test_process_user_recall_word_removes_missing_word_and_retries(mock_client_class, rune_recall_service, state_manager, test_db):
+    """Test that missing words are removed from daily_selection and the next word is tried."""    
+
+    # Mock HTTP client for successful message sending
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    mock_client.post.return_value = mock_response
+    mock_client_class.return_value.__enter__.return_value = mock_client
+
+    # Setup user with daily selection containing 3 words
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [
+        WordOfDay(id_=999, word_phrase="missing_word"),  # This word doesn't exist
+        WordOfDay(id_=1, word_phrase="hello"),  # This exists in test_db
+        WordOfDay(id_=2, word_phrase="goodbye"),
+    ]
+    user_data.next_word_index = 0
+    user_data.chat_id = 123
+
+    rune_recall_service._process_user_recall_word("active_user", user_data)
+
+    # Verify the missing word was removed from daily_selection
+    updated_user = state_manager.get_user("active_user")
+    assert len(updated_user.daily_selection) == 2
+    word_phrases = [w.word_phrase for w in updated_user.daily_selection]
+    assert "missing_word" not in word_phrases
+    assert "hello" in word_phrases
+    assert "goodbye" in word_phrases
+
+
+def test_process_user_recall_word_all_words_invalid_replenishes(rune_recall_service, state_manager):
+    """Test that when all words are invalid, selection is replenished."""    
+
+    # Setup user with all invalid words
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [
+        WordOfDay(id_=999, word_phrase="missing1"),
+        WordOfDay(id_=998, word_phrase="missing2"),
+    ]
+    user_data.next_word_index = 0
+    user_data.chat_id = 123
+
+    # Mock replenishment to return new words
+    mock_new_words = [{"id": 1, "word_phrase": "new_word"}]
+
+    with patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_new_words):
+        rune_recall_service._process_user_recall_word("active_user", user_data)
+
+    # Verify selection was replenished
+    updated_user = state_manager.get_user("active_user")
+    assert len(updated_user.daily_selection) == 1
+    assert updated_user.daily_selection[0].word_phrase == "new_word"
+
+
+def test_ensure_daily_selection_creates_new_selection(rune_recall_service, state_manager):
+    """Test _ensure_daily_selection creates a new selection when needed."""
+
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = []
+
+    mock_words = [{"id": 1, "word_phrase": "test"}]
+    with patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_words):
+        result = rune_recall_service._ensure_daily_selection("active_user", user_data)
+
+    assert result is True
+    assert len(user_data.daily_selection) == 1
+    assert user_data.next_word_index == 0
+
+
+def test_ensure_daily_selection_returns_false_when_no_words(rune_recall_service, state_manager):
+    """Test _ensure_daily_selection returns False when no words available."""
+    from unittest.mock import patch
+
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = []
+
+    with patch.object(rune_recall_service, "_select_daily_portion", return_value=[]):
+        result = rune_recall_service._ensure_daily_selection("active_user", user_data)
+
+    assert result is False
+
+
+def test_get_next_word_id_to_send_returns_correct_id(rune_recall_service, state_manager):
+    """Test _get_next_word_id_to_send returns the correct word ID."""
+
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="first"), WordOfDay(id_=2, word_phrase="second")]
+    user_data.next_word_index = 1
+
+    word_id = rune_recall_service._get_next_word_id_to_send(user_data)
+    assert word_id == 2
+
+
+def test_get_next_word_id_to_send_resets_index(rune_recall_service, state_manager):
+    """Test _get_next_word_id_to_send resets index when out of bounds."""
+
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="first")]
+    user_data.next_word_index = 5  # Out of bounds
+
+    word_id = rune_recall_service._get_next_word_id_to_send(user_data)
+    assert word_id == 1
+    assert user_data.next_word_index == 0
+
+
+def test_remove_word_by_id_from_selection(rune_recall_service, state_manager):
+    """Test _remove_word_by_id_from_selection removes correct word."""
+
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [
+        WordOfDay(id_=1, word_phrase="first"),
+        WordOfDay(id_=2, word_phrase="second"),
+        WordOfDay(id_=3, word_phrase="third"),
+    ]
+    user_data.next_word_index = 1
+
+    result = rune_recall_service._remove_word_by_id_from_selection(user_data, 2)
+    
+    assert result is True
+    assert len(user_data.daily_selection) == 2
+    remaining_ids = [w.id_ for w in user_data.daily_selection]
+    assert 2 not in remaining_ids
+    assert 1 in remaining_ids
+    assert 3 in remaining_ids
+
+
+def test_remove_word_by_id_adjusts_index(rune_recall_service, state_manager):
+    """Test _remove_word_by_id_from_selection adjusts index when needed."""
+
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="first")]
+    user_data.next_word_index = 1  # Out of bounds after removal
+
+    rune_recall_service._remove_word_by_id_from_selection(user_data, 1)
+    
+    assert user_data.next_word_index == 0
+
+
+@patch("src.runestone.services.rune_recall_service.httpx.Client")
 def test_send_word_message_with_user_example(mock_client_class, rune_recall_service):
     """Test the exact failing example from user: favorit with translation (-en, -er, -erna) favorite."""
     mock_client = MagicMock()
