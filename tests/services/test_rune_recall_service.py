@@ -979,8 +979,10 @@ def test_bump_words_error_handling(rune_recall_service, state_manager):
 
 
 @patch("src.runestone.services.rune_recall_service.httpx.Client")
-def test_process_user_recall_word_removes_missing_word_and_retries(mock_client_class, rune_recall_service, state_manager, test_db):
-    """Test that missing words are removed from daily_selection and the next word is tried."""    
+def test_process_user_recall_word_removes_missing_word_and_retries(
+    mock_client_class, rune_recall_service, state_manager, test_db
+):
+    """Test that missing words are removed from daily_selection and the next word is tried."""
 
     # Mock HTTP client for successful message sending
     mock_client = MagicMock()
@@ -1010,8 +1012,18 @@ def test_process_user_recall_word_removes_missing_word_and_retries(mock_client_c
     assert "goodbye" in word_phrases
 
 
-def test_process_user_recall_word_all_words_invalid_replenishes(rune_recall_service, state_manager):
-    """Test that when all words are invalid, selection is replenished."""    
+@patch("src.runestone.services.rune_recall_service.httpx.Client")
+def test_process_user_recall_word_all_words_invalid_bumps_and_retries(
+    mock_client_class, rune_recall_service, state_manager, test_db
+):
+    """Test that when all words are invalid, bump_words is called and method retries with new selection."""
+
+    # Mock HTTP client for successful message sending
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    mock_client.post.return_value = mock_response
+    mock_client_class.return_value.__enter__.return_value = mock_client
 
     # Setup user with all invalid words
     user_data = state_manager.get_user("active_user")
@@ -1021,17 +1033,21 @@ def test_process_user_recall_word_all_words_invalid_replenishes(rune_recall_serv
     ]
     user_data.next_word_index = 0
     user_data.chat_id = 123
+    user_data.db_user_id = 1
 
-    # Mock replenishment to return new words
-    mock_new_words = [{"id": 1, "word_phrase": "new_word"}]
+    # Mock new words selection - return a valid word from test_db
+    mock_new_words = [{"id": 1, "word_phrase": "hello"}]
 
     with patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_new_words):
         rune_recall_service._process_user_recall_word("active_user", user_data)
 
-    # Verify selection was replenished
+    # Verify bump_words was called by checking selection was replaced
     updated_user = state_manager.get_user("active_user")
     assert len(updated_user.daily_selection) == 1
-    assert updated_user.daily_selection[0].word_phrase == "new_word"
+    assert updated_user.daily_selection[0].word_phrase == "hello"
+
+    # Verify the new word was sent (retry happened)
+    mock_client.post.assert_called_once()
 
 
 def test_ensure_daily_selection_creates_new_selection(rune_recall_service, state_manager):
@@ -1097,7 +1113,7 @@ def test_remove_word_by_id_from_selection(rune_recall_service, state_manager):
     user_data.next_word_index = 1
 
     result = rune_recall_service._remove_word_by_id_from_selection(user_data, 2)
-    
+
     assert result is True
     assert len(user_data.daily_selection) == 2
     remaining_ids = [w.id_ for w in user_data.daily_selection]
@@ -1114,7 +1130,7 @@ def test_remove_word_by_id_adjusts_index(rune_recall_service, state_manager):
     user_data.next_word_index = 1  # Out of bounds after removal
 
     rune_recall_service._remove_word_by_id_from_selection(user_data, 1)
-    
+
     assert user_data.next_word_index == 0
 
 
