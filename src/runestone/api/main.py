@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from runestone.api.endpoints import router as api_router
 from runestone.config import settings
 from runestone.core.logging_config import setup_logging
-from runestone.db.database import Base, engine
+from runestone.db.database import run_migrations
 
 
 @asynccontextmanager
@@ -22,8 +22,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan context manager."""
     # Startup
     setup_logging()
-    # Create database tables
-    Base.metadata.create_all(bind=engine)
+    # Run database migrations
+    run_migrations()
     yield
     # Shutdown
 

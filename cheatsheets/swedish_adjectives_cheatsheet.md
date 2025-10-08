@@ -95,4 +95,3 @@ These don't follow any pattern and just need to be memorized. Luckily, there are
 | :--- | :--- | :--- | :--- |
 | **small** | `liten` | `litet` | `**små**` |
 | **old** | `gammal` | `gammalt` | `**gamla**` |
-

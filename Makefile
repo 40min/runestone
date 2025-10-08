@@ -7,6 +7,7 @@
 .PHONY: test test-coverage backend-test frontend-test
 .PHONY: run run-backend run-frontend run-dev run-recall load-vocab
 .PHONY: dev-test dev-full ci-lint ci-test
+.PHONY: db-init db-migrate db-upgrade db-downgrade db-current db-history
 .PHONY: init-state docker-up docker-down docker-build restart-recall rebuild-restart-recall rebuild-restart-all
 
 # =============================================================================
@@ -53,6 +54,14 @@ help:
 	@echo "CI/CD:"
 	@echo "  ci-lint          - CI linting pipeline"
 	@echo "  ci-test          - CI testing pipeline"
+	@echo ""
+	@echo "Database Migrations:"
+	@echo "  db-init          - Initialize database with current schema (for new databases)"
+	@echo "  db-migrate       - Create a new migration (requires MESSAGE='your migration message')"
+	@echo "  db-upgrade       - Apply migrations to database"
+	@echo "  db-downgrade     - Downgrade migrations (requires REVISION=revision_id or REVISION=-1)"
+	@echo "  db-current       - Show current migration revision"
+	@echo "  db-history       - Show migration history"
 	@echo ""
 	@echo "Docker:"
 	@echo "  init-state       - Initialize state directory and database with proper permissions"
@@ -252,6 +261,52 @@ ci-lint: install-dev lint-check
 # CI testing pipeline
 ci-test: install-dev test-coverage
 	@echo "✅ CI testing pipeline complete!"
+# =============================================================================
+# DATABASE MIGRATIONS
+# =============================================================================
+
+# Initialize database with current schema (for new databases)
+db-init:
+	@echo "🗄️  Initializing database with current schema..."
+	@uv run alembic stamp head
+	@echo "✅ Database initialized!"
+
+# Create a new migration
+db-migrate:
+	@if [ -z "$(MESSAGE)" ]; then \
+		echo "❌ Error: MESSAGE is required. Usage: make db-migrate MESSAGE='your migration message'"; \
+		exit 1; \
+	fi
+	@echo "🔄 Creating new migration: $(MESSAGE)"
+	@uv run alembic revision --autogenerate -m "$(MESSAGE)"
+	@echo "✅ Migration created!"
+
+# Apply migrations to the database
+db-upgrade:
+	@echo "⬆️  Upgrading database to latest migration..."
+	@uv run alembic upgrade head
+	@echo "✅ Database upgraded!"
+
+# Downgrade migrations (specify revision or use -1 for one step back)
+db-downgrade:
+	@if [ -z "$(REVISION)" ]; then \
+		echo "❌ Error: REVISION is required. Usage: make db-downgrade REVISION=revision_id or REVISION=-1"; \
+		exit 1; \
+	fi
+	@echo "⬇️  Downgrading database to revision: $(REVISION)"
+	@uv run alembic downgrade $(REVISION)
+	@echo "✅ Database downgraded!"
+
+# Show current migration revision
+db-current:
+	@echo "📍 Current migration revision:"
+	@uv run alembic current
+
+# Show migration history
+db-history:
+	@echo "📚 Migration history:"
+	@uv run alembic history
+
 
 # =============================================================================
 # UTILITIES

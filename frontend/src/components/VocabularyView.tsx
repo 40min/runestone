@@ -88,7 +88,7 @@ const VocabularyView: React.FC = () => {
           <Typography sx={{ color: "#9ca3af" }}>Loading...</Typography>
         </Box>
       )}
-      
+
       {recentVocabulary.length === 0 && !loading ? (
         <Box sx={{ textAlign: "center", py: 8 }}>
           <Typography sx={{ color: "#9ca3af", mb: 2 }}>
@@ -124,6 +124,15 @@ const VocabularyView: React.FC = () => {
                 render: (value) => (
                   <Typography sx={{ color: 'white', textAlign: 'center' }}>
                     {value ? new Date(value as string).toLocaleDateString() : 'Never'}
+                  </Typography>
+                )
+              },
+              {
+                key: 'learned_times',
+                label: 'Learned Times',
+                render: (value) => (
+                  <Typography sx={{ color: 'white', textAlign: 'center' }}>
+                    {value as number}
                   </Typography>
                 )
               },

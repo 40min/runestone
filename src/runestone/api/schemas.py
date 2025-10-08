@@ -122,6 +122,7 @@ class Vocabulary(BaseModel):
     example_phrase: Optional[str] = None
     in_learn: bool = True
     last_learned: Optional[str] = None
+    learned_times: int = 0
     created_at: str
     updated_at: str
 

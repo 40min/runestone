@@ -57,11 +57,11 @@ repos:
           - eslint-plugin-react-hooks@^5.2.0
           - eslint-plugin-react-refresh@^0.4.20
           - globals@^16.3.0
-        args: ["frontend/"]
+        args: ["--config", "frontend/eslint.config.js", "frontend/"]
 
 
 # Configure pre-commit to run on specific events
-default_stages: [commit]
+default_stages: [pre-commit]
 fail_fast: false
 
 # Additional configuration

@@ -19,11 +19,11 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from runestone.config import settings
 from runestone.core.logging_config import setup_logging
-from runestone.db.database import setup_database, SessionLocal
+from runestone.db.database import SessionLocal, setup_database
 from runestone.db.repository import VocabularyRepository
 from runestone.services.rune_recall_service import RuneRecallService
-from runestone.state.state_manager import StateManager
 from runestone.services.telegram_command_service import TelegramCommandService
+from runestone.state.state_manager import StateManager
 
 
 def process_updates_job(state_manager: StateManager) -> None:
@@ -31,11 +31,7 @@ def process_updates_job(state_manager: StateManager) -> None:
     db = SessionLocal()
     try:
         vocabulary_repository = VocabularyRepository(db)
-        recall_service = RuneRecallService(
-            vocabulary_repository,
-            state_manager,
-            settings
-        )
+        recall_service = RuneRecallService(vocabulary_repository, state_manager, settings)
         telegram_service = TelegramCommandService(state_manager, recall_service)
         telegram_service.process_updates()
     finally:
@@ -47,11 +43,7 @@ def send_recall_word_job(state_manager: StateManager) -> None:
     db = SessionLocal()
     try:
         vocabulary_repository = VocabularyRepository(db)
-        recall_service = RuneRecallService(
-            vocabulary_repository,
-            state_manager,
-            settings
-        )
+        recall_service = RuneRecallService(vocabulary_repository, state_manager, settings)
         recall_service.send_next_recall_word()
     finally:
         db.close()
@@ -69,7 +61,7 @@ def create_scheduler(state_manager: StateManager) -> BlockingScheduler:
         id="poll_commands",
         name="Poll Telegram Commands",
         max_instances=1,
-        replace_existing=True
+        replace_existing=True,
     )
 
     # Send recall words periodically during the day
@@ -80,7 +72,7 @@ def create_scheduler(state_manager: StateManager) -> BlockingScheduler:
         id="send_recall_words",
         name="Send Recall Vocabulary Words",
         max_instances=1,
-        replace_existing=True
+        replace_existing=True,
     )
 
     return scheduler

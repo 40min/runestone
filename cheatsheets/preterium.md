@@ -56,7 +56,7 @@ This group is split into two based on the final consonant sound.
 *   **Examples from the book:**
     *   `skriv!` (write!) → `skrev` (wrote)
     *   `var!` (be!) → `var` (was/were)
-       
+
 *   **More useful examples to memorize:**
     *   `gå` (go) → `gick` (went)
     *   `ger` (give) → `gav` (gave)
@@ -87,7 +87,7 @@ This group is split into two based on the final consonant sound.
 
 
 
-   
+
 
 Here is a list of some of the most essential Group 4 verbs:
 
@@ -112,4 +112,3 @@ Here is a list of some of the most essential Group 4 verbs:
 | **sitta** | satt | suttit | to sit |
 | **stå** | stod | stått | to stand |
 | **veta** | visste | vetat | to know |
-

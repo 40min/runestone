@@ -9,6 +9,7 @@ interface SavedVocabularyItem {
   example_phrase: string | null;
   in_learn: boolean;
   last_learned: string | null;
+  learned_times: number;
   created_at: string;
   updated_at: string;
 }
