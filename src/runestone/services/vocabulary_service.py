@@ -88,6 +88,7 @@ class VocabularyService:
                     example_phrase=vocab.example_phrase,
                     in_learn=vocab.in_learn,
                     last_learned=vocab.last_learned.isoformat() if vocab.last_learned else None,
+                    learned_times=vocab.learned_times or 0,
                     created_at=vocab.created_at.isoformat() if vocab.created_at else None,
                     updated_at=vocab.updated_at.isoformat() if vocab.updated_at else None,
                 )
@@ -120,6 +121,7 @@ class VocabularyService:
             example_phrase=updated_vocab.example_phrase,
             in_learn=updated_vocab.in_learn,
             last_learned=updated_vocab.last_learned.isoformat() if updated_vocab.last_learned else None,
+            learned_times=updated_vocab.learned_times or 0,
             created_at=updated_vocab.created_at.isoformat() if updated_vocab.created_at else None,
             updated_at=updated_vocab.updated_at.isoformat() if updated_vocab.updated_at else None,
         )

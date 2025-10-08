@@ -4,7 +4,7 @@ Tests for vocabulary database repository functionality.
 This module contains tests for the vocabulary repository.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -622,13 +622,13 @@ class TestVocabularyRepository:
         db_session.commit()
 
         # Record time before update
-        before_update = datetime.now()
+        before_update = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Update last_learned
         updated_vocab = repo.update_last_learned(vocab)
 
         # Record time after update
-        after_update = datetime.now()
+        after_update = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Verify the update
         assert updated_vocab.last_learned is not None
@@ -857,3 +857,61 @@ class TestVocabularyRepository:
         # Verify user 2's item still exists
         db_vocab_user2 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab3.id).first()
         assert db_vocab_user2 is not None
+
+    def test_update_last_learned_increments_learned_times(self, repo, db_session):
+        """Test that update_last_learned increments the learned_times counter."""
+
+        # Add a test item with initial learned_times = 0
+        vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            in_learn=True,
+            last_learned=None,
+            learned_times=0,
+        )
+        db_session.add(vocab)
+        db_session.commit()
+
+        # Record time before update
+        before_update = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        # Update last_learned (should increment learned_times)
+        updated_vocab = repo.update_last_learned(vocab)
+
+        # Record time after update
+        after_update = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        # Verify the update
+        assert updated_vocab.last_learned is not None
+        assert before_update <= updated_vocab.last_learned <= after_update
+        assert updated_vocab.learned_times == 1  # Should be incremented from 0 to 1
+
+        # Verify in database
+        db_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab.id).first()
+        assert db_vocab.last_learned is not None
+        assert before_update <= db_vocab.last_learned <= after_update
+        assert db_vocab.learned_times == 1
+
+        # Test multiple increments
+        updated_vocab2 = repo.update_last_learned(updated_vocab)
+        assert updated_vocab2.learned_times == 2  # Should increment to 2
+
+        # Verify in database
+        db_vocab2 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab.id).first()
+        assert db_vocab2.learned_times == 2
+
+        # Test incrementing from None (should handle gracefully)
+        vocab_with_none = VocabularyModel(
+            user_id=1,
+            word_phrase="en banan",
+            translation="a banana",
+            in_learn=True,
+            last_learned=None,
+            learned_times=None,  # Test None value
+        )
+        db_session.add(vocab_with_none)
+        db_session.commit()
+
+        updated_vocab_none = repo.update_last_learned(vocab_with_none)
+        assert updated_vocab_none.learned_times == 1  # Should handle None as 0 + 1

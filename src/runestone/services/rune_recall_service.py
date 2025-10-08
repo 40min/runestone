@@ -206,7 +206,7 @@ class RuneRecallService:
         # chat_id is guaranteed to be non-None due to check in _process_user_recall_word
         assert user_data.chat_id is not None
         if self._send_word_message(user_data.chat_id, word_to_send):
-            # Update last_learned timestamp
+            # Update learned_times for every attempt to show word to user
             self.vocabulary_repository.update_last_learned(word)
             # Update the next word index
             user_data.next_word_index += 1

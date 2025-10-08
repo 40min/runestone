@@ -51,6 +51,7 @@ class TestVocabularyService:
         assert apple_vocab.user_id == 1
         assert apple_vocab.in_learn is True
         assert apple_vocab.last_learned is None
+        assert apple_vocab.learned_times == 0
 
     def test_save_vocabulary_duplicate(self, service, db_session):
         """Test that duplicate word_phrases are not added."""
@@ -78,6 +79,7 @@ class TestVocabularyService:
         assert apple_vocab.example_phrase == "Jag äter ett äpple varje dag."
         assert apple_vocab.in_learn is True
         assert apple_vocab.last_learned is None
+        assert apple_vocab.learned_times == 0
 
     def test_get_vocabulary(self, service, db_session):
         """Test retrieving all vocabulary items."""
@@ -212,6 +214,7 @@ class TestVocabularyService:
         assert updated_vocab.example_phrase == "Jag äter ett äpple varje dag."  # Unchanged
         assert updated_vocab.in_learn is False
         assert updated_vocab.last_learned is None  # Unchanged
+        assert updated_vocab.learned_times == 0  # Unchanged
 
     def test_update_vocabulary_item_partial(self, service, db_session):
         """Test updating a vocabulary item with partial fields."""
@@ -294,6 +297,7 @@ class TestVocabularyService:
         assert result.user_id == 1
         assert result.in_learn is True
         assert result.last_learned is None
+        assert result.learned_times == 0
 
         # Verify item was added to DB
         vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "ett äpple").first()
@@ -341,6 +345,7 @@ class TestVocabularyService:
         assert result.word_phrase == "en banan"
         assert result.translation == "a banana"
         assert result.example_phrase is None
+        assert result.learned_times == 0
 
     def test_load_vocab_from_csv_skip_check(self, service, db_session):
         """Test loading vocabulary from CSV with skip existence check (upsert)."""

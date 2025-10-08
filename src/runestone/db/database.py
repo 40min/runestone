@@ -12,6 +12,8 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
+from alembic import command
+from alembic.config import Config
 from runestone.config import settings
 
 # Create SQLAlchemy engine
@@ -36,6 +38,31 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def run_migrations() -> None:
+    """Run Alembic migrations to upgrade database to latest version."""
+    try:
+        # Get the alembic.ini path
+        alembic_ini_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "alembic.ini"))
+
+        if not os.path.exists(alembic_ini_path):
+            logger.warning(f"Alembic configuration not found at {alembic_ini_path}")
+            logger.info("Falling back to creating tables with Base.metadata.create_all()")
+            Base.metadata.create_all(bind=engine)
+            return
+
+        # Create Alembic config
+        alembic_cfg = Config(alembic_ini_path)
+
+        # Run migrations
+        logger.info("Running database migrations...")
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Database migrations completed successfully.")
+
+    except Exception:
+        logger.error("Failed to run migrations", exc_info=True)
+        raise
 
 
 def setup_database() -> None:

@@ -5,7 +5,7 @@ This module contains repository classes that encapsulate database
 logic for different entities.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from sqlalchemy import func, or_
@@ -181,8 +181,9 @@ class VocabularyRepository:
         )
 
     def update_last_learned(self, vocab: Vocabulary) -> Vocabulary:
-        """Update the last_learned timestamp for a vocabulary item."""
-        vocab.last_learned = datetime.now()
+        """Update the last_learned timestamp and increment learned_times for a vocabulary item."""
+        vocab.last_learned = datetime.now(timezone.utc)
+        vocab.learned_times = (vocab.learned_times or 0) + 1
         return self.update_vocabulary_item(vocab)
 
     def get_vocabulary_item_by_word_phrase(self, word_phrase: str, user_id: int) -> Optional[Vocabulary]:

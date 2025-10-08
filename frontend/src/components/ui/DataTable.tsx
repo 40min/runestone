@@ -26,7 +26,7 @@ interface DataTableProps<T> {
   onSelectionChange?: (index: number, checked: boolean) => void;
   onSelectAll?: (checked: boolean) => void;
   onRowClick?: (row: T, index: number) => void;
-  
+
   sx?: SxProps<Theme>;
 }
 

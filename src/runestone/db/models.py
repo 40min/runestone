@@ -25,6 +25,7 @@ class Vocabulary(Base):
     example_phrase = Column(Text, nullable=True)
     in_learn = Column(Boolean, default=True)
     last_learned = Column(DateTime(timezone=True), nullable=True)
+    learned_times = Column(Integer, default=0, server_default="0", nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
