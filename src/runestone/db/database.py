@@ -44,7 +44,7 @@ def run_migrations() -> None:
     """Run Alembic migrations to upgrade database to latest version."""
     try:
         # Get the alembic.ini path
-        alembic_ini_path = os.path.join(os.getcwd(), "alembic.ini")
+        alembic_ini_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "alembic.ini"))
 
         if not os.path.exists(alembic_ini_path):
             logger.warning(f"Alembic configuration not found at {alembic_ini_path}")
@@ -60,10 +60,9 @@ def run_migrations() -> None:
         command.upgrade(alembic_cfg, "head")
         logger.info("Database migrations completed successfully.")
 
-    except Exception as e:
-        logger.error(f"Failed to run migrations: {e}")
-        logger.info("Falling back to creating tables with Base.metadata.create_all()")
-        Base.metadata.create_all(bind=engine)
+    except Exception:
+        logger.error("Failed to run migrations", exc_info=True)
+        raise
 
 
 def setup_database() -> None:

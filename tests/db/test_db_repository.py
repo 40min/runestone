@@ -4,7 +4,7 @@ Tests for vocabulary database repository functionality.
 This module contains tests for the vocabulary repository.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -622,13 +622,13 @@ class TestVocabularyRepository:
         db_session.commit()
 
         # Record time before update
-        before_update = datetime.now()
+        before_update = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Update last_learned
         updated_vocab = repo.update_last_learned(vocab)
 
         # Record time after update
-        after_update = datetime.now()
+        after_update = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Verify the update
         assert updated_vocab.last_learned is not None
@@ -860,7 +860,6 @@ class TestVocabularyRepository:
 
     def test_update_last_learned_increments_learned_times(self, repo, db_session):
         """Test that update_last_learned increments the learned_times counter."""
-        from datetime import datetime
 
         # Add a test item with initial learned_times = 0
         vocab = VocabularyModel(
@@ -875,13 +874,13 @@ class TestVocabularyRepository:
         db_session.commit()
 
         # Record time before update
-        before_update = datetime.now()
+        before_update = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Update last_learned (should increment learned_times)
         updated_vocab = repo.update_last_learned(vocab)
 
         # Record time after update
-        after_update = datetime.now()
+        after_update = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Verify the update
         assert updated_vocab.last_learned is not None

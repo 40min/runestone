@@ -56,9 +56,9 @@ help:
 	@echo "  ci-test          - CI testing pipeline"
 	@echo ""
 	@echo "Database Migrations:"
-	@echo "  db-init          - Initialize database with current schema (for new databases)"
+	@echo "  db-init          - Mark database as having the latest migration revision (for existing databases)"
 	@echo "  db-migrate       - Create a new migration (requires MESSAGE='your migration message')"
-	@echo "  db-upgrade       - Apply migrations to database"
+	@echo "  db-upgrade       - Apply migrations to database (initialize new databases or upgrade existing ones)"
 	@echo "  db-downgrade     - Downgrade migrations (requires REVISION=revision_id or REVISION=-1)"
 	@echo "  db-current       - Show current migration revision"
 	@echo "  db-history       - Show migration history"
@@ -265,7 +265,7 @@ ci-test: install-dev test-coverage
 # DATABASE MIGRATIONS
 # =============================================================================
 
-# Initialize database with current schema (for new databases)
+# Mark database as having the latest migration revision (for existing databases)
 db-init:
 	@echo "🗄️  Initializing database with current schema..."
 	@uv run alembic stamp head
@@ -281,7 +281,7 @@ db-migrate:
 	@uv run alembic revision --autogenerate -m "$(MESSAGE)"
 	@echo "✅ Migration created!"
 
-# Apply migrations to the database
+# Apply migrations to the database (initialize new databases or upgrade existing ones)
 db-upgrade:
 	@echo "⬆️  Upgrading database to latest migration..."
 	@uv run alembic upgrade head

@@ -5,7 +5,7 @@ This module contains repository classes that encapsulate database
 logic for different entities.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from sqlalchemy import func, or_
