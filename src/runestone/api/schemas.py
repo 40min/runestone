@@ -95,6 +95,7 @@ class VocabularyItemCreate(BaseModel):
     word_phrase: str
     translation: str
     example_phrase: Optional[str] = None
+    extra_info: Optional[str] = None
 
 
 class VocabularyUpdate(BaseModel):
@@ -103,6 +104,7 @@ class VocabularyUpdate(BaseModel):
     word_phrase: Optional[str] = None
     translation: Optional[str] = None
     example_phrase: Optional[str] = None
+    extra_info: Optional[str] = None
     in_learn: Optional[bool] = None
 
 
@@ -120,6 +122,7 @@ class Vocabulary(BaseModel):
     word_phrase: str
     translation: str
     example_phrase: Optional[str] = None
+    extra_info: Optional[str] = None
     in_learn: bool = True
     last_learned: Optional[str] = None
     learned_times: int = 0
@@ -132,6 +135,7 @@ class VocabularyImproveRequest(BaseModel):
 
     word_phrase: str
     include_translation: bool
+    include_extra_info: bool = False
 
 
 class VocabularyImproveResponse(BaseModel):
@@ -139,3 +143,4 @@ class VocabularyImproveResponse(BaseModel):
 
     translation: Optional[str] = None
     example_phrase: str
+    extra_info: Optional[str] = None

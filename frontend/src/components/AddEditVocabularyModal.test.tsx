@@ -101,7 +101,7 @@ describe("AddEditVocabularyModal", () => {
     await user.click(fillAllButton);
 
     await waitFor(() => {
-      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", true);
+      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", { includeTranslation: true, includeExtraInfo: true });
     });
 
     // Check that fields are filled
@@ -128,7 +128,7 @@ describe("AddEditVocabularyModal", () => {
     await user.click(fillExampleButton);
 
     await waitFor(() => {
-      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", false);
+      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", { includeTranslation: false, includeExtraInfo: false });
     });
 
     // Check that example phrase is filled
@@ -187,6 +187,7 @@ describe("AddEditVocabularyModal", () => {
       word_phrase: "hej",
       translation: "hello",
       example_phrase: "Hej, hur mår du?",
+      extra_info: null,
       in_learn: false,
     });
   });

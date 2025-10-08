@@ -569,7 +569,7 @@ describe('improveVocabularyItem', () => {
       json: () => Promise.resolve(mockResponse),
     });
 
-    const result = await improveVocabularyItem('hej', true);
+    const result = await improveVocabularyItem('hej', { includeTranslation: true, includeExtraInfo: false });
 
     expect(result).toEqual(mockResponse);
     expect(mockFetch).toHaveBeenCalledWith(
@@ -582,6 +582,7 @@ describe('improveVocabularyItem', () => {
         body: JSON.stringify({
           word_phrase: 'hej',
           include_translation: true,
+          include_extra_info: false,
         }),
       })
     );
@@ -597,7 +598,7 @@ describe('improveVocabularyItem', () => {
       json: () => Promise.resolve(mockResponse),
     });
 
-    const result = await improveVocabularyItem('hej', false);
+    const result = await improveVocabularyItem('hej', { includeTranslation: false, includeExtraInfo: false });
 
     expect(result).toEqual(mockResponse);
     expect(mockFetch).toHaveBeenCalledWith(
@@ -610,6 +611,7 @@ describe('improveVocabularyItem', () => {
         body: JSON.stringify({
           word_phrase: 'hej',
           include_translation: false,
+          include_extra_info: false,
         }),
       })
     );
@@ -623,7 +625,7 @@ describe('improveVocabularyItem', () => {
       json: () => Promise.resolve({}),
     });
 
-    await expect(improveVocabularyItem('hej', true)).rejects.toThrow(
+    await expect(improveVocabularyItem('hej', { includeTranslation: true, includeExtraInfo: false })).rejects.toThrow(
       'Failed to improve vocabulary item: HTTP 500'
     );
   });
@@ -631,6 +633,6 @@ describe('improveVocabularyItem', () => {
   it('should handle network error', async () => {
     mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
-    await expect(improveVocabularyItem('hej', true)).rejects.toThrow('Network error');
+    await expect(improveVocabularyItem('hej', { includeTranslation: true, includeExtraInfo: false })).rejects.toThrow('Network error');
   });
 });

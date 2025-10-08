@@ -544,3 +544,46 @@ class TestVocabularyService:
         assert result.translation == "clear"
         # The parser should extract the example phrase from the example_phrase field
         assert result.example_phrase == "Det är tydliga instruktioner."
+
+    def test_improve_item_with_extra_info(self, service):
+        """Test vocabulary improvement with extra_info generation."""
+        # Mock LLM client from the service fixture
+        service.llm_client.improve_vocabulary_item.return_value = (
+            '{"translation": "an apple", "example_phrase": "Jag äter ett äpple varje dag.", '
+            '"extra_info": "en-word, noun, base form: äpple"}'
+        )
+
+        # Test request with extra_info
+        request = VocabularyImproveRequest(word_phrase="ett äpple", include_translation=True, include_extra_info=True)
+
+        result = service.improve_item(request)
+
+        # Verify result
+        assert isinstance(result, VocabularyImproveResponse)
+        assert result.translation == "an apple"
+        assert result.example_phrase == "Jag äter ett äpple varje dag."
+        assert result.extra_info == "en-word, noun, base form: äpple"
+
+        # Verify LLM client was called correctly
+        service.llm_client.improve_vocabulary_item.assert_called_once()
+        prompt_arg = service.llm_client.improve_vocabulary_item.call_args[0][0]
+        assert "ett äpple" in prompt_arg
+        assert "extra_info" in prompt_arg
+
+    def test_improve_item_extra_info_only(self, service):
+        """Test vocabulary improvement with only extra_info generation."""
+        # Mock LLM client from the service fixture
+        service.llm_client.improve_vocabulary_item.return_value = (
+            '{"example_phrase": "Jag äter ett äpple varje dag.", "extra_info": "en-word, noun, base form: äpple"}'
+        )
+
+        # Test request with only extra_info
+        request = VocabularyImproveRequest(word_phrase="ett äpple", include_translation=False, include_extra_info=True)
+
+        result = service.improve_item(request)
+
+        # Verify result
+        assert isinstance(result, VocabularyImproveResponse)
+        assert result.translation is None
+        assert result.example_phrase == "Jag äter ett äpple varje dag."
+        assert result.extra_info == "en-word, noun, base form: äpple"

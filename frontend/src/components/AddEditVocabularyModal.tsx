@@ -11,6 +11,7 @@ interface SavedVocabularyItem {
   word_phrase: string;
   translation: string;
   example_phrase: string | null;
+  extra_info: string | null;
   in_learn: boolean;
   last_learned: string | null;
   created_at: string;
@@ -34,6 +35,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   const [wordPhrase, setWordPhrase] = useState("");
   const [translation, setTranslation] = useState("");
   const [examplePhrase, setExamplePhrase] = useState("");
+  const [extraInfo, setExtraInfo] = useState("");
   const [inLearn, setInLearn] = useState(false);
   const [isImproving, setIsImproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,11 +46,13 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
       setWordPhrase(item.word_phrase);
       setTranslation(item.translation);
       setExamplePhrase(item.example_phrase || "");
+      setExtraInfo(item.extra_info || "");
       setInLearn(item.in_learn);
     } else {
       setWordPhrase("");
       setTranslation("");
       setExamplePhrase("");
+      setExtraInfo("");
       setInLearn(false);
     }
   }, [item, open]);
@@ -63,6 +67,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
         word_phrase: wordPhrase.trim(),
         translation: translation.trim(),
         example_phrase: examplePhrase.trim() || null,
+        extra_info: extraInfo.trim() || null,
         in_learn: inLearn,
       });
     } catch (err) {
@@ -76,7 +81,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
     onClose();
   };
 
-  const handleImproveVocabulary = async (includeTranslation: boolean) => {
+  const handleImproveVocabulary = async (includeTranslation: boolean, includeExtraInfo: boolean = false) => {
     if (!wordPhrase.trim()) return;
 
     setError("");
@@ -84,12 +89,15 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
     try {
       const result = await improveVocabularyItem(
         wordPhrase.trim(),
-        includeTranslation
+        { includeTranslation, includeExtraInfo }
       );
       if (includeTranslation) {
         setTranslation(result.translation || "");
       }
       setExamplePhrase(result.example_phrase);
+      if (includeExtraInfo && result.extra_info) {
+        setExtraInfo(result.extra_info);
+      }
     } catch (err) {
       const errorMessage =
         err instanceof Error
@@ -101,7 +109,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
     }
   };
 
-  const handleFillAll = () => handleImproveVocabulary(true);
+  const handleFillAll = () => handleImproveVocabulary(true, true);
 
   const handleFillExample = () => handleImproveVocabulary(false);
 
@@ -255,6 +263,57 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
             </IconButton>
           </Box>
 
+          <Box sx={{ position: "relative" }}>
+            <TextField
+              label="Extra Info (Optional)"
+              value={extraInfo}
+              onChange={(e) => setExtraInfo(e.target.value)}
+              fullWidth
+              variant="outlined"
+              multiline
+              rows={2}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  color: "white",
+                  "& fieldset": {
+                    borderColor: "#374151",
+                  },
+                  "&:hover fieldset": {
+                    borderColor: "#6b7280",
+                  },
+                  "&.Mui-focused fieldset": {
+                    borderColor: "var(--primary-color)",
+                  },
+                },
+                "& .MuiInputLabel-root": {
+                  color: "#9ca3af",
+                  "&.Mui-focused": {
+                    color: "var(--primary-color)",
+                  },
+                },
+              }}
+            />
+            <IconButton
+              onClick={() => handleImproveVocabulary(false, true)}
+              disabled={!wordPhrase.trim() || isImproving}
+              sx={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                fontSize: "0.75em",
+                color: "var(--primary-color)",
+                "&:hover": {
+                  backgroundColor: "rgba(59, 130, 246, 0.1)",
+                },
+                "&:disabled": {
+                  color: "#6b7280",
+                },
+              }}
+              title="Fill Extra Info"
+            >
+              <AutoFixNormal />
+            </IconButton>
+          </Box>
 
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <StyledCheckbox

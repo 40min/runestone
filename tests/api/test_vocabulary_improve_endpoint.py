@@ -129,3 +129,59 @@ def test_improve_vocabulary_empty_response(client_with_mock_service):
     response_data = response.json()
     assert response_data["translation"] is None
     assert response_data["example_phrase"] == ""
+
+
+def test_improve_vocabulary_with_extra_info(client_with_mock_service):
+    """Test vocabulary improvement endpoint with extra_info."""
+    client, mock_service = client_with_mock_service
+
+    # Mock service response with extra_info
+    mock_response = VocabularyImproveResponse(
+        translation="an apple",
+        example_phrase="Jag äter ett äpple varje dag.",
+        extra_info="en-word, noun, base form: äpple",
+    )
+    mock_service.improve_item.return_value = mock_response
+
+    # Test request with extra_info
+    request_data = {"word_phrase": "ett äpple", "include_translation": True, "include_extra_info": True}
+
+    response = client.post("/api/vocabulary/improve", json=request_data)
+
+    # Verify response
+    assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["translation"] == "an apple"
+    assert response_data["example_phrase"] == "Jag äter ett äpple varje dag."
+    assert response_data["extra_info"] == "en-word, noun, base form: äpple"
+
+    # Verify service was called correctly
+    mock_service.improve_item.assert_called_once()
+    call_args = mock_service.improve_item.call_args[0][0]
+    assert isinstance(call_args, VocabularyImproveRequest)
+    assert call_args.word_phrase == "ett äpple"
+    assert call_args.include_translation is True
+    assert call_args.include_extra_info is True
+
+
+def test_improve_vocabulary_extra_info_only(client_with_mock_service):
+    """Test vocabulary improvement endpoint with only extra_info."""
+    client, mock_service = client_with_mock_service
+
+    # Mock service response with only extra_info
+    mock_response = VocabularyImproveResponse(
+        translation=None, example_phrase="Jag äter ett äpple varje dag.", extra_info="en-word, noun, base form: äpple"
+    )
+    mock_service.improve_item.return_value = mock_response
+
+    # Test request with only extra_info
+    request_data = {"word_phrase": "ett äpple", "include_translation": False, "include_extra_info": True}
+
+    response = client.post("/api/vocabulary/improve", json=request_data)
+
+    # Verify response
+    assert response.status_code == 200
+    response_data = response.json()
+    assert response_data["translation"] is None
+    assert response_data["example_phrase"] == "Jag äter ett äpple varje dag."
+    assert response_data["extra_info"] == "en-word, noun, base form: äpple"

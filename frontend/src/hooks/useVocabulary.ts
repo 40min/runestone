@@ -7,6 +7,7 @@ interface SavedVocabularyItem {
   word_phrase: string;
   translation: string;
   example_phrase: string | null;
+  extra_info: string | null;
   in_learn: boolean;
   last_learned: string | null;
   learned_times: number;
@@ -192,8 +193,8 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
 
 export const improveVocabularyItem = async (
   wordPhrase: string,
-  includeTranslation: boolean
-): Promise<{ translation?: string; example_phrase: string }> => {
+  options: { includeTranslation: boolean; includeExtraInfo: boolean }
+): Promise<{ translation?: string; example_phrase: string; extra_info?: string }> => {
   const response = await fetch(`${API_BASE_URL}/api/vocabulary/improve`, {
     method: 'POST',
     headers: {
@@ -201,7 +202,8 @@ export const improveVocabularyItem = async (
     },
     body: JSON.stringify({
       word_phrase: wordPhrase,
-      include_translation: includeTranslation,
+      include_translation: options.includeTranslation,
+      include_extra_info: options.includeExtraInfo,
     }),
   });
 

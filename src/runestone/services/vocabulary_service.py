@@ -68,6 +68,7 @@ class VocabularyService:
             word_phrase=vocab.word_phrase,
             translation=vocab.translation,
             example_phrase=vocab.example_phrase,
+            extra_info=vocab.extra_info,
             in_learn=vocab.in_learn,
             last_learned=vocab.last_learned.isoformat() if vocab.last_learned else None,
             created_at=vocab.created_at.isoformat() if vocab.created_at else None,
@@ -86,6 +87,7 @@ class VocabularyService:
                     word_phrase=vocab.word_phrase,
                     translation=vocab.translation,
                     example_phrase=vocab.example_phrase,
+                    extra_info=vocab.extra_info,
                     in_learn=vocab.in_learn,
                     last_learned=vocab.last_learned.isoformat() if vocab.last_learned else None,
                     learned_times=vocab.learned_times or 0,
@@ -119,6 +121,7 @@ class VocabularyService:
             word_phrase=updated_vocab.word_phrase,
             translation=updated_vocab.translation,
             example_phrase=updated_vocab.example_phrase,
+            extra_info=updated_vocab.extra_info,
             in_learn=updated_vocab.in_learn,
             last_learned=updated_vocab.last_learned.isoformat() if updated_vocab.last_learned else None,
             learned_times=updated_vocab.learned_times or 0,
@@ -164,17 +167,44 @@ class VocabularyService:
         return {"original_count": original_count, "added_count": added_count, "skipped_count": skipped_count}
 
     def improve_item(self, request: VocabularyImproveRequest) -> VocabularyImproveResponse:
-        """Improve a vocabulary item using LLM to generate translation and example phrase."""
+        """Improve a vocabulary item using LLM to generate translation, example phrase, and extra info."""
 
         # Prepare prompt parameters
+        content_parts = []
         if request.include_translation:
-            content_type = "both translation and example phrase"
+            content_parts.append("translation")
+        if request.include_extra_info:
+            content_parts.append("extra info")
+        content_parts.append("example phrase")  # Always include example phrase
+
+        content_type = (
+            ", ".join(content_parts[:-1]) + " and " + content_parts[-1] if len(content_parts) > 1 else content_parts[0]
+        )
+
+        # Build translation instructions
+        if request.include_translation:
             translation_instruction = '"English translation of the word/phrase"'
             translation_detail = "Provide the most common and accurate English translation."
         else:
-            content_type = "an example phrase"
             translation_instruction = "null"
             translation_detail = "Set translation to null since only example phrase is requested."
+
+        # Build extra_info instructions
+        if request.include_extra_info:
+            extra_info_instruction = (
+                ',\n    "extra_info": "A concise description of grammatical details '
+                '(e.g., word form, base form, en/ett classification)"'
+            )
+            extra_info_detail = """
+
+3. For extra_info:
+    - Provide grammatical information about the Swedish word/phrase
+    - Include word form (noun, verb, adjective, etc.), en/ett classification for nouns, base forms, etc.
+    - Keep it concise and human-readable (e.g., "en-word, noun, base form: ord")
+    - Focus on the most important grammatical details for language learners"""
+        else:
+            extra_info_instruction = ""
+            extra_info_detail = ""
 
         # Format the prompt with all required parameters
         prompt = VOCABULARY_IMPROVE_PROMPT_TEMPLATE.format(
@@ -182,6 +212,8 @@ class VocabularyService:
             content_type=content_type,
             translation_instruction=translation_instruction,
             translation_detail=translation_detail,
+            extra_info_instruction=extra_info_instruction,
+            extra_info_detail=extra_info_detail,
         )
 
         # Get improvement from LLM
@@ -193,25 +225,31 @@ class VocabularyService:
         except json.JSONDecodeError as e:
             self.logger.warning(f"Failed to parse LLM response as JSON: {response_text}. Error: {e}")
             # Try to extract information from malformed response
-            result = self._parse_malformed_llm_response(response_text, request.include_translation)
+            result = self._parse_malformed_llm_response(
+                response_text, request.include_translation, request.include_extra_info
+            )
+
         translation = result.get("translation") if request.include_translation else None
         example_phrase = result.get("example_phrase", "")
+        extra_info = result.get("extra_info") if request.include_extra_info else None
 
-        return VocabularyImproveResponse(translation=translation, example_phrase=example_phrase)
+        return VocabularyImproveResponse(translation=translation, example_phrase=example_phrase, extra_info=extra_info)
 
     def delete_vocabulary_item(self, item_id: int, user_id: int = 1) -> bool:
         """Completely delete a vocabulary item from the database."""
         return self.repo.hard_delete_vocabulary_item(item_id, user_id)
 
-    def _parse_malformed_llm_response(self, response_text: str, include_translation: bool) -> dict:
+    def _parse_malformed_llm_response(
+        self, response_text: str, include_translation: bool, include_extra_info: bool = False
+    ) -> dict:
         """
         Parse a malformed LLM response that is not valid JSON.
 
-        Attempts to extract translation and example_phrase from various formats.
-        Returns a dict with 'translation' and 'example_phrase' keys.
+        Attempts to extract translation, example_phrase, and extra_info from various formats.
+        Returns a dict with 'translation', 'example_phrase', and 'extra_info' keys.
         """
 
-        result = {"translation": None, "example_phrase": ""}
+        result = {"translation": None, "example_phrase": "", "extra_info": None}
 
         # Clean the response text
         response_text = response_text.strip()
@@ -242,8 +280,14 @@ class VocabularyService:
         if example_match:
             result["example_phrase"] = example_match.group(1)
 
+        # Look for extra_info: "value" (with or without quotes around key)
+        if include_extra_info:
+            extra_info_match = re.search(r'(?:"extra_info"|\bextra_info)\s*:\s*"([^"]*)"', response_text, re.IGNORECASE)
+            if extra_info_match:
+                result["extra_info"] = extra_info_match.group(1)
+
         # If no structured data found, try to extract from plain text
-        if not result["translation"] and not result["example_phrase"]:
+        if not result["translation"] and not result["example_phrase"] and not result["extra_info"]:
             # Split by common separators and take the first meaningful part as example
             lines = [line.strip() for line in response_text.split("\n") if line.strip()]
             if lines:
