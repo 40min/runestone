@@ -193,8 +193,8 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
 
 export const improveVocabularyItem = async (
   wordPhrase: string,
-  options: { includeTranslation: boolean; includeExtraInfo: boolean }
-): Promise<{ translation?: string; example_phrase: string; extra_info?: string }> => {
+  mode: 'example_only' | 'extra_info_only' | 'all_fields'
+): Promise<{ translation?: string; example_phrase?: string; extra_info?: string }> => {
   const response = await fetch(`${API_BASE_URL}/api/vocabulary/improve`, {
     method: 'POST',
     headers: {
@@ -202,8 +202,7 @@ export const improveVocabularyItem = async (
     },
     body: JSON.stringify({
       word_phrase: wordPhrase,
-      include_translation: options.includeTranslation,
-      include_extra_info: options.includeExtraInfo,
+      mode: mode,
     }),
   });
 

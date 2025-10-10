@@ -88,6 +88,7 @@ describe("AddEditVocabularyModal", () => {
     mockImproveVocabularyItem.mockResolvedValue({
       translation: "hello",
       example_phrase: "Hej, hur mår du?",
+      extra_info: "en-word, noun, base form: hej",
     });
 
     render(<AddEditVocabularyModal {...defaultProps} />);
@@ -101,13 +102,14 @@ describe("AddEditVocabularyModal", () => {
     await user.click(fillAllButton);
 
     await waitFor(() => {
-      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", { includeTranslation: true, includeExtraInfo: true });
+      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", "all_fields");
     });
 
     // Check that fields are filled
     await waitFor(() => {
       expect(screen.getByDisplayValue("hello")).toBeInTheDocument();
       expect(screen.getByDisplayValue("Hej, hur mår du?")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("en-word, noun, base form: hej")).toBeInTheDocument();
     });
   });
 
@@ -123,12 +125,12 @@ describe("AddEditVocabularyModal", () => {
     const wordInput = screen.getByLabelText("Swedish Word/Phrase");
     await user.type(wordInput, "hej");
 
-    // Click Fill Example button (Lightbulb icon)
+    // Click Fill Example button (AutoFixNormal icon)
     const fillExampleButton = screen.getByTitle("Fill Example");
     await user.click(fillExampleButton);
 
     await waitFor(() => {
-      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", { includeTranslation: false, includeExtraInfo: false });
+      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", "example_only");
     });
 
     // Check that example phrase is filled

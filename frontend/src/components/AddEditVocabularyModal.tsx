@@ -102,21 +102,20 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
     onClose();
   };
 
-  const handleImproveVocabulary = async (includeTranslation: boolean, includeExtraInfo: boolean = false) => {
+  const handleImproveVocabulary = async (mode: 'example_only' | 'extra_info_only' | 'all_fields') => {
     if (!wordPhrase.trim()) return;
 
     setError("");
     setIsImproving(true);
     try {
-      const result = await improveVocabularyItem(
-        wordPhrase.trim(),
-        { includeTranslation, includeExtraInfo }
-      );
-      if (includeTranslation) {
-        setTranslation(result.translation || "");
+      const result = await improveVocabularyItem(wordPhrase.trim(), mode);
+      if (result.translation) {
+        setTranslation(result.translation);
       }
-      setExamplePhrase(result.example_phrase);
-      if (includeExtraInfo && result.extra_info) {
+      if (result.example_phrase) {
+        setExamplePhrase(result.example_phrase);
+      }
+      if (result.extra_info) {
         setExtraInfo(result.extra_info);
       }
     } catch (err) {
@@ -130,9 +129,9 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
     }
   };
 
-  const handleFillAll = () => handleImproveVocabulary(true, true);
+  const handleFillAll = () => handleImproveVocabulary('all_fields');
 
-  const handleFillExample = () => handleImproveVocabulary(false);
+  const handleFillExample = () => handleImproveVocabulary('example_only');
 
   return (
     <Modal
@@ -239,7 +238,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
               sx={textFieldStyles}
             />
             <IconButton
-              onClick={() => handleImproveVocabulary(false, true)}
+              onClick={() => handleImproveVocabulary('extra_info_only')}
               disabled={!wordPhrase.trim() || isImproving}
               sx={{
                 position: "absolute",

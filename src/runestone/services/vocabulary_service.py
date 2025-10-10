@@ -179,40 +179,41 @@ class VocabularyService:
         except json.JSONDecodeError as e:
             self.logger.warning(f"Failed to parse LLM response as JSON: {response_text}. Error: {e}")
             # Try to extract information from malformed response
-            result = self._parse_malformed_llm_response(
-                response_text, request.include_translation, request.include_extra_info
-            )
+            result = self._parse_malformed_llm_response(response_text, request.mode)
 
-        translation = result.get("translation") if request.include_translation else None
-        example_phrase = result.get("example_phrase", "")
-        extra_info = result.get("extra_info") if request.include_extra_info else None
+        # Determine which fields to return based on mode
+        from ..api.schemas import ImprovementMode
+
+        if request.mode == ImprovementMode.EXAMPLE_ONLY:
+            translation = None
+            example_phrase = result.get("example_phrase", "")
+            extra_info = None
+        elif request.mode == ImprovementMode.EXTRA_INFO_ONLY:
+            translation = None
+            example_phrase = None
+            extra_info = result.get("extra_info")
+        else:  # ALL_FIELDS
+            translation = result.get("translation")
+            example_phrase = result.get("example_phrase", "")
+            extra_info = result.get("extra_info")
 
         return VocabularyImproveResponse(translation=translation, example_phrase=example_phrase, extra_info=extra_info)
 
     def _build_improvement_prompt(self, request: VocabularyImproveRequest) -> str:
         """Build the LLM prompt for vocabulary improvement."""
-        # Prepare content type description
-        content_parts = []
-        if request.include_translation:
-            content_parts.append("translation")
-        if request.include_extra_info:
-            content_parts.append("extra info")
-        content_parts.append("example phrase")  # Always include example phrase
+        from ..api.schemas import ImprovementMode
 
-        content_type = (
-            ", ".join(content_parts[:-1]) + " and " + content_parts[-1] if len(content_parts) > 1 else content_parts[0]
-        )
-
-        # Build JSON schema field for translation
-        if request.include_translation:
-            translation_instruction_json = '"English translation of the word/phrase"'
-            translation_detail = "Provide the most common and accurate English translation."
-        else:
+        # Determine content based on mode
+        if request.mode == ImprovementMode.EXAMPLE_ONLY:
+            content_type = "example phrase"
             translation_instruction_json = "null"
             translation_detail = "Set translation to null since only example phrase is requested."
-
-        # Build JSON schema field and instructions for extra_info
-        if request.include_extra_info:
+            extra_info_json = ""
+            extra_info_detail = ""
+        elif request.mode == ImprovementMode.EXTRA_INFO_ONLY:
+            content_type = "extra info"
+            translation_instruction_json = "null"
+            translation_detail = "Set translation to null since only extra info is requested."
             extra_info_json = (
                 ',\n    "extra_info": "A concise description of grammatical details '
                 '(e.g., word form, base form, en/ett classification)"'
@@ -224,9 +225,21 @@ class VocabularyService:
     - Include word form (noun, verb, adjective, etc.), en/ett classification for nouns, base forms, etc.
     - Keep it concise and human-readable (e.g., "en-word, noun, base form: ord")
     - Focus on the most important grammatical details for language learners"""
-        else:
-            extra_info_json = ""
-            extra_info_detail = ""
+        else:  # ALL_FIELDS
+            content_type = "translation, example phrase and extra info"
+            translation_instruction_json = '"English translation of the word/phrase"'
+            translation_detail = "Provide the most common and accurate English translation."
+            extra_info_json = (
+                ',\n    "extra_info": "A concise description of grammatical details '
+                '(e.g., word form, base form, en/ett classification)"'
+            )
+            extra_info_detail = """
+
+3. For extra_info:
+    - Provide grammatical information about the Swedish word/phrase
+    - Include word form (noun, verb, adjective, etc.), en/ett classification for nouns, base forms, etc.
+    - Keep it concise and human-readable (e.g., "en-word, noun, base form: ord")
+    - Focus on the most important grammatical details for language learners"""
 
         # Build the complete prompt
         return VOCABULARY_IMPROVE_PROMPT_TEMPLATE.format(
@@ -242,15 +255,14 @@ class VocabularyService:
         """Completely delete a vocabulary item from the database."""
         return self.repo.hard_delete_vocabulary_item(item_id, user_id)
 
-    def _parse_malformed_llm_response(
-        self, response_text: str, include_translation: bool, include_extra_info: bool = False
-    ) -> dict:
+    def _parse_malformed_llm_response(self, response_text: str, mode) -> dict:
         """
         Parse a malformed LLM response that is not valid JSON.
 
         Attempts to extract translation, example_phrase, and extra_info from various formats.
         Returns a dict with 'translation', 'example_phrase', and 'extra_info' keys.
         """
+        from ..api.schemas import ImprovementMode
 
         result = {"translation": None, "example_phrase": "", "extra_info": None}
 
@@ -284,10 +296,9 @@ class VocabularyService:
             result["example_phrase"] = example_match.group(1)
 
         # Look for extra_info: "value" (with or without quotes around key)
-        if include_extra_info:
-            extra_info_match = re.search(r'(?:"extra_info"|\bextra_info)\s*:\s*"([^"]*)"', response_text, re.IGNORECASE)
-            if extra_info_match:
-                result["extra_info"] = extra_info_match.group(1)
+        extra_info_match = re.search(r'(?:"extra_info"|\bextra_info)\s*:\s*"([^"]*)"', response_text, re.IGNORECASE)
+        if extra_info_match:
+            result["extra_info"] = extra_info_match.group(1)
 
         # If no structured data found, try to extract from plain text
         if not result["translation"] and not result["example_phrase"] and not result["extra_info"]:
@@ -298,7 +309,7 @@ class VocabularyService:
                 result["example_phrase"] = lines[0]
 
         # If translation was requested but not found, try to infer it
-        if include_translation and not result["translation"]:
+        if mode == ImprovementMode.ALL_FIELDS and not result["translation"]:
             # Look for English words that might be translations
             words = re.findall(r"\b[a-zA-Z]+\b", response_text)
             english_words = [
