@@ -1,5 +1,6 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import useVocabulary, { useRecentVocabulary, improveVocabularyItem } from './useVocabulary';
+import { VOCABULARY_IMPROVEMENT_MODES } from '../constants';
 
 // Mock config
 vi.mock('../config', () => ({
@@ -570,7 +571,7 @@ describe('improveVocabularyItem', () => {
       json: () => Promise.resolve(mockResponse),
     });
 
-    const result = await improveVocabularyItem('hej', 'all_fields');
+    const result = await improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS);
 
     expect(result).toEqual(mockResponse);
     expect(mockFetch).toHaveBeenCalledWith(
@@ -582,7 +583,7 @@ describe('improveVocabularyItem', () => {
         },
         body: JSON.stringify({
           word_phrase: 'hej',
-          mode: 'all_fields',
+          mode: VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS,
         }),
       })
     );
@@ -598,7 +599,7 @@ describe('improveVocabularyItem', () => {
       json: () => Promise.resolve(mockResponse),
     });
 
-    const result = await improveVocabularyItem('hej', 'example_only');
+    const result = await improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY);
 
     expect(result).toEqual(mockResponse);
     expect(mockFetch).toHaveBeenCalledWith(
@@ -610,7 +611,7 @@ describe('improveVocabularyItem', () => {
         },
         body: JSON.stringify({
           word_phrase: 'hej',
-          mode: 'example_only',
+          mode: VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY,
         }),
       })
     );
@@ -624,7 +625,7 @@ describe('improveVocabularyItem', () => {
       json: () => Promise.resolve({}),
     });
 
-    await expect(improveVocabularyItem('hej', 'all_fields')).rejects.toThrow(
+    await expect(improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS)).rejects.toThrow(
       'Failed to improve vocabulary item: HTTP 500'
     );
   });
@@ -632,6 +633,6 @@ describe('improveVocabularyItem', () => {
   it('should handle network error', async () => {
     mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
-    await expect(improveVocabularyItem('hej', 'all_fields')).rejects.toThrow('Network error');
+    await expect(improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS)).rejects.toThrow('Network error');
   });
 });

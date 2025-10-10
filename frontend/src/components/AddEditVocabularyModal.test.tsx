@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AddEditVocabularyModal from "./AddEditVocabularyModal";
+import { VOCABULARY_IMPROVEMENT_MODES } from "../constants";
 
 // Mock the useVocabulary hook
 vi.mock("../hooks/useVocabulary", () => ({
@@ -102,7 +103,7 @@ describe("AddEditVocabularyModal", () => {
     await user.click(fillAllButton);
 
     await waitFor(() => {
-      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", "all_fields");
+      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS);
     });
 
     // Check that fields are filled
@@ -130,7 +131,7 @@ describe("AddEditVocabularyModal", () => {
     await user.click(fillExampleButton);
 
     await waitFor(() => {
-      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", "example_only");
+      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY);
     });
 
     // Check that example phrase is filled

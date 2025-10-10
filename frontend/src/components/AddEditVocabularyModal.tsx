@@ -4,6 +4,7 @@ import AutoFixNormal from "@mui/icons-material/AutoFixNormal";
 import AutoFixHigh from "@mui/icons-material/AutoFixHigh";
 import { CustomButton, StyledCheckbox } from "./ui";
 import { improveVocabularyItem } from "../hooks/useVocabulary";
+import { VOCABULARY_IMPROVEMENT_MODES, type VocabularyImprovementMode } from "../constants";
 
 interface SavedVocabularyItem {
   id: number;
@@ -102,7 +103,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
     onClose();
   };
 
-  const handleImproveVocabulary = async (mode: 'example_only' | 'extra_info_only' | 'all_fields') => {
+  const handleImproveVocabulary = async (mode: VocabularyImprovementMode) => {
     if (!wordPhrase.trim()) return;
 
     setError("");
@@ -129,9 +130,9 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
     }
   };
 
-  const handleFillAll = () => handleImproveVocabulary('all_fields');
+  const handleFillAll = () => handleImproveVocabulary(VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS);
 
-  const handleFillExample = () => handleImproveVocabulary('example_only');
+  const handleFillExample = () => handleImproveVocabulary(VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY);
 
   return (
     <Modal
@@ -238,7 +239,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
               sx={textFieldStyles}
             />
             <IconButton
-              onClick={() => handleImproveVocabulary('extra_info_only')}
+              onClick={() => handleImproveVocabulary(VOCABULARY_IMPROVEMENT_MODES.EXTRA_INFO_ONLY)}
               disabled={!wordPhrase.trim() || isImproving}
               sx={{
                 position: "absolute",

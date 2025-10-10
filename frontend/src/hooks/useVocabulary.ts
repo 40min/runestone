@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { API_BASE_URL } from '../config';
+import type { VocabularyImprovementMode } from '../constants';
 
 interface SavedVocabularyItem {
   id: number;
@@ -193,7 +194,7 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
 
 export const improveVocabularyItem = async (
   wordPhrase: string,
-  mode: 'example_only' | 'extra_info_only' | 'all_fields'
+  mode: VocabularyImprovementMode
 ): Promise<{ translation?: string; example_phrase?: string; extra_info?: string }> => {
   const response = await fetch(`${API_BASE_URL}/api/vocabulary/improve`, {
     method: 'POST',
