@@ -26,7 +26,7 @@ const mockAnalysisResult = {
 const mockResourcesResult = "Additional learning tips here. Check out https://example.com for more resources.";
 
 describe("ResultsDisplay", () => {
-  it("renders error state when error is provided", () => {
+  it("renders error state when error is provided and no results", () => {
     const error = "Processing failed";
     render(
       <ResultsDisplay
@@ -39,6 +39,27 @@ describe("ResultsDisplay", () => {
 
     expect(screen.getByText("Error")).toBeInTheDocument();
     expect(screen.getByText(error)).toBeInTheDocument();
+  });
+
+  it("shows results alongside error when both are present", () => {
+    const error = "Analysis failed: HTTP 500: Internal Server Error";
+    render(
+      <ResultsDisplay
+        ocrResult={mockOcrResult}
+        analysisResult={null}
+        resourcesResult={null}
+        error={error}
+      />
+    );
+
+    // Should show the error alert
+    expect(screen.getByText("Error")).toBeInTheDocument();
+    expect(screen.getByText(error)).toBeInTheDocument();
+
+    // Should also show the results
+    expect(screen.getByText("Analysis Results")).toBeInTheDocument();
+    expect(screen.getByText("OCR Text")).toBeInTheDocument();
+    expect(screen.getByText(mockOcrResult.text)).toBeInTheDocument();
   });
 
   it("renders OCR tab content by default", () => {
