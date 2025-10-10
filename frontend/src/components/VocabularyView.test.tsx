@@ -275,6 +275,7 @@ describe("VocabularyView", () => {
         word_phrase: "hej",
         translation: "hello",
         example_phrase: "Hej, hur mår du?",
+        extra_info: "en-word, noun, base form: hej",
         in_learn: true,
         last_learned: null,
         showed_times: 5,
@@ -287,6 +288,7 @@ describe("VocabularyView", () => {
         word_phrase: "bra",
         translation: "good",
         example_phrase: null,
+        extra_info: null,
         in_learn: false,
         last_learned: null,
         showed_times: 0,
@@ -317,6 +319,7 @@ describe("VocabularyView", () => {
     expect(screen.getByText("Swedish")).toBeInTheDocument();
     expect(screen.getByText("English")).toBeInTheDocument();
     expect(screen.getByText("Example Phrase")).toBeInTheDocument();
+    expect(screen.getByText("Extra Info")).toBeInTheDocument();
     expect(screen.getByText("In Learning")).toBeInTheDocument();
     expect(screen.getByText("Last Learned")).toBeInTheDocument();
     expect(screen.getByText("Saved")).toBeInTheDocument();
@@ -325,10 +328,11 @@ describe("VocabularyView", () => {
     expect(screen.getByText("hej")).toBeInTheDocument();
     expect(screen.getByText("hello")).toBeInTheDocument();
     expect(screen.getByText("Hej, hur mår du?")).toBeInTheDocument();
+    expect(screen.getByText("en-word, noun, base form: hej")).toBeInTheDocument();
 
     expect(screen.getByText("bra")).toBeInTheDocument();
     expect(screen.getByText("good")).toBeInTheDocument();
-    expect(screen.getByText("—")).toBeInTheDocument(); // null example_phrase should show dash
+    expect(screen.getAllByText("—")).toHaveLength(2); // null example_phrase and null extra_info should show dash
 
     // Check dates are formatted
     expect(screen.getByText("10/27/2023")).toBeInTheDocument();
@@ -343,6 +347,7 @@ describe("VocabularyView", () => {
         word_phrase: "test",
         translation: "test translation",
         example_phrase: null,
+        extra_info: null,
         in_learn: true,
         last_learned: null,
         showed_times: 2,
@@ -367,7 +372,7 @@ describe("VocabularyView", () => {
 
     render(<VocabularyView />);
 
-    // Should display dash for null example_phrase
-    expect(screen.getByText("—")).toBeInTheDocument();
+    // Should display dash for null example_phrase and null extra_info
+    expect(screen.getAllByText("—")).toHaveLength(2);
   });
 });

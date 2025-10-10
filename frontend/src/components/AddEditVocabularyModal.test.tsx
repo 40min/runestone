@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AddEditVocabularyModal from "./AddEditVocabularyModal";
+import { VOCABULARY_IMPROVEMENT_MODES } from "../constants";
 
 // Mock the useVocabulary hook
 vi.mock("../hooks/useVocabulary", () => ({
@@ -88,6 +89,7 @@ describe("AddEditVocabularyModal", () => {
     mockImproveVocabularyItem.mockResolvedValue({
       translation: "hello",
       example_phrase: "Hej, hur mår du?",
+      extra_info: "en-word, noun, base form: hej",
     });
 
     render(<AddEditVocabularyModal {...defaultProps} />);
@@ -101,13 +103,14 @@ describe("AddEditVocabularyModal", () => {
     await user.click(fillAllButton);
 
     await waitFor(() => {
-      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", true);
+      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS);
     });
 
     // Check that fields are filled
     await waitFor(() => {
       expect(screen.getByDisplayValue("hello")).toBeInTheDocument();
       expect(screen.getByDisplayValue("Hej, hur mår du?")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("en-word, noun, base form: hej")).toBeInTheDocument();
     });
   });
 
@@ -123,12 +126,12 @@ describe("AddEditVocabularyModal", () => {
     const wordInput = screen.getByLabelText("Swedish Word/Phrase");
     await user.type(wordInput, "hej");
 
-    // Click Fill Example button (Lightbulb icon)
+    // Click Fill Example button (AutoFixNormal icon)
     const fillExampleButton = screen.getByTitle("Fill Example");
     await user.click(fillExampleButton);
 
     await waitFor(() => {
-      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", false);
+      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY);
     });
 
     // Check that example phrase is filled
@@ -187,6 +190,7 @@ describe("AddEditVocabularyModal", () => {
       word_phrase: "hej",
       translation: "hello",
       example_phrase: "Hej, hur mår du?",
+      extra_info: null,
       in_learn: false,
     });
   });

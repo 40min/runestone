@@ -1,5 +1,6 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import useVocabulary, { useRecentVocabulary, improveVocabularyItem } from './useVocabulary';
+import { VOCABULARY_IMPROVEMENT_MODES } from '../constants';
 
 // Mock config
 vi.mock('../config', () => ({
@@ -558,10 +559,11 @@ describe('improveVocabularyItem', () => {
     mockFetch.mockClear();
   });
 
-  it('should improve vocabulary item with includeTranslation=true successfully', async () => {
+  it('should improve vocabulary item with all_fields mode successfully', async () => {
     const mockResponse = {
       translation: 'hello',
       example_phrase: 'Hej, hur mår du?',
+      extra_info: 'en-word, noun, base form: hej',
     };
 
     mockFetch.mockResolvedValueOnce({
@@ -569,7 +571,7 @@ describe('improveVocabularyItem', () => {
       json: () => Promise.resolve(mockResponse),
     });
 
-    const result = await improveVocabularyItem('hej', true);
+    const result = await improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS);
 
     expect(result).toEqual(mockResponse);
     expect(mockFetch).toHaveBeenCalledWith(
@@ -581,13 +583,13 @@ describe('improveVocabularyItem', () => {
         },
         body: JSON.stringify({
           word_phrase: 'hej',
-          include_translation: true,
+          mode: VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS,
         }),
       })
     );
   });
 
-  it('should improve vocabulary item with includeTranslation=false successfully', async () => {
+  it('should improve vocabulary item with example_only mode successfully', async () => {
     const mockResponse = {
       example_phrase: 'Hej, hur mår du?',
     };
@@ -597,7 +599,7 @@ describe('improveVocabularyItem', () => {
       json: () => Promise.resolve(mockResponse),
     });
 
-    const result = await improveVocabularyItem('hej', false);
+    const result = await improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY);
 
     expect(result).toEqual(mockResponse);
     expect(mockFetch).toHaveBeenCalledWith(
@@ -609,7 +611,7 @@ describe('improveVocabularyItem', () => {
         },
         body: JSON.stringify({
           word_phrase: 'hej',
-          include_translation: false,
+          mode: VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY,
         }),
       })
     );
@@ -623,7 +625,7 @@ describe('improveVocabularyItem', () => {
       json: () => Promise.resolve({}),
     });
 
-    await expect(improveVocabularyItem('hej', true)).rejects.toThrow(
+    await expect(improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS)).rejects.toThrow(
       'Failed to improve vocabulary item: HTTP 500'
     );
   });
@@ -631,6 +633,6 @@ describe('improveVocabularyItem', () => {
   it('should handle network error', async () => {
     mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
-    await expect(improveVocabularyItem('hej', true)).rejects.toThrow('Network error');
+    await expect(improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS)).rejects.toThrow('Network error');
   });
 });

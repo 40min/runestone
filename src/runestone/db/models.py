@@ -16,13 +16,14 @@ class Vocabulary(Base):
     __tablename__ = "vocabulary"
 
     # Fields that can be updated via API
-    UPDATABLE_FIELDS = {"word_phrase", "translation", "example_phrase", "in_learn"}
+    UPDATABLE_FIELDS = {"word_phrase", "translation", "example_phrase", "extra_info", "in_learn"}
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False)
     word_phrase = Column(Text, nullable=False, index=True)
     translation = Column(Text, nullable=False)
     example_phrase = Column(Text, nullable=True)
+    extra_info = Column(Text, nullable=True, default=None)
     in_learn = Column(Boolean, default=True)
     last_learned = Column(DateTime(timezone=True), nullable=True)
     learned_times = Column(Integer, default=0, server_default="0", nullable=False)

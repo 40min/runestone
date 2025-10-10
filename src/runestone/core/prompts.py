@@ -181,19 +181,19 @@ SWEDISH WORD/PHRASE: {word_phrase}
 Please provide your response in the following JSON format:
 
 {{
-    "translation": {translation_instruction},
-    "example_phrase": "A natural Swedish sentence using the word/phrase in context"
+    "translation": {translation_instruction_json},
+    "example_phrase": "A natural Swedish sentence using the word/phrase in context"{extra_info_json}
 }}
 
 INSTRUCTIONS:
 1. For translation:
-   {translation_detail}
+    {translation_detail}
 
 2. For example_phrase:
-   - Create a natural, conversational Swedish sentence that uses the word/phrase
-   - The sentence should clearly demonstrate the meaning and usage
-   - Keep it simple and appropriate for language learners
-   - The example should be practical and realistic
+    - Create a natural, conversational Swedish sentence that uses the word/phrase
+    - The sentence should clearly demonstrate the meaning and usage
+    - Keep it simple and appropriate for language learners
+    - The example should be practical and realistic{extra_info_detail}
 
 Return ONLY valid JSON, no additional text or formatting.
 """

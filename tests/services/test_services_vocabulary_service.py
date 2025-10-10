@@ -8,6 +8,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from runestone.api.schemas import ImprovementMode
 from runestone.api.schemas import Vocabulary as VocabularySchema
 from runestone.api.schemas import VocabularyImproveRequest, VocabularyImproveResponse, VocabularyItemCreate
 from runestone.config import Settings
@@ -489,14 +490,15 @@ class TestVocabularyService:
         assert db_vocab_user2 is not None
 
     def test_improve_item_success(self, service):
-        """Test successful vocabulary item improvement."""
+        """Test successful vocabulary item improvement with ALL_FIELDS mode."""
         # Mock LLM client from the service fixture
         service.llm_client.improve_vocabulary_item.return_value = (
-            '{"translation": "an apple", "example_phrase": "Jag äter ett äpple varje dag."}'
+            '{"translation": "an apple", "example_phrase": "Jag äter ett äpple varje dag.", '
+            '"extra_info": "en-word, noun"}'
         )
 
-        # Test request
-        request = VocabularyImproveRequest(word_phrase="ett äpple", include_translation=True)
+        # Test request with ALL_FIELDS mode
+        request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.ALL_FIELDS)
 
         result = service.improve_item(request)
 
@@ -504,6 +506,7 @@ class TestVocabularyService:
         assert isinstance(result, VocabularyImproveResponse)
         assert result.translation == "an apple"
         assert result.example_phrase == "Jag äter ett äpple varje dag."
+        assert result.extra_info == "en-word, noun"
 
         # Verify LLM client was called correctly
         service.llm_client.improve_vocabulary_item.assert_called_once()
@@ -511,12 +514,12 @@ class TestVocabularyService:
         assert "ett äpple" in prompt_arg
 
     def test_improve_item_without_translation(self, service):
-        """Test vocabulary improvement without translation."""
+        """Test vocabulary improvement with EXAMPLE_ONLY mode."""
         # Mock LLM client from the service fixture
         service.llm_client.improve_vocabulary_item.return_value = '{"example_phrase": "Jag äter ett äpple varje dag."}'
 
-        # Test request without translation
-        request = VocabularyImproveRequest(word_phrase="ett äpple", include_translation=False)
+        # Test request with EXAMPLE_ONLY mode
+        request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.EXAMPLE_ONLY)
 
         result = service.improve_item(request)
 
@@ -524,17 +527,18 @@ class TestVocabularyService:
         assert isinstance(result, VocabularyImproveResponse)
         assert result.translation is None
         assert result.example_phrase == "Jag äter ett äpple varje dag."
+        assert result.extra_info is None
 
     def test_improve_item_malformed_response_handling(self, service):
         """Test vocabulary improvement with malformed LLM response that gets parsed gracefully."""
 
         # Mock LLM client from the service fixture
         service.llm_client.improve_vocabulary_item.return_value = (
-            'translation: "clear", example_phrase: "Det är tydliga instruktioner."'
+            'translation: "clear", example_phrase: "Det är tydliga instruktioner.", extra_info: "adjective"'
         )
 
-        # Test request
-        request = VocabularyImproveRequest(word_phrase="tydliga", include_translation=True)
+        # Test request with ALL_FIELDS mode
+        request = VocabularyImproveRequest(word_phrase="tydliga", mode=ImprovementMode.ALL_FIELDS)
 
         result = service.improve_item(request)
 
@@ -544,3 +548,46 @@ class TestVocabularyService:
         assert result.translation == "clear"
         # The parser should extract the example phrase from the example_phrase field
         assert result.example_phrase == "Det är tydliga instruktioner."
+        # The parser should extract extra_info
+        assert result.extra_info == "adjective"
+
+    def test_improve_item_with_extra_info(self, service):
+        """Test vocabulary improvement with ALL_FIELDS mode including extra_info."""
+        # Mock LLM client from the service fixture
+        service.llm_client.improve_vocabulary_item.return_value = (
+            '{"translation": "an apple", "example_phrase": "Jag äter ett äpple varje dag.", '
+            '"extra_info": "en-word, noun, base form: äpple"}'
+        )
+
+        # Test request with ALL_FIELDS mode
+        request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.ALL_FIELDS)
+
+        result = service.improve_item(request)
+
+        # Verify result
+        assert isinstance(result, VocabularyImproveResponse)
+        assert result.translation == "an apple"
+        assert result.example_phrase == "Jag äter ett äpple varje dag."
+        assert result.extra_info == "en-word, noun, base form: äpple"
+
+        # Verify LLM client was called correctly
+        service.llm_client.improve_vocabulary_item.assert_called_once()
+        prompt_arg = service.llm_client.improve_vocabulary_item.call_args[0][0]
+        assert "ett äpple" in prompt_arg
+        assert "extra_info" in prompt_arg
+
+    def test_improve_item_extra_info_only(self, service):
+        """Test vocabulary improvement with EXTRA_INFO_ONLY mode."""
+        # Mock LLM client from the service fixture
+        service.llm_client.improve_vocabulary_item.return_value = '{"extra_info": "en-word, noun, base form: äpple"}'
+
+        # Test request with EXTRA_INFO_ONLY mode
+        request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.EXTRA_INFO_ONLY)
+
+        result = service.improve_item(request)
+
+        # Verify result
+        assert isinstance(result, VocabularyImproveResponse)
+        assert result.translation is None
+        assert result.example_phrase is None
+        assert result.extra_info == "en-word, noun, base form: äpple"
