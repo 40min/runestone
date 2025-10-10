@@ -125,10 +125,14 @@ class TestContentAnalyzer:
         # With the new parser, missing fields trigger fallback
         result = analyzer.analyze_content(self.sample_text)
 
-        # Should get fallback analysis
+        # Should get fallback analysis that preserves extracted data and fills missing fields
         assert "grammar_focus" in result
         assert "vocabulary" in result
-        assert result["grammar_focus"]["topic"] == "Swedish language practice"
+        # The topic from the partial JSON should be preserved
+        assert result["grammar_focus"]["topic"] == "Swedish greetings"
+        # Missing fields should be filled with defaults
+        assert result["grammar_focus"]["explanation"] != ""
+        assert "search_needed" in result
 
     def test_analyze_content_no_response(self):
         """Test handling of empty response."""

@@ -53,7 +53,14 @@ class ResponseParser:
 
             return OCRResponse(**data)
         except Exception as e:
-            raise ResponseParseError(f"Failed to parse OCR response: {str(e)}")
+            # Try fallback parsing for malformed responses
+            try:
+                fallback_data = self._fallback_ocr_parse(response)
+                return OCRResponse(**fallback_data)
+            except Exception as fallback_error:
+                raise ResponseParseError(
+                    f"Failed to parse OCR response: {str(e)}. Fallback also failed: {str(fallback_error)}"
+                )
 
     def parse_analysis_response(self, response: str) -> AnalysisResponse:
         """
@@ -182,35 +189,229 @@ class ResponseParser:
         # Remove any leading/trailing whitespace
         return response
 
-    def _fallback_analysis_parse(self, response: str) -> Dict[str, Any]:
+    def _fallback_ocr_parse(self, response: str) -> Dict[str, Any]:
         """
-        Fallback parser for malformed analysis responses.
+        Fallback parser for malformed OCR responses.
 
-        Returns a minimal valid analysis structure when JSON parsing fails.
+        Attempts to extract transcribed text and recognition statistics from
+        malformed responses using regex and heuristics.
 
         Args:
             response: Raw response text
 
         Returns:
-            Dictionary with basic analysis structure
+            Dictionary with OCR data structure
+
+        Raises:
+            ResponseParseError: If no meaningful text can be extracted
         """
-        return {
+        response = response.strip()
+        result = {
+            "transcribed_text": "",
+            "recognition_statistics": {
+                "total_elements": 0,
+                "successfully_transcribed": 0,
+                "unclear_uncertain": 0,
+                "unable_to_recognize": 0,
+            },
+        }
+
+        # Try to find JSON-like structure even if malformed
+        if response.startswith("{") and response.endswith("}"):
+            # Try to fix common JSON issues
+            fixed_text = response
+            # Fix trailing commas
+            fixed_text = re.sub(r",(\s*[}\]])", r"\1", fixed_text)
+            # Fix missing quotes around keys
+            fixed_text = re.sub(r"(\w+):", r'"\1":', fixed_text)
+            try:
+                return json.loads(fixed_text)
+            except json.JSONDecodeError:
+                pass  # Continue with regex extraction
+
+        # Try to extract transcribed_text field
+        transcribed_match = re.search(
+            r'(?:"transcribed_text"|transcribed_text)\s*:\s*"([^"]*)"', response, re.DOTALL | re.IGNORECASE
+        )
+        if transcribed_match:
+            result["transcribed_text"] = transcribed_match.group(1)
+
+        # Try to extract recognition statistics
+        total_match = re.search(r'(?:"total_elements"|total_elements)\s*:\s*(\d+)', response, re.IGNORECASE)
+        if total_match:
+            result["recognition_statistics"]["total_elements"] = int(total_match.group(1))
+
+        success_match = re.search(
+            r'(?:"successfully_transcribed"|successfully_transcribed)\s*:\s*(\d+)', response, re.IGNORECASE
+        )
+        if success_match:
+            result["recognition_statistics"]["successfully_transcribed"] = int(success_match.group(1))
+
+        unclear_match = re.search(r'(?:"unclear_uncertain"|unclear_uncertain)\s*:\s*(\d+)', response, re.IGNORECASE)
+        if unclear_match:
+            result["recognition_statistics"]["unclear_uncertain"] = int(unclear_match.group(1))
+
+        unable_match = re.search(r'(?:"unable_to_recognize"|unable_to_recognize)\s*:\s*(\d+)', response, re.IGNORECASE)
+        if unable_match:
+            result["recognition_statistics"]["unable_to_recognize"] = int(unable_match.group(1))
+
+        # If no transcribed text found, try to extract plain text
+        if not result["transcribed_text"]:
+            # Remove JSON-like structure markers
+            text = re.sub(r'[{}"\[\]]', "", response)
+            # Remove field names
+            field_pattern = (
+                r"(transcribed_text|recognition_statistics|total_elements|"
+                r"successfully_transcribed|unclear_uncertain|unable_to_recognize)\s*:\s*"
+            )
+            text = re.sub(field_pattern, "", text, flags=re.IGNORECASE)
+            # Clean up and get first reasonable text block
+            lines = [line.strip() for line in text.split("\n") if line.strip() and not line.strip().isdigit()]
+            if lines:
+                result["transcribed_text"] = "\n".join(lines[:10])  # Take first 10 meaningful lines
+
+        # If still no text extracted, raise an error
+        if not result["transcribed_text"]:
+            raise ResponseParseError("Could not extract transcribed text from malformed OCR response")
+
+        return result
+
+    def _fallback_analysis_parse(self, response: str) -> Dict[str, Any]:
+        """
+        Fallback parser for malformed analysis responses.
+
+        Attempts to extract analysis components from malformed responses
+        using regex and heuristics.
+
+        Args:
+            response: Raw response text
+
+        Returns:
+            Dictionary with analysis structure
+
+        Raises:
+            ResponseParseError: If no meaningful data can be extracted
+        """
+        response = response.strip()
+        result = {
             "grammar_focus": {
                 "has_explicit_rules": False,
-                "topic": "Swedish language practice",
-                "explanation": "This page contains Swedish language exercises and examples.",
+                "topic": "",
+                "explanation": "",
                 "rules": None,
             },
             "vocabulary": [],
-            "core_topics": ["Swedish language learning"],
+            "core_topics": [],
             "search_needed": {
                 "should_search": True,
-                "query_suggestions": [
-                    "Swedish grammar basics",
-                    "Swedish vocabulary practice",
-                ],
+                "query_suggestions": [],
             },
         }
+
+        # Try to find JSON-like structure even if malformed
+        if response.startswith("{") and response.endswith("}"):
+            # Try to fix common JSON issues
+            fixed_text = response
+            # Fix trailing commas
+            fixed_text = re.sub(r",(\s*[}\]])", r"\1", fixed_text)
+            # Fix missing quotes around keys
+            fixed_text = re.sub(r"(\w+):", r'"\1":', fixed_text)
+            try:
+                parsed_json = json.loads(fixed_text)
+                # Merge with result to ensure we start with extracted data
+                if "grammar_focus" in parsed_json:
+                    result["grammar_focus"].update(parsed_json["grammar_focus"])
+                if "vocabulary" in parsed_json:
+                    result["vocabulary"] = parsed_json["vocabulary"]
+                if "core_topics" in parsed_json:
+                    result["core_topics"] = parsed_json["core_topics"]
+                if "search_needed" in parsed_json:
+                    result["search_needed"].update(parsed_json["search_needed"])
+                # Don't return yet - continue to ensure all required fields are filled
+            except json.JSONDecodeError:
+                pass  # Continue with regex extraction
+
+        # Try to extract grammar_focus fields
+        topic_match = re.search(r'(?:"topic"|topic)\s*:\s*"([^"]*)"', response, re.IGNORECASE)
+        if topic_match:
+            result["grammar_focus"]["topic"] = topic_match.group(1)
+
+        explanation_match = re.search(r'(?:"explanation"|explanation)\s*:\s*"([^"]*)"', response, re.IGNORECASE)
+        if explanation_match:
+            result["grammar_focus"]["explanation"] = explanation_match.group(1)
+
+        rules_match = re.search(r'(?:"rules"|rules)\s*:\s*"([^"]*)"', response, re.IGNORECASE)
+        if rules_match:
+            result["grammar_focus"]["rules"] = rules_match.group(1)
+
+        has_rules_match = re.search(
+            r'(?:"has_explicit_rules"|has_explicit_rules)\s*:\s*(true|false)', response, re.IGNORECASE
+        )
+        if has_rules_match:
+            result["grammar_focus"]["has_explicit_rules"] = has_rules_match.group(1).lower() == "true"
+
+        # Try to extract vocabulary items
+        vocab_pattern = (
+            r'\{\s*"swedish"\s*:\s*"([^"]*)"\s*,\s*"english"\s*:\s*"([^"]*)"\s*'
+            r'(?:,\s*"example_phrase"\s*:\s*(?:"([^"]*)"|null))?\s*\}'
+        )
+        vocab_matches = re.finditer(vocab_pattern, response, re.IGNORECASE)
+        for match in vocab_matches:
+            vocab_item = {
+                "swedish": match.group(1),
+                "english": match.group(2),
+                "example_phrase": match.group(3) if match.group(3) else None,
+            }
+            result["vocabulary"].append(vocab_item)
+
+        # Try to extract core_topics
+        topics_match = re.search(r'(?:"core_topics"|core_topics)\s*:\s*\[(.*?)\]', response, re.DOTALL | re.IGNORECASE)
+        if topics_match:
+            topics_str = topics_match.group(1)
+            topics = re.findall(r'"([^"]*)"', topics_str)
+            result["core_topics"] = topics
+
+        # Try to extract search_needed
+        should_search_match = re.search(
+            r'(?:"should_search"|should_search)\s*:\s*(true|false)', response, re.IGNORECASE
+        )
+        if should_search_match:
+            result["search_needed"]["should_search"] = should_search_match.group(1).lower() == "true"
+
+        queries_match = re.search(
+            r'(?:"query_suggestions"|query_suggestions)\s*:\s*\[(.*?)\]', response, re.DOTALL | re.IGNORECASE
+        )
+        if queries_match:
+            queries_str = queries_match.group(1)
+            queries = re.findall(r'"([^"]*)"', queries_str)
+            result["search_needed"]["query_suggestions"] = queries
+
+        # Ensure all required fields have default values if missing
+        if not result["grammar_focus"]["topic"]:
+            result["grammar_focus"]["topic"] = "Swedish language practice"
+
+        if not result["grammar_focus"]["explanation"]:
+            result["grammar_focus"]["explanation"] = "Could not extract complete explanation from response"
+
+        if not result["core_topics"]:
+            result["core_topics"] = ["Swedish language learning"]
+
+        if not result["search_needed"]["query_suggestions"]:
+            result["search_needed"]["query_suggestions"] = ["Swedish grammar basics", "Swedish vocabulary practice"]
+
+        # If absolutely no meaningful data was extracted, raise error
+        if (
+            (not result["grammar_focus"]["topic"] or result["grammar_focus"]["topic"] == "Swedish language practice")
+            and not result["vocabulary"]
+            and len(result["core_topics"]) == 1
+            and result["core_topics"][0] == "Swedish language learning"
+        ):
+            # Try to extract any text content as a last resort
+            lines = [line.strip() for line in response.split("\n") if line.strip()]
+            if not lines:
+                raise ResponseParseError("Could not extract meaningful analysis data from malformed response")
+
+        return result
 
     def _fallback_vocabulary_parse(self, response_text: str, mode: ImprovementMode) -> Dict[str, Any]:
         """
