@@ -69,6 +69,10 @@ class ContentAnalyzer:
             if not response_text:
                 raise ContentAnalysisError("No analysis returned from LLM")
 
+            # Log the raw response for debugging
+            if self.verbose:
+                self.logger.debug(f"Raw LLM response (first 500 chars): {response_text[:500]}")
+
             # Parse response using ResponseParser (includes automatic fallback)
             try:
                 analysis_response = self.parser.parse_analysis_response(response_text)

@@ -146,7 +146,7 @@ Please provide your analysis in the following JSON format:
     "grammar_focus": {{
         "has_explicit_rules": boolean,
         "topic": "string describing the main grammatical topic",
-        "rules": "rules from a page with translation into English per phrase in brackets"
+        "rules": "single string with rules and translations. Use newlines to separate rules, not a list",
         "explanation": "English explanation of the grammar rule or pattern"
     }},
     "vocabulary": [
@@ -167,8 +167,10 @@ Please provide your analysis in the following JSON format:
 
 INSTRUCTIONS:
 1. For grammar_focus:
-   - If you recognise rules listed in the text, provide them as is but with translation into English
-     per phrase in brackets. If no rules are explicitly listed, infer them from the text.
+   - If you recognise rules listed in the text, provide them as a SINGLE STRING with translation into English
+     per phrase in brackets. If multiple rules exist, separate them with newlines (\n) within the string.
+     DO NOT return rules as a list or array - it must be a single string value.
+   - If no rules are explicitly listed, infer them from the text and format as a single string.
    - Set has_explicit_rules to true if there's a clear grammar rule section
    - Set has_explicit_rules to false if you need to infer the grammar from exercises
    - Provide a clear English explanation of the grammatical concept
