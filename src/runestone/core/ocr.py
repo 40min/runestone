@@ -5,7 +5,6 @@ This module handles image processing and text extraction from Swedish textbook p
 using various LLM providers like OpenAI or Gemini.
 """
 
-import json
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -15,7 +14,8 @@ from runestone.config import Settings
 from runestone.core.clients.base import BaseLLMClient
 from runestone.core.exceptions import ImageProcessingError, OCRError
 from runestone.core.logging_config import get_logger
-from runestone.core.prompts import OCR_PROMPT
+from runestone.core.prompt_builder import PromptBuilder, ResponseParser
+from runestone.core.prompt_builder.exceptions import ResponseParseError
 
 
 class OCRProcessor:
@@ -41,6 +41,10 @@ class OCRProcessor:
         self.logger = get_logger(__name__)
 
         self.client = client
+
+        # Initialize prompt builder and parser
+        self.builder = PromptBuilder()
+        self.parser = ResponseParser()
 
     def _load_and_validate_image(self, image_path: Path) -> Image.Image:
         """
@@ -91,23 +95,16 @@ class OCRProcessor:
             Cleaned transcribed text
 
         Raises:
-            OCRError: If recognition percentage is below 90% or JSON parsing fails
+            OCRError: If recognition percentage is below 90% or parsing fails
         """
         try:
-            # Parse JSON response
-            response_data = json.loads(extracted_text)
-
-            # Check for error response
-            if "error" in response_data:
-                raise OCRError(response_data["error"])
-
-            # Extract transcribed text
-            transcribed_text = response_data.get("transcribed_text", "").strip()
+            # Parse and validate response using ResponseParser
+            response = self.parser.parse_ocr_response(extracted_text)
 
             # Analyze recognition statistics
-            stats = response_data.get("recognition_statistics", {})
-            total = stats.get("total_elements", 0)
-            success = stats.get("successfully_transcribed", 0)
+            stats = response.recognition_statistics
+            total = stats.total_elements
+            success = stats.successfully_transcribed
 
             if total > 0:
                 percentage = (success / total) * 100
@@ -118,12 +115,10 @@ class OCRProcessor:
                     )
             # If total == 0, skip check (assume no text to recognize)
 
-            return transcribed_text
+            return response.transcribed_text.strip()
 
-        except json.JSONDecodeError as e:
-            raise OCRError(f"Failed to parse OCR response as JSON: {str(e)}")
-        except KeyError as e:
-            raise OCRError(f"Missing required field in OCR response: {str(e)}")
+        except ResponseParseError as e:
+            raise OCRError(f"Failed to parse OCR response: {str(e)}")
 
     def _preprocess_image_for_ocr(self, image: Image.Image) -> Image.Image:
         """
@@ -201,8 +196,8 @@ class OCRProcessor:
             # ENHANCEMENT: Apply preprocessing for better light-blue text detection
             preprocessed_image = self._preprocess_image_for_ocr(image)
 
-            # Prepare the prompt for OCR
-            ocr_prompt = OCR_PROMPT
+            # Build OCR prompt using PromptBuilder
+            ocr_prompt = self.builder.build_ocr_prompt()
 
             # Use the client for OCR processing with preprocessed image
             extracted_text = self.client.extract_text_from_image(preprocessed_image, ocr_prompt)

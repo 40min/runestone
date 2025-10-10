@@ -5,8 +5,6 @@ This module contains service classes that handle business logic
 for vocabulary-related operations.
 """
 
-import json
-import re
 from typing import List
 
 from ..api.schemas import Vocabulary as VocabularySchema
@@ -15,7 +13,8 @@ from ..config import Settings
 from ..core.clients.base import BaseLLMClient
 from ..core.exceptions import VocabularyItemExists
 from ..core.logging_config import get_logger
-from ..core.prompts import VOCABULARY_IMPROVE_PROMPT_TEMPLATE
+from ..core.prompt_builder import PromptBuilder, ResponseParser
+from ..core.prompt_builder.exceptions import ResponseParseError
 from ..db.models import Vocabulary
 from ..db.repository import VocabularyRepository
 
@@ -29,6 +28,10 @@ class VocabularyService:
         self.settings = settings
         self.llm_client = llm_client
         self.logger = get_logger(__name__)
+
+        # Initialize prompt builder and parser
+        self.builder = PromptBuilder()
+        self.parser = ResponseParser()
 
     def save_vocabulary(self, items: List[VocabularyItemCreate], user_id: int = 1) -> dict:
         """Save vocabulary items, handling business logic."""
@@ -168,198 +171,26 @@ class VocabularyService:
 
     def improve_item(self, request: VocabularyImproveRequest) -> VocabularyImproveResponse:
         """Improve a vocabulary item using LLM to generate translation, example phrase, and extra info."""
-        prompt = self._build_improvement_prompt(request)
+        # Build improvement prompt using PromptBuilder
+        prompt = self.builder.build_vocabulary_prompt(word_phrase=request.word_phrase, mode=request.mode)
 
         # Get improvement from LLM
         response_text = self.llm_client.improve_vocabulary_item(prompt)
 
-        # Parse JSON response with fallback for malformed responses
+        # Parse response using ResponseParser (includes automatic fallback)
         try:
-            result = json.loads(response_text)
-        except json.JSONDecodeError as e:
-            self.logger.warning(f"Failed to parse LLM response as JSON: {response_text}. Error: {e}")
-            # Try to extract information from malformed response
-            result = self._parse_malformed_llm_response(response_text, request.mode)
+            vocab_response = self.parser.parse_vocabulary_response(response_text, request.mode)
 
-        # Determine which fields to return based on mode
-        from ..api.schemas import ImprovementMode
-
-        if request.mode == ImprovementMode.EXAMPLE_ONLY:
-            translation = None
-            example_phrase = result.get("example_phrase", "")
-            extra_info = None
-        elif request.mode == ImprovementMode.EXTRA_INFO_ONLY:
-            translation = None
-            example_phrase = None
-            extra_info = result.get("extra_info")
-        else:  # ALL_FIELDS
-            translation = result.get("translation")
-            example_phrase = result.get("example_phrase", "")
-            extra_info = result.get("extra_info")
-
-        return VocabularyImproveResponse(translation=translation, example_phrase=example_phrase, extra_info=extra_info)
-
-    def _build_improvement_prompt(self, request: VocabularyImproveRequest) -> str:
-        """Build the LLM prompt for vocabulary improvement."""
-        from ..api.schemas import ImprovementMode
-
-        # Determine content based on mode
-        if request.mode == ImprovementMode.EXAMPLE_ONLY:
-            content_type = "example phrase"
-            translation_instruction_json = "null"
-            translation_detail = "Set translation to null since only example phrase is requested."
-            extra_info_json = ""
-            extra_info_detail = ""
-        elif request.mode == ImprovementMode.EXTRA_INFO_ONLY:
-            content_type = "extra info"
-            translation_instruction_json = "null"
-            translation_detail = "Set translation to null since only extra info is requested."
-            extra_info_json = (
-                ',\n    "extra_info": "A concise description of grammatical details '
-                '(e.g., word form, base form, en/ett classification)"'
+            return VocabularyImproveResponse(
+                translation=vocab_response.translation,
+                example_phrase=vocab_response.example_phrase,
+                extra_info=vocab_response.extra_info,
             )
-            extra_info_detail = """
-
-3. For extra_info:
-    - Provide grammatical information about the Swedish word/phrase
-    - Include word form (noun, verb, adjective, etc.), en/ett classification for nouns, base forms, etc.
-    - Keep it concise and human-readable (e.g., "en-word, noun, base form: ord")
-    - Focus on the most important grammatical details for language learners"""
-        else:  # ALL_FIELDS
-            content_type = "translation, example phrase and extra info"
-            translation_instruction_json = '"English translation of the word/phrase"'
-            translation_detail = "Provide the most common and accurate English translation."
-            extra_info_json = (
-                ',\n    "extra_info": "A concise description of grammatical details '
-                '(e.g., word form, base form, en/ett classification)"'
-            )
-            extra_info_detail = """
-
-3. For extra_info:
-    - Provide grammatical information about the Swedish word/phrase
-    - Include word form (noun, verb, adjective, etc.), en/ett classification for nouns, base forms, etc.
-    - Keep it concise and human-readable (e.g., "en-word, noun, base form: ord")
-    - Focus on the most important grammatical details for language learners"""
-
-        # Build the complete prompt
-        return VOCABULARY_IMPROVE_PROMPT_TEMPLATE.format(
-            word_phrase=request.word_phrase,
-            content_type=content_type,
-            translation_instruction_json=translation_instruction_json,
-            translation_detail=translation_detail,
-            extra_info_json=extra_info_json,
-            extra_info_detail=extra_info_detail,
-        )
+        except ResponseParseError as e:
+            self.logger.error(f"Failed to parse vocabulary response: {e}")
+            # Return empty response as fallback
+            return VocabularyImproveResponse(translation=None, example_phrase="", extra_info=None)
 
     def delete_vocabulary_item(self, item_id: int, user_id: int = 1) -> bool:
         """Completely delete a vocabulary item from the database."""
         return self.repo.hard_delete_vocabulary_item(item_id, user_id)
-
-    def _parse_malformed_llm_response(self, response_text: str, mode) -> dict:
-        """
-        Parse a malformed LLM response that is not valid JSON.
-
-        Attempts to extract translation, example_phrase, and extra_info from various formats.
-        Returns a dict with 'translation', 'example_phrase', and 'extra_info' keys.
-        """
-        from ..api.schemas import ImprovementMode
-
-        result = {"translation": None, "example_phrase": "", "extra_info": None}
-
-        # Clean the response text
-        response_text = response_text.strip()
-
-        # Try to find JSON-like structure even if malformed
-        if response_text.startswith("{") and response_text.endswith("}"):
-            # Try to fix common JSON issues
-            fixed_text = response_text
-            # Fix trailing commas
-            fixed_text = re.sub(r",(\s*[}\]])", r"\1", fixed_text)
-            # Fix missing quotes around keys
-            fixed_text = re.sub(r"(\w+):", r'"\1":', fixed_text)
-            try:
-                return json.loads(fixed_text)
-            except json.JSONDecodeError:
-                pass  # Continue with other parsing methods
-
-        # Try to extract using regex patterns
-        # Look for translation: "value" (with or without quotes around key)
-        translation_match = re.search(r'(?:"translation"|\btranslation)\s*:\s*"([^"]*)"', response_text, re.IGNORECASE)
-        if translation_match:
-            result["translation"] = translation_match.group(1)
-
-        # Look for example_phrase: "value" (with or without quotes around key)
-        example_match = re.search(
-            r'(?:"example_phrase"|\bexample_phrase)\s*:\s*"([^"]*)"', response_text, re.IGNORECASE
-        )
-        if example_match:
-            result["example_phrase"] = example_match.group(1)
-
-        # Look for extra_info: "value" (with or without quotes around key)
-        extra_info_match = re.search(r'(?:"extra_info"|\bextra_info)\s*:\s*"([^"]*)"', response_text, re.IGNORECASE)
-        if extra_info_match:
-            result["extra_info"] = extra_info_match.group(1)
-
-        # If no structured data found, try to extract from plain text
-        if not result["translation"] and not result["example_phrase"] and not result["extra_info"]:
-            # Split by common separators and take the first meaningful part as example
-            lines = [line.strip() for line in response_text.split("\n") if line.strip()]
-            if lines:
-                # Assume the first line is the example phrase
-                result["example_phrase"] = lines[0]
-
-        # If translation was requested but not found, try to infer it
-        if mode == ImprovementMode.ALL_FIELDS and not result["translation"]:
-            # Look for English words that might be translations
-            words = re.findall(r"\b[a-zA-Z]+\b", response_text)
-            english_words = [
-                w
-                for w in words
-                if len(w) > 2
-                and w.lower()
-                not in [
-                    "the",
-                    "and",
-                    "for",
-                    "are",
-                    "but",
-                    "not",
-                    "you",
-                    "all",
-                    "can",
-                    "had",
-                    "her",
-                    "was",
-                    "one",
-                    "our",
-                    "out",
-                    "day",
-                    "get",
-                    "has",
-                    "him",
-                    "his",
-                    "how",
-                    "its",
-                    "may",
-                    "new",
-                    "now",
-                    "old",
-                    "see",
-                    "two",
-                    "way",
-                    "who",
-                    "boy",
-                    "did",
-                    "has",
-                    "let",
-                    "put",
-                    "say",
-                    "she",
-                    "too",
-                    "use",
-                ]
-            ]
-            if english_words:
-                result["translation"] = " ".join(english_words[:3])  # Take first few words
-
-        return result

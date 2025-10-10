@@ -5,14 +5,14 @@ This module uses configurable LLM providers to analyze extracted text and identi
 grammar rules, vocabulary, and generate learning resources.
 """
 
-import json
 from typing import Any, Dict, Optional
 
 from runestone.config import Settings
 from runestone.core.clients.base import BaseLLMClient
 from runestone.core.exceptions import ContentAnalysisError
 from runestone.core.logging_config import get_logger
-from runestone.core.prompts import ANALYSIS_PROMPT_TEMPLATE, SEARCH_PROMPT_TEMPLATE
+from runestone.core.prompt_builder import PromptBuilder, ResponseParser
+from runestone.core.prompt_builder.exceptions import ResponseParseError
 
 
 class ContentAnalyzer:
@@ -39,6 +39,10 @@ class ContentAnalyzer:
 
         self.client = client
 
+        # Initialize prompt builder and parser
+        self.builder = PromptBuilder()
+        self.parser = ResponseParser()
+
     def analyze_content(self, extracted_text: str) -> Dict[str, Any]:
         """
         Analyze Swedish textbook content to extract learning materials.
@@ -53,7 +57,8 @@ class ContentAnalyzer:
             ContentAnalysisError: If content analysis fails
         """
         try:
-            analysis_prompt = ANALYSIS_PROMPT_TEMPLATE.format(extracted_text=extracted_text)
+            # Build analysis prompt using PromptBuilder
+            analysis_prompt = self.builder.build_analysis_prompt(extracted_text)
 
             if self.verbose:
                 self.logger.info(f"Analyzing content with {self.client.provider_name}...")
@@ -63,65 +68,41 @@ class ContentAnalyzer:
             if not response_text:
                 raise ContentAnalysisError("No analysis returned from LLM")
 
-            # Parse JSON response
+            # Parse response using ResponseParser (includes automatic fallback)
             try:
-                analysis = json.loads(response_text.strip())
+                analysis_response = self.parser.parse_analysis_response(response_text)
 
-                # Validate required fields
-                required_fields = [
-                    "grammar_focus",
-                    "vocabulary",
-                    "core_topics",
-                    "search_needed",
-                ]
-                for field in required_fields:
-                    if field not in analysis:
-                        raise ContentAnalysisError(f"Missing required field: {field}")
-
-                return analysis
-
-            except json.JSONDecodeError:
-                # If JSON parsing fails, try to extract content manually
+                # Convert to dictionary format for backward compatibility
+                return {
+                    "grammar_focus": {
+                        "has_explicit_rules": analysis_response.grammar_focus.has_explicit_rules,
+                        "topic": analysis_response.grammar_focus.topic,
+                        "explanation": analysis_response.grammar_focus.explanation,
+                        "rules": analysis_response.grammar_focus.rules,
+                    },
+                    "vocabulary": [
+                        {
+                            "swedish": item.swedish,
+                            "english": item.english,
+                            "example_phrase": item.example_phrase,
+                        }
+                        for item in analysis_response.vocabulary
+                    ],
+                    "core_topics": analysis_response.core_topics,
+                    "search_needed": {
+                        "should_search": analysis_response.search_needed.should_search,
+                        "query_suggestions": analysis_response.search_needed.query_suggestions,
+                    },
+                }
+            except ResponseParseError as e:
                 if self.verbose:
-                    self.logger.warning("JSON parsing failed, attempting fallback analysis...")
-
-                return self._fallback_analysis(extracted_text, response_text)
+                    self.logger.warning(f"Response parsing failed: {e}")
+                raise ContentAnalysisError(f"Failed to parse analysis response: {str(e)}")
 
         except ContentAnalysisError:
             raise
         except Exception as e:
             raise ContentAnalysisError(f"Content analysis failed: {str(e)}")
-
-    def _fallback_analysis(self, extracted_text: str, raw_response: str) -> Dict[str, Any]:
-        """
-        Fallback analysis when JSON parsing fails.
-
-        Args:
-            extracted_text: Original extracted text
-            raw_response: Raw LLM response
-
-        Returns:
-            Basic analysis structure
-        """
-        return {
-            "grammar_focus": {
-                "has_explicit_rules": False,
-                "topic": "Swedish language practice",
-                "explanation": "This page contains Swedish language exercises and examples.",  # noqa: E501
-                "rules": None,
-            },
-            "vocabulary": [],
-            "core_topics": ["Swedish language learning"],
-            "search_needed": {
-                "should_search": True,
-                "query_suggestions": [
-                    "Swedish grammar basics",
-                    "Swedish vocabulary practice",
-                ],
-            },
-            "fallback_used": True,
-            "raw_response": raw_response,
-        }
 
     def find_extra_learning_info(self, analysis: Dict[str, Any]) -> str:
         """
@@ -150,18 +131,17 @@ class ContentAnalyzer:
                     f"Searching for educational material on topics: {core_topics} and queries: {search_queries}"
                 )
 
-            # Use combined queries in one search prompt
-            search_prompt = SEARCH_PROMPT_TEMPLATE.format(
-                core_topics=", ".join(f'"{topic}"' for topic in core_topics[:3]),
-                query_suggestions=", ".join(f'"{query}"' for query in search_queries[:4]),
+            # Build search prompt using PromptBuilder
+            search_prompt = self.builder.build_search_prompt(
+                core_topics=core_topics[:3], query_suggestions=search_queries[:4]
             )
 
             try:
                 response_text = self.client.search_resources(search_prompt)
 
                 if response_text:
-                    # Return the LLM response as is
-                    return response_text
+                    # Parse search response (returns as plain text)
+                    return self.parser.parse_search_response(response_text)
 
                 # Fallback with simple message if no response
                 return "No extra learning info available at this time."

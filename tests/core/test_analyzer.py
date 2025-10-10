@@ -94,11 +94,14 @@ class TestContentAnalyzer:
         analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
         result = analyzer.analyze_content(self.sample_text)
 
-        # Should get fallback analysis
-        assert "fallback_used" in result
-        assert result["fallback_used"] is True
+        # Should get fallback analysis with default structure
         assert "grammar_focus" in result
         assert "vocabulary" in result
+        assert "core_topics" in result
+        assert "search_needed" in result
+        # Fallback provides minimal valid structure
+        assert result["grammar_focus"]["topic"] == "Swedish language practice"
+        assert isinstance(result["vocabulary"], list)
 
     def test_analyze_content_missing_fields(self):
         """Test handling of JSON with missing required fields."""
@@ -119,10 +122,13 @@ class TestContentAnalyzer:
 
         analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
 
-        with pytest.raises(ContentAnalysisError) as exc_info:
-            analyzer.analyze_content(self.sample_text)
+        # With the new parser, missing fields trigger fallback
+        result = analyzer.analyze_content(self.sample_text)
 
-        assert "Missing required field" in str(exc_info.value)
+        # Should get fallback analysis
+        assert "grammar_focus" in result
+        assert "vocabulary" in result
+        assert result["grammar_focus"]["topic"] == "Swedish language practice"
 
     def test_analyze_content_no_response(self):
         """Test handling of empty response."""
@@ -202,33 +208,32 @@ class TestContentAnalyzer:
         assert "No extra learning info available" in resources
 
     def test_fallback_analysis_structure(self):
-        """Test structure of fallback analysis."""
-        mock_client = Mock()
-        analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
+        """Test structure of fallback analysis via parser."""
+        from runestone.core.prompt_builder.parsers import ResponseParser
 
-        result = analyzer._fallback_analysis("test text", "raw response")
+        parser = ResponseParser()
+
+        # Test that fallback returns valid structure
+        fallback_data = parser._fallback_analysis_parse("invalid response")
 
         # Check required structure
-        assert "grammar_focus" in result
-        assert "vocabulary" in result
-        assert "core_topics" in result
-        assert "search_needed" in result
-        assert "fallback_used" in result
-        assert "raw_response" in result
+        assert "grammar_focus" in fallback_data
+        assert "vocabulary" in fallback_data
+        assert "core_topics" in fallback_data
+        assert "search_needed" in fallback_data
 
-        assert result["fallback_used"] is True
-        assert result["raw_response"] == "raw response"
-        assert isinstance(result["vocabulary"], list)
-        assert isinstance(result["core_topics"], list)
+        assert isinstance(fallback_data["vocabulary"], list)
+        assert isinstance(fallback_data["core_topics"], list)
+        assert fallback_data["grammar_focus"]["topic"] == "Swedish language practice"
 
     def test_fallback_analysis_includes_rules_field(self):
         """Test that fallback analysis includes rules field."""
-        mock_client = Mock()
-        analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
+        from runestone.core.prompt_builder.parsers import ResponseParser
 
-        result = analyzer._fallback_analysis("test text", "raw response")
+        parser = ResponseParser()
+        fallback_data = parser._fallback_analysis_parse("invalid response")
 
         # Check that rules field is present and None
-        assert "grammar_focus" in result
-        assert "rules" in result["grammar_focus"]
-        assert result["grammar_focus"]["rules"] is None
+        assert "grammar_focus" in fallback_data
+        assert "rules" in fallback_data["grammar_focus"]
+        assert fallback_data["grammar_focus"]["rules"] is None
