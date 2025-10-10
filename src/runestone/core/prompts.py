@@ -181,8 +181,8 @@ SWEDISH WORD/PHRASE: {word_phrase}
 Please provide your response in the following JSON format:
 
 {{
-    "translation": {translation_instruction},
-    "example_phrase": "A natural Swedish sentence using the word/phrase in context"{extra_info_instruction}
+    "translation": {translation_instruction_json},
+    "example_phrase": "A natural Swedish sentence using the word/phrase in context"{extra_info_json}
 }}
 
 INSTRUCTIONS:

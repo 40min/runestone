@@ -25,6 +25,27 @@ interface AddEditVocabularyModalProps {
   onDelete?: () => Promise<void>;
 }
 
+const textFieldStyles = {
+  "& .MuiOutlinedInput-root": {
+    color: "white",
+    "& fieldset": {
+      borderColor: "#374151",
+    },
+    "&:hover fieldset": {
+      borderColor: "#6b7280",
+    },
+    "&.Mui-focused fieldset": {
+      borderColor: "var(--primary-color)",
+    },
+  },
+  "& .MuiInputLabel-root": {
+    color: "#9ca3af",
+    "&.Mui-focused": {
+      color: "var(--primary-color)",
+    },
+  },
+};
+
 const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   open,
   item,
@@ -161,26 +182,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
             onChange={(e) => setWordPhrase(e.target.value)}
             fullWidth
             variant="outlined"
-            sx={{
-              "& .MuiOutlinedInput-root": {
-                color: "white",
-                "& fieldset": {
-                  borderColor: "#374151",
-                },
-                "&:hover fieldset": {
-                  borderColor: "#6b7280",
-                },
-                "&.Mui-focused fieldset": {
-                  borderColor: "var(--primary-color)",
-                },
-              },
-              "& .MuiInputLabel-root": {
-                color: "#9ca3af",
-                "&.Mui-focused": {
-                  color: "var(--primary-color)",
-                },
-              },
-            }}
+            sx={textFieldStyles}
           />
 
           <TextField
@@ -189,26 +191,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
             onChange={(e) => setTranslation(e.target.value)}
             fullWidth
             variant="outlined"
-            sx={{
-              "& .MuiOutlinedInput-root": {
-                color: "white",
-                "& fieldset": {
-                  borderColor: "#374151",
-                },
-                "&:hover fieldset": {
-                  borderColor: "#6b7280",
-                },
-                "&.Mui-focused fieldset": {
-                  borderColor: "var(--primary-color)",
-                },
-              },
-              "& .MuiInputLabel-root": {
-                color: "#9ca3af",
-                "&.Mui-focused": {
-                  color: "var(--primary-color)",
-                },
-              },
-            }}
+            sx={textFieldStyles}
           />
 
           <Box sx={{ position: "relative" }}>
@@ -220,26 +203,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
               variant="outlined"
               multiline
               rows={2}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  color: "white",
-                  "& fieldset": {
-                    borderColor: "#374151",
-                  },
-                  "&:hover fieldset": {
-                    borderColor: "#6b7280",
-                  },
-                  "&.Mui-focused fieldset": {
-                    borderColor: "var(--primary-color)",
-                  },
-                },
-                "& .MuiInputLabel-root": {
-                  color: "#9ca3af",
-                  "&.Mui-focused": {
-                    color: "var(--primary-color)",
-                  },
-                },
-              }}
+              sx={textFieldStyles}
             />
             <IconButton
               onClick={handleFillExample}
@@ -272,26 +236,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
               variant="outlined"
               multiline
               rows={2}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  color: "white",
-                  "& fieldset": {
-                    borderColor: "#374151",
-                  },
-                  "&:hover fieldset": {
-                    borderColor: "#6b7280",
-                  },
-                  "&.Mui-focused fieldset": {
-                    borderColor: "var(--primary-color)",
-                  },
-                },
-                "& .MuiInputLabel-root": {
-                  color: "#9ca3af",
-                  "&.Mui-focused": {
-                    color: "var(--primary-color)",
-                  },
-                },
-              }}
+              sx={textFieldStyles}
             />
             <IconButton
               onClick={() => handleImproveVocabulary(false, true)}

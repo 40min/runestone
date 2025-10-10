@@ -168,53 +168,7 @@ class VocabularyService:
 
     def improve_item(self, request: VocabularyImproveRequest) -> VocabularyImproveResponse:
         """Improve a vocabulary item using LLM to generate translation, example phrase, and extra info."""
-
-        # Prepare prompt parameters
-        content_parts = []
-        if request.include_translation:
-            content_parts.append("translation")
-        if request.include_extra_info:
-            content_parts.append("extra info")
-        content_parts.append("example phrase")  # Always include example phrase
-
-        content_type = (
-            ", ".join(content_parts[:-1]) + " and " + content_parts[-1] if len(content_parts) > 1 else content_parts[0]
-        )
-
-        # Build translation instructions
-        if request.include_translation:
-            translation_instruction = '"English translation of the word/phrase"'
-            translation_detail = "Provide the most common and accurate English translation."
-        else:
-            translation_instruction = "null"
-            translation_detail = "Set translation to null since only example phrase is requested."
-
-        # Build extra_info instructions
-        if request.include_extra_info:
-            extra_info_instruction = (
-                ',\n    "extra_info": "A concise description of grammatical details '
-                '(e.g., word form, base form, en/ett classification)"'
-            )
-            extra_info_detail = """
-
-3. For extra_info:
-    - Provide grammatical information about the Swedish word/phrase
-    - Include word form (noun, verb, adjective, etc.), en/ett classification for nouns, base forms, etc.
-    - Keep it concise and human-readable (e.g., "en-word, noun, base form: ord")
-    - Focus on the most important grammatical details for language learners"""
-        else:
-            extra_info_instruction = ""
-            extra_info_detail = ""
-
-        # Format the prompt with all required parameters
-        prompt = VOCABULARY_IMPROVE_PROMPT_TEMPLATE.format(
-            word_phrase=request.word_phrase,
-            content_type=content_type,
-            translation_instruction=translation_instruction,
-            translation_detail=translation_detail,
-            extra_info_instruction=extra_info_instruction,
-            extra_info_detail=extra_info_detail,
-        )
+        prompt = self._build_improvement_prompt(request)
 
         # Get improvement from LLM
         response_text = self.llm_client.improve_vocabulary_item(prompt)
@@ -234,6 +188,55 @@ class VocabularyService:
         extra_info = result.get("extra_info") if request.include_extra_info else None
 
         return VocabularyImproveResponse(translation=translation, example_phrase=example_phrase, extra_info=extra_info)
+
+    def _build_improvement_prompt(self, request: VocabularyImproveRequest) -> str:
+        """Build the LLM prompt for vocabulary improvement."""
+        # Prepare content type description
+        content_parts = []
+        if request.include_translation:
+            content_parts.append("translation")
+        if request.include_extra_info:
+            content_parts.append("extra info")
+        content_parts.append("example phrase")  # Always include example phrase
+
+        content_type = (
+            ", ".join(content_parts[:-1]) + " and " + content_parts[-1] if len(content_parts) > 1 else content_parts[0]
+        )
+
+        # Build JSON schema field for translation
+        if request.include_translation:
+            translation_instruction_json = '"English translation of the word/phrase"'
+            translation_detail = "Provide the most common and accurate English translation."
+        else:
+            translation_instruction_json = "null"
+            translation_detail = "Set translation to null since only example phrase is requested."
+
+        # Build JSON schema field and instructions for extra_info
+        if request.include_extra_info:
+            extra_info_json = (
+                ',\n    "extra_info": "A concise description of grammatical details '
+                '(e.g., word form, base form, en/ett classification)"'
+            )
+            extra_info_detail = """
+
+3. For extra_info:
+    - Provide grammatical information about the Swedish word/phrase
+    - Include word form (noun, verb, adjective, etc.), en/ett classification for nouns, base forms, etc.
+    - Keep it concise and human-readable (e.g., "en-word, noun, base form: ord")
+    - Focus on the most important grammatical details for language learners"""
+        else:
+            extra_info_json = ""
+            extra_info_detail = ""
+
+        # Build the complete prompt
+        return VOCABULARY_IMPROVE_PROMPT_TEMPLATE.format(
+            word_phrase=request.word_phrase,
+            content_type=content_type,
+            translation_instruction_json=translation_instruction_json,
+            translation_detail=translation_detail,
+            extra_info_json=extra_info_json,
+            extra_info_detail=extra_info_detail,
+        )
 
     def delete_vocabulary_item(self, item_id: int, user_id: int = 1) -> bool:
         """Completely delete a vocabulary item from the database."""
