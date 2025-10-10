@@ -211,7 +211,7 @@ load-vocab:
 		$(if $(filter true,$(SKIP_EXISTENCE_CHECK)),--skip-existence-check)
 
 # Start FastAPI backend server
-run-backend:
+run-backend: db-upgrade
 	@echo "🚀 Starting FastAPI backend server..."
 	@echo "📍 Backend will be available at: http://localhost:8010"
 	@echo "📚 API documentation at: http://localhost:8010/docs"
@@ -224,7 +224,7 @@ run-frontend:
 	@cd frontend && npm run dev
 
 # Start both backend and frontend concurrently
-run-dev:
+run-dev: db-upgrade
 	@echo "🚀 Starting full development environment..."
 	@echo "📍 Backend: http://localhost:8010"
 	@echo "📍 Frontend: http://localhost:5173"
