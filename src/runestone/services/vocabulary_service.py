@@ -13,8 +13,9 @@ from ..config import Settings
 from ..core.clients.base import BaseLLMClient
 from ..core.exceptions import VocabularyItemExists
 from ..core.logging_config import get_logger
-from ..core.prompt_builder import PromptBuilder, ResponseParser
+from ..core.prompt_builder.builder import PromptBuilder
 from ..core.prompt_builder.exceptions import ResponseParseError
+from ..core.prompt_builder.parsers import ResponseParser
 from ..db.models import Vocabulary
 from ..db.repository import VocabularyRepository
 

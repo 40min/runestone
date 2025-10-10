@@ -7,8 +7,8 @@ prompts using templates from the template registry.
 
 from typing import Dict, List, Optional
 
-from .templates import TEMPLATE_REGISTRY, PromptTemplate
-from .types import ImprovementMode, PromptType
+from runestone.core.prompt_builder.templates import TEMPLATE_REGISTRY, PromptTemplate
+from runestone.core.prompt_builder.types import ImprovementMode, PromptType
 
 
 class PromptBuilder:

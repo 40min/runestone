@@ -11,8 +11,9 @@ from runestone.config import Settings
 from runestone.core.clients.base import BaseLLMClient
 from runestone.core.exceptions import ContentAnalysisError
 from runestone.core.logging_config import get_logger
-from runestone.core.prompt_builder import PromptBuilder, ResponseParser
+from runestone.core.prompt_builder.builder import PromptBuilder
 from runestone.core.prompt_builder.exceptions import ResponseParseError
+from runestone.core.prompt_builder.parsers import ResponseParser
 
 
 class ContentAnalyzer:

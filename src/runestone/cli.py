@@ -23,7 +23,8 @@ from runestone.core.console import setup_console
 from runestone.core.exceptions import RunestoneError
 from runestone.core.logging_config import setup_logging
 from runestone.core.processor import RunestoneProcessor
-from runestone.core.prompt_builder import ImprovementMode, PromptBuilder
+from runestone.core.prompt_builder.builder import PromptBuilder
+from runestone.core.prompt_builder.types import ImprovementMode
 from runestone.db.repository import VocabularyRepository
 from runestone.services.vocabulary_service import VocabularyService
 

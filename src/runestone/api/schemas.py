@@ -9,7 +9,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from runestone.core.prompt_builder import ImprovementMode
+from runestone.core.prompt_builder.types import ImprovementMode
 
 
 class OCRResult(BaseModel):

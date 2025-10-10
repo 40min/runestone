@@ -8,8 +8,8 @@ organized in a centralized registry for easy management and version control.
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-from .exceptions import ParameterMissingError
-from .types import PromptType
+from runestone.core.prompt_builder.exceptions import ParameterMissingError
+from runestone.core.prompt_builder.types import PromptType
 
 
 @dataclass

@@ -9,9 +9,9 @@ import json
 import re
 from typing import Any, Dict, Optional
 
-from .exceptions import ResponseParseError
-from .types import ImprovementMode
-from .validators import AnalysisResponse, OCRResponse, VocabularyResponse
+from runestone.core.prompt_builder.exceptions import ResponseParseError
+from runestone.core.prompt_builder.types import ImprovementMode
+from runestone.core.prompt_builder.validators import AnalysisResponse, OCRResponse, VocabularyResponse
 
 
 class ResponseParser:
