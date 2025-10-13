@@ -14,6 +14,14 @@ from runestone.core.console import setup_console
 from runestone.core.exceptions import RunestoneError
 from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
+from runestone.core.prompt_builder.validators import (
+    AnalysisResponse,
+    GrammarFocusResponse,
+    OCRResponse,
+    RecognitionStatistics,
+    SearchNeededResponse,
+    VocabularyItemResponse,
+)
 
 
 class TestRunestoneIntegration:
@@ -59,28 +67,34 @@ class TestRunestoneIntegration:
         mock_image_open.return_value = mock_image
 
         # Mock OCR results
-        mock_ocr_result = {
-            "text": "Hej, vad heter du?",
-            "character_count": 17,
-        }
+        mock_ocr_result = OCRResponse(
+            transcribed_text="Hej, vad heter du?",
+            recognition_statistics=RecognitionStatistics(
+                total_elements=17,
+                successfully_transcribed=17,
+                unclear_uncertain=0,
+                unable_to_recognize=0,
+            ),
+        )
 
         # Mock analysis results
-        mock_analysis = {
-            "grammar_focus": {
-                "has_explicit_rules": False,
-                "topic": "Swedish questions",
-                "explanation": "Basic question formation in Swedish",
-            },
-            "vocabulary": [
-                {"swedish": "hej", "english": "hello"},
-                {"swedish": "vad", "english": "what"},
+        mock_analysis = AnalysisResponse(
+            grammar_focus=GrammarFocusResponse(
+                has_explicit_rules=False,
+                topic="Swedish questions",
+                explanation="Basic question formation in Swedish",
+                rules=None,
+            ),
+            vocabulary=[
+                VocabularyItemResponse(swedish="hej", english="hello", example_phrase=None),
+                VocabularyItemResponse(swedish="vad", english="what", example_phrase=None),
             ],
-            "core_topics": ["questions", "greetings"],
-            "search_needed": {
-                "should_search": True,
-                "query_suggestions": ["Swedish questions"],
-            },
-        }
+            core_topics=["questions", "greetings"],
+            search_needed=SearchNeededResponse(
+                should_search=True,
+                query_suggestions=["Swedish questions"],
+            ),
+        )
 
         # Mock resources
         mock_resources = "Additional learning resources about Swedish questions"
@@ -107,7 +121,7 @@ class TestRunestoneIntegration:
         # Simulate the workflow step by step
         image_bytes = b"fake image data"
         ocr_result = processor.run_ocr(image_bytes)
-        analysis_result = processor.run_analysis(ocr_result["text"])
+        analysis_result = processor.run_analysis(ocr_result.transcribed_text)
         resources_result = processor.run_resource_search(analysis_result)
 
         # Verify workflow execution
@@ -152,7 +166,15 @@ class TestRunestoneIntegration:
         mock_image_open.return_value = mock_image
 
         # Mock empty OCR result
-        mock_ocr_result = {"text": "", "character_count": 0}
+        mock_ocr_result = OCRResponse(
+            transcribed_text="",
+            recognition_statistics=RecognitionStatistics(
+                total_elements=0,
+                successfully_transcribed=0,
+                unclear_uncertain=0,
+                unable_to_recognize=0,
+            ),
+        )
 
         mock_ocr_processor = Mock(spec=OCRProcessor)
         mock_ocr_processor.extract_text.return_value = mock_ocr_result
@@ -165,16 +187,31 @@ class TestRunestoneIntegration:
 
         with pytest.raises(RunestoneError) as exc_info:
             ocr_result = processor.run_ocr(b"fake image data")
-            processor.run_analysis(ocr_result["text"])
+            processor.run_analysis(ocr_result.transcribed_text)
 
         assert "No text provided for analysis" in str(exc_info.value)
 
     @patch("runestone.core.processor.ResultFormatter")
     def test_display_results_console(self, mock_formatter):
         """Test console result display."""
+        mock_ocr_result = OCRResponse(
+            transcribed_text="test",
+            recognition_statistics=RecognitionStatistics(
+                total_elements=4,
+                successfully_transcribed=4,
+                unclear_uncertain=0,
+                unable_to_recognize=0,
+            ),
+        )
+        mock_analysis = AnalysisResponse(
+            grammar_focus=GrammarFocusResponse(has_explicit_rules=False, topic="", explanation="", rules=None),
+            vocabulary=[],
+            core_topics=[],
+            search_needed=SearchNeededResponse(should_search=False, query_suggestions=[]),
+        )
         mock_results = {
-            "ocr_result": {"text": "test"},
-            "analysis": {"grammar_focus": {}},
+            "ocr_result": mock_ocr_result,
+            "analysis": mock_analysis,
             "extra_info": "",
         }
 
@@ -198,9 +235,24 @@ class TestRunestoneIntegration:
     @patch("runestone.core.processor.ResultFormatter")
     def test_display_results_markdown(self, mock_formatter):
         """Test markdown result display."""
+        mock_ocr_result = OCRResponse(
+            transcribed_text="test",
+            recognition_statistics=RecognitionStatistics(
+                total_elements=4,
+                successfully_transcribed=4,
+                unclear_uncertain=0,
+                unable_to_recognize=0,
+            ),
+        )
+        mock_analysis = AnalysisResponse(
+            grammar_focus=GrammarFocusResponse(has_explicit_rules=False, topic="", explanation="", rules=None),
+            vocabulary=[],
+            core_topics=[],
+            search_needed=SearchNeededResponse(should_search=False, query_suggestions=[]),
+        )
         mock_results = {
-            "ocr_result": {"text": "test"},
-            "analysis": {"grammar_focus": {}},
+            "ocr_result": mock_ocr_result,
+            "analysis": mock_analysis,
             "extra_info": "",
         }
 

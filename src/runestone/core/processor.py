@@ -18,6 +18,7 @@ from runestone.core.exceptions import RunestoneError
 from runestone.core.formatter import ResultFormatter
 from runestone.core.logging_config import get_logger
 from runestone.core.ocr import OCRProcessor
+from runestone.core.prompt_builder.validators import AnalysisResponse, OCRResponse
 
 
 class RunestoneProcessor:
@@ -57,7 +58,7 @@ class RunestoneProcessor:
         except Exception as e:
             raise RunestoneError(f"Failed to initialize processor: {str(e)}")
 
-    def run_ocr(self, image_bytes: bytes) -> Dict[str, Any]:
+    def run_ocr(self, image_bytes: bytes) -> OCRResponse:
         """
         Run OCR on image bytes.
 
@@ -65,7 +66,7 @@ class RunestoneProcessor:
             image_bytes: Raw image bytes
 
         Returns:
-            OCR result dictionary
+            OCR result object
 
         Raises:
             RunestoneError: If OCR processing fails
@@ -83,7 +84,7 @@ class RunestoneProcessor:
             duration = time.time() - start_time
 
             if self.verbose:
-                char_count = ocr_result.get("character_count", 0)
+                char_count = ocr_result.recognition_statistics.total_elements
                 self.logger.info(f"OCR completed in {duration:.2f} seconds, extracted {char_count} characters")
 
             return ocr_result
@@ -97,7 +98,7 @@ class RunestoneProcessor:
             else:
                 raise RunestoneError(f"OCR processing failed: {str(e)}")
 
-    def run_analysis(self, text: str) -> Dict[str, Any]:
+    def run_analysis(self, text: str) -> AnalysisResponse:
         """
         Analyze extracted text content.
 
@@ -122,7 +123,7 @@ class RunestoneProcessor:
             duration = time.time() - start_time
 
             if self.verbose:
-                vocab_count = len(analysis.get("vocabulary", []))
+                vocab_count = len(analysis.vocabulary)
                 self.logger.info(f"Analysis completed in {duration:.2f} seconds, found {vocab_count} vocabulary items")
 
             return analysis
@@ -136,7 +137,7 @@ class RunestoneProcessor:
             else:
                 raise RunestoneError(f"Content analysis failed: {str(e)}")
 
-    def run_resource_search(self, analysis_data: Dict[str, Any]) -> str:
+    def run_resource_search(self, analysis_data: AnalysisResponse) -> str:
         """
         Find extra learning resources based on analysis.
 
@@ -232,7 +233,7 @@ class RunestoneProcessor:
             ocr_result = self.run_ocr(image_bytes)
 
             # Extract text for analysis
-            extracted_text = ocr_result.get("text", "")
+            extracted_text = ocr_result.transcribed_text
             if not extracted_text:
                 raise RunestoneError("No text extracted from image")
 

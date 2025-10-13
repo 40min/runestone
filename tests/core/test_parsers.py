@@ -33,11 +33,11 @@ class TestResponseParserFallbacks:
 
         result = self.parser._fallback_ocr_parse(malformed_response)
 
-        assert "transcribed_text" in result
-        assert "recognition_statistics" in result
-        assert result["transcribed_text"] == "Hej! Hur mår du?"
-        assert result["recognition_statistics"]["total_elements"] == 50
-        assert result["recognition_statistics"]["successfully_transcribed"] == 45
+        assert hasattr(result, "transcribed_text")
+        assert hasattr(result, "recognition_statistics")
+        assert result.transcribed_text == "Hej! Hur mår du?"
+        assert result.recognition_statistics.total_elements == 50
+        assert result.recognition_statistics.successfully_transcribed == 45
 
     def test_fallback_ocr_parse_with_text_only(self):
         """Test OCR fallback parser with plain text response."""
@@ -49,9 +49,9 @@ class TestResponseParserFallbacks:
 
         result = self.parser._fallback_ocr_parse(plain_text_response)
 
-        assert "transcribed_text" in result
-        assert len(result["transcribed_text"]) > 0
-        assert "Some transcribed text" in result["transcribed_text"]
+        assert hasattr(result, "transcribed_text")
+        assert len(result.transcribed_text) > 0
+        assert "Some transcribed text" in result.transcribed_text
 
     def test_fallback_ocr_parse_empty_response_raises_error(self):
         """Test OCR fallback parser raises error on empty response."""
@@ -66,9 +66,9 @@ class TestResponseParserFallbacks:
 
         result = self.parser._fallback_ocr_parse(broken_response)
 
-        assert "transcribed_text" in result
-        assert result["transcribed_text"] == "Hej världen!"
-        assert result["recognition_statistics"]["total_elements"] == 10
+        assert hasattr(result, "transcribed_text")
+        assert result.transcribed_text == "Hej världen!"
+        assert result.recognition_statistics.total_elements == 10
 
     # Analysis Fallback Tests
     def test_fallback_analysis_parse_with_partial_json(self):
@@ -90,11 +90,11 @@ class TestResponseParserFallbacks:
 
         result = self.parser._fallback_analysis_parse(malformed_response)
 
-        assert "grammar_focus" in result
-        assert result["grammar_focus"]["topic"] == "Swedish possessives"
-        assert result["grammar_focus"]["explanation"] == "Rules for possessive pronouns in Swedish"
-        assert result["grammar_focus"]["has_explicit_rules"] is True
-        assert len(result["vocabulary"]) >= 1
+        assert hasattr(result, "grammar_focus")
+        assert result.grammar_focus.topic == "Swedish possessives"
+        assert result.grammar_focus.explanation == "Rules for possessive pronouns in Swedish"
+        assert result.grammar_focus.has_explicit_rules is True
+        assert len(result.vocabulary) >= 1
 
     def test_fallback_analysis_parse_extracts_vocab_items(self):
         """Test analysis fallback parser extracts vocabulary items."""
@@ -106,10 +106,10 @@ class TestResponseParserFallbacks:
 
         result = self.parser._fallback_analysis_parse(response_with_vocab)
 
-        assert len(result["vocabulary"]) == 2
-        assert result["vocabulary"][0]["swedish"] == "hund"
-        assert result["vocabulary"][0]["english"] == "dog"
-        assert result["vocabulary"][1]["swedish"] == "katt"
+        assert len(result.vocabulary) == 2
+        assert result.vocabulary[0].swedish == "hund"
+        assert result.vocabulary[0].english == "dog"
+        assert result.vocabulary[1].swedish == "katt"
 
     def test_fallback_analysis_parse_extracts_core_topics(self):
         """Test analysis fallback parser extracts core topics."""
@@ -121,9 +121,9 @@ class TestResponseParserFallbacks:
 
         result = self.parser._fallback_analysis_parse(response_with_topics)
 
-        assert len(result["core_topics"]) == 3
-        assert "Swedish grammar" in result["core_topics"]
-        assert "Verb conjugation" in result["core_topics"]
+        assert len(result.core_topics) == 3
+        assert "Swedish grammar" in result.core_topics
+        assert "Verb conjugation" in result.core_topics
 
     def test_fallback_analysis_parse_empty_response_raises_error(self):
         """Test analysis fallback parser raises error on completely empty response."""
@@ -139,9 +139,9 @@ class TestResponseParserFallbacks:
         result = self.parser._fallback_analysis_parse(minimal_response)
 
         # Should provide default structure
-        assert "grammar_focus" in result
-        assert result["grammar_focus"]["topic"] == "Swedish language practice"
-        assert len(result["core_topics"]) > 0
+        assert hasattr(result, "grammar_focus")
+        assert result.grammar_focus.topic == "Swedish language practice"
+        assert len(result.core_topics) > 0
 
     # Vocabulary Fallback Tests (already exists but verify it works)
     def test_fallback_vocabulary_parse_with_broken_json(self):
@@ -150,9 +150,9 @@ class TestResponseParserFallbacks:
 
         result = self.parser._fallback_vocabulary_parse(malformed_response, ImprovementMode.ALL_FIELDS)
 
-        assert result["translation"] == "apple"
-        assert result["example_phrase"] == "Jag äter ett äpple."
-        assert result["extra_info"] == "en-word"
+        assert result.translation == "apple"
+        assert result.example_phrase == "Jag äter ett äpple."
+        assert result.extra_info == "en-word"
 
     # Integration Tests
     def test_parse_ocr_response_uses_fallback_on_error(self):

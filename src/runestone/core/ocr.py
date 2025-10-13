@@ -6,7 +6,7 @@ using various LLM providers like OpenAI or Gemini.
 """
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from PIL import Image
 
@@ -17,6 +17,7 @@ from runestone.core.logging_config import get_logger
 from runestone.core.prompt_builder.builder import PromptBuilder
 from runestone.core.prompt_builder.exceptions import ResponseParseError
 from runestone.core.prompt_builder.parsers import ResponseParser
+from runestone.core.prompt_builder.validators import OCRResponse
 
 
 class OCRProcessor:
@@ -53,10 +54,8 @@ class OCRProcessor:
 
         Args:
             image_path: Path to the image file
-
         Returns:
             PIL Image object
-
         Raises:
             ImageProcessingError: If image cannot be loaded or is invalid
         """
@@ -85,7 +84,7 @@ class OCRProcessor:
         except Exception as e:
             raise ImageProcessingError(f"Failed to load image: {str(e)}")
 
-    def _parse_and_analyze_recognition_stats(self, extracted_text: str) -> str:
+    def _parse_and_analyze_recognition_stats(self, extracted_text: str) -> OCRResponse:
         """
         Parse JSON response from OCR and analyze recognition quality.
 
@@ -93,7 +92,7 @@ class OCRProcessor:
             extracted_text: JSON string from OCR response
 
         Returns:
-            Cleaned transcribed text
+            OCRResponse object
 
         Raises:
             OCRError: If recognition percentage is below 90% or parsing fails
@@ -116,7 +115,7 @@ class OCRProcessor:
                     )
             # If total == 0, skip check (assume no text to recognize)
 
-            return response.transcribed_text.strip()
+            return response
 
         except ResponseParseError as e:
             raise OCRError(f"Failed to parse OCR response: {str(e)}")
@@ -161,7 +160,7 @@ class OCRProcessor:
             else:
                 return image
 
-    def extract_text(self, image: Image.Image) -> Dict[str, Any]:
+    def extract_text(self, image: Image.Image) -> OCRResponse:
         """
         Extract text from a Swedish textbook page image with enhanced preprocessing.
 
@@ -169,7 +168,7 @@ class OCRProcessor:
             image: PIL Image object to process
 
         Returns:
-            Dictionary containing extracted text and metadata
+            OCRResponse object containing extracted text and metadata
 
         Raises:
             OCRError: If text extraction fails
@@ -208,19 +207,18 @@ class OCRProcessor:
                 raise OCRError("No text returned from OCR processing")
 
             # Parse and analyze recognition statistics
-            text_part = self._parse_and_analyze_recognition_stats(extracted_text)
+            ocr_response = self._parse_and_analyze_recognition_stats(extracted_text)
 
             # Check if extracted text is too short
-            if len(text_part) < 10:
+            if len(ocr_response.transcribed_text) < 10:
                 raise OCRError("Extracted text is too short - may not be a valid textbook page")
 
             if self.verbose:
-                self.logger.info(f"OCR extraction successful: {len(text_part)} characters extracted")
+                self.logger.info(
+                    f"OCR extraction successful: {len(ocr_response.transcribed_text)} characters extracted"
+                )
 
-            return {
-                "text": text_part,
-                "character_count": len(text_part),
-            }
+            return ocr_response
 
         except OCRError:
             raise

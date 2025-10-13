@@ -5,13 +5,13 @@ This module handles the presentation of analysis results using Rich for console 
 and markdown for file output.
 """
 
-from typing import Any, Dict
-
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+
+from runestone.core.prompt_builder.validators import AnalysisResponse, OCRResponse
 
 
 class ResultFormatter:
@@ -28,8 +28,8 @@ class ResultFormatter:
 
     def format_console_output(
         self,
-        ocr_result: Dict[str, Any],
-        analysis: Dict[str, Any],
+        ocr_result: OCRResponse,
+        analysis: AnalysisResponse,
         extra_info: str,
     ) -> None:
         """
@@ -63,9 +63,9 @@ class ResultFormatter:
         footer_text = Text("✨ Analysis complete!", style="bold green")
         self.console.print(Panel(footer_text, box=box.ROUNDED))
 
-    def _format_recognized_text(self, ocr_result: Dict[str, Any]) -> None:
+    def _format_recognized_text(self, ocr_result: OCRResponse) -> None:
         """Format the recognized text section."""
-        text = ocr_result.get("text", "No text extracted")
+        text = ocr_result.transcribed_text or "No text extracted"
 
         # Truncate very long text for display
         display_text = text
@@ -80,12 +80,12 @@ class ResultFormatter:
         self.console.print(panel)
         self.console.print()
 
-    def _format_grammar_focus(self, analysis: Dict[str, Any]) -> None:
+    def _format_grammar_focus(self, analysis: AnalysisResponse) -> None:
         """Format the grammar focus section."""
-        grammar = analysis.get("grammar_focus", {})
-        topic = grammar.get("topic", "No topic identified")
-        explanation = grammar.get("explanation", "No explanation available")
-        has_rules = grammar.get("has_explicit_rules", False)
+        grammar = analysis.grammar_focus
+        topic = grammar.topic or "No topic identified"
+        explanation = grammar.explanation or "No explanation available"
+        has_rules = grammar.has_explicit_rules
 
         rule_type = "Explicit Rule" if has_rules else "Inferred Pattern"
 
@@ -103,9 +103,9 @@ class ResultFormatter:
         self.console.print(panel)
         self.console.print()
 
-    def _format_vocabulary(self, analysis: Dict[str, Any]) -> None:
+    def _format_vocabulary(self, analysis: AnalysisResponse) -> None:
         """Format the vocabulary section."""
-        vocab_list = analysis.get("vocabulary", [])
+        vocab_list = analysis.vocabulary
 
         if not vocab_list:
             content = "[italic]No vocabulary identified[/italic]"
@@ -116,8 +116,8 @@ class ResultFormatter:
             table.add_column("English", style="white")
 
             for item in vocab_list:
-                swedish = item.get("swedish", "")
-                english = item.get("english", "")
+                swedish = item.swedish or ""
+                english = item.english or ""
                 if swedish and english:
                     table.add_row(swedish, "-", english)
 
@@ -151,8 +151,8 @@ class ResultFormatter:
 
     def format_markdown_output(
         self,
-        ocr_result: Dict[str, Any],
-        analysis: Dict[str, Any],
+        ocr_result: OCRResponse,
+        analysis: AnalysisResponse,
         resources: str,
     ) -> str:
         """
@@ -175,17 +175,17 @@ class ResultFormatter:
         # Full recognized text
         md_lines.append("## 📖 Full Recognized Text")
         md_lines.append("")
-        text = ocr_result.get("text", "No text extracted")
+        text = ocr_result.transcribed_text or "No text extracted"
         md_lines.append(f"```\n{text}\n```")
         md_lines.append("")
 
         # Grammar focus
         md_lines.append("## 🎓 Grammar Focus")
         md_lines.append("")
-        grammar = analysis.get("grammar_focus", {})
-        topic = grammar.get("topic", "No topic identified")
-        explanation = grammar.get("explanation", "No explanation available")
-        has_rules = grammar.get("has_explicit_rules", False)
+        grammar = analysis.grammar_focus
+        topic = grammar.topic or "No topic identified"
+        explanation = grammar.explanation or "No explanation available"
+        has_rules = grammar.has_explicit_rules
 
         rule_type = "Explicit Rule" if has_rules else "Inferred Pattern"
 
@@ -199,7 +199,7 @@ class ResultFormatter:
         # Vocabulary
         md_lines.append("## 🔑 Word Bank")
         md_lines.append("")
-        vocab_list = analysis.get("vocabulary", [])
+        vocab_list = analysis.vocabulary
 
         if not vocab_list:
             md_lines.append("*No vocabulary identified*")
@@ -207,8 +207,8 @@ class ResultFormatter:
             md_lines.append("| Svenska | English |")
             md_lines.append("|---------|---------|")
             for item in vocab_list:
-                swedish = item.get("swedish", "")
-                english = item.get("english", "")
+                swedish = item.swedish or ""
+                english = item.english or ""
                 if swedish and english:
                     md_lines.append(f"| {swedish} | {english} |")
         md_lines.append("")

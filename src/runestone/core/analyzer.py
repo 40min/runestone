@@ -5,7 +5,7 @@ This module uses configurable LLM providers to analyze extracted text and identi
 grammar rules, vocabulary, and generate learning resources.
 """
 
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from runestone.config import Settings
 from runestone.core.clients.base import BaseLLMClient
@@ -14,6 +14,7 @@ from runestone.core.logging_config import get_logger
 from runestone.core.prompt_builder.builder import PromptBuilder
 from runestone.core.prompt_builder.exceptions import ResponseParseError
 from runestone.core.prompt_builder.parsers import ResponseParser
+from runestone.core.prompt_builder.validators import AnalysisResponse
 
 
 class ContentAnalyzer:
@@ -44,7 +45,7 @@ class ContentAnalyzer:
         self.builder = PromptBuilder()
         self.parser = ResponseParser()
 
-    def analyze_content(self, extracted_text: str) -> Dict[str, Any]:
+    def analyze_content(self, extracted_text: str) -> AnalysisResponse:
         """
         Analyze Swedish textbook content to extract learning materials.
 
@@ -52,7 +53,7 @@ class ContentAnalyzer:
             extracted_text: Raw text extracted from the textbook page
 
         Returns:
-            Dictionary containing analyzed content with grammar, vocabulary, and resources
+            AnalysisResponse object containing analyzed content with grammar, vocabulary, and resources
 
         Raises:
             ContentAnalysisError: If content analysis fails
@@ -76,29 +77,7 @@ class ContentAnalyzer:
             # Parse response using ResponseParser (includes automatic fallback)
             try:
                 analysis_response = self.parser.parse_analysis_response(response_text)
-
-                # Convert to dictionary format for backward compatibility
-                return {
-                    "grammar_focus": {
-                        "has_explicit_rules": analysis_response.grammar_focus.has_explicit_rules,
-                        "topic": analysis_response.grammar_focus.topic,
-                        "explanation": analysis_response.grammar_focus.explanation,
-                        "rules": analysis_response.grammar_focus.rules,
-                    },
-                    "vocabulary": [
-                        {
-                            "swedish": item.swedish,
-                            "english": item.english,
-                            "example_phrase": item.example_phrase,
-                        }
-                        for item in analysis_response.vocabulary
-                    ],
-                    "core_topics": analysis_response.core_topics,
-                    "search_needed": {
-                        "should_search": analysis_response.search_needed.should_search,
-                        "query_suggestions": analysis_response.search_needed.query_suggestions,
-                    },
-                }
+                return analysis_response
             except ResponseParseError as e:
                 if self.verbose:
                     self.logger.warning(f"Response parsing failed: {e}")
@@ -109,7 +88,7 @@ class ContentAnalyzer:
         except Exception as e:
             raise ContentAnalysisError(f"Content analysis failed: {str(e)}")
 
-    def find_extra_learning_info(self, analysis: Dict[str, Any]) -> str:
+    def find_extra_learning_info(self, analysis: AnalysisResponse) -> str:
         """
         Find extra learning information using web search and compile educational material.
 
@@ -119,13 +98,13 @@ class ContentAnalyzer:
         Returns:
             Compiled educational material from web search as a string
         """
-        if not analysis.get("search_needed", {}).get("should_search", False):
+        if not analysis.search_needed.should_search:
             return ""
 
         try:
             # Get search queries and core topics from analysis
-            search_queries = analysis.get("search_needed", {}).get("query_suggestions", [])
-            core_topics = analysis.get("core_topics", [])
+            search_queries = analysis.search_needed.query_suggestions
+            core_topics = analysis.core_topics
 
             if not search_queries and not core_topics:
                 self.logger.warning("No search queries or topics generated")
