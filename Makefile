@@ -6,6 +6,7 @@
 .PHONY: lint lint-check backend-lint frontend-lint
 .PHONY: test test-coverage backend-test frontend-test
 .PHONY: run run-backend run-frontend run-dev run-recall load-vocab
+.PHONY: test-prompts-ocr test-prompts-analysis test-prompts-search test-prompts-vocabulary
 .PHONY: dev-test dev-full ci-lint ci-test
 .PHONY: db-init db-migrate db-upgrade db-downgrade db-current db-history
 .PHONY: init-state docker-up docker-down docker-build restart-recall rebuild-restart-recall rebuild-restart-all
@@ -46,6 +47,12 @@ help:
 	@echo "  run-frontend     - Start frontend development server"
 	@echo "  run-dev          - Start both backend and frontend concurrently"
 	@echo "  run-recall       - Start the Rune Recall Telegram Bot Worker"
+	@echo ""
+	@echo "Test Prompts:"
+	@echo "  test-prompts-ocr          - Test and display OCR prompt"
+	@echo "  test-prompts-analysis     - Test analysis prompt (requires TEXT='sample text')"
+	@echo "  test-prompts-search       - Test search prompt (requires TOPICS='topic1 topic2 ...')"
+	@echo "  test-prompts-vocabulary   - Test vocabulary improvement prompt (requires WORD='word', optional: MODE=example_only|extra_info_only|all_fields)"
 	@echo ""
 	@echo "Development Workflows:"
 	@echo "  dev-test         - Quick development test (install-dev + lint-check + test)"
@@ -237,6 +244,42 @@ run-dev: db-upgrade
 run-recall:
 	@echo "🚀 Starting Rune Recall Telegram Bot Worker..."
 	@uv run python recall_main.py
+
+# =============================================================================
+# TEST PROMPTS
+# =============================================================================
+
+# Test OCR prompt building
+test-prompts-ocr:
+	@echo "🧪 Testing OCR prompt..."
+	@uv run runestone test-prompts ocr
+
+# Test analysis prompt building
+test-prompts-analysis:
+	@if [ -z "$(TEXT)" ]; then \
+		echo "❌ Error: TEXT is required. Usage: make test-prompts-analysis TEXT='sample text'"; \
+		exit 1; \
+	fi
+	@echo "🧪 Testing analysis prompt with text: $(TEXT)"
+	@uv run runestone test-prompts analysis "$(TEXT)"
+
+# Test search prompt building
+test-prompts-search:
+	@if [ -z "$(TOPICS)" ]; then \
+		echo "❌ Error: TOPICS is required. Usage: make test-prompts-search TOPICS='topic1 topic2 ...'"; \
+		exit 1; \
+	fi
+	@echo "🧪 Testing search prompt with topics: $(TOPICS)"
+	@uv run runestone test-prompts search $(TOPICS)
+
+# Test vocabulary improvement prompt building
+test-prompts-vocabulary:
+	@if [ -z "$(WORD)" ]; then \
+		echo "❌ Error: WORD is required. Usage: make test-prompts-vocabulary WORD='word' [MODE=example_only|extra_info_only|all_fields]"; \
+		exit 1; \
+	fi
+	@echo "🧪 Testing vocabulary improvement prompt for word: $(WORD)"
+	@uv run runestone test-prompts vocabulary "$(WORD)" $(if $(MODE),--mode $(MODE))
 
 # =============================================================================
 # DEVELOPMENT WORKFLOWS

@@ -357,14 +357,7 @@ def vocabulary(word: str, mode: str):
     """Test vocabulary improvement prompt building."""
     try:
         builder = PromptBuilder()
-
-        # Convert string mode to ImprovementMode enum
-        mode_map = {
-            "example_only": ImprovementMode.EXAMPLE_ONLY,
-            "extra_info_only": ImprovementMode.EXTRA_INFO_ONLY,
-            "all_fields": ImprovementMode.ALL_FIELDS,
-        }
-        improvement_mode = mode_map[mode]
+        improvement_mode = ImprovementMode(mode)
 
         prompt = builder.build_vocabulary_prompt(word, improvement_mode)
 
