@@ -27,7 +27,6 @@ from runestone.api.schemas import (
 from runestone.core.exceptions import RunestoneError, VocabularyItemExists
 from runestone.core.logging_config import get_logger
 from runestone.core.processor import RunestoneProcessor
-from runestone.core.prompt_builder.validators import AnalysisResponse, OCRResponse
 from runestone.dependencies import get_runestone_processor, get_vocabulary_service
 from runestone.services.vocabulary_service import VocabularyService
 
@@ -86,16 +85,10 @@ async def process_ocr(
         # Run OCR on image bytes
         ocr_result = processor.run_ocr(content)
 
-        # Handle both OCRResponse objects and dict (for testing compatibility)
-        if isinstance(ocr_result, OCRResponse):
-            # OCRResponse object - use mapper to convert
-            stats = ocr_result.recognition_statistics
-            logger.debug(f"[API] Result stats: {stats.successfully_transcribed}/{stats.total_elements} elements")
-            return convert_ocr_response(ocr_result)
-        else:
-            # Handle dict format (for backward compatibility with tests)
-            logger.debug(f"[API] Result (dict format): {len(ocr_result.get('text', ''))} chars")
-            return OCRResult(**ocr_result)
+        # OCRResponse object - use mapper to convert
+        stats = ocr_result.recognition_statistics
+        logger.debug(f"[API] Result stats: {stats.successfully_transcribed}/{stats.total_elements} elements")
+        return convert_ocr_response(ocr_result)
 
     except RunestoneError as e:
         logger.error(f"[API] RunestoneError: {type(e).__name__}: {str(e)}")
@@ -145,24 +138,13 @@ async def analyze_content(
     logger.info(f"[API] Analysis request received: text_length={len(request.text)} chars")
 
     try:
-        logger.debug("[API] Starting content analysis...")
-
         # Run content analysis
         analysis_result = processor.run_analysis(request.text)
 
-        logger.debug("[API] Content analysis completed successfully")
-
-        # Handle both AnalysisResponse objects and dict (for testing compatibility)
-        if isinstance(analysis_result, AnalysisResponse):
-            # AnalysisResponse object - use mapper to convert
-            vocab_count = len(analysis_result.vocabulary)
-            logger.debug(f"[API] Found {vocab_count} vocabulary items")
-            return convert_analysis_response(analysis_result)
-        else:
-            # Handle dict format (for backward compatibility with tests)
-            vocab_count = len(analysis_result.get("vocabulary", []))
-            logger.debug(f"[API] Found {vocab_count} vocabulary items")
-            return ContentAnalysis(**analysis_result)
+        # AnalysisResponse object - use mapper to convert
+        vocab_count = len(analysis_result.vocabulary)
+        logger.debug(f"[API] Found {vocab_count} vocabulary items")
+        return convert_analysis_response(analysis_result)
 
     except RunestoneError as e:
         logger.error(f"[API] RunestoneError during analysis: {type(e).__name__}: {str(e)}")
