@@ -62,8 +62,7 @@ class ContentAnalyzer:
             # Build analysis prompt using PromptBuilder
             analysis_prompt = self.builder.build_analysis_prompt(extracted_text)
 
-            if self.verbose:
-                self.logger.info(f"Analyzing content with {self.client.provider_name}...")
+            self.logger.debug(f"[ContentAnalyzer] Analyzing content with {self.client.provider_name}...")
 
             response_text = self.client.analyze_content(analysis_prompt)
 
@@ -71,16 +70,14 @@ class ContentAnalyzer:
                 raise ContentAnalysisError("No analysis returned from LLM")
 
             # Log the raw response for debugging
-            if self.verbose:
-                self.logger.debug(f"Raw LLM response (first 500 chars): {response_text[:500]}")
+            self.logger.debug(f"[ContentAnalyzer] Raw LLM response (first 500 chars): {response_text[:500]}")
 
             # Parse response using ResponseParser (includes automatic fallback)
             try:
                 analysis_response = self.parser.parse_analysis_response(response_text)
                 return analysis_response
             except ResponseParseError as e:
-                if self.verbose:
-                    self.logger.warning(f"Response parsing failed: {e}")
+                self.logger.warning(f"[ContentAnalyzer] Response parsing failed: {e}")
                 raise ContentAnalysisError(f"Failed to parse analysis response: {str(e)}")
 
         except ContentAnalysisError:
@@ -107,13 +104,13 @@ class ContentAnalyzer:
             core_topics = analysis.core_topics
 
             if not search_queries and not core_topics:
-                self.logger.warning("No search queries or topics generated")
+                self.logger.warning("[ContentAnalyzer] No search queries or topics generated")
                 return ""
 
-            if self.verbose:
-                self.logger.info(
-                    f"Searching for educational material on topics: {core_topics} and queries: {search_queries}"
-                )
+            self.logger.debug(
+                f"[ContentAnalyzer] Searching for educational material on "
+                f"topics: {core_topics} and queries: {search_queries}"
+            )
 
             # Build search prompt using PromptBuilder
             search_prompt = self.builder.build_search_prompt(
@@ -131,11 +128,9 @@ class ContentAnalyzer:
                 return "No extra learning info available at this time."
 
             except Exception as e:
-                if self.verbose:
-                    self.logger.warning(f"Search failed: {e}")
+                self.logger.warning(f"[ContentAnalyzer] Search failed: {e}")
                 return f"Search failed: {str(e)}"
 
         except Exception as e:
-            if self.verbose:
-                self.logger.error(f"Resource search failed: {e}")
+            self.logger.error(f"[ContentAnalyzer] Resource search failed: {e}")
             return f"Resource search failed: {str(e)}"

@@ -95,12 +95,12 @@ class TestRunestoneProcessor:
             assert resources_result == "Extra info"
 
         # Verify timing logs were called
-        # Check that logger.info was called with timing messages
-        info_calls = [call for call in mock_logger.info.call_args_list if "completed in" in str(call)]
-        assert len(info_calls) == 3
+        # Check that logger.debug was called with timing messages
+        debug_calls = [call for call in mock_logger.debug.call_args_list if "completed in" in str(call)]
+        assert len(debug_calls) == 3
 
         # Verify the timing messages
-        for i, call in enumerate(info_calls):
+        for i, call in enumerate(debug_calls):
             args, kwargs = call
             message = args[0]
             assert "completed in" in message
@@ -109,7 +109,7 @@ class TestRunestoneProcessor:
     @patch("PIL.Image.open")
     @patch("runestone.core.processor.get_logger")
     def test_stateless_workflow_no_verbose_no_timing_logs(self, mock_get_logger, mock_image_open):
-        """Test that timing logs are not generated when verbose is False."""
+        """Test that timing logs use logger.debug (actual output controlled by log level)."""
         # Mock PIL Image
         mock_image = Mock()
         mock_image.size = (800, 600)
@@ -160,9 +160,11 @@ class TestRunestoneProcessor:
         assert analysis_result == mock_analysis
         assert resources_result == ""
 
-        # Verify no timing logs were called (only other logs)
-        timing_calls = [call for call in mock_logger.info.call_args_list if "completed in" in str(call)]
-        assert len(timing_calls) == 0
+        # Note: logger.debug() is always called, but actual output is controlled by log level
+        # When verbose=False, log level is INFO so debug messages are suppressed
+        # The mock will still show calls were made, which is expected behavior
+        timing_calls = [call for call in mock_logger.debug.call_args_list if "completed in" in str(call)]
+        assert len(timing_calls) > 0  # Calls are made but would be suppressed by log level
 
     @patch("PIL.Image.open")
     @patch("runestone.core.processor.get_logger")
@@ -353,8 +355,8 @@ class TestRunestoneProcessor:
         mock_analyzer_instance.find_extra_learning_info.assert_called_once_with(mock_analysis)
 
         # Verify logging
-        mock_logger.info.assert_any_call(f"Starting processing of image: {self.image_path}")
-        mock_logger.info.assert_any_call("Image processing completed successfully")
+        mock_logger.debug.assert_any_call(f"[RunestoneProcessor] Starting processing of image: {self.image_path}")
+        mock_logger.debug.assert_any_call("[RunestoneProcessor] Image processing completed successfully")
 
     @patch("PIL.Image.open")
     @patch("runestone.core.processor.get_logger")

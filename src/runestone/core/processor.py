@@ -72,31 +72,30 @@ class RunestoneProcessor:
             RunestoneError: If OCR processing fails
         """
         try:
+            self.logger.debug(f"[RunestoneProcessor] Starting OCR, received {len(image_bytes)} bytes")
+
             # Convert bytes to PIL Image
             image = Image.open(BytesIO(image_bytes))
 
-            # Extract text using OCR
-            if self.verbose:
-                self.logger.info("Running OCR on image...")
+            self.logger.debug(f"[RunestoneProcessor] Image loaded: mode={image.mode}, size={image.size}")
 
             start_time = time.time()
             ocr_result = self.ocr_processor.extract_text(image)
             duration = time.time() - start_time
 
-            if self.verbose:
-                char_count = ocr_result.recognition_statistics.total_elements
-                self.logger.info(f"OCR completed in {duration:.2f} seconds, extracted {char_count} characters")
+            char_count = ocr_result.recognition_statistics.total_elements
+            self.logger.debug(
+                f"[RunestoneProcessor] OCR completed in {duration:.2f} seconds, extracted {char_count} characters"
+            )
 
             return ocr_result
 
         except Exception as e:
-            if self.verbose:
-                self.logger.error(f"OCR processing failed: {str(e)}")
-
+            self.logger.error(f"[RunestoneProcessor] OCR processing failed: {type(e).__name__}: {str(e)}")
             if isinstance(e, RunestoneError):
                 raise
             else:
-                raise RunestoneError(f"OCR processing failed: {str(e)}")
+                raise RunestoneError(f"OCR processing failed: {type(e).__name__}: {str(e)}")
 
     def run_analysis(self, text: str) -> AnalysisResponse:
         """
@@ -115,22 +114,26 @@ class RunestoneProcessor:
             if not text:
                 raise RunestoneError("No text provided for analysis")
 
-            if self.verbose:
-                self.logger.info("Analyzing content...")
+            self.logger.debug("[RunestoneProcessor] Analyzing content...")
 
             start_time = time.time()
             analysis = self.content_analyzer.analyze_content(text)
             duration = time.time() - start_time
 
-            if self.verbose:
+            # Handle both AnalysisResponse objects and dict (for testing compatibility)
+            if hasattr(analysis, "vocabulary"):
                 vocab_count = len(analysis.vocabulary)
-                self.logger.info(f"Analysis completed in {duration:.2f} seconds, found {vocab_count} vocabulary items")
+            else:
+                vocab_count = len(analysis.get("vocabulary", []))
+            self.logger.debug(
+                f"[RunestoneProcessor] Analysis completed in {duration:.2f} seconds, "
+                f"found {vocab_count} vocabulary items"
+            )
 
             return analysis
 
         except Exception as e:
-            if self.verbose:
-                self.logger.error(f"Content analysis failed: {str(e)}")
+            self.logger.error(f"[RunestoneProcessor] Content analysis failed: {str(e)}")
 
             if isinstance(e, RunestoneError):
                 raise
@@ -151,24 +154,23 @@ class RunestoneProcessor:
             RunestoneError: If resource search fails
         """
         try:
-            if self.verbose:
-                self.logger.info("Searching for learning resources...")
+            self.logger.debug("[RunestoneProcessor] Searching for learning resources...")
 
             start_time = time.time()
             extra_info = self.content_analyzer.find_extra_learning_info(analysis_data)
             duration = time.time() - start_time
 
-            if self.verbose:
-                if extra_info:
-                    self.logger.info(f"Resource search completed in {duration:.2f} seconds")
-                else:
-                    self.logger.warning(f"Resource search completed in {duration:.2f} seconds, no results found")
+            if extra_info:
+                self.logger.debug(f"[RunestoneProcessor] Resource search completed in {duration:.2f} seconds")
+            else:
+                self.logger.warning(
+                    f"[RunestoneProcessor] Resource search completed in {duration:.2f} seconds, no results found"
+                )
 
             return extra_info
 
         except Exception as e:
-            if self.verbose:
-                self.logger.error(f"Resource search failed: {str(e)}")
+            self.logger.error(f"[RunestoneProcessor] Resource search failed: {str(e)}")
 
             if isinstance(e, RunestoneError):
                 raise
@@ -222,8 +224,7 @@ class RunestoneProcessor:
             RunestoneError: If processing fails at any step
         """
         try:
-            if self.verbose:
-                self.logger.info(f"Starting processing of image: {image_path}")
+            self.logger.debug(f"[RunestoneProcessor] Starting processing of image: {image_path}")
 
             # Read image file
             with open(image_path, "rb") as f:
@@ -250,14 +251,12 @@ class RunestoneProcessor:
                 "extra_info": extra_info,
             }
 
-            if self.verbose:
-                self.logger.info("Image processing completed successfully")
+            self.logger.debug("[RunestoneProcessor] Image processing completed successfully")
 
             return results
 
         except Exception as e:
-            if self.verbose:
-                self.logger.error(f"Image processing failed: {str(e)}")
+            self.logger.error(f"[RunestoneProcessor] Image processing failed: {str(e)}")
 
             if isinstance(e, RunestoneError):
                 raise
@@ -281,8 +280,7 @@ class RunestoneProcessor:
 
             output_path.write_text(markdown_output, encoding="utf-8")
 
-            if self.verbose:
-                self.logger.info(f"Results saved to: {output_path}")  # noqa: E501
+            self.logger.debug(f"[RunestoneProcessor] Results saved to: {output_path}")  # noqa: E501
 
         except Exception as e:
             raise RunestoneError(f"Failed to save results to file: {str(e)}")

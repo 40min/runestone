@@ -21,7 +21,7 @@ from runestone.db.database import setup_database
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan context manager."""
     # Startup
-    setup_logging()
+    setup_logging(verbose=settings.verbose)
     # Verify database setup
     setup_database()
     yield

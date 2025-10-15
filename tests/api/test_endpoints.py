@@ -9,6 +9,7 @@ import io
 from unittest.mock import Mock, patch
 
 from runestone.core.exceptions import RunestoneError
+from runestone.core.prompt_builder.validators import AnalysisResponse
 from runestone.dependencies import get_runestone_processor
 
 
@@ -212,16 +213,12 @@ class TestResourceEndpoints:
         # Verify response
         assert data["extra_info"] == mock_extra_info
 
-        # Verify processor was called with minimal data
-        mock_processor_instance.run_resource_search.assert_called_once_with(
-            {
-                "search_needed": {
-                    "query_suggestions": ["Swedish question formation", "Basic Swedish grammar"],
-                    "should_search": True,
-                },
-                "core_topics": ["questions", "greetings"],
-            }
-        )
+        # Verify processor was called with AnalysisResponse object
+        call_args = mock_processor_instance.run_resource_search.call_args[0][0]
+        assert isinstance(call_args, AnalysisResponse)
+        assert call_args.core_topics == ["questions", "greetings"]
+        assert call_args.search_needed.should_search is True
+        assert call_args.search_needed.query_suggestions == ["Swedish question formation", "Basic Swedish grammar"]
 
 
 class TestVocabularyEndpoints:

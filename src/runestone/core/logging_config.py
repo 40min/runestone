@@ -10,16 +10,21 @@ import sys
 from typing import Optional
 
 
-def setup_logging(level: str = "INFO", format_string: Optional[str] = None) -> None:
+def setup_logging(level: str = "INFO", format_string: Optional[str] = None, verbose: bool = False) -> None:
     """
     Set up centralized logging configuration.
 
     Args:
         level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         format_string: Custom format string for log messages
+        verbose: If True, set log level to DEBUG for detailed logging
     """
     if format_string is None:
         format_string = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+    # Use DEBUG level if verbose mode is enabled
+    if verbose:
+        level = "DEBUG"
 
     # Configure root logger
     logging.basicConfig(

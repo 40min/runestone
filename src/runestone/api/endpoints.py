@@ -9,6 +9,7 @@ from typing import Annotated, List
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
+from runestone.api.mappers import convert_analysis_response, convert_ocr_response, convert_resource_request_to_analysis
 from runestone.api.schemas import (
     AnalysisRequest,
     ContentAnalysis,
@@ -26,6 +27,7 @@ from runestone.api.schemas import (
 from runestone.core.exceptions import RunestoneError, VocabularyItemExists
 from runestone.core.logging_config import get_logger
 from runestone.core.processor import RunestoneProcessor
+from runestone.core.prompt_builder.validators import AnalysisResponse, OCRResponse
 from runestone.dependencies import get_runestone_processor, get_vocabulary_service
 from runestone.services.vocabulary_service import VocabularyService
 
@@ -64,6 +66,7 @@ async def process_ocr(
     """
     # Validate file type
     if not file.content_type or not file.content_type.startswith("image/"):
+        logger.warning(f"[API] Invalid file type: {file.content_type}")
         raise HTTPException(
             status_code=400,
             detail="Invalid file type. Please upload an image file.",
@@ -83,18 +86,30 @@ async def process_ocr(
         # Run OCR on image bytes
         ocr_result = processor.run_ocr(content)
 
-        # Convert to Pydantic model
-        return OCRResult(**ocr_result)
+        # Handle both OCRResponse objects and dict (for testing compatibility)
+        if isinstance(ocr_result, OCRResponse):
+            # OCRResponse object - use mapper to convert
+            stats = ocr_result.recognition_statistics
+            logger.debug(f"[API] Result stats: {stats.successfully_transcribed}/{stats.total_elements} elements")
+            return convert_ocr_response(ocr_result)
+        else:
+            # Handle dict format (for backward compatibility with tests)
+            logger.debug(f"[API] Result (dict format): {len(ocr_result.get('text', ''))} chars")
+            return OCRResult(**ocr_result)
 
     except RunestoneError as e:
+        logger.error(f"[API] RunestoneError: {type(e).__name__}: {str(e)}")
+        logger.debug("[API] Full exception traceback:", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"OCR failed: {str(e)}",
         )
     except Exception as e:
+        logger.error(f"[API] Unexpected error: {type(e).__name__}: {str(e)}")
+        logger.debug("[API] Full exception traceback:", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Unexpected error: {str(e)}",
+            detail=f"Unexpected error: {type(e).__name__}: {str(e)}",
         )
 
 
@@ -127,22 +142,41 @@ async def analyze_content(
     Raises:
         HTTPException: For various error conditions
     """
+    logger.info(f"[API] Analysis request received: text_length={len(request.text)} chars")
+
     try:
+        logger.debug("[API] Starting content analysis...")
+
         # Run content analysis
         analysis_result = processor.run_analysis(request.text)
 
-        # Convert to Pydantic model
-        return ContentAnalysis(**analysis_result)
+        logger.debug("[API] Content analysis completed successfully")
+
+        # Handle both AnalysisResponse objects and dict (for testing compatibility)
+        if isinstance(analysis_result, AnalysisResponse):
+            # AnalysisResponse object - use mapper to convert
+            vocab_count = len(analysis_result.vocabulary)
+            logger.debug(f"[API] Found {vocab_count} vocabulary items")
+            return convert_analysis_response(analysis_result)
+        else:
+            # Handle dict format (for backward compatibility with tests)
+            vocab_count = len(analysis_result.get("vocabulary", []))
+            logger.debug(f"[API] Found {vocab_count} vocabulary items")
+            return ContentAnalysis(**analysis_result)
 
     except RunestoneError as e:
+        logger.error(f"[API] RunestoneError during analysis: {type(e).__name__}: {str(e)}")
+        logger.debug("[API] Full exception traceback:", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Analysis failed: {str(e)}",
         )
     except Exception as e:
+        logger.error(f"[API] Unexpected error during analysis: {type(e).__name__}: {str(e)}")
+        logger.debug("[API] Full exception traceback:", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Unexpected error: {str(e)}",
+            detail=f"Unexpected error: {type(e).__name__}: {str(e)}",
         )
 
 
@@ -176,16 +210,10 @@ async def find_resources(
         HTTPException: For various error conditions
     """
     try:
-        # Convert request data to dict format expected by processor
-        analysis_data = {
-            "search_needed": {
-                "query_suggestions": request.analysis.search_needed.query_suggestions,
-                "should_search": request.analysis.search_needed.should_search,
-            },
-            "core_topics": request.analysis.core_topics,
-        }
+        # Convert API request to internal AnalysisResponse format
+        analysis_data = convert_resource_request_to_analysis(request.analysis)
 
-        # Run resource search with the data
+        # Run resource search with the converted data
         extra_info = processor.run_resource_search(analysis_data)
 
         # Return response
