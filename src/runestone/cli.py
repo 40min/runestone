@@ -327,9 +327,9 @@ def search(topics):
         # Split topics into core topics and query suggestions
         # Use first half as core topics, second half as queries
         topics_list = list(topics)
-        mid = len(topics_list) // 2 if len(topics_list) > 1 else 1
-        core_topics = topics_list[:mid] if mid > 0 else topics_list
-        query_suggestions = topics_list[mid:] if mid < len(topics_list) else topics_list
+        mid = (len(topics_list) + 1) // 2
+        core_topics = topics_list[:mid]
+        query_suggestions = topics_list[mid:]
 
         prompt = builder.build_search_prompt(core_topics=core_topics, query_suggestions=query_suggestions)
 
