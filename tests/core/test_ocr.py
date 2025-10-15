@@ -10,6 +10,7 @@ import pytest
 from runestone.config import Settings
 from runestone.core.exceptions import ImageProcessingError, OCRError
 from runestone.core.ocr import OCRProcessor
+from runestone.core.prompt_builder.validators import OCRResponse
 
 
 class TestOCRProcessor:
@@ -120,10 +121,11 @@ class TestOCRProcessor:
         processor = OCRProcessor(settings=self.settings, client=mock_client)
         result = processor.extract_text(mock_image)
 
-        # Verify result structure
-        assert isinstance(result, dict)
-        assert result["text"] == "Svenska text från läroboken"
-        assert result["character_count"] == len("Svenska text från läroboken")
+        # Verify result structure - now returns OCRResponse object
+        assert isinstance(result, OCRResponse)
+        assert result.transcribed_text == "Svenska text från läroboken"
+        assert result.recognition_statistics.total_elements == 50
+        assert result.recognition_statistics.successfully_transcribed == 50
 
         # Verify LLM client was called correctly
         mock_client.extract_text_from_image.assert_called_once()
@@ -220,9 +222,11 @@ class TestOCRProcessor:
 
         result = processor._parse_and_analyze_recognition_stats(test_json)
 
-        # Should return cleaned text
-        expected_text = "This is the main content of the page."
-        assert result == expected_text
+        # Should return OCRResponse object
+        assert isinstance(result, OCRResponse)
+        assert result.transcribed_text == "This is the main content of the page."
+        assert result.recognition_statistics.total_elements == 100
+        assert result.recognition_statistics.successfully_transcribed == 95
 
     def test_parse_and_analyze_recognition_stats_low_percentage(self):
         """Test that OCRError is raised when recognition percentage is below 90%."""
@@ -259,8 +263,9 @@ class TestOCRProcessor:
 
         result = processor._parse_and_analyze_recognition_stats(test_json)
 
-        # Should return the transcribed text
-        assert result == "This is plain text without statistics."
+        # Should return OCRResponse object
+        assert isinstance(result, OCRResponse)
+        assert result.transcribed_text == "This is plain text without statistics."
 
     def test_parse_and_analyze_recognition_stats_zero_total(self):
         """Test handling when total text elements is zero."""
@@ -280,9 +285,9 @@ class TestOCRProcessor:
 
         result = processor._parse_and_analyze_recognition_stats(test_json)
 
-        # Should return transcribed text without raising error
-        expected_text = "Some content."
-        assert result == expected_text
+        # Should return OCRResponse object without raising error
+        assert isinstance(result, OCRResponse)
+        assert result.transcribed_text == "Some content."
 
     def test_parse_and_analyze_recognition_stats_boundary_percentage(self):
         """Test boundary case where percentage is exactly 90%."""
@@ -303,8 +308,8 @@ class TestOCRProcessor:
         result = processor._parse_and_analyze_recognition_stats(test_json)
 
         # Should succeed (not raise error) since 90% is acceptable
-        expected_text = "Content."
-        assert result == expected_text
+        assert isinstance(result, OCRResponse)
+        assert result.transcribed_text == "Content."
 
     def test_extract_text_with_stats_parsing(self):
         """Test that extract_text properly parses and removes statistics."""
@@ -331,9 +336,10 @@ class TestOCRProcessor:
         processor = OCRProcessor(settings=self.settings, client=mock_client)
         result = processor.extract_text(mock_image)
 
-        # Verify result contains cleaned text
-        assert result["text"] == "Extracted Swedish text content."
-        assert result["character_count"] == len("Extracted Swedish text content.")
+        # Verify result is OCRResponse object with text
+        assert isinstance(result, OCRResponse)
+        assert result.transcribed_text == "Extracted Swedish text content."
+        assert result.recognition_statistics.successfully_transcribed == 95
 
     def test_extract_text_with_low_recognition_raises_error(self):
         """Test that extract_text raises OCRError for low recognition percentage."""

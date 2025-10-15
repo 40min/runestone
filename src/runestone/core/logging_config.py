@@ -10,16 +10,21 @@ import sys
 from typing import Optional
 
 
-def setup_logging(level: str = "INFO", format_string: Optional[str] = None) -> None:
+def setup_logging(level: str = "INFO", format_string: Optional[str] = None, verbose: bool = False) -> None:
     """
     Set up centralized logging configuration.
 
     Args:
         level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         format_string: Custom format string for log messages
+        verbose: If True, set log level to DEBUG for detailed logging
     """
     if format_string is None:
         format_string = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+    # Use DEBUG level if verbose mode is enabled
+    if verbose:
+        level = "DEBUG"
 
     # Configure root logger
     logging.basicConfig(
@@ -29,9 +34,17 @@ def setup_logging(level: str = "INFO", format_string: Optional[str] = None) -> N
     )
 
     # Set specific loggers if needed
-    # Suppress noisy loggers
+    # Suppress noisy loggers from third-party libraries
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("google.generativeai").setLevel(logging.WARNING)
+    logging.getLogger("openai").setLevel(logging.WARNING)
+    logging.getLogger("PIL").setLevel(logging.WARNING)
+    logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
+    logging.getLogger("fastapi").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler").setLevel(logging.WARNING)
+    logging.getLogger("alembic").setLevel(logging.WARNING)
 
 
 def get_logger(name: str) -> logging.Logger:

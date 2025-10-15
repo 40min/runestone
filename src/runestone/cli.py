@@ -23,6 +23,8 @@ from runestone.core.console import setup_console
 from runestone.core.exceptions import RunestoneError
 from runestone.core.logging_config import setup_logging
 from runestone.core.processor import RunestoneProcessor
+from runestone.core.prompt_builder.builder import PromptBuilder
+from runestone.core.prompt_builder.types import ImprovementMode
 from runestone.db.repository import VocabularyRepository
 from runestone.services.vocabulary_service import VocabularyService
 
@@ -269,6 +271,103 @@ def load_vocab(csv_path: Path, db_name: str, skip_existence_check: bool):
     except csv.Error as e:
         console.print(f"[red]Error:[/red] CSV parsing error: {e}")
         sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+
+@cli.group()
+def test_prompts():
+    """Test prompt building and display resulting prompts."""
+    pass
+
+
+@test_prompts.command()
+def ocr():
+    """Test OCR prompt building."""
+    try:
+        builder = PromptBuilder()
+        prompt = builder.build_ocr_prompt()
+
+        console.print("[bold cyan]OCR Prompt:[/bold cyan]")
+        console.print("=" * 80)
+        console.print(prompt)
+        console.print("=" * 80)
+        console.print(f"\n[green]Prompt length:[/green] {len(prompt)} characters")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+
+@test_prompts.command()
+@click.argument("text")
+def analysis(text: str):
+    """Test analysis prompt building with sample text."""
+    try:
+        builder = PromptBuilder()
+        prompt = builder.build_analysis_prompt(text)
+
+        console.print("[bold cyan]Analysis Prompt:[/bold cyan]")
+        console.print("=" * 80)
+        console.print(prompt)
+        console.print("=" * 80)
+        console.print(f"\n[green]Prompt length:[/green] {len(prompt)} characters")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+
+@test_prompts.command()
+@click.argument("topics", nargs=-1, required=True)
+def search(topics):
+    """Test search prompt building with topics."""
+    try:
+        builder = PromptBuilder()
+
+        # Split topics into core topics and query suggestions
+        # Use first half as core topics, second half as queries
+        topics_list = list(topics)
+        mid = (len(topics_list) + 1) // 2
+        core_topics = topics_list[:mid]
+        query_suggestions = topics_list[mid:]
+
+        prompt = builder.build_search_prompt(core_topics=core_topics, query_suggestions=query_suggestions)
+
+        console.print("[bold cyan]Search Prompt:[/bold cyan]")
+        console.print("=" * 80)
+        console.print(prompt)
+        console.print("=" * 80)
+        console.print(f"\n[green]Core topics:[/green] {core_topics}")
+        console.print(f"[green]Query suggestions:[/green] {query_suggestions}")
+        console.print(f"[green]Prompt length:[/green] {len(prompt)} characters")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+
+@test_prompts.command()
+@click.argument("word")
+@click.option(
+    "--mode",
+    type=click.Choice(["example_only", "extra_info_only", "all_fields"]),
+    default="example_only",
+    help="Improvement mode: what fields to generate",
+)
+def vocabulary(word: str, mode: str):
+    """Test vocabulary improvement prompt building."""
+    try:
+        builder = PromptBuilder()
+        improvement_mode = ImprovementMode(mode)
+
+        prompt = builder.build_vocabulary_prompt(word, improvement_mode)
+
+        console.print(f"[bold cyan]Vocabulary Improvement Prompt (mode: {mode}):[/bold cyan]")
+        console.print("=" * 80)
+        console.print(prompt)
+        console.print("=" * 80)
+        console.print(f"\n[green]Word:[/green] {word}")
+        console.print(f"[green]Mode:[/green] {mode}")
+        console.print(f"[green]Prompt length:[/green] {len(prompt)} characters")
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         sys.exit(1)

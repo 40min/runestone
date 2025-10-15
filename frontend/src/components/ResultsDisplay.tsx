@@ -98,15 +98,14 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     }
   }, [analysisResult]);
 
-  if (error) {
-    return (
-      <Box sx={{ maxWidth: "64rem", mx: "auto", mt: 8 }}>
-        <ErrorAlert message={error} />
-      </Box>
-    );
-  }
-
   if (!ocrResult && !analysisResult && !resourcesResult) {
+    if (error) {
+      return (
+        <Box sx={{ maxWidth: "64rem", mx: "auto", mt: 8 }}>
+          <ErrorAlert message={error} />
+        </Box>
+      );
+    }
     return null;
   }
 
@@ -224,6 +223,12 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     <Box sx={{ py: 8 }}>
       <SectionTitle>Analysis Results</SectionTitle>
 
+      {error && (
+        <Box sx={{ mb: 4 }}>
+          <ErrorAlert message={error} />
+        </Box>
+      )}
+
       <TabNavigation
         tabs={tabs}
         activeTab={activeTab}
@@ -233,10 +238,12 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
       <Box sx={{ pt: 6 }}>
         {activeTab === "ocr" && (
           <Box>
-            <Typography sx={{ color: "#d1d5db", mb: 2 }}>
-              The OCR text extracted from the image will be displayed here. This
-              text can be edited and copied for further use.
-            </Typography>
+            {!ocrResult && (
+              <Typography sx={{ color: "#d1d5db", mb: 2 }}>
+                The OCR text extracted from the image will be displayed here. This
+                text can be edited and copied for further use.
+              </Typography>
+            )}
             {ocrResult && (
               <ContentCard>
                 <Typography sx={{ color: "white", whiteSpace: "pre-wrap" }}>

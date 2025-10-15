@@ -11,6 +11,14 @@ from runestone.config import Settings
 from runestone.core.console import setup_console
 from runestone.core.exceptions import RunestoneError
 from runestone.core.processor import RunestoneProcessor
+from runestone.core.prompt_builder.validators import (
+    AnalysisResponse,
+    GrammarFocusResponse,
+    OCRResponse,
+    RecognitionStatistics,
+    SearchNeededResponse,
+    VocabularyItemResponse,
+)
 
 
 class TestRunestoneProcessor:
@@ -36,17 +44,25 @@ class TestRunestoneProcessor:
         mock_get_logger.return_value = mock_logger
 
         # Mock OCR result
-        mock_ocr_result = {"text": "Sample Swedish text", "character_count": 20}
+        mock_ocr_result = OCRResponse(
+            transcribed_text="Sample Swedish text",
+            recognition_statistics=RecognitionStatistics(
+                total_elements=20,
+                successfully_transcribed=20,
+                unclear_uncertain=0,
+                unable_to_recognize=0,
+            ),
+        )
         mock_ocr_instance = Mock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
 
         # Mock analysis result
-        mock_analysis = {
-            "vocabulary": [{"swedish": "hej", "english": "hello"}],
-            "grammar_focus": {"topic": "greetings"},
-            "core_topics": ["greetings"],
-            "search_needed": {"should_search": False},
-        }
+        mock_analysis = AnalysisResponse(
+            vocabulary=[VocabularyItemResponse(swedish="hej", english="hello", example_phrase=None)],
+            grammar_focus=GrammarFocusResponse(has_explicit_rules=False, topic="greetings", explanation="", rules=None),
+            core_topics=["greetings"],
+            search_needed=SearchNeededResponse(should_search=False, query_suggestions=[]),
+        )
         mock_analyzer_instance = Mock()
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
         mock_analyzer_instance.find_extra_learning_info.return_value = "Extra info"
@@ -70,21 +86,21 @@ class TestRunestoneProcessor:
 
             # Test the stateless workflow
             ocr_result = processor.run_ocr(b"fake image data")
-            analysis_result = processor.run_analysis(ocr_result["text"])
+            analysis_result = processor.run_analysis(ocr_result.transcribed_text)
             resources_result = processor.run_resource_search(analysis_result)
 
-        # Verify results
-        assert ocr_result == mock_ocr_result
-        assert analysis_result == mock_analysis
-        assert resources_result == "Extra info"
+            # Verify results
+            assert ocr_result == mock_ocr_result
+            assert analysis_result == mock_analysis
+            assert resources_result == "Extra info"
 
         # Verify timing logs were called
-        # Check that logger.info was called with timing messages
-        info_calls = [call for call in mock_logger.info.call_args_list if "completed in" in str(call)]
-        assert len(info_calls) == 3
+        # Check that logger.debug was called with timing messages
+        debug_calls = [call for call in mock_logger.debug.call_args_list if "completed in" in str(call)]
+        assert len(debug_calls) == 3
 
         # Verify the timing messages
-        for i, call in enumerate(info_calls):
+        for i, call in enumerate(debug_calls):
             args, kwargs = call
             message = args[0]
             assert "completed in" in message
@@ -93,7 +109,7 @@ class TestRunestoneProcessor:
     @patch("PIL.Image.open")
     @patch("runestone.core.processor.get_logger")
     def test_stateless_workflow_no_verbose_no_timing_logs(self, mock_get_logger, mock_image_open):
-        """Test that timing logs are not generated when verbose is False."""
+        """Test that timing logs use logger.debug (actual output controlled by log level)."""
         # Mock PIL Image
         mock_image = Mock()
         mock_image.size = (800, 600)
@@ -104,17 +120,25 @@ class TestRunestoneProcessor:
         mock_get_logger.return_value = mock_logger
 
         # Mock OCR result
-        mock_ocr_result = {"text": "Sample Swedish text", "character_count": 20}
+        mock_ocr_result = OCRResponse(
+            transcribed_text="Sample Swedish text",
+            recognition_statistics=RecognitionStatistics(
+                total_elements=20,
+                successfully_transcribed=20,
+                unclear_uncertain=0,
+                unable_to_recognize=0,
+            ),
+        )
         mock_ocr_instance = Mock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
 
         # Mock analysis result
-        mock_analysis = {
-            "vocabulary": [{"swedish": "hej", "english": "hello"}],
-            "grammar_focus": {"topic": "greetings"},
-            "core_topics": ["greetings"],
-            "search_needed": {"should_search": False},
-        }
+        mock_analysis = AnalysisResponse(
+            vocabulary=[VocabularyItemResponse(swedish="hej", english="hello", example_phrase=None)],
+            grammar_focus=GrammarFocusResponse(has_explicit_rules=False, topic="greetings", explanation="", rules=None),
+            core_topics=["greetings"],
+            search_needed=SearchNeededResponse(should_search=False, query_suggestions=[]),
+        )
         mock_analyzer_instance = Mock()
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
         mock_analyzer_instance.find_extra_learning_info.return_value = ""
@@ -128,7 +152,7 @@ class TestRunestoneProcessor:
 
         # Test the stateless workflow
         ocr_result = processor.run_ocr(b"fake image data")
-        analysis_result = processor.run_analysis(ocr_result["text"])
+        analysis_result = processor.run_analysis(ocr_result.transcribed_text)
         resources_result = processor.run_resource_search(analysis_result)
 
         # Verify results
@@ -136,9 +160,11 @@ class TestRunestoneProcessor:
         assert analysis_result == mock_analysis
         assert resources_result == ""
 
-        # Verify no timing logs were called (only other logs)
-        timing_calls = [call for call in mock_logger.info.call_args_list if "completed in" in str(call)]
-        assert len(timing_calls) == 0
+        # Note: logger.debug() is always called, but actual output is controlled by log level
+        # When verbose=False, log level is INFO so debug messages are suppressed
+        # The mock will still show calls were made, which is expected behavior
+        timing_calls = [call for call in mock_logger.debug.call_args_list if "completed in" in str(call)]
+        assert len(timing_calls) > 0  # Calls are made but would be suppressed by log level
 
     @patch("PIL.Image.open")
     @patch("runestone.core.processor.get_logger")
@@ -184,7 +210,15 @@ class TestRunestoneProcessor:
         mock_image_open.return_value = mock_image
 
         # Mock OCR result
-        mock_ocr_result = {"text": "Sample Swedish text", "character_count": 20}
+        mock_ocr_result = OCRResponse(
+            transcribed_text="Sample Swedish text",
+            recognition_statistics=RecognitionStatistics(
+                total_elements=20,
+                successfully_transcribed=20,
+                unclear_uncertain=0,
+                unable_to_recognize=0,
+            ),
+        )
         mock_ocr_instance = Mock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
 
@@ -237,12 +271,12 @@ class TestRunestoneProcessor:
         # Mock OCR (not directly used in this test, but needed for processor init)
         mock_ocr_instance = Mock()
 
-        mock_analysis_data = {
-            "vocabulary": [{"swedish": "hej", "english": "hello"}],
-            "grammar_focus": {"topic": "greetings"},
-            "core_topics": ["greetings"],
-            "search_needed": {"should_search": True},
-        }
+        mock_analysis_data = AnalysisResponse(
+            vocabulary=[VocabularyItemResponse(swedish="hej", english="hello", example_phrase=None)],
+            grammar_focus=GrammarFocusResponse(has_explicit_rules=False, topic="greetings", explanation="", rules=None),
+            core_topics=["greetings"],
+            search_needed=SearchNeededResponse(should_search=True, query_suggestions=[]),
+        )
 
         processor = RunestoneProcessor(
             settings=self.settings,
@@ -275,17 +309,25 @@ class TestRunestoneProcessor:
         mock_get_logger.return_value = mock_logger
 
         # Mock OCR result
-        mock_ocr_result = {"text": "Sample Swedish text", "character_count": 20}
+        mock_ocr_result = OCRResponse(
+            transcribed_text="Sample Swedish text",
+            recognition_statistics=RecognitionStatistics(
+                total_elements=20,
+                successfully_transcribed=20,
+                unclear_uncertain=0,
+                unable_to_recognize=0,
+            ),
+        )
         mock_ocr_instance = Mock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
 
         # Mock analysis result
-        mock_analysis = {
-            "vocabulary": [{"swedish": "hej", "english": "hello"}],
-            "grammar_focus": {"topic": "greetings"},
-            "core_topics": ["greetings"],
-            "search_needed": {"should_search": False},
-        }
+        mock_analysis = AnalysisResponse(
+            vocabulary=[VocabularyItemResponse(swedish="hej", english="hello", example_phrase=None)],
+            grammar_focus=GrammarFocusResponse(has_explicit_rules=False, topic="greetings", explanation="", rules=None),
+            core_topics=["greetings"],
+            search_needed=SearchNeededResponse(should_search=False, query_suggestions=[]),
+        )
         mock_analyzer_instance = Mock()
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
         mock_analyzer_instance.find_extra_learning_info.return_value = "Extra info"
@@ -313,8 +355,8 @@ class TestRunestoneProcessor:
         mock_analyzer_instance.find_extra_learning_info.assert_called_once_with(mock_analysis)
 
         # Verify logging
-        mock_logger.info.assert_any_call(f"Starting processing of image: {self.image_path}")
-        mock_logger.info.assert_any_call("Image processing completed successfully")
+        mock_logger.debug.assert_any_call(f"[RunestoneProcessor] Starting processing of image: {self.image_path}")
+        mock_logger.debug.assert_any_call("[RunestoneProcessor] Image processing completed successfully")
 
     @patch("PIL.Image.open")
     @patch("runestone.core.processor.get_logger")
@@ -337,7 +379,15 @@ class TestRunestoneProcessor:
         mock_get_logger.return_value = mock_logger
 
         # Mock OCR result with empty text
-        mock_ocr_result = {"text": "", "character_count": 0}
+        mock_ocr_result = OCRResponse(
+            transcribed_text="",
+            recognition_statistics=RecognitionStatistics(
+                total_elements=0,
+                successfully_transcribed=0,
+                unclear_uncertain=0,
+                unable_to_recognize=0,
+            ),
+        )
         mock_ocr_instance = Mock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
 

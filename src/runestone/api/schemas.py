@@ -5,10 +5,11 @@ This module defines the data models used for API communication,
 ensuring type safety and validation for the Runestone web API.
 """
 
-from enum import Enum
 from typing import List, Optional
 
 from pydantic import BaseModel
+
+from runestone.core.prompt_builder.types import ImprovementMode
 
 
 class OCRResult(BaseModel):
@@ -129,14 +130,6 @@ class Vocabulary(BaseModel):
     learned_times: int = 0
     created_at: str
     updated_at: str
-
-
-class ImprovementMode(str, Enum):
-    """Mode for vocabulary improvement."""
-
-    EXAMPLE_ONLY = "example_only"
-    EXTRA_INFO_ONLY = "extra_info_only"
-    ALL_FIELDS = "all_fields"
 
 
 class VocabularyImproveRequest(BaseModel):

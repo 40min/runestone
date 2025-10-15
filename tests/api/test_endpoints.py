@@ -9,6 +9,7 @@ import io
 from unittest.mock import Mock, patch
 
 from runestone.core.exceptions import RunestoneError
+from runestone.core.prompt_builder.validators import AnalysisResponse
 from runestone.dependencies import get_runestone_processor
 
 
@@ -19,10 +20,17 @@ class TestOCREndpoints:
         """Test successful OCR processing."""
         # Mock processor
         mock_processor_instance = Mock()
-        mock_ocr_result = {
-            "text": "Hej, vad heter du?",
-            "character_count": 17,
-        }
+        from runestone.core.prompt_builder.validators import OCRResponse, RecognitionStatistics
+
+        mock_ocr_result = OCRResponse(
+            transcribed_text="Hej, vad heter du?",
+            recognition_statistics=RecognitionStatistics(
+                total_elements=5,
+                successfully_transcribed=5,
+                unclear_uncertain=0,
+                unable_to_recognize=0,
+            ),
+        )
         mock_processor_instance.run_ocr.return_value = mock_ocr_result
 
         # Override the dependency
@@ -39,7 +47,7 @@ class TestOCREndpoints:
 
         # Verify response structure
         assert data["text"] == "Hej, vad heter du?"
-        assert data["character_count"] == 17
+        assert data["character_count"] == 18
 
         # Verify processor was called with image bytes
         mock_processor_instance.run_ocr.assert_called_once_with(image_content)
@@ -127,19 +135,29 @@ class TestAnalysisEndpoints:
         # Mock processor
         mock_processor_instance = Mock()
 
-        mock_analysis_result = {
-            "grammar_focus": {
-                "topic": "Swedish questions",
-                "explanation": "Basic question formation",
-                "has_explicit_rules": False,
-            },
-            "vocabulary": [
-                {"swedish": "hej", "english": "hello"},
-                {"swedish": "vad", "english": "what"},
+        from runestone.core.prompt_builder.validators import (
+            AnalysisResponse,
+            GrammarFocusResponse,
+            SearchNeededResponse,
+            VocabularyItemResponse,
+        )
+
+        mock_analysis_result = AnalysisResponse(
+            grammar_focus=GrammarFocusResponse(
+                topic="Swedish questions",
+                explanation="Basic question formation",
+                has_explicit_rules=False,
+            ),
+            vocabulary=[
+                VocabularyItemResponse(swedish="hej", english="hello"),
+                VocabularyItemResponse(swedish="vad", english="what"),
             ],
-            "core_topics": ["questions", "greetings"],
-            "search_needed": {"should_search": True, "query_suggestions": ["Swedish question formation"]},
-        }
+            core_topics=["questions", "greetings"],
+            search_needed=SearchNeededResponse(
+                should_search=True,
+                query_suggestions=["Swedish question formation"],
+            ),
+        )
         mock_processor_instance.run_analysis.return_value = mock_analysis_result
 
         # Override the dependency
@@ -212,16 +230,12 @@ class TestResourceEndpoints:
         # Verify response
         assert data["extra_info"] == mock_extra_info
 
-        # Verify processor was called with minimal data
-        mock_processor_instance.run_resource_search.assert_called_once_with(
-            {
-                "search_needed": {
-                    "query_suggestions": ["Swedish question formation", "Basic Swedish grammar"],
-                    "should_search": True,
-                },
-                "core_topics": ["questions", "greetings"],
-            }
-        )
+        # Verify processor was called with AnalysisResponse object
+        call_args = mock_processor_instance.run_resource_search.call_args[0][0]
+        assert isinstance(call_args, AnalysisResponse)
+        assert call_args.core_topics == ["questions", "greetings"]
+        assert call_args.search_needed.should_search is True
+        assert call_args.search_needed.query_suggestions == ["Swedish question formation", "Basic Swedish grammar"]
 
 
 class TestVocabularyEndpoints:
