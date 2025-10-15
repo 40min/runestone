@@ -115,13 +115,6 @@ class PromptBuilder:
 
         Returns:
             Complete vocabulary improvement prompt string
-
-        Example:
-            >>> builder = PromptBuilder()
-            >>> prompt = builder.build_vocabulary_prompt(
-            ...     word_phrase="hund",
-            ...     mode=ImprovementMode.ALL_FIELDS
-            ... )
         """
         template = self._templates[PromptType.VOCABULARY_IMPROVE]
 
@@ -160,7 +153,7 @@ class PromptBuilder:
                 "Swedish sentence that uses the word/phrase\n    - The sentence "
                 "should clearly demonstrate the meaning and usage\n    - Keep it "
                 "simple and appropriate for language learners\n    - The example "
-                "should be practical and realistic"
+                "should be practical and realistic\n - Provide an English translation for example."
             ),
             "extra_info_json": (
                 ',\n    "extra_info": "A concise description of grammatical details '
@@ -169,7 +162,8 @@ class PromptBuilder:
             "extra_info_detail": (
                 "\n\n3. For extra_info:\n    - Provide grammatical information about "
                 "the Swedish word/phrase\n    - Include word form (noun, verb, "
-                "adjective, etc.), en/ett classification for nouns, base forms, etc.\n"
+                "adjective, etc.), en/ett classification for nouns, base forms, verb forms (4 forms) for verbs "
+                "etc.\n"
                 '    - Keep it concise and human-readable (e.g., "en-word, noun, '
                 'base form: ord")\n    - Focus on the most important grammatical '
                 "details for language learners"
