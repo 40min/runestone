@@ -49,5 +49,5 @@ RUN chown -R runestone:runestone /app
 # Switch to non-root user
 USER runestone
 
-# Run the application
-CMD ["python", "recall_main.py"]
+# Run database migrations and start the application
+CMD ["sh", "-c", "alembic upgrade head && python recall_main.py"]

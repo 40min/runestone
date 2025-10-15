@@ -50,5 +50,5 @@ USER runestone
 # Expose port
 EXPOSE 8010
 
-# Run the application
-CMD ["uvicorn", "runestone.api.main:app", "--host", "0.0.0.0", "--port", "8010"]
+# Run database migrations and start the application
+CMD ["sh", "-c", "alembic upgrade head && uvicorn runestone.api.main:app --host 0.0.0.0 --port 8010"]
