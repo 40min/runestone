@@ -34,9 +34,17 @@ def setup_logging(level: str = "INFO", format_string: Optional[str] = None, verb
     )
 
     # Set specific loggers if needed
-    # Suppress noisy loggers
+    # Suppress noisy loggers from third-party libraries
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("google.generativeai").setLevel(logging.WARNING)
+    logging.getLogger("openai").setLevel(logging.WARNING)
+    logging.getLogger("PIL").setLevel(logging.WARNING)
+    logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
+    logging.getLogger("fastapi").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler").setLevel(logging.WARNING)
+    logging.getLogger("alembic").setLevel(logging.WARNING)
 
 
 def get_logger(name: str) -> logging.Logger:
