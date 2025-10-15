@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from "react";
-import {
-  Box,
-  Typography,
-  Snackbar,
-  Alert,
-} from "@mui/material";
+import { Box, Typography, Snackbar, Alert } from "@mui/material";
 import type { AlertColor } from "@mui/material";
 import { Copy, Save } from "lucide-react";
-import { CustomButton, ContentCard, ErrorAlert, SectionTitle, TabNavigation, StyledCheckbox, DataTable } from "./ui";
+import {
+  CustomButton,
+  ContentCard,
+  ErrorAlert,
+  SectionTitle,
+  TabNavigation,
+  StyledCheckbox,
+  DataTable,
+} from "./ui";
 
 // Utility function to convert URLs in text to HTML links
 const convertUrlsToLinks = (text: string): (string | React.ReactElement)[] => {
@@ -89,7 +92,9 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     severity: "success",
   });
   const [checkedItems, setCheckedItems] = useState<boolean[]>(() =>
-    analysisResult ? new Array(analysisResult.vocabulary.length).fill(false) : []
+    analysisResult
+      ? new Array(analysisResult.vocabulary.length).fill(false)
+      : []
   );
 
   useEffect(() => {
@@ -209,9 +214,6 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     }
   };
 
-  const allChecked = checkedItems.every(Boolean);
-  const checkAllButtonText = allChecked ? "Uncheck All" : "Check All";
-
   const tabs = [
     ocrResult && { id: "ocr", label: "OCR Text" },
     analysisResult && { id: "grammar", label: "Grammar" },
@@ -240,8 +242,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
           <Box>
             {!ocrResult && (
               <Typography sx={{ color: "#d1d5db", mb: 2 }}>
-                The OCR text extracted from the image will be displayed here. This
-                text can be edited and copied for further use.
+                The OCR text extracted from the image will be displayed here.
+                This text can be edited and copied for further use.
               </Typography>
             )}
             {ocrResult && (
@@ -358,38 +360,22 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
             </Box>
             {analysisResult && (
               <Box sx={{ mt: 4 }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                <Box
+                  sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}
+                >
                   <StyledCheckbox
                     checked={checkedItems.every(Boolean)}
                     indeterminate={
-                      checkedItems.some(Boolean) &&
-                      !checkedItems.every(Boolean)
+                      checkedItems.some(Boolean) && !checkedItems.every(Boolean)
                     }
                     onChange={handleCheckAll}
                   />
-                  <CustomButton
-                    variant="primary"
-                    size="small"
-                    onClick={handleCheckAll}
-                    sx={{
-                      fontSize: "0.75rem",
-                      textTransform: "none",
-                      minWidth: "auto",
-                      p: 0,
-                      "&:hover": {
-                        backgroundColor: "transparent",
-                        textDecoration: "underline",
-                      },
-                    }}
-                  >
-                    {checkAllButtonText}
-                  </CustomButton>
                 </Box>
                 <DataTable
                   columns={[
                     {
-                      key: 'select',
-                      label: 'Select',
+                      key: "select",
+                      label: "Select",
                       render: (_, __, index) => (
                         <StyledCheckbox
                           checked={checkedItems[index] || false}
@@ -397,15 +383,20 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                         />
                       ),
                     },
-                    { key: 'swedish', label: 'Swedish' },
-                    { key: 'english', label: 'English' },
+                    { key: "swedish", label: "Swedish" },
+                    { key: "english", label: "English" },
                     {
-                      key: 'example_phrase',
-                      label: 'Example Phrase',
-                      render: (value) => (value as string) || "—"
+                      key: "example_phrase",
+                      label: "Example Phrase",
+                      render: (value) => (value as string) || "—",
                     },
                   ]}
-                  data={analysisResult.vocabulary as unknown as Record<string, unknown>[]}
+                  data={
+                    analysisResult.vocabulary as unknown as Record<
+                      string,
+                      unknown
+                    >[]
+                  }
                 />
               </Box>
             )}

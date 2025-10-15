@@ -1,7 +1,7 @@
 /// <reference types="vitest/globals" />
 /// <reference types="@testing-library/jest-dom" />
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { vi } from 'vitest';
+import { vi } from "vitest";
 import ResultsDisplay from "./ResultsDisplay";
 
 const mockOcrResult = {
@@ -14,8 +14,7 @@ const mockAnalysisResult = {
     topic: "Present tense",
     explanation: "Focus on present tense usage in sentences",
     has_explicit_rules: true,
-    rules:
-      "Hej [hello] - greeting\nHur mår du? [how are you?] - question form",
+    rules: "Hej [hello] - greeting\nHur mår du? [how are you?] - question form",
   },
   vocabulary: [
     { swedish: "hej", english: "hello", example_phrase: "Hej, hur mår du?" },
@@ -23,7 +22,8 @@ const mockAnalysisResult = {
   ],
 };
 
-const mockResourcesResult = "Additional learning tips here. Check out https://example.com for more resources.";
+const mockResourcesResult =
+  "Additional learning tips here. Check out https://example.com for more resources.";
 
 describe("ResultsDisplay", () => {
   it("renders error state when error is provided and no results", () => {
@@ -34,6 +34,7 @@ describe("ResultsDisplay", () => {
         analysisResult={null}
         resourcesResult={null}
         error={error}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -49,6 +50,7 @@ describe("ResultsDisplay", () => {
         analysisResult={null}
         resourcesResult={null}
         error={error}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -69,6 +71,7 @@ describe("ResultsDisplay", () => {
         analysisResult={mockAnalysisResult}
         resourcesResult={mockResourcesResult}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -84,6 +87,7 @@ describe("ResultsDisplay", () => {
         analysisResult={mockAnalysisResult}
         resourcesResult={mockResourcesResult}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -138,15 +142,17 @@ describe("ResultsDisplay", () => {
         analysisResult={mockAnalysisResult}
         resourcesResult={mockResourcesResult}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    // Check all items first
-    const checkAllButton = screen.getByText("Check All");
-    fireEvent.click(checkAllButton);
+    // Check all items first using the master checkbox
+    const checkboxes = screen.getAllByRole("checkbox");
+    const masterCheckbox = checkboxes[0];
+    fireEvent.click(masterCheckbox);
 
     const copyButton = screen.getByText("Copy");
     fireEvent.click(copyButton);
@@ -166,6 +172,7 @@ describe("ResultsDisplay", () => {
         analysisResult={mockAnalysisResult}
         resourcesResult={mockResourcesResult}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -175,8 +182,12 @@ describe("ResultsDisplay", () => {
     expect(
       screen.getByRole("heading", { name: "Extra info" })
     ).toBeInTheDocument();
-    expect(screen.getByText(/Additional learning tips here. Check out/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "https://example.com" })).toBeInTheDocument();
+    expect(
+      screen.getByText(/Additional learning tips here. Check out/)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "https://example.com" })
+    ).toBeInTheDocument();
     expect(screen.getByText(/for more resources/)).toBeInTheDocument();
   });
 
@@ -193,6 +204,7 @@ describe("ResultsDisplay", () => {
         analysisResult={resultWithoutExtraInfo.analysis}
         resourcesResult={resultWithoutExtraInfo.extra_info}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -207,6 +219,7 @@ describe("ResultsDisplay", () => {
         analysisResult={null}
         resourcesResult={null}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -220,6 +233,7 @@ describe("ResultsDisplay", () => {
         analysisResult={mockAnalysisResult}
         resourcesResult={mockResourcesResult}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -236,6 +250,7 @@ describe("ResultsDisplay", () => {
         analysisResult={mockAnalysisResult}
         resourcesResult={mockResourcesResult}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -268,6 +283,7 @@ describe("ResultsDisplay", () => {
         analysisResult={resultWithoutRules.analysis}
         resourcesResult={resultWithoutRules.extra_info}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -299,6 +315,7 @@ describe("ResultsDisplay", () => {
         analysisResult={resultWithoutRules.analysis}
         resourcesResult={resultWithoutRules.extra_info}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -315,7 +332,8 @@ describe("ResultsDisplay", () => {
     const resultWithUrl = {
       ocr_result: mockOcrResult,
       analysis: mockAnalysisResult,
-      extra_info: "Check out this resource: https://example.com/learn-swedish and also https://swedishpod101.com",
+      extra_info:
+        "Check out this resource: https://example.com/learn-swedish and also https://swedishpod101.com",
     };
 
     render(
@@ -324,6 +342,7 @@ describe("ResultsDisplay", () => {
         analysisResult={resultWithUrl.analysis}
         resourcesResult={resultWithUrl.extra_info}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -331,8 +350,12 @@ describe("ResultsDisplay", () => {
     fireEvent.click(extraInfoTab);
 
     // Check that the link elements are present
-    const link1 = screen.getByRole("link", { name: "https://example.com/learn-swedish" });
-    const link2 = screen.getByRole("link", { name: "https://swedishpod101.com" });
+    const link1 = screen.getByRole("link", {
+      name: "https://example.com/learn-swedish",
+    });
+    const link2 = screen.getByRole("link", {
+      name: "https://swedishpod101.com",
+    });
 
     expect(link1).toBeInTheDocument();
     expect(link1).toHaveAttribute("href", "https://example.com/learn-swedish");
@@ -353,6 +376,7 @@ describe("ResultsDisplay", () => {
         analysisResult={mockAnalysisResult}
         resourcesResult={mockResourcesResult}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -362,7 +386,7 @@ describe("ResultsDisplay", () => {
     // Check that all checkboxes are unchecked by default
     const checkboxes = screen.getAllByRole("checkbox");
     expect(checkboxes).toHaveLength(3);
-    checkboxes.forEach(checkbox => {
+    checkboxes.forEach((checkbox) => {
       expect(checkbox).not.toBeChecked();
     });
   });
@@ -374,6 +398,7 @@ describe("ResultsDisplay", () => {
         analysisResult={mockAnalysisResult}
         resourcesResult={mockResourcesResult}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -402,38 +427,32 @@ describe("ResultsDisplay", () => {
         analysisResult={mockAnalysisResult}
         resourcesResult={mockResourcesResult}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    const checkAllButton = screen.getByText("Check All");
     const checkboxes = screen.getAllByRole("checkbox");
+    const masterCheckbox = checkboxes[0];
 
     // Initially all unchecked
-    checkboxes.forEach(checkbox => {
+    checkboxes.forEach((checkbox) => {
       expect(checkbox).not.toBeChecked();
     });
 
-    // Click to check all
-    fireEvent.click(checkAllButton);
-    checkboxes.forEach(checkbox => {
+    // Click master checkbox to check all
+    fireEvent.click(masterCheckbox);
+    checkboxes.forEach((checkbox) => {
       expect(checkbox).toBeChecked();
     });
 
-    // Button should now say "Uncheck All"
-    expect(screen.getByText("Uncheck All")).toBeInTheDocument();
-
-    // Click to uncheck all again
-    const uncheckAllButton = screen.getByText("Uncheck All");
-    fireEvent.click(uncheckAllButton);
-    checkboxes.forEach(checkbox => {
+    // Click master checkbox to uncheck all again
+    fireEvent.click(masterCheckbox);
+    checkboxes.forEach((checkbox) => {
       expect(checkbox).not.toBeChecked();
     });
-
-    // Button should now say "Check All" again
-    expect(screen.getByText("Check All")).toBeInTheDocument();
   });
 
   it("copies only selected vocabulary items", async () => {
@@ -448,6 +467,7 @@ describe("ResultsDisplay", () => {
         analysisResult={mockAnalysisResult}
         resourcesResult={mockResourcesResult}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -480,6 +500,7 @@ describe("ResultsDisplay", () => {
         analysisResult={mockAnalysisResult}
         resourcesResult={mockResourcesResult}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -492,7 +513,9 @@ describe("ResultsDisplay", () => {
 
     // Should show error message
     await waitFor(() => {
-      expect(screen.getByText("No vocabulary items selected!")).toBeInTheDocument();
+      expect(
+        screen.getByText("No vocabulary items selected!")
+      ).toBeInTheDocument();
     });
 
     // Clipboard should not be called
@@ -511,22 +534,26 @@ describe("ResultsDisplay", () => {
         analysisResult={mockAnalysisResult}
         resourcesResult={mockResourcesResult}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    // Check all items first
-    const checkAllButton = screen.getByText("Check All");
-    fireEvent.click(checkAllButton);
+    // Check all items first using the master checkbox
+    const checkboxes = screen.getAllByRole("checkbox");
+    const masterCheckbox = checkboxes[0];
+    fireEvent.click(masterCheckbox);
 
     const copyButton = screen.getByText("Copy");
     fireEvent.click(copyButton);
 
     // Should show success message
     await waitFor(() => {
-      expect(screen.getByText("Selected vocabulary copied to clipboard!")).toBeInTheDocument();
+      expect(
+        screen.getByText("Selected vocabulary copied to clipboard!")
+      ).toBeInTheDocument();
     });
   });
 
@@ -542,22 +569,26 @@ describe("ResultsDisplay", () => {
         analysisResult={mockAnalysisResult}
         resourcesResult={mockResourcesResult}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    // Check all items first
-    const checkAllButton = screen.getByText("Check All");
-    fireEvent.click(checkAllButton);
+    // Check all items first using the master checkbox
+    const checkboxes = screen.getAllByRole("checkbox");
+    const masterCheckbox = checkboxes[0];
+    fireEvent.click(masterCheckbox);
 
     const copyButton = screen.getByText("Copy");
     fireEvent.click(copyButton);
 
     // Should show error message
     await waitFor(() => {
-      expect(screen.getByText("Failed to copy vocabulary. Please try again.")).toBeInTheDocument();
+      expect(
+        screen.getByText("Failed to copy vocabulary. Please try again.")
+      ).toBeInTheDocument();
     });
   });
 
@@ -570,7 +601,7 @@ describe("ResultsDisplay", () => {
     delete navigator.clipboard;
 
     // Spy on console.error to suppress expected error output
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     render(
       <ResultsDisplay
@@ -578,23 +609,29 @@ describe("ResultsDisplay", () => {
         analysisResult={mockAnalysisResult}
         resourcesResult={mockResourcesResult}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    // Check all items first
-    const checkAllButton = screen.getByText("Check All");
-    fireEvent.click(checkAllButton);
+    // Check all items first using the master checkbox
+    const checkboxes = screen.getAllByRole("checkbox");
+    const masterCheckbox = checkboxes[0];
+    fireEvent.click(masterCheckbox);
 
     const copyButton = screen.getByText("Copy");
     fireEvent.click(copyButton);
 
     // Should show either success or error message - the fallback might not work in test environment
     await waitFor(() => {
-      const successMessage = screen.queryByText("Selected vocabulary copied to clipboard!");
-      const errorMessage = screen.queryByText("Failed to copy vocabulary. Please try again.");
+      const successMessage = screen.queryByText(
+        "Selected vocabulary copied to clipboard!"
+      );
+      const errorMessage = screen.queryByText(
+        "Failed to copy vocabulary. Please try again."
+      );
       expect(successMessage || errorMessage).toBeTruthy();
     });
 
@@ -610,6 +647,7 @@ describe("ResultsDisplay", () => {
         analysisResult={mockAnalysisResult}
         resourcesResult={mockResourcesResult}
         error={null}
+        saveVocabulary={vi.fn()}
       />
     );
 
@@ -625,67 +663,7 @@ describe("ResultsDisplay", () => {
     const checkboxes = screen.getAllByRole("checkbox");
     expect(checkboxes).toHaveLength(3);
 
-    // Check that the Check/Uncheck All button is present
-    expect(screen.getByText("Check All")).toBeInTheDocument();
-
     // Check that the Copy button is present
     expect(screen.getByText("Copy")).toBeInTheDocument();
-  });
-
-  it("updates button text to 'Uncheck All' when all items are checked", () => {
-    render(
-      <ResultsDisplay
-        ocrResult={mockOcrResult}
-        analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
-        error={null}
-      />
-    );
-
-    const vocabularyTab = screen.getByText("Vocabulary");
-    fireEvent.click(vocabularyTab);
-
-    // Initially all unchecked, button should say "Check All"
-    expect(screen.getByText("Check All")).toBeInTheDocument();
-
-    // Check all items
-    const checkAllButton = screen.getByText("Check All");
-    fireEvent.click(checkAllButton);
-
-    // Button should now say "Uncheck All"
-    expect(screen.getByText("Uncheck All")).toBeInTheDocument();
-    expect(screen.queryByText("Check All")).not.toBeInTheDocument();
-  });
-
-  it("updates button text back to 'Check All' when all items are unchecked again", () => {
-    render(
-      <ResultsDisplay
-        ocrResult={mockOcrResult}
-        analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
-        error={null}
-      />
-    );
-
-    const vocabularyTab = screen.getByText("Vocabulary");
-    fireEvent.click(vocabularyTab);
-
-    // Initially all unchecked, button should say "Check All"
-    expect(screen.getByText("Check All")).toBeInTheDocument();
-
-    // Check all items
-    const checkAllButton = screen.getByText("Check All");
-    fireEvent.click(checkAllButton);
-
-    // Button should say "Uncheck All"
-    expect(screen.getByText("Uncheck All")).toBeInTheDocument();
-
-    // Uncheck all items
-    const uncheckAllButton = screen.getByText("Uncheck All");
-    fireEvent.click(uncheckAllButton);
-
-    // Button should say "Check All" again
-    expect(screen.getByText("Check All")).toBeInTheDocument();
-    expect(screen.queryByText("Uncheck All")).not.toBeInTheDocument();
   });
 });
