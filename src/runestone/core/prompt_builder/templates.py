@@ -204,17 +204,39 @@ INSTRUCTIONS:
    - Provide a clear English explanation of the grammatical concept
 
 2. For vocabulary:
-   - Extract all Swedish words and meaningful phrases from the text (including excercise
-     description)
-   - Exclude very basic function words (e.g., och, är, en, ett, han, hon, de, hen, jag, du, vi, ni, mig, dig)
-     but allow basic words to appear as part of longer meaningful phrases, but not as single entries.
-   - Exclude personal names
-   - Lowercase all words and phrases except personal names and abbreviations.
-   - Deduplicate words, but keep different forms if they appear (e.g., hund / hunden).
-   - For each entry, provide the Swedish word/phrase and its most common English translation.
-   - For each entry, also provide an example_phrase containing the sentence from the source text
-     where the word appeared, if available. If not available, set to null.
-   - List translated words in alphabetical order.
+   - Extract ALL Swedish words and meaningful phrases from the text, including:
+     * All nouns (common and proper nouns, except when used as personal names in context)
+     * All verbs in any form (infinitives, conjugated forms, past participles)
+     * All adjectives and adverbs
+     * Phrasal expressions and common collocations
+     * Compound words and technical terms
+   - INCLUDE words that appear in:
+     * The main body text
+     * Titles and headings
+     * Exercise descriptions and instructions
+     * Example sentences
+   - EXCLUDE only these categories:
+     * Personal names used as names in the text (e.g., "Alfred", "Bertha" when referring to people)
+     * The most basic pronouns: jag, du, han, hon, den, det, vi, ni, de, hen
+     * The most basic articles when standalone: en, ett
+     * The most basic conjunctions when standalone: och, eller, men, att (as conjunction)
+     * The most basic prepositions when standalone: i, på, av, till, från, med, för, om
+   - IMPORTANT: DO include function words when they are part of meaningful phrases
+     (e.g., "gå till" as a phrasal verb, "tycka om" as an expression)
+   - DO include all content words, even if they seem basic (e.g., år, dag, stor, god, vara, ha, göra)
+   - For each word, identify all distinct forms present in the text (e.g., dog/dö, föddes/födas,
+     slutade/sluta, stora/stor)
+   - Lowercase all entries except proper nouns and abbreviations
+   - Deduplicate identical entries, but preserve different grammatical forms as separate entries
+   - For each entry provide:
+     * swedish: the word or phrase as it appears in text
+     * english: the most contextually appropriate English translation
+     * example_phrase: a complete sentence from the source text containing this word.
+       If the word appears multiple times, choose the most illustrative example.
+       Never set to null unless the word genuinely doesn't appear in a complete sentence.
+   - Sort all entries alphabetically by the Swedish word
+   - Aim for comprehensive vocabulary extraction - a typical textbook page should yield
+     50-150+ vocabulary entries depending on text length and density
 
 3. For core_topics:
    - Identify 2-4 main learning topics from this page
