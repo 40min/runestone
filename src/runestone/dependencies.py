@@ -58,6 +58,35 @@ def get_llm_client(settings: Annotated[Settings, Depends(get_settings)]) -> Base
     return create_llm_client(settings=settings)
 
 
+def get_ocr_llm_client(
+    settings: Annotated[Settings, Depends(get_settings)],
+    llm_client: Annotated[BaseLLMClient, Depends(get_llm_client)],
+) -> BaseLLMClient:
+    """
+    Dependency injection for OCR-specific LLM client.
+
+    This function implements a fallback strategy:
+    - If ocr_llm_provider is configured, creates a dedicated OCR client
+    - Otherwise, returns the main LLM client (reuse for OCR)
+
+    Args:
+        settings: Application settings from dependency injection
+        llm_client: Main LLM client from dependency injection (used as fallback)
+
+    Returns:
+        BaseLLMClient: OCR-specific LLM client instance or main client
+    """
+    if settings.ocr_llm_provider:
+        # Create dedicated OCR client with OCR-specific settings
+        return create_llm_client(
+            settings=settings,
+            provider=settings.ocr_llm_provider,
+            model_name=settings.ocr_llm_model_name,
+        )
+    # Fall back to main client if no OCR-specific provider is configured
+    return llm_client
+
+
 def get_vocabulary_service(
     repo: Annotated[VocabularyRepository, Depends(get_vocabulary_repository)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -79,19 +108,19 @@ def get_vocabulary_service(
 
 def get_ocr_processor(
     settings: Annotated[Settings, Depends(get_settings)],
-    llm_client: Annotated[BaseLLMClient, Depends(get_llm_client)],
+    ocr_llm_client: Annotated[BaseLLMClient, Depends(get_ocr_llm_client)],
 ) -> OCRProcessor:
     """
     Dependency injection for OCR processor.
 
     Args:
         settings: Application settings from dependency injection
-        llm_client: LLM client from dependency injection
+        ocr_llm_client: OCR-specific LLM client from dependency injection
 
     Returns:
         OCRProcessor: OCR processor instance
     """
-    return OCRProcessor(settings, llm_client)
+    return OCRProcessor(settings, ocr_llm_client)
 
 
 def get_content_analyzer(
