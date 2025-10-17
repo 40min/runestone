@@ -103,3 +103,8 @@ class BaseLLMClient(ABC):
     def model_name(self) -> str:
         """Return the name of the model being used."""
         pass
+
+    @property
+    def log_mark(self) -> str:
+        """Return the log marker for this client (provider:model)."""
+        return f"[{self.provider_name}:{self.model_name}]"

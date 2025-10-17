@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     # Gemini Configuration
     gemini_api_key: str
 
+    # OpenRouter Configuration
+    openrouter_api_key: Optional[str] = None
+    ocr_llm_provider: Optional[str] = None
+    ocr_llm_model_name: Optional[str] = None
+
     # Application Settings
     allowed_origins: str
     # Telegram Configuration
