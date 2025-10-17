@@ -221,7 +221,7 @@ class OpenAIClient(BaseLLMClient):
             )
 
             if not response.choices or not response.choices[0].message.content:
-                raise LLMError("No vocabulary improvement returned from OpenAI")
+                raise LLMError(f"No vocabulary improvement returned from {self.provider_name}")
 
             return response.choices[0].message.content.strip()
 

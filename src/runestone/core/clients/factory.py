@@ -68,10 +68,10 @@ def create_llm_client(
     effective_model_name = model_name or settings.llm_model_name
 
     # Validate provider
-    if effective_provider not in get_available_providers():
+    available_providers = get_available_providers()
+    if effective_provider not in available_providers:
         raise ValueError(
-            f"Unsupported LLM provider: {effective_provider}. "
-            f"Supported providers: {', '.join(get_available_providers())}"
+            f"Unsupported LLM provider: {effective_provider}. " f"Supported providers: {', '.join(available_providers)}"
         )
 
     # Create client based on provider

@@ -99,7 +99,7 @@ class TestOpenRouterClient:
         with pytest.raises(LLMError) as exc_info:
             client.improve_vocabulary_item(self.prompt)
 
-        assert "No vocabulary improvement returned from OpenAI" in str(exc_info.value)
+        assert f"No vocabulary improvement returned from {client.provider_name}" in str(exc_info.value)
 
     @patch("runestone.core.clients.openrouter_client.OpenAI")
     def test_improve_vocabulary_item_api_error(self, mock_openai_class):
