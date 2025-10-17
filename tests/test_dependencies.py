@@ -17,6 +17,7 @@ from runestone.core.processor import RunestoneProcessor
 from runestone.dependencies import (
     get_content_analyzer,
     get_llm_client,
+    get_ocr_llm_client,
     get_ocr_processor,
     get_runestone_processor,
     get_vocabulary_service,
@@ -63,23 +64,81 @@ class TestDependencyProviders:
             mock_llm_client,
         )
 
-    @patch("runestone.dependencies.OCRProcessor")
-    def test_get_ocr_processor(self, mock_ocr_processor_class):
-        """Test get_ocr_processor provider creates processor correctly."""
+    @patch("runestone.dependencies.create_llm_client")
+    def test_get_ocr_llm_client_with_dedicated_provider(self, mock_create_client):
+        """Test get_ocr_llm_client creates dedicated client when ocr_llm_provider is set."""
         # Setup
         mock_settings = Mock(spec=Settings)
-        mock_llm_client = Mock(spec=BaseLLMClient)
+        mock_settings.ocr_llm_provider = "openrouter"
+        mock_settings.ocr_llm_model_name = "anthropic/claude-3.5-sonnet"
+        mock_main_client = Mock(spec=BaseLLMClient)
+        mock_ocr_client = Mock(spec=BaseLLMClient)
+        mock_create_client.return_value = mock_ocr_client
+
+        # Execute
+        result = get_ocr_llm_client(mock_settings, mock_main_client)
+
+        # Assert - should create a new dedicated client
+        assert result == mock_ocr_client
+        assert result is not mock_main_client  # Verify it's a different instance
+        mock_create_client.assert_called_once_with(
+            settings=mock_settings,
+            provider="openrouter",
+            model_name="anthropic/claude-3.5-sonnet",
+        )
+
+    def test_get_ocr_llm_client_fallback_to_main(self):
+        """Test get_ocr_llm_client returns main client when ocr_llm_provider is not set."""
+        # Setup
+        mock_settings = Mock(spec=Settings)
+        mock_settings.ocr_llm_provider = None  # Not configured
+        mock_main_client = Mock(spec=BaseLLMClient)
+
+        # Execute
+        result = get_ocr_llm_client(mock_settings, mock_main_client)
+
+        # Assert - should return the same main client instance (fallback)
+        assert result is mock_main_client
+
+    @patch("runestone.dependencies.create_llm_client")
+    def test_get_ocr_llm_client_passes_correct_parameters(self, mock_create_client):
+        """Test get_ocr_llm_client passes correct provider and model_name."""
+        # Setup
+        mock_settings = Mock(spec=Settings)
+        mock_settings.ocr_llm_provider = "gemini"
+        mock_settings.ocr_llm_model_name = "gemini-1.5-pro"
+        mock_main_client = Mock(spec=BaseLLMClient)
+        mock_ocr_client = Mock(spec=BaseLLMClient)
+        mock_create_client.return_value = mock_ocr_client
+
+        # Execute
+        result = get_ocr_llm_client(mock_settings, mock_main_client)
+
+        # Assert
+        assert result == mock_ocr_client
+        mock_create_client.assert_called_once_with(
+            settings=mock_settings,
+            provider="gemini",
+            model_name="gemini-1.5-pro",
+        )
+
+    @patch("runestone.dependencies.OCRProcessor")
+    def test_get_ocr_processor(self, mock_ocr_processor_class):
+        """Test get_ocr_processor provider creates processor with OCR client correctly."""
+        # Setup
+        mock_settings = Mock(spec=Settings)
+        mock_ocr_llm_client = Mock(spec=BaseLLMClient)
         mock_processor = Mock(spec=OCRProcessor)
         mock_ocr_processor_class.return_value = mock_processor
 
         # Execute
-        result = get_ocr_processor(mock_settings, mock_llm_client)
+        result = get_ocr_processor(mock_settings, mock_ocr_llm_client)
 
         # Assert
         assert result == mock_processor
         mock_ocr_processor_class.assert_called_once_with(
             mock_settings,
-            mock_llm_client,
+            mock_ocr_llm_client,
         )
 
     @patch("runestone.dependencies.RunestoneProcessor")

@@ -75,13 +75,13 @@ class OpenAIClient(BaseLLMClient):
             OCRError: If OCR processing fails
         """
         try:
-            self.logger.debug(f"[OpenAI] Starting OCR processing with model: {self._model_name}")
+            self.logger.debug(f"{self.log_mark} Starting OCR processing with model: {self._model_name}")
 
             # Convert image to base64
-            self.logger.debug("[OpenAI] Converting image to base64...")
+            self.logger.debug(f"{self.log_mark} Converting image to base64...")
             image_b64 = self._image_to_base64(image)
 
-            self.logger.debug("[OpenAI] Sending request to OpenAI API...")
+            self.logger.debug(f"{self.log_mark} Sending request to OpenAI API...")
             response = self.client.chat.completions.create(
                 model=self._model_name,
                 messages=[
@@ -103,40 +103,40 @@ class OpenAIClient(BaseLLMClient):
                 temperature=0.1,
             )
 
-            self.logger.debug("[OpenAI] Received response from OpenAI API")
-            self.logger.debug(f"[OpenAI] Response has {len(response.choices)} choice(s)")
+            self.logger.debug(f"{self.log_mark} Received response from OpenAI API")
+            self.logger.debug(f"{self.log_mark} Response has {len(response.choices)} choice(s)")
 
             if not response.choices or not response.choices[0].message.content:
-                self.logger.error("[OpenAI] No text returned from OpenAI API response")
+                self.logger.error(f"{self.log_mark} No text returned from OpenAI API response")
                 raise OCRError("No text returned from OpenAI API")
 
             extracted_text = response.choices[0].message.content.strip()
 
-            self.logger.debug(f"[OpenAI] Extracted text length: {len(extracted_text)} characters")
+            self.logger.debug(f"{self.log_mark} Extracted text length: {len(extracted_text)} characters")
 
             # Check for error response
             if "ERROR: Could not recognise text on the page" in extracted_text:
-                self.logger.error("[OpenAI] Model returned error: Could not recognise text on the page")
+                self.logger.error(f"{self.log_mark} Model returned error: Could not recognise text on the page")
                 raise OCRError("Could not recognise text on the page.")
 
             if len(extracted_text) < 10:
-                self.logger.error(f"[OpenAI] Extracted text too short: {len(extracted_text)} chars")
+                self.logger.error(f"{self.log_mark} Extracted text too short: {len(extracted_text)} chars")
                 raise OCRError("Extracted text is too short - may not be a valid textbook page")
 
-            self.logger.debug("[OpenAI] OCR processing completed successfully")
+            self.logger.debug(f"{self.log_mark} OCR processing completed successfully")
 
             return extracted_text
 
         except OCRError:
             raise
         except APIError as e:
-            self.logger.error(f"[OpenAI] API Error: {type(e).__name__}")
-            self.logger.error(f"[OpenAI] Error message: {str(e)}")
+            self.logger.error(f"{self.log_mark} API Error: {type(e).__name__}")
+            self.logger.error(f"{self.log_mark} Error message: {str(e)}")
             raise OCRError(f"OpenAI API error: {str(e)}")
         except Exception as e:
-            self.logger.error(f"[OpenAI] Unexpected error type: {type(e).__name__}")
-            self.logger.error(f"[OpenAI] Error message: {str(e)}")
-            self.logger.exception("[OpenAI] Full exception traceback:")
+            self.logger.error(f"{self.log_mark} Unexpected error type: {type(e).__name__}")
+            self.logger.error(f"{self.log_mark} Error message: {str(e)}")
+            self.logger.exception(f"{self.log_mark} Full exception traceback:")
             raise OCRError(f"OCR processing failed: {type(e).__name__}: {str(e)}")
 
     def analyze_content(self, prompt: str) -> str:
@@ -182,7 +182,7 @@ class OpenAIClient(BaseLLMClient):
             LLMError: If resource search fails
         """
         try:
-            self.logger.debug("[OpenAI] Searching for educational resources...")
+            self.logger.debug(f"{self.log_mark} Searching for educational resources...")
 
             response = self.client.chat.completions.create(
                 model=self._model_name,
@@ -221,7 +221,7 @@ class OpenAIClient(BaseLLMClient):
             )
 
             if not response.choices or not response.choices[0].message.content:
-                raise LLMError("No vocabulary improvement returned from OpenAI")
+                raise LLMError(f"No vocabulary improvement returned from {self.provider_name}")
 
             return response.choices[0].message.content.strip()
 

@@ -5,6 +5,7 @@ This module handles image processing and text extraction from Swedish textbook p
 using various LLM providers like OpenAI or Gemini.
 """
 
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -167,6 +168,7 @@ class OCRProcessor:
         Raises:
             OCRError: If text extraction fails
         """
+        start_time = time.time()
         try:
             # Log original image characteristics for debugging
             self.logger.debug(f"[OCRProcessor] Starting text extraction: mode={image.mode}, size={image.size}")
@@ -227,6 +229,10 @@ class OCRProcessor:
                 f"[OCRProcessor] OCR extraction successful: {len(ocr_response.transcribed_text)} characters extracted"
             )
 
+            processing_time = time.time() - start_time
+            self.logger.info(f"[OCRProcessor] OCR processing completed in {processing_time:.2f} seconds")
+
+            return ocr_response
             return ocr_response
 
         except OCRError:
