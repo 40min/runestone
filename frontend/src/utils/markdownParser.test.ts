@@ -222,7 +222,17 @@ describe("parseMarkdown", () => {
       const html = parseMarkdown(markdown);
       expect(html).toContain("<strong>bold</strong>");
       expect(html).toContain("<em>italic</em>");
-      expect(html).toContain('<a href="https://example.com">link</a>');
+      expect(html).toContain('<a href="https://example.com" target="_blank" rel="noopener noreferrer">link</a>');
+    });
+
+    it("should add target='_blank' and rel='noopener noreferrer' to external links", () => {
+      const markdown = `[External Link](https://www.external.com) and [Internal Link](/internal)`;
+      const html = parseMarkdown(markdown);
+
+      expect(html).toContain(
+        '<a href="https://www.external.com" target="_blank" rel="noopener noreferrer">External Link</a>'
+      );
+      expect(html).toContain('<a href="/internal">Internal Link</a>');
     });
   });
 });

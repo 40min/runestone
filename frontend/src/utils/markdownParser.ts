@@ -1,4 +1,4 @@
-import { marked } from "marked";
+import { marked, Renderer, type Tokens } from "marked";
 import DOMPurify from "dompurify";
 
 // Configure marked options for better parsing
@@ -7,6 +7,20 @@ marked.setOptions({
   breaks: false, // Don't add <br> on single line breaks
   pedantic: false,
 });
+
+// Custom renderer to add target="_blank" and rel="noopener noreferrer" to external links
+const renderer = new Renderer();
+renderer.link = (token: Tokens.Link) => {
+  const { href, title, text } = token;
+  const isExternal = href && (href.startsWith("http://") || href.startsWith("https://"));
+  const target = isExternal ? ' target="_blank"' : "";
+  const rel = isExternal ? ' rel="noopener noreferrer"' : "";
+  const linkTitle = title ? ` title="${title}"` : "";
+  return `<a href="${href}"${target}${rel}${linkTitle}>${text}</a>`;
+};
+
+// Register the custom renderer
+marked.use({ renderer });
 
 /**
  * Preprocesses markdown to fix common parsing issues:
