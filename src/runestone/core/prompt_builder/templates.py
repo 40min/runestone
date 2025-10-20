@@ -76,6 +76,12 @@ Return this layout summary as plain text, then continue with Stage 2.
 
 ## Stage 2 — Text Transcription
 Now transcribe all visible text **exactly as it appears**, following the detected layout and reading order.
+Format the transcribed text using **markdown syntax** for better structure and readability:
+- Use `#` for main headings, `##` for subheadings, `###` for subsections
+- Use `**bold**` for important terms, emphasis, or headings within text
+- Use `-` or `*` for bullet lists
+- Use `1.`, `2.`, etc. for numbered lists
+- Preserve paragraph breaks with blank lines
 
 ### Exact Transcription Rules
 - Copy all text precisely, preserving:

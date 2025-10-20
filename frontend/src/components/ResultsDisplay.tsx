@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Box, Typography, Snackbar, Alert } from "@mui/material";
+import { Box, Typography, Snackbar, Alert, IconButton } from "@mui/material";
 import type { AlertColor } from "@mui/material";
 import { Copy, Save } from "lucide-react";
+import { ContentCopy } from "@mui/icons-material";
 import {
   CustomButton,
   ContentCard,
@@ -11,6 +12,7 @@ import {
   StyledCheckbox,
   DataTable,
 } from "./ui";
+import { parseMarkdown } from "../utils/markdownParser";
 
 // Utility function to convert URLs in text to HTML links
 const convertUrlsToLinks = (text: string): (string | React.ReactElement)[] => {
@@ -96,6 +98,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
       ? new Array(analysisResult.vocabulary.length).fill(false)
       : []
   );
+  const [copyButtonText, setCopyButtonText] = useState("Copy");
 
   useEffect(() => {
     if (analysisResult) {
@@ -214,6 +217,28 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     }
   };
 
+  const handleCopyOCRText = async () => {
+    if (!ocrResult) return;
+
+    try {
+      await navigator.clipboard.writeText(ocrResult.text);
+      setCopyButtonText("Copied!");
+      setSnackbar({
+        open: true,
+        message: "OCR text copied to clipboard!",
+        severity: "success",
+      });
+      setTimeout(() => setCopyButtonText("Copy"), 2000);
+    } catch (err) {
+      console.error("Failed to copy OCR text: ", err);
+      setSnackbar({
+        open: true,
+        message: "Failed to copy OCR text. Please try again.",
+        severity: "error",
+      });
+    }
+  };
+
   const tabs = [
     ocrResult && { id: "ocr", label: "OCR Text" },
     analysisResult && { id: "grammar", label: "Grammar" },
@@ -247,11 +272,29 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
               </Typography>
             )}
             {ocrResult && (
-              <ContentCard>
-                <Typography sx={{ color: "white", whiteSpace: "pre-wrap" }}>
-                  {ocrResult.text}
-                </Typography>
-              </ContentCard>
+              <Box>
+                <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+                  <IconButton
+                    onClick={handleCopyOCRText}
+                    sx={{
+                      color: "var(--primary-color)",
+                      "&:hover": {
+                        backgroundColor: "rgba(255, 255, 255, 0.1)",
+                      },
+                    }}
+                    title={copyButtonText}
+                  >
+                    <ContentCopy />
+                  </IconButton>
+                </Box>
+                <ContentCard>
+                  <Box
+                    sx={{ color: "white" }}
+                    className="markdown-content"
+                    dangerouslySetInnerHTML={{ __html: parseMarkdown(ocrResult.text) }}
+                  />
+                </ContentCard>
+              </Box>
             )}
           </Box>
         )}
