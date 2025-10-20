@@ -82,6 +82,8 @@ Format the transcribed text using **markdown syntax** for better structure and r
 - Use `-` or `*` for bullet lists
 - Use `1.`, `2.`, etc. for numbered lists
 - Preserve paragraph breaks with blank lines
+- Insert `---` to visually separate unrelated lists that appear consecutively in the same text area  \
+(e.g. exercises list followed by explanation list)
 
 ### Exact Transcription Rules
 - Copy all text precisely, preserving:
@@ -90,12 +92,16 @@ Format the transcribed text using **markdown syntax** for better structure and r
   - Paragraph breaks and line spacing
   - Underscores (_) used for blanks
   - Number formatting and mathematical notation
+  - **Do NOT infer or supply missing text. If text is partially obscured, unreadable, \
+    or intended as a blank, leave it as underscores
+  - **Never replace blanks or questions with possible answers.**
+  - **Never attempt to complete, interpret, or explain exercises or examples.**
 
 ### Layout and Section Rules
 - For multiple **vertical columns**, transcribe *top-to-bottom per column*, \
-  inserting: `— [Column Break] —`
+  inserting: `—-—`
 - For **side-by-side exercise blocks** (e.g., "A" and "B"), transcribe *left block first*, \
-  then *right block*, inserting: `— [Exercise Block Break] —`
+  then *right block*, inserting: `—-—`
 - For boxed or colored sections, mark them clearly: `=== [Section Start: describe if visible] ===
 …content…
 === [Section End] ===`
@@ -156,6 +162,9 @@ Important Notes
 - Be extremely precise with names, numbers, and exercise content - transcribe EXACTLY as shown, don't modify or guess
 - Ignore images, and non-text graphics
 - Maintain the original language of the text (don't translate)
++ Do **not** interpret or solve exercises — leave all blanks, questions, and tasks exactly as they appear.
++ If you detect any exercises, quizzes, or fill-in tasks, **transcribe them verbatim** and \
+  **do not provide or infer answers under any circumstance**.
 - ACCURACY IS CRITICAL: Copy text exactly as it appears without any modifications, especially names
   and numbers in exercises
 """,
