@@ -143,8 +143,10 @@ describe("parseMarkdown", () => {
 
       const html = parseMarkdown(markdown);
 
-      // Should contain a horizontal rule separator between the two lists
-      expect(html).toContain("<hr>");
+      // Should create two separate ordered lists
+      const olMatches = html.match(/<ol>/g);
+      expect(olMatches).toBeTruthy();
+      expect(olMatches!.length).toBeGreaterThanOrEqual(2);
 
       // Should contain both lists
       expect(html).toContain("First item");
@@ -162,8 +164,10 @@ describe("parseMarkdown", () => {
 
       const html = parseMarkdown(markdown);
 
-      // Should contain a horizontal rule separator
-      expect(html).toContain("<hr>");
+      // Should create two separate ordered lists
+      const olMatches = html.match(/<ol>/g);
+      expect(olMatches).toBeTruthy();
+      expect(olMatches!.length).toBeGreaterThanOrEqual(2);
 
       // Should contain all items
       expect(html).toContain("First");
