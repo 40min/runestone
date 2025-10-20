@@ -87,8 +87,6 @@ Format the transcribed text using **markdown syntax** for better structure and r
 - Use `-` or `*` for bullet lists
 - Use `1.`, `2.`, etc. for numbered lists
 - Preserve paragraph breaks with blank lines
-- Insert `---` to visually separate unrelated lists that appear consecutively in the same text area  \
-(e.g. exercises list followed by explanation list)
 
 ### Exact Transcription Rules
 - Copy all text precisely, preserving:

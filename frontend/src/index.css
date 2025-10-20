@@ -71,27 +71,16 @@ body {
   margin: 0.5em 0;
 }
 
-/* Remove ALL margin and display from paragraphs inside list items */
+/* Simplified paragraph styles in list items */
 .markdown-content li > p {
-  margin: 0 !important;
-  padding: 0 !important;
-  display: contents !important;
+  margin: 0;
+  padding: 0;
+  display: contents;
 }
 
-/* Ensure only child paragraphs are truly inline */
-.markdown-content li > p:only-child {
-  display: contents !important;
-}
-
-/* Handle first paragraph in list items */
-.markdown-content li > p:first-child {
-  display: contents !important;
-}
-
-/* Handle subsequent paragraphs with minimal spacing */
 .markdown-content li > p + p {
-  display: block !important;
-  margin-top: 0.3em !important;
+  display: block;
+  margin-top: 0.3em;
 }
 
 /* Prevent line breaks after list markers */
