@@ -118,12 +118,14 @@ class VocabularyRepository:
     def get_vocabulary(self, limit: int, search_query: str | None = None, user_id: int = 1) -> List[Vocabulary]:
         r"""Retrieve vocabulary items for a user, optionally filtered by search query with wildcard support.
 
+        The search performs a case-insensitive substring match by default. For example,
+        searching for "apple" will match "apples" and "pineapple".
+
         Supports wildcards:
         - '*' matches zero or more characters
         - '?' matches exactly one character
 
-        Special SQL characters (%, _, \) are escaped to be treated as literals.
-        Matching is case-insensitive.
+        Special SQL characters (%, _, \) in the search query are treated as literal characters.
         """
         query = self.db.query(Vocabulary).filter(Vocabulary.user_id == user_id)
 
