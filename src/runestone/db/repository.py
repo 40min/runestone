@@ -13,6 +13,7 @@ from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
 from ..api.schemas import VocabularyItemCreate
+from ..utils.search import parse_search_query_with_wildcards
 from .models import Vocabulary
 
 
@@ -116,13 +117,28 @@ class VocabularyRepository:
             self.batch_insert_vocabulary_items(filtered_items, user_id)
 
     def get_vocabulary(self, limit: int, search_query: str | None = None, user_id: int = 1) -> List[Vocabulary]:
-        """Retrieve vocabulary items for a user, optionally filtered by search query."""
+        r"""Retrieve vocabulary items for a user, optionally filtered by search query with wildcard support.
+
+        The search performs a case-insensitive substring match by default. For example,
+        searching for "apple" will match "apples" and "pineapple".
+
+        Supports wildcards:
+        - '*' matches zero or more characters
+        - '?' matches exactly one character
+
+        Special SQL characters (%, _, \) in the search query are treated as literal characters.
+        """
         query = self.db.query(Vocabulary).filter(Vocabulary.user_id == user_id)
 
         if search_query:
-            # Support wildcard (*) pattern matching, case-insensitive
-            search_pattern = search_query.replace("*", "%").lower()
-            query = query.filter(Vocabulary.word_phrase.ilike(f"%{search_pattern}%"))
+            # Parse the search query, handling wildcards and escape sequences
+            search_pattern = parse_search_query_with_wildcards(search_query).lower()
+
+            # Wrap with % for substring matching (unless the pattern already has wildcards)
+            search_pattern = f"%{search_pattern}%"
+
+            # Use ilike with escape character for case-insensitive matching
+            query = query.filter(Vocabulary.word_phrase.ilike(search_pattern, escape="\\"))
 
         return query.order_by(Vocabulary.created_at.desc(), Vocabulary.id.desc()).limit(limit).all()
 
