@@ -325,24 +325,60 @@ class RuneRecallService:
 
         return len(user_data.daily_selection) < original_length
 
-    def replenish_daily_selection_if_empty(self, username: str, user_data: UserData) -> None:
+    def maintain_daily_selection(self, username: str, user_data: UserData) -> int:
         """
-        Replenish daily_selection if it becomes empty.
+        Ensure user has target number of words in daily selection.
+        Adds replacement words as needed to reach words_per_day target.
 
         Args:
             username: Username for logging purposes
             user_data: UserData object for the user
+
+        Returns:
+            Number of words added (0 if no words added or needed)
         """
-        if not user_data.daily_selection:
-            logger.info(f"Daily selection empty for user {username}, selecting new portion")
-            portion_words = self._select_daily_portion(user_data.db_user_id)
-            if portion_words:
-                daily_selection_list = [
-                    WordOfDay(id_=word["id"], word_phrase=word["word_phrase"]) for word in portion_words
-                ]
-                user_data.daily_selection = daily_selection_list
-                user_data.next_word_index = 0
-                logger.info(f"Selected {len(portion_words)} new words for user {username}")
+        current_count = len(user_data.daily_selection)
+        target_count = self.words_per_day
+
+        # Check if we need to add words
+        if current_count >= target_count:
+            logger.debug(f"User {username} already has {current_count}/{target_count} words, " "no maintenance needed")
+            return 0
+
+        # Calculate how many words we need to add
+        needed = target_count - current_count
+        logger.info(
+            f"User {username} has {current_count}/{target_count} words, " f"attempting to add {needed} replacement(s)"
+        )
+
+        # Get list of word IDs to exclude (already in selection)
+        excluded_ids = [word.id_ for word in user_data.daily_selection]
+
+        # Select replacement words (reusing existing method with exclusions)
+        new_words = self.vocabulary_repository.select_new_daily_words(
+            user_id=user_data.db_user_id,
+            cooldown_days=self.cooldown_days,
+            limit=needed,
+            excluded_word_ids=excluded_ids if excluded_ids else None,
+        )
+
+        if new_words:
+            # Add new words to daily selection
+            for word in new_words:
+                user_data.daily_selection.append(WordOfDay(id_=word.id, word_phrase=word.word_phrase))
+
+            added_count = len(new_words)
+            logger.info(
+                f"Added {added_count} replacement word(s) for user {username} "
+                f"(now {len(user_data.daily_selection)}/{target_count})"
+            )
+            return added_count
+        else:
+            logger.info(
+                f"No replacement words available for user {username} "
+                f"(current: {current_count}/{target_count}, all words in cooldown or exhausted)"
+            )
+            return 0
 
     def update_user_daily_selection(self, username: str, user_data: UserData) -> None:
         """
@@ -389,8 +425,10 @@ class RuneRecallService:
             # Remove from daily_selection
             removed_from_selection = self.remove_word_from_daily_selection(user_data, word_phrase)
 
-            # Replenish daily_selection if it becomes empty
-            self.replenish_daily_selection_if_empty(username, user_data)
+            # Maintain target word count (adds replacements if needed)
+            added_count = 0
+            if removed_from_selection:
+                added_count = self.maintain_daily_selection(username, user_data)
 
             # Update user data in state
             self.update_user_daily_selection(username, user_data)
@@ -399,6 +437,11 @@ class RuneRecallService:
             status_msg = "removed from vocabulary"
             if removed_from_selection:
                 status_msg += " and daily selection"
+                if added_count > 0:
+                    word_word = "word" if added_count == 1 else "words"
+                    status_msg += f" (added {added_count} replacement {word_word})"
+                elif len(user_data.daily_selection) < self.words_per_day:
+                    status_msg += " (no replacement available - words in cooldown)"
 
             logger.info(f"User {username} removed word '{word_phrase}' from vocabulary")
 
@@ -406,6 +449,7 @@ class RuneRecallService:
                 "success": True,
                 "message": f"Word '{word_phrase}' {status_msg}.",
                 "removed_from_selection": removed_from_selection,
+                "replacements_added": added_count,
             }
 
         except Exception as e:
@@ -432,14 +476,27 @@ class RuneRecallService:
             removed_from_selection = self.remove_word_from_daily_selection(user_data, word_phrase)
 
             if removed_from_selection:
-                # Replenish daily_selection if it becomes empty
-                self.replenish_daily_selection_if_empty(username, user_data)
+                # Maintain target word count (adds replacements if needed)
+                added_count = self.maintain_daily_selection(username, user_data)
 
                 # Update user data in state
                 self.update_user_daily_selection(username, user_data)
 
+                # Prepare success message
+                status_msg = "postponed (removed from today's selection)"
+                if added_count > 0:
+                    word_word = "word" if added_count == 1 else "words"
+                    status_msg += f" (added {added_count} replacement {word_word})"
+                elif len(user_data.daily_selection) < self.words_per_day:
+                    status_msg += " (no replacement available - words in cooldown)"
+                message = f"Word '{word_phrase}' {status_msg}."
+
                 logger.info(f"User {username} postponed word '{word_phrase}'")
-                return {"success": True, "message": f"Word '{word_phrase}' postponed (removed from today's selection)."}
+                return {
+                    "success": True,
+                    "message": message,
+                    "replacements_added": added_count,
+                }
             else:
                 return {"success": False, "message": f"Word '{word_phrase}' was not in today's selection."}
 

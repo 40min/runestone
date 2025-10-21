@@ -1205,7 +1205,63 @@ class TestVocabularyRepository:
         db_vocab2 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab.id).first()
         assert db_vocab2.learned_times == 2
 
-        # Test incrementing from None (should handle gracefully)
+    def test_select_new_daily_words_with_exclusions(self, repo, db_session):
+        """Test that select_new_daily_words properly excludes specified word IDs."""
+        # Create test vocabulary items (similar to service test fixture)
+        vocab1 = VocabularyModel(
+            user_id=1,
+            word_phrase="hello",
+            translation="hej",
+            example_phrase="Hello, how are you?",
+            in_learn=True,
+            last_learned=None,
+        )
+        vocab2 = VocabularyModel(
+            user_id=1,
+            word_phrase="goodbye",
+            translation="hej då",
+            example_phrase="Goodbye, see you later!",
+            in_learn=True,
+            last_learned=None,
+        )
+        vocab3 = VocabularyModel(
+            user_id=1,
+            word_phrase="thank you",
+            translation="tack",
+            example_phrase="Thank you for your help.",
+            in_learn=True,
+            last_learned=None,
+        )
+        vocab4 = VocabularyModel(
+            user_id=2,
+            word_phrase="water",
+            translation="vatten",
+            example_phrase="I need water.",
+            in_learn=True,
+            last_learned=None,
+        )
+        db_session.add_all([vocab1, vocab2, vocab3, vocab4])
+        db_session.commit()
+
+        # Ensure all words are available (no cooldown)
+        words = db_session.query(VocabularyModel).filter(VocabularyModel.user_id == 1).all()
+        for word in words:
+            word.last_learned = datetime.now() - timedelta(days=10)
+        db_session.commit()
+
+        # Select words excluding specific IDs
+        excluded_ids = [vocab1.id]  # Exclude "hello" (id=vocab1.id)
+        selected_words = repo.select_new_daily_words(
+            user_id=1, cooldown_days=7, limit=5, excluded_word_ids=excluded_ids
+        )
+
+        # Verify excluded word is not in results
+        selected_ids = [w.id for w in selected_words]
+        assert vocab1.id not in selected_ids
+        assert len(selected_words) == 2  # Should get goodbye and thank you
+
+    def test_update_last_learned_increments_learned_times_none(self, repo, db_session):
+        """Test that update_last_learned handles None learned_times gracefully."""
         vocab_with_none = VocabularyModel(
             user_id=1,
             word_phrase="en banan",
