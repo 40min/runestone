@@ -116,13 +116,32 @@ class VocabularyRepository:
             self.batch_insert_vocabulary_items(filtered_items, user_id)
 
     def get_vocabulary(self, limit: int, search_query: str | None = None, user_id: int = 1) -> List[Vocabulary]:
-        """Retrieve vocabulary items for a user, optionally filtered by search query."""
+        r"""Retrieve vocabulary items for a user, optionally filtered by search query with wildcard support.
+
+        Supports wildcards:
+        - '*' matches zero or more characters
+        - '?' matches exactly one character
+
+        Special SQL characters (%, _, \) are escaped to be treated as literals.
+        Matching is case-insensitive.
+        """
         query = self.db.query(Vocabulary).filter(Vocabulary.user_id == user_id)
 
         if search_query:
-            # Support wildcard (*) pattern matching, case-insensitive
-            search_pattern = search_query.replace("*", "%").lower()
-            query = query.filter(Vocabulary.word_phrase.ilike(f"%{search_pattern}%"))
+            # Escape special SQL LIKE characters to treat them as literals
+            # First escape backslash, then other special chars
+            escaped = search_query.replace("\\", "\\\\")
+            escaped = escaped.replace("%", r"\%")
+            escaped = escaped.replace("_", r"\_")
+
+            # Convert wildcards: * → %, ? → _
+            search_pattern = escaped.replace("*", "%").replace("?", "_").lower()
+
+            # Wrap with % for substring matching
+            search_pattern = f"%{search_pattern}%"
+
+            # Use ilike with escape character for case-insensitive matching
+            query = query.filter(Vocabulary.word_phrase.ilike(search_pattern, escape="\\"))
 
         return query.order_by(Vocabulary.created_at.desc(), Vocabulary.id.desc()).limit(limit).all()
 
