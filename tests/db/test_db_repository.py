@@ -533,6 +533,82 @@ class TestVocabularyRepository:
         result = repo.get_vocabulary(limit=20, search_query=None, user_id=1)
         assert len(result) == 3  # None should return all
 
+    def test_get_vocabulary_with_escaped_wildcards(self, repo, db_session, vocab_factory):
+        """Test that escaped wildcards are treated as literal characters (bug fix test)."""
+        # Add test data with literal wildcard characters
+        test_items = [
+            vocab_factory(
+                word_phrase="file*.txt",
+                translation="a file with asterisk",
+                created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+            ),
+            vocab_factory(
+                word_phrase="test?.py",
+                translation="a file with question mark",
+                created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+            ),
+            vocab_factory(
+                word_phrase="normal file",
+                translation="a normal file",
+                created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+            ),
+        ]
+        db_session.add_all(test_items)
+        db_session.commit()
+
+        # Search for literal asterisk using backslash escape: \*
+        # This is the key bug case - should find "file*.txt" but not match it as a wildcard
+        result = repo.get_vocabulary(limit=20, search_query=r"\*", user_id=1)
+        assert len(result) == 1
+        assert result[0].word_phrase == "file*.txt"
+
+        # Search for literal question mark using backslash escape: \?
+        result = repo.get_vocabulary(limit=20, search_query=r"\?", user_id=1)
+        assert len(result) == 1
+        assert result[0].word_phrase == "test?.py"
+
+        # Verify unescaped wildcards still work as wildcards
+        result = repo.get_vocabulary(limit=20, search_query="file*", user_id=1)
+        # "file*" as a wildcard should match both "file*.txt" and "normal file" (both contain "file")
+        assert len(result) == 2
+        phrases = [r.word_phrase for r in result]
+        assert "file*.txt" in phrases
+        assert "normal file" in phrases
+
+    def test_get_vocabulary_with_escaped_wildcards_in_pattern(self, repo, db_session, vocab_factory):
+        """Test complex patterns with both escaped and unescaped wildcards."""
+        # Add test data
+        test_items = [
+            vocab_factory(
+                word_phrase="log_2024*.txt",
+                translation="log file with wildcard",
+                created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+            ),
+            vocab_factory(
+                word_phrase="log_2024_jan.txt",
+                translation="january log",
+                created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+            ),
+            vocab_factory(
+                word_phrase="log-2024.txt",
+                translation="dash log",
+                created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+            ),
+        ]
+        db_session.add_all(test_items)
+        db_session.commit()
+
+        # Search for pattern with escaped wildcard and SQL underscore
+        # "log_2024\*" should match only "log_2024*.txt" (literal asterisk)
+        result = repo.get_vocabulary(limit=20, search_query=r"log_2024\*", user_id=1)
+        assert len(result) == 1
+        assert result[0].word_phrase == "log_2024*.txt"
+
+        # Search with unescaped wildcard should match multiple
+        # "log*2024*" should match all three (wildcard before and after 2024)
+        result = repo.get_vocabulary(limit=20, search_query="log*2024*", user_id=1)
+        assert len(result) == 3
+
     def test_get_vocabulary_item(self, repo, db_session):
         """Test getting a vocabulary item."""
         # Add a test item

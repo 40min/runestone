@@ -13,6 +13,7 @@ from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
 from ..api.schemas import VocabularyItemCreate
+from ..utils.search import parse_search_query_with_wildcards
 from .models import Vocabulary
 
 
@@ -130,16 +131,10 @@ class VocabularyRepository:
         query = self.db.query(Vocabulary).filter(Vocabulary.user_id == user_id)
 
         if search_query:
-            # Escape special SQL LIKE characters to treat them as literals
-            # First escape backslash, then other special chars
-            escaped = search_query.replace("\\", "\\\\")
-            escaped = escaped.replace("%", r"\%")
-            escaped = escaped.replace("_", r"\_")
+            # Parse the search query, handling wildcards and escape sequences
+            search_pattern = parse_search_query_with_wildcards(search_query).lower()
 
-            # Convert wildcards: * → %, ? → _
-            search_pattern = escaped.replace("*", "%").replace("?", "_").lower()
-
-            # Wrap with % for substring matching
+            # Wrap with % for substring matching (unless the pattern already has wildcards)
             search_pattern = f"%{search_pattern}%"
 
             # Use ilike with escape character for case-insensitive matching
