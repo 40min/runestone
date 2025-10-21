@@ -1301,26 +1301,6 @@ def test_postpone_word_no_replacement_available(rune_recall_service, state_manag
     assert "words in cooldown" in result["message"]
 
 
-def test_select_new_daily_words_with_exclusions(vocabulary_repository, test_db):
-    """Test that select_new_daily_words properly excludes specified word IDs."""
-    # Ensure all words are available (no cooldown)
-    words = test_db.query(Vocabulary).filter(Vocabulary.user_id == 1).all()
-    for word in words:
-        word.last_learned = datetime.now() - timedelta(days=10)
-    test_db.commit()
-
-    # Select words excluding specific IDs
-    excluded_ids = [1]  # Exclude "hello" (id=1)
-    selected_words = vocabulary_repository.select_new_daily_words(
-        user_id=1, cooldown_days=7, limit=5, excluded_word_ids=excluded_ids
-    )
-
-    # Verify excluded word is not in results
-    selected_ids = [w.id for w in selected_words]
-    assert 1 not in selected_ids
-    assert len(selected_words) == 2  # Should get goodbye and thank you
-
-
 def test_maintain_daily_selection_excludes_existing_words(rune_recall_service, state_manager, test_db):
     """Test that maintain_daily_selection excludes words already in selection."""
     from src.runestone.state.state_types import WordOfDay

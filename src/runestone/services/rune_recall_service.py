@@ -483,13 +483,13 @@ class RuneRecallService:
                 self.update_user_daily_selection(username, user_data)
 
                 # Prepare success message
-                message = f"Word '{word_phrase}' postponed (removed from today's selection)"
+                status_msg = "postponed (removed from today's selection)"
                 if added_count > 0:
                     word_word = "word" if added_count == 1 else "words"
-                    message += f" and added {added_count} replacement {word_word}"
+                    status_msg += f" (added {added_count} replacement {word_word})"
                 elif len(user_data.daily_selection) < self.words_per_day:
-                    message += " (no replacement available - words in cooldown)"
-                message += "."
+                    status_msg += " (no replacement available - words in cooldown)"
+                message = f"Word '{word_phrase}' {status_msg}."
 
                 logger.info(f"User {username} postponed word '{word_phrase}'")
                 return {
