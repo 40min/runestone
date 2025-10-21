@@ -42,7 +42,7 @@ class VocabularyRepository:
                 word_phrase=item.word_phrase,
                 translation=item.translation,
                 example_phrase=item.example_phrase,
-                in_learn=True,
+                in_learn=item.in_learn,
                 last_learned=None,
             )
             for item in items
@@ -57,7 +57,7 @@ class VocabularyRepository:
             word_phrase=item.word_phrase,
             translation=item.translation,
             example_phrase=item.example_phrase,
-            in_learn=True,
+            in_learn=item.in_learn,
             last_learned=None,
         )
         self.db.add(vocab)
@@ -76,7 +76,7 @@ class VocabularyRepository:
                 "word_phrase": item.word_phrase,
                 "translation": item.translation,
                 "example_phrase": item.example_phrase,
-                "in_learn": True,
+                "in_learn": item.in_learn,
                 "last_learned": None,
             }
             for item in items
