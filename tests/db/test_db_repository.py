@@ -12,6 +12,161 @@ from runestone.api.schemas import VocabularyItemCreate
 from runestone.db.models import Vocabulary as VocabularyModel
 
 
+@pytest.fixture
+def vocab_factory():
+    """Factory fixture for creating VocabularyModel instances with defaults."""
+
+    def _create_vocab(
+        user_id=1,
+        word_phrase="",
+        translation="",
+        example_phrase=None,
+        created_at=None,
+        in_learn=True,
+        last_learned=None,
+        learned_times=0,
+    ):
+        """Create a VocabularyModel instance with provided or default values."""
+        return VocabularyModel(
+            user_id=user_id,
+            word_phrase=word_phrase,
+            translation=translation,
+            example_phrase=example_phrase,
+            created_at=created_at,
+            in_learn=in_learn,
+            last_learned=last_learned,
+            learned_times=learned_times,
+        )
+
+    return _create_vocab
+
+
+@pytest.fixture
+def basic_vocab_items(vocab_factory):
+    """Create a set of basic vocabulary items for testing."""
+    return [
+        vocab_factory(
+            word_phrase="ett äpple",
+            translation="an apple",
+            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="en banan",
+            translation="a banana",
+            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="ett päron",
+            translation="a pear",
+            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            user_id=2,
+            word_phrase="en kiwi",
+            translation="a kiwi",
+            created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
+        ),
+    ]
+
+
+@pytest.fixture
+def wildcard_test_items(vocab_factory):
+    """Create vocabulary items for wildcard testing."""
+    return [
+        vocab_factory(
+            word_phrase="ett äpple",
+            translation="an apple",
+            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="en banan",
+            translation="a banana",
+            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="ett päron",
+            translation="a pear",
+            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="en katt",
+            translation="a cat",
+            created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
+        ),
+    ]
+
+
+@pytest.fixture
+def mixed_wildcard_items(vocab_factory):
+    """Create vocabulary items for mixed wildcard testing."""
+    return [
+        vocab_factory(
+            word_phrase="att lära sig",
+            translation="to learn",
+            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="att läsa",
+            translation="to read",
+            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="att leka",
+            translation="to play",
+            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+        ),
+    ]
+
+
+@pytest.fixture
+def special_char_items(vocab_factory):
+    """Create vocabulary items with SQL special characters for testing escaping."""
+    return [
+        vocab_factory(
+            word_phrase="100% säker",
+            translation="100% sure",
+            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="ett_exempel",
+            translation="an example",
+            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="back\\slash",
+            translation="backslash",
+            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="normal word",
+            translation="normal",
+            created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
+        ),
+    ]
+
+
+@pytest.fixture
+def edge_case_items(vocab_factory):
+    """Create vocabulary items for wildcard edge case testing."""
+    return [
+        vocab_factory(
+            word_phrase="test",
+            translation="test",
+            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="testing",
+            translation="testing",
+            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="t",
+            translation="single t",
+            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+        ),
+    ]
+
+
 class TestVocabularyRepository:
     """Test cases for VocabularyRepository."""
 
@@ -229,45 +384,10 @@ class TestVocabularyRepository:
         assert len(result_user2) == 1
         assert result_user2[0].word_phrase == "en kiwi"
 
-    def test_get_vocabulary_with_search(self, repo, db_session):
+    def test_get_vocabulary_with_search(self, repo, db_session, basic_vocab_items):
         """Test retrieving vocabulary items filtered by search query."""
-        from datetime import datetime, timezone
-
         # Add test data
-        vocab1 = VocabularyModel(
-            user_id=1,
-            word_phrase="ett äpple",
-            translation="an apple",
-            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab2 = VocabularyModel(
-            user_id=1,
-            word_phrase="en banan",
-            translation="a banana",
-            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab3 = VocabularyModel(
-            user_id=1,
-            word_phrase="ett päron",
-            translation="a pear",
-            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab4 = VocabularyModel(
-            user_id=2,
-            word_phrase="en kiwi",
-            translation="a kiwi",
-            created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-
-        db_session.add_all([vocab1, vocab2, vocab3, vocab4])
+        db_session.add_all(basic_vocab_items)
         db_session.commit()
 
         # Search for "banan" - should find one match
@@ -305,44 +425,10 @@ class TestVocabularyRepository:
         assert len(result) == 1
         assert result[0].word_phrase == "ett päron"  # Most recent
 
-    def test_get_vocabulary_with_question_mark_wildcard(self, repo, db_session):
+    def test_get_vocabulary_with_question_mark_wildcard(self, repo, db_session, wildcard_test_items):
         """Test retrieving vocabulary items with '?' wildcard matching exactly one character."""
-
         # Add test data with varying patterns
-        vocab1 = VocabularyModel(
-            user_id=1,
-            word_phrase="ett äpple",
-            translation="an apple",
-            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab2 = VocabularyModel(
-            user_id=1,
-            word_phrase="en banan",
-            translation="a banana",
-            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab3 = VocabularyModel(
-            user_id=1,
-            word_phrase="ett päron",
-            translation="a pear",
-            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab4 = VocabularyModel(
-            user_id=1,
-            word_phrase="en katt",
-            translation="a cat",
-            created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-
-        db_session.add_all([vocab1, vocab2, vocab3, vocab4])
+        db_session.add_all(wildcard_test_items)
         db_session.commit()
 
         # Search with '?' - "en ?" should match "en " + one character
@@ -373,36 +459,10 @@ class TestVocabularyRepository:
         assert "ett äpple" in phrases
         assert "ett päron" in phrases
 
-    def test_get_vocabulary_with_mixed_wildcards(self, repo, db_session):
+    def test_get_vocabulary_with_mixed_wildcards(self, repo, db_session, mixed_wildcard_items):
         """Test retrieving vocabulary items with both '*' and '?' wildcards."""
-
         # Add test data
-        vocab1 = VocabularyModel(
-            user_id=1,
-            word_phrase="att lära sig",
-            translation="to learn",
-            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab2 = VocabularyModel(
-            user_id=1,
-            word_phrase="att läsa",
-            translation="to read",
-            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab3 = VocabularyModel(
-            user_id=1,
-            word_phrase="att leka",
-            translation="to play",
-            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-
-        db_session.add_all([vocab1, vocab2, vocab3])
+        db_session.add_all(mixed_wildcard_items)
         db_session.commit()
 
         # Search with mixed wildcards - "att l?*a" should match "att lära sig", "att läsa", "att leka"
@@ -426,44 +486,10 @@ class TestVocabularyRepository:
         assert "att leka" in phrases
         assert "att lära sig" in phrases
 
-    def test_get_vocabulary_with_escaped_sql_characters(self, repo, db_session):
+    def test_get_vocabulary_with_escaped_sql_characters(self, repo, db_session, special_char_items):
         r"""Test that SQL special characters (%, _, \) are properly escaped."""
-
         # Add test data with special characters
-        vocab1 = VocabularyModel(
-            user_id=1,
-            word_phrase="100% säker",
-            translation="100% sure",
-            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab2 = VocabularyModel(
-            user_id=1,
-            word_phrase="ett_exempel",
-            translation="an example",
-            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab3 = VocabularyModel(
-            user_id=1,
-            word_phrase="back\\slash",
-            translation="backslash",
-            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab4 = VocabularyModel(
-            user_id=1,
-            word_phrase="normal word",
-            translation="normal",
-            created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-
-        db_session.add_all([vocab1, vocab2, vocab3, vocab4])
+        db_session.add_all(special_char_items)
         db_session.commit()
 
         # Search for literal '%' - should match only "100% säker"
@@ -486,36 +512,10 @@ class TestVocabularyRepository:
         assert len(result) == 1
         assert result[0].word_phrase == "100% säker"
 
-    def test_get_vocabulary_wildcard_edge_cases(self, repo, db_session):
+    def test_get_vocabulary_wildcard_edge_cases(self, repo, db_session, edge_case_items):
         """Test edge cases for wildcard patterns."""
-
         # Add test data
-        vocab1 = VocabularyModel(
-            user_id=1,
-            word_phrase="test",
-            translation="test",
-            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab2 = VocabularyModel(
-            user_id=1,
-            word_phrase="testing",
-            translation="testing",
-            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab3 = VocabularyModel(
-            user_id=1,
-            word_phrase="t",
-            translation="single t",
-            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-
-        db_session.add_all([vocab1, vocab2, vocab3])
+        db_session.add_all(edge_case_items)
         db_session.commit()
 
         # Test only wildcards
