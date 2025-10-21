@@ -75,7 +75,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
       setTranslation("");
       setExamplePhrase("");
       setExtraInfo("");
-      setInLearn(false);
+      setInLearn(true);
     }
   }, [item, open]);
 

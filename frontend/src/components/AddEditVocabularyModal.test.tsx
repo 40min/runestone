@@ -191,6 +191,29 @@ describe("AddEditVocabularyModal", () => {
       translation: "hello",
       example_phrase: "Hej, hur mår du?",
       extra_info: null,
+      in_learn: true,
+    });
+  });
+  it("calls onSave with in_learn: false when checkbox is unchecked", async () => {
+    const user = userEvent.setup();
+    render(<AddEditVocabularyModal {...defaultProps} />);
+
+    const wordInput = screen.getByLabelText("Swedish Word/Phrase");
+    const translationInput = screen.getByLabelText("English Translation");
+    const checkbox = screen.getByRole("checkbox", { name: "In Learning" });
+
+    await user.type(wordInput, "hej");
+    await user.type(translationInput, "hello");
+    await user.click(checkbox); // Uncheck the checkbox
+
+    const saveButton = screen.getByRole("button", { name: "Add Item" });
+    await user.click(saveButton);
+
+    expect(mockOnSave).toHaveBeenCalledWith({
+      word_phrase: "hej",
+      translation: "hello",
+      example_phrase: null,
+      extra_info: null,
       in_learn: false,
     });
   });
@@ -285,12 +308,12 @@ describe("AddEditVocabularyModal", () => {
     render(<AddEditVocabularyModal {...defaultProps} />);
 
     const checkbox = screen.getByRole("checkbox", { name: "In Learning" });
+    expect(checkbox).toBeChecked(); // Now defaults to true
+
+    await user.click(checkbox);
     expect(checkbox).not.toBeChecked();
 
     await user.click(checkbox);
     expect(checkbox).toBeChecked();
-
-    await user.click(checkbox);
-    expect(checkbox).not.toBeChecked();
   });
 });

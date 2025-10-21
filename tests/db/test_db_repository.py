@@ -12,6 +12,161 @@ from runestone.api.schemas import VocabularyItemCreate
 from runestone.db.models import Vocabulary as VocabularyModel
 
 
+@pytest.fixture
+def vocab_factory():
+    """Factory fixture for creating VocabularyModel instances with defaults."""
+
+    def _create_vocab(
+        user_id=1,
+        word_phrase="",
+        translation="",
+        example_phrase=None,
+        created_at=None,
+        in_learn=True,
+        last_learned=None,
+        learned_times=0,
+    ):
+        """Create a VocabularyModel instance with provided or default values."""
+        return VocabularyModel(
+            user_id=user_id,
+            word_phrase=word_phrase,
+            translation=translation,
+            example_phrase=example_phrase,
+            created_at=created_at,
+            in_learn=in_learn,
+            last_learned=last_learned,
+            learned_times=learned_times,
+        )
+
+    return _create_vocab
+
+
+@pytest.fixture
+def basic_vocab_items(vocab_factory):
+    """Create a set of basic vocabulary items for testing."""
+    return [
+        vocab_factory(
+            word_phrase="ett äpple",
+            translation="an apple",
+            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="en banan",
+            translation="a banana",
+            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="ett päron",
+            translation="a pear",
+            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            user_id=2,
+            word_phrase="en kiwi",
+            translation="a kiwi",
+            created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
+        ),
+    ]
+
+
+@pytest.fixture
+def wildcard_test_items(vocab_factory):
+    """Create vocabulary items for wildcard testing."""
+    return [
+        vocab_factory(
+            word_phrase="ett äpple",
+            translation="an apple",
+            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="en banan",
+            translation="a banana",
+            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="ett päron",
+            translation="a pear",
+            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="en katt",
+            translation="a cat",
+            created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
+        ),
+    ]
+
+
+@pytest.fixture
+def mixed_wildcard_items(vocab_factory):
+    """Create vocabulary items for mixed wildcard testing."""
+    return [
+        vocab_factory(
+            word_phrase="att lära sig",
+            translation="to learn",
+            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="att läsa",
+            translation="to read",
+            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="att leka",
+            translation="to play",
+            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+        ),
+    ]
+
+
+@pytest.fixture
+def special_char_items(vocab_factory):
+    """Create vocabulary items with SQL special characters for testing escaping."""
+    return [
+        vocab_factory(
+            word_phrase="100% säker",
+            translation="100% sure",
+            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="ett_exempel",
+            translation="an example",
+            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="back\\slash",
+            translation="backslash",
+            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="normal word",
+            translation="normal",
+            created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
+        ),
+    ]
+
+
+@pytest.fixture
+def edge_case_items(vocab_factory):
+    """Create vocabulary items for wildcard edge case testing."""
+    return [
+        vocab_factory(
+            word_phrase="test",
+            translation="test",
+            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="testing",
+            translation="testing",
+            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+        ),
+        vocab_factory(
+            word_phrase="t",
+            translation="single t",
+            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+        ),
+    ]
+
+
 class TestVocabularyRepository:
     """Test cases for VocabularyRepository."""
 
@@ -229,45 +384,10 @@ class TestVocabularyRepository:
         assert len(result_user2) == 1
         assert result_user2[0].word_phrase == "en kiwi"
 
-    def test_get_vocabulary_with_search(self, repo, db_session):
+    def test_get_vocabulary_with_search(self, repo, db_session, basic_vocab_items):
         """Test retrieving vocabulary items filtered by search query."""
-        from datetime import datetime, timezone
-
         # Add test data
-        vocab1 = VocabularyModel(
-            user_id=1,
-            word_phrase="ett äpple",
-            translation="an apple",
-            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab2 = VocabularyModel(
-            user_id=1,
-            word_phrase="en banan",
-            translation="a banana",
-            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab3 = VocabularyModel(
-            user_id=1,
-            word_phrase="ett päron",
-            translation="a pear",
-            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab4 = VocabularyModel(
-            user_id=2,
-            word_phrase="en kiwi",
-            translation="a kiwi",
-            created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-
-        db_session.add_all([vocab1, vocab2, vocab3, vocab4])
+        db_session.add_all(basic_vocab_items)
         db_session.commit()
 
         # Search for "banan" - should find one match
@@ -304,6 +424,190 @@ class TestVocabularyRepository:
         result = repo.get_vocabulary(limit=1, search_query="ett", user_id=1)
         assert len(result) == 1
         assert result[0].word_phrase == "ett päron"  # Most recent
+
+    def test_get_vocabulary_with_question_mark_wildcard(self, repo, db_session, wildcard_test_items):
+        """Test retrieving vocabulary items with '?' wildcard matching exactly one character."""
+        # Add test data with varying patterns
+        db_session.add_all(wildcard_test_items)
+        db_session.commit()
+
+        # Search with '?' - "en ?" should match "en " + one character
+        # Should NOT match "en banan" (too many chars after "en "), but pattern is wrapped with %
+        # So "en ?" becomes "%en _%", which will match "en " followed by any single char followed by anything
+        result = repo.get_vocabulary(limit=20, search_query="en ?a", user_id=1)
+        # "en ?a" becomes "%en _a%", should match "en banan" (b is one char, then a) and "en katt"
+        # (k is one char, then a)
+        assert len(result) == 2
+        phrases = [r.word_phrase for r in result]
+        assert "en banan" in phrases
+        assert "en katt" in phrases
+
+        # Search with '?' - "?tt" should match words with any single char followed by "tt"
+        result = repo.get_vocabulary(limit=20, search_query="?tt", user_id=1)
+        # "?tt" becomes "%_tt%", should match "ett äpple", "ett päron", "en katt"
+        assert len(result) == 3
+        phrases = [r.word_phrase for r in result]
+        assert "ett äpple" in phrases
+        assert "ett päron" in phrases
+        assert "en katt" in phrases
+
+        # Search with multiple '?' - "??" should match any two characters
+        result = repo.get_vocabulary(limit=20, search_query="e?? ", user_id=1)
+        # "e?? " becomes "%e__ %", should match "ett äpple" and "ett päron" (ett = e + 2 chars + space)
+        assert len(result) == 2
+        phrases = [r.word_phrase for r in result]
+        assert "ett äpple" in phrases
+        assert "ett päron" in phrases
+
+    def test_get_vocabulary_with_mixed_wildcards(self, repo, db_session, mixed_wildcard_items):
+        """Test retrieving vocabulary items with both '*' and '?' wildcards."""
+        # Add test data
+        db_session.add_all(mixed_wildcard_items)
+        db_session.commit()
+
+        # Search with mixed wildcards - "att l?*a" should match "att lära sig", "att läsa", "att leka"
+        # Pattern: "att l" + one char + any chars + "a"
+        result = repo.get_vocabulary(limit=20, search_query="att l?*a", user_id=1)
+        assert len(result) == 3
+        phrases = [r.word_phrase for r in result]
+        assert "att lära sig" in phrases
+        assert "att läsa" in phrases
+        assert "att leka" in phrases
+
+        # More specific pattern - "att l??a" should match all three (all have exactly 2 chars between
+        # l and a in the word containing 'a')
+        # "att läsa" - 'lä' before 's' then 'a'
+        # "att leka" - 'le' before 'k' then 'a'
+        # "att lära sig" - 'lä' before 'r' then 'a'
+        result = repo.get_vocabulary(limit=20, search_query="att l??a", user_id=1)
+        assert len(result) == 3
+        phrases = [r.word_phrase for r in result]
+        assert "att läsa" in phrases
+        assert "att leka" in phrases
+        assert "att lära sig" in phrases
+
+    def test_get_vocabulary_with_escaped_sql_characters(self, repo, db_session, special_char_items):
+        r"""Test that SQL special characters (%, _, \) are properly escaped."""
+        # Add test data with special characters
+        db_session.add_all(special_char_items)
+        db_session.commit()
+
+        # Search for literal '%' - should match only "100% säker"
+        result = repo.get_vocabulary(limit=20, search_query="100%", user_id=1)
+        assert len(result) == 1
+        assert result[0].word_phrase == "100% säker"
+
+        # Search for literal '_' - should match only "ett_exempel"
+        result = repo.get_vocabulary(limit=20, search_query="ett_exempel", user_id=1)
+        assert len(result) == 1
+        assert result[0].word_phrase == "ett_exempel"
+
+        # Search for literal '\' - should match only "back\slash"
+        result = repo.get_vocabulary(limit=20, search_query="back\\", user_id=1)
+        assert len(result) == 1
+        assert result[0].word_phrase == "back\\slash"
+
+        # Verify wildcards still work with escaped chars present
+        result = repo.get_vocabulary(limit=20, search_query="*%*", user_id=1)
+        assert len(result) == 1
+        assert result[0].word_phrase == "100% säker"
+
+    def test_get_vocabulary_wildcard_edge_cases(self, repo, db_session, edge_case_items):
+        """Test edge cases for wildcard patterns."""
+        # Add test data
+        db_session.add_all(edge_case_items)
+        db_session.commit()
+
+        # Test only wildcards
+        result = repo.get_vocabulary(limit=20, search_query="*", user_id=1)
+        assert len(result) == 3  # '*' matches everything
+
+        # '?' with wrapping % becomes '%_%' which matches any string with at least 1 character
+        result = repo.get_vocabulary(limit=20, search_query="?", user_id=1)
+        assert len(result) == 3  # All three items contain at least one character
+
+        # Test empty and None patterns (already covered but verifying)
+        result = repo.get_vocabulary(limit=20, search_query="", user_id=1)
+        assert len(result) == 3  # Empty string should match all
+
+        result = repo.get_vocabulary(limit=20, search_query=None, user_id=1)
+        assert len(result) == 3  # None should return all
+
+    def test_get_vocabulary_with_escaped_wildcards(self, repo, db_session, vocab_factory):
+        """Test that escaped wildcards are treated as literal characters (bug fix test)."""
+        # Add test data with literal wildcard characters
+        test_items = [
+            vocab_factory(
+                word_phrase="file*.txt",
+                translation="a file with asterisk",
+                created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+            ),
+            vocab_factory(
+                word_phrase="test?.py",
+                translation="a file with question mark",
+                created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+            ),
+            vocab_factory(
+                word_phrase="normal file",
+                translation="a normal file",
+                created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+            ),
+        ]
+        db_session.add_all(test_items)
+        db_session.commit()
+
+        # Search for literal asterisk using backslash escape: \*
+        # This is the key bug case - should find "file*.txt" but not match it as a wildcard
+        result = repo.get_vocabulary(limit=20, search_query=r"\*", user_id=1)
+        assert len(result) == 1
+        assert result[0].word_phrase == "file*.txt"
+
+        # Search for literal question mark using backslash escape: \?
+        result = repo.get_vocabulary(limit=20, search_query=r"\?", user_id=1)
+        assert len(result) == 1
+        assert result[0].word_phrase == "test?.py"
+
+        # Verify unescaped wildcards still work as wildcards
+        result = repo.get_vocabulary(limit=20, search_query="file*", user_id=1)
+        # "file*" as a wildcard should match both "file*.txt" and "normal file" (both contain "file")
+        assert len(result) == 2
+        phrases = [r.word_phrase for r in result]
+        assert "file*.txt" in phrases
+        assert "normal file" in phrases
+
+    def test_get_vocabulary_with_escaped_wildcards_in_pattern(self, repo, db_session, vocab_factory):
+        """Test complex patterns with both escaped and unescaped wildcards."""
+        # Add test data
+        test_items = [
+            vocab_factory(
+                word_phrase="log_2024*.txt",
+                translation="log file with wildcard",
+                created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+            ),
+            vocab_factory(
+                word_phrase="log_2024_jan.txt",
+                translation="january log",
+                created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+            ),
+            vocab_factory(
+                word_phrase="log-2024.txt",
+                translation="dash log",
+                created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+            ),
+        ]
+        db_session.add_all(test_items)
+        db_session.commit()
+
+        # Search for pattern with escaped wildcard and SQL underscore
+        # "log_2024\*" should match only "log_2024*.txt" (literal asterisk)
+        result = repo.get_vocabulary(limit=20, search_query=r"log_2024\*", user_id=1)
+        assert len(result) == 1
+        assert result[0].word_phrase == "log_2024*.txt"
+
+        # Search with unescaped wildcard should match multiple
+        # "log*2024*" should match all three (wildcard before and after 2024)
+        result = repo.get_vocabulary(limit=20, search_query="log*2024*", user_id=1)
+        assert len(result) == 3
 
     def test_get_vocabulary_item(self, repo, db_session):
         """Test getting a vocabulary item."""

@@ -98,6 +98,7 @@ class VocabularyItemCreate(BaseModel):
     translation: str
     example_phrase: Optional[str] = None
     extra_info: Optional[str] = None
+    in_learn: bool = True
 
 
 class VocabularyUpdate(BaseModel):
