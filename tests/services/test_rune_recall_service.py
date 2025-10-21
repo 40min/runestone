@@ -592,37 +592,50 @@ def test_remove_word_from_daily_selection(rune_recall_service, state_manager):
     assert user_data.next_word_index == 0  # Should reset
 
 
-def test_replenish_daily_selection_if_empty(rune_recall_service, state_manager):
-    """Test replenishing daily_selection when it becomes empty."""
+def test_maintain_daily_selection_adds_words_when_below_target(rune_recall_service, state_manager):
+    """Test maintaining daily_selection when below target count."""
     user_data = state_manager.get_user("active_user")
     user_data.daily_selection = []
     user_data.db_user_id = 1
 
-    # Mock new portion selection
-    mock_portion = [{"id": 4, "word_phrase": "ny"}, {"id": 5, "word_phrase": "gammal"}]
+    # Mock vocabulary repository to return new words
+    from src.runestone.db.models import Vocabulary
 
-    with patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_portion):
-        rune_recall_service.replenish_daily_selection_if_empty("active_user", user_data)
+    mock_words = [
+        Vocabulary(id=4, word_phrase="ny", translation="new", example_phrase="", in_learn=True, user_id=1),
+        Vocabulary(id=5, word_phrase="gammal", translation="old", example_phrase="", in_learn=True, user_id=1),
+    ]
 
+    with patch.object(rune_recall_service.vocabulary_repository, "select_new_daily_words", return_value=mock_words):
+        added_count = rune_recall_service.maintain_daily_selection("active_user", user_data)
+
+    assert added_count == 2
     assert len(user_data.daily_selection) == 2
     assert user_data.daily_selection[0].id_ == 4
     assert user_data.daily_selection[0].word_phrase == "ny"
-    assert user_data.next_word_index == 0
 
 
-def test_replenish_daily_selection_not_empty(rune_recall_service, state_manager):
-    """Test that replenishment doesn't happen when selection is not empty."""
+def test_maintain_daily_selection_not_needed_when_at_target(rune_recall_service, state_manager):
+    """Test that maintenance doesn't happen when selection is already at target."""
     from src.runestone.state.state_types import WordOfDay
 
     user_data = state_manager.get_user("active_user")
-    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="existing")]
+    # Set selection to target count (5 words per day based on mock_settings)
+    user_data.daily_selection = [
+        WordOfDay(id_=1, word_phrase="word1"),
+        WordOfDay(id_=2, word_phrase="word2"),
+        WordOfDay(id_=3, word_phrase="word3"),
+        WordOfDay(id_=4, word_phrase="word4"),
+        WordOfDay(id_=5, word_phrase="word5"),
+    ]
 
-    with patch.object(rune_recall_service, "_select_daily_portion") as mock_select:
-        rune_recall_service.replenish_daily_selection_if_empty("active_user", user_data)
+    with patch.object(rune_recall_service.vocabulary_repository, "select_new_daily_words") as mock_select:
+        added_count = rune_recall_service.maintain_daily_selection("active_user", user_data)
 
-    # Should not call the service
+    # Should not call repository since we're at target
     mock_select.assert_not_called()
-    assert len(user_data.daily_selection) == 1
+    assert added_count == 0
+    assert len(user_data.daily_selection) == 5
 
 
 def test_update_user_daily_selection(rune_recall_service, state_manager):
@@ -640,18 +653,22 @@ def test_update_user_daily_selection(rune_recall_service, state_manager):
 
 
 def test_remove_word_completely_success(rune_recall_service, state_manager):
-    """Test successful complete word removal."""
+    """Test successful complete word removal with automatic replacement."""
     from unittest.mock import MagicMock, patch
 
+    from src.runestone.db.models import Vocabulary
     from src.runestone.state.state_types import WordOfDay
 
-    # Setup user data
+    # Setup user data with one word (below target of 5)
     user_data = state_manager.get_user("active_user")
     user_data.daily_selection = [WordOfDay(id_=1, word_phrase="kontanter")]
     user_data.db_user_id = 1
 
     # Mock vocabulary repository responses
     mock_word = MagicMock(id=1, word_phrase="kontanter")
+    mock_replacement = Vocabulary(
+        id=10, word_phrase="replacement", translation="repl", example_phrase="", in_learn=True, user_id=1
+    )
 
     with (
         patch.object(
@@ -659,6 +676,9 @@ def test_remove_word_completely_success(rune_recall_service, state_manager):
         ),
         patch.object(
             rune_recall_service.vocabulary_repository, "delete_vocabulary_item_by_word_phrase", return_value=True
+        ),
+        patch.object(
+            rune_recall_service.vocabulary_repository, "select_new_daily_words", return_value=[mock_replacement]
         ),
     ):
 
@@ -668,6 +688,8 @@ def test_remove_word_completely_success(rune_recall_service, state_manager):
         assert "kontanter" in result["message"]
         assert "removed from vocabulary" in result["message"]
         assert result["removed_from_selection"] is True
+        assert result["replacements_added"] == 1
+        assert "added 1 replacement word" in result["message"]
 
         # Verify repository calls
         rune_recall_service.vocabulary_repository.get_vocabulary_item_by_word_phrase.assert_called_once_with(
@@ -676,6 +698,8 @@ def test_remove_word_completely_success(rune_recall_service, state_manager):
         rune_recall_service.vocabulary_repository.delete_vocabulary_item_by_word_phrase.assert_called_once_with(
             "kontanter", 1
         )
+        # Verify replacement was requested (excluding the removed word's ID)
+        rune_recall_service.vocabulary_repository.select_new_daily_words.assert_called_once()
 
 
 def test_remove_word_completely_word_not_found(rune_recall_service, state_manager):
@@ -729,17 +753,31 @@ def test_remove_word_completely_user_not_found(rune_recall_service, state_manage
 
 
 def test_postpone_word_success(rune_recall_service, state_manager):
-    """Test successful word postponement."""
+    """Test successful word postponement with automatic replacement."""
+    from unittest.mock import patch
+
+    from src.runestone.db.models import Vocabulary
     from src.runestone.state.state_types import WordOfDay
 
     user_data = state_manager.get_user("active_user")
     user_data.daily_selection = [WordOfDay(id_=1, word_phrase="kontanter"), WordOfDay(id_=2, word_phrase="hej")]
+    user_data.db_user_id = 1
 
-    result = rune_recall_service.postpone_word("active_user", "kontanter")
+    # Mock replacement word
+    mock_replacement = Vocabulary(
+        id=10, word_phrase="replacement", translation="repl", example_phrase="", in_learn=True, user_id=1
+    )
+
+    with patch.object(
+        rune_recall_service.vocabulary_repository, "select_new_daily_words", return_value=[mock_replacement]
+    ):
+        result = rune_recall_service.postpone_word("active_user", "kontanter")
 
     assert result["success"] is True
     assert "postponed" in result["message"]
     assert "kontanter" in result["message"]
+    assert result["replacements_added"] == 1
+    assert "added 1 replacement word" in result["message"]
 
 
 def test_postpone_word_not_in_selection(rune_recall_service, state_manager):
@@ -1161,3 +1199,149 @@ def test_send_word_message_with_user_example(mock_client_class, rune_recall_serv
         "https://api.telegram.org/bottest_token/sendMessage",
         json={"chat_id": 123, "text": expected_message, "parse_mode": "MarkdownV2"},
     )
+
+
+# Tests for new word replacement functionality
+
+
+def test_maintain_daily_selection_with_partial_selection(rune_recall_service, state_manager):
+    """Test maintaining daily selection when partially filled."""
+    from src.runestone.db.models import Vocabulary
+    from src.runestone.state.state_types import WordOfDay
+
+    user_data = state_manager.get_user("active_user")
+    # Start with 2 words (target is 5)
+    user_data.daily_selection = [
+        WordOfDay(id_=1, word_phrase="word1"),
+        WordOfDay(id_=2, word_phrase="word2"),
+    ]
+    user_data.db_user_id = 1
+
+    # Mock 3 replacement words
+    mock_replacements = [
+        Vocabulary(id=3, word_phrase="word3", translation="t3", example_phrase="", in_learn=True, user_id=1),
+        Vocabulary(id=4, word_phrase="word4", translation="t4", example_phrase="", in_learn=True, user_id=1),
+        Vocabulary(id=5, word_phrase="word5", translation="t5", example_phrase="", in_learn=True, user_id=1),
+    ]
+
+    with patch.object(
+        rune_recall_service.vocabulary_repository, "select_new_daily_words", return_value=mock_replacements
+    ) as mock_select:
+        added_count = rune_recall_service.maintain_daily_selection("active_user", user_data)
+
+    assert added_count == 3
+    assert len(user_data.daily_selection) == 5
+    # Verify excluded_word_ids parameter was passed correctly
+    call_args = mock_select.call_args
+    assert call_args.kwargs["excluded_word_ids"] == [1, 2]
+
+
+def test_maintain_daily_selection_no_replacements_available(rune_recall_service, state_manager):
+    """Test maintaining daily selection when no replacement words are available."""
+    from src.runestone.state.state_types import WordOfDay
+
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="word1")]
+    user_data.db_user_id = 1
+
+    # Mock no replacement words available
+    with patch.object(rune_recall_service.vocabulary_repository, "select_new_daily_words", return_value=[]):
+        added_count = rune_recall_service.maintain_daily_selection("active_user", user_data)
+
+    assert added_count == 0
+    assert len(user_data.daily_selection) == 1  # Still has the original word
+
+
+def test_remove_word_completely_no_replacement_available(rune_recall_service, state_manager):
+    """Test word removal when no replacement words are available."""
+    from unittest.mock import MagicMock, patch
+
+    from src.runestone.state.state_types import WordOfDay
+
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="kontanter")]
+    user_data.db_user_id = 1
+
+    mock_word = MagicMock(id=1, word_phrase="kontanter")
+
+    with (
+        patch.object(
+            rune_recall_service.vocabulary_repository, "get_vocabulary_item_by_word_phrase", return_value=mock_word
+        ),
+        patch.object(
+            rune_recall_service.vocabulary_repository, "delete_vocabulary_item_by_word_phrase", return_value=True
+        ),
+        patch.object(rune_recall_service.vocabulary_repository, "select_new_daily_words", return_value=[]),
+    ):
+        result = rune_recall_service.remove_word_completely("active_user", "kontanter")
+
+    assert result["success"] is True
+    assert result["removed_from_selection"] is True
+    assert result["replacements_added"] == 0
+    assert "no replacement available" in result["message"]
+    assert "words in cooldown" in result["message"]
+
+
+def test_postpone_word_no_replacement_available(rune_recall_service, state_manager):
+    """Test word postponement when no replacement words are available."""
+    from unittest.mock import patch
+
+    from src.runestone.state.state_types import WordOfDay
+
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="kontanter"), WordOfDay(id_=2, word_phrase="hej")]
+    user_data.db_user_id = 1
+
+    with patch.object(rune_recall_service.vocabulary_repository, "select_new_daily_words", return_value=[]):
+        result = rune_recall_service.postpone_word("active_user", "kontanter")
+
+    assert result["success"] is True
+    assert result["replacements_added"] == 0
+    assert "no replacement available" in result["message"]
+    assert "words in cooldown" in result["message"]
+
+
+def test_select_new_daily_words_with_exclusions(vocabulary_repository, test_db):
+    """Test that select_new_daily_words properly excludes specified word IDs."""
+    # Ensure all words are available (no cooldown)
+    words = test_db.query(Vocabulary).filter(Vocabulary.user_id == 1).all()
+    for word in words:
+        word.last_learned = datetime.now() - timedelta(days=10)
+    test_db.commit()
+
+    # Select words excluding specific IDs
+    excluded_ids = [1]  # Exclude "hello" (id=1)
+    selected_words = vocabulary_repository.select_new_daily_words(
+        user_id=1, cooldown_days=7, limit=5, excluded_word_ids=excluded_ids
+    )
+
+    # Verify excluded word is not in results
+    selected_ids = [w.id for w in selected_words]
+    assert 1 not in selected_ids
+    assert len(selected_words) == 2  # Should get goodbye and thank you
+
+
+def test_maintain_daily_selection_excludes_existing_words(rune_recall_service, state_manager, test_db):
+    """Test that maintain_daily_selection excludes words already in selection."""
+    from src.runestone.state.state_types import WordOfDay
+
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [
+        WordOfDay(id_=1, word_phrase="hello"),  # Already in selection
+    ]
+    user_data.db_user_id = 1
+
+    # Ensure all words are available
+    words = test_db.query(Vocabulary).filter(Vocabulary.user_id == 1).all()
+    for word in words:
+        word.last_learned = datetime.now() - timedelta(days=10)
+    test_db.commit()
+
+    # Call maintain to add more words
+    added_count = rune_recall_service.maintain_daily_selection("active_user", user_data)
+
+    # Should add words, but not include the one already in selection
+    assert added_count > 0
+    word_ids = [w.id_ for w in user_data.daily_selection]
+    # Should not have duplicate of word id=1
+    assert word_ids.count(1) == 1
