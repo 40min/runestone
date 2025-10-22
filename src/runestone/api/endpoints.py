@@ -243,7 +243,7 @@ async def save_vocabulary(
         HTTPException: For database errors
     """
     try:
-        return service.save_vocabulary(request.items)
+        return service.save_vocabulary(request.items, request.enrich)
 
     except Exception as e:
         raise HTTPException(
