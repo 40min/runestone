@@ -180,7 +180,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
         example_phrase: item.example_phrase,
       }));
 
-      const response = await fetch(`${API_BASE_URL}/api/vocabulary/save`, {
+      const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
