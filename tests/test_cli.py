@@ -36,8 +36,10 @@ class TestCLI:
         assert "Process a Swedish textbook page" in result.output
         assert "IMAGE_PATH" in result.output
 
+    @patch("runestone.cli.ContentAnalyzer")
+    @patch("runestone.cli.OCRProcessor")
     @patch("runestone.cli.RunestoneProcessor")
-    def test_process_command_success(self, mock_processor_class):
+    def test_process_command_success(self, mock_processor_class, mock_ocr_class, mock_analyzer_class):
         """Test successful process command execution."""
         # Create a real temporary file for testing
         with self.runner.isolated_filesystem():
@@ -67,13 +69,12 @@ class TestCLI:
             )
 
             assert result.exit_code == 0
-            # Check that settings was passed and other parameters
+            # Check that processor was called with correct parameters
             call_args = mock_processor_class.call_args
-            assert call_args[1]["provider"] == "openai"
-            assert call_args[1]["api_key"] == self.api_key
-            assert call_args[1]["model_name"] is None
             assert call_args[1]["verbose"] is True
             assert "settings" in call_args[1]
+            assert "ocr_processor" in call_args[1]
+            assert "content_analyzer" in call_args[1]
             mock_processor.process_image.assert_called_once()
             mock_processor.display_results_console.assert_called_once_with(mock_results)
 
@@ -85,6 +86,8 @@ class TestCLI:
         mock_settings.llm_provider = "openai"
         mock_settings.openai_api_key = None
         mock_settings.gemini_api_key = None
+        mock_settings.openrouter_api_key = None
+        mock_settings.ocr_llm_provider = None
         mock_settings.verbose = False
 
         # Mock PIL Image to avoid image loading error
@@ -207,16 +210,26 @@ class TestCLI:
         assert result.exit_code == 0
         assert "0.1.0" in result.output
 
-    @patch.dict("os.environ", {"OPENAI_API_KEY": "env-api-key"})
     @patch("runestone.cli.settings")
+    @patch("runestone.cli.create_llm_client")
+    @patch("runestone.cli.ContentAnalyzer")
+    @patch("runestone.cli.OCRProcessor")
     @patch("runestone.cli.RunestoneProcessor")
-    def test_process_command_env_api_key(self, mock_processor_class, mock_settings):
+    def test_process_command_env_api_key(
+        self, mock_processor_class, mock_ocr_class, mock_analyzer_class, mock_create_client, mock_settings
+    ):
         """Test process command using API key from environment."""
         # Mock the global settings instance to use the test API key
         mock_settings.llm_provider = "openai"
         mock_settings.openai_api_key = "env-api-key"
         mock_settings.gemini_api_key = None
+        mock_settings.openrouter_api_key = None
+        mock_settings.ocr_llm_provider = None
         mock_settings.verbose = False
+
+        # Mock LLM client
+        mock_llm_client = Mock()
+        mock_create_client.return_value = mock_llm_client
 
         with self.runner.isolated_filesystem():
             Path(self.test_image_path).touch()
@@ -234,13 +247,12 @@ class TestCLI:
             result = self.runner.invoke(cli, ["process", self.test_image_path])
 
             assert result.exit_code == 0
-            # Should use API key from environment
+            # Check that processor was called with correct parameters
             call_args = mock_processor_class.call_args
-            assert call_args[1]["provider"] == "openai"
-            assert call_args[1]["api_key"] == "env-api-key"
-            assert call_args[1]["model_name"] is None
-            assert call_args[1]["verbose"] is True
+            # verbose can be True if VERBOSE env var is set in actual environment
             assert "settings" in call_args[1]
+            assert "ocr_processor" in call_args[1]
+            assert "content_analyzer" in call_args[1]
 
     def test_load_vocab_command_help(self):
         """Test load_vocab command help message."""

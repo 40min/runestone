@@ -251,7 +251,7 @@ INSTRUCTIONS:
      * english: the most contextually appropriate English translation
      * example_phrase: a complete sentence from the source text containing this word.
        If the word appears multiple times, choose the most illustrative example.
-       Never set to null unless the word genuinely doesn't appear in a complete sentence.
+       If the example is unclear or unhelpful or non-demonstrative enough, generate a better example.
        Provide English translation in ().
    - Sort all entries alphabetically by the Swedish word
    - Aim for comprehensive vocabulary extraction - a typical textbook page should yield

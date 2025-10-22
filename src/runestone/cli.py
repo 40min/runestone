@@ -18,10 +18,12 @@ from sqlalchemy.orm import sessionmaker
 
 from runestone.api.schemas import VocabularyItemCreate
 from runestone.config import Settings
-from runestone.core.clients.factory import get_available_providers
+from runestone.core.analyzer import ContentAnalyzer
+from runestone.core.clients.factory import create_llm_client, get_available_providers
 from runestone.core.console import setup_console
 from runestone.core.exceptions import RunestoneError
 from runestone.core.logging_config import setup_logging
+from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
 from runestone.core.prompt_builder.builder import PromptBuilder
 from runestone.core.prompt_builder.types import ImprovementMode
@@ -149,14 +151,48 @@ def process(
                 f"Supported formats: {', '.join(allowed_extensions)}"  # noqa: E501
             )
 
+        # Override settings with CLI parameters if provided
+        if api_key:
+            # Temporarily override the appropriate API key in settings
+            if provider == "openai":
+                settings.openai_api_key = api_key
+            elif provider == "gemini":
+                settings.gemini_api_key = api_key
+            elif provider == "openrouter":
+                settings.openrouter_api_key = api_key
+
         if verbose:
             console.print(f"Processing image: {image_path}")
             console.print(f"Provider: {provider}")
             console.print(f"Output format: {output_format}")
 
-        # Initialize processor with settings
+        # Create LLM client with the specified provider
+        llm_client = create_llm_client(
+            settings=settings,
+            provider=provider,
+            model_name=model,
+        )
+
+        # Create OCR client (use dedicated OCR provider if configured, otherwise use main client)
+        if settings.ocr_llm_provider:
+            ocr_llm_client = create_llm_client(
+                settings=settings,
+                provider=settings.ocr_llm_provider,
+                model_name=settings.ocr_llm_model_name,
+            )
+        else:
+            ocr_llm_client = llm_client
+
+        # Initialize components
+        ocr_processor = OCRProcessor(settings, ocr_llm_client)
+        content_analyzer = ContentAnalyzer(settings, llm_client)
+
+        # Initialize processor with dependencies
         processor = RunestoneProcessor(
-            settings=settings, provider=provider, api_key=api_key, model_name=model, verbose=verbose
+            settings=settings,
+            ocr_processor=ocr_processor,
+            content_analyzer=content_analyzer,
+            verbose=verbose,
         )
 
         # Process the image
@@ -239,7 +275,9 @@ def load_vocab(csv_path: Path, db_name: str, skip_existence_check: bool):
         try:
             # Create service with database session
             repo = VocabularyRepository(db)
-            service = VocabularyService(repo)
+            # Create LLM client for vocabulary service
+            llm_client = create_llm_client(settings=settings)
+            service = VocabularyService(repo, settings, llm_client)
 
             # Load vocabulary using service
             stats = service.load_vocab_from_csv(items, skip_existence_check, user_id=1)
