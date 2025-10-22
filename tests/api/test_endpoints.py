@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 
 from runestone.core.exceptions import RunestoneError
 from runestone.core.prompt_builder.validators import AnalysisResponse
-from runestone.dependencies import get_runestone_processor
+from runestone.dependencies import get_runestone_processor, get_vocabulary_service
 
 
 class TestOCREndpoints:
@@ -619,3 +619,107 @@ class TestSettingsDependency:
         assert response.status_code == 404
         data = response.json()
         assert "not found" in data["detail"]
+
+    def test_save_vocabulary_with_enrichment_enabled(self, client):
+        """Test saving vocabulary with enrichment enabled."""
+        # Mock service response
+        mock_vocabulary_service = Mock()
+        mock_vocabulary_service.save_vocabulary.return_value = {"message": "Vocabulary saved successfully"}
+
+        # Override the service dependency
+        client.app.dependency_overrides[get_vocabulary_service] = lambda: mock_vocabulary_service
+
+        # Request with enrichment enabled
+        request_data = {
+            "items": [
+                {
+                    "word_phrase": "ett äpple",
+                    "translation": "an apple",
+                    "example_phrase": "Jag äter ett äpple.",
+                }
+            ],
+            "enrich": True,
+        }
+
+        response = client.post("/api/vocabulary", json=request_data)
+
+        # Verify response
+        assert response.status_code == 200
+
+        # Verify service was called with enrich=True
+        mock_vocabulary_service.save_vocabulary.assert_called_once()
+        call_args = mock_vocabulary_service.save_vocabulary.call_args
+        # Check positional args: call_args.args[0] is items, call_args.args[1] is enrich
+        assert call_args.args[1] is True
+
+        # Clean up
+        client.app.dependency_overrides.clear()
+
+    def test_save_vocabulary_with_enrichment_disabled(self, client):
+        """Test saving vocabulary with enrichment disabled."""
+        # Mock service response
+        mock_vocabulary_service = Mock()
+        mock_vocabulary_service.save_vocabulary.return_value = {"message": "Vocabulary saved successfully"}
+
+        # Override the service dependency
+        client.app.dependency_overrides[get_vocabulary_service] = lambda: mock_vocabulary_service
+
+        # Request with enrichment disabled
+        request_data = {
+            "items": [
+                {
+                    "word_phrase": "ett äpple",
+                    "translation": "an apple",
+                    "example_phrase": "Jag äter ett äpple.",
+                }
+            ],
+            "enrich": False,
+        }
+
+        response = client.post("/api/vocabulary", json=request_data)
+
+        # Verify response
+        assert response.status_code == 200
+
+        # Verify service was called with enrich=False
+        mock_vocabulary_service.save_vocabulary.assert_called_once()
+        call_args = mock_vocabulary_service.save_vocabulary.call_args
+        # Check positional args: call_args.args[0] is items, call_args.args[1] is enrich
+        assert call_args.args[1] is False
+
+        # Clean up
+        client.app.dependency_overrides.clear()
+
+    def test_save_vocabulary_enrichment_default_true(self, client):
+        """Test that enrichment defaults to True when not specified."""
+        # Mock service response
+        mock_vocabulary_service = Mock()
+        mock_vocabulary_service.save_vocabulary.return_value = {"message": "Vocabulary saved successfully"}
+
+        # Override the service dependency
+        client.app.dependency_overrides[get_vocabulary_service] = lambda: mock_vocabulary_service
+
+        # Request without enrich field
+        request_data = {
+            "items": [
+                {
+                    "word_phrase": "ett äpple",
+                    "translation": "an apple",
+                    "example_phrase": "Jag äter ett äpple.",
+                }
+            ]
+        }
+
+        response = client.post("/api/vocabulary", json=request_data)
+
+        # Verify response
+        assert response.status_code == 200
+
+        # Verify service was called with enrich=True (default)
+        mock_vocabulary_service.save_vocabulary.assert_called_once()
+        call_args = mock_vocabulary_service.save_vocabulary.call_args
+        # Check positional args: call_args.args[0] is items, call_args.args[1] is enrich (default True)
+        assert call_args.args[1] is True
+
+        # Clean up
+        client.app.dependency_overrides.clear()

@@ -591,3 +591,68 @@ class TestVocabularyService:
         assert result.translation is None
         assert result.example_phrase is None
         assert result.extra_info == "en-word, noun, base form: äpple"
+
+    def test_enrich_vocabulary_item_success(self, service):
+        """Test successful vocabulary item enrichment."""
+        # Mock LLM client to return extra_info
+        service.llm_client.improve_vocabulary_item.return_value = '{"extra_info": "en-word, noun, base form: äpple"}'
+
+        # Test item
+        item = VocabularyItemCreate(
+            word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple."
+        )
+
+        # Enrich the item
+        enriched_item = service._enrich_vocabulary_item(item)
+
+        # Verify enrichment
+        assert enriched_item.extra_info == "en-word, noun, base form: äpple"
+        assert enriched_item.word_phrase == item.word_phrase
+        assert enriched_item.translation == item.translation
+
+    def test_enrich_vocabulary_item_failure_returns_original(self, service):
+        """Test that enrichment failure returns original item."""
+        # Mock LLM client to raise exception
+        service.llm_client.improve_vocabulary_item.side_effect = Exception("LLM error")
+
+        # Test item
+        item = VocabularyItemCreate(
+            word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple."
+        )
+
+        # Enrich should not raise, but return original
+        enriched_item = service._enrich_vocabulary_item(item)
+
+        # Verify original item returned
+        assert enriched_item.extra_info is None
+        assert enriched_item.word_phrase == item.word_phrase
+
+    def test_save_vocabulary_items_with_enrichment(self, service, db_session):
+        """Test saving vocabulary items with enrichment enabled."""
+        # Mock LLM client
+        service.llm_client.improve_vocabulary_item.return_value = '{"extra_info": "en-word, noun"}'
+
+        items = [
+            VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple.")
+        ]
+
+        # Save with enrichment
+        result = service.save_vocabulary(items, user_id=1, enrich=True)
+
+        # Verify item was enriched - result is a dict with message
+        assert result == {"message": "Vocabulary saved successfully"}
+
+    def test_save_vocabulary_items_without_enrichment(self, service, db_session):
+        """Test saving vocabulary items with enrichment disabled."""
+        items = [
+            VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple.")
+        ]
+
+        # Save without enrichment
+        result = service.save_vocabulary(items, user_id=1, enrich=False)
+
+        # Verify item was not enriched - result is a dict with message
+        assert result == {"message": "Vocabulary saved successfully"}
+
+        # Verify LLM was not called
+        service.llm_client.improve_vocabulary_item.assert_not_called()

@@ -5,7 +5,6 @@ This module provides reusable test fixtures for API testing,
 including database setup and test client configuration.
 """
 
-import os
 from typing import Generator
 from unittest.mock import Mock
 
@@ -21,12 +20,13 @@ from runestone.dependencies import get_runestone_processor
 
 @pytest.fixture(scope="function")
 def client() -> Generator[TestClient, None, None]:
-    """Create a test client with file-based database for testing."""
-    # Use a temporary database file for testing
-    test_db_url = "sqlite:///./test_vocabulary.db"
+    """Create a test client with in-memory database for testing."""
+    # Use a shared in-memory database for faster testing
+    # The 'file::memory:?cache=shared' URI allows multiple connections to share the same in-memory database
+    test_db_url = "sqlite:///file::memory:?cache=shared&uri=true"
 
     # Create a single engine for all tests in this fixture
-    engine = create_engine(test_db_url, connect_args={"check_same_thread": False})
+    engine = create_engine(test_db_url, connect_args={"check_same_thread": False, "uri": True})
     Base.metadata.create_all(bind=engine)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -45,10 +45,6 @@ def client() -> Generator[TestClient, None, None]:
 
     # Dispose the engine to close all connections
     engine.dispose()
-
-    # Clean up the test database file
-    if os.path.exists("./test_vocabulary.db"):
-        os.remove("./test_vocabulary.db")
 
 
 @pytest.fixture(scope="function")

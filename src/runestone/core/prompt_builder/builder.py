@@ -164,9 +164,10 @@ class PromptBuilder:
                 "the Swedish word/phrase\n    - Include word form (noun, verb, "
                 "adjective, etc.), en/ett classification for nouns, base forms, verb forms (4 forms) for verbs "
                 "etc.\n"
-                '    - Keep it concise and human-readable (e.g., "en-word, noun, '
+                '    - Keep it short, concise and human-readable (e.g., "en-word, noun, '
                 'base form: ord")\n    - Focus on the most important grammatical '
-                "details for language learners"
+                "details for language learners. Don't provide basic form of word if it is"
+                "already in basic form. Provide comparative forms for adjectives."
             ),
         }
 

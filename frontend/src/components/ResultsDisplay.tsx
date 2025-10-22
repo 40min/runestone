@@ -55,6 +55,7 @@ interface VocabularyItem {
   swedish: string;
   english: string;
   example_phrase?: string;
+  extra_info?: string;
 }
 
 interface ContentAnalysis {
@@ -67,7 +68,7 @@ interface ResultsDisplayProps {
   analysisResult: ContentAnalysis | null;
   resourcesResult: string | null;
   error: string | null;
-  saveVocabulary: (vocabulary: VocabularyItem[]) => Promise<void>;
+  saveVocabulary: (vocabulary: VocabularyItem[], enrich: boolean) => Promise<void>;
 }
 
 const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
@@ -98,6 +99,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
       ? new Array(analysisResult.vocabulary.length).fill(false)
       : []
   );
+  const [enrichVocabulary, setEnrichVocabulary] = useState(true);
   const [copyButtonText, setCopyButtonText] = useState("Copy");
 
   useEffect(() => {
@@ -201,10 +203,12 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     }
 
     try {
-      await saveVocabulary(checkedVocab);
+      await saveVocabulary(checkedVocab, enrichVocabulary);
       setSnackbar({
         open: true,
-        message: "Selected vocabulary saved to database!",
+        message: enrichVocabulary
+          ? "Selected vocabulary enriched and saved to database!"
+          : "Selected vocabulary saved to database!",
         severity: "success",
       });
     } catch (err) {
@@ -383,7 +387,14 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
             >
               <SectionTitle>Vocabulary Analysis</SectionTitle>
               {analysisResult && analysisResult.vocabulary.length > 0 && (
-                <Box sx={{ display: "flex", gap: 2 }}>
+                <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <StyledCheckbox
+                      checked={enrichVocabulary}
+                      onChange={setEnrichVocabulary}
+                    />
+                    <Typography sx={{ color: "white" }}>Enrich with grammar info</Typography>
+                  </Box>
                   <CustomButton
                     variant="primary"
                     onClick={handleSaveVocabulary}
