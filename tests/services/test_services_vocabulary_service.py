@@ -638,9 +638,15 @@ class TestVocabularyService:
 
         # Save with enrichment
         result = service.save_vocabulary(items, user_id=1, enrich=True)
+        db_session.commit()
 
         # Verify item was enriched - result is a dict with message
         assert result == {"message": "Vocabulary saved successfully"}
+
+        # Verify extra_info was saved to database
+        vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "ett äpple").first()
+        assert vocab is not None
+        assert vocab.extra_info == "en-word, noun"
 
     def test_save_vocabulary_items_without_enrichment(self, service, db_session):
         """Test saving vocabulary items with enrichment disabled."""
