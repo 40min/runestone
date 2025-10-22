@@ -348,4 +348,54 @@ describe('useImageProcessing', () => {
       expect(result.current.processingStep).toBe('DONE');
     });
   });
+
+  it('should skip resources step when should_search is false', async () => {
+    const mockOcrResponse = { text: 'Sample text', character_count: 11 };
+    const mockAnalysisResponse = {
+      grammar_focus: { topic: 'Present tense', explanation: 'Focus on present tense usage', has_explicit_rules: true },
+      vocabulary: [{ swedish: 'hej', english: 'hello' }],
+      core_topics: ['present tense', 'greetings'],
+      search_needed: { should_search: false, query_suggestions: [] },
+    };
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockOcrResponse),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockAnalysisResponse),
+      });
+
+    const { result } = renderHook(() => useImageProcessing());
+
+    const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
+    await act(async () => {
+      await result.current.processImage(file);
+    });
+
+    await waitFor(() => {
+      expect(result.current.ocrResult).toEqual(mockOcrResponse);
+      expect(result.current.analysisResult).toEqual(mockAnalysisResponse);
+      expect(result.current.resourcesResult).toBeNull();
+      expect(result.current.processingStep).toBe('DONE');
+      expect(result.current.error).toBeNull();
+      expect(result.current.isProcessing).toBe(false);
+    });
+
+    // Verify only OCR and analysis API calls were made (no resources call)
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenNthCalledWith(1, 'http://localhost:8010/api/ocr', {
+      method: 'POST',
+      body: expect.any(FormData),
+    });
+    expect(mockFetch).toHaveBeenNthCalledWith(2, 'http://localhost:8010/api/analyze', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text: 'Sample text' }),
+    });
+  });
 });

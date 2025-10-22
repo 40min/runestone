@@ -252,6 +252,7 @@ INSTRUCTIONS:
      * example_phrase: a complete sentence from the source text containing this word.
        If the word appears multiple times, choose the most illustrative example.
        Never set to null unless the word genuinely doesn't appear in a complete sentence.
+       Provide English translation in ().
    - Sort all entries alphabetically by the Swedish word
    - Aim for comprehensive vocabulary extraction - a typical textbook page should yield
      50-150+ vocabulary entries depending on text length and density

@@ -121,35 +121,39 @@ const useImageProcessing = (): UseImageProcessingReturn => {
       setAnalysisResult(analysisData);
       setProgress(80);
 
-      // Step 3: Resources
-      setProcessingStep("RESOURCES");
-      setProgress(90);
-      const resourcesResponse = await fetch(`${API_BASE_URL}/api/resources`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          analysis: {
-            core_topics: analysisData.core_topics,
-            search_needed: analysisData.search_needed,
+      // Step 3: Resources (only if needed)
+      if (analysisData.search_needed.should_search) {
+        setProcessingStep("RESOURCES");
+        setProgress(90);
+        const resourcesResponse = await fetch(`${API_BASE_URL}/api/resources`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        }),
-      });
+          body: JSON.stringify({
+            analysis: {
+              core_topics: analysisData.core_topics,
+              search_needed: analysisData.search_needed,
+            },
+          }),
+        });
 
-      if (!resourcesResponse.ok) {
-        const errorData = await resourcesResponse
-          .json()
-          .catch(() => ({ error: "Unknown error" }));
-        throw new Error(
-          errorData.error ||
-            `Resources failed: HTTP ${resourcesResponse.status}: ${resourcesResponse.statusText}`
-        );
+        if (!resourcesResponse.ok) {
+          const errorData = await resourcesResponse
+            .json()
+            .catch(() => ({ error: "Unknown error" }));
+          throw new Error(
+            errorData.error ||
+              `Resources failed: HTTP ${resourcesResponse.status}: ${resourcesResponse.statusText}`
+          );
+        }
+
+        const resourcesData = await resourcesResponse.json();
+        setResourcesResult(resourcesData.extra_info);
+        setProgress(100);
+      } else {
+        setProgress(100);
       }
-
-      const resourcesData = await resourcesResponse.json();
-      setResourcesResult(resourcesData.extra_info);
-      setProgress(100);
       setProcessingStep("DONE");
     } catch (err) {
       const errorMessage =
