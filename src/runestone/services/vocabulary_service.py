@@ -212,25 +212,20 @@ class VocabularyService:
 
     def _enrich_vocabulary_item(self, item: VocabularyItemCreate) -> VocabularyItemCreate:
         """Enrich a vocabulary item with extra_info using LLM."""
-        try:
-            # Create improvement request with EXTRA_INFO_ONLY mode
-            request = VocabularyImproveRequest(word_phrase=item.word_phrase, mode=ImprovementMode.EXTRA_INFO_ONLY)
+        # Create improvement request with EXTRA_INFO_ONLY mode
+        request = VocabularyImproveRequest(word_phrase=item.word_phrase, mode=ImprovementMode.EXTRA_INFO_ONLY)
 
-            # Get improvement from LLM
-            improvement = self.improve_item(request)
+        # Get improvement from LLM
+        improvement = self.improve_item(request)
 
-            # Return new item with extra_info populated
-            return VocabularyItemCreate(
-                word_phrase=item.word_phrase,
-                translation=item.translation,
-                example_phrase=item.example_phrase,
-                extra_info=improvement.extra_info,
-                in_learn=item.in_learn,
-            )
-        except Exception as e:
-            self.logger.warning(f"Failed to enrich vocabulary item '{item.word_phrase}': {e}")
-            # Return original item if enrichment fails
-            return item
+        # Return new item with extra_info populated
+        return VocabularyItemCreate(
+            word_phrase=item.word_phrase,
+            translation=item.translation,
+            example_phrase=item.example_phrase,
+            extra_info=improvement.extra_info,
+            in_learn=item.in_learn,
+        )
 
     def delete_vocabulary_item(self, item_id: int, user_id: int = 1) -> bool:
         """Completely delete a vocabulary item from the database."""

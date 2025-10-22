@@ -610,8 +610,8 @@ class TestVocabularyService:
         assert enriched_item.word_phrase == item.word_phrase
         assert enriched_item.translation == item.translation
 
-    def test_enrich_vocabulary_item_failure_returns_original(self, service):
-        """Test that enrichment failure returns original item."""
+    def test_enrich_vocabulary_item_failure_raises_exception(self, service):
+        """Test that enrichment failure raises exception."""
         # Mock LLM client to raise exception
         service.llm_client.improve_vocabulary_item.side_effect = Exception("LLM error")
 
@@ -620,12 +620,9 @@ class TestVocabularyService:
             word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple."
         )
 
-        # Enrich should not raise, but return original
-        enriched_item = service._enrich_vocabulary_item(item)
-
-        # Verify original item returned
-        assert enriched_item.extra_info is None
-        assert enriched_item.word_phrase == item.word_phrase
+        # Enrich should raise exception
+        with pytest.raises(Exception, match="LLM error"):
+            service._enrich_vocabulary_item(item)
 
     def test_save_vocabulary_items_with_enrichment(self, service, db_session):
         """Test saving vocabulary items with enrichment enabled."""
