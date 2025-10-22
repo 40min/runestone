@@ -387,28 +387,37 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
             >
               <SectionTitle>Vocabulary Analysis</SectionTitle>
               {analysisResult && analysisResult.vocabulary.length > 0 && (
-                <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-end",
+                    gap: 1,
+                  }}
+                >
+                  <Box sx={{ display: "flex", gap: 2 }}>
+                    <CustomButton
+                      variant="primary"
+                      onClick={handleSaveVocabulary}
+                      startIcon={<Save size={16} />}
+                    >
+                      Save to Database
+                    </CustomButton>
+                    <CustomButton
+                      variant="primary"
+                      onClick={handleCopyVocabulary}
+                      startIcon={<Copy size={16} />}
+                    >
+                      Copy
+                    </CustomButton>
+                  </Box>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 2 }}>
                     <StyledCheckbox
                       checked={enrichVocabulary}
                       onChange={setEnrichVocabulary}
                     />
                     <Typography sx={{ color: "white" }}>Enrich with grammar info</Typography>
                   </Box>
-                  <CustomButton
-                    variant="primary"
-                    onClick={handleSaveVocabulary}
-                    startIcon={<Save size={16} />}
-                  >
-                    Save to Database
-                  </CustomButton>
-                  <CustomButton
-                    variant="primary"
-                    onClick={handleCopyVocabulary}
-                    startIcon={<Copy size={16} />}
-                  >
-                    Copy
-                  </CustomButton>
                 </Box>
               )}
             </Box>
