@@ -7,22 +7,15 @@ including database setup for unit tests.
 
 import os
 
-import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-from runestone.db.database import Base
-from runestone.db.repository import VocabularyRepository
-
-# Set test environment file before any imports
+# Set test environment file BEFORE any imports that could trigger config loading
 os.environ["ENV_FILE"] = ".env.test"
 
-"""
-Shared fixtures and configuration for tests.
+import pytest  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
 
-This module provides reusable test fixtures for testing,
-including database setup for unit tests.
-"""
+from runestone.db.database import Base  # noqa: E402
+from runestone.db.repository import VocabularyRepository  # noqa: E402
 
 
 @pytest.fixture
