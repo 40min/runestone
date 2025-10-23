@@ -10,9 +10,6 @@ import os
 # Set test environment file BEFORE any imports that could trigger config loading
 os.environ["ENV_FILE"] = ".env.test"
 
-from runestone.db.database import Base  # noqa: E402
-from runestone.db.repository import VocabularyRepository  # noqa: E402
-
 import pytest  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
