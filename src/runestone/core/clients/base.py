@@ -108,6 +108,7 @@ class BaseLLMClient(ABC):
         """
         pass
 
+    @property
     @abstractmethod
     def provider_name(self) -> str:
         """Return the name of the LLM provider."""

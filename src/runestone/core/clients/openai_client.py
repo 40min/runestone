@@ -261,6 +261,7 @@ class OpenAIClient(BaseLLMClient):
         except Exception as e:
             raise LLMError(f"Vocabulary batch improvement failed: {str(e)}")
 
+    @property
     def provider_name(self) -> str:
         """Return the name of the LLM provider."""
         return "openai"
