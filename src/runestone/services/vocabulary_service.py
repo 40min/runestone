@@ -16,7 +16,6 @@ from ..core.logging_config import get_logger
 from ..core.prompt_builder.builder import PromptBuilder
 from ..core.prompt_builder.exceptions import ResponseParseError
 from ..core.prompt_builder.parsers import ResponseParser
-from ..core.prompt_builder.types import ImprovementMode
 from ..db.models import Vocabulary
 from ..db.repository import VocabularyRepository
 
@@ -52,22 +51,9 @@ class VocabularyService:
                 filtered_items.append(item)
                 seen_in_batch.add(item.word_phrase)
 
-        # Enrich filtered items if requested (only enrich items that will actually be saved)
+        # Enrich filtered items if requested (CHANGED: now uses batch method)
         if enrich and filtered_items:
-            enriched_items = []
-            enriched_count = 0
-            failed_count = 0
-
-            for item in filtered_items:
-                enriched_item = self._enrich_vocabulary_item(item)
-                enriched_items.append(enriched_item)
-                if enriched_item.extra_info is not None and enriched_item.extra_info != item.extra_info:
-                    enriched_count += 1
-                elif item.extra_info is None:  # If original had no extra_info but enrichment failed
-                    failed_count += 1
-
-            filtered_items = enriched_items
-            self.logger.info(f"Enrichment completed: {enriched_count} enriched, {failed_count} failed")
+            filtered_items = self._enrich_vocabulary_items(filtered_items)
 
         # Batch insert the filtered (and potentially enriched) items
         if filtered_items:
@@ -210,22 +196,92 @@ class VocabularyService:
             # Return empty response as fallback
             return VocabularyImproveResponse(translation=None, example_phrase="", extra_info=None)
 
-    def _enrich_vocabulary_item(self, item: VocabularyItemCreate) -> VocabularyItemCreate:
-        """Enrich a vocabulary item with extra_info using LLM."""
-        # Create improvement request with EXTRA_INFO_ONLY mode
-        request = VocabularyImproveRequest(word_phrase=item.word_phrase, mode=ImprovementMode.EXTRA_INFO_ONLY)
+    def _enrich_vocabulary_items(self, items: List[VocabularyItemCreate]) -> List[VocabularyItemCreate]:
+        """
+        Enrich vocabulary items with extra_info using LLM batch processing.
 
-        # Get improvement from LLM
-        improvement = self.improve_item(request)
+        Processes items in batches of up to 100 for optimal performance.
+        Handles partial failures gracefully - enriches successful items and logs failures.
 
-        # Return new item with extra_info populated
-        return VocabularyItemCreate(
-            word_phrase=item.word_phrase,
-            translation=item.translation,
-            example_phrase=item.example_phrase,
-            extra_info=improvement.extra_info,
-            in_learn=item.in_learn,
+        Args:
+            items: List of vocabulary items to enrich
+
+        Returns:
+            List of vocabulary items with extra_info populated where successful
+        """
+        if not items:
+            return items
+
+        enriched_items = []
+        BATCH_SIZE = 100
+        total_enriched = 0
+        total_failed = 0
+
+        # Process in batches
+        for batch_start in range(0, len(items), BATCH_SIZE):
+            batch_end = min(batch_start + BATCH_SIZE, len(items))
+            batch = items[batch_start:batch_end]
+            batch_num = batch_start // BATCH_SIZE + 1
+
+            try:
+                # Extract word_phrases for this batch
+                word_phrases = [item.word_phrase for item in batch]
+
+                # Build batch prompt
+                prompt = self.builder.build_vocabulary_batch_prompt(word_phrases)
+
+                # Get batch improvements from LLM
+                response_text = self.llm_client.improve_vocabulary_batch(prompt)
+
+                # Parse batch response
+                enrichments = self.parser.parse_vocabulary_batch_response(response_text)
+
+                # Apply enrichments to items
+                batch_success = 0
+                batch_failed = 0
+
+                for item in batch:
+                    extra_info = enrichments.get(item.word_phrase)
+
+                    # Create enriched item
+                    enriched_item = VocabularyItemCreate(
+                        word_phrase=item.word_phrase,
+                        translation=item.translation,
+                        example_phrase=item.example_phrase,
+                        extra_info=extra_info if extra_info else item.extra_info,
+                        in_learn=item.in_learn,
+                    )
+                    enriched_items.append(enriched_item)
+
+                    if extra_info:
+                        batch_success += 1
+                    else:
+                        batch_failed += 1
+
+                total_enriched += batch_success
+                total_failed += batch_failed
+
+                if batch_failed > 0:
+                    self.logger.warning(
+                        f"Batch {batch_num}: {batch_success} items enriched, {batch_failed} items failed"
+                    )
+                else:
+                    self.logger.info(f"Batch {batch_num}: All {batch_success} items enriched successfully")
+
+            except Exception as e:
+                # Log error but continue with non-enriched items
+                self.logger.error(f"Failed to enrich batch {batch_num}: {e}")
+                # Add items without enrichment
+                enriched_items.extend(batch)
+                total_failed += len(batch)
+
+        # Log summary
+        total_items = len(items)
+        self.logger.info(
+            f"Enrichment summary: {total_enriched}/{total_items} successful, {total_failed}/{total_items} failed"
         )
+
+        return enriched_items
 
     def delete_vocabulary_item(self, item_id: int, user_id: int = 1) -> bool:
         """Completely delete a vocabulary item from the database."""
