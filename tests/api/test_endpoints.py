@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 
 from runestone.core.exceptions import RunestoneError
 from runestone.core.prompt_builder.validators import AnalysisResponse
-from runestone.dependencies import get_runestone_processor
+from runestone.dependencies import get_runestone_processor, get_vocabulary_service
 
 
 class TestOCREndpoints:
@@ -619,3 +619,125 @@ class TestSettingsDependency:
         assert response.status_code == 404
         data = response.json()
         assert "not found" in data["detail"]
+
+    def test_save_vocabulary_with_enrichment_enabled(self, client):
+        """Test saving vocabulary with enrichment enabled."""
+        # Mock service response
+        mock_vocabulary_service = Mock()
+        mock_vocabulary_service.save_vocabulary.return_value = {"message": "Vocabulary saved successfully"}
+
+        # Override the service dependency
+        client.app.dependency_overrides[get_vocabulary_service] = lambda: mock_vocabulary_service
+
+        # Request with enrichment enabled
+        request_data = {
+            "items": [
+                {
+                    "word_phrase": "ett äpple",
+                    "translation": "an apple",
+                    "example_phrase": "Jag äter ett äpple.",
+                }
+            ],
+            "enrich": True,
+        }
+
+        response = client.post("/api/vocabulary", json=request_data)
+
+        # Verify response
+        assert response.status_code == 200
+
+        # Verify service was called with correct arguments
+        mock_vocabulary_service.save_vocabulary.assert_called_once()
+        call_args = mock_vocabulary_service.save_vocabulary.call_args
+        # Check positional args: call_args.args[0] is items, call_args.args[1] is enrich
+        # Verify items parameter (converted to VocabularyItemCreate objects by Pydantic)
+        items_arg = call_args.args[0]
+        assert len(items_arg) == 1
+        assert items_arg[0].word_phrase == request_data["items"][0]["word_phrase"]
+        assert items_arg[0].translation == request_data["items"][0]["translation"]
+        assert items_arg[0].example_phrase == request_data["items"][0]["example_phrase"]
+        assert call_args.args[1] is True  # Verify enrich parameter
+
+        # Clean up
+        client.app.dependency_overrides.clear()
+
+    def test_save_vocabulary_with_enrichment_disabled(self, client):
+        """Test saving vocabulary with enrichment disabled."""
+        # Mock service response
+        mock_vocabulary_service = Mock()
+        mock_vocabulary_service.save_vocabulary.return_value = {"message": "Vocabulary saved successfully"}
+
+        # Override the service dependency
+        client.app.dependency_overrides[get_vocabulary_service] = lambda: mock_vocabulary_service
+
+        # Request with enrichment disabled
+        request_data = {
+            "items": [
+                {
+                    "word_phrase": "ett äpple",
+                    "translation": "an apple",
+                    "example_phrase": "Jag äter ett äpple.",
+                }
+            ],
+            "enrich": False,
+        }
+
+        response = client.post("/api/vocabulary", json=request_data)
+
+        # Verify response
+        assert response.status_code == 200
+
+        # Verify service was called with correct arguments
+        mock_vocabulary_service.save_vocabulary.assert_called_once()
+        call_args = mock_vocabulary_service.save_vocabulary.call_args
+        # Check positional args: call_args.args[0] is items, call_args.args[1] is enrich
+        # Verify items parameter (converted to VocabularyItemCreate objects by Pydantic)
+        items_arg = call_args.args[0]
+        assert len(items_arg) == 1
+        assert items_arg[0].word_phrase == request_data["items"][0]["word_phrase"]
+        assert items_arg[0].translation == request_data["items"][0]["translation"]
+        assert items_arg[0].example_phrase == request_data["items"][0]["example_phrase"]
+        assert call_args.args[1] is False  # Verify enrich parameter
+
+        # Clean up
+        client.app.dependency_overrides.clear()
+
+    def test_save_vocabulary_enrichment_default_true(self, client):
+        """Test that enrichment defaults to True when not specified."""
+        # Mock service response
+        mock_vocabulary_service = Mock()
+        mock_vocabulary_service.save_vocabulary.return_value = {"message": "Vocabulary saved successfully"}
+
+        # Override the service dependency
+        client.app.dependency_overrides[get_vocabulary_service] = lambda: mock_vocabulary_service
+
+        # Request without enrich field
+        request_data = {
+            "items": [
+                {
+                    "word_phrase": "ett äpple",
+                    "translation": "an apple",
+                    "example_phrase": "Jag äter ett äpple.",
+                }
+            ]
+        }
+
+        response = client.post("/api/vocabulary", json=request_data)
+
+        # Verify response
+        assert response.status_code == 200
+
+        # Verify service was called with correct arguments (default enrich=True)
+        mock_vocabulary_service.save_vocabulary.assert_called_once()
+        call_args = mock_vocabulary_service.save_vocabulary.call_args
+        # Check positional args: call_args.args[0] is items, call_args.args[1] is enrich (default True)
+        # Verify items parameter (converted to VocabularyItemCreate objects by Pydantic)
+        items_arg = call_args.args[0]
+        assert len(items_arg) == 1
+        assert items_arg[0].word_phrase == request_data["items"][0]["word_phrase"]
+        assert items_arg[0].translation == request_data["items"][0]["translation"]
+        assert items_arg[0].example_phrase == request_data["items"][0]["example_phrase"]
+        assert call_args.args[1] is True  # Verify enrich parameter (default value)
+
+        # Clean up
+        client.app.dependency_overrides.clear()

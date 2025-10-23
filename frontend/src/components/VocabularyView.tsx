@@ -107,7 +107,11 @@ const VocabularyView: React.FC = () => {
               { key: 'word_phrase', label: 'Swedish' },
               { key: 'translation', label: 'English' },
               { key: 'example_phrase', label: 'Example Phrase' },
-              { key: 'extra_info', label: 'Extra Info' },
+              {
+                key: 'extra_info',
+                label: 'Grammar Info',
+                render: (value) => (value as string | null) || "—",
+              },
               {
                 key: 'in_learn',
                 label: 'In Learning',

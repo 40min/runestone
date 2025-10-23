@@ -43,7 +43,7 @@ def state_manager(temp_state_file):
 @pytest.fixture
 def test_db():
     """Create a test database with sample vocabulary data."""
-    test_db_url = "sqlite:///./test_recall.db"
+    test_db_url = "sqlite:///:memory:"
     engine = create_engine(test_db_url, connect_args={"check_same_thread": False})
     Base.metadata.create_all(bind=engine)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -93,8 +93,6 @@ def test_db():
         db.close()
         # Dispose the engine to close all connections
         engine.dispose()
-        if os.path.exists("./test_recall.db"):
-            os.remove("./test_recall.db")
 
 
 @pytest.fixture

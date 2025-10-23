@@ -115,6 +115,7 @@ class VocabularySaveRequest(BaseModel):
     """Schema for saving vocabulary request."""
 
     items: List[VocabularyItemCreate]
+    enrich: bool = True
 
 
 class Vocabulary(BaseModel):

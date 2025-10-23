@@ -16,6 +16,7 @@ from ..core.logging_config import get_logger
 from ..core.prompt_builder.builder import PromptBuilder
 from ..core.prompt_builder.exceptions import ResponseParseError
 from ..core.prompt_builder.parsers import ResponseParser
+from ..core.prompt_builder.types import ImprovementMode
 from ..db.models import Vocabulary
 from ..db.repository import VocabularyRepository
 
@@ -34,7 +35,7 @@ class VocabularyService:
         self.builder = PromptBuilder()
         self.parser = ResponseParser()
 
-    def save_vocabulary(self, items: List[VocabularyItemCreate], user_id: int = 1) -> dict:
+    def save_vocabulary(self, items: List[VocabularyItemCreate], enrich: bool = True, user_id: int = 1) -> dict:
         """Save vocabulary items, handling business logic."""
         # Get unique word_phrases from the batch
         batch_word_phrases = [item.word_phrase for item in items]
@@ -51,7 +52,24 @@ class VocabularyService:
                 filtered_items.append(item)
                 seen_in_batch.add(item.word_phrase)
 
-        # Batch insert the filtered items
+        # Enrich filtered items if requested (only enrich items that will actually be saved)
+        if enrich and filtered_items:
+            enriched_items = []
+            enriched_count = 0
+            failed_count = 0
+
+            for item in filtered_items:
+                enriched_item = self._enrich_vocabulary_item(item)
+                enriched_items.append(enriched_item)
+                if enriched_item.extra_info is not None and enriched_item.extra_info != item.extra_info:
+                    enriched_count += 1
+                elif item.extra_info is None:  # If original had no extra_info but enrichment failed
+                    failed_count += 1
+
+            filtered_items = enriched_items
+            self.logger.info(f"Enrichment completed: {enriched_count} enriched, {failed_count} failed")
+
+        # Batch insert the filtered (and potentially enriched) items
         if filtered_items:
             self.repo.batch_insert_vocabulary_items(filtered_items, user_id)
 
@@ -191,6 +209,23 @@ class VocabularyService:
             self.logger.error(f"Failed to parse vocabulary response: {e}")
             # Return empty response as fallback
             return VocabularyImproveResponse(translation=None, example_phrase="", extra_info=None)
+
+    def _enrich_vocabulary_item(self, item: VocabularyItemCreate) -> VocabularyItemCreate:
+        """Enrich a vocabulary item with extra_info using LLM."""
+        # Create improvement request with EXTRA_INFO_ONLY mode
+        request = VocabularyImproveRequest(word_phrase=item.word_phrase, mode=ImprovementMode.EXTRA_INFO_ONLY)
+
+        # Get improvement from LLM
+        improvement = self.improve_item(request)
+
+        # Return new item with extra_info populated
+        return VocabularyItemCreate(
+            word_phrase=item.word_phrase,
+            translation=item.translation,
+            example_phrase=item.example_phrase,
+            extra_info=improvement.extra_info,
+            in_learn=item.in_learn,
+        )
 
     def delete_vocabulary_item(self, item_id: int, user_id: int = 1) -> bool:
         """Completely delete a vocabulary item from the database."""
