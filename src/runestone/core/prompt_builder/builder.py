@@ -214,3 +214,28 @@ class PromptBuilder:
             )
 
         return params
+
+    def build_vocabulary_batch_prompt(self, word_phrases: List[str]) -> str:
+        """
+        Build batch vocabulary improvement prompt for multiple items.
+
+        Args:
+            word_phrases: List of Swedish words/phrases (max 100)
+
+        Returns:
+            Complete batch improvement prompt string
+
+        Raises:
+            ValueError: If word_phrases list is empty or exceeds 100 items
+        """
+        if not word_phrases:
+            raise ValueError("word_phrases list cannot be empty")
+        if len(word_phrases) > 100:
+            raise ValueError(f"Batch size {len(word_phrases)} exceeds maximum of 100")
+
+        template = self._templates[PromptType.VOCABULARY_BATCH_IMPROVE]
+
+        # Format as numbered list for clarity
+        word_phrases_list = "\n".join(f"{i+1}. {wp}" for i, wp in enumerate(word_phrases))
+
+        return template.render(word_phrases_list=word_phrases_list)
