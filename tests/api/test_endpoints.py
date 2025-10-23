@@ -646,11 +646,17 @@ class TestSettingsDependency:
         # Verify response
         assert response.status_code == 200
 
-        # Verify service was called with enrich=True
+        # Verify service was called with correct arguments
         mock_vocabulary_service.save_vocabulary.assert_called_once()
         call_args = mock_vocabulary_service.save_vocabulary.call_args
         # Check positional args: call_args.args[0] is items, call_args.args[1] is enrich
-        assert call_args.args[1] is True
+        # Verify items parameter (converted to VocabularyItemCreate objects by Pydantic)
+        items_arg = call_args.args[0]
+        assert len(items_arg) == 1
+        assert items_arg[0].word_phrase == request_data["items"][0]["word_phrase"]
+        assert items_arg[0].translation == request_data["items"][0]["translation"]
+        assert items_arg[0].example_phrase == request_data["items"][0]["example_phrase"]
+        assert call_args.args[1] is True  # Verify enrich parameter
 
         # Clean up
         client.app.dependency_overrides.clear()
@@ -681,11 +687,17 @@ class TestSettingsDependency:
         # Verify response
         assert response.status_code == 200
 
-        # Verify service was called with enrich=False
+        # Verify service was called with correct arguments
         mock_vocabulary_service.save_vocabulary.assert_called_once()
         call_args = mock_vocabulary_service.save_vocabulary.call_args
         # Check positional args: call_args.args[0] is items, call_args.args[1] is enrich
-        assert call_args.args[1] is False
+        # Verify items parameter (converted to VocabularyItemCreate objects by Pydantic)
+        items_arg = call_args.args[0]
+        assert len(items_arg) == 1
+        assert items_arg[0].word_phrase == request_data["items"][0]["word_phrase"]
+        assert items_arg[0].translation == request_data["items"][0]["translation"]
+        assert items_arg[0].example_phrase == request_data["items"][0]["example_phrase"]
+        assert call_args.args[1] is False  # Verify enrich parameter
 
         # Clean up
         client.app.dependency_overrides.clear()
@@ -715,11 +727,17 @@ class TestSettingsDependency:
         # Verify response
         assert response.status_code == 200
 
-        # Verify service was called with enrich=True (default)
+        # Verify service was called with correct arguments (default enrich=True)
         mock_vocabulary_service.save_vocabulary.assert_called_once()
         call_args = mock_vocabulary_service.save_vocabulary.call_args
         # Check positional args: call_args.args[0] is items, call_args.args[1] is enrich (default True)
-        assert call_args.args[1] is True
+        # Verify items parameter (converted to VocabularyItemCreate objects by Pydantic)
+        items_arg = call_args.args[0]
+        assert len(items_arg) == 1
+        assert items_arg[0].word_phrase == request_data["items"][0]["word_phrase"]
+        assert items_arg[0].translation == request_data["items"][0]["translation"]
+        assert items_arg[0].example_phrase == request_data["items"][0]["example_phrase"]
+        assert call_args.args[1] is True  # Verify enrich parameter (default value)
 
         # Clean up
         client.app.dependency_overrides.clear()
