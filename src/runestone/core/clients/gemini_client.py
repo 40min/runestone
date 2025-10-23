@@ -182,7 +182,35 @@ class GeminiClient(BaseLLMClient):
         except Exception as e:
             raise LLMError(f"Vocabulary improvement failed: {str(e)}")
 
-    @property
+    def improve_vocabulary_batch(self, prompt: str) -> str:
+        """
+        Improve multiple vocabulary items using Gemini in batch.
+
+        Args:
+            prompt: Batch vocabulary improvement prompt
+
+        Returns:
+            JSON string with batch improvements
+
+        Raises:
+            LLMError: If batch improvement fails
+        """
+        try:
+            if self.verbose:
+                self.logger.info("Improving vocabulary batch with Gemini...")
+
+            response = self.analysis_model.generate_content(prompt)
+
+            if not response.text:
+                raise LLMError("No vocabulary batch improvement returned from Gemini")
+
+            return response.text.strip()
+
+        except google.api_core.exceptions.GoogleAPICallError as e:
+            raise LLMError(f"Gemini API call failed: {str(e)}")
+        except Exception as e:
+            raise LLMError(f"Vocabulary batch improvement failed: {str(e)}")
+
     def provider_name(self) -> str:
         """Return the name of the LLM provider."""
         return "gemini"

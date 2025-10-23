@@ -92,7 +92,22 @@ class BaseLLMClient(ABC):
         """
         pass
 
-    @property
+    @abstractmethod
+    def improve_vocabulary_batch(self, prompt: str) -> str:
+        """
+        Improve multiple vocabulary items in a single batch request.
+
+        Args:
+            prompt: Batch vocabulary improvement prompt containing list of words
+
+        Returns:
+            JSON string containing word_phrase -> extra_info mappings
+
+        Raises:
+            LLMError: If batch improvement fails
+        """
+        pass
+
     @abstractmethod
     def provider_name(self) -> str:
         """Return the name of the LLM provider."""

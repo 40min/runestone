@@ -230,7 +230,37 @@ class OpenAIClient(BaseLLMClient):
         except Exception as e:
             raise LLMError(f"Vocabulary improvement failed: {str(e)}")
 
-    @property
+    def improve_vocabulary_batch(self, prompt: str) -> str:
+        """
+        Improve multiple vocabulary items using OpenAI in batch.
+
+        Args:
+            prompt: Batch vocabulary improvement prompt
+
+        Returns:
+            JSON string with batch improvements
+
+        Raises:
+            LLMError: If batch improvement fails
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model=self._model_name,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=10000,
+                temperature=0.1,
+            )
+
+            if not response.choices or not response.choices[0].message.content:
+                raise LLMError(f"No vocabulary batch improvement returned from {self.provider_name}")
+
+            return response.choices[0].message.content.strip()
+
+        except APIError as e:
+            raise LLMError(f"OpenAI API error during vocabulary batch improvement: {str(e)}")
+        except Exception as e:
+            raise LLMError(f"Vocabulary batch improvement failed: {str(e)}")
+
     def provider_name(self) -> str:
         """Return the name of the LLM provider."""
         return "openai"
