@@ -93,3 +93,14 @@ class TestSettings:
         with patch.dict(os.environ, minimal_env, clear=True):
             with pytest.raises(ValidationError):
                 TestSettings()
+
+    def test_test_env_file_is_used(self):
+        """Test that tests use the .env.test file instead of .env."""
+        from runestone.config import settings
+
+        # These should be the test values from .env.test, not from .env
+        assert settings.llm_provider == "openai"
+        assert settings.openai_api_key == "test_openai_api_key_for_testing_only"
+        assert settings.gemini_api_key == "test_gemini_api_key_for_testing_only"
+        assert settings.allowed_origins == "http://localhost:5173,http://127.0.0.1:5173,http://frontend:3010"
+        assert settings.telegram_bot_token == "test_telegram_bot_token_for_testing_only"

@@ -5,6 +5,7 @@ This module provides a single source of truth for all application settings,
 loaded from environment variables using Pydantic BaseSettings.
 """
 
+import os
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -53,14 +54,14 @@ class Settings(BaseSettings):
     class Config:
         """Pydantic configuration."""
 
-        env_file = ".env"
+        env_file = os.getenv("ENV_FILE", ".env")
         env_file_encoding = "utf-8"
         case_sensitive = False
         extra = "ignore"
 
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from the specified env file
+load_dotenv(dotenv_path=os.getenv("ENV_FILE", ".env"))
 
 # Global settings instance
 settings = Settings()  # type: ignore
