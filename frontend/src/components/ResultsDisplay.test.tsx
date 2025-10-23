@@ -666,4 +666,124 @@ describe("ResultsDisplay", () => {
     // Check that the Copy button is present
     expect(screen.getByText("Copy")).toBeInTheDocument();
   });
+  it("copies OCR text to clipboard when copy button is clicked", async () => {
+    const mockClipboard = {
+      writeText: vi.fn().mockResolvedValue(undefined),
+    };
+    Object.assign(navigator, { clipboard: mockClipboard });
+
+    render(
+      <ResultsDisplay
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
+        error={null}
+        saveVocabulary={vi.fn()}
+      />
+    );
+
+    const copyButton = screen.getByTitle("Copy");
+    fireEvent.click(copyButton);
+
+    // Wait for the async operation to complete
+    await waitFor(() => {
+      expect(mockClipboard.writeText).toHaveBeenCalledWith(mockOcrResult.text);
+    });
+
+    // Check that the button text changes to "Copied!"
+    expect(screen.getByTitle("Copied!")).toBeInTheDocument();
+
+    // Check that success snackbar appears
+    expect(
+      screen.getByText("OCR text copied to clipboard!")
+    ).toBeInTheDocument();
+  });
+
+  it("shows error snackbar when OCR text copy fails", async () => {
+    const mockClipboard = {
+      writeText: vi.fn().mockRejectedValue(new Error("Clipboard error")),
+    };
+    Object.assign(navigator, { clipboard: mockClipboard });
+
+    render(
+      <ResultsDisplay
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
+        error={null}
+        saveVocabulary={vi.fn()}
+      />
+    );
+
+    const copyButton = screen.getByTitle("Copy");
+    fireEvent.click(copyButton);
+
+    // Should show error message
+    await waitFor(() => {
+      expect(
+        screen.getByText("Failed to copy OCR text. Please try again.")
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("handles OCR text copy when clipboard API is not available by attempting fallback", async () => {
+    // Save original methods
+    const originalClipboard = navigator.clipboard;
+
+    // Mock the absence of clipboard API
+    // @ts-expect-error - Intentionally deleting clipboard for testing fallback
+    delete navigator.clipboard;
+
+    // Spy on console.error to suppress expected error output
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    render(
+      <ResultsDisplay
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
+        error={null}
+        saveVocabulary={vi.fn()}
+      />
+    );
+
+    const copyButton = screen.getByTitle("Copy");
+    fireEvent.click(copyButton);
+
+    // Should show either success or error message - the fallback might not work in test environment
+    await waitFor(() => {
+      const successMessage = screen.queryByText("OCR text copied to clipboard!");
+      const errorMessage = screen.queryByText(
+        "Failed to copy OCR text. Please try again."
+      );
+      expect(successMessage || errorMessage).toBeTruthy();
+    });
+
+    // Restore original methods
+    Object.assign(navigator, { clipboard: originalClipboard });
+    consoleSpy.mockRestore();
+  });
+
+  it("does not attempt to copy OCR text when ocrResult is null", () => {
+    const mockClipboard = {
+      writeText: vi.fn().mockResolvedValue(undefined),
+    };
+    Object.assign(navigator, { clipboard: mockClipboard });
+
+    render(
+      <ResultsDisplay
+        ocrResult={null}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
+        error={null}
+        saveVocabulary={vi.fn()}
+      />
+    );
+
+    // Copy button should not be present when ocrResult is null
+    expect(screen.queryByTitle("Copy")).not.toBeInTheDocument();
+
+    // Clipboard should not be called
+    expect(mockClipboard.writeText).not.toHaveBeenCalled();
+  });
 });

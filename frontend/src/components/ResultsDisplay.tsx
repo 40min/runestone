@@ -225,6 +225,25 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     if (!ocrResult) return;
 
     try {
+      // Check if clipboard API is available
+      if (!navigator.clipboard) {
+        // Fallback for older browsers or non-HTTPS contexts
+        const textArea = document.createElement("textarea");
+        textArea.value = ocrResult.text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+        setCopyButtonText("Copied!");
+        setSnackbar({
+          open: true,
+          message: "OCR text copied to clipboard!",
+          severity: "success",
+        });
+        setTimeout(() => setCopyButtonText("Copy"), 2000);
+        return;
+      }
+
       await navigator.clipboard.writeText(ocrResult.text);
       setCopyButtonText("Copied!");
       setSnackbar({

@@ -11,11 +11,11 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from runestone.db.database import Base
-from runestone.db.repository import VocabularyRepository
-
 # Set test environment file before any imports
 os.environ["ENV_FILE"] = ".env.test"
+
+from runestone.db.database import Base  # noqa: E402
+from runestone.db.repository import VocabularyRepository  # noqa: E402
 
 """
 Shared fixtures and configuration for tests.
