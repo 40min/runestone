@@ -26,6 +26,10 @@ class TestVocabularyService:
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "openai"
         mock_llm_client = Mock()
+        # Set default mock response for LLM client to avoid TypeError
+        mock_llm_client.improve_vocabulary_item.return_value = (
+            '{"translation": "mock translation", "example_phrase": "mock example", "extra_info": "mock info"}'
+        )
         return VocabularyService(vocabulary_repository, mock_settings, mock_llm_client)
 
     def test_save_vocabulary_new(self, service, db_session):
