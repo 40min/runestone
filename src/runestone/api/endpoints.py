@@ -12,6 +12,8 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from runestone.api.mappers import convert_analysis_response, convert_ocr_response, convert_resource_request_to_analysis
 from runestone.api.schemas import (
     AnalysisRequest,
+    CheatsheetContent,
+    CheatsheetInfo,
     ContentAnalysis,
     ErrorResponse,
     OCRResult,
@@ -27,7 +29,8 @@ from runestone.api.schemas import (
 from runestone.core.exceptions import RunestoneError, VocabularyItemExists
 from runestone.core.logging_config import get_logger
 from runestone.core.processor import RunestoneProcessor
-from runestone.dependencies import get_runestone_processor, get_vocabulary_service
+from runestone.dependencies import get_grammar_service, get_runestone_processor, get_vocabulary_service
+from runestone.services.grammar_service import GrammarService
 from runestone.services.vocabulary_service import VocabularyService
 
 router = APIRouter()
@@ -504,3 +507,88 @@ async def health_check() -> dict:
     Returns basic service status information.
     """
     return {"status": "healthy", "service": "runestone-api"}
+
+
+# Grammar endpoints
+grammar_router = APIRouter(prefix="/grammar", tags=["grammar"])
+
+
+@grammar_router.get(
+    "/cheatsheets",
+    response_model=List[CheatsheetInfo],
+    responses={
+        200: {"description": "Cheatsheets retrieved successfully"},
+        500: {"model": ErrorResponse, "description": "Server error"},
+    },
+)
+async def list_cheatsheets(
+    service: Annotated[GrammarService, Depends(get_grammar_service)],
+) -> List[CheatsheetInfo]:
+    """
+    List all available grammar cheatsheets.
+
+    Returns a list of cheatsheet information including filename and title.
+
+    Args:
+        service: Grammar service
+
+    Returns:
+        List[CheatsheetInfo]: List of cheatsheet information
+    """
+    try:
+        cheatsheets = service.list_cheatsheets()
+        return [CheatsheetInfo(**cs) for cs in cheatsheets]
+    except Exception as e:
+        logger.error(f"Failed to list cheatsheets: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve cheatsheets",
+        )
+
+
+@grammar_router.get(
+    "/cheatsheets/{filename}",
+    response_model=CheatsheetContent,
+    responses={
+        200: {"description": "Cheatsheet content retrieved successfully"},
+        400: {"model": ErrorResponse, "description": "Invalid filename"},
+        404: {"model": ErrorResponse, "description": "Cheatsheet not found"},
+        500: {"model": ErrorResponse, "description": "Server error"},
+    },
+)
+async def get_cheatsheet_content(
+    filename: str,
+    service: Annotated[GrammarService, Depends(get_grammar_service)],
+) -> CheatsheetContent:
+    """
+    Get the content of a specific grammar cheatsheet.
+
+    Args:
+        filename: The filename of the cheatsheet (must end with .md)
+        service: Grammar service
+
+    Returns:
+        CheatsheetContent: The cheatsheet content
+
+    Raises:
+        HTTPException: For invalid filename or file not found
+    """
+    try:
+        content = service.get_cheatsheet_content(filename)
+        return CheatsheetContent(content=content)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error(f"Failed to get cheatsheet content for {filename}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve cheatsheet content",
+        )
