@@ -7,6 +7,7 @@ prompts using templates from the template registry.
 
 from typing import Dict, List, Optional
 
+from runestone.core.constants import VOCABULARY_BATCH_SIZE
 from runestone.core.prompt_builder.templates import TEMPLATE_REGISTRY, PromptTemplate
 from runestone.core.prompt_builder.types import ImprovementMode, PromptType
 
@@ -230,8 +231,8 @@ class PromptBuilder:
         """
         if not word_phrases:
             raise ValueError("word_phrases list cannot be empty")
-        if len(word_phrases) > 100:
-            raise ValueError(f"Batch size {len(word_phrases)} exceeds maximum of 100")
+        if len(word_phrases) > VOCABULARY_BATCH_SIZE:
+            raise ValueError(f"Batch size {len(word_phrases)} exceeds maximum of {VOCABULARY_BATCH_SIZE}")
 
         template = self._templates[PromptType.VOCABULARY_BATCH_IMPROVE]
 

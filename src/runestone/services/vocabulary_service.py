@@ -11,6 +11,7 @@ from ..api.schemas import Vocabulary as VocabularySchema
 from ..api.schemas import VocabularyImproveRequest, VocabularyImproveResponse, VocabularyItemCreate, VocabularyUpdate
 from ..config import Settings
 from ..core.clients.base import BaseLLMClient
+from ..core.constants import VOCABULARY_BATCH_SIZE
 from ..core.exceptions import VocabularyItemExists
 from ..core.logging_config import get_logger
 from ..core.prompt_builder.builder import PromptBuilder
@@ -213,15 +214,14 @@ class VocabularyService:
             return items
 
         enriched_items = []
-        BATCH_SIZE = 100
         total_enriched = 0
         total_failed = 0
 
         # Process in batches
-        for batch_start in range(0, len(items), BATCH_SIZE):
-            batch_end = min(batch_start + BATCH_SIZE, len(items))
+        for batch_start in range(0, len(items), VOCABULARY_BATCH_SIZE):
+            batch_end = min(batch_start + VOCABULARY_BATCH_SIZE, len(items))
             batch = items[batch_start:batch_end]
-            batch_num = batch_start // BATCH_SIZE + 1
+            batch_num = batch_start // VOCABULARY_BATCH_SIZE + 1
 
             try:
                 # Extract word_phrases for this batch

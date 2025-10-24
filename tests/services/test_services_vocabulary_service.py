@@ -670,6 +670,7 @@ class TestVocabularyService:
 
         # Verify item was not enriched - result is a dict with message
         assert result == {"message": "Vocabulary saved successfully"}
+        service.llm_client.improve_vocabulary_batch.assert_not_called()
 
     def test_enrich_vocabulary_items_partial_failure(self, service):
         """Test vocabulary items batch enrichment with partial failures."""
