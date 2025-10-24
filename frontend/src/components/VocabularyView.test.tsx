@@ -319,7 +319,7 @@ describe("VocabularyView", () => {
     expect(screen.getByText("Swedish")).toBeInTheDocument();
     expect(screen.getByText("English")).toBeInTheDocument();
     expect(screen.getByText("Example Phrase")).toBeInTheDocument();
-    expect(screen.getByText("Extra Info")).toBeInTheDocument();
+    expect(screen.getByText("Grammar Info")).toBeInTheDocument();
     expect(screen.getByText("In Learning")).toBeInTheDocument();
     expect(screen.getByText("Last Learned")).toBeInTheDocument();
     expect(screen.getByText("Saved")).toBeInTheDocument();

@@ -68,7 +68,10 @@ interface ResultsDisplayProps {
   analysisResult: ContentAnalysis | null;
   resourcesResult: string | null;
   error: string | null;
-  saveVocabulary: (vocabulary: VocabularyItem[], enrich: boolean) => Promise<void>;
+  saveVocabulary: (
+    vocabulary: VocabularyItem[],
+    enrich: boolean
+  ) => Promise<void>;
 }
 
 const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
@@ -146,13 +149,19 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
         textArea.value = vocabText;
         document.body.appendChild(textArea);
         textArea.select();
-        document.execCommand("copy");
+
+        const successful = document.execCommand("copy");
         document.body.removeChild(textArea);
-        setSnackbar({
-          open: true,
-          message: "Selected vocabulary copied to clipboard!",
-          severity: "success",
-        });
+
+        if (successful) {
+          setSnackbar({
+            open: true,
+            message: "Selected vocabulary copied to clipboard!",
+            severity: "success",
+          });
+        } else {
+          throw new Error("Fallback copy method failed");
+        }
         return;
       }
 
@@ -172,17 +181,16 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     }
   };
 
-  const handleCheckboxChange = (index: number) => {
+  const handleCheckboxChange = (index: number, checked: boolean) => {
     const newCheckedItems = [...checkedItems];
-    newCheckedItems[index] = !newCheckedItems[index];
+    newCheckedItems[index] = checked;
     setCheckedItems(newCheckedItems);
   };
 
-  const handleCheckAll = () => {
+  const handleCheckAll = (checked: boolean) => {
     if (!analysisResult) return;
-    const allChecked = checkedItems.every(Boolean);
     const newCheckedItems = new Array(analysisResult.vocabulary.length).fill(
-      !allChecked
+      checked
     );
     setCheckedItems(newCheckedItems);
   };
@@ -296,7 +304,9 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
             )}
             {ocrResult && (
               <Box>
-                <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+                <Box
+                  sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}
+                >
                   <IconButton
                     onClick={handleCopyOCRText}
                     sx={{
@@ -314,7 +324,9 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                   <Box
                     sx={{ color: "white" }}
                     className="markdown-content"
-                    dangerouslySetInnerHTML={{ __html: parseMarkdown(ocrResult.text) }}
+                    dangerouslySetInnerHTML={{
+                      __html: parseMarkdown(ocrResult.text),
+                    }}
                   />
                 </ContentCard>
               </Box>
@@ -430,41 +442,36 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                       Copy
                     </CustomButton>
                   </Box>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 2 }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                      mt: 2,
+                    }}
+                  >
                     <StyledCheckbox
+                      id="enrich-grammar-checkbox"
                       checked={enrichVocabulary}
-                      onChange={setEnrichVocabulary}
+                      onChange={(checked) => setEnrichVocabulary(checked)}
                     />
-                    <Typography sx={{ color: "white" }}>Enrich with grammar info</Typography>
+                    <Typography sx={{ color: "white" }}>
+                      Enrich with grammar info
+                    </Typography>
                   </Box>
                 </Box>
               )}
             </Box>
             {analysisResult && (
               <Box sx={{ mt: 4 }}>
-                <Box
-                  sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}
-                >
-                  <StyledCheckbox
-                    checked={checkedItems.every(Boolean)}
-                    indeterminate={
-                      checkedItems.some(Boolean) && !checkedItems.every(Boolean)
-                    }
-                    onChange={handleCheckAll}
-                  />
-                </Box>
                 <DataTable
+                  selectable={true}
+                  selectedItems={checkedItems}
+                  onSelectionChange={handleCheckboxChange}
+                  onSelectAll={handleCheckAll}
+                  masterCheckboxId="vocabulary-master-checkbox"
+                  rowCheckboxIdPrefix="vocabulary-item"
                   columns={[
-                    {
-                      key: "select",
-                      label: "Select",
-                      render: (_, __, index) => (
-                        <StyledCheckbox
-                          checked={checkedItems[index] || false}
-                          onChange={() => handleCheckboxChange(index)}
-                        />
-                      ),
-                    },
                     { key: "swedish", label: "Swedish" },
                     { key: "english", label: "English" },
                     {

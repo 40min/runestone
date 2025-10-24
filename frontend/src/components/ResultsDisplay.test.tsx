@@ -149,10 +149,12 @@ describe("ResultsDisplay", () => {
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    // Check all items first using the master checkbox
-    const checkboxes = screen.getAllByRole("checkbox");
-    const masterCheckbox = checkboxes[0];
-    fireEvent.click(masterCheckbox);
+    // Check all items by clicking individual checkboxes using IDs
+    const firstVocabCheckbox = document.getElementById("vocabulary-item-0");
+    const secondVocabCheckbox = document.getElementById("vocabulary-item-1");
+
+    fireEvent.click(firstVocabCheckbox!); // First vocabulary item (hej)
+    fireEvent.click(secondVocabCheckbox!); // Second vocabulary item (bra)
 
     const copyButton = screen.getByText("Copy");
     fireEvent.click(copyButton);
@@ -383,12 +385,18 @@ describe("ResultsDisplay", () => {
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    // Check that all checkboxes are unchecked by default
-    const checkboxes = screen.getAllByRole("checkbox");
-    expect(checkboxes).toHaveLength(3);
-    checkboxes.forEach((checkbox) => {
-      expect(checkbox).not.toBeChecked();
-    });
+    // Check that all checkboxes are unchecked by default using IDs
+    const enrichCheckbox = document.getElementById("enrich-grammar-checkbox");
+    const masterCheckbox = document.getElementById(
+      "vocabulary-master-checkbox"
+    );
+    const firstVocabCheckbox = document.getElementById("vocabulary-item-0");
+    const secondVocabCheckbox = document.getElementById("vocabulary-item-1");
+
+    expect(enrichCheckbox).toBeChecked();
+    expect(masterCheckbox).not.toBeChecked();
+    expect(firstVocabCheckbox).not.toBeChecked();
+    expect(secondVocabCheckbox).not.toBeChecked();
   });
 
   it("toggles individual checkbox when clicked", () => {
@@ -405,22 +413,21 @@ describe("ResultsDisplay", () => {
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    const checkboxes = screen.getAllByRole("checkbox");
-    const firstCheckbox = checkboxes[1]; // Skip master checkbox
+    const firstCheckbox = document.getElementById("vocabulary-item-0");
 
     // Initially unchecked
     expect(firstCheckbox).not.toBeChecked();
 
     // Click to check
-    fireEvent.click(firstCheckbox);
+    fireEvent.click(firstCheckbox!);
     expect(firstCheckbox).toBeChecked();
 
     // Click to uncheck again
-    fireEvent.click(firstCheckbox);
+    fireEvent.click(firstCheckbox!);
     expect(firstCheckbox).not.toBeChecked();
   });
 
-  it("handles check all/uncheck all functionality", () => {
+  it("handles check all/uncheck all functionality", async () => {
     render(
       <ResultsDisplay
         ocrResult={mockOcrResult}
@@ -434,24 +441,33 @@ describe("ResultsDisplay", () => {
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    const checkboxes = screen.getAllByRole("checkbox");
-    const masterCheckbox = checkboxes[0];
+    const masterCheckbox = document.getElementById(
+      "vocabulary-master-checkbox"
+    );
+    const firstVocabCheckbox = document.getElementById("vocabulary-item-0");
+    const secondVocabCheckbox = document.getElementById("vocabulary-item-1");
 
     // Initially all unchecked
-    checkboxes.forEach((checkbox) => {
-      expect(checkbox).not.toBeChecked();
+    expect(masterCheckbox).not.toBeChecked();
+    expect(firstVocabCheckbox).not.toBeChecked();
+    expect(secondVocabCheckbox).not.toBeChecked();
+
+    // Click master checkbox to check all vocabulary items
+    fireEvent.click(masterCheckbox!);
+
+    await waitFor(() => {
+      expect(firstVocabCheckbox).toBeChecked();
+      expect(secondVocabCheckbox).toBeChecked();
+      expect(masterCheckbox).toBeChecked();
     });
 
-    // Click master checkbox to check all
-    fireEvent.click(masterCheckbox);
-    checkboxes.forEach((checkbox) => {
-      expect(checkbox).toBeChecked();
-    });
+    // Click master checkbox to uncheck all vocabulary items again
+    fireEvent.click(masterCheckbox!);
 
-    // Click master checkbox to uncheck all again
-    fireEvent.click(masterCheckbox);
-    checkboxes.forEach((checkbox) => {
-      expect(checkbox).not.toBeChecked();
+    await waitFor(() => {
+      expect(firstVocabCheckbox).not.toBeChecked();
+      expect(secondVocabCheckbox).not.toBeChecked();
+      expect(masterCheckbox).not.toBeChecked();
     });
   });
 
@@ -474,10 +490,9 @@ describe("ResultsDisplay", () => {
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    const checkboxes = screen.getAllByRole("checkbox");
-
-    // Check the second item
-    fireEvent.click(checkboxes[2]);
+    // Click only the second vocabulary item using ID
+    const secondVocabCheckbox = document.getElementById("vocabulary-item-1");
+    fireEvent.click(secondVocabCheckbox!);
 
     const copyButton = screen.getByText("Copy");
     fireEvent.click(copyButton);
@@ -541,10 +556,12 @@ describe("ResultsDisplay", () => {
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    // Check all items first using the master checkbox
-    const checkboxes = screen.getAllByRole("checkbox");
-    const masterCheckbox = checkboxes[0];
-    fireEvent.click(masterCheckbox);
+    // Check all items by clicking individual checkboxes using IDs
+    const firstVocabCheckbox = document.getElementById("vocabulary-item-0");
+    const secondVocabCheckbox = document.getElementById("vocabulary-item-1");
+
+    fireEvent.click(firstVocabCheckbox!); // First vocabulary item
+    fireEvent.click(secondVocabCheckbox!); // Second vocabulary item
 
     const copyButton = screen.getByText("Copy");
     fireEvent.click(copyButton);
@@ -576,10 +593,12 @@ describe("ResultsDisplay", () => {
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    // Check all items first using the master checkbox
-    const checkboxes = screen.getAllByRole("checkbox");
-    const masterCheckbox = checkboxes[0];
-    fireEvent.click(masterCheckbox);
+    // Check all items by clicking individual checkboxes using IDs
+    const firstVocabCheckbox = document.getElementById("vocabulary-item-0");
+    const secondVocabCheckbox = document.getElementById("vocabulary-item-1");
+
+    fireEvent.click(firstVocabCheckbox!); // First vocabulary item
+    fireEvent.click(secondVocabCheckbox!); // Second vocabulary item
 
     const copyButton = screen.getByText("Copy");
     fireEvent.click(copyButton);
@@ -616,10 +635,12 @@ describe("ResultsDisplay", () => {
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    // Check all items first using the master checkbox
-    const checkboxes = screen.getAllByRole("checkbox");
-    const masterCheckbox = checkboxes[0];
-    fireEvent.click(masterCheckbox);
+    // Check all items by clicking individual checkboxes using IDs
+    const firstVocabCheckbox = document.getElementById("vocabulary-item-0");
+    const secondVocabCheckbox = document.getElementById("vocabulary-item-1");
+
+    fireEvent.click(firstVocabCheckbox!); // First vocabulary item
+    fireEvent.click(secondVocabCheckbox!); // Second vocabulary item
 
     const copyButton = screen.getByText("Copy");
     fireEvent.click(copyButton);
@@ -660,8 +681,15 @@ describe("ResultsDisplay", () => {
     expect(screen.getByText("bra")).toBeInTheDocument();
     expect(screen.getByText("good")).toBeInTheDocument();
 
-    const checkboxes = screen.getAllByRole("checkbox");
-    expect(checkboxes).toHaveLength(3);
+    // Verify all checkboxes exist by ID
+    expect(
+      document.getElementById("enrich-grammar-checkbox")
+    ).toBeInTheDocument();
+    expect(
+      document.getElementById("vocabulary-master-checkbox")
+    ).toBeInTheDocument();
+    expect(document.getElementById("vocabulary-item-0")).toBeInTheDocument();
+    expect(document.getElementById("vocabulary-item-1")).toBeInTheDocument();
 
     // Check that the Copy button is present
     expect(screen.getByText("Copy")).toBeInTheDocument();
@@ -752,7 +780,9 @@ describe("ResultsDisplay", () => {
 
     // Should show either success or error message - the fallback might not work in test environment
     await waitFor(() => {
-      const successMessage = screen.queryByText("OCR text copied to clipboard!");
+      const successMessage = screen.queryByText(
+        "OCR text copied to clipboard!"
+      );
       const errorMessage = screen.queryByText(
         "Failed to copy OCR text. Please try again."
       );
