@@ -7,3 +7,4 @@ export { default as StyledCheckbox } from './StyledCheckbox';
 export { default as TabNavigation } from './TabNavigation';
 export { default as DataTable } from './DataTable';
 export { default as SearchInput } from './SearchInput';
+export { default as MarkdownDisplay } from './MarkdownDisplay';

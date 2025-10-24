@@ -4,8 +4,8 @@ import { Diamond } from 'lucide-react';
 import { CustomButton } from './ui';
 
 interface HeaderProps {
-  currentView: 'analyzer' | 'vocabulary';
-  onViewChange: (view: 'analyzer' | 'vocabulary') => void;
+  currentView: 'analyzer' | 'vocabulary' | 'grammar';
+  onViewChange: (view: 'analyzer' | 'vocabulary' | 'grammar') => void;
 }
 
 const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
@@ -67,6 +67,20 @@ const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
         >
           Vocabulary
         </CustomButton>
+         <CustomButton
+           variant="secondary"
+           onClick={() => onViewChange('grammar')}
+           sx={{
+             color: currentView === 'grammar' ? 'var(--primary-color)' : '#9ca3af',
+             backgroundColor: currentView === 'grammar' ? 'rgba(147, 51, 234, 0.1)' : 'transparent',
+             '&:hover': {
+               color: 'white',
+               backgroundColor: currentView === 'grammar' ? 'rgba(147, 51, 234, 0.2)' : 'rgba(156, 163, 175, 0.1)',
+             },
+           }}
+         >
+           Grammar
+         </CustomButton>
       </Box>
       </Box>
     </header>

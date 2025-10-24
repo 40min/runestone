@@ -3,11 +3,13 @@ import FileUpload from './components/FileUpload';
 import ProcessingStatus from './components/ProcessingStatus';
 import ResultsDisplay from './components/ResultsDisplay';
 import VocabularyView from './components/VocabularyView';
+import GrammarView from './components/GrammarView';
 import useImageProcessing from './hooks/useImageProcessing';
 import { useState } from 'react';
 
 function App() {
-  const [currentView, setCurrentView] = useState<'analyzer' | 'vocabulary'>('analyzer');
+  const [currentView, setCurrentView] = useState<'analyzer' | 'vocabulary' | 'grammar'>('analyzer');
+
   const { processImage, saveVocabulary, ocrResult, analysisResult, resourcesResult, processingStep, error, isProcessing } = useImageProcessing();
 
   const handleFileSelect = async (file: File) => {
@@ -33,9 +35,11 @@ function App() {
 
                 {((ocrResult || analysisResult || resourcesResult) || error) && <ResultsDisplay ocrResult={ocrResult} analysisResult={analysisResult} resourcesResult={resourcesResult} error={error} saveVocabulary={saveVocabulary} />}
               </>
-            ) : (
-              <VocabularyView />
-            )}
+             ) : currentView === 'vocabulary' ? (
+               <VocabularyView />
+             ) : (
+               <GrammarView />
+             )}
           </div>
         </main>
       </div>

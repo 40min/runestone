@@ -147,3 +147,16 @@ class VocabularyImproveResponse(BaseModel):
     translation: Optional[str] = None
     example_phrase: Optional[str] = None
     extra_info: Optional[str] = None
+
+
+class CheatsheetInfo(BaseModel):
+    """Schema for cheatsheet information."""
+
+    filename: str
+    title: str
+
+
+class CheatsheetContent(BaseModel):
+    """Schema for cheatsheet content."""
+
+    content: str
