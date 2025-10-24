@@ -152,6 +152,64 @@ class ResponseParser:
             # Try fallback parsing for malformed responses
             return self._fallback_vocabulary_parse(response, mode)
 
+    def parse_vocabulary_batch_response(self, response: str) -> Dict[str, Optional[str]]:
+        """
+        Parse batch vocabulary improvement response.
+
+        Args:
+            response: Raw LLM response string (expected as JSON dict)
+
+        Returns:
+            Dictionary mapping word_phrase -> extra_info (or None if failed)
+
+        Raises:
+            ResponseParseError: If parsing completely fails
+        """
+        try:
+            data = self._parse_json(response)
+
+            # Validate it's a dictionary
+            if not isinstance(data, dict):
+                raise ResponseParseError("Batch response must be a JSON object/dictionary")
+
+            # Normalize: ensure all values are str or None
+            result = {}
+            for word_phrase, extra_info in data.items():
+                if extra_info is None or isinstance(extra_info, str):
+                    result[word_phrase] = extra_info
+                else:
+                    # Convert to string if possible
+                    result[word_phrase] = str(extra_info) if extra_info else None
+
+            return result
+
+        except json.JSONDecodeError:
+            # Try fallback parsing
+            return self._fallback_vocabulary_batch_parse(response)
+
+    def _fallback_vocabulary_batch_parse(self, response: str) -> Dict[str, Optional[str]]:
+        """
+        Fallback parser for malformed batch responses.
+
+        Attempts to extract key-value pairs using regex when JSON parsing fails.
+        """
+        result = {}
+
+        # Try to find quoted key-value pairs
+        # Pattern: "key": "value" or "key": null
+        pattern = r'"([^"]+)"\s*:\s*(?:"([^"]*)"|null)'
+        matches = re.finditer(pattern, response, re.DOTALL)
+
+        for match in matches:
+            word_phrase = match.group(1)
+            extra_info = match.group(2) if match.group(2) else None
+            result[word_phrase] = extra_info
+
+        if not result:
+            raise ResponseParseError("Could not extract any vocabulary data from malformed batch response")
+
+        return result
+
     def _parse_json(self, response: str) -> Dict[str, Any]:
         """
         Extract and parse JSON from response, handling markdown code blocks.

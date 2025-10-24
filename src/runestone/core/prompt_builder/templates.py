@@ -341,6 +341,42 @@ Return ONLY valid JSON, no additional text or formatting.
         ],
         metadata={"output_format": "json"},
     ),
+    PromptType.VOCABULARY_BATCH_IMPROVE: PromptTemplate(
+        name="Vocabulary Batch Improvement",
+        version="1.0.0",
+        content="""
+You are a Swedish language learning expert. Your task is to provide grammatical information (extra_info)
+for a batch of Swedish words/phrases.
+
+WORD/PHRASE LIST:
+{word_phrases_list}
+
+For each word/phrase, provide:
+- Grammatical information (word form, base form, en/ett classification for nouns, verb forms, etc.)
+- Keep it concise and human-readable
+- Focus on the most important details for language learners
+
+Return ONLY a JSON object where each key is the Swedish word/phrase and the value is the extra_info string:
+
+{{
+    "word_phrase_1": "grammatical details here",
+    "word_phrase_2": "grammatical details here"
+}}
+
+IMPORTANT:
+- Include ALL word_phrases from the input list
+- If you cannot determine extra_info for a word, use null as the value
+- Keep extra_info concise (e.g., "en-word, noun, base form: ord")
+- For nouns: include en/ett classification and base form if different
+- For verbs: include verb forms (infinitive, present, past, supine) if relevant
+- For adjectives: include comparative forms if relevant
+- Don't provide base form if word is already in base form
+
+Return ONLY valid JSON, no additional text or formatting.
+""",
+        parameters=["word_phrases_list"],
+        metadata={"output_format": "json"},
+    ),
 }
 
 

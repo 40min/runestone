@@ -596,42 +596,52 @@ class TestVocabularyService:
         assert result.example_phrase is None
         assert result.extra_info == "en-word, noun, base form: äpple"
 
-    def test_enrich_vocabulary_item_success(self, service):
-        """Test successful vocabulary item enrichment."""
-        # Mock LLM client to return extra_info
-        service.llm_client.improve_vocabulary_item.return_value = '{"extra_info": "en-word, noun, base form: äpple"}'
+    def test_enrich_vocabulary_items_success(self, service):
+        """Test successful vocabulary items batch enrichment."""
+        # Mock LLM client to return batch response
+        service.llm_client.improve_vocabulary_batch.return_value = """
+        {
+            "ett äpple": "en-word, noun, base form: äpple",
+            "en banan": "en-word, noun",
+            "vara": "verb, forms: vara, är, var, varit"
+        }
+        """
 
-        # Test item
-        item = VocabularyItemCreate(
-            word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple."
-        )
+        # Test items
+        items = [
+            VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple."),
+            VocabularyItemCreate(word_phrase="en banan", translation="a banana", example_phrase="Han äter en banan."),
+            VocabularyItemCreate(word_phrase="vara", translation="to be", example_phrase="Jag vill vara glad."),
+        ]
 
-        # Enrich the item
-        enriched_item = service._enrich_vocabulary_item(item)
+        # Enrich the items
+        enriched_items = service._enrich_vocabulary_items(items)
 
-        # Verify enrichment
-        assert enriched_item.extra_info == "en-word, noun, base form: äpple"
-        assert enriched_item.word_phrase == item.word_phrase
-        assert enriched_item.translation == item.translation
+        # Verify all enriched
+        assert len(enriched_items) == 3
+        assert enriched_items[0].extra_info == "en-word, noun, base form: äpple"
+        assert enriched_items[1].extra_info == "en-word, noun"
+        assert enriched_items[2].extra_info == "verb, forms: vara, är, var, varit"
 
-    def test_enrich_vocabulary_item_failure_raises_exception(self, service):
-        """Test that enrichment failure raises exception."""
-        # Mock LLM client to raise exception
-        service.llm_client.improve_vocabulary_item.side_effect = Exception("LLM error")
+    def test_enrich_vocabulary_items_llm_exception(self, service):
+        """Test vocabulary items enrichment when LLM raises exception."""
+        # Mock LLM to raise exception
+        service.llm_client.improve_vocabulary_batch.side_effect = Exception("LLM error")
 
-        # Test item
-        item = VocabularyItemCreate(
-            word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple."
-        )
+        items = [
+            VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple."),
+        ]
 
-        # Enrich should raise exception
-        with pytest.raises(Exception, match="LLM error"):
-            service._enrich_vocabulary_item(item)
+        # Should not raise, but return items without enrichment
+        enriched_items = service._enrich_vocabulary_items(items)
+
+        assert len(enriched_items) == 1
+        assert enriched_items[0].extra_info is None
 
     def test_save_vocabulary_items_with_enrichment(self, service, db_session):
         """Test saving vocabulary items with enrichment enabled."""
         # Mock LLM client
-        service.llm_client.improve_vocabulary_item.return_value = '{"extra_info": "en-word, noun"}'
+        service.llm_client.improve_vocabulary_batch.return_value = '{"ett äpple": "en-word, noun"}'
 
         items = [
             VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple.")
@@ -660,6 +670,90 @@ class TestVocabularyService:
 
         # Verify item was not enriched - result is a dict with message
         assert result == {"message": "Vocabulary saved successfully"}
+        service.llm_client.improve_vocabulary_batch.assert_not_called()
 
-        # Verify LLM was not called
+    def test_enrich_vocabulary_items_partial_failure(self, service):
+        """Test vocabulary items batch enrichment with partial failures."""
+        # Mock LLM with some null values
+        service.llm_client.improve_vocabulary_batch.return_value = """
+        {
+            "ett äpple": "en-word, noun, base form: äpple",
+            "en banan": null,
+            "vara": "verb, forms: vara, är, var, varit"
+        }
+        """
+
+        items = [
+            VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple."),
+            VocabularyItemCreate(word_phrase="en banan", translation="a banana", example_phrase="Han äter en banan."),
+            VocabularyItemCreate(word_phrase="vara", translation="to be", example_phrase="Jag vill vara glad."),
+        ]
+
+        enriched_items = service._enrich_vocabulary_items(items)
+
+        # Verify: 2 enriched, 1 failed
+        assert len(enriched_items) == 3
+        assert enriched_items[0].extra_info == "en-word, noun, base form: äpple"
+        assert enriched_items[1].extra_info is None  # Failed
+        assert enriched_items[2].extra_info == "verb, forms: vara, är, var, varit"
+
+    def test_enrich_vocabulary_items_large_batch(self, service):
+        """Test vocabulary items enrichment with >100 items (multiple batches)."""
+        # Create 150 items
+        items = [
+            VocabularyItemCreate(
+                word_phrase=f"word_{i}", translation=f"translation_{i}", example_phrase=f"Example {i}."
+            )
+            for i in range(150)
+        ]
+
+        # Mock LLM to return appropriate responses for each batch
+        def mock_batch_response(prompt):
+            # Extract word count from prompt
+            if "word_0" in prompt and "word_99" in prompt:
+                # First batch (0-99)
+                return "{" + ",".join(f'"word_{i}": "info_{i}"' for i in range(100)) + "}"
+            else:
+                # Second batch (100-149)
+                return "{" + ",".join(f'"word_{i}": "info_{i}"' for i in range(100, 150)) + "}"
+
+        service.llm_client.improve_vocabulary_batch.side_effect = mock_batch_response
+
+        enriched_items = service._enrich_vocabulary_items(items)
+
+        # Verify all 150 items enriched across 2 batches
+        assert len(enriched_items) == 150
+        assert all(item.extra_info for item in enriched_items)
+        assert service.llm_client.improve_vocabulary_batch.call_count == 2
+
+    def test_enrich_vocabulary_items_empty_list(self, service):
+        """Test vocabulary items enrichment with empty list."""
+        enriched_items = service._enrich_vocabulary_items([])
+
+        assert enriched_items == []
+        service.llm_client.improve_vocabulary_batch.assert_not_called()
+
+    def test_save_vocabulary_with_batch_enrichment(self, service, db_session):
+        """Test save_vocabulary using batch enrichment."""
+        # Mock batch enrichment
+        service.llm_client.improve_vocabulary_batch.return_value = """
+        {
+            "ett äpple": "en-word, noun, base form: äpple"
+        }
+        """
+
+        items = [
+            VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple.")
+        ]
+
+        result = service.save_vocabulary(items, user_id=1, enrich=True)
+        db_session.commit()
+
+        # Verify result
+        assert result == {"message": "Vocabulary saved successfully"}
+
+        # Verify item saved with enrichment
+        vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "ett äpple").first()
+        assert vocab is not None
+        assert vocab.extra_info == "en-word, noun, base form: äpple"
         service.llm_client.improve_vocabulary_item.assert_not_called()

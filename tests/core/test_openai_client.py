@@ -69,7 +69,7 @@ class TestOpenAIClient:
         with pytest.raises(LLMError) as exc_info:
             client.improve_vocabulary_item(self.prompt)
 
-        assert "OpenAI API error during vocabulary improvement: API error" in str(exc_info.value)
+        assert "openai API error during vocabulary improvement: API error" in str(exc_info.value)
 
     @patch("runestone.core.clients.openai_client.OpenAI")
     def test_improve_vocabulary_item_general_exception(self, mock_openai_class):
@@ -84,3 +84,69 @@ class TestOpenAIClient:
             client.improve_vocabulary_item(self.prompt)
 
         assert "Vocabulary improvement failed: Some other error" in str(exc_info.value)
+
+    @patch("runestone.core.clients.openai_client.OpenAI")
+    def test_improve_vocabulary_batch_success(self, mock_openai_class):
+        """Test successful vocabulary batch improvement."""
+        # Mock response
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message.content = "Batch improved vocabulary data"
+
+        mock_client = Mock()
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai_class.return_value = mock_client
+
+        client = OpenAIClient(api_key=self.api_key)
+        result = client.improve_vocabulary_batch(self.prompt)
+
+        assert result == "Batch improved vocabulary data"
+        mock_client.chat.completions.create.assert_called_once()
+
+    @patch("runestone.core.clients.openai_client.OpenAI")
+    def test_improve_vocabulary_batch_no_response(self, mock_openai_class):
+        """Test vocabulary batch improvement with no response text."""
+        # Mock response with no content
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message.content = None
+
+        mock_client = Mock()
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai_class.return_value = mock_client
+
+        client = OpenAIClient(api_key=self.api_key)
+
+        with pytest.raises(LLMError) as exc_info:
+            client.improve_vocabulary_batch(self.prompt)
+
+        assert f"No vocabulary batch improvement returned from {client.provider_name}" in str(exc_info.value)
+
+    @patch("runestone.core.clients.openai_client.OpenAI")
+    def test_improve_vocabulary_batch_api_error(self, mock_openai_class):
+        """Test vocabulary batch improvement with OpenAI API error."""
+        mock_client = Mock()
+        mock_request = Mock()
+        mock_client.chat.completions.create.side_effect = APIError("API error", request=mock_request, body=None)
+        mock_openai_class.return_value = mock_client
+
+        client = OpenAIClient(api_key=self.api_key)
+
+        with pytest.raises(LLMError) as exc_info:
+            client.improve_vocabulary_batch(self.prompt)
+
+        assert "openai API error during vocabulary batch improvement: API error" in str(exc_info.value)
+
+    @patch("runestone.core.clients.openai_client.OpenAI")
+    def test_improve_vocabulary_batch_general_exception(self, mock_openai_class):
+        """Test vocabulary batch improvement with general exception."""
+        mock_client = Mock()
+        mock_client.chat.completions.create.side_effect = ValueError("Some other error")
+        mock_openai_class.return_value = mock_client
+
+        client = OpenAIClient(api_key=self.api_key)
+
+        with pytest.raises(LLMError) as exc_info:
+            client.improve_vocabulary_batch(self.prompt)
+
+        assert "Vocabulary batch improvement failed: Some other error" in str(exc_info.value)

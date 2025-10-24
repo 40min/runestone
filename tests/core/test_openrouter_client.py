@@ -114,7 +114,7 @@ class TestOpenRouterClient:
         with pytest.raises(LLMError) as exc_info:
             client.improve_vocabulary_item(self.prompt)
 
-        assert "OpenAI API error during vocabulary improvement: API error" in str(exc_info.value)
+        assert "openrouter API error during vocabulary improvement: API error" in str(exc_info.value)
 
     @patch("runestone.core.clients.openrouter_client.OpenAI")
     def test_instantiation_with_model_name(self, mock_openai_class):

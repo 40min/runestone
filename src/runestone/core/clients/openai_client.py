@@ -199,6 +199,40 @@ class OpenAIClient(BaseLLMClient):
         except Exception as e:
             raise LLMError(f"Resource search failed: {str(e)}")
 
+    def _improve_vocabulary(self, prompt: str, no_response_msg: str, api_error_msg: str, general_error_msg: str) -> str:
+        """
+        Private helper method for vocabulary improvement operations.
+
+        Args:
+            prompt: The prompt to send to OpenAI
+            no_response_msg: Error message for no response case
+            api_error_msg: Error message prefix for API errors
+            general_error_msg: Error message prefix for general exceptions
+
+        Returns:
+            Improved vocabulary data as string
+
+        Raises:
+            LLMError: If the operation fails
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model=self._model_name,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=10000,
+                temperature=0.1,
+            )
+
+            if not response.choices or not response.choices[0].message.content:
+                raise LLMError(no_response_msg)
+
+            return response.choices[0].message.content.strip()
+
+        except APIError as e:
+            raise LLMError(f"{api_error_msg}: {str(e)}")
+        except Exception as e:
+            raise LLMError(f"{general_error_msg}: {str(e)}")
+
     def improve_vocabulary_item(self, prompt: str) -> str:
         """
         Improve a vocabulary item using OpenAI.
@@ -212,23 +246,32 @@ class OpenAIClient(BaseLLMClient):
         Raises:
             LLMError: If vocabulary improvement fails
         """
-        try:
-            response = self.client.chat.completions.create(
-                model=self._model_name,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=10000,
-                temperature=0.1,
-            )
+        return self._improve_vocabulary(
+            prompt,
+            f"No vocabulary improvement returned from {self.provider_name}",
+            f"{self.provider_name} API error during vocabulary improvement",
+            "Vocabulary improvement failed",
+        )
 
-            if not response.choices or not response.choices[0].message.content:
-                raise LLMError(f"No vocabulary improvement returned from {self.provider_name}")
+    def improve_vocabulary_batch(self, prompt: str) -> str:
+        """
+        Improve multiple vocabulary items using OpenAI in batch.
 
-            return response.choices[0].message.content.strip()
+        Args:
+            prompt: Batch vocabulary improvement prompt
 
-        except APIError as e:
-            raise LLMError(f"OpenAI API error during vocabulary improvement: {str(e)}")
-        except Exception as e:
-            raise LLMError(f"Vocabulary improvement failed: {str(e)}")
+        Returns:
+            JSON string with batch improvements
+
+        Raises:
+            LLMError: If batch improvement fails
+        """
+        return self._improve_vocabulary(
+            prompt,
+            f"No vocabulary batch improvement returned from {self.provider_name}",
+            f"{self.provider_name} API error during vocabulary batch improvement",
+            "Vocabulary batch improvement failed",
+        )
 
     @property
     def provider_name(self) -> str:
