@@ -8,6 +8,7 @@ interface StyledCheckboxProps {
   label?: string;
   indeterminate?: boolean;
   sx?: SxProps<Theme>;
+  id?: string;
 }
 
 const StyledCheckbox: React.FC<StyledCheckboxProps> = ({
@@ -16,9 +17,11 @@ const StyledCheckbox: React.FC<StyledCheckboxProps> = ({
   label,
   indeterminate = false,
   sx = {},
+  id,
 }) => {
   const checkbox = (
     <Checkbox
+      id={id}
       checked={checked}
       indeterminate={indeterminate}
       onChange={(e) => onChange(e.target.checked)}

@@ -26,7 +26,8 @@ interface DataTableProps<T> {
   onSelectionChange?: (index: number, checked: boolean) => void;
   onSelectAll?: (checked: boolean) => void;
   onRowClick?: (row: T, index: number) => void;
-
+  masterCheckboxId?: string;
+  rowCheckboxIdPrefix?: string;
   sx?: SxProps<Theme>;
 }
 
@@ -38,7 +39,8 @@ function DataTable<T extends Record<string, unknown>>({
   onSelectionChange,
   onSelectAll,
   onRowClick,
-
+  masterCheckboxId,
+  rowCheckboxIdPrefix,
   sx = {},
 }: DataTableProps<T>) {
   const allSelected = selectedItems.length > 0 && selectedItems.every(Boolean);
@@ -71,6 +73,7 @@ function DataTable<T extends Record<string, unknown>>({
                 }}
               >
                 <StyledCheckbox
+                  id={masterCheckboxId}
                   checked={allSelected}
                   indeterminate={someSelected}
                   onChange={handleSelectAll}
@@ -108,6 +111,7 @@ function DataTable<T extends Record<string, unknown>>({
               {selectable && (
                 <TableCell sx={{ borderBottom: '1px solid #4d3c63' }}>
                   <StyledCheckbox
+                    id={rowCheckboxIdPrefix ? `${rowCheckboxIdPrefix}-${index}` : undefined}
                     checked={selectedItems[index] || false}
                     onChange={(checked) => onSelectionChange?.(index, checked)}
                   />
