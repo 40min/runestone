@@ -9,6 +9,7 @@ import os
 import re
 from pathlib import Path
 from typing import List
+from urllib.parse import unquote
 
 from ..core.logging_config import get_logger
 
@@ -54,6 +55,9 @@ class GrammarService:
 
     def get_cheatsheet_content(self, filepath: str) -> str:
         """Validate filepath and return cheatsheet content."""
+        # Validate filepath (raises ValueError if invalid)
+        self._validate_filename(filepath)
+
         # Construct the full path
         cheatsheets_path = Path(self.cheatsheets_dir)
         file_path = cheatsheets_path / filepath
@@ -73,20 +77,38 @@ class GrammarService:
         # Read and return content
         return resolved_file.read_text(encoding="utf-8")
 
-    def _is_valid_filename(self, filename: str) -> bool:
-        """Validate filename to prevent path traversal attacks."""
-        if not filename or not filename.endswith(".md"):
-            return False
+    def _validate_filename(self, filepath: str) -> None:
+        """
+        Validate filepath to prevent path traversal and other security issues.
 
-        # Check for path traversal characters
-        if "/" in filename or "\\" in filename or ".." in filename:
-            return False
+        Supports both simple filenames and paths with subdirectories (e.g., 'category/file.md').
 
-        # Check for other potentially dangerous characters using regex whitelist
-        if re.search(r"[^a-zA-Z0-9._-]", filename):
-            return False
+        Raises:
+            ValueError: If filepath is invalid or has security issues.
+        """
+        # Decode URL-encoded characters to catch encoded path traversal attempts
+        decoded_filepath = unquote(filepath)
 
-        return True
+        # Check for security issues first (these should raise "Invalid file path")
+        has_security_issue = (
+            not filepath  # empty
+            or ".." in filepath
+            or "\\" in filepath  # path traversal
+            or ".." in decoded_filepath
+            or "\\" in decoded_filepath  # encoded path traversal
+            or filepath.endswith("/")
+            or filepath.endswith("\\")  # trailing slashes
+            or decoded_filepath.endswith("/")
+            or decoded_filepath.endswith("\\")  # encoded trailing slashes
+            or re.search(r'[<>:"|?*]', filepath)  # dangerous characters
+        )
+
+        if has_security_issue:
+            raise ValueError(f"Invalid file path: {filepath}")
+
+        # Must end with .md extension
+        if not filepath.endswith(".md"):
+            raise ValueError(f"File not found or invalid: {filepath}")
 
     def _filename_to_title(self, filename: str) -> str:
         """Convert filename to human-readable title."""

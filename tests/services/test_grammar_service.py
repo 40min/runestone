@@ -234,7 +234,7 @@ class TestGrammarService:
         for filename, expected_title in test_cases:
             assert service._filename_to_title(filename) == expected_title
 
-    def test_is_valid_filename(self, service):
+    def test_validate_filename(self, service):
         """Test filename validation."""
         valid_filenames = [
             "file.md",
@@ -245,11 +245,11 @@ class TestGrammarService:
         ]
 
         for filename in valid_filenames:
-            assert service._is_valid_filename(filename) is True
+            # Should not raise any exception
+            service._validate_filename(filename)
 
-        invalid_filenames = [
+        invalid_filenames_security = [
             "",  # Empty
-            "file.txt",  # Wrong extension
             "file.md/",  # Path separator
             "file.md\\",  # Backslash
             "file.md..",  # Double dot
@@ -263,8 +263,17 @@ class TestGrammarService:
             "file*.md",
         ]
 
-        for filename in invalid_filenames:
-            assert service._is_valid_filename(filename) is False
+        for filename in invalid_filenames_security:
+            with pytest.raises(ValueError, match="Invalid file path"):
+                service._validate_filename(filename)
+
+        invalid_filenames_extension = [
+            "file.txt",  # Wrong extension
+        ]
+
+        for filename in invalid_filenames_extension:
+            with pytest.raises(ValueError, match="File not found or invalid"):
+                service._validate_filename(filename)
 
     def test_list_cheatsheets_with_categories(self, service, temp_cheatsheets_with_categories):
         """Test listing cheatsheets with category support."""
