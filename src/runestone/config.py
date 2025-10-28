@@ -32,6 +32,7 @@ class Settings(BaseSettings):
 
     # Application Settings
     allowed_origins: str
+    cheatsheets_dir: str = "cheatsheets"
     # Telegram Configuration
     telegram_bot_token: str
     verbose: bool = False

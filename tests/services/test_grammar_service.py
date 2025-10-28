@@ -20,7 +20,7 @@ class TestGrammarService:
     @pytest.fixture
     def service(self):
         """Create a GrammarService instance."""
-        return GrammarService()
+        return GrammarService("cheatsheets")
 
     @pytest.fixture
     def temp_cheatsheets_dir(self):

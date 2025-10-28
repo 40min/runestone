@@ -1,11 +1,24 @@
-import React, { useState } from 'react';
-import { Box, Typography, List, ListItem, ListItemButton, ListItemText } from '@mui/material';
-import { ContentCard, LoadingSpinner, ErrorAlert, SectionTitle } from './ui';
-import MarkdownDisplay from './ui/MarkdownDisplay';
-import useGrammar from '../hooks/useGrammar';
+import React, { useState } from "react";
+import {
+  Box,
+  Typography,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
+} from "@mui/material";
+import { ContentCard, LoadingSpinner, ErrorAlert, SectionTitle } from "./ui";
+import MarkdownDisplay from "./ui/MarkdownDisplay";
+import useGrammar from "../hooks/useGrammar";
 
 const GrammarView: React.FC = () => {
-  const { cheatsheets, selectedCheatsheet, loading, error, fetchCheatsheetContent } = useGrammar();
+  const {
+    cheatsheets,
+    selectedCheatsheet,
+    loading,
+    error,
+    fetchCheatsheetContent,
+  } = useGrammar();
   const [selectedFilename, setSelectedFilename] = useState<string | null>(null);
 
   const handleCheatsheetClick = async (filename: string) => {
@@ -23,11 +36,14 @@ const GrammarView: React.FC = () => {
         </Box>
       )}
 
-      <Box sx={{ display: 'flex', gap: 4, mt: 6 }}>
+      <Box sx={{ display: "flex", gap: 4, mt: 6 }}>
         {/* Left Pane: Cheatsheet List */}
-        <Box sx={{ flex: 1, maxWidth: '300px' }}>
+        <Box sx={{ flex: 1, maxWidth: "300px" }}>
           <ContentCard>
-            <Typography variant="h6" sx={{ color: 'var(--primary-color)', mb: 2 }}>
+            <Typography
+              variant="h6"
+              sx={{ color: "var(--primary-color)", mb: 2 }}
+            >
               Available Cheatsheets
             </Typography>
             {loading && cheatsheets.length === 0 ? (
@@ -40,10 +56,10 @@ const GrammarView: React.FC = () => {
                       onClick={() => handleCheatsheetClick(cheatsheet.filename)}
                       selected={selectedFilename === cheatsheet.filename}
                       sx={{
-                        '&.Mui-selected': {
-                          backgroundColor: 'rgba(147, 51, 234, 0.1)',
-                          '&:hover': {
-                            backgroundColor: 'rgba(147, 51, 234, 0.2)',
+                        "&.Mui-selected": {
+                          backgroundColor: "rgba(147, 51, 234, 0.1)",
+                          "&:hover": {
+                            backgroundColor: "rgba(147, 51, 234, 0.2)",
                           },
                         },
                       }}
@@ -51,8 +67,8 @@ const GrammarView: React.FC = () => {
                       <ListItemText
                         primary={cheatsheet.title}
                         sx={{
-                          '& .MuiListItemText-primary': {
-                            color: 'white',
+                          "& .MuiListItemText-primary": {
+                            color: "white",
                           },
                         }}
                       />
@@ -72,15 +88,19 @@ const GrammarView: React.FC = () => {
                 {loading ? (
                   <LoadingSpinner />
                 ) : selectedCheatsheet ? (
-                  <MarkdownDisplay markdownContent={selectedCheatsheet.content} />
+                  <MarkdownDisplay
+                    markdownContent={selectedCheatsheet.content}
+                  />
                 ) : (
-                  <Typography sx={{ color: '#9ca3af' }}>
-                    Failed to load cheatsheet content.
-                  </Typography>
+                  !error && (
+                    <Typography sx={{ color: "#9ca3af" }}>
+                      Failed to load cheatsheet content.
+                    </Typography>
+                  )
                 )}
               </>
             ) : (
-              <Typography sx={{ color: '#9ca3af' }}>
+              <Typography sx={{ color: "#9ca3af" }}>
                 Select a cheatsheet from the list to view its content.
               </Typography>
             )}

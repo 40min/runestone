@@ -160,11 +160,14 @@ def get_runestone_processor(
     return RunestoneProcessor(settings, ocr_processor, content_analyzer)
 
 
-def get_grammar_service() -> GrammarService:
+def get_grammar_service(settings: Annotated[Settings, Depends(get_settings)]) -> GrammarService:
     """
     Dependency injection for grammar service.
+
+    Args:
+        settings: Application settings from dependency injection
 
     Returns:
         GrammarService: Service instance for grammar operations
     """
-    return GrammarService()
+    return GrammarService(settings.cheatsheets_dir)
