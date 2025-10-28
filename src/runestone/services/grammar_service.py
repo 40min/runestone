@@ -56,7 +56,7 @@ class GrammarService:
     def get_cheatsheet_content(self, filepath: str) -> str:
         """Validate filepath and return cheatsheet content."""
         # Validate filepath (raises ValueError if invalid)
-        self._validate_filename(filepath)
+        self._validate_filepath(filepath)
 
         # Construct the full path
         cheatsheets_path = Path(self.cheatsheets_dir)
@@ -79,7 +79,7 @@ class GrammarService:
         # Read and return content
         return resolved_file.read_text(encoding="utf-8")
 
-    def _validate_filename(self, filepath: str) -> None:
+    def _validate_filepath(self, filepath: str) -> None:
         """
         Validate filepath to prevent path traversal and other security issues.
 
