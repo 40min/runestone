@@ -38,6 +38,7 @@ RUN groupadd -r runestone && useradd -r -g runestone runestone
 COPY --from=builder /tmp/.local /app/.local
 
 # Copy source code, resources, cheatsheets, and alembic configuration
+# Including cheatsheets for grammar reference
 COPY src/ ./src/
 COPY res/ ./res/
 COPY cheatsheets/ ./cheatsheets/

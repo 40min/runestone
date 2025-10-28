@@ -6,6 +6,7 @@ for grammar-related operations.
 """
 
 import os
+import re
 from typing import List
 
 from ..core.logging_config import get_logger
@@ -67,9 +68,8 @@ class GrammarService:
         if "/" in filename or "\\" in filename or ".." in filename:
             return False
 
-        # Check for other potentially dangerous characters
-        dangerous_chars = ["<", ">", ":", '"', "|", "?", "*"]
-        if any(char in filename for char in dangerous_chars):
+        # Check for other potentially dangerous characters using regex whitelist
+        if re.search(r"[^a-zA-Z0-9._-]", filename):
             return False
 
         return True
