@@ -7,6 +7,7 @@ for grammar-related operations.
 
 import os
 import re
+from pathlib import Path
 from typing import List
 
 from ..core.logging_config import get_logger
@@ -27,14 +28,29 @@ class GrammarService:
             return []
 
         files = []
-        for filename in os.listdir(self.cheatsheets_dir):
-            if filename.endswith(".md"):
+        cheatsheets_path = Path(self.cheatsheets_dir)
+
+        for item in cheatsheets_path.iterdir():
+            # Scan one level of subdirectories
+            if item.is_dir():
+                category = item.name
+                for sub_item in item.iterdir():
+                    if self._is_suitable_cheatsheet(sub_item):
+                        relative_path = sub_item.relative_to(cheatsheets_path).as_posix()
+                        title = self._filename_to_title(sub_item.name)
+                        files.append({"filename": relative_path, "title": title, "category": category})
+            # Scan root directory
+            elif self._is_suitable_cheatsheet(item):
+                filename = item.name
                 title = self._filename_to_title(filename)
-                files.append({"filename": filename, "title": title})
+                files.append({"filename": filename, "title": title, "category": "General"})
 
         # Sort by title
         files.sort(key=lambda x: x["title"])
         return files
+
+    def _is_suitable_cheatsheet(self, file_item: Path) -> bool:
+        return file_item.is_file() and file_item.name.endswith(".md")
 
     def get_cheatsheet_content(self, filename: str) -> str:
         """Validate filename and return cheatsheet content."""

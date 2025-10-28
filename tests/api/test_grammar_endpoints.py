@@ -39,9 +39,9 @@ class TestGrammarEndpoints:
         # Mock service
         mock_service = Mock()
         mock_service.list_cheatsheets.return_value = [
-            {"filename": "adjectiv-komparation.md", "title": "Adjectiv Komparation"},
-            {"filename": "objectspronomen.md", "title": "Objectspronomen"},
-            {"filename": "presens-perfect.md", "title": "Presens Perfect"},
+            {"filename": "adjectiv-komparation.md", "title": "Adjectiv Komparation", "category": "General"},
+            {"filename": "objectspronomen.md", "title": "Objectspronomen", "category": "General"},
+            {"filename": "presens-perfect.md", "title": "Presens Perfect", "category": "General"},
         ]
 
         # Override the dependency
