@@ -91,6 +91,8 @@ describe("GrammarView", () => {
       fetchCheatsheetContent: vi.fn(),
     });
 
+    render(<GrammarView />);
+
     // Categories should be rendered with bold text
     const adjectivesCategory = screen.getByText("adjectives");
     const verbsCategory = screen.getByText("verbs");
@@ -128,6 +130,8 @@ describe("GrammarView", () => {
       fetchCheatsheets: vi.fn(),
       fetchCheatsheetContent: vi.fn(),
     });
+
+    render(<GrammarView />);
 
     // Initially, cheatsheets should be collapsed
     const adjectivCheatsheet = screen.getByText("Adjectiv Komparation");
@@ -178,6 +182,8 @@ describe("GrammarView", () => {
       fetchCheatsheets: vi.fn(),
       fetchCheatsheetContent: vi.fn(),
     });
+
+    render(<GrammarView />);
 
     // Expand verbs category
     const verbsCategory = screen.getByText("verbs");

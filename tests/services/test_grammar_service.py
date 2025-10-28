@@ -5,7 +5,6 @@ This module contains tests for the grammar service.
 """
 
 import os
-import re
 import tempfile
 from unittest.mock import patch
 
@@ -46,6 +45,48 @@ class TestGrammarService:
             non_md_file = os.path.join(temp_dir, "not_a_cheatsheet.txt")
             with open(non_md_file, "w", encoding="utf-8") as f:
                 f.write("This should be ignored")
+
+            yield temp_dir
+
+    @pytest.fixture
+    def temp_cheatsheets_with_categories(self):
+        """Create a temporary directory with categorized cheatsheet files."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create root level files (General category)
+            root_files = {
+                "pronunciation.md": "# Pronunciation\n\nContent about pronunciation.",
+                "swedish_adjectives.md": "# Swedish Adjectives\n\nContent about adjectives.",
+            }
+
+            for filename, content in root_files.items():
+                filepath = os.path.join(temp_dir, filename)
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(content)
+
+            # Create subdirectories with categorized files
+            verbs_dir = os.path.join(temp_dir, "verbs")
+            os.makedirs(verbs_dir, exist_ok=True)
+            verbs_files = {
+                "hjalpverb.md": "# Hjalpverb\n\nContent about auxiliary verbs.",
+                "verb-forms.md": "# Verb Forms\n\nContent about verb forms.",
+            }
+
+            for filename, content in verbs_files.items():
+                filepath = os.path.join(verbs_dir, filename)
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(content)
+
+            # Create adjectives subdirectory
+            adj_dir = os.path.join(temp_dir, "adjectives")
+            os.makedirs(adj_dir, exist_ok=True)
+            adj_files = {
+                "adjectiv-komparation.md": "# Adjectiv Komparation\n\nContent about adjective comparison.",
+            }
+
+            for filename, content in adj_files.items():
+                filepath = os.path.join(adj_dir, filename)
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(content)
 
             yield temp_dir
 
@@ -128,7 +169,7 @@ class TestGrammarService:
     def test_get_cheatsheet_content_file_not_found(self, service, temp_cheatsheets_dir):
         """Test getting content of non-existent file."""
         with patch.object(service, "cheatsheets_dir", temp_cheatsheets_dir):
-            with pytest.raises(FileNotFoundError, match="Cheatsheet 'nonexistent.md' not found"):
+            with pytest.raises(ValueError, match="File not found or invalid: nonexistent.md"):
                 service.get_cheatsheet_content("nonexistent.md")
 
     def test_get_cheatsheet_content_invalid_filename_path_traversal(self, service, temp_cheatsheets_dir):
@@ -151,13 +192,13 @@ class TestGrammarService:
             ]
 
             for filename in invalid_filenames:
-                with pytest.raises(ValueError, match=f"Invalid filename: {re.escape(filename)}"):
+                with pytest.raises(ValueError, match="Invalid file path"):
                     service.get_cheatsheet_content(filename)
 
     def test_get_cheatsheet_content_invalid_filename_no_md(self, service, temp_cheatsheets_dir):
         """Test that non-.md files are rejected."""
         with patch.object(service, "cheatsheets_dir", temp_cheatsheets_dir):
-            with pytest.raises(ValueError, match="Invalid filename: file.txt"):
+            with pytest.raises(ValueError, match="File not found or invalid: file.txt"):
                 service.get_cheatsheet_content("file.txt")
 
     def test_get_cheatsheet_content_invalid_filepath_dangerous_chars(self, service, temp_cheatsheets_dir):
@@ -175,7 +216,7 @@ class TestGrammarService:
             ]
 
             for filepath in dangerous_filepaths:
-                with pytest.raises(ValueError, match=f"Invalid file path: {re.escape(filepath)}"):
+                with pytest.raises(ValueError, match="Invalid file path"):
                     service.get_cheatsheet_content(filepath)
 
     def test_filename_to_title_conversion(self, service):
@@ -224,3 +265,59 @@ class TestGrammarService:
 
         for filename in invalid_filenames:
             assert service._is_valid_filename(filename) is False
+
+    def test_list_cheatsheets_with_categories(self, service, temp_cheatsheets_with_categories):
+        """Test listing cheatsheets with category support."""
+        with patch.object(service, "cheatsheets_dir", temp_cheatsheets_with_categories):
+            result = service.list_cheatsheets()
+
+        # Should return 5 cheatsheets total
+        assert len(result) == 5
+
+        # Check that all have category field
+        for item in result:
+            assert "filename" in item
+            assert "title" in item
+            assert "category" in item
+
+        # Check General category items (root level)
+        general_items = [item for item in result if item["category"] == "General"]
+        assert len(general_items) == 2
+        general_filenames = [item["filename"] for item in general_items]
+        assert "pronunciation.md" in general_filenames
+        assert "swedish_adjectives.md" in general_filenames
+
+        # Check verbs category items
+        verbs_items = [item for item in result if item["category"] == "verbs"]
+        assert len(verbs_items) == 2
+        verbs_filenames = [item["filename"] for item in verbs_items]
+        assert "verbs/hjalpverb.md" in verbs_filenames
+        assert "verbs/verb-forms.md" in verbs_filenames
+
+        # Check adjectives category items
+        adj_items = [item for item in result if item["category"] == "adjectives"]
+        assert len(adj_items) == 1
+        assert adj_items[0]["filename"] == "adjectives/adjectiv-komparation.md"
+
+    def test_list_cheatsheets_category_field_present(self, service, temp_cheatsheets_dir):
+        """Test that category field is always present in results."""
+        with patch.object(service, "cheatsheets_dir", temp_cheatsheets_dir):
+            result = service.list_cheatsheets()
+
+        # All items should have General category (root level files)
+        for item in result:
+            assert item["category"] == "General"
+
+    def test_get_cheatsheet_content_with_category_path(self, service, temp_cheatsheets_with_categories):
+        """Test getting cheatsheet content from categorized subdirectory."""
+        with patch.object(service, "cheatsheets_dir", temp_cheatsheets_with_categories):
+            content = service.get_cheatsheet_content("verbs/hjalpverb.md")
+
+        assert content == "# Hjalpverb\n\nContent about auxiliary verbs."
+
+    def test_get_cheatsheet_content_path_traversal_with_categories(self, service, temp_cheatsheets_with_categories):
+        """Test that path traversal is prevented even with category paths."""
+        with patch.object(service, "cheatsheets_dir", temp_cheatsheets_with_categories):
+            # Try to escape from verbs directory
+            with pytest.raises(ValueError, match="Invalid file path"):
+                service.get_cheatsheet_content("verbs/../../../etc/passwd.md")
