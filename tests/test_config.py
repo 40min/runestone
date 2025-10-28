@@ -18,7 +18,6 @@ class TestSettings:
             llm_provider: str
             openai_api_key: str
             openai_model: str
-            gemini_api_key: str
             verbose: bool = False
             allowed_origins: str
             database_url: str = "sqlite:///./state/runestone.db"
@@ -37,7 +36,6 @@ class TestSettings:
             "LLM_PROVIDER": "openai",
             "OPENAI_API_KEY": "test-key",
             "OPENAI_MODEL": "gpt-4o-mini",
-            "GEMINI_API_KEY": "test-gemini-key",
             "VERBOSE": "true",
             "ALLOWED_ORIGINS": "http://localhost:3000",
             "DATABASE_URL": "sqlite:///./test.db",
@@ -54,7 +52,6 @@ class TestSettings:
             assert test_settings.llm_provider == "openai"
             assert test_settings.openai_api_key == "test-key"
             assert test_settings.openai_model == "gpt-4o-mini"
-            assert test_settings.gemini_api_key == "test-gemini-key"
             assert test_settings.verbose is True
             assert test_settings.allowed_origins == "http://localhost:3000"
             assert test_settings.database_url == "sqlite:///./test.db"
@@ -71,7 +68,6 @@ class TestSettings:
             llm_provider: str
             openai_api_key: str
             openai_model: str
-            gemini_api_key: str
             verbose: bool = False
             allowed_origins: str
             database_url: str = "sqlite:///./state/runestone.db"
@@ -101,6 +97,5 @@ class TestSettings:
         # These should be the test values from .env.test, not from .env
         assert settings.llm_provider == "openai"
         assert settings.openai_api_key == "test_openai_api_key_for_testing_only"
-        assert settings.gemini_api_key == "test_gemini_api_key_for_testing_only"
         assert settings.allowed_origins == "http://localhost:5173,http://127.0.0.1:5173,http://frontend:3010"
         assert settings.telegram_bot_token == "test_telegram_bot_token_for_testing_only"

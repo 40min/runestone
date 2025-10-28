@@ -11,7 +11,6 @@ import pytest
 
 from runestone.config import Settings
 from runestone.core.clients.factory import (
-    _create_gemini_client,
     _create_openai_client,
     _create_openrouter_client,
     create_llm_client,
@@ -26,7 +25,7 @@ class TestFactory:
     def test_get_available_providers(self):
         """Test get_available_providers returns correct list."""
         providers = get_available_providers()
-        assert providers == ["openai", "gemini", "openrouter"]
+        assert providers == ["openai", "openrouter"]
 
     @patch("runestone.core.clients.factory.OpenAIClient")
     def test_create_openai_client_success(self, mock_openai_client):
@@ -65,30 +64,6 @@ class TestFactory:
 
         assert result == mock_client
         mock_openai_client.assert_called_once_with(api_key="test-key", verbose=False)
-
-    @patch("runestone.core.clients.factory.GeminiClient")
-    def test_create_gemini_client_success(self, mock_gemini_client):
-        """Test successful Gemini client creation."""
-        mock_settings = Mock(spec=Settings)
-        mock_settings.gemini_api_key = "test-key"
-        mock_settings.verbose = True
-        mock_client = Mock()
-        mock_gemini_client.return_value = mock_client
-
-        result = _create_gemini_client(mock_settings)
-
-        assert result == mock_client
-        mock_gemini_client.assert_called_once_with(api_key="test-key", verbose=True)
-
-    def test_create_gemini_client_missing_api_key(self):
-        """Test Gemini client creation fails with missing API key."""
-        mock_settings = Mock(spec=Settings)
-        mock_settings.gemini_api_key = ""
-
-        with pytest.raises(APIKeyError) as exc_info:
-            _create_gemini_client(mock_settings)
-
-        assert "Gemini API key is required" in str(exc_info.value)
 
     @patch("runestone.core.clients.factory.OpenRouterClient")
     def test_create_openrouter_client_success(self, mock_openrouter_client):
@@ -144,20 +119,6 @@ class TestFactory:
         assert result == mock_client
         mock_create_openai.assert_called_once_with(settings=mock_settings, model_name="gpt-4")
 
-    @patch("runestone.core.clients.factory._create_gemini_client")
-    def test_create_llm_client_gemini(self, mock_create_gemini):
-        """Test create_llm_client for Gemini provider."""
-        mock_settings = Mock(spec=Settings)
-        mock_settings.llm_provider = "gemini"
-        mock_settings.llm_model_name = None  # Gemini doesn't use model_name
-        mock_client = Mock()
-        mock_create_gemini.return_value = mock_client
-
-        result = create_llm_client(mock_settings)
-
-        assert result == mock_client
-        mock_create_gemini.assert_called_once_with(settings=mock_settings)
-
     @patch("runestone.core.clients.factory._create_openrouter_client")
     def test_create_llm_client_openrouter(self, mock_create_openrouter):
         """Test create_llm_client for OpenRouter provider."""
@@ -176,7 +137,7 @@ class TestFactory:
     def test_create_llm_client_with_provider_override(self, mock_create_openai):
         """Test create_llm_client with provider parameter override."""
         mock_settings = Mock(spec=Settings)
-        mock_settings.llm_provider = "gemini"  # Default provider
+        mock_settings.llm_provider = "openrouter"  # Default provider
         mock_settings.llm_model_name = "gpt-4"
         mock_client = Mock()
         mock_create_openai.return_value = mock_client

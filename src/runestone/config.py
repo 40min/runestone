@@ -22,9 +22,6 @@ class Settings(BaseSettings):
     # OpenAI Configuration
     openai_api_key: str
 
-    # Gemini Configuration
-    gemini_api_key: str
-
     # OpenRouter Configuration
     openrouter_api_key: Optional[str] = None
     ocr_llm_provider: Optional[str] = None

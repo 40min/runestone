@@ -55,10 +55,10 @@ A command-line tool and web application for analyzing Swedish textbook pages usi
    export OPENAI_API_KEY="your-openai-api-key"
    ```
 
-   **For Gemini:**
+   **For Openrouter:**
    ```bash
-   export GEMINI_API_KEY="your-gemini-api-key"
-   export LLM_PROVIDER="gemini"
+   export GEMINI_API_KEY="your-openrouter-api-key"
+   export LLM_PROVIDER="openrouter"
    ```
 
    **Or copy and configure the environment file:**
@@ -78,8 +78,8 @@ A command-line tool and web application for analyzing Swedish textbook pages usi
 # Process a Swedish textbook page image (uses OpenAI by default)
 runestone process /path/to/textbook_page.jpg
 
-# Use Gemini provider
-runestone process --provider gemini /path/to/textbook_page.jpg
+# Use Openrouter provider
+runestone process --provider openrouter /path/to/textbook_page.jpg
 
 # Use specific OpenAI model
 runestone process --provider openai --model gpt-4o-mini /path/to/textbook_page.jpg
@@ -406,7 +406,7 @@ tests/
 ### Environment Variables
 
 **Provider Selection:**
-- `LLM_PROVIDER`: Choose your LLM provider (`openai` or `gemini`, default: `openai`)
+- `LLM_PROVIDER`: Choose your LLM provider (`openai` or `openrouter`, default: `openai`)
 
 **OpenAI Configuration:**
 - `OPENAI_API_KEY`: Your OpenAI API key (required for OpenAI provider)
@@ -513,7 +513,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- [Google Gemini](https://deepmind.google/technologies/gemini/) for vision and language processing
 - [Rich](https://github.com/Textualize/rich) for beautiful terminal output
 - [Click](https://click.palletsprojects.com/) for CLI framework
 - The Swedish language learning community

@@ -32,7 +32,7 @@ class TestDependencyProviders:
         "provider, key_attr, key_value",
         [
             ("openai", "openai_api_key", "openai-test-key"),
-            ("gemini", "gemini_api_key", "gemini-test-key"),
+            ("openrouter", "openrouter_api_key", "openrouter-test-key"),
         ],
     )
     @patch("runestone.dependencies.create_llm_client")
@@ -105,8 +105,8 @@ class TestDependencyProviders:
         """Test get_ocr_llm_client passes correct provider and model_name."""
         # Setup
         mock_settings = Mock(spec=Settings)
-        mock_settings.ocr_llm_provider = "gemini"
-        mock_settings.ocr_llm_model_name = "gemini-1.5-pro"
+        mock_settings.ocr_llm_provider = "openrouter"
+        mock_settings.ocr_llm_model_name = "anthropic/claude-3.5-sonnet"
         mock_main_client = Mock(spec=BaseLLMClient)
         mock_ocr_client = Mock(spec=BaseLLMClient)
         mock_create_client.return_value = mock_ocr_client
@@ -118,8 +118,8 @@ class TestDependencyProviders:
         assert result == mock_ocr_client
         mock_create_client.assert_called_once_with(
             settings=mock_settings,
-            provider="gemini",
-            model_name="gemini-1.5-pro",
+            provider="openrouter",
+            model_name="anthropic/claude-3.5-sonnet",
         )
 
     @patch("runestone.dependencies.OCRProcessor")

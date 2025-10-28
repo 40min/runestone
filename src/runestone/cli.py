@@ -75,8 +75,8 @@ def cli():
 @click.option(
     "--model",
     help=(
-        "Model name to use. If not provided, uses provider defaults (gpt-4o-mini for OpenAI, "
-        "gemini-2.0-flash-exp for Gemini). Can be set via OPENAI_MODEL environment "
+        "Model name to use. If not provided, uses provider defaults (gpt-4o-mini for OpenAI, ). "
+        "Can be set via OPENAI_MODEL environment "
         "variable for OpenAI."
     ),
 )
@@ -108,8 +108,7 @@ def process(
 
     Examples:
         runestone process /path/to/textbook_page.jpg
-        runestone process --provider openai /path/to/textbook_page.jpg
-        runestone process --provider gemini --api-key YOUR_KEY /path/to/textbook_page.jpg # noqa: E501
+        runestone process --provider openai --api-key YOUR_KEY /path/to/textbook_page.jpg # noqa: E501
     """
     try:
         # Determine provider (use CLI arg, then settings, then default)
@@ -120,8 +119,8 @@ def process(
         if not api_key:
             if provider == "openai":
                 api_key = settings.openai_api_key
-            elif provider == "gemini":
-                api_key = settings.gemini_api_key
+            elif provider == "openrouter":
+                api_key = settings.openai_api_key
 
         # Validate API key is available
         if not api_key:
@@ -131,10 +130,10 @@ def process(
                     "Set OPENAI_API_KEY environment variable or use --api-key option."
                 )
                 sys.exit(1)
-            elif provider == "gemini":
+            elif provider == "openrouter":
                 console.print(
-                    "[red]Error:[/red] Gemini API key is required. "
-                    "Set GEMINI_API_KEY environment variable or use --api-key option."
+                    "[red]Error:[/red] Openrouter API key is required. "
+                    "Set OPENROUTER_API_KEY environment variable or use --api-key option."
                 )
                 sys.exit(1)
 
@@ -156,8 +155,6 @@ def process(
             # Temporarily override the appropriate API key in settings
             if provider == "openai":
                 settings.openai_api_key = api_key
-            elif provider == "gemini":
-                settings.gemini_api_key = api_key
             elif provider == "openrouter":
                 settings.openrouter_api_key = api_key
 

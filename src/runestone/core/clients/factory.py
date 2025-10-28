@@ -9,7 +9,6 @@ from typing import Optional
 
 from runestone.config import Settings
 from runestone.core.clients.base import BaseLLMClient
-from runestone.core.clients.gemini_client import GeminiClient
 from runestone.core.clients.openai_client import OpenAIClient
 from runestone.core.clients.openrouter_client import OpenRouterClient
 from runestone.core.exceptions import APIKeyError
@@ -24,14 +23,6 @@ def _create_openai_client(settings: Settings, model_name: str | None) -> OpenAIC
         return OpenAIClient(api_key=api_key, model_name=model_name, verbose=settings.verbose)
     else:
         return OpenAIClient(api_key=api_key, verbose=settings.verbose)
-
-
-def _create_gemini_client(settings: Settings) -> GeminiClient:
-    """Create a Gemini LLM client."""
-    api_key = settings.gemini_api_key
-    if not api_key:
-        raise APIKeyError("Gemini API key is required. Set GEMINI_API_KEY environment variable.")
-    return GeminiClient(api_key=api_key, verbose=settings.verbose)
 
 
 def _create_openrouter_client(settings: Settings, model_name: str | None) -> OpenRouterClient:
@@ -77,8 +68,6 @@ def create_llm_client(
     # Create client based on provider
     if effective_provider == "openai":
         return _create_openai_client(settings=settings, model_name=effective_model_name)
-    elif effective_provider == "gemini":
-        return _create_gemini_client(settings=settings)
     elif effective_provider == "openrouter":
         return _create_openrouter_client(settings=settings, model_name=effective_model_name)
 
@@ -93,4 +82,4 @@ def get_available_providers() -> list[str]:
     Returns:
         List of supported provider names
     """
-    return ["openai", "gemini", "openrouter"]
+    return ["openai", "openrouter"]
