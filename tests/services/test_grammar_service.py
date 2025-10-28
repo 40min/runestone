@@ -169,7 +169,7 @@ class TestGrammarService:
     def test_get_cheatsheet_content_file_not_found(self, service, temp_cheatsheets_dir):
         """Test getting content of non-existent file."""
         with patch.object(service, "cheatsheets_dir", temp_cheatsheets_dir):
-            with pytest.raises(ValueError, match="File not found or invalid: nonexistent.md"):
+            with pytest.raises(FileNotFoundError, match="Cheatsheet not found: nonexistent.md"):
                 service.get_cheatsheet_content("nonexistent.md")
 
     def test_get_cheatsheet_content_invalid_filename_path_traversal(self, service, temp_cheatsheets_dir):
@@ -198,7 +198,7 @@ class TestGrammarService:
     def test_get_cheatsheet_content_invalid_filename_no_md(self, service, temp_cheatsheets_dir):
         """Test that non-.md files are rejected."""
         with patch.object(service, "cheatsheets_dir", temp_cheatsheets_dir):
-            with pytest.raises(ValueError, match="File not found or invalid: file.txt"):
+            with pytest.raises(ValueError, match=r"Invalid file extension: file.txt. Only \.md files are allowed."):
                 service.get_cheatsheet_content("file.txt")
 
     def test_get_cheatsheet_content_invalid_filepath_dangerous_chars(self, service, temp_cheatsheets_dir):
@@ -234,7 +234,7 @@ class TestGrammarService:
         for filename, expected_title in test_cases:
             assert service._filename_to_title(filename) == expected_title
 
-    def test_validate_filename(self, service):
+    def test_validate_filepath(self, service):
         """Test filename validation."""
         valid_filenames = [
             "file.md",
@@ -246,7 +246,7 @@ class TestGrammarService:
 
         for filename in valid_filenames:
             # Should not raise any exception
-            service._validate_filename(filename)
+            service._validate_filepath(filename)
 
         invalid_filenames_security = [
             "",  # Empty
@@ -265,15 +265,17 @@ class TestGrammarService:
 
         for filename in invalid_filenames_security:
             with pytest.raises(ValueError, match="Invalid file path"):
-                service._validate_filename(filename)
+                service._validate_filepath(filename)
 
         invalid_filenames_extension = [
             "file.txt",  # Wrong extension
+            "file.jpg",
+            "file.pdf",
         ]
 
         for filename in invalid_filenames_extension:
-            with pytest.raises(ValueError, match="File not found or invalid"):
-                service._validate_filename(filename)
+            with pytest.raises(ValueError, match=r"Invalid file extension: .*?\. Only \.md files are allowed\."):
+                service._validate_filepath(filename)
 
     def test_list_cheatsheets_with_categories(self, service, temp_cheatsheets_with_categories):
         """Test listing cheatsheets with category support."""

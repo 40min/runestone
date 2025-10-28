@@ -73,8 +73,6 @@ class GrammarService:
         # Check file exists and has .md extension
         if not resolved_file.exists():
             raise FileNotFoundError(f"Cheatsheet not found: {filepath}")
-        if resolved_file.suffix != ".md":
-            raise ValueError(f"File not found or invalid: {filepath}")
 
         # Read and return content
         return resolved_file.read_text(encoding="utf-8")
@@ -108,9 +106,9 @@ class GrammarService:
         if has_security_issue:
             raise ValueError(f"Invalid file path: {filepath}")
 
-        # Must end with .md extension
+        # Must end with .md extension for valid cheatsheet files
         if not filepath.endswith(".md"):
-            raise ValueError(f"File not found or invalid: {filepath}")
+            raise ValueError(f"Invalid file extension: {filepath}. Only .md files are allowed.")
 
     def _filename_to_title(self, filename: str) -> str:
         """Convert filename to human-readable title."""
