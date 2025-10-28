@@ -547,17 +547,17 @@ async def list_cheatsheets(
 
 
 @grammar_router.get(
-    "/cheatsheets/{filename}",
+    "/cheatsheets/{filepath:path}",
     response_model=CheatsheetContent,
     responses={
         200: {"description": "Cheatsheet content retrieved successfully"},
-        400: {"model": ErrorResponse, "description": "Invalid filename"},
+        400: {"model": ErrorResponse, "description": "Invalid filepath"},
         404: {"model": ErrorResponse, "description": "Cheatsheet not found"},
         500: {"model": ErrorResponse, "description": "Server error"},
     },
 )
 async def get_cheatsheet_content(
-    filename: str,
+    filepath: str,
     service: Annotated[GrammarService, Depends(get_grammar_service)],
 ) -> CheatsheetContent:
     """
@@ -574,7 +574,7 @@ async def get_cheatsheet_content(
         HTTPException: For invalid filename or file not found
     """
     try:
-        content = service.get_cheatsheet_content(filename)
+        content = service.get_cheatsheet_content(filepath)
         return CheatsheetContent(content=content)
     except ValueError as e:
         raise HTTPException(
@@ -587,7 +587,7 @@ async def get_cheatsheet_content(
             detail=str(e),
         )
     except Exception as e:
-        logger.error(f"Failed to get cheatsheet content for {filename}: {e}")
+        logger.error(f"Failed to get cheatsheet content for {filepath}: {e}")
         raise HTTPException(
             status_code=500,
             detail="Failed to retrieve cheatsheet content",

@@ -13,8 +13,8 @@ describe('useGrammar', () => {
 
   it('should fetch cheatsheets on mount', async () => {
     const mockCheatsheets = [
-      { filename: 'test1.md', title: 'Test 1' },
-      { filename: 'test2.md', title: 'Test 2' },
+      { filename: 'test1.md', title: 'Test 1', category: 'General' },
+      { filename: 'test2.md', title: 'Test 2', category: 'Verbs' },
     ];
 
     mockFetch.mockResolvedValueOnce({

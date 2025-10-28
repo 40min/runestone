@@ -52,23 +52,26 @@ class GrammarService:
     def _is_suitable_cheatsheet(self, file_item: Path) -> bool:
         return file_item.is_file() and file_item.name.endswith(".md")
 
-    def get_cheatsheet_content(self, filename: str) -> str:
-        """Validate filename and return cheatsheet content."""
-        # Validate filename to prevent path traversal attacks
-        if not self._is_valid_filename(filename):
-            raise ValueError(f"Invalid filename: {filename}")
+    def get_cheatsheet_content(self, filepath: str) -> str:
+        """Validate filepath and return cheatsheet content."""
+        # Construct the full path
+        cheatsheets_path = Path(self.cheatsheets_dir)
+        file_path = cheatsheets_path / filepath
 
-        filepath = os.path.join(self.cheatsheets_dir, filename)
+        # Resolve to absolute paths
+        resolved_file = file_path.resolve()
+        resolved_base = cheatsheets_path.resolve()
 
-        try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                content = f.read()
-            return content
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Cheatsheet '{filename}' not found")
-        except Exception as e:
-            self.logger.error(f"Error reading cheatsheet '{filename}': {e}")
-            raise
+        # Security check: ensure file is within cheatsheets directory
+        if not resolved_file.is_relative_to(resolved_base):
+            raise ValueError(f"Invalid file path: {filepath}")
+
+        # Check file exists and has .md extension
+        if not resolved_file.exists() or resolved_file.suffix != ".md":
+            raise ValueError(f"File not found or invalid: {filepath}")
+
+        # Read and return content
+        return resolved_file.read_text(encoding="utf-8")
 
     def _is_valid_filename(self, filename: str) -> bool:
         """Validate filename to prevent path traversal attacks."""

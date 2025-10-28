@@ -111,6 +111,20 @@ class TestGrammarService:
 
         assert content == "# Adjectiv Komparation\n\nContent about adjective comparison."
 
+    def test_get_cheatsheet_content_nested_path_success(self, service, temp_cheatsheets_dir):
+        """Test getting cheatsheet content with nested paths."""
+        # Create a subdirectory with a file
+        verbs_dir = os.path.join(temp_cheatsheets_dir, "verbs")
+        os.makedirs(verbs_dir, exist_ok=True)
+        nested_file = os.path.join(verbs_dir, "hjalpverb.md")
+        with open(nested_file, "w", encoding="utf-8") as f:
+            f.write("# Hjalpverb\n\nContent about auxiliary verbs.")
+
+        with patch.object(service, "cheatsheets_dir", temp_cheatsheets_dir):
+            content = service.get_cheatsheet_content("verbs/hjalpverb.md")
+
+        assert content == "# Hjalpverb\n\nContent about auxiliary verbs."
+
     def test_get_cheatsheet_content_file_not_found(self, service, temp_cheatsheets_dir):
         """Test getting content of non-existent file."""
         with patch.object(service, "cheatsheets_dir", temp_cheatsheets_dir):
@@ -146,10 +160,10 @@ class TestGrammarService:
             with pytest.raises(ValueError, match="Invalid filename: file.txt"):
                 service.get_cheatsheet_content("file.txt")
 
-    def test_get_cheatsheet_content_invalid_filename_dangerous_chars(self, service, temp_cheatsheets_dir):
-        """Test that filenames with dangerous characters are rejected."""
+    def test_get_cheatsheet_content_invalid_filepath_dangerous_chars(self, service, temp_cheatsheets_dir):
+        """Test that filepaths with dangerous characters are rejected."""
         with patch.object(service, "cheatsheets_dir", temp_cheatsheets_dir):
-            dangerous_filenames = [
+            dangerous_filepaths = [
                 "file<>.md",
                 "file>.md",
                 "file<.md",
@@ -160,9 +174,9 @@ class TestGrammarService:
                 "file*.md",
             ]
 
-            for filename in dangerous_filenames:
-                with pytest.raises(ValueError, match=f"Invalid filename: {re.escape(filename)}"):
-                    service.get_cheatsheet_content(filename)
+            for filepath in dangerous_filepaths:
+                with pytest.raises(ValueError, match=f"Invalid file path: {re.escape(filepath)}"):
+                    service.get_cheatsheet_content(filepath)
 
     def test_filename_to_title_conversion(self, service):
         """Test filename to title conversion."""
