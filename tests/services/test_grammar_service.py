@@ -128,6 +128,12 @@ class TestGrammarService:
                 "file.md/",
                 "file.md\\",
                 "file.md..",
+                # URL-encoded path traversal sequences
+                "file.md%2F..%2Fother.md",  # file.md/../other.md
+                "file.md%5C..%5Cother.md",  # file.md\..\other.md (backslash encoded)
+                "file.md%2E%2E%2Fother.md",  # file.md../other.md (double dot encoded)
+                "file.md%2F%2E%2E%2Fother.md",  # file.md/.. /other.md
+                "%2E%2E%2Fetc%2Fpasswd.md",  # ../../etc/passwd.md
             ]
 
             for filename in invalid_filenames:
