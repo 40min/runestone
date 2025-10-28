@@ -2,11 +2,11 @@
 
 ## 1 Verb: presens perfekt
 
-### FOKUS
-
-Han har lyssnat mycket på svensk musik.
+Han **har** lyssnat mycket på svensk musik.
 
 Har + supinum = presens perfekt.
+
+### FOKUS
 
 | Grupp | Imperativ | Supinum |
 | --- | --- | --- |
@@ -15,7 +15,7 @@ Har + supinum = presens perfekt.
 | 2b   | köp!     | köpt    |
 | 3    | bo!      | bott    |
 | 4a IT-verb (SPECIAL) | skriv! | skrivit |
-| 4b (SPECIAL) | gå!    | gått    |
+| 4b (SPECIAL) | gå! | gått |
 
 Grupp 1 och 2: supinum = imperativ + t.
 Grupp 3: supinum = imperativ + tt.

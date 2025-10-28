@@ -37,9 +37,11 @@ RUN groupadd -r runestone && useradd -r -g runestone runestone
 # Copy Python dependencies from builder stage
 COPY --from=builder /tmp/.local /app/.local
 
-# Copy source code, resources, and alembic configuration
+# Copy source code, resources, cheatsheets, and alembic configuration
+# Including cheatsheets for grammar reference
 COPY src/ ./src/
 COPY res/ ./res/
+COPY cheatsheets/ ./cheatsheets/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 

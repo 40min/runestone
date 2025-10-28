@@ -19,6 +19,7 @@ from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.database import get_db
 from runestone.db.repository import VocabularyRepository
+from runestone.services.grammar_service import GrammarService
 from runestone.services.vocabulary_service import VocabularyService
 
 
@@ -157,3 +158,16 @@ def get_runestone_processor(
         RunestoneProcessor: Runestone processor instance
     """
     return RunestoneProcessor(settings, ocr_processor, content_analyzer)
+
+
+def get_grammar_service(settings: Annotated[Settings, Depends(get_settings)]) -> GrammarService:
+    """
+    Dependency injection for grammar service.
+
+    Args:
+        settings: Application settings from dependency injection
+
+    Returns:
+        GrammarService: Service instance for grammar operations
+    """
+    return GrammarService(settings.cheatsheets_dir)
