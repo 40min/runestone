@@ -6,7 +6,9 @@ import {
   ListItem,
   ListItemButton,
   ListItemText,
+  Collapse,
 } from "@mui/material";
+import { ExpandMore, ExpandLess } from "@mui/icons-material";
 import { ContentCard, LoadingSpinner, ErrorAlert, SectionTitle } from "./ui";
 import MarkdownDisplay from "./ui/MarkdownDisplay";
 import useGrammar from "../hooks/useGrammar";
@@ -20,10 +22,44 @@ const GrammarView: React.FC = () => {
     fetchCheatsheetContent,
   } = useGrammar();
   const [selectedFilename, setSelectedFilename] = useState<string | null>(null);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
+    new Set()
+  );
 
   const handleCheatsheetClick = async (filename: string) => {
     setSelectedFilename(filename);
     await fetchCheatsheetContent(filename);
+  };
+
+  // Group cheatsheets by category
+  const { generalCheatsheets, categorizedCheatsheets } = cheatsheets.reduce<{
+    generalCheatsheets: typeof cheatsheets;
+    categorizedCheatsheets: Record<string, typeof cheatsheets>;
+  }>(
+    (acc, cheatsheet) => {
+      if (cheatsheet.category === "General") {
+        acc.generalCheatsheets.push(cheatsheet);
+      } else {
+        if (!acc.categorizedCheatsheets[cheatsheet.category]) {
+          acc.categorizedCheatsheets[cheatsheet.category] = [];
+        }
+        acc.categorizedCheatsheets[cheatsheet.category].push(cheatsheet);
+      }
+      return acc;
+    },
+    { generalCheatsheets: [], categorizedCheatsheets: {} }
+  );
+
+  const toggleCategory = (category: string) => {
+    setExpandedCategories((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(category)) {
+        newSet.delete(category);
+      } else {
+        newSet.add(category);
+      }
+      return newSet;
+    });
   };
 
   return (
@@ -50,7 +86,8 @@ const GrammarView: React.FC = () => {
               <LoadingSpinner />
             ) : (
               <List>
-                {cheatsheets.map((cheatsheet) => (
+                {/* Render General cheatsheets at root level */}
+                {generalCheatsheets.map((cheatsheet) => (
                   <ListItem key={cheatsheet.filename} disablePadding>
                     <ListItemButton
                       onClick={() => handleCheatsheetClick(cheatsheet.filename)}
@@ -75,6 +112,75 @@ const GrammarView: React.FC = () => {
                     </ListItemButton>
                   </ListItem>
                 ))}
+
+                {/* Render categorized cheatsheets with collapsible categories */}
+                {Object.keys(categorizedCheatsheets)
+                  .sort()
+                  .map((category) => (
+                    <React.Fragment key={category}>
+                      <ListItem disablePadding>
+                        <ListItemButton
+                          onClick={() => toggleCategory(category)}
+                        >
+                          <ListItemText
+                            primary={category}
+                            primaryTypographyProps={{ fontWeight: "bold" }}
+                            sx={{
+                              "& .MuiListItemText-primary": {
+                                color: "white",
+                              },
+                            }}
+                          />
+                          {expandedCategories.has(category) ? (
+                            <ExpandLess />
+                          ) : (
+                            <ExpandMore />
+                          )}
+                        </ListItemButton>
+                      </ListItem>
+                      <Collapse in={expandedCategories.has(category)}>
+                        <List component="div" disablePadding>
+                          {categorizedCheatsheets[category].map(
+                            (cheatsheet) => (
+                              <ListItem
+                                key={cheatsheet.filename}
+                                disablePadding
+                              >
+                                <ListItemButton
+                                  onClick={() =>
+                                    handleCheatsheetClick(cheatsheet.filename)
+                                  }
+                                  selected={
+                                    selectedFilename === cheatsheet.filename
+                                  }
+                                  sx={{
+                                    pl: 4,
+                                    "&.Mui-selected": {
+                                      backgroundColor:
+                                        "rgba(147, 51, 234, 0.1)",
+                                      "&:hover": {
+                                        backgroundColor:
+                                          "rgba(147, 51, 234, 0.2)",
+                                      },
+                                    },
+                                  }}
+                                >
+                                  <ListItemText
+                                    primary={cheatsheet.title}
+                                    sx={{
+                                      "& .MuiListItemText-primary": {
+                                        color: "white",
+                                      },
+                                    }}
+                                  />
+                                </ListItemButton>
+                              </ListItem>
+                            )
+                          )}
+                        </List>
+                      </Collapse>
+                    </React.Fragment>
+                  ))}
               </List>
             )}
           </ContentCard>

@@ -154,6 +154,7 @@ class CheatsheetInfo(BaseModel):
 
     filename: str
     title: str
+    category: str
 
 
 class CheatsheetContent(BaseModel):

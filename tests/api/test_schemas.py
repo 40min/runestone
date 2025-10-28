@@ -10,6 +10,8 @@ from pydantic import ValidationError
 
 from runestone.api.schemas import (
     AnalysisRequest,
+    CheatsheetContent,
+    CheatsheetInfo,
     ContentAnalysis,
     ErrorResponse,
     GrammarFocus,
@@ -228,3 +230,55 @@ class TestSchemaValidation:
         """Test SearchNeeded with invalid query_suggestions type."""
         with pytest.raises(ValidationError):
             SearchNeeded(should_search=True, query_suggestions="invalid")  # Should be list
+
+
+class TestCheatsheetSchemas:
+    """Test cases for cheatsheet-related schemas."""
+
+    def test_cheatsheet_info_with_category(self):
+        """Test CheatsheetInfo schema with category field."""
+        info = CheatsheetInfo(filename="adjectiv-komparation.md", title="Adjectiv Komparation", category="adjectives")
+        assert info.filename == "adjectiv-komparation.md"
+        assert info.title == "Adjectiv Komparation"
+        assert info.category == "adjectives"
+
+    def test_cheatsheet_info_general_category(self):
+        """Test CheatsheetInfo schema with General category."""
+        info = CheatsheetInfo(filename="pronunciation.md", title="Pronunciation", category="General")
+        assert info.filename == "pronunciation.md"
+        assert info.title == "Pronunciation"
+        assert info.category == "General"
+
+    def test_cheatsheet_info_nested_path(self):
+        """Test CheatsheetInfo schema with nested file path."""
+        info = CheatsheetInfo(filename="verbs/hjalpverb.md", title="Hjalpverb", category="verbs")
+        assert info.filename == "verbs/hjalpverb.md"
+        assert info.title == "Hjalpverb"
+        assert info.category == "verbs"
+
+    def test_cheatsheet_info_serialization(self):
+        """Test CheatsheetInfo serialization to dict."""
+        info = CheatsheetInfo(filename="test.md", title="Test", category="General")
+        data = info.model_dump()
+        assert data == {"filename": "test.md", "title": "Test", "category": "General"}
+
+    def test_cheatsheet_content(self):
+        """Test CheatsheetContent schema."""
+        content = CheatsheetContent(content="# Test Content\n\nThis is test content.")
+        assert content.content == "# Test Content\n\nThis is test content."
+
+    def test_cheatsheet_content_empty(self):
+        """Test CheatsheetContent schema with empty content."""
+        content = CheatsheetContent(content="")
+        assert content.content == ""
+
+    def test_cheatsheet_info_missing_required_fields(self):
+        """Test CheatsheetInfo with missing required fields."""
+        with pytest.raises(ValidationError):
+            CheatsheetInfo(filename="test.md", title="Test")  # Missing category
+
+        with pytest.raises(ValidationError):
+            CheatsheetInfo(filename="test.md", category="General")  # Missing title
+
+        with pytest.raises(ValidationError):
+            CheatsheetInfo(title="Test", category="General")  # Missing filename

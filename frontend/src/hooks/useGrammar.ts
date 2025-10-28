@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../config';
 interface CheatsheetInfo {
   filename: string;
   title: string;
+  category: string;
 }
 
 interface CheatsheetContent {

@@ -7,7 +7,9 @@ for grammar-related operations.
 
 import os
 import re
+from pathlib import Path
 from typing import List
+from urllib.parse import unquote
 
 from ..core.logging_config import get_logger
 
@@ -27,47 +29,86 @@ class GrammarService:
             return []
 
         files = []
-        for filename in os.listdir(self.cheatsheets_dir):
-            if filename.endswith(".md"):
+        cheatsheets_path = Path(self.cheatsheets_dir)
+
+        for item in cheatsheets_path.iterdir():
+            # Scan one level of subdirectories
+            if item.is_dir():
+                category = item.name
+                for sub_item in item.iterdir():
+                    if self._is_suitable_cheatsheet(sub_item):
+                        relative_path = sub_item.relative_to(cheatsheets_path).as_posix()
+                        title = self._filename_to_title(sub_item.name)
+                        files.append({"filename": relative_path, "title": title, "category": category})
+            # Scan root directory
+            elif self._is_suitable_cheatsheet(item):
+                filename = item.name
                 title = self._filename_to_title(filename)
-                files.append({"filename": filename, "title": title})
+                files.append({"filename": filename, "title": title, "category": "General"})
 
         # Sort by title
         files.sort(key=lambda x: x["title"])
         return files
 
-    def get_cheatsheet_content(self, filename: str) -> str:
-        """Validate filename and return cheatsheet content."""
-        # Validate filename to prevent path traversal attacks
-        if not self._is_valid_filename(filename):
-            raise ValueError(f"Invalid filename: {filename}")
+    def _is_suitable_cheatsheet(self, file_item: Path) -> bool:
+        return file_item.is_file() and file_item.name.endswith(".md")
 
-        filepath = os.path.join(self.cheatsheets_dir, filename)
+    def get_cheatsheet_content(self, filepath: str) -> str:
+        """Validate filepath and return cheatsheet content."""
+        # Validate filepath (raises ValueError if invalid)
+        self._validate_filepath(filepath)
 
-        try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                content = f.read()
-            return content
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Cheatsheet '{filename}' not found")
-        except Exception as e:
-            self.logger.error(f"Error reading cheatsheet '{filename}': {e}")
-            raise
+        # Construct the full path
+        cheatsheets_path = Path(self.cheatsheets_dir)
+        file_path = cheatsheets_path / filepath
 
-    def _is_valid_filename(self, filename: str) -> bool:
-        """Validate filename to prevent path traversal attacks."""
-        if not filename or not filename.endswith(".md"):
-            return False
+        # Resolve to absolute paths
+        resolved_file = file_path.resolve()
+        resolved_base = cheatsheets_path.resolve()
 
-        # Check for path traversal characters
-        if "/" in filename or "\\" in filename or ".." in filename:
-            return False
+        # Security check: ensure file is within cheatsheets directory
+        if not resolved_file.is_relative_to(resolved_base):
+            raise ValueError(f"Invalid file path: {filepath}")
 
-        # Check for other potentially dangerous characters using regex whitelist
-        if re.search(r"[^a-zA-Z0-9._-]", filename):
-            return False
+        # Check file exists and has .md extension
+        if not resolved_file.exists():
+            raise FileNotFoundError(f"Cheatsheet not found: {filepath}")
 
-        return True
+        # Read and return content
+        return resolved_file.read_text(encoding="utf-8")
+
+    def _validate_filepath(self, filepath: str) -> None:
+        """
+        Validate filepath to prevent path traversal and other security issues.
+
+        Supports both simple filenames and paths with subdirectories (e.g., 'category/file.md').
+
+        Raises:
+            ValueError: If filepath is invalid or has security issues.
+        """
+        # Decode URL-encoded characters to catch encoded path traversal attempts
+        decoded_filepath = unquote(filepath)
+
+        # Check for security issues first (these should raise "Invalid file path")
+        has_security_issue = (
+            not filepath  # empty
+            or ".." in filepath
+            or "\\" in filepath  # path traversal
+            or ".." in decoded_filepath
+            or "\\" in decoded_filepath  # encoded path traversal
+            or filepath.endswith("/")
+            or filepath.endswith("\\")  # trailing slashes
+            or decoded_filepath.endswith("/")
+            or decoded_filepath.endswith("\\")  # encoded trailing slashes
+            or re.search(r'[<>:"|?*]', filepath)  # dangerous characters
+        )
+
+        if has_security_issue:
+            raise ValueError(f"Invalid file path: {filepath}")
+
+        # Must end with .md extension for valid cheatsheet files
+        if not filepath.endswith(".md"):
+            raise ValueError(f"Invalid file extension: {filepath}. Only .md files are allowed.")
 
     def _filename_to_title(self, filename: str) -> str:
         """Convert filename to human-readable title."""

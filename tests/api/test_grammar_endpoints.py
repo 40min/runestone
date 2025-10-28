@@ -39,9 +39,9 @@ class TestGrammarEndpoints:
         # Mock service
         mock_service = Mock()
         mock_service.list_cheatsheets.return_value = [
-            {"filename": "adjectiv-komparation.md", "title": "Adjectiv Komparation"},
-            {"filename": "objectspronomen.md", "title": "Objectspronomen"},
-            {"filename": "presens-perfect.md", "title": "Presens Perfect"},
+            {"filename": "adjectiv-komparation.md", "title": "Adjectiv Komparation", "category": "General"},
+            {"filename": "objectspronomen.md", "title": "Objectspronomen", "category": "General"},
+            {"filename": "presens-perfect.md", "title": "Presens Perfect", "category": "General"},
         ]
 
         # Override the dependency
@@ -115,17 +115,40 @@ class TestGrammarEndpoints:
         # Verify response structure
         assert data["content"] == "# Test Content\n\nThis is test content."
 
-        # Verify service was called with correct filename
+        # Verify service was called with correct filepath
         mock_service.get_cheatsheet_content.assert_called_once_with("adjectiv-komparation.md")
 
         # Clean up
         client_no_db.app.dependency_overrides.clear()
 
-    def test_get_cheatsheet_content_invalid_filename(self, client_no_db):
-        """Test getting content with invalid filename."""
+    def test_get_cheatsheet_content_nested_path_success(self, client_no_db):
+        """Test successful retrieval of cheatsheet content with nested paths."""
+        # Mock service
+        mock_service = Mock()
+        mock_service.get_cheatsheet_content.return_value = "# Nested Content\n\nThis is nested content."
+
+        # Override the dependency
+        client_no_db.app.dependency_overrides[get_grammar_service] = lambda: mock_service
+
+        response = client_no_db.get("/api/grammar/cheatsheets/verbs/hjalpverb.md")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify response structure
+        assert data["content"] == "# Nested Content\n\nThis is nested content."
+
+        # Verify service was called with correct nested filepath
+        mock_service.get_cheatsheet_content.assert_called_once_with("verbs/hjalpverb.md")
+
+        # Clean up
+        client_no_db.app.dependency_overrides.clear()
+
+    def test_get_cheatsheet_content_invalid_filepath(self, client_no_db):
+        """Test getting content with invalid filepath."""
         # Mock service to raise ValueError
         mock_service = Mock()
-        mock_service.get_cheatsheet_content.side_effect = ValueError("Invalid filename: badfile.txt")
+        mock_service.get_cheatsheet_content.side_effect = ValueError("Invalid file path: badfile.txt")
 
         # Override the dependency
         client_no_db.app.dependency_overrides[get_grammar_service] = lambda: mock_service
@@ -134,7 +157,7 @@ class TestGrammarEndpoints:
 
         assert response.status_code == 400
         data = response.json()
-        assert "Invalid filename: badfile.txt" in data["detail"]
+        assert "Invalid file path: badfile.txt" in data["detail"]
 
         # Clean up
         client_no_db.app.dependency_overrides.clear()
