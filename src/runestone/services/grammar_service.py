@@ -71,7 +71,9 @@ class GrammarService:
             raise ValueError(f"Invalid file path: {filepath}")
 
         # Check file exists and has .md extension
-        if not resolved_file.exists() or resolved_file.suffix != ".md":
+        if not resolved_file.exists():
+            raise FileNotFoundError(f"Cheatsheet not found: {filepath}")
+        if resolved_file.suffix != ".md":
             raise ValueError(f"File not found or invalid: {filepath}")
 
         # Read and return content
