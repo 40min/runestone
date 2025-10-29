@@ -34,6 +34,7 @@ class VocabularyItem(BaseModel):
     swedish: str
     english: str
     example_phrase: Optional[str] = None
+    known: bool = False
 
 
 class SearchNeeded(BaseModel):

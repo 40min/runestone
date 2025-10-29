@@ -18,12 +18,12 @@ interface Column<T> {
   sx?: SxProps<Theme>;
 }
 
-interface DataTableProps<T> {
+interface DataTableProps<T extends { id: string }> {
   columns: Column<T>[];
   data: T[];
   selectable?: boolean;
-  selectedItems?: boolean[];
-  onSelectionChange?: (index: number, checked: boolean) => void;
+  selectedItems?: Map<string, boolean>;
+  onSelectionChange?: (id: string, checked: boolean) => void;
   onSelectAll?: (checked: boolean) => void;
   onRowClick?: (row: T, index: number) => void;
   masterCheckboxId?: string;
@@ -31,11 +31,11 @@ interface DataTableProps<T> {
   sx?: SxProps<Theme>;
 }
 
-function DataTable<T extends Record<string, unknown>>({
+function DataTable<T extends { id: string } & Record<string, unknown>>({
   columns,
   data,
   selectable = false,
-  selectedItems = [],
+  selectedItems = new Map(),
   onSelectionChange,
   onSelectAll,
   onRowClick,
@@ -43,8 +43,8 @@ function DataTable<T extends Record<string, unknown>>({
   rowCheckboxIdPrefix,
   sx = {},
 }: DataTableProps<T>) {
-  const allSelected = selectedItems.length > 0 && selectedItems.every(Boolean);
-  const someSelected = selectedItems.some(Boolean) && !allSelected;
+  const allSelected = data.length > 0 && data.every((row) => selectedItems.get(row.id));
+  const someSelected = data.some((row) => selectedItems.get(row.id)) && !allSelected;
 
   const handleSelectAll = (checked: boolean) => {
     if (onSelectAll) {
@@ -98,7 +98,7 @@ function DataTable<T extends Record<string, unknown>>({
         <TableBody>
           {data.map((row, index) => (
             <TableRow
-              key={index}
+              key={row.id} // Use row.id as key
               sx={{
                 borderBottom: '1px solid #4d3c63',
                 cursor: onRowClick ? 'pointer' : 'default',
@@ -111,9 +111,9 @@ function DataTable<T extends Record<string, unknown>>({
               {selectable && (
                 <TableCell sx={{ borderBottom: '1px solid #4d3c63' }}>
                   <StyledCheckbox
-                    id={rowCheckboxIdPrefix ? `${rowCheckboxIdPrefix}-${index}` : undefined}
-                    checked={selectedItems[index] || false}
-                    onChange={(checked) => onSelectionChange?.(index, checked)}
+                    id={rowCheckboxIdPrefix ? `${rowCheckboxIdPrefix}-${row.id}` : undefined} // Use row.id for checkbox ID
+                    checked={selectedItems.get(row.id) || false} // Check against map
+                    onChange={(checked) => onSelectionChange?.(row.id, checked)} // Pass row.id
                   />
                 </TableCell>
               )}

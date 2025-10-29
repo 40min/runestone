@@ -283,6 +283,10 @@ class VocabularyService:
 
         return enriched_items
 
+    def get_existing_word_phrases(self, word_phrases: List[str], user_id: int) -> List[str]:
+        """Get existing word phrases from the repository."""
+        return list(self.repo.get_existing_word_phrases_for_batch(word_phrases, user_id))
+
     def delete_vocabulary_item(self, item_id: int, user_id: int = 1) -> bool:
         """Completely delete a vocabulary item from the database."""
         return self.repo.hard_delete_vocabulary_item(item_id, user_id)

@@ -22,6 +22,7 @@ from runestone.core.prompt_builder.validators import (
     SearchNeededResponse,
     VocabularyItemResponse,
 )
+from runestone.services.vocabulary_service import VocabularyService
 
 
 class TestRunestoneIntegration:
@@ -42,7 +43,11 @@ class TestRunestoneIntegration:
         mock_analyzer = Mock(spec=ContentAnalyzer)
 
         processor = RunestoneProcessor(
-            settings=self.settings, ocr_processor=mock_ocr, content_analyzer=mock_analyzer, verbose=True
+            settings=self.settings,
+            ocr_processor=mock_ocr,
+            content_analyzer=mock_analyzer,
+            vocabulary_service=Mock(spec=VocabularyService),
+            verbose=True,
         )
 
         assert processor.verbose is True
@@ -53,7 +58,12 @@ class TestRunestoneIntegration:
     def test_processor_init_failure(self):
         """Test processor initialization failure."""
         with pytest.raises(RunestoneError) as exc_info:
-            RunestoneProcessor(settings=self.settings, ocr_processor=None, content_analyzer=None)
+            RunestoneProcessor(
+                settings=self.settings,
+                ocr_processor=None,
+                content_analyzer=None,
+                vocabulary_service=Mock(spec=VocabularyService),
+            )
 
         assert "Failed to initialize processor" in str(exc_info.value)
 
@@ -115,6 +125,7 @@ class TestRunestoneIntegration:
             settings=self.settings,
             ocr_processor=mock_ocr_processor,
             content_analyzer=mock_content_analyzer,
+            vocabulary_service=Mock(spec=VocabularyService),
             verbose=True,
         )
 
@@ -149,7 +160,10 @@ class TestRunestoneIntegration:
         mock_content_analyzer = Mock(spec=ContentAnalyzer)
 
         processor = RunestoneProcessor(
-            settings=self.settings, ocr_processor=mock_ocr_processor, content_analyzer=mock_content_analyzer
+            settings=self.settings,
+            ocr_processor=mock_ocr_processor,
+            content_analyzer=mock_content_analyzer,
+            vocabulary_service=Mock(spec=VocabularyService),
         )
 
         with pytest.raises(RunestoneError) as exc_info:
@@ -182,7 +196,10 @@ class TestRunestoneIntegration:
         mock_content_analyzer = Mock(spec=ContentAnalyzer)
 
         processor = RunestoneProcessor(
-            settings=self.settings, ocr_processor=mock_ocr_processor, content_analyzer=mock_content_analyzer
+            settings=self.settings,
+            ocr_processor=mock_ocr_processor,
+            content_analyzer=mock_content_analyzer,
+            vocabulary_service=Mock(spec=VocabularyService),
         )
 
         with pytest.raises(RunestoneError) as exc_info:
@@ -222,7 +239,10 @@ class TestRunestoneIntegration:
         mock_formatter.return_value = mock_formatter_instance
 
         processor = RunestoneProcessor(
-            settings=self.settings, ocr_processor=mock_ocr_processor, content_analyzer=mock_content_analyzer
+            settings=self.settings,
+            ocr_processor=mock_ocr_processor,
+            content_analyzer=mock_content_analyzer,
+            vocabulary_service=Mock(spec=VocabularyService),
         )
         processor.display_results_console(mock_results)
 
@@ -264,7 +284,10 @@ class TestRunestoneIntegration:
         mock_formatter.return_value = mock_formatter_instance
 
         processor = RunestoneProcessor(
-            settings=self.settings, ocr_processor=mock_ocr_processor, content_analyzer=mock_content_analyzer
+            settings=self.settings,
+            ocr_processor=mock_ocr_processor,
+            content_analyzer=mock_content_analyzer,
+            vocabulary_service=Mock(spec=VocabularyService),
         )
         processor.display_results_markdown(mock_results)
 
@@ -297,6 +320,7 @@ class TestRunestoneIntegration:
             settings=self.settings,
             ocr_processor=mock_ocr_processor,
             content_analyzer=mock_content_analyzer,
+            vocabulary_service=Mock(spec=VocabularyService),
             verbose=True,
         )
         processor.save_results_to_file(mock_results, output_path)

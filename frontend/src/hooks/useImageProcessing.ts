@@ -13,10 +13,16 @@ interface GrammarFocus {
 }
 
 interface VocabularyItem {
+  id?: string;
   swedish: string;
   english: string;
   example_phrase?: string;
   extra_info?: string;
+  known?: boolean;
+}
+
+interface EnrichedVocabularyItem extends VocabularyItem {
+  id: string;
 }
 
 interface ContentAnalysis {
@@ -31,7 +37,8 @@ interface ContentAnalysis {
 
 interface UseImageProcessingReturn {
   processImage: (file: File) => Promise<void>;
-  saveVocabulary: (vocabulary: VocabularyItem[], enrich: boolean) => Promise<void>;
+  saveVocabulary: (vocabulary: EnrichedVocabularyItem[], enrich: boolean) => Promise<void>;
+  onVocabularyUpdated: (updatedVocabulary: EnrichedVocabularyItem[]) => void;
   ocrResult: OCRResult | null;
   analysisResult: ContentAnalysis | null;
   resourcesResult: string | null;
@@ -171,7 +178,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
     }
   };
 
-  const saveVocabulary = async (vocabulary: VocabularyItem[], enrich: boolean = true) => {
+  const saveVocabulary = async (vocabulary: EnrichedVocabularyItem[], enrich: boolean = true) => {
     try {
       // Transform vocabulary items to match backend schema
       const transformedItems = vocabulary.map((item) => ({
@@ -204,6 +211,16 @@ const useImageProcessing = (): UseImageProcessingReturn => {
     }
   };
 
+  const onVocabularyUpdated = (updatedVocabulary: EnrichedVocabularyItem[]) => {
+    setAnalysisResult((prev) => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        vocabulary: updatedVocabulary,
+      };
+    });
+  };
+
   const reset = () => {
     setOcrResult(null);
     setAnalysisResult(null);
@@ -217,6 +234,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
   return {
     processImage,
     saveVocabulary,
+    onVocabularyUpdated,
     ocrResult,
     analysisResult,
     resourcesResult,

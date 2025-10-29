@@ -10,7 +10,7 @@ import { useState } from 'react';
 function App() {
   const [currentView, setCurrentView] = useState<'analyzer' | 'vocabulary' | 'grammar'>('analyzer');
 
-  const { processImage, saveVocabulary, ocrResult, analysisResult, resourcesResult, processingStep, error, isProcessing } = useImageProcessing();
+  const { processImage, saveVocabulary, onVocabularyUpdated, ocrResult, analysisResult, resourcesResult, processingStep, error, isProcessing } = useImageProcessing();
 
   const handleFileSelect = async (file: File) => {
     await processImage(file);
@@ -33,7 +33,7 @@ function App() {
 
                 {isProcessing && <ProcessingStatus isProcessing={isProcessing} processingStep={processingStep} />}
 
-                {((ocrResult || analysisResult || resourcesResult) || error) && <ResultsDisplay ocrResult={ocrResult} analysisResult={analysisResult} resourcesResult={resourcesResult} error={error} saveVocabulary={saveVocabulary} />}
+                {((ocrResult || analysisResult || resourcesResult) || error) && <ResultsDisplay ocrResult={ocrResult} analysisResult={analysisResult} resourcesResult={resourcesResult} error={error} saveVocabulary={saveVocabulary} onVocabularyUpdated={onVocabularyUpdated} />}
               </>
              ) : currentView === 'vocabulary' ? (
                <VocabularyView />
