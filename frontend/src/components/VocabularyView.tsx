@@ -149,7 +149,7 @@ const VocabularyView: React.FC = () => {
             ]}
             data={recentVocabulary.map((item) => ({
               ...item,
-              id: item.word_phrase, // Use word_phrase as unique ID for DataTable
+              id: String(item.id), // Use the unique ID from the database
             })) as unknown as ({ id: string } & Record<string, unknown>)[]}
             onRowClick={handleRowClick}
           />
