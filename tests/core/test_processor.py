@@ -19,6 +19,7 @@ from runestone.core.prompt_builder.validators import (
     SearchNeededResponse,
     VocabularyItemResponse,
 )
+from runestone.services.vocabulary_service import VocabularyService
 
 
 class TestRunestoneProcessor:
@@ -81,6 +82,7 @@ class TestRunestoneProcessor:
                 settings=self.settings,
                 ocr_processor=mock_ocr_instance,
                 content_analyzer=mock_analyzer_instance,
+                vocabulary_service=Mock(spec=VocabularyService),
                 verbose=True,
             )
 
@@ -147,6 +149,7 @@ class TestRunestoneProcessor:
             settings=self.settings,
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
+            vocabulary_service=Mock(spec=VocabularyService),
             verbose=False,
         )
 
@@ -190,6 +193,7 @@ class TestRunestoneProcessor:
             settings=self.settings,
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
+            vocabulary_service=Mock(spec=VocabularyService),
             verbose=True,
         )
 
@@ -229,6 +233,7 @@ class TestRunestoneProcessor:
             settings=self.settings,
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
+            vocabulary_service=Mock(spec=VocabularyService),
             verbose=False,
         )
         result = processor.run_ocr(b"fake image data")
@@ -238,13 +243,13 @@ class TestRunestoneProcessor:
 
     def test_run_analysis_success(self):
         """Test successful content analysis."""
-        # Mock analysis result
-        mock_analysis = {
-            "vocabulary": [{"swedish": "hej", "english": "hello"}],
-            "grammar_focus": {"topic": "greetings"},
-            "core_topics": ["greetings"],
-            "search_needed": {"should_search": False},
-        }
+        # Mock analysis result as AnalysisResponse object
+        mock_analysis = AnalysisResponse(
+            vocabulary=[VocabularyItemResponse(swedish="hej", english="hello", example_phrase=None)],
+            grammar_focus=GrammarFocusResponse(has_explicit_rules=False, topic="greetings", explanation="", rules=None),
+            core_topics=["greetings"],
+            search_needed=SearchNeededResponse(should_search=False, query_suggestions=[]),
+        )
         mock_analyzer_instance = Mock()
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
 
@@ -255,6 +260,7 @@ class TestRunestoneProcessor:
             settings=self.settings,
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
+            vocabulary_service=Mock(spec=VocabularyService),
             verbose=False,
         )
         result = processor.run_analysis("Sample text")
@@ -282,6 +288,7 @@ class TestRunestoneProcessor:
             settings=self.settings,
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
+            vocabulary_service=Mock(spec=VocabularyService),
             verbose=False,
         )
         result = processor.run_resource_search(mock_analysis_data)
@@ -336,6 +343,7 @@ class TestRunestoneProcessor:
             settings=self.settings,
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
+            vocabulary_service=Mock(spec=VocabularyService),
             verbose=True,
         )
         result = processor.process_image(self.image_path)
@@ -398,6 +406,7 @@ class TestRunestoneProcessor:
             settings=self.settings,
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
+            vocabulary_service=Mock(spec=VocabularyService),
             verbose=True,
         )
 
@@ -437,6 +446,7 @@ class TestRunestoneProcessor:
             settings=self.settings,
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
+            vocabulary_service=Mock(spec=VocabularyService),
             verbose=True,
         )
 

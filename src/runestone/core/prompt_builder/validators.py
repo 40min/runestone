@@ -41,6 +41,7 @@ class VocabularyItemResponse(BaseModel):
     swedish: str = Field(description="Swedish word or phrase")
     english: str = Field(description="English translation")
     example_phrase: Optional[str] = Field(None, description="Example sentence from source text")
+    known: bool = Field(default=False, description="Whether the word is already in user's vocabulary database")
 
 
 class SearchNeededResponse(BaseModel):

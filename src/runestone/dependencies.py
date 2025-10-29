@@ -145,6 +145,7 @@ def get_runestone_processor(
     settings: Annotated[Settings, Depends(get_settings)],
     ocr_processor: Annotated[OCRProcessor, Depends(get_ocr_processor)],
     content_analyzer: Annotated[ContentAnalyzer, Depends(get_content_analyzer)],
+    vocabulary_service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
 ) -> RunestoneProcessor:
     """
     Dependency injection for Runestone processor.
@@ -153,11 +154,12 @@ def get_runestone_processor(
         settings: Application settings from dependency injection
         ocr_processor: OCR processor from dependency injection
         content_analyzer: Content analyzer from dependency injection
+        vocabulary_service: Vocabulary service from dependency injection
 
     Returns:
         RunestoneProcessor: Runestone processor instance
     """
-    return RunestoneProcessor(settings, ocr_processor, content_analyzer)
+    return RunestoneProcessor(settings, ocr_processor, content_analyzer, vocabulary_service=vocabulary_service)
 
 
 def get_grammar_service(settings: Annotated[Settings, Depends(get_settings)]) -> GrammarService:

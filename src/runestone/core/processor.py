@@ -19,6 +19,7 @@ from runestone.core.formatter import ResultFormatter
 from runestone.core.logging_config import get_logger
 from runestone.core.ocr import OCRProcessor
 from runestone.core.prompt_builder.validators import AnalysisResponse, OCRResponse
+from runestone.services.vocabulary_service import VocabularyService
 
 
 class RunestoneProcessor:
@@ -29,6 +30,7 @@ class RunestoneProcessor:
         settings: Settings,
         ocr_processor: OCRProcessor,
         content_analyzer: ContentAnalyzer,
+        vocabulary_service: VocabularyService,
         verbose: Optional[bool] = None,
     ):
         """
@@ -39,6 +41,7 @@ class RunestoneProcessor:
             ocr_processor: OCR processor instance
             content_analyzer: Content analyzer instance
             verbose: Enable verbose logging. If None, uses settings.verbose
+            vocabulary_service: Vocabulary service for marking known words
         """
         # Use provided settings or create default
         self.settings = settings
@@ -55,6 +58,7 @@ class RunestoneProcessor:
             self.ocr_processor = ocr_processor
             self.content_analyzer = content_analyzer
             self.formatter = ResultFormatter()
+            self.vocabulary_service = vocabulary_service
         except Exception as e:
             raise RunestoneError(f"Failed to initialize processor: {str(e)}")
 
@@ -97,15 +101,16 @@ class RunestoneProcessor:
             else:
                 raise RunestoneError(f"OCR processing failed: {type(e).__name__}: {str(e)}")
 
-    def run_analysis(self, text: str) -> AnalysisResponse:
+    def run_analysis(self, text: str, user_id: int = 1) -> AnalysisResponse:
         """
-        Analyze extracted text content.
+        Analyze extracted text content and mark known vocabulary.
 
         Args:
             text: Extracted text from OCR
+            user_id: User ID for checking known vocabulary (default: 1)
 
         Returns:
-            Content analysis results
+            Content analysis results with known vocabulary marked
 
         Raises:
             RunestoneError: If content analysis fails
@@ -120,15 +125,15 @@ class RunestoneProcessor:
             analysis = self.content_analyzer.analyze_content(text)
             duration = time.time() - start_time
 
-            # Handle both AnalysisResponse objects and dict (for testing compatibility)
-            if hasattr(analysis, "vocabulary"):
-                vocab_count = len(analysis.vocabulary)
-            else:
-                vocab_count = len(analysis.get("vocabulary", []))
+            vocab_count = len(analysis.vocabulary)
             self.logger.debug(
                 f"[RunestoneProcessor] Analysis completed in {duration:.2f} seconds, "
                 f"found {vocab_count} vocabulary items"
             )
+
+            # Mark known vocabulary if vocabulary_service is available
+            if analysis.vocabulary:
+                self._mark_known_vocabulary(analysis, user_id)
 
             return analysis
 
@@ -139,6 +144,36 @@ class RunestoneProcessor:
                 raise
             else:
                 raise RunestoneError(f"Content analysis failed: {str(e)}")
+
+    def _mark_known_vocabulary(self, analysis: AnalysisResponse, user_id: int = 1) -> None:
+        """
+        Mark vocabulary items as known if they exist in the user's database.
+
+        Args:
+            analysis: Analysis response containing vocabulary items
+            user_id: User ID for checking known vocabulary
+        """
+        try:
+            # Extract Swedish words from vocabulary
+            swedish_words = [item.swedish for item in analysis.vocabulary]
+
+            # Get known words from database
+            known_words = self.vocabulary_service.get_existing_word_phrases(swedish_words, user_id)
+
+            # Mark vocabulary items as known
+            known_count = 0
+            for item in analysis.vocabulary:
+                if item.swedish in known_words:
+                    item.known = True
+                    known_count += 1
+
+            self.logger.debug(
+                f"[RunestoneProcessor] Marked {known_count}/{len(analysis.vocabulary)} vocabulary items as known"
+            )
+
+        except Exception as e:
+            # Log error but don't fail the entire analysis
+            self.logger.warning(f"[RunestoneProcessor] Failed to mark known vocabulary: {str(e)}")
 
     def run_resource_search(self, analysis_data: AnalysisResponse) -> str:
         """

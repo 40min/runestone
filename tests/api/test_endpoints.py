@@ -149,8 +149,8 @@ class TestAnalysisEndpoints:
                 has_explicit_rules=False,
             ),
             vocabulary=[
-                VocabularyItemResponse(swedish="hej", english="hello"),
-                VocabularyItemResponse(swedish="vad", english="what"),
+                VocabularyItemResponse(swedish="hej", english="hello", example_phrase=None, known=False),
+                VocabularyItemResponse(swedish="vad", english="what", example_phrase=None, known=True),
             ],
             core_topics=["questions", "greetings"],
             search_needed=SearchNeededResponse(
@@ -174,6 +174,12 @@ class TestAnalysisEndpoints:
         # Verify response structure
         assert data["grammar_focus"]["topic"] == "Swedish questions"
         assert len(data["vocabulary"]) == 2
+
+        # Verify known field is present and correct
+        assert data["vocabulary"][0]["swedish"] == "hej"
+        assert data["vocabulary"][0]["known"] is False
+        assert data["vocabulary"][1]["swedish"] == "vad"
+        assert data["vocabulary"][1]["known"] is True
 
         # Verify processor was called
         mock_processor_instance.run_analysis.assert_called_once_with("Hej, vad heter du?")

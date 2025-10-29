@@ -58,6 +58,7 @@ def convert_analysis_response(response: AnalysisResponse) -> ContentAnalysis:
                 swedish=item.swedish,
                 english=item.english,
                 example_phrase=item.example_phrase,
+                known=item.known,
             )
             for item in response.vocabulary
         ],

@@ -757,3 +757,46 @@ class TestVocabularyService:
         assert vocab is not None
         assert vocab.extra_info == "en-word, noun, base form: äpple"
         service.llm_client.improve_vocabulary_item.assert_not_called()
+
+    def test_get_existing_word_phrases(self, service, db_session):
+        """Test retrieving existing word phrases."""
+        # Add some test data
+        vocab1 = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            in_learn=True,
+            last_learned=None,
+        )
+        vocab2 = VocabularyModel(
+            user_id=1,
+            word_phrase="en banan",
+            translation="a banana",
+            in_learn=True,
+            last_learned=None,
+        )
+        vocab3 = VocabularyModel(
+            user_id=2,
+            word_phrase="ett päron",
+            translation="a pear",
+            in_learn=True,
+            last_learned=None,
+        )
+
+        db_session.add_all([vocab1, vocab2, vocab3])
+        db_session.commit()
+
+        # Test for user 1
+        word_phrases_to_check = ["ett äpple", "en banan", "en apelsin"]
+        existing = service.get_existing_word_phrases(word_phrases_to_check, user_id=1)
+        assert sorted(existing) == sorted(["ett äpple", "en banan"])
+
+        # Test for user 2
+        word_phrases_to_check = ["ett päron", "en banan"]
+        existing = service.get_existing_word_phrases(word_phrases_to_check, user_id=2)
+        assert existing == ["ett päron"]
+
+        # Test with no existing phrases
+        word_phrases_to_check = ["en apelsin", "en druva"]
+        existing = service.get_existing_word_phrases(word_phrases_to_check, user_id=1)
+        assert existing == []

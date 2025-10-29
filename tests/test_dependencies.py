@@ -148,11 +148,14 @@ class TestDependencyProviders:
         mock_settings = Mock(spec=Settings)
         mock_ocr_processor = Mock(spec=OCRProcessor)
         mock_content_analyzer = Mock(spec=ContentAnalyzer)
+        mock_vocabulary_service = Mock(spec=VocabularyService)
         mock_processor = Mock(spec=RunestoneProcessor)
         mock_runestone_processor_class.return_value = mock_processor
 
         # Execute
-        result = get_runestone_processor(mock_settings, mock_ocr_processor, mock_content_analyzer)
+        result = get_runestone_processor(
+            mock_settings, mock_ocr_processor, mock_content_analyzer, mock_vocabulary_service
+        )
 
         # Assert
         assert result == mock_processor
@@ -160,6 +163,7 @@ class TestDependencyProviders:
             mock_settings,
             mock_ocr_processor,
             mock_content_analyzer,
+            vocabulary_service=mock_vocabulary_service,
         )
 
     @patch("runestone.dependencies.VocabularyService")
