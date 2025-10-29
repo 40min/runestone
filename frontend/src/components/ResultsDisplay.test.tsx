@@ -17,9 +17,9 @@ const mockAnalysisResult = {
     rules: "Hej [hello] - greeting\nHur mår du? [how are you?] - question form",
   },
   vocabulary: [
-    { swedish: "hej", english: "hello", example_phrase: "Hej, hur mår du?", known: false },
-    { swedish: "bra", english: "good", example_phrase: "Jag mår bra idag.", known: true },
-    { swedish: "hus", english: "house", example_phrase: "Jag har ett hus.", known: false },
+    { id: "hej", swedish: "hej", english: "hello", example_phrase: "Hej, hur mår du?", known: false },
+    { id: "bra", swedish: "bra", english: "good", example_phrase: "Jag mår bra idag.", known: true },
+    { id: "hus", swedish: "hus", english: "house", example_phrase: "Jag har ett hus.", known: false },
   ],
 };
 
@@ -151,8 +151,8 @@ describe("ResultsDisplay", () => {
     fireEvent.click(vocabularyTab);
 
     // Check all items by clicking individual checkboxes using IDs
-    const firstVocabCheckbox = document.getElementById("vocabulary-item-0");
-    const secondVocabCheckbox = document.getElementById("vocabulary-item-1");
+    const firstVocabCheckbox = document.getElementById("vocabulary-item-hej");
+    const secondVocabCheckbox = document.getElementById("vocabulary-item-bra");
 
     fireEvent.click(firstVocabCheckbox!); // First vocabulary item (hej)
     fireEvent.click(secondVocabCheckbox!); // Second vocabulary item (bra)
@@ -391,8 +391,8 @@ describe("ResultsDisplay", () => {
     const masterCheckbox = document.getElementById(
       "vocabulary-master-checkbox"
     );
-    const firstVocabCheckbox = document.getElementById("vocabulary-item-0");
-    const secondVocabCheckbox = document.getElementById("vocabulary-item-1");
+    const firstVocabCheckbox = document.getElementById("vocabulary-item-hej");
+    const secondVocabCheckbox = document.getElementById("vocabulary-item-bra");
 
     expect(enrichCheckbox).toBeChecked();
     expect(masterCheckbox).not.toBeChecked();
@@ -414,18 +414,18 @@ describe("ResultsDisplay", () => {
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    const firstCheckbox = document.getElementById("vocabulary-item-0");
+    const firstVocabCheckbox = document.getElementById("vocabulary-item-hej");
 
     // Initially unchecked
-    expect(firstCheckbox).not.toBeChecked();
+    expect(firstVocabCheckbox).not.toBeChecked();
 
     // Click to check
-    fireEvent.click(firstCheckbox!);
-    expect(firstCheckbox).toBeChecked();
+    fireEvent.click(firstVocabCheckbox!);
+    expect(firstVocabCheckbox).toBeChecked();
 
     // Click to uncheck again
-    fireEvent.click(firstCheckbox!);
-    expect(firstCheckbox).not.toBeChecked();
+    fireEvent.click(firstVocabCheckbox!);
+    expect(firstVocabCheckbox).not.toBeChecked();
   });
 
   it("handles check all/uncheck all functionality", async () => {
@@ -445,8 +445,8 @@ describe("ResultsDisplay", () => {
     const masterCheckbox = document.getElementById(
       "vocabulary-master-checkbox"
     );
-    const firstVocabCheckbox = document.getElementById("vocabulary-item-0");
-    const secondVocabCheckbox = document.getElementById("vocabulary-item-1");
+    const firstVocabCheckbox = document.getElementById("vocabulary-item-hej");
+    const secondVocabCheckbox = document.getElementById("vocabulary-item-bra");
 
     // Initially all unchecked
     expect(masterCheckbox).not.toBeChecked();
@@ -492,7 +492,7 @@ describe("ResultsDisplay", () => {
     fireEvent.click(vocabularyTab);
 
     // Click only the second vocabulary item using ID
-    const secondVocabCheckbox = document.getElementById("vocabulary-item-1");
+    const secondVocabCheckbox = document.getElementById("vocabulary-item-bra");
     fireEvent.click(secondVocabCheckbox!);
 
     const copyButton = screen.getByText("Copy");
@@ -558,8 +558,8 @@ describe("ResultsDisplay", () => {
     fireEvent.click(vocabularyTab);
 
     // Check all items by clicking individual checkboxes using IDs
-    const firstVocabCheckbox = document.getElementById("vocabulary-item-0");
-    const secondVocabCheckbox = document.getElementById("vocabulary-item-1");
+    const firstVocabCheckbox = document.getElementById("vocabulary-item-hej");
+    const secondVocabCheckbox = document.getElementById("vocabulary-item-bra");
 
     fireEvent.click(firstVocabCheckbox!); // First vocabulary item
     fireEvent.click(secondVocabCheckbox!); // Second vocabulary item
@@ -595,8 +595,8 @@ describe("ResultsDisplay", () => {
     fireEvent.click(vocabularyTab);
 
     // Check all items by clicking individual checkboxes using IDs
-    const firstVocabCheckbox = document.getElementById("vocabulary-item-0");
-    const secondVocabCheckbox = document.getElementById("vocabulary-item-1");
+    const firstVocabCheckbox = document.getElementById("vocabulary-item-hej");
+    const secondVocabCheckbox = document.getElementById("vocabulary-item-bra");
 
     fireEvent.click(firstVocabCheckbox!); // First vocabulary item
     fireEvent.click(secondVocabCheckbox!); // Second vocabulary item
@@ -637,8 +637,8 @@ describe("ResultsDisplay", () => {
     fireEvent.click(vocabularyTab);
 
     // Check all items by clicking individual checkboxes using IDs
-    const firstVocabCheckbox = document.getElementById("vocabulary-item-0");
-    const secondVocabCheckbox = document.getElementById("vocabulary-item-1");
+    const firstVocabCheckbox = document.getElementById("vocabulary-item-hej");
+    const secondVocabCheckbox = document.getElementById("vocabulary-item-bra");
 
     fireEvent.click(firstVocabCheckbox!); // First vocabulary item
     fireEvent.click(secondVocabCheckbox!); // Second vocabulary item
@@ -689,8 +689,9 @@ describe("ResultsDisplay", () => {
     expect(
       document.getElementById("vocabulary-master-checkbox")
     ).toBeInTheDocument();
-    expect(document.getElementById("vocabulary-item-0")).toBeInTheDocument();
-    expect(document.getElementById("vocabulary-item-1")).toBeInTheDocument();
+    expect(document.getElementById("vocabulary-item-hej")).toBeInTheDocument();
+    expect(document.getElementById("vocabulary-item-bra")).toBeInTheDocument();
+    expect(document.getElementById("vocabulary-item-hus")).toBeInTheDocument();
 
     // Check that the Copy button is present
     expect(screen.getByText("Copy")).toBeInTheDocument();
@@ -879,8 +880,8 @@ describe("ResultsDisplay", () => {
 
     await waitFor(() => {
       // Visible items should be checked
-      expect(document.getElementById("vocabulary-item-0")).toBeChecked(); // hej
-      expect(document.getElementById("vocabulary-item-2")).toBeChecked(); // hus
+      expect(document.getElementById("vocabulary-item-hej")).toBeChecked(); // hej
+      expect(document.getElementById("vocabulary-item-hus")).toBeChecked(); // hus
 
       // Hidden item should not be checked (it's not even in the DOM, but we check its state before filtering)
       // This is tricky to test directly without inspecting state. Let's check what's copied.

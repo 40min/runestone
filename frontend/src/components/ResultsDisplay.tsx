@@ -52,11 +52,13 @@ interface GrammarFocus {
 }
 
 interface VocabularyItem {
+  id: string; // Add id property
   swedish: string;
   english: string;
   example_phrase?: string;
   extra_info?: string;
   known?: boolean;
+  [key: string]: unknown; // Add index signature
 }
 
 interface ContentAnalysis {
@@ -98,10 +100,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     message: "",
     severity: "success",
   });
-  const [checkedItems, setCheckedItems] = useState<boolean[]>(() =>
-    analysisResult
-      ? new Array(analysisResult.vocabulary.length).fill(false)
-      : []
+  const [checkedItems, setCheckedItems] = useState<Map<string, boolean>>(
+    () => new Map()
   );
   const [enrichVocabulary, setEnrichVocabulary] = useState(true);
   const [hideKnown, setHideKnown] = useState(false); // New state variable
@@ -109,7 +109,11 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
 
   useEffect(() => {
     if (analysisResult) {
-      setCheckedItems(new Array(analysisResult.vocabulary.length).fill(false));
+      const initialCheckedItems = new Map<string, boolean>();
+      analysisResult.vocabulary.forEach((item) =>
+        initialCheckedItems.set(item.swedish, false)
+      );
+      setCheckedItems(initialCheckedItems);
     }
   }, [analysisResult]);
 
@@ -136,8 +140,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   const handleCopyVocabulary = async () => {
     if (!analysisResult) return;
 
-    const checkedVocab = filteredVocabulary.filter(
-      (_, index) => checkedItems[index]
+    const checkedVocab = filteredVocabulary.filter((item) =>
+      checkedItems.get(item.swedish)
     );
     if (checkedVocab.length === 0) {
       setSnackbar({
@@ -192,16 +196,17 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     }
   };
 
-  const handleCheckboxChange = (index: number, checked: boolean) => {
-    const newCheckedItems = [...checkedItems];
-    newCheckedItems[index] = checked;
+  const handleCheckboxChange = (id: string, checked: boolean) => {
+    const newCheckedItems = new Map(checkedItems);
+    newCheckedItems.set(id, checked);
     setCheckedItems(newCheckedItems);
   };
 
   const handleCheckAll = (checked: boolean) => {
     if (!analysisResult) return;
-    const newCheckedItems = new Array(filteredVocabulary.length).fill(
-      checked
+    const newCheckedItems = new Map(checkedItems);
+    filteredVocabulary.forEach((item) =>
+      newCheckedItems.set(item.swedish, checked)
     );
     setCheckedItems(newCheckedItems);
   };
@@ -209,8 +214,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   const handleSaveVocabulary = async () => {
     if (!analysisResult) return;
 
-    const checkedVocab = filteredVocabulary.filter(
-      (_, index) => checkedItems[index]
+    const checkedVocab = filteredVocabulary.filter((item) =>
+      checkedItems.get(item.swedish)
     );
     if (checkedVocab.length === 0) {
       setSnackbar({
@@ -510,10 +515,10 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                     },
                   ]}
                   data={
-                    filteredVocabulary as unknown as Record<
-                      string,
-                      unknown
-                    >[]
+                    filteredVocabulary.map((item) => ({
+                      ...item,
+                      id: item.swedish, // Use swedish word as unique ID for DataTable
+                    })) as unknown as (VocabularyItem & { id: string })[]
                   }
                 />
               </Box>

@@ -147,7 +147,10 @@ const VocabularyView: React.FC = () => {
                 render: (value) => new Date(value as string).toLocaleDateString()
               },
             ]}
-            data={recentVocabulary as unknown as Record<string, unknown>[]}
+            data={recentVocabulary.map((item) => ({
+              ...item,
+              id: item.word_phrase, // Use word_phrase as unique ID for DataTable
+            })) as unknown as ({ id: string } & Record<string, unknown>)[]}
             onRowClick={handleRowClick}
           />
         )
