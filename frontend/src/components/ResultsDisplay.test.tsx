@@ -1,6 +1,12 @@
 /// <reference types="vitest/globals" />
 /// <reference types="@testing-library/jest-dom" />
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { vi } from "vitest";
 import ResultsDisplay from "./ResultsDisplay";
 
@@ -922,6 +928,175 @@ describe("ResultsDisplay", () => {
       expect(mockClipboard.writeText).toHaveBeenCalledWith(
         "hej - hello\nhus - house"
       );
+    });
+  });
+
+  describe("UUID Generation", () => {
+    it("should generate UUIDs for vocabulary items without IDs", () => {
+      const mockVocabulary = [
+        { swedish: "hund", english: "dog", known: false },
+        { swedish: "katt", english: "cat", known: false },
+      ];
+      const analysisResult = {
+        grammar_focus: mockAnalysisResult.grammar_focus,
+        vocabulary: mockVocabulary,
+      };
+
+      render(
+        <ResultsDisplay
+          ocrResult={null}
+          analysisResult={analysisResult}
+          resourcesResult={null}
+          error={null}
+          saveVocabulary={vi.fn()}
+        />
+      );
+
+      const vocabularyTab = screen.getByText("Vocabulary");
+      fireEvent.click(vocabularyTab);
+
+      // Check that checkboxes for items are rendered, which implies they have unique IDs
+      expect(screen.getByText("hund")).toBeInTheDocument();
+      expect(screen.getByText("katt")).toBeInTheDocument();
+    });
+
+    it("should preserve existing IDs if present", () => {
+      const mockVocabulary = [
+        {
+          id: "existing-id-1",
+          swedish: "hund",
+          english: "dog",
+          known: false,
+        },
+        { swedish: "katt", english: "cat", known: false }, // One without ID
+      ];
+      const analysisResult = {
+        grammar_focus: mockAnalysisResult.grammar_focus,
+        vocabulary: mockVocabulary,
+      };
+
+      render(
+        <ResultsDisplay
+          ocrResult={null}
+          analysisResult={analysisResult}
+          resourcesResult={null}
+          error={null}
+          saveVocabulary={vi.fn()}
+        />
+      );
+
+      const vocabularyTab = screen.getByText("Vocabulary");
+      fireEvent.click(vocabularyTab);
+
+      // Check that the item with the existing ID has a checkbox with that ID
+      const hundCheckbox = document.getElementById("vocabulary-item-existing-id-1");
+      expect(hundCheckbox).toBeInTheDocument();
+    });
+  });
+
+  describe("Checkbox State Management", () => {
+    it("should handle duplicate Swedish words correctly", async () => {
+      const mockVocabulary = [
+        { swedish: "hund", english: "dog", known: false },
+        { swedish: "hund", english: "hound", known: false },
+      ];
+      const analysisResult = {
+        grammar_focus: mockAnalysisResult.grammar_focus,
+        vocabulary: mockVocabulary,
+      };
+
+      render(
+        <ResultsDisplay
+          ocrResult={null}
+          analysisResult={analysisResult}
+          resourcesResult={null}
+          error={null}
+          saveVocabulary={vi.fn()}
+        />
+      );
+
+      const vocabularyTab = screen.getByText("Vocabulary");
+      fireEvent.click(vocabularyTab);
+
+      const checkboxes = await screen.findAllByRole("checkbox");
+      // There should be a master checkbox and two item checkboxes
+      expect(checkboxes.length).toBeGreaterThanOrEqual(3);
+
+      // Get the two checkboxes for "hund"
+      const dogCheckbox = checkboxes[1];
+      const houndCheckbox = checkboxes[2];
+
+      expect(dogCheckbox).not.toBeChecked();
+      expect(houndCheckbox).not.toBeChecked();
+
+      // Click the first "hund" checkbox
+      fireEvent.click(dogCheckbox);
+
+      // Only the first checkbox should be checked
+      expect(dogCheckbox).toBeChecked();
+      expect(houndCheckbox).not.toBeChecked();
+
+      // Click the second "hund" checkbox
+      fireEvent.click(houndCheckbox);
+
+      // Both should be checked now
+      expect(dogCheckbox).toBeChecked();
+      expect(houndCheckbox).toBeChecked();
+    });
+  });
+
+  describe("Hide Known Words after Save", () => {
+    it("should update state and hide saved items when 'Hide known words' is active", async () => {
+      const saveVocabularyMock = vi.fn().mockResolvedValue(undefined);
+      const onVocabularyUpdatedMock = vi.fn();
+
+      const mockVocabulary = [
+        { swedish: "spik", english: "nail", known: false },
+        { swedish: "hammare", english: "hammer", known: false },
+      ];
+      const analysisResult = {
+        grammar_focus: mockAnalysisResult.grammar_focus,
+        vocabulary: mockVocabulary,
+      };
+
+      render(
+        <ResultsDisplay
+          ocrResult={null}
+          analysisResult={analysisResult}
+          resourcesResult={null}
+          error={null}
+          saveVocabulary={saveVocabularyMock}
+          onVocabularyUpdated={onVocabularyUpdatedMock}
+        />
+      );
+
+      const vocabularyTab = screen.getByText("Vocabulary");
+      fireEvent.click(vocabularyTab);
+
+      // Hide known words
+      const hideKnownCheckbox = document.getElementById(
+        "hide-known-words-checkbox"
+      );
+      fireEvent.click(hideKnownCheckbox!);
+
+      // Select the "spik" item to save
+      const spikRow = await screen.findByText("spik");
+      const parentRow = spikRow.closest("tr");
+      const spikCheckbox = within(parentRow!).getByRole("checkbox");
+      fireEvent.click(spikCheckbox);
+
+      // Save the selected vocabulary
+      const saveButton = screen.getByText("Save to Database");
+      fireEvent.click(saveButton);
+
+      await waitFor(() => {
+        expect(saveVocabularyMock).toHaveBeenCalled();
+      });
+
+      // After saving, "spik" should be marked as known and be hidden
+      expect(screen.queryByText("spik")).not.toBeInTheDocument();
+      // "hammare" should still be visible
+      expect(screen.getByText("hammare")).toBeInTheDocument();
     });
   });
 });

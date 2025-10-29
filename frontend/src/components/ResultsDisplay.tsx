@@ -3,6 +3,7 @@ import { Box, Typography, Snackbar, Alert, IconButton } from "@mui/material";
 import type { AlertColor } from "@mui/material";
 import { Copy, Save } from "lucide-react";
 import { ContentCopy } from "@mui/icons-material";
+import { v4 as uuidv4 } from "uuid"; // Import uuid
 import {
   CustomButton,
   ContentCard,
@@ -13,6 +14,16 @@ import {
   DataTable,
 } from "./ui";
 import { parseMarkdown } from "../utils/markdownParser";
+
+// Helper function to enrich vocabulary items with a unique ID
+const enrichVocabularyItems = (
+  vocabulary: VocabularyItem[]
+): EnrichedVocabularyItem[] => {
+  return vocabulary.map((item) => ({
+    ...item,
+    id: item.id || uuidv4(), // Use existing ID or generate a new one
+  }));
+};
 
 // Utility function to convert URLs in text to HTML links
 const convertUrlsToLinks = (text: string): (string | React.ReactElement)[] => {
@@ -52,13 +63,18 @@ interface GrammarFocus {
 }
 
 interface VocabularyItem {
-  id: string; // Add id property
+  id?: string; // Make id optional in base interface
   swedish: string;
   english: string;
   example_phrase?: string;
   extra_info?: string;
   known?: boolean;
   [key: string]: unknown; // Add index signature
+}
+
+// New interface for enriched vocabulary items with a required ID
+interface EnrichedVocabularyItem extends VocabularyItem {
+  id: string;
 }
 
 interface ContentAnalysis {
@@ -72,9 +88,10 @@ interface ResultsDisplayProps {
   resourcesResult: string | null;
   error: string | null;
   saveVocabulary: (
-    vocabulary: VocabularyItem[],
+    vocabulary: EnrichedVocabularyItem[], // Use EnrichedVocabularyItem
     enrich: boolean
   ) => Promise<void>;
+  onVocabularyUpdated?: (updatedVocabulary: EnrichedVocabularyItem[]) => void; // Optional callback
 }
 
 const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
@@ -83,6 +100,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   resourcesResult,
   error,
   saveVocabulary,
+  onVocabularyUpdated,
 }) => {
   const availableTabs = [
     ocrResult && "ocr",
@@ -106,24 +124,33 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   const [enrichVocabulary, setEnrichVocabulary] = useState(true);
   const [hideKnown, setHideKnown] = useState(false); // New state variable
   const [copyButtonText, setCopyButtonText] = useState("Copy");
+  const [enrichedVocabulary, setEnrichedVocabulary] = useState<
+    EnrichedVocabularyItem[]
+  >([]);
 
   useEffect(() => {
-    if (analysisResult) {
+    if (analysisResult?.vocabulary) {
+      const newEnrichedVocabulary = enrichVocabularyItems(
+        analysisResult.vocabulary
+      );
+      setEnrichedVocabulary(newEnrichedVocabulary);
+
       const initialCheckedItems = new Map<string, boolean>();
-      analysisResult.vocabulary.forEach((item) =>
-        initialCheckedItems.set(item.swedish, false)
+      newEnrichedVocabulary.forEach((item) =>
+        initialCheckedItems.set(item.id, false)
       );
       setCheckedItems(initialCheckedItems);
+    } else {
+      setEnrichedVocabulary([]);
+      setCheckedItems(new Map());
     }
   }, [analysisResult]);
 
   // Memoized filtered vocabulary list
   const filteredVocabulary = useMemo(
     () =>
-      analysisResult
-        ? analysisResult.vocabulary.filter((item) => !hideKnown || !item.known)
-        : [],
-    [analysisResult, hideKnown]
+      enrichedVocabulary.filter((item) => !hideKnown || !item.known),
+    [enrichedVocabulary, hideKnown]
   );
 
   if (!ocrResult && !analysisResult && !resourcesResult) {
@@ -141,7 +168,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     if (!analysisResult) return;
 
     const checkedVocab = filteredVocabulary.filter((item) =>
-      checkedItems.get(item.swedish)
+      checkedItems.get(item.id)
     );
     if (checkedVocab.length === 0) {
       setSnackbar({
@@ -203,11 +230,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   };
 
   const handleCheckAll = (checked: boolean) => {
-    if (!analysisResult) return;
     const newCheckedItems = new Map(checkedItems);
-    filteredVocabulary.forEach((item) =>
-      newCheckedItems.set(item.swedish, checked)
-    );
+    filteredVocabulary.forEach((item) => newCheckedItems.set(item.id, checked));
     setCheckedItems(newCheckedItems);
   };
 
@@ -215,7 +239,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     if (!analysisResult) return;
 
     const checkedVocab = filteredVocabulary.filter((item) =>
-      checkedItems.get(item.swedish)
+      checkedItems.get(item.id)
     );
     if (checkedVocab.length === 0) {
       setSnackbar({
@@ -235,6 +259,20 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
           : "Selected vocabulary saved to database!",
         severity: "success",
       });
+
+      // Update the local state for known items
+      const updatedVocabulary = enrichedVocabulary.map((item) =>
+        checkedItems.get(item.id) ? { ...item, known: true } : item
+      );
+      setEnrichedVocabulary(updatedVocabulary);
+
+      // Clear checked items after saving
+      setCheckedItems(new Map());
+
+      // Call the optional callback to update parent component's state
+      if (onVocabularyUpdated) {
+        onVocabularyUpdated(updatedVocabulary);
+      }
     } catch (err) {
       console.error("Failed to save vocabulary: ", err);
       setSnackbar({
@@ -433,7 +471,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
               }}
             >
               <SectionTitle>Vocabulary Analysis</SectionTitle>
-              {analysisResult && analysisResult.vocabulary.length > 0 && (
+              {analysisResult && enrichedVocabulary.length > 0 && (
                 <Box
                   sx={{
                     display: "flex",
@@ -514,12 +552,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                       render: (value) => (value as string) || "—",
                     },
                   ]}
-                  data={
-                    filteredVocabulary.map((item) => ({
-                      ...item,
-                      id: item.swedish, // Use swedish word as unique ID for DataTable
-                    })) as unknown as (VocabularyItem & { id: string })[]
-                  }
+                  data={filteredVocabulary as unknown as EnrichedVocabularyItem[]}
                 />
               </Box>
             )}
