@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { Box, Typography } from "@mui/material";
 import { useRecentVocabulary } from "../hooks/useVocabulary";
-import { LoadingSpinner, ErrorAlert, SectionTitle, DataTable, StyledCheckbox, SearchInput, CustomButton } from "./ui";
+import {
+  LoadingSpinner,
+  ErrorAlert,
+  SectionTitle,
+  DataTable,
+  StyledCheckbox,
+  SearchInput,
+  CustomButton,
+} from "./ui";
 import AddEditVocabularyModal from "./AddEditVocabularyModal";
 
 const VocabularyView: React.FC = () => {
@@ -40,11 +48,13 @@ const VocabularyView: React.FC = () => {
   };
 
   const handleRowClick = (row: unknown) => {
-    const item = row as typeof recentVocabulary[0];
+    const item = row as (typeof recentVocabulary)[0];
     openEditModal(item);
   };
 
-  const handleSaveEdit = async (updatedItem: Partial<typeof recentVocabulary[0]>) => {
+  const handleSaveEdit = async (
+    updatedItem: Partial<(typeof recentVocabulary)[0]>
+  ) => {
     if (editingItem) {
       await updateVocabularyItem(editingItem.id, updatedItem);
     } else {
@@ -71,7 +81,14 @@ const VocabularyView: React.FC = () => {
     <Box sx={{ py: 8 }}>
       <SectionTitle>Recent Vocabulary</SectionTitle>
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          mb: 3,
+        }}
+      >
         <SearchInput
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -84,7 +101,7 @@ const VocabularyView: React.FC = () => {
       </Box>
 
       {loading && !isInitialLoad && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+        <Box sx={{ display: "flex", justifyContent: "center", my: 2 }}>
           <Typography sx={{ color: "#9ca3af" }}>Loading...</Typography>
         </Box>
       )}
@@ -92,7 +109,9 @@ const VocabularyView: React.FC = () => {
       {recentVocabulary.length === 0 && !loading ? (
         <Box sx={{ textAlign: "center", py: 8 }}>
           <Typography sx={{ color: "#9ca3af", mb: 2 }}>
-            {activeSearchTerm ? "No vocabulary matches your search." : "No vocabulary saved yet."}
+            {activeSearchTerm
+              ? "No vocabulary matches your search."
+              : "No vocabulary saved yet."}
           </Typography>
           <Typography sx={{ color: "#6b7280" }}>
             {activeSearchTerm
@@ -104,53 +123,58 @@ const VocabularyView: React.FC = () => {
         recentVocabulary.length > 0 && (
           <DataTable
             columns={[
-              { key: 'word_phrase', label: 'Swedish' },
-              { key: 'translation', label: 'English' },
-              { key: 'example_phrase', label: 'Example Phrase' },
+              { key: "word_phrase", label: "Swedish" },
+              { key: "translation", label: "English" },
+              { key: "example_phrase", label: "Example Phrase" },
               {
-                key: 'extra_info',
-                label: 'Grammar Info',
+                key: "extra_info",
+                label: "Grammar Info",
                 render: (value) => (value as string | null) || "—",
               },
               {
-                key: 'in_learn',
-                label: 'In Learning',
+                key: "in_learn",
+                label: "In Learning",
                 render: (value) => (
                   <StyledCheckbox
                     checked={value as boolean}
                     onChange={() => {}} // TODO: Implement update functionality
-                    sx={{ pointerEvents: 'none' }} // Make it read-only for now
+                    sx={{ pointerEvents: "none" }} // Make it read-only for now
                   />
-                )
+                ),
               },
               {
-                key: 'last_learned',
-                label: 'Last Learned',
+                key: "last_learned",
+                label: "Last Learned",
                 render: (value) => (
-                  <Typography sx={{ color: 'white', textAlign: 'center' }}>
-                    {value ? new Date(value as string).toLocaleDateString() : 'Never'}
+                  <Typography sx={{ color: "white", textAlign: "center" }}>
+                    {value
+                      ? new Date(value as string).toLocaleDateString()
+                      : "Never"}
                   </Typography>
-                )
+                ),
               },
               {
-                key: 'learned_times',
-                label: 'Learned Times',
+                key: "learned_times",
+                label: "Learned Times",
                 render: (value) => (
-                  <Typography sx={{ color: 'white', textAlign: 'center' }}>
+                  <Typography sx={{ color: "white", textAlign: "center" }}>
                     {value as number}
                   </Typography>
-                )
+                ),
               },
               {
-                key: 'created_at',
-                label: 'Saved',
-                render: (value) => new Date(value as string).toLocaleDateString()
+                key: "created_at",
+                label: "Saved",
+                render: (value) =>
+                  new Date(value as string).toLocaleDateString(),
               },
             ]}
-            data={recentVocabulary.map((item) => ({
-              ...item,
-              id: String(item.id), // Use the database ID as the unique key
-            })) as unknown as ({ id: string } & Record<string, unknown>)[]}
+            data={
+              recentVocabulary.map((item) => ({
+                ...item,
+                id: item.id,
+              })) as unknown as ({ id: string } & Record<string, unknown>)[]
+            }
             onRowClick={handleRowClick}
           />
         )
