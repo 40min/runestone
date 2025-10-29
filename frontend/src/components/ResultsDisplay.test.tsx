@@ -17,8 +17,9 @@ const mockAnalysisResult = {
     rules: "Hej [hello] - greeting\nHur mår du? [how are you?] - question form",
   },
   vocabulary: [
-    { swedish: "hej", english: "hello", example_phrase: "Hej, hur mår du?" },
-    { swedish: "bra", english: "good", example_phrase: "Jag mår bra idag." },
+    { swedish: "hej", english: "hello", example_phrase: "Hej, hur mår du?", known: false },
+    { swedish: "bra", english: "good", example_phrase: "Jag mår bra idag.", known: true },
+    { swedish: "hus", english: "house", example_phrase: "Jag har ett hus.", known: false },
   ],
 };
 
@@ -815,5 +816,111 @@ describe("ResultsDisplay", () => {
 
     // Clipboard should not be called
     expect(mockClipboard.writeText).not.toHaveBeenCalled();
+  });
+
+  it("filters out known words when 'Hide known words' is checked", async () => {
+    render(
+      <ResultsDisplay
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
+        error={null}
+        saveVocabulary={vi.fn()}
+      />
+    );
+
+    const vocabularyTab = screen.getByText("Vocabulary");
+    fireEvent.click(vocabularyTab);
+
+    // Initially, all words are visible
+    expect(screen.getByText("hej")).toBeInTheDocument();
+    expect(screen.getByText("bra")).toBeInTheDocument(); // known word
+    expect(screen.getByText("hus")).toBeInTheDocument();
+
+    const hideKnownCheckbox = document.getElementById("hide-known-words-checkbox");
+    fireEvent.click(hideKnownCheckbox!);
+
+    await waitFor(() => {
+      // Known word "bra" should be hidden
+      expect(screen.getByText("hej")).toBeInTheDocument();
+      expect(screen.queryByText("bra")).not.toBeInTheDocument();
+      expect(screen.getByText("hus")).toBeInTheDocument();
+    });
+
+    // Uncheck to show all words again
+    fireEvent.click(hideKnownCheckbox!);
+    await waitFor(() => {
+      expect(screen.getByText("hej")).toBeInTheDocument();
+      expect(screen.getByText("bra")).toBeInTheDocument();
+      expect(screen.getByText("hus")).toBeInTheDocument();
+    });
+  });
+
+  it("'Check All' only checks visible items when 'Hide known words' is active", async () => {
+    render(
+      <ResultsDisplay
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
+        error={null}
+        saveVocabulary={vi.fn()}
+      />
+    );
+
+    const vocabularyTab = screen.getByText("Vocabulary");
+    fireEvent.click(vocabularyTab);
+
+    // Hide known words
+    const hideKnownCheckbox = document.getElementById("hide-known-words-checkbox");
+    fireEvent.click(hideKnownCheckbox!);
+
+    const masterCheckbox = document.getElementById("vocabulary-master-checkbox");
+    fireEvent.click(masterCheckbox!);
+
+    await waitFor(() => {
+      // Visible items should be checked
+      expect(document.getElementById("vocabulary-item-0")).toBeChecked(); // hej
+      expect(document.getElementById("vocabulary-item-2")).toBeChecked(); // hus
+
+      // Hidden item should not be checked (it's not even in the DOM, but we check its state before filtering)
+      // This is tricky to test directly without inspecting state. Let's check what's copied.
+    });
+  });
+
+  it("copies only visible (filtered) vocabulary", async () => {
+    const mockClipboard = {
+      writeText: vi.fn().mockResolvedValue(undefined),
+    };
+    Object.assign(navigator, { clipboard: mockClipboard });
+
+    render(
+      <ResultsDisplay
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
+        error={null}
+        saveVocabulary={vi.fn()}
+      />
+    );
+
+    const vocabularyTab = screen.getByText("Vocabulary");
+    fireEvent.click(vocabularyTab);
+
+    // Hide known words
+    const hideKnownCheckbox = document.getElementById("hide-known-words-checkbox");
+    fireEvent.click(hideKnownCheckbox!);
+
+    // Check all visible items
+    const masterCheckbox = document.getElementById("vocabulary-master-checkbox");
+    fireEvent.click(masterCheckbox!);
+
+    const copyButton = screen.getByText("Copy");
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(mockClipboard.writeText).toHaveBeenCalledWith(
+        "hej - hello\nhus - house"
+      );
+    });
   });
 });

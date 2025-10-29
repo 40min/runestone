@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Box, Typography, Snackbar, Alert, IconButton } from "@mui/material";
 import type { AlertColor } from "@mui/material";
 import { Copy, Save } from "lucide-react";
@@ -56,6 +56,7 @@ interface VocabularyItem {
   english: string;
   example_phrase?: string;
   extra_info?: string;
+  known?: boolean;
 }
 
 interface ContentAnalysis {
@@ -103,6 +104,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
       : []
   );
   const [enrichVocabulary, setEnrichVocabulary] = useState(true);
+  const [hideKnown, setHideKnown] = useState(false); // New state variable
   const [copyButtonText, setCopyButtonText] = useState("Copy");
 
   useEffect(() => {
@@ -110,6 +112,15 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
       setCheckedItems(new Array(analysisResult.vocabulary.length).fill(false));
     }
   }, [analysisResult]);
+
+  // Memoized filtered vocabulary list
+  const filteredVocabulary = useMemo(
+    () =>
+      analysisResult
+        ? analysisResult.vocabulary.filter((item) => !hideKnown || !item.known)
+        : [],
+    [analysisResult, hideKnown]
+  );
 
   if (!ocrResult && !analysisResult && !resourcesResult) {
     if (error) {
@@ -125,7 +136,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   const handleCopyVocabulary = async () => {
     if (!analysisResult) return;
 
-    const checkedVocab = analysisResult.vocabulary.filter(
+    const checkedVocab = filteredVocabulary.filter(
       (_, index) => checkedItems[index]
     );
     if (checkedVocab.length === 0) {
@@ -189,7 +200,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
 
   const handleCheckAll = (checked: boolean) => {
     if (!analysisResult) return;
-    const newCheckedItems = new Array(analysisResult.vocabulary.length).fill(
+    const newCheckedItems = new Array(filteredVocabulary.length).fill(
       checked
     );
     setCheckedItems(newCheckedItems);
@@ -198,7 +209,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   const handleSaveVocabulary = async () => {
     if (!analysisResult) return;
 
-    const checkedVocab = analysisResult.vocabulary.filter(
+    const checkedVocab = filteredVocabulary.filter(
       (_, index) => checkedItems[index]
     );
     if (checkedVocab.length === 0) {
@@ -459,6 +470,24 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                       Enrich with grammar info
                     </Typography>
                   </Box>
+                  {/* New checkbox for hiding known words */}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                      mt: 1,
+                    }}
+                  >
+                    <StyledCheckbox
+                      id="hide-known-words-checkbox"
+                      checked={hideKnown}
+                      onChange={(checked) => setHideKnown(checked)}
+                    />
+                    <Typography sx={{ color: "white" }}>
+                      Hide known words
+                    </Typography>
+                  </Box>
                 </Box>
               )}
             </Box>
@@ -481,7 +510,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                     },
                   ]}
                   data={
-                    analysisResult.vocabulary as unknown as Record<
+                    filteredVocabulary as unknown as Record<
                       string,
                       unknown
                     >[]

@@ -17,6 +17,7 @@ interface VocabularyItem {
   english: string;
   example_phrase?: string;
   extra_info?: string;
+  known?: boolean;
 }
 
 interface ContentAnalysis {
