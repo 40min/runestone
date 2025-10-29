@@ -552,7 +552,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                       render: (value) => (value as string) || "—",
                     },
                   ]}
-                  data={filteredVocabulary as unknown as EnrichedVocabularyItem[]}
+                  data={filteredVocabulary}
                 />
               </Box>
             )}
