@@ -13,12 +13,14 @@ import {
   StyledCheckbox,
   DataTable,
 } from "./ui";
+import ProcessingStatus from "./ProcessingStatus"; // Import ProcessingStatus
 import { parseMarkdown } from "../utils/markdownParser";
 import type {
   OCRResult,
   VocabularyItem,
   EnrichedVocabularyItem,
   ContentAnalysis,
+  ProcessingStep, // Import ProcessingStep
 } from "../hooks/useImageProcessing";
 
 // Helper function to enrich vocabulary items with a unique ID
@@ -68,7 +70,8 @@ interface ResultsDisplayProps {
   onVocabularyUpdated?: (updatedVocabulary: EnrichedVocabularyItem[]) => void; // Optional callback
   recognizeOnly: boolean; // New prop
   onAnalyze: (text: string) => Promise<void>; // New prop
-  processingStep: string; // New prop
+  processingStep: ProcessingStep; // New prop
+  isProcessing: boolean; // New prop
 }
 
 const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
@@ -78,9 +81,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   error,
   saveVocabulary,
   onVocabularyUpdated,
-  recognizeOnly, // Destructure new prop
-  onAnalyze, // Destructure new prop
   processingStep, // Destructure new prop
+  isProcessing, // Destructure new prop
 }) => {
   const availableTabs = [
     ocrResult && "ocr",
@@ -132,7 +134,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     [enrichedVocabulary, hideKnown]
   );
 
-  if (!ocrResult && !analysisResult && !resourcesResult) {
+  if (!ocrResult && !analysisResult && !resourcesResult && !isProcessing) {
     if (error) {
       return (
         <Box sx={{ maxWidth: "64rem", mx: "auto", mt: 8 }}>
@@ -278,7 +280,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
         setCopyButtonText("Copied!");
         setSnackbar({
           open: true,
-          message: "OCR text copied to clipboard!",
+          message: "Recognized text copied to clipboard!",
           severity: "success",
         });
         setTimeout(() => setCopyButtonText("Copy"), 2000);
@@ -289,7 +291,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
       setCopyButtonText("Copied!");
       setSnackbar({
         open: true,
-        message: "OCR text copied to clipboard!",
+        message: "Recognized text copied to clipboard!",
         severity: "success",
       });
       setTimeout(() => setCopyButtonText("Copy"), 2000);
@@ -297,15 +299,9 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
       console.error("Failed to copy OCR text: ", err);
       setSnackbar({
         open: true,
-        message: "Failed to copy OCR text. Please try again.",
+        message: "Failed to copy recognized text. Please try again.",
         severity: "error",
       });
-    }
-  };
-
-  const handleAnalyzeOcrText = async () => {
-    if (ocrResult?.text) {
-      await onAnalyze(ocrResult.text);
     }
   };
 
@@ -316,27 +312,18 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     resourcesResult && { id: "extra_info", label: "Extra info" },
   ].filter(Boolean) as { id: string; label: string }[];
 
-  const isAnalyzeButtonDisabled =
-    processingStep === "ANALYZING" || processingStep === "RESOURCES";
-
   return (
     <Box sx={{ py: 8 }}>
-      <SectionTitle>Analysis Results</SectionTitle>
+      {isProcessing && (
+        <ProcessingStatus
+          isProcessing={isProcessing}
+          processingStep={processingStep}
+        />
+      )}
 
       {error && (
         <Box sx={{ mb: 4 }}>
           <ErrorAlert message={error} />
-        </Box>
-      )}
-
-      {recognizeOnly && ocrResult && (
-        <Box sx={{ display: "flex", justifyContent: "center", mb: 4 }}>
-          <CustomButton
-            onClick={handleAnalyzeOcrText}
-            disabled={isAnalyzeButtonDisabled}
-          >
-            Analyse
-          </CustomButton>
         </Box>
       )}
 
@@ -349,12 +336,6 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
       <Box sx={{ pt: 6 }}>
         {activeTab === "ocr" && (
           <Box>
-            {!ocrResult && (
-              <Typography sx={{ color: "#d1d5db", mb: 2 }}>
-                The OCR text extracted from the image will be displayed here.
-                This text can be edited and copied for further use.
-              </Typography>
-            )}
             {ocrResult && (
               <Box>
                 <Box

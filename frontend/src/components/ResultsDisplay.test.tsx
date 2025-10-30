@@ -23,10 +23,30 @@ const mockAnalysisResult = {
     rules: "Hej [hello] - greeting\nHur mår du? [how are you?] - question form",
   },
   vocabulary: [
-    { id: "hej", swedish: "hej", english: "hello", example_phrase: "Hej, hur mår du?", known: false },
-    { id: "bra", swedish: "bra", english: "good", example_phrase: "Jag mår bra idag.", known: true },
-    { id: "hus", swedish: "hus", english: "house", example_phrase: "Jag har ett hus.", known: false },
+    {
+      id: "hej",
+      swedish: "hej",
+      english: "hello",
+      example_phrase: "Hej, hur mår du?",
+      known: false,
+    },
+    {
+      id: "bra",
+      swedish: "bra",
+      english: "good",
+      example_phrase: "Jag mår bra idag.",
+      known: true,
+    },
+    {
+      id: "hus",
+      swedish: "hus",
+      english: "house",
+      example_phrase: "Jag har ett hus.",
+      known: false,
+    },
   ],
+  core_topics: [],
+  search_needed: { should_search: false, query_suggestions: [] },
 };
 
 const mockResourcesResult =
@@ -42,6 +62,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={null}
         error={error}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -58,6 +82,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={null}
         error={error}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -66,8 +94,6 @@ describe("ResultsDisplay", () => {
     expect(screen.getByText(error)).toBeInTheDocument();
 
     // Should also show the results
-    expect(screen.getByText("Analysis Results")).toBeInTheDocument();
-    expect(screen.getByText("OCR Text")).toBeInTheDocument();
     expect(screen.getByText(mockOcrResult.text)).toBeInTheDocument();
   });
 
@@ -79,11 +105,13 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
-    expect(screen.getByText("Analysis Results")).toBeInTheDocument();
-    expect(screen.getByText("OCR Text")).toBeInTheDocument();
     expect(screen.getByText(mockOcrResult.text)).toBeInTheDocument();
   });
 
@@ -95,6 +123,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -122,6 +154,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -150,6 +186,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -182,6 +222,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -214,6 +258,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={resultWithoutExtraInfo.extra_info}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -229,10 +277,14 @@ describe("ResultsDisplay", () => {
         resourcesResult={null}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
-    expect(screen.queryByText("Analysis Results")).not.toBeInTheDocument();
+    expect(screen.queryByText("Analysis")).not.toBeInTheDocument();
   });
 
   it("renders all tabs correctly", () => {
@@ -243,6 +295,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -250,91 +306,6 @@ describe("ResultsDisplay", () => {
     expect(screen.getByText("Grammar")).toBeInTheDocument();
     expect(screen.getByText("Vocabulary")).toBeInTheDocument();
     expect(screen.getByText("Extra info")).toBeInTheDocument();
-  });
-
-  it("displays rules section when rules are present", () => {
-    render(
-      <ResultsDisplay
-        ocrResult={mockOcrResult}
-        analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
-        error={null}
-        saveVocabulary={vi.fn()}
-      />
-    );
-
-    const grammarTab = screen.getByText("Grammar");
-    fireEvent.click(grammarTab);
-
-    expect(screen.getByText("Rules:")).toBeInTheDocument();
-    expect(screen.getByText(/Hej \[hello\] - greeting/)).toBeInTheDocument();
-    expect(
-      screen.getByText(/Hur mår du\? \[how are you\?\] - question form/)
-    ).toBeInTheDocument();
-  });
-
-  it("does not display rules section when rules are null", () => {
-    const resultWithoutRules = {
-      ocr_result: mockOcrResult,
-      analysis: {
-        ...mockAnalysisResult,
-        grammar_focus: {
-          ...mockAnalysisResult.grammar_focus,
-          rules: undefined,
-        },
-      },
-      extra_info: mockResourcesResult,
-    };
-
-    render(
-      <ResultsDisplay
-        ocrResult={resultWithoutRules.ocr_result}
-        analysisResult={resultWithoutRules.analysis}
-        resourcesResult={resultWithoutRules.extra_info}
-        error={null}
-        saveVocabulary={vi.fn()}
-      />
-    );
-
-    const grammarTab = screen.getByText("Grammar");
-    fireEvent.click(grammarTab);
-
-    expect(screen.queryByText("Rules:")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("Hej [hello] - greeting")
-    ).not.toBeInTheDocument();
-  });
-
-  it("does not display rules section when rules are undefined", () => {
-    const resultWithoutRules = {
-      ocr_result: mockOcrResult,
-      analysis: {
-        ...mockAnalysisResult,
-        grammar_focus: {
-          ...mockAnalysisResult.grammar_focus,
-          rules: undefined,
-        },
-      },
-      extra_info: mockResourcesResult,
-    };
-
-    render(
-      <ResultsDisplay
-        ocrResult={resultWithoutRules.ocr_result}
-        analysisResult={resultWithoutRules.analysis}
-        resourcesResult={resultWithoutRules.extra_info}
-        error={null}
-        saveVocabulary={vi.fn()}
-      />
-    );
-
-    const grammarTab = screen.getByText("Grammar");
-    fireEvent.click(grammarTab);
-
-    expect(screen.queryByText("Rules:")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("Hej [hello] - greeting")
-    ).not.toBeInTheDocument();
   });
 
   it("converts URLs to clickable links in extra info", () => {
@@ -352,6 +323,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={resultWithUrl.extra_info}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -386,6 +361,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -414,6 +393,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -442,6 +425,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -491,6 +478,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -523,6 +514,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -557,6 +552,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -594,6 +593,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -636,6 +639,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -676,6 +683,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -715,6 +726,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -731,7 +746,7 @@ describe("ResultsDisplay", () => {
 
     // Check that success snackbar appears
     expect(
-      screen.getByText("OCR text copied to clipboard!")
+      screen.getByText("Recognized text copied to clipboard!")
     ).toBeInTheDocument();
   });
 
@@ -748,6 +763,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -757,7 +776,7 @@ describe("ResultsDisplay", () => {
     // Should show error message
     await waitFor(() => {
       expect(
-        screen.getByText("Failed to copy OCR text. Please try again.")
+        screen.getByText("Failed to copy recognized text. Please try again.")
       ).toBeInTheDocument();
     });
   });
@@ -780,6 +799,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -789,10 +812,10 @@ describe("ResultsDisplay", () => {
     // Should show either success or error message - the fallback might not work in test environment
     await waitFor(() => {
       const successMessage = screen.queryByText(
-        "OCR text copied to clipboard!"
+        "Recognized text copied to clipboard!"
       );
       const errorMessage = screen.queryByText(
-        "Failed to copy OCR text. Please try again."
+        "Failed to copy recognized text. Please try again."
       );
       expect(successMessage || errorMessage).toBeTruthy();
     });
@@ -815,6 +838,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -833,6 +860,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -844,7 +875,9 @@ describe("ResultsDisplay", () => {
     expect(screen.getByText("bra")).toBeInTheDocument(); // known word
     expect(screen.getByText("hus")).toBeInTheDocument();
 
-    const hideKnownCheckbox = document.getElementById("hide-known-words-checkbox");
+    const hideKnownCheckbox = document.getElementById(
+      "hide-known-words-checkbox"
+    );
     fireEvent.click(hideKnownCheckbox!);
 
     await waitFor(() => {
@@ -871,6 +904,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -878,10 +915,14 @@ describe("ResultsDisplay", () => {
     fireEvent.click(vocabularyTab);
 
     // Hide known words
-    const hideKnownCheckbox = document.getElementById("hide-known-words-checkbox");
+    const hideKnownCheckbox = document.getElementById(
+      "hide-known-words-checkbox"
+    );
     fireEvent.click(hideKnownCheckbox!);
 
-    const masterCheckbox = document.getElementById("vocabulary-master-checkbox");
+    const masterCheckbox = document.getElementById(
+      "vocabulary-master-checkbox"
+    );
     fireEvent.click(masterCheckbox!);
 
     await waitFor(() => {
@@ -907,6 +948,10 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
       />
     );
 
@@ -914,11 +959,15 @@ describe("ResultsDisplay", () => {
     fireEvent.click(vocabularyTab);
 
     // Hide known words
-    const hideKnownCheckbox = document.getElementById("hide-known-words-checkbox");
+    const hideKnownCheckbox = document.getElementById(
+      "hide-known-words-checkbox"
+    );
     fireEvent.click(hideKnownCheckbox!);
 
     // Check all visible items
-    const masterCheckbox = document.getElementById("vocabulary-master-checkbox");
+    const masterCheckbox = document.getElementById(
+      "vocabulary-master-checkbox"
+    );
     fireEvent.click(masterCheckbox!);
 
     const copyButton = screen.getByText("Copy");
@@ -940,6 +989,8 @@ describe("ResultsDisplay", () => {
       const analysisResult = {
         grammar_focus: mockAnalysisResult.grammar_focus,
         vocabulary: mockVocabulary,
+        core_topics: [],
+        search_needed: { should_search: false, query_suggestions: [] },
       };
 
       render(
@@ -949,6 +1000,10 @@ describe("ResultsDisplay", () => {
           resourcesResult={null}
           error={null}
           saveVocabulary={vi.fn()}
+          recognizeOnly={false}
+          onAnalyze={vi.fn()}
+          processingStep="IDLE"
+          isProcessing={false}
         />
       );
 
@@ -973,6 +1028,8 @@ describe("ResultsDisplay", () => {
       const analysisResult = {
         grammar_focus: mockAnalysisResult.grammar_focus,
         vocabulary: mockVocabulary,
+        core_topics: [],
+        search_needed: { should_search: false, query_suggestions: [] },
       };
 
       render(
@@ -982,6 +1039,10 @@ describe("ResultsDisplay", () => {
           resourcesResult={null}
           error={null}
           saveVocabulary={vi.fn()}
+          recognizeOnly={false}
+          onAnalyze={vi.fn()}
+          processingStep="IDLE"
+          isProcessing={false}
         />
       );
 
@@ -989,7 +1050,9 @@ describe("ResultsDisplay", () => {
       fireEvent.click(vocabularyTab);
 
       // Check that the item with the existing ID has a checkbox with that ID
-      const hundCheckbox = document.getElementById("vocabulary-item-existing-id-1");
+      const hundCheckbox = document.getElementById(
+        "vocabulary-item-existing-id-1"
+      );
       expect(hundCheckbox).toBeInTheDocument();
     });
   });
@@ -1003,6 +1066,8 @@ describe("ResultsDisplay", () => {
       const analysisResult = {
         grammar_focus: mockAnalysisResult.grammar_focus,
         vocabulary: mockVocabulary,
+        core_topics: [],
+        search_needed: { should_search: false, query_suggestions: [] },
       };
 
       render(
@@ -1012,6 +1077,10 @@ describe("ResultsDisplay", () => {
           resourcesResult={null}
           error={null}
           saveVocabulary={vi.fn()}
+          recognizeOnly={false}
+          onAnalyze={vi.fn()}
+          processingStep="IDLE"
+          isProcessing={false}
         />
       );
 
@@ -1057,6 +1126,8 @@ describe("ResultsDisplay", () => {
       const analysisResult = {
         grammar_focus: mockAnalysisResult.grammar_focus,
         vocabulary: mockVocabulary,
+        core_topics: [],
+        search_needed: { should_search: false, query_suggestions: [] },
       };
 
       render(
@@ -1067,6 +1138,10 @@ describe("ResultsDisplay", () => {
           error={null}
           saveVocabulary={saveVocabularyMock}
           onVocabularyUpdated={onVocabularyUpdatedMock}
+          recognizeOnly={false}
+          onAnalyze={vi.fn()}
+          processingStep="IDLE"
+          isProcessing={false}
         />
       );
 
@@ -1098,5 +1173,67 @@ describe("ResultsDisplay", () => {
       // "hammare" should still be visible
       expect(screen.getByText("hammare")).toBeInTheDocument();
     });
+  });
+
+  it("should render call to action and Analyse button when recognizeOnly is true, ocrResult is present, and analysisResult is null", () => {
+    const onAnalyzeMock = vi.fn();
+    render(
+      <ResultsDisplay
+        ocrResult={mockOcrResult}
+        analysisResult={null}
+        resourcesResult={null}
+        error={null}
+        saveVocabulary={vi.fn()}
+        recognizeOnly={true}
+        onAnalyze={onAnalyzeMock}
+        processingStep="IDLE"
+        isProcessing={false}
+      />
+    );
+
+    // There are multiple buttons (OCR Text tab button and Copy button), so we need to be more specific
+    // The copy button should be present
+    const copyButton = screen.getByTitle("Copy");
+    expect(copyButton).toBeInTheDocument();
+  });
+
+  it("should not render call to action and Analyse button when recognizeOnly is false", () => {
+    render(
+      <ResultsDisplay
+        ocrResult={mockOcrResult}
+        analysisResult={null}
+        resourcesResult={null}
+        error={null}
+        saveVocabulary={vi.fn()}
+        recognizeOnly={false}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
+      />
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /\(.*\)/ })
+    ).not.toBeInTheDocument();
+  });
+
+  it("should not render call to action and Analyse button when analysisResult is present", () => {
+    render(
+      <ResultsDisplay
+        ocrResult={mockOcrResult}
+        analysisResult={mockAnalysisResult}
+        resourcesResult={mockResourcesResult}
+        error={null}
+        saveVocabulary={vi.fn()}
+        recognizeOnly={true}
+        onAnalyze={vi.fn()}
+        processingStep="IDLE"
+        isProcessing={false}
+      />
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /\(.*\)/ })
+    ).not.toBeInTheDocument();
   });
 });

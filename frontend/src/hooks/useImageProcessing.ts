@@ -10,6 +10,7 @@ export interface GrammarFocus {
   topic: string;
   explanation: string;
   has_explicit_rules: boolean;
+  rules?: string;
 }
 
 export interface VocabularyItem {
@@ -36,6 +37,8 @@ export interface ContentAnalysis {
   };
 }
 
+export type ProcessingStep = "IDLE" | "OCR" | "ANALYZING" | "RESOURCES" | "DONE"; // Export ProcessingStep type
+
 interface UseImageProcessingReturn {
   processImage: (file: File, recognizeOnly: boolean) => Promise<void>;
   recognizeImage: (file: File) => Promise<OCRResult | null>;
@@ -45,7 +48,7 @@ interface UseImageProcessingReturn {
   ocrResult: OCRResult | null;
   analysisResult: ContentAnalysis | null;
   resourcesResult: string | null;
-  processingStep: "IDLE" | "OCR" | "ANALYZING" | "RESOURCES" | "DONE";
+  processingStep: ProcessingStep;
   error: string | null;
   isProcessing: boolean;
   reset: () => void;
@@ -59,9 +62,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
     null
   );
   const [resourcesResult, setResourcesResult] = useState<string | null>(null);
-  const [processingStep, setProcessingStep] = useState<
-    "IDLE" | "OCR" | "ANALYZING" | "RESOURCES" | "DONE"
-  >("IDLE");
+  const [processingStep, setProcessingStep] = useState<ProcessingStep>("IDLE");
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentImage, setCurrentImage] = useState<string | null>(null);

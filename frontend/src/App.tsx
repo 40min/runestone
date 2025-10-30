@@ -1,12 +1,14 @@
 import Header from "./components/Header";
 import FileUpload from "./components/FileUpload";
-import ProcessingStatus from "./components/ProcessingStatus";
 import ResultsDisplay from "./components/ResultsDisplay";
 import VocabularyView from "./components/VocabularyView";
 import GrammarView from "./components/GrammarView";
 import useImageProcessing from "./hooks/useImageProcessing";
 import { useState } from "react";
 import StyledCheckbox from "./components/ui/StyledCheckbox";
+import { CustomButton } from "./components/ui"; // Import CustomButton
+import { BrainCircuit } from "lucide-react"; // Import BrainCircuit
+import { Box } from "@mui/material"; // Import Box for layout
 
 function App() {
   const [currentView, setCurrentView] = useState<
@@ -31,6 +33,15 @@ function App() {
     await processImage(file, recognizeOnly);
   };
 
+  const handleAnalyzeOcrText = async () => {
+    if (ocrResult?.text) {
+      await analyzeText(ocrResult.text);
+    }
+  };
+
+  const isAnalyzeButtonDisabled =
+    processingStep === "ANALYZING" || processingStep === "RESOURCES";
+
   return (
     <div className="bg-[#1a102b] min-h-screen">
       <div className="layout-container flex h-full grow flex-col">
@@ -53,20 +64,24 @@ function App() {
                   onFileSelect={handleFileSelect}
                   isProcessing={isProcessing}
                 />
-                <StyledCheckbox
-                  label="Recognize only"
-                  checked={recognizeOnly}
-                  onChange={(checked: boolean) => setRecognizeOnly(checked)}
-                />
-
-                {isProcessing && (
-                  <ProcessingStatus
-                    isProcessing={isProcessing}
-                    processingStep={processingStep}
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <StyledCheckbox
+                    label="Recognize only"
+                    checked={recognizeOnly}
+                    onChange={(checked: boolean) => setRecognizeOnly(checked)}
                   />
-                )}
+                  {recognizeOnly && ocrResult && (
+                    <CustomButton
+                      onClick={handleAnalyzeOcrText}
+                      disabled={isAnalyzeButtonDisabled}
+                      sx={{ minWidth: 0, padding: "4px 8px", fontSize: "0.75rem" }}
+                    >
+                      <BrainCircuit size={16} />
+                    </CustomButton>
+                  )}
+                </Box>
 
-                {(ocrResult || analysisResult || resourcesResult || error) && (
+                {(ocrResult || analysisResult || resourcesResult || error || isProcessing) && (
                   <ResultsDisplay
                     ocrResult={ocrResult}
                     analysisResult={analysisResult}
@@ -76,6 +91,8 @@ function App() {
                     onVocabularyUpdated={onVocabularyUpdated}
                     recognizeOnly={recognizeOnly}
                     onAnalyze={analyzeText}
+                    processingStep={processingStep}
+                    isProcessing={isProcessing}
                   />
                 )}
               </>
