@@ -799,4 +799,52 @@ class TestVocabularyService:
         # Test with no existing phrases
         word_phrases_to_check = ["en apelsin", "en druva"]
         existing = service.get_existing_word_phrases(word_phrases_to_check, user_id=1)
-        assert existing == []
+
+    def test_get_vocabulary_with_precise_flag(self, service, db_session):
+        """Test that service passes through precise flag correctly."""
+        from unittest.mock import patch
+
+        # Add test data
+        vocab1 = VocabularyModel(
+            user_id=1,
+            word_phrase="apple",
+            translation="äpple",
+            in_learn=True,
+            last_learned=None,
+        )
+        vocab2 = VocabularyModel(
+            user_id=1,
+            word_phrase="pineapple",
+            translation="ananas",
+            in_learn=True,
+            last_learned=None,
+        )
+        db_session.add_all([vocab1, vocab2])
+        db_session.commit()
+
+        # Test with precise=False (partial search)
+        with patch.object(service.repo, "get_vocabulary") as mock_repo:
+            mock_repo.return_value = [vocab1, vocab2]
+            result = service.get_vocabulary(limit=20, search_query="apple", precise=False, user_id=1)
+
+            # Verify repo called with precise=False
+            mock_repo.assert_called_once_with(20, "apple", False, 1)
+            assert len(result) == 2
+
+        # Test with precise=True (exact search)
+        with patch.object(service.repo, "get_vocabulary") as mock_repo:
+            mock_repo.return_value = [vocab1]
+            result = service.get_vocabulary(limit=20, search_query="apple", precise=True, user_id=1)
+
+            # Verify repo called with precise=True
+            mock_repo.assert_called_once_with(20, "apple", True, 1)
+            assert len(result) == 1
+
+        # Test default precise=False when not specified
+        with patch.object(service.repo, "get_vocabulary") as mock_repo:
+            mock_repo.return_value = [vocab1, vocab2]
+            result = service.get_vocabulary(limit=20, search_query="apple", user_id=1)
+
+            # Verify repo called with precise=False (default)
+            mock_repo.assert_called_once_with(20, "apple", False, 1)
+            assert len(result) == 2

@@ -1274,4 +1274,95 @@ class TestVocabularyRepository:
         db_session.commit()
 
         updated_vocab_none = repo.update_last_learned(vocab_with_none)
-        assert updated_vocab_none.learned_times == 1  # Should handle None as 0 + 1
+        assert updated_vocab_none.learned_times == 1
+        db_vocab_none = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab_with_none.id).first()
+        assert db_vocab_none.learned_times == 1
+
+    def test_get_vocabulary_with_precise_search(self, repo, db_session, vocab_factory):
+        """Test precise search functionality (exact case-insensitive match)."""
+        # Add test data with case variations
+        test_items = [
+            vocab_factory(
+                word_phrase="apple",
+                translation="äpple",
+                created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+            ),
+            vocab_factory(
+                word_phrase="APPLE",
+                translation="ÄPPLE",
+                created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+            ),
+            vocab_factory(
+                word_phrase="pineapple",
+                translation="ananas",
+                created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+            ),
+            vocab_factory(
+                word_phrase="app",
+                translation="app",
+                created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
+            ),
+        ]
+        db_session.add_all(test_items)
+        db_session.commit()
+
+        # Test precise search for "apple" - should match only exact case-insensitive matches
+        result = repo.get_vocabulary(limit=20, search_query="apple", precise=True, user_id=1)
+        assert len(result) == 2  # "apple" and "APPLE"
+        phrases = [r.word_phrase for r in result]
+        assert "apple" in phrases
+        assert "APPLE" in phrases
+        assert "pineapple" not in phrases  # No partial match
+        assert "app" not in phrases  # No partial match
+
+        # Test case-insensitive precise search
+        result = repo.get_vocabulary(limit=20, search_query="APPLE", precise=True, user_id=1)
+        assert len(result) == 2  # Same two items
+        phrases = [r.word_phrase for r in result]
+        assert "apple" in phrases
+        assert "APPLE" in phrases
+
+        # Test precise search for "pineapple" - should match only exact
+        result = repo.get_vocabulary(limit=20, search_query="pineapple", precise=True, user_id=1)
+        assert len(result) == 1
+        assert result[0].word_phrase == "pineapple"
+
+        # Test precise search for non-existent term
+        result = repo.get_vocabulary(limit=20, search_query="banana", precise=True, user_id=1)
+        assert len(result) == 0
+
+        # Test precise search with None query (should return all)
+        result = repo.get_vocabulary(limit=20, search_query=None, precise=True, user_id=1)
+        assert len(result) == 4
+
+        # Test precise search with empty string (should return all)
+        result = repo.get_vocabulary(limit=20, search_query="", precise=True, user_id=1)
+        assert len(result) == 4
+
+    def test_get_vocabulary_precise_vs_partial_comparison(self, repo, db_session, vocab_factory):
+        """Test that precise and partial search produce different results."""
+        # Add test data
+        test_items = [
+            vocab_factory(word_phrase="test", translation="test", created_at=datetime(2023, 1, 1, tzinfo=timezone.utc)),
+            vocab_factory(
+                word_phrase="testing", translation="testing", created_at=datetime(2023, 1, 2, tzinfo=timezone.utc)
+            ),
+            vocab_factory(
+                word_phrase="contest", translation="contest", created_at=datetime(2023, 1, 3, tzinfo=timezone.utc)
+            ),
+        ]
+        db_session.add_all(test_items)
+        db_session.commit()
+
+        # Partial search for "test" - should match all three (substring match)
+        partial_result = repo.get_vocabulary(limit=20, search_query="test", precise=False, user_id=1)
+        assert len(partial_result) == 3
+        partial_phrases = [r.word_phrase for r in partial_result]
+        assert "test" in partial_phrases
+        assert "testing" in partial_phrases
+        assert "contest" in partial_phrases
+
+        # Precise search for "test" - should match only exact
+        precise_result = repo.get_vocabulary(limit=20, search_query="test", precise=True, user_id=1)
+        assert len(precise_result) == 1
+        assert precise_result[0].word_phrase == "test"
