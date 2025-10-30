@@ -14,6 +14,12 @@ import {
   DataTable,
 } from "./ui";
 import { parseMarkdown } from "../utils/markdownParser";
+import type {
+  OCRResult,
+  VocabularyItem,
+  EnrichedVocabularyItem,
+  ContentAnalysis,
+} from "../hooks/useImageProcessing";
 
 // Helper function to enrich vocabulary items with a unique ID
 const enrichVocabularyItems = (
@@ -50,38 +56,6 @@ const convertUrlsToLinks = (text: string): (string | React.ReactElement)[] => {
   });
 };
 
-interface OCRResult {
-  text: string;
-  character_count: number;
-}
-
-interface GrammarFocus {
-  topic: string;
-  explanation: string;
-  has_explicit_rules: boolean;
-  rules?: string;
-}
-
-interface VocabularyItem {
-  id?: string; // Make id optional in base interface
-  swedish: string;
-  english: string;
-  example_phrase?: string;
-  extra_info?: string;
-  known?: boolean;
-  [key: string]: unknown; // Add index signature
-}
-
-// New interface for enriched vocabulary items with a required ID
-interface EnrichedVocabularyItem extends VocabularyItem {
-  id: string;
-}
-
-interface ContentAnalysis {
-  grammar_focus: GrammarFocus;
-  vocabulary: VocabularyItem[];
-}
-
 interface ResultsDisplayProps {
   ocrResult: OCRResult | null;
   analysisResult: ContentAnalysis | null;
@@ -92,6 +66,9 @@ interface ResultsDisplayProps {
     enrich: boolean
   ) => Promise<void>;
   onVocabularyUpdated?: (updatedVocabulary: EnrichedVocabularyItem[]) => void; // Optional callback
+  recognizeOnly: boolean; // New prop
+  onAnalyze: (text: string) => Promise<void>; // New prop
+  processingStep: string; // New prop
 }
 
 const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
@@ -101,6 +78,9 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   error,
   saveVocabulary,
   onVocabularyUpdated,
+  recognizeOnly, // Destructure new prop
+  onAnalyze, // Destructure new prop
+  processingStep, // Destructure new prop
 }) => {
   const availableTabs = [
     ocrResult && "ocr",
@@ -148,8 +128,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
 
   // Memoized filtered vocabulary list
   const filteredVocabulary = useMemo(
-    () =>
-      enrichedVocabulary.filter((item) => !hideKnown || !item.known),
+    () => enrichedVocabulary.filter((item) => !hideKnown || !item.known),
     [enrichedVocabulary, hideKnown]
   );
 
@@ -324,12 +303,21 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     }
   };
 
+  const handleAnalyzeOcrText = async () => {
+    if (ocrResult?.text) {
+      await onAnalyze(ocrResult.text);
+    }
+  };
+
   const tabs = [
     ocrResult && { id: "ocr", label: "OCR Text" },
     analysisResult && { id: "grammar", label: "Grammar" },
     analysisResult && { id: "vocabulary", label: "Vocabulary" },
     resourcesResult && { id: "extra_info", label: "Extra info" },
   ].filter(Boolean) as { id: string; label: string }[];
+
+  const isAnalyzeButtonDisabled =
+    processingStep === "ANALYZING" || processingStep === "RESOURCES";
 
   return (
     <Box sx={{ py: 8 }}>
@@ -338,6 +326,17 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
       {error && (
         <Box sx={{ mb: 4 }}>
           <ErrorAlert message={error} />
+        </Box>
+      )}
+
+      {recognizeOnly && ocrResult && (
+        <Box sx={{ display: "flex", justifyContent: "center", mb: 4 }}>
+          <CustomButton
+            onClick={handleAnalyzeOcrText}
+            disabled={isAnalyzeButtonDisabled}
+          >
+            Analyse
+          </CustomButton>
         </Box>
       )}
 
