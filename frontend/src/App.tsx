@@ -74,14 +74,23 @@ function App() {
                     <CustomButton
                       onClick={handleAnalyzeOcrText}
                       disabled={isAnalyzeButtonDisabled}
-                      sx={{ minWidth: 0, padding: "4px 8px", fontSize: "0.75rem" }}
+                      sx={{
+                        minWidth: 0,
+                        padding: "4px 8px",
+                        fontSize: "0.75rem",
+                      }}
+                      aria-label="Analyze"
                     >
                       <BrainCircuit size={16} />
                     </CustomButton>
                   )}
                 </Box>
 
-                {(ocrResult || analysisResult || resourcesResult || error || isProcessing) && (
+                {(ocrResult ||
+                  analysisResult ||
+                  resourcesResult ||
+                  error ||
+                  isProcessing) && (
                   <ResultsDisplay
                     ocrResult={ocrResult}
                     analysisResult={analysisResult}
