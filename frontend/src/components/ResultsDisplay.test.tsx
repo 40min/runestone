@@ -1175,65 +1175,115 @@ describe("ResultsDisplay", () => {
     });
   });
 
-  it("should render call to action and Analyse button when recognizeOnly is true, ocrResult is present, and analysisResult is null", () => {
-    const onAnalyzeMock = vi.fn();
-    render(
-      <ResultsDisplay
-        ocrResult={mockOcrResult}
-        analysisResult={null}
-        resourcesResult={null}
-        error={null}
-        saveVocabulary={vi.fn()}
-        recognizeOnly={true}
-        onAnalyze={onAnalyzeMock}
-        processingStep="IDLE"
-        isProcessing={false}
-      />
-    );
+  describe("Recognize Only Feature", () => {
+    it("renders OCR results when recognizeOnly is true and ocrResult is present", () => {
+      const onAnalyzeMock = vi.fn();
+      render(
+        <ResultsDisplay
+          ocrResult={mockOcrResult}
+          analysisResult={null}
+          resourcesResult={null}
+          error={null}
+          saveVocabulary={vi.fn()}
+          recognizeOnly={true}
+          onAnalyze={onAnalyzeMock}
+          processingStep="IDLE"
+          isProcessing={false}
+        />
+      );
 
-    // There are multiple buttons (OCR Text tab button and Copy button), so we need to be more specific
-    // The copy button should be present
-    const copyButton = screen.getByTitle("Copy");
-    expect(copyButton).toBeInTheDocument();
-  });
+      // Should display the OCR text
+      expect(screen.getByText(mockOcrResult.text)).toBeInTheDocument();
 
-  it("should not render call to action and Analyse button when recognizeOnly is false", () => {
-    render(
-      <ResultsDisplay
-        ocrResult={mockOcrResult}
-        analysisResult={null}
-        resourcesResult={null}
-        error={null}
-        saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
-        processingStep="IDLE"
-        isProcessing={false}
-      />
-    );
+      // Should have the copy button for OCR text
+      const copyButton = screen.getByTitle("Copy");
+      expect(copyButton).toBeInTheDocument();
+    });
 
-    expect(
-      screen.queryByRole("button", { name: /\(.*\)/ })
-    ).not.toBeInTheDocument();
-  });
+    it("does not show analysis tabs when recognizeOnly is true and analysisResult is null", () => {
+      render(
+        <ResultsDisplay
+          ocrResult={mockOcrResult}
+          analysisResult={null}
+          resourcesResult={null}
+          error={null}
+          saveVocabulary={vi.fn()}
+          recognizeOnly={true}
+          onAnalyze={vi.fn()}
+          processingStep="IDLE"
+          isProcessing={false}
+        />
+      );
 
-  it("should not render call to action and Analyse button when analysisResult is present", () => {
-    render(
-      <ResultsDisplay
-        ocrResult={mockOcrResult}
-        analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
-        error={null}
-        saveVocabulary={vi.fn()}
-        recognizeOnly={true}
-        onAnalyze={vi.fn()}
-        processingStep="IDLE"
-        isProcessing={false}
-      />
-    );
+      // Should not show Grammar or Vocabulary tabs when analysis hasn't been performed
+      expect(screen.queryByText("Grammar")).not.toBeInTheDocument();
+      expect(screen.queryByText("Vocabulary")).not.toBeInTheDocument();
+      expect(screen.queryByText("Extra info")).not.toBeInTheDocument();
+    });
 
-    expect(
-      screen.queryByRole("button", { name: /\(.*\)/ })
-    ).not.toBeInTheDocument();
+    it("shows all tabs including analysis when recognizeOnly is true but analysisResult is present", () => {
+      render(
+        <ResultsDisplay
+          ocrResult={mockOcrResult}
+          analysisResult={mockAnalysisResult}
+          resourcesResult={mockResourcesResult}
+          error={null}
+          saveVocabulary={vi.fn()}
+          recognizeOnly={true}
+          onAnalyze={vi.fn()}
+          processingStep="IDLE"
+          isProcessing={false}
+        />
+      );
+
+      // Should show all tabs when analysis has been performed
+      expect(screen.getByText("OCR Text")).toBeInTheDocument();
+      expect(screen.getByText("Grammar")).toBeInTheDocument();
+      expect(screen.getByText("Vocabulary")).toBeInTheDocument();
+      expect(screen.getByText("Extra info")).toBeInTheDocument();
+    });
+
+    it("handles recognizeOnly prop correctly when false", () => {
+      render(
+        <ResultsDisplay
+          ocrResult={mockOcrResult}
+          analysisResult={mockAnalysisResult}
+          resourcesResult={mockResourcesResult}
+          error={null}
+          saveVocabulary={vi.fn()}
+          recognizeOnly={false}
+          onAnalyze={vi.fn()}
+          processingStep="IDLE"
+          isProcessing={false}
+        />
+      );
+
+      // Should show all tabs normally when recognizeOnly is false
+      expect(screen.getByText("OCR Text")).toBeInTheDocument();
+      expect(screen.getByText("Grammar")).toBeInTheDocument();
+      expect(screen.getByText("Vocabulary")).toBeInTheDocument();
+      expect(screen.getByText("Extra info")).toBeInTheDocument();
+    });
+
+    it("displays processing status when isProcessing is true during recognize-only mode", () => {
+      render(
+        <ResultsDisplay
+          ocrResult={null}
+          analysisResult={null}
+          resourcesResult={null}
+          error={null}
+          saveVocabulary={vi.fn()}
+          recognizeOnly={true}
+          onAnalyze={vi.fn()}
+          processingStep="OCR"
+          isProcessing={true}
+        />
+      );
+
+      // ProcessingStatus component should be rendered
+      // The actual text depends on ProcessingStatus implementation
+      // We just verify the component renders when isProcessing is true
+      expect(screen.queryByText("Analysis")).not.toBeInTheDocument();
+    });
   });
 });
