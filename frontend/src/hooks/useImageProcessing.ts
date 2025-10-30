@@ -115,6 +115,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
       setOcrResult(ocrData);
       setProgress(50);
       setProcessingStep("DONE");
+      setIsProcessing(false);
       return ocrData;
     } catch (err) {
       const errorMessage =
@@ -132,7 +133,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
     setAnalysisResult(null);
     setResourcesResult(null);
     setProcessingStep("IDLE");
-    setProgress(50);
+    setProgress(0);
 
     try {
       setProcessingStep("ANALYZING");
@@ -204,7 +205,6 @@ const useImageProcessing = (): UseImageProcessingReturn => {
   };
 
   const processImage = async (file: File, recognizeOnly: boolean) => {
-    setIsProcessing(true);
     setError(null);
     setAnalysisResult(null);
     setResourcesResult(null);
@@ -222,8 +222,6 @@ const useImageProcessing = (): UseImageProcessingReturn => {
       const errorMessage =
         err instanceof Error ? err.message : "An unexpected error occurred during image processing";
       setError(errorMessage);
-    } finally {
-      setIsProcessing(false);
     }
   };
 

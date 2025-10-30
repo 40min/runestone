@@ -62,8 +62,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={null}
         error={error}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -82,8 +80,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={null}
         error={error}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -105,8 +101,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -123,8 +117,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -154,8 +146,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -186,8 +176,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -222,8 +210,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -258,8 +244,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={resultWithoutExtraInfo.extra_info}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -277,8 +261,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={null}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -295,8 +277,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -323,8 +303,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={resultWithUrl.extra_info}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -361,8 +339,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -393,8 +369,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -425,8 +399,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -478,8 +450,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -514,8 +484,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -552,8 +520,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -593,8 +559,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -639,8 +603,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -683,8 +645,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -726,8 +686,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -763,8 +721,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -799,8 +755,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -838,8 +792,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -860,8 +812,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -904,8 +854,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -948,8 +896,6 @@ describe("ResultsDisplay", () => {
         resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
-        recognizeOnly={false}
-        onAnalyze={vi.fn()}
         processingStep="IDLE"
         isProcessing={false}
       />
@@ -1000,8 +946,6 @@ describe("ResultsDisplay", () => {
           resourcesResult={null}
           error={null}
           saveVocabulary={vi.fn()}
-          recognizeOnly={false}
-          onAnalyze={vi.fn()}
           processingStep="IDLE"
           isProcessing={false}
         />
@@ -1039,8 +983,6 @@ describe("ResultsDisplay", () => {
           resourcesResult={null}
           error={null}
           saveVocabulary={vi.fn()}
-          recognizeOnly={false}
-          onAnalyze={vi.fn()}
           processingStep="IDLE"
           isProcessing={false}
         />
@@ -1077,8 +1019,6 @@ describe("ResultsDisplay", () => {
           resourcesResult={null}
           error={null}
           saveVocabulary={vi.fn()}
-          recognizeOnly={false}
-          onAnalyze={vi.fn()}
           processingStep="IDLE"
           isProcessing={false}
         />
@@ -1138,8 +1078,6 @@ describe("ResultsDisplay", () => {
           error={null}
           saveVocabulary={saveVocabularyMock}
           onVocabularyUpdated={onVocabularyUpdatedMock}
-          recognizeOnly={false}
-          onAnalyze={vi.fn()}
           processingStep="IDLE"
           isProcessing={false}
         />
@@ -1177,7 +1115,6 @@ describe("ResultsDisplay", () => {
 
   describe("Recognize Only Feature", () => {
     it("renders OCR results when recognizeOnly is true and ocrResult is present", () => {
-      const onAnalyzeMock = vi.fn();
       render(
         <ResultsDisplay
           ocrResult={mockOcrResult}
@@ -1185,8 +1122,6 @@ describe("ResultsDisplay", () => {
           resourcesResult={null}
           error={null}
           saveVocabulary={vi.fn()}
-          recognizeOnly={true}
-          onAnalyze={onAnalyzeMock}
           processingStep="IDLE"
           isProcessing={false}
         />
@@ -1208,8 +1143,6 @@ describe("ResultsDisplay", () => {
           resourcesResult={null}
           error={null}
           saveVocabulary={vi.fn()}
-          recognizeOnly={true}
-          onAnalyze={vi.fn()}
           processingStep="IDLE"
           isProcessing={false}
         />
@@ -1229,8 +1162,6 @@ describe("ResultsDisplay", () => {
           resourcesResult={mockResourcesResult}
           error={null}
           saveVocabulary={vi.fn()}
-          recognizeOnly={true}
-          onAnalyze={vi.fn()}
           processingStep="IDLE"
           isProcessing={false}
         />
@@ -1251,8 +1182,6 @@ describe("ResultsDisplay", () => {
           resourcesResult={mockResourcesResult}
           error={null}
           saveVocabulary={vi.fn()}
-          recognizeOnly={false}
-          onAnalyze={vi.fn()}
           processingStep="IDLE"
           isProcessing={false}
         />
@@ -1273,8 +1202,6 @@ describe("ResultsDisplay", () => {
           resourcesResult={null}
           error={null}
           saveVocabulary={vi.fn()}
-          recognizeOnly={true}
-          onAnalyze={vi.fn()}
           processingStep="OCR"
           isProcessing={true}
         />
