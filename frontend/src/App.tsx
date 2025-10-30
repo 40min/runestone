@@ -98,8 +98,6 @@ function App() {
                     error={error}
                     saveVocabulary={saveVocabulary}
                     onVocabularyUpdated={onVocabularyUpdated}
-                    recognizeOnly={recognizeOnly}
-                    onAnalyze={analyzeText}
                     processingStep={processingStep}
                     isProcessing={isProcessing}
                   />

@@ -68,8 +68,6 @@ interface ResultsDisplayProps {
     enrich: boolean
   ) => Promise<void>;
   onVocabularyUpdated?: (updatedVocabulary: EnrichedVocabularyItem[]) => void; // Optional callback
-  recognizeOnly: boolean; // New prop
-  onAnalyze: (text: string) => Promise<void>; // New prop
   processingStep: ProcessingStep; // New prop
   isProcessing: boolean; // New prop
 }
