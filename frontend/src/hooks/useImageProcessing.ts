@@ -1,18 +1,19 @@
 import { useState } from "react";
 import { API_BASE_URL } from "../config";
 
-interface OCRResult {
+export interface OCRResult {
   text: string;
   character_count: number;
 }
 
-interface GrammarFocus {
+export interface GrammarFocus {
   topic: string;
   explanation: string;
   has_explicit_rules: boolean;
+  rules?: string;
 }
 
-interface VocabularyItem {
+export interface VocabularyItem {
   id?: string;
   swedish: string;
   english: string;
@@ -21,11 +22,12 @@ interface VocabularyItem {
   known?: boolean;
 }
 
-interface EnrichedVocabularyItem extends VocabularyItem {
+export interface EnrichedVocabularyItem extends VocabularyItem {
   id: string;
+  [key: string]: unknown; // Add index signature
 }
 
-interface ContentAnalysis {
+export interface ContentAnalysis {
   grammar_focus: GrammarFocus;
   vocabulary: VocabularyItem[];
   core_topics: string[];
@@ -35,14 +37,18 @@ interface ContentAnalysis {
   };
 }
 
+export type ProcessingStep = "IDLE" | "OCR" | "ANALYZING" | "RESOURCES" | "DONE"; // Export ProcessingStep type
+
 interface UseImageProcessingReturn {
-  processImage: (file: File) => Promise<void>;
+  processImage: (file: File, recognizeOnly: boolean) => Promise<void>;
+  recognizeImage: (file: File) => Promise<OCRResult | null>;
+  analyzeText: (text: string) => Promise<void>;
   saveVocabulary: (vocabulary: EnrichedVocabularyItem[], enrich: boolean) => Promise<void>;
   onVocabularyUpdated: (updatedVocabulary: EnrichedVocabularyItem[]) => void;
   ocrResult: OCRResult | null;
   analysisResult: ContentAnalysis | null;
   resourcesResult: string | null;
-  processingStep: "IDLE" | "OCR" | "ANALYZING" | "RESOURCES" | "DONE";
+  processingStep: ProcessingStep;
   error: string | null;
   isProcessing: boolean;
   reset: () => void;
@@ -56,30 +62,35 @@ const useImageProcessing = (): UseImageProcessingReturn => {
     null
   );
   const [resourcesResult, setResourcesResult] = useState<string | null>(null);
-  const [processingStep, setProcessingStep] = useState<
-    "IDLE" | "OCR" | "ANALYZING" | "RESOURCES" | "DONE"
-  >("IDLE");
+  const [processingStep, setProcessingStep] = useState<ProcessingStep>("IDLE");
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentImage, setCurrentImage] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
 
-  const processImage = async (file: File) => {
-    setIsProcessing(true);
-    setError(null);
+  const reset = () => {
     setOcrResult(null);
     setAnalysisResult(null);
     setResourcesResult(null);
     setProcessingStep("IDLE");
+    setError(null);
+    setIsProcessing(false);
+    setProgress(0);
+    setCurrentImage(null);
+  };
+
+  const recognizeImage = async (file: File): Promise<OCRResult | null> => {
+    setIsProcessing(true);
+    setError(null);
+    setOcrResult(null);
+    setProcessingStep("IDLE");
     setProgress(10);
 
-    // Create data URL for the image to display during processing
     const imageUrl = URL.createObjectURL(file);
     setCurrentImage(imageUrl);
     setProgress(20);
 
     try {
-      // Step 1: OCR
       setProcessingStep("OCR");
       setProgress(30);
       const formData = new FormData();
@@ -103,8 +114,28 @@ const useImageProcessing = (): UseImageProcessingReturn => {
       const ocrData: OCRResult = await ocrResponse.json();
       setOcrResult(ocrData);
       setProgress(50);
+      setProcessingStep("DONE");
+      setIsProcessing(false);
+      return ocrData;
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "An unexpected error occurred during OCR";
+      setError(errorMessage);
+      setProcessingStep("IDLE");
+      setIsProcessing(false);
+      return null;
+    }
+  };
 
-      // Step 2: Analysis
+  const analyzeText = async (text: string): Promise<void> => {
+    setIsProcessing(true);
+    setError(null);
+    setAnalysisResult(null);
+    setResourcesResult(null);
+    setProcessingStep("IDLE");
+    setProgress(0);
+
+    try {
       setProcessingStep("ANALYZING");
       setProgress(60);
       const analyzeResponse = await fetch(`${API_BASE_URL}/api/analyze`, {
@@ -112,7 +143,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text: ocrData.text }),
+        body: JSON.stringify({ text: text }),
       });
 
       if (!analyzeResponse.ok) {
@@ -129,7 +160,6 @@ const useImageProcessing = (): UseImageProcessingReturn => {
       setAnalysisResult(analysisData);
       setProgress(80);
 
-      // Step 3: Resources (only if needed)
       if (analysisData.search_needed.should_search) {
         setProcessingStep("RESOURCES");
         setProgress(90);
@@ -165,22 +195,38 @@ const useImageProcessing = (): UseImageProcessingReturn => {
       setProcessingStep("DONE");
     } catch (err) {
       const errorMessage =
-        err instanceof Error ? err.message : "An unexpected error occurred";
+        err instanceof Error ? err.message : "An unexpected error occurred during analysis";
       setError(errorMessage);
       setProcessingStep("IDLE");
     } finally {
       setIsProcessing(false);
-      // Clean up the object URL to prevent memory leaks
-      if (imageUrl) {
-        URL.revokeObjectURL(imageUrl);
-        setCurrentImage(null);
+      setCurrentImage(null);
+    }
+  };
+
+  const processImage = async (file: File, recognizeOnly: boolean) => {
+    setError(null);
+    setAnalysisResult(null);
+    setResourcesResult(null);
+    setProcessingStep("IDLE");
+    setProgress(0);
+
+    try {
+      const ocrData = await recognizeImage(file);
+      if (ocrData && ocrData.text) {
+        if (!recognizeOnly) {
+          await analyzeText(ocrData.text);
+        }
       }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "An unexpected error occurred during image processing";
+      setError(errorMessage);
     }
   };
 
   const saveVocabulary = async (vocabulary: EnrichedVocabularyItem[], enrich: boolean = true) => {
     try {
-      // Transform vocabulary items to match backend schema
       const transformedItems = vocabulary.map((item) => ({
         word_phrase: item.swedish,
         translation: item.english,
@@ -221,18 +267,10 @@ const useImageProcessing = (): UseImageProcessingReturn => {
     });
   };
 
-  const reset = () => {
-    setOcrResult(null);
-    setAnalysisResult(null);
-    setResourcesResult(null);
-    setProcessingStep("IDLE");
-    setError(null);
-    setIsProcessing(false);
-    setProgress(0);
-  };
-
   return {
     processImage,
+    recognizeImage,
+    analyzeText,
     saveVocabulary,
     onVocabularyUpdated,
     ocrResult,

@@ -13,7 +13,15 @@ import {
   StyledCheckbox,
   DataTable,
 } from "./ui";
+import ProcessingStatus from "./ProcessingStatus"; // Import ProcessingStatus
 import { parseMarkdown } from "../utils/markdownParser";
+import type {
+  OCRResult,
+  VocabularyItem,
+  EnrichedVocabularyItem,
+  ContentAnalysis,
+  ProcessingStep, // Import ProcessingStep
+} from "../hooks/useImageProcessing";
 
 // Helper function to enrich vocabulary items with a unique ID
 const enrichVocabularyItems = (
@@ -50,38 +58,6 @@ const convertUrlsToLinks = (text: string): (string | React.ReactElement)[] => {
   });
 };
 
-interface OCRResult {
-  text: string;
-  character_count: number;
-}
-
-interface GrammarFocus {
-  topic: string;
-  explanation: string;
-  has_explicit_rules: boolean;
-  rules?: string;
-}
-
-interface VocabularyItem {
-  id?: string; // Make id optional in base interface
-  swedish: string;
-  english: string;
-  example_phrase?: string;
-  extra_info?: string;
-  known?: boolean;
-  [key: string]: unknown; // Add index signature
-}
-
-// New interface for enriched vocabulary items with a required ID
-interface EnrichedVocabularyItem extends VocabularyItem {
-  id: string;
-}
-
-interface ContentAnalysis {
-  grammar_focus: GrammarFocus;
-  vocabulary: VocabularyItem[];
-}
-
 interface ResultsDisplayProps {
   ocrResult: OCRResult | null;
   analysisResult: ContentAnalysis | null;
@@ -92,6 +68,8 @@ interface ResultsDisplayProps {
     enrich: boolean
   ) => Promise<void>;
   onVocabularyUpdated?: (updatedVocabulary: EnrichedVocabularyItem[]) => void; // Optional callback
+  processingStep: ProcessingStep; // New prop
+  isProcessing: boolean; // New prop
 }
 
 const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
@@ -101,6 +79,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   error,
   saveVocabulary,
   onVocabularyUpdated,
+  processingStep, // Destructure new prop
+  isProcessing, // Destructure new prop
 }) => {
   const availableTabs = [
     ocrResult && "ocr",
@@ -148,12 +128,11 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
 
   // Memoized filtered vocabulary list
   const filteredVocabulary = useMemo(
-    () =>
-      enrichedVocabulary.filter((item) => !hideKnown || !item.known),
+    () => enrichedVocabulary.filter((item) => !hideKnown || !item.known),
     [enrichedVocabulary, hideKnown]
   );
 
-  if (!ocrResult && !analysisResult && !resourcesResult) {
+  if (!ocrResult && !analysisResult && !resourcesResult && !isProcessing) {
     if (error) {
       return (
         <Box sx={{ maxWidth: "64rem", mx: "auto", mt: 8 }}>
@@ -299,7 +278,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
         setCopyButtonText("Copied!");
         setSnackbar({
           open: true,
-          message: "OCR text copied to clipboard!",
+          message: "Recognized text copied to clipboard!",
           severity: "success",
         });
         setTimeout(() => setCopyButtonText("Copy"), 2000);
@@ -310,7 +289,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
       setCopyButtonText("Copied!");
       setSnackbar({
         open: true,
-        message: "OCR text copied to clipboard!",
+        message: "Recognized text copied to clipboard!",
         severity: "success",
       });
       setTimeout(() => setCopyButtonText("Copy"), 2000);
@@ -318,7 +297,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
       console.error("Failed to copy OCR text: ", err);
       setSnackbar({
         open: true,
-        message: "Failed to copy OCR text. Please try again.",
+        message: "Failed to copy recognized text. Please try again.",
         severity: "error",
       });
     }
@@ -333,7 +312,12 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
 
   return (
     <Box sx={{ py: 8 }}>
-      <SectionTitle>Analysis Results</SectionTitle>
+      {isProcessing && (
+        <ProcessingStatus
+          isProcessing={isProcessing}
+          processingStep={processingStep}
+        />
+      )}
 
       {error && (
         <Box sx={{ mb: 4 }}>
@@ -350,12 +334,6 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
       <Box sx={{ pt: 6 }}>
         {activeTab === "ocr" && (
           <Box>
-            {!ocrResult && (
-              <Typography sx={{ color: "#d1d5db", mb: 2 }}>
-                The OCR text extracted from the image will be displayed here.
-                This text can be edited and copied for further use.
-              </Typography>
-            )}
             {ocrResult && (
               <Box>
                 <Box
