@@ -123,10 +123,6 @@ const useImageProcessing = (): UseImageProcessingReturn => {
       setProcessingStep("IDLE");
       setIsProcessing(false);
       return null;
-    } finally {
-      if (imageUrl) {
-        URL.revokeObjectURL(imageUrl);
-      }
     }
   };
 
