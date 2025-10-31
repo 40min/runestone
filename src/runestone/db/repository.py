@@ -119,7 +119,9 @@ class VocabularyRepository:
         if filtered_items:
             self.batch_insert_vocabulary_items(filtered_items, user_id)
 
-    def get_vocabulary(self, limit: int, search_query: str | None = None, user_id: int = 1) -> List[Vocabulary]:
+    def get_vocabulary(
+        self, limit: int, search_query: str | None = None, precise: bool = False, user_id: int = 1
+    ) -> List[Vocabulary]:
         r"""Retrieve vocabulary items for a user, optionally filtered by search query with wildcard support.
 
         The search performs a case-insensitive substring match by default. For example,
@@ -134,14 +136,18 @@ class VocabularyRepository:
         query = self.db.query(Vocabulary).filter(Vocabulary.user_id == user_id)
 
         if search_query:
-            # Parse the search query, handling wildcards and escape sequences
-            search_pattern = parse_search_query_with_wildcards(search_query).lower()
+            if precise:
+                query = query.filter(func.lower(Vocabulary.word_phrase) == search_query.lower())
+            else:
+                # Parse the search query, handling wildcards and escape sequences
+                search_pattern = parse_search_query_with_wildcards(search_query).lower()
 
-            # Wrap with % for substring matching (unless the pattern already has wildcards)
-            search_pattern = f"%{search_pattern}%"
+                # Wrap with % for substring matching only if the user did not provide any wildcards.
+                if "%" not in search_pattern and "_" not in search_pattern:
+                    search_pattern = f"%{search_pattern}%"
 
-            # Use ilike with escape character for case-insensitive matching
-            query = query.filter(Vocabulary.word_phrase.ilike(search_pattern, escape="\\"))
+                # Use ilike with escape character for case-insensitive matching
+                query = query.filter(Vocabulary.word_phrase.ilike(search_pattern, escape="\\"))
 
         return query.order_by(Vocabulary.created_at.desc(), Vocabulary.id.desc()).limit(limit).all()
 

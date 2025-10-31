@@ -211,7 +211,37 @@ describe("VocabularyView", () => {
     fireEvent.change(searchInput, { target: { value: 'test' } });
     fireEvent.click(searchButton);
 
-    expect(mockUseRecentVocabulary).toHaveBeenCalledWith('test');
+    expect(mockUseRecentVocabulary).toHaveBeenCalledWith('test', false);
+  });
+
+  it("renders precise search checkbox and toggles hook parameter", () => {
+    const mockHookReturn = {
+      recentVocabulary: [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+    };
+
+    mockUseRecentVocabulary.mockReturnValue(mockHookReturn);
+
+    render(<VocabularyView />);
+
+    const checkbox = screen.getByLabelText("Precise search");
+    expect(checkbox).toBeInTheDocument();
+    expect(checkbox).not.toBeChecked();
+
+    fireEvent.click(checkbox);
+    expect(mockUseRecentVocabulary).toHaveBeenLastCalledWith("", true);
+
+    fireEvent.click(checkbox);
+    expect(mockUseRecentVocabulary).toHaveBeenLastCalledWith("", false);
   });
 
   it("calls useRecentVocabulary with search term when >3 characters", async () => {
@@ -236,7 +266,7 @@ describe("VocabularyView", () => {
 
     // Should call immediately when >3 chars
     await waitFor(() => {
-      expect(mockUseRecentVocabulary).toHaveBeenCalledWith('hello');
+      expect(mockUseRecentVocabulary).toHaveBeenCalledWith('hello', false);
     });
   });
 
@@ -265,6 +295,7 @@ describe("VocabularyView", () => {
       expect(screen.getByText("No vocabulary matches your search.")).toBeInTheDocument();
       expect(screen.getByText("Try a different search term.")).toBeInTheDocument();
     });
+    expect(mockUseRecentVocabulary).toHaveBeenCalledWith('nonexistent', false);
   });
 
   it("renders vocabulary table with data", () => {

@@ -446,8 +446,8 @@ class TestVocabularyEndpoints:
         assert data[0]["word_phrase"] == "ett päron"  # Most recent
         assert data[1]["word_phrase"] == "ett äpple"
 
-        # Search with wildcard "*" - "ban*" should match "banan"
-        response = client.get("/api/vocabulary?search_query=ban*")
+        # Search with wildcard "*" - "*ban*" should match "banan"
+        response = client.get("/api/vocabulary?search_query=*ban*")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
@@ -746,4 +746,114 @@ class TestSettingsDependency:
         assert call_args.args[1] is True  # Verify enrich parameter (default value)
 
         # Clean up
+
+    def test_get_vocabulary_with_precise_search(self, client):
+        """Test the precise search functionality via API."""
+        # Save test data with case variations and partial matches
+        payload = {
+            "items": [
+                {
+                    "word_phrase": "apple",
+                    "translation": "äpple",
+                },
+                {
+                    "word_phrase": "APPLE",
+                    "translation": "ÄPPLE",
+                },
+                {
+                    "word_phrase": "pineapple",
+                    "translation": "ananas",
+                },
+                {
+                    "word_phrase": "app",
+                    "translation": "app",
+                },
+            ]
+        }
+        client.post("/api/vocabulary", json=payload)
+
+        # Test precise=False (default) - should match all containing "apple"
+        response = client.get("/api/vocabulary?search_query=apple&precise=false")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 3  # apple, APPLE, pineapple
+        phrases = [item["word_phrase"] for item in data]
+        assert "apple" in phrases
+        assert "APPLE" in phrases
+        assert "pineapple" in phrases
+        assert "app" not in phrases  # No partial match
+
+        # Test precise=True - should match only exact case-insensitive
+        response = client.get("/api/vocabulary?search_query=apple&precise=true")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2  # apple and APPLE
+        phrases = [item["word_phrase"] for item in data]
+        assert "apple" in phrases
+        assert "APPLE" in phrases
+        assert "pineapple" not in phrases
+        assert "app" not in phrases
+
+        # Test default precise behavior (should be False)
+        response = client.get("/api/vocabulary?search_query=apple")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 3  # Same as precise=false
+
+        # Test precise search for non-existent term
+        response = client.get("/api/vocabulary?search_query=banana&precise=true")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 0
+
+        # Test precise search with case sensitivity difference
+        response = client.get("/api/vocabulary?search_query=PINEAPPLE&precise=true")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["word_phrase"] == "pineapple"
+
+    def test_get_vocabulary_invalid_limit(self, client):
+        """Test get_vocabulary with invalid limit values."""
+        # Test limit too high
+        response = client.get("/api/vocabulary?limit=101")
+        assert response.status_code == 400
+        data = response.json()
+        assert "Limit must be between 1 and 100" in data["detail"]
+
+        # Test limit too low
+        response = client.get("/api/vocabulary?limit=0")
+        assert response.status_code == 400
+        data = response.json()
+        assert "Limit must be between 1 and 100" in data["detail"]
+
+        # Test negative limit
+        response = client.get("/api/vocabulary?limit=-1")
+        assert response.status_code == 400
+        data = response.json()
+        assert "Limit must be between 1 and 100" in data["detail"]
+
+    def test_get_vocabulary_limit_bounds(self, client):
+        """Test get_vocabulary with valid limit bounds."""
+        # Save multiple items
+        payload = {"items": [{"word_phrase": f"word_{i}", "translation": f"trans_{i}"} for i in range(5)]}
+        client.post("/api/vocabulary", json=payload)
+
+        # Test minimum valid limit
+        response = client.get("/api/vocabulary?limit=1")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+
+        # Test maximum valid limit
+        response = client.get("/api/vocabulary?limit=100")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 5  # All items
+
+        # Test default limit (should be 100)
+        response = client.get("/api/vocabulary")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 5
         client.app.dependency_overrides.clear()

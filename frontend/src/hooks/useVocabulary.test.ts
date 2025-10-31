@@ -1,4 +1,5 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import useVocabulary, { useRecentVocabulary, improveVocabularyItem } from './useVocabulary';
 import { VOCABULARY_IMPROVEMENT_MODES } from '../constants';
 
@@ -9,7 +10,7 @@ vi.mock('../config', () => ({
 
 // Mock fetch
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+globalThis.fetch = mockFetch as unknown as typeof fetch;
 
 describe('useVocabulary', () => {
   beforeEach(() => {
@@ -172,7 +173,34 @@ describe('useRecentVocabulary', () => {
       expect(result.current.error).toBeNull();
     });
 
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/vocabulary?search_query=hej&limit=100');
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=false');
+  });
+  it('should include precise=true when precise search is enabled', async () => {
+    const mockVocabularyResponse = [
+      {
+        id: 1,
+        user_id: 1,
+        word_phrase: 'hej',
+        translation: 'hello',
+        example_phrase: 'Hej, hur mår du?',
+        created_at: '2023-10-27T10:00:00Z',
+      },
+    ];
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockVocabularyResponse),
+    });
+
+    const { result } = renderHook(() => useRecentVocabulary('hej', true));
+
+    await waitFor(() => {
+      expect(result.current.recentVocabulary).toEqual(mockVocabularyResponse);
+      expect(result.current.loading).toBe(false);
+      expect(result.current.error).toBeNull();
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=true');
   });
 
   it('should refetch when search query changes', async () => {
@@ -209,8 +237,8 @@ describe('useRecentVocabulary', () => {
       });
 
     const { result, rerender } = renderHook(
-      ({ searchQuery }) => useRecentVocabulary(searchQuery),
-      { initialProps: { searchQuery: '' } }
+      ({ searchQuery, precise }) => useRecentVocabulary(searchQuery, precise),
+      { initialProps: { searchQuery: '', precise: false } }
     );
 
     // Initial load
@@ -219,7 +247,7 @@ describe('useRecentVocabulary', () => {
     });
 
     // Change search query
-    rerender({ searchQuery: 'bra' });
+    rerender({ searchQuery: 'bra', precise: false });
 
     await waitFor(() => {
       expect(result.current.recentVocabulary).toEqual(mockVocabularyResponse2);
@@ -227,7 +255,65 @@ describe('useRecentVocabulary', () => {
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(mockFetch).toHaveBeenNthCalledWith(1, 'http://localhost:8010/api/vocabulary?limit=20');
-    expect(mockFetch).toHaveBeenNthCalledWith(2, 'http://localhost:8010/api/vocabulary?search_query=bra&limit=100');
+    expect(mockFetch).toHaveBeenNthCalledWith(2, 'http://localhost:8010/api/vocabulary?search_query=bra&limit=100&precise=false');
+  });
+  it('should refetch when precise search flag changes', async () => {
+    const mockVocabularyResponse1 = [
+      {
+        id: 1,
+        user_id: 1,
+        word_phrase: 'hej',
+        translation: 'hello',
+        example_phrase: 'Hej, hur mår du?',
+        created_at: '2023-10-27T10:00:00Z',
+      },
+    ];
+
+    const mockVocabularyResponse2 = [
+      {
+        id: 2,
+        user_id: 1,
+        word_phrase: 'hej',
+        translation: 'hi',
+        example_phrase: 'Hej!',
+        created_at: '2023-10-28T10:00:00Z',
+      },
+    ];
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockVocabularyResponse1),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockVocabularyResponse2),
+      });
+
+    const { result, rerender } = renderHook(
+      ({ precise }) => useRecentVocabulary('hej', precise),
+      { initialProps: { precise: false } }
+    );
+
+    await waitFor(() => {
+      expect(result.current.recentVocabulary).toEqual(mockVocabularyResponse1);
+    });
+
+    rerender({ precise: true });
+
+    await waitFor(() => {
+      expect(result.current.recentVocabulary).toEqual(mockVocabularyResponse2);
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=false'
+    );
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=true'
+    );
   });
 
   it('should handle fetch error', async () => {

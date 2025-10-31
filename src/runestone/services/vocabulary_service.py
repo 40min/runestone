@@ -84,9 +84,11 @@ class VocabularyService:
             updated_at=vocab.updated_at.isoformat() if vocab.updated_at else None,
         )
 
-    def get_vocabulary(self, limit: int, search_query: str | None = None, user_id: int = 1) -> List[VocabularySchema]:
+    def get_vocabulary(
+        self, limit: int, search_query: str | None = None, precise: bool = False, user_id: int = 1
+    ) -> List[VocabularySchema]:
         """Retrieve vocabulary items, optionally filtered by search query, converting to Pydantic models."""
-        vocabularies = self.repo.get_vocabulary(limit, search_query, user_id)
+        vocabularies = self.repo.get_vocabulary(limit, search_query, precise, user_id)
         result = []
         for vocab in vocabularies:
             result.append(

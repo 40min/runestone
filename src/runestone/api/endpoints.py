@@ -313,6 +313,7 @@ async def get_vocabulary(
     service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
     limit: int = 100,
     search_query: str | None = None,
+    precise: bool = False,
 ) -> List[Vocabulary]:
     """
     Retrieve vocabulary items, optionally filtered by search query.
@@ -340,7 +341,7 @@ async def get_vocabulary(
                 detail="Limit must be between 1 and 100",
             )
 
-        return service.get_vocabulary(limit, search_query)
+        return service.get_vocabulary(limit, search_query, precise)
 
     except HTTPException:
         raise
