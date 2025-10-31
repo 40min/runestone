@@ -142,8 +142,9 @@ class VocabularyRepository:
                 # Parse the search query, handling wildcards and escape sequences
                 search_pattern = parse_search_query_with_wildcards(search_query).lower()
 
-                # Wrap with % for substring matching (unless the pattern already has wildcards)
-                search_pattern = f"%{search_pattern}%"
+                # Wrap with % for substring matching only if the user did not provide any wildcards.
+                if "%" not in search_pattern and "_" not in search_pattern:
+                    search_pattern = f"%{search_pattern}%"
 
                 # Use ilike with escape character for case-insensitive matching
                 query = query.filter(Vocabulary.word_phrase.ilike(search_pattern, escape="\\"))

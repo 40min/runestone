@@ -401,8 +401,8 @@ class TestVocabularyRepository:
         assert result[0].word_phrase == "ett päron"  # Most recent
         assert result[1].word_phrase == "ett äpple"
 
-        # Search with wildcard "*" - "ban*" should match "banan"
-        result = repo.get_vocabulary(limit=20, search_query="ban*", user_id=1)
+        # Search with wildcard "*" - "ban*" should match "banan" (starts with "ban")
+        result = repo.get_vocabulary(limit=20, search_query="*ban*", user_id=1)
         assert len(result) == 1
         assert result[0].word_phrase == "en banan"
 
@@ -431,29 +431,28 @@ class TestVocabularyRepository:
         db_session.add_all(wildcard_test_items)
         db_session.commit()
 
-        # Search with '?' - "en ?" should match "en " + one character
-        # Should NOT match "en banan" (too many chars after "en "), but pattern is wrapped with %
-        # So "en ?" becomes "%en _%", which will match "en " followed by any single char followed by anything
-        result = repo.get_vocabulary(limit=20, search_query="en ?a", user_id=1)
-        # "en ?a" becomes "%en _a%", should match "en banan" (b is one char, then a) and "en katt"
+        # Search with '?' - "en ?a*" should match "en " + one character + "a" + anything
+        # "en ?a*" becomes "en _a%" (no wrapping since wildcards present)
+        result = repo.get_vocabulary(limit=20, search_query="*en ?a*", user_id=1)
+        # "*en ?a*" becomes "%en _a%", should match "en banan" (b is one char, then a) and "en katt"
         # (k is one char, then a)
         assert len(result) == 2
         phrases = [r.word_phrase for r in result]
         assert "en banan" in phrases
         assert "en katt" in phrases
 
-        # Search with '?' - "?tt" should match words with any single char followed by "tt"
-        result = repo.get_vocabulary(limit=20, search_query="?tt", user_id=1)
-        # "?tt" becomes "%_tt%", should match "ett äpple", "ett päron", "en katt"
+        # Search with '?' - "*?tt*" should match words with any single char followed by "tt"
+        result = repo.get_vocabulary(limit=20, search_query="*?tt*", user_id=1)
+        # "*?tt*" becomes "%_tt%", should match "ett äpple", "ett päron", "en katt"
         assert len(result) == 3
         phrases = [r.word_phrase for r in result]
         assert "ett äpple" in phrases
         assert "ett päron" in phrases
         assert "en katt" in phrases
 
-        # Search with multiple '?' - "??" should match any two characters
-        result = repo.get_vocabulary(limit=20, search_query="e?? ", user_id=1)
-        # "e?? " becomes "%e__ %", should match "ett äpple" and "ett päron" (ett = e + 2 chars + space)
+        # Search with multiple '?' - "*e?? *" should match any two characters
+        result = repo.get_vocabulary(limit=20, search_query="*e?? *", user_id=1)
+        # "*e?? *" becomes "%e__ %", should match "ett äpple" and "ett päron" (ett = e + 2 chars + space)
         assert len(result) == 2
         phrases = [r.word_phrase for r in result]
         assert "ett äpple" in phrases
@@ -465,21 +464,21 @@ class TestVocabularyRepository:
         db_session.add_all(mixed_wildcard_items)
         db_session.commit()
 
-        # Search with mixed wildcards - "att l?*a" should match "att lära sig", "att läsa", "att leka"
-        # Pattern: "att l" + one char + any chars + "a"
-        result = repo.get_vocabulary(limit=20, search_query="att l?*a", user_id=1)
+        # Search with mixed wildcards - "*att l?*a*" should match "att lära sig", "att läsa", "att leka"
+        # Pattern: anything + "att l" + one char + any chars + "a" + anything
+        result = repo.get_vocabulary(limit=20, search_query="*att l?*a*", user_id=1)
         assert len(result) == 3
         phrases = [r.word_phrase for r in result]
         assert "att lära sig" in phrases
         assert "att läsa" in phrases
         assert "att leka" in phrases
 
-        # More specific pattern - "att l??a" should match all three (all have exactly 2 chars between
+        # More specific pattern - "*att l??a*" should match all three (all have exactly 2 chars between
         # l and a in the word containing 'a')
         # "att läsa" - 'lä' before 's' then 'a'
         # "att leka" - 'le' before 'k' then 'a'
         # "att lära sig" - 'lä' before 'r' then 'a'
-        result = repo.get_vocabulary(limit=20, search_query="att l??a", user_id=1)
+        result = repo.get_vocabulary(limit=20, search_query="*att l??a*", user_id=1)
         assert len(result) == 3
         phrases = [r.word_phrase for r in result]
         assert "att läsa" in phrases
@@ -493,17 +492,17 @@ class TestVocabularyRepository:
         db_session.commit()
 
         # Search for literal '%' - should match only "100% säker"
-        result = repo.get_vocabulary(limit=20, search_query="100%", user_id=1)
+        result = repo.get_vocabulary(limit=20, search_query="*100%*", user_id=1)
         assert len(result) == 1
         assert result[0].word_phrase == "100% säker"
 
         # Search for literal '_' - should match only "ett_exempel"
-        result = repo.get_vocabulary(limit=20, search_query="ett_exempel", user_id=1)
+        result = repo.get_vocabulary(limit=20, search_query="*ett_exempel*", user_id=1)
         assert len(result) == 1
         assert result[0].word_phrase == "ett_exempel"
 
         # Search for literal '\' - should match only "back\slash"
-        result = repo.get_vocabulary(limit=20, search_query="back\\", user_id=1)
+        result = repo.get_vocabulary(limit=20, search_query=r"*back\\*", user_id=1)
         assert len(result) == 1
         assert result[0].word_phrase == "back\\slash"
 
@@ -522,8 +521,8 @@ class TestVocabularyRepository:
         result = repo.get_vocabulary(limit=20, search_query="*", user_id=1)
         assert len(result) == 3  # '*' matches everything
 
-        # '?' with wrapping % becomes '%_%' which matches any string with at least 1 character
-        result = repo.get_vocabulary(limit=20, search_query="?", user_id=1)
+        # '?' alone becomes '_' which matches exactly one character, need * for substring
+        result = repo.get_vocabulary(limit=20, search_query="*?*", user_id=1)
         assert len(result) == 3  # All three items contain at least one character
 
         # Test empty and None patterns (already covered but verifying)
@@ -568,8 +567,8 @@ class TestVocabularyRepository:
         assert result[0].word_phrase == "test?.py"
 
         # Verify unescaped wildcards still work as wildcards
-        result = repo.get_vocabulary(limit=20, search_query="file*", user_id=1)
-        # "file*" as a wildcard should match both "file*.txt" and "normal file" (both contain "file")
+        result = repo.get_vocabulary(limit=20, search_query="*file*", user_id=1)
+        # "*file*" as a wildcard should match both "file*.txt" and "normal file" (both contain "file")
         assert len(result) == 2
         phrases = [r.word_phrase for r in result]
         assert "file*.txt" in phrases
@@ -599,14 +598,14 @@ class TestVocabularyRepository:
         db_session.commit()
 
         # Search for pattern with escaped wildcard and SQL underscore
-        # "log_2024\*" should match only "log_2024*.txt" (literal asterisk)
-        result = repo.get_vocabulary(limit=20, search_query=r"log_2024\*", user_id=1)
+        # "*log_2024\**" should match only "log_2024*.txt" (literal asterisk)
+        result = repo.get_vocabulary(limit=20, search_query=r"*log_2024\**", user_id=1)
         assert len(result) == 1
         assert result[0].word_phrase == "log_2024*.txt"
 
         # Search with unescaped wildcard should match multiple
-        # "log*2024*" should match all three (wildcard before and after 2024)
-        result = repo.get_vocabulary(limit=20, search_query="log*2024*", user_id=1)
+        # "*log*2024*" should match all three (wildcard before and after 2024)
+        result = repo.get_vocabulary(limit=20, search_query="*log*2024*", user_id=1)
         assert len(result) == 3
 
     def test_get_vocabulary_item(self, repo, db_session):

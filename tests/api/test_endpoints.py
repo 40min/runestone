@@ -446,8 +446,8 @@ class TestVocabularyEndpoints:
         assert data[0]["word_phrase"] == "ett päron"  # Most recent
         assert data[1]["word_phrase"] == "ett äpple"
 
-        # Search with wildcard "*" - "ban*" should match "banan"
-        response = client.get("/api/vocabulary?search_query=ban*")
+        # Search with wildcard "*" - "*ban*" should match "banan"
+        response = client.get("/api/vocabulary?search_query=*ban*")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
