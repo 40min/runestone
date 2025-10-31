@@ -94,9 +94,9 @@ const VocabularyView: React.FC = () => {
         <Box
           sx={{
             display: "flex",
-            alignItems: "center",
-            gap: 2,
-            flexWrap: "wrap",
+            flexDirection: "column",
+            gap: 1,
+            flex: 1,
           }}
         >
           <SearchInput
