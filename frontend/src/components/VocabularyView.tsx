@@ -103,7 +103,7 @@ const VocabularyView: React.FC = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search vocabulary..."
-            onSearch={handleSearch}
+            onSearch={handleSearch} sx={{ mb: 0 }}
           />
           <StyledCheckbox
             id="precise-search-checkbox"
