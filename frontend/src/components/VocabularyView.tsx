@@ -15,6 +15,7 @@ import AddEditVocabularyModal from "./AddEditVocabularyModal";
 const VocabularyView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeSearchTerm, setActiveSearchTerm] = useState("");
+  const [preciseSearch, setPreciseSearch] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const {
     recentVocabulary,
@@ -27,7 +28,7 @@ const VocabularyView: React.FC = () => {
     updateVocabularyItem,
     createVocabularyItem,
     deleteVocabularyItem,
-  } = useRecentVocabulary(activeSearchTerm);
+  } = useRecentVocabulary(activeSearchTerm, preciseSearch);
 
   useEffect(() => {
     if (!loading && isInitialLoad) {
@@ -87,14 +88,30 @@ const VocabularyView: React.FC = () => {
           justifyContent: "space-between",
           alignItems: "flex-start",
           mb: 3,
+          gap: 2,
         }}
       >
-        <SearchInput
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search vocabulary..."
-          onSearch={handleSearch}
-        />
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 2,
+            flexWrap: "wrap",
+          }}
+        >
+          <SearchInput
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search vocabulary..."
+            onSearch={handleSearch}
+          />
+          <StyledCheckbox
+            id="precise-search-checkbox"
+            checked={preciseSearch}
+            onChange={setPreciseSearch}
+            label="Precise search"
+          />
+        </Box>
         <CustomButton variant="primary" onClick={() => openEditModal(null)}>
           Add New Word
         </CustomButton>

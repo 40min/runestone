@@ -78,7 +78,7 @@ const useVocabulary = (): UseVocabularyReturn => {
 
 export default useVocabulary;
 
-export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyReturn => {
+export const useRecentVocabulary = (searchQuery?: string, preciseSearch = false): UseRecentVocabularyReturn => {
   const [recentVocabulary, setRecentVocabulary] = useState<SavedVocabularyItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +93,7 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
       if (searchQuery) {
         params.append('search_query', searchQuery);
         params.append('limit', '100');
+        params.append('precise', preciseSearch ? 'true' : 'false');
       } else {
         params.append('limit', '20');
       }
@@ -108,7 +109,7 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
     } finally {
       setLoading(false);
     }
-  }, [searchQuery]);
+  }, [searchQuery, preciseSearch]);
 
   const openEditModal = useCallback((item: SavedVocabularyItem | null) => {
     setEditingItem(item);
@@ -175,7 +176,7 @@ export const useRecentVocabulary = (searchQuery?: string): UseRecentVocabularyRe
 
   useEffect(() => {
     fetchRecentVocabulary();
-  }, [searchQuery, fetchRecentVocabulary]);
+  }, [searchQuery, preciseSearch, fetchRecentVocabulary]);
 
   return {
     recentVocabulary,
