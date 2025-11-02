@@ -11,12 +11,15 @@ from pydantic import BaseModel
 
 from runestone.core.prompt_builder.types import ImprovementMode
 from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
+from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 
 # Import unified schemas instead of defining duplicates
 GrammarFocus = GrammarFocus
 VocabularyItem = VocabularyItem
 SearchNeeded = SearchNeeded
 ContentAnalysis = ContentAnalysis
+OCRResult = OCRResult
+RecognitionStatistics = RecognitionStatistics
 
 
 class AnalysisRequest(BaseModel):

@@ -11,9 +11,9 @@ from typing import Any, Dict, Optional
 
 from runestone.core.prompt_builder.exceptions import ResponseParseError
 from runestone.core.prompt_builder.types import ImprovementMode
-from runestone.core.prompt_builder.validators import VocabularyResponse
 from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
 from runestone.schemas.ocr import OCRResult, RecognitionStatistics
+from runestone.schemas.vocabulary import VocabularyResponse
 
 
 class ResponseParser:

@@ -19,6 +19,7 @@ from ..core.prompt_builder.exceptions import ResponseParseError
 from ..core.prompt_builder.parsers import ResponseParser
 from ..db.models import Vocabulary
 from ..db.repository import VocabularyRepository
+from ..schemas.vocabulary import VocabularyResponse
 
 
 class VocabularyService:
@@ -187,7 +188,7 @@ class VocabularyService:
 
         # Parse response using ResponseParser (includes automatic fallback)
         try:
-            vocab_response = self.parser.parse_vocabulary_response(response_text, request.mode)
+            vocab_response: VocabularyResponse = self.parser.parse_vocabulary_response(response_text, request.mode)
 
             return VocabularyImproveResponse(
                 translation=vocab_response.translation,
