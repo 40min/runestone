@@ -9,8 +9,8 @@ import io
 from unittest.mock import Mock, patch
 
 from runestone.core.exceptions import RunestoneError
-from runestone.core.prompt_builder.validators import AnalysisResponse
 from runestone.dependencies import get_runestone_processor, get_vocabulary_service
+from runestone.schemas.analysis import ContentAnalysis
 
 
 class TestOCREndpoints:
@@ -20,9 +20,9 @@ class TestOCREndpoints:
         """Test successful OCR processing."""
         # Mock processor
         mock_processor_instance = Mock()
-        from runestone.core.prompt_builder.validators import OCRResponse, RecognitionStatistics
+        from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 
-        mock_ocr_result = OCRResponse(
+        mock_ocr_result = OCRResult(
             transcribed_text="Hej, vad heter du?",
             recognition_statistics=RecognitionStatistics(
                 total_elements=5,
@@ -135,25 +135,20 @@ class TestAnalysisEndpoints:
         # Mock processor
         mock_processor_instance = Mock()
 
-        from runestone.core.prompt_builder.validators import (
-            AnalysisResponse,
-            GrammarFocusResponse,
-            SearchNeededResponse,
-            VocabularyItemResponse,
-        )
+        from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
 
-        mock_analysis_result = AnalysisResponse(
-            grammar_focus=GrammarFocusResponse(
+        mock_analysis_result = ContentAnalysis(
+            grammar_focus=GrammarFocus(
                 topic="Swedish questions",
                 explanation="Basic question formation",
                 has_explicit_rules=False,
             ),
             vocabulary=[
-                VocabularyItemResponse(swedish="hej", english="hello", example_phrase=None, known=False),
-                VocabularyItemResponse(swedish="vad", english="what", example_phrase=None, known=True),
+                VocabularyItem(swedish="hej", english="hello", example_phrase=None, known=False),
+                VocabularyItem(swedish="vad", english="what", example_phrase=None, known=True),
             ],
             core_topics=["questions", "greetings"],
-            search_needed=SearchNeededResponse(
+            search_needed=SearchNeeded(
                 should_search=True,
                 query_suggestions=["Swedish question formation"],
             ),
@@ -236,9 +231,9 @@ class TestResourceEndpoints:
         # Verify response
         assert data["extra_info"] == mock_extra_info
 
-        # Verify processor was called with AnalysisResponse object
+        # Verify processor was called with ContentAnalysis object
         call_args = mock_processor_instance.run_resource_search.call_args[0][0]
-        assert isinstance(call_args, AnalysisResponse)
+        assert isinstance(call_args, ContentAnalysis)
         assert call_args.core_topics == ["questions", "greetings"]
         assert call_args.search_needed.should_search is True
         assert call_args.search_needed.query_suggestions == ["Swedish question formation", "Basic Swedish grammar"]

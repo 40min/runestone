@@ -142,6 +142,8 @@ class TestResourceRequest:
         """Test creating a valid ResourceRequest."""
         request_data = ResourceRequestData(
             core_topics=["questions"],
+            grammar_focus=GrammarFocus(topic="Questions", explanation="Question formation", has_explicit_rules=False),
+            vocabulary=[VocabularyItem(swedish="vad", english="what")],
             search_needed=SearchNeeded(should_search=True, query_suggestions=["Swedish questions"]),
         )
         request = ResourceRequest(analysis=request_data)
