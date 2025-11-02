@@ -14,7 +14,7 @@ from runestone.core.logging_config import get_logger
 from runestone.core.prompt_builder.builder import PromptBuilder
 from runestone.core.prompt_builder.exceptions import ResponseParseError
 from runestone.core.prompt_builder.parsers import ResponseParser
-from runestone.core.prompt_builder.validators import AnalysisResponse
+from runestone.schemas.analysis import ContentAnalysis
 
 
 class ContentAnalyzer:
@@ -45,7 +45,7 @@ class ContentAnalyzer:
         self.builder = PromptBuilder()
         self.parser = ResponseParser()
 
-    def analyze_content(self, extracted_text: str) -> AnalysisResponse:
+    def analyze_content(self, extracted_text: str) -> ContentAnalysis:
         """
         Analyze Swedish textbook content to extract learning materials.
 
@@ -85,7 +85,7 @@ class ContentAnalyzer:
         except Exception as e:
             raise ContentAnalysisError(f"Content analysis failed: {str(e)}")
 
-    def find_extra_learning_info(self, analysis: AnalysisResponse) -> str:
+    def find_extra_learning_info(self, analysis: ContentAnalysis) -> str:
         """
         Find extra learning information using web search and compile educational material.
 

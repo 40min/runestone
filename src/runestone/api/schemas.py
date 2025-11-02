@@ -10,40 +10,13 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from runestone.core.prompt_builder.types import ImprovementMode
+from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
 
-
-class GrammarFocus(BaseModel):
-    """Schema for grammar focus analysis."""
-
-    topic: str
-    explanation: str
-    has_explicit_rules: bool
-    rules: Optional[str] = None
-
-
-class VocabularyItem(BaseModel):
-    """Schema for individual vocabulary items."""
-
-    swedish: str
-    english: str
-    example_phrase: Optional[str] = None
-    known: bool = False
-
-
-class SearchNeeded(BaseModel):
-    """Schema for search requirements."""
-
-    should_search: bool
-    query_suggestions: List[str]
-
-
-class ContentAnalysis(BaseModel):
-    """Schema for content analysis results."""
-
-    grammar_focus: GrammarFocus
-    vocabulary: List[VocabularyItem]
-    core_topics: List[str]
-    search_needed: SearchNeeded
+# Import unified schemas instead of defining duplicates
+GrammarFocus = GrammarFocus
+VocabularyItem = VocabularyItem
+SearchNeeded = SearchNeeded
+ContentAnalysis = ContentAnalysis
 
 
 class AnalysisRequest(BaseModel):
@@ -52,11 +25,10 @@ class AnalysisRequest(BaseModel):
     text: str
 
 
-class ResourceRequestData(BaseModel):
-    """Minimal schema for resource search request data."""
+class ResourceRequestData(ContentAnalysis):
+    """Minimal schema for resource search request data - now inherits from unified ContentAnalysis."""
 
-    core_topics: List[str]
-    search_needed: SearchNeeded
+    pass
 
 
 class ResourceRequest(BaseModel):
