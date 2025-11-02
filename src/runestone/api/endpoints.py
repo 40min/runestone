@@ -29,7 +29,6 @@ from runestone.core.exceptions import RunestoneError, VocabularyItemExists
 from runestone.core.logging_config import get_logger
 from runestone.core.processor import RunestoneProcessor
 from runestone.dependencies import get_grammar_service, get_runestone_processor, get_vocabulary_service
-from runestone.schemas.analysis import ContentAnalysis as UnifiedContentAnalysis
 from runestone.services.grammar_service import GrammarService
 from runestone.services.vocabulary_service import VocabularyService
 
@@ -122,7 +121,7 @@ async def process_ocr(
 async def analyze_content(
     request: AnalysisRequest,
     processor: Annotated[RunestoneProcessor, Depends(get_runestone_processor)],
-) -> UnifiedContentAnalysis:
+) -> ContentAnalysis:
     """
     Analyze extracted text content.
 
@@ -195,11 +194,11 @@ async def find_resources(
         HTTPException: For various error conditions
     """
     try:
-        # Use unified ContentAnalysis directly (no conversion needed)
-        analysis_data = request.analysis
-
-        # Run resource search with the unified schema
-        extra_info = processor.run_resource_search(analysis_data)
+        # Run resource search with the simplified parameters
+        extra_info = processor.run_resource_search(
+            core_topics=request.analysis.core_topics,
+            search_needed=request.analysis.search_needed,
+        )
 
         # Return response
         return ResourceResponse(extra_info=extra_info)

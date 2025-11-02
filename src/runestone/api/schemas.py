@@ -28,10 +28,11 @@ class AnalysisRequest(BaseModel):
     text: str
 
 
-class ResourceRequestData(ContentAnalysis):
-    """Minimal schema for resource search request data - now inherits from unified ContentAnalysis."""
+class ResourceRequestData(BaseModel):
+    """Simplified schema for resource search request data - only required fields."""
 
-    pass
+    core_topics: list[str] = []
+    search_needed: SearchNeeded
 
 
 class ResourceRequest(BaseModel):

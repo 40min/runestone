@@ -10,7 +10,6 @@ from unittest.mock import Mock, patch
 
 from runestone.core.exceptions import RunestoneError
 from runestone.dependencies import get_runestone_processor, get_vocabulary_service
-from runestone.schemas.analysis import ContentAnalysis
 
 
 class TestOCREndpoints:
@@ -231,12 +230,14 @@ class TestResourceEndpoints:
         # Verify response
         assert data["extra_info"] == mock_extra_info
 
-        # Verify processor was called with ContentAnalysis object
-        call_args = mock_processor_instance.run_resource_search.call_args[0][0]
-        assert isinstance(call_args, ContentAnalysis)
-        assert call_args.core_topics == ["questions", "greetings"]
-        assert call_args.search_needed.should_search is True
-        assert call_args.search_needed.query_suggestions == ["Swedish question formation", "Basic Swedish grammar"]
+        # Verify processor was called with core_topics and search_needed
+        call_args = mock_processor_instance.run_resource_search.call_args
+        assert call_args.kwargs["core_topics"] == ["questions", "greetings"]
+        assert call_args.kwargs["search_needed"].should_search is True
+        assert call_args.kwargs["search_needed"].query_suggestions == [
+            "Swedish question formation",
+            "Basic Swedish grammar",
+        ]
 
 
 class TestVocabularyEndpoints:

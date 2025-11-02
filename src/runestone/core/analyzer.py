@@ -14,7 +14,7 @@ from runestone.core.logging_config import get_logger
 from runestone.core.prompt_builder.builder import PromptBuilder
 from runestone.core.prompt_builder.exceptions import ResponseParseError
 from runestone.core.prompt_builder.parsers import ResponseParser
-from runestone.schemas.analysis import ContentAnalysis
+from runestone.schemas.analysis import ContentAnalysis, SearchNeeded
 
 
 class ContentAnalyzer:
@@ -85,23 +85,24 @@ class ContentAnalyzer:
         except Exception as e:
             raise ContentAnalysisError(f"Content analysis failed: {str(e)}")
 
-    def find_extra_learning_info(self, analysis: ContentAnalysis) -> str:
+    def find_extra_learning_info(self, core_topics: list[str], search_needed: SearchNeeded) -> str:
         """
         Find extra learning information using web search and compile educational material.
 
         Args:
-            analysis: Content analysis results
+            core_topics: Main topics covered in the content
+            search_needed: Search requirements including whether to search and query suggestions
 
         Returns:
             Compiled educational material from web search as a string
         """
-        if not analysis.search_needed.should_search:
+        if not search_needed.should_search:
             return ""
 
         try:
-            # Get search queries and core topics from analysis
-            search_queries = analysis.search_needed.query_suggestions
-            core_topics = analysis.core_topics
+            # Get search queries and core topics from parameters
+            search_queries = search_needed.query_suggestions
+            core_topics = core_topics
 
             if not search_queries and not core_topics:
                 self.logger.warning("[ContentAnalyzer] No search queries or topics generated")

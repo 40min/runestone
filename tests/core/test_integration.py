@@ -127,12 +127,14 @@ class TestRunestoneIntegration:
         image_bytes = b"fake image data"
         ocr_result = processor.run_ocr(image_bytes)
         analysis_result = processor.run_analysis(ocr_result.transcribed_text)
-        resources_result = processor.run_resource_search(analysis_result)
+        resources_result = processor.run_resource_search(analysis_result.core_topics, analysis_result.search_needed)
 
         # Verify workflow execution
         mock_ocr_processor.extract_text.assert_called_once()
         mock_content_analyzer.analyze_content.assert_called_once_with("Hej, vad heter du?")
-        mock_content_analyzer.find_extra_learning_info.assert_called_once_with(mock_analysis)
+        mock_content_analyzer.find_extra_learning_info.assert_called_once_with(
+            mock_analysis.core_topics, mock_analysis.search_needed
+        )
 
         # Verify result structure
         assert ocr_result == mock_ocr_result

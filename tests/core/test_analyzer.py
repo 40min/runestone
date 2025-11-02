@@ -153,27 +153,19 @@ class TestContentAnalyzer:
 
     def test_find_extra_learning_info_no_search_needed(self):
         """Test resource finding when search is not needed."""
-        analysis = ContentAnalysis(
-            grammar_focus=GrammarFocus(has_explicit_rules=False, topic="", explanation=""),
-            vocabulary=[],
-            core_topics=[],
-            search_needed=SearchNeeded(should_search=False, query_suggestions=[]),
-        )
+        core_topics = []
+        search_needed = SearchNeeded(should_search=False, query_suggestions=[])
 
         mock_client = Mock()
         analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
-        resources = analyzer.find_extra_learning_info(analysis)
+        resources = analyzer.find_extra_learning_info(core_topics, search_needed)
 
         assert resources == ""
 
     def test_find_extra_learning_info_with_search(self):
         """Test resource finding with search queries."""
-        analysis = ContentAnalysis(
-            grammar_focus=GrammarFocus(has_explicit_rules=True, topic="Swedish greetings", explanation=""),
-            vocabulary=[],
-            core_topics=["greetings"],
-            search_needed=SearchNeeded(should_search=True, query_suggestions=["Swedish greetings"]),
-        )
+        core_topics = ["greetings"]
+        search_needed = SearchNeeded(should_search=True, query_suggestions=["Swedish greetings"])
 
         # Mock search response with educational material
         mock_search_response = (
@@ -186,7 +178,7 @@ class TestContentAnalyzer:
         mock_client.search_resources.return_value = mock_search_response
 
         analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
-        resources = analyzer.find_extra_learning_info(analysis)
+        resources = analyzer.find_extra_learning_info(core_topics, search_needed)
 
         # Should return a string with educational material
         assert isinstance(resources, str)
@@ -195,12 +187,8 @@ class TestContentAnalyzer:
 
     def test_find_extra_learning_info_fallback(self):
         """Test fallback behavior when search fails."""
-        analysis = ContentAnalysis(
-            grammar_focus=GrammarFocus(has_explicit_rules=True, topic="Swedish greetings", explanation=""),
-            vocabulary=[],
-            core_topics=["greetings"],
-            search_needed=SearchNeeded(should_search=True, query_suggestions=["Swedish greetings"]),
-        )
+        core_topics = ["greetings"]
+        search_needed = SearchNeeded(should_search=True, query_suggestions=["Swedish greetings"])
 
         # Mock search response with empty text (simulating failure)
         mock_search_response = ""
@@ -209,7 +197,7 @@ class TestContentAnalyzer:
         mock_client.search_resources.return_value = mock_search_response
 
         analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
-        resources = analyzer.find_extra_learning_info(analysis)
+        resources = analyzer.find_extra_learning_info(core_topics, search_needed)
 
         # Should return error message when LLM fails
         assert isinstance(resources, str)

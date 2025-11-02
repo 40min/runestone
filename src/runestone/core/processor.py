@@ -18,7 +18,7 @@ from runestone.core.exceptions import RunestoneError
 from runestone.core.formatter import ResultFormatter
 from runestone.core.logging_config import get_logger
 from runestone.core.ocr import OCRProcessor
-from runestone.schemas.analysis import ContentAnalysis
+from runestone.schemas.analysis import ContentAnalysis, SearchNeeded
 from runestone.schemas.ocr import OCRResult
 from runestone.services.vocabulary_service import VocabularyService
 
@@ -176,12 +176,13 @@ class RunestoneProcessor:
             # Log error but don't fail the entire analysis
             self.logger.warning(f"[RunestoneProcessor] Failed to mark known vocabulary: {str(e)}")
 
-    def run_resource_search(self, analysis_data: ContentAnalysis) -> str:
+    def run_resource_search(self, core_topics: list[str], search_needed: SearchNeeded) -> str:
         """
         Find extra learning resources based on analysis.
 
         Args:
-            analysis_data: Content analysis results
+            core_topics: Main topics covered in the content
+            search_needed: Search requirements including whether to search and query suggestions
 
         Returns:
             Extra learning information as string
@@ -193,7 +194,7 @@ class RunestoneProcessor:
             self.logger.debug("[RunestoneProcessor] Searching for learning resources...")
 
             start_time = time.time()
-            extra_info = self.content_analyzer.find_extra_learning_info(analysis_data)
+            extra_info = self.content_analyzer.find_extra_learning_info(core_topics, search_needed)
             duration = time.time() - start_time
 
             if extra_info:
@@ -278,7 +279,7 @@ class RunestoneProcessor:
             analysis = self.run_analysis(extracted_text)
 
             # Step 3: Resource search
-            extra_info = self.run_resource_search(analysis)
+            extra_info = self.run_resource_search(analysis.core_topics, analysis.search_needed)
 
             # Combine results
             results = {

@@ -83,7 +83,7 @@ class TestRunestoneProcessor:
             # Test the stateless workflow
             ocr_result = processor.run_ocr(b"fake image data")
             analysis_result = processor.run_analysis(ocr_result.transcribed_text)
-            resources_result = processor.run_resource_search(analysis_result)
+            resources_result = processor.run_resource_search(analysis_result.core_topics, analysis_result.search_needed)
 
             # Verify results
             assert ocr_result == mock_ocr_result
@@ -150,7 +150,7 @@ class TestRunestoneProcessor:
         # Test the stateless workflow
         ocr_result = processor.run_ocr(b"fake image data")
         analysis_result = processor.run_analysis(ocr_result.transcribed_text)
-        resources_result = processor.run_resource_search(analysis_result)
+        resources_result = processor.run_resource_search(analysis_result.core_topics, analysis_result.search_needed)
 
         # Verify results
         assert ocr_result == mock_ocr_result
@@ -271,12 +271,8 @@ class TestRunestoneProcessor:
         # Mock OCR (not directly used in this test, but needed for processor init)
         mock_ocr_instance = Mock()
 
-        mock_analysis_data = ContentAnalysis(
-            vocabulary=[VocabularyItem(swedish="hej", english="hello", example_phrase=None)],
-            grammar_focus=GrammarFocus(has_explicit_rules=False, topic="greetings", explanation="", rules=None),
-            core_topics=["greetings"],
-            search_needed=SearchNeeded(should_search=True, query_suggestions=[]),
-        )
+        core_topics = ["greetings"]
+        search_needed = SearchNeeded(should_search=True, query_suggestions=[])
 
         processor = RunestoneProcessor(
             settings=self.settings,
@@ -285,7 +281,7 @@ class TestRunestoneProcessor:
             vocabulary_service=Mock(spec=VocabularyService),
             verbose=False,
         )
-        result = processor.run_resource_search(mock_analysis_data)
+        result = processor.run_resource_search(core_topics, search_needed)
 
         assert result == mock_resources
 
@@ -354,7 +350,9 @@ class TestRunestoneProcessor:
         mock_open.assert_called_once_with(self.image_path, "rb")
         mock_ocr_instance.extract_text.assert_called_once()
         mock_analyzer_instance.analyze_content.assert_called_once_with("Sample Swedish text")
-        mock_analyzer_instance.find_extra_learning_info.assert_called_once_with(mock_analysis)
+        mock_analyzer_instance.find_extra_learning_info.assert_called_once_with(
+            mock_analysis.core_topics, mock_analysis.search_needed
+        )
 
         # Verify logging
         mock_logger.debug.assert_any_call(f"[RunestoneProcessor] Starting processing of image: {self.image_path}")
