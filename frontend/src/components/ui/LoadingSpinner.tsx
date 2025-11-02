@@ -10,7 +10,7 @@ interface LoadingSpinnerProps {
 }
 
 const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
-  size = 64,
+  size = 32,
   color = 'var(--primary-color)',
   message,
   sx = {},
@@ -19,16 +19,13 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
     <Box
       sx={{
         position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        backgroundColor: 'rgba(0, 0, 0, 0.3)',
+        bottom: 20,
+        right: 20,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 4,
+        gap: 1,
         zIndex: 9999,
         pointerEvents: 'none',
         ...sx,
@@ -37,12 +34,13 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
       <CircularProgress size={size} sx={{ color }} />
       {message && (
         <Typography
-          variant="body1"
+          variant="body2"
           sx={{
             color: 'white',
-            fontSize: '1.125rem',
-            fontWeight: 600,
+            fontSize: '0.875rem',
+            fontWeight: 500,
             textAlign: 'center',
+            textShadow: '0 0 4px rgba(0, 0, 0, 0.5)',
           }}
         >
           {message}
