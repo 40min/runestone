@@ -9,7 +9,7 @@ from typing import Annotated, List
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
-from runestone.api.mappers import convert_analysis_response, convert_ocr_response, convert_resource_request_to_analysis
+from runestone.api.mappers import convert_analysis_response, convert_resource_request_to_analysis
 from runestone.api.schemas import (
     AnalysisRequest,
     CheatsheetContent,
@@ -88,10 +88,10 @@ async def process_ocr(
         # Run OCR on image bytes
         ocr_result = processor.run_ocr(content)
 
-        # OCRResponse object - use mapper to convert
+        # OCRResult object - return directly (unified schema)
         stats = ocr_result.recognition_statistics
         logger.debug(f"[API] Result stats: {stats.successfully_transcribed}/{stats.total_elements} elements")
-        return convert_ocr_response(ocr_result)
+        return ocr_result
 
     except RunestoneError as e:
         logger.error(f"[API] RunestoneError: {type(e).__name__}: {str(e)}")

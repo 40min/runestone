@@ -16,7 +16,6 @@ from runestone.api.schemas import (
     ErrorResponse,
     GrammarFocus,
     HealthResponse,
-    OCRResult,
     ResourceRequest,
     ResourceRequestData,
     ResourceResponse,
@@ -26,6 +25,7 @@ from runestone.api.schemas import (
     VocabularyItemCreate,
     VocabularySaveRequest,
 )
+from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 
 
 class TestOCRResult:
@@ -33,15 +33,25 @@ class TestOCRResult:
 
     def test_valid_ocr_result(self):
         """Test creating a valid OCRResult."""
-        result = OCRResult(text="Hello world", character_count=11)
-        assert result.text == "Hello world"
+        stats = RecognitionStatistics(
+            total_elements=10, successfully_transcribed=10, unclear_uncertain=0, unable_to_recognize=0
+        )
+        result = OCRResult(transcribed_text="Hello world", recognition_statistics=stats)
+        assert result.transcribed_text == "Hello world"
         assert result.character_count == 11
 
     def test_ocr_result_serialization(self):
         """Test OCRResult serialization to dict."""
-        result = OCRResult(text="Test", character_count=4)
-        data = result.model_dump()
-        assert data == {"text": "Test", "character_count": 4}
+        stats = RecognitionStatistics(
+            total_elements=5, successfully_transcribed=5, unclear_uncertain=0, unable_to_recognize=0
+        )
+        result = OCRResult(transcribed_text="Test", recognition_statistics=stats)
+        # Use by_alias=True to get the API format with aliases
+        data = result.model_dump(by_alias=True)
+        # Check that serialization uses aliases: transcribed_text -> text
+        assert data["text"] == "Test"
+        assert data["character_count"] == 4
+        assert "recognition_statistics" in data
 
 
 class TestGrammarFocus:
@@ -219,12 +229,13 @@ class TestSchemaValidation:
     def test_invalid_ocr_result(self):
         """Test OCRResult with invalid data."""
         with pytest.raises(ValidationError):
-            OCRResult(text="Hello", character_count="invalid")  # character_count should be int
+            # recognition_statistics should be RecognitionStatistics object, not string
+            OCRResult(transcribed_text="Hello", recognition_statistics="invalid")
 
     def test_missing_required_fields(self):
         """Test schema with missing required fields."""
         with pytest.raises(ValidationError):
-            OCRResult()  # Missing required fields
+            OCRResult()  # Missing required fields (transcribed_text and recognition_statistics)
 
     def test_invalid_search_needed(self):
         """Test SearchNeeded with invalid query_suggestions type."""

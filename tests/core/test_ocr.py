@@ -10,7 +10,7 @@ import pytest
 from runestone.config import Settings
 from runestone.core.exceptions import ImageProcessingError, OCRError
 from runestone.core.ocr import OCRProcessor
-from runestone.core.prompt_builder.validators import OCRResponse
+from runestone.schemas.ocr import OCRResult
 
 
 class TestOCRProcessor:
@@ -121,8 +121,8 @@ class TestOCRProcessor:
         processor = OCRProcessor(settings=self.settings, client=mock_client)
         result = processor.extract_text(mock_image)
 
-        # Verify result structure - now returns OCRResponse object
-        assert isinstance(result, OCRResponse)
+        # Verify result structure - now returns OCRResult object
+        assert isinstance(result, OCRResult)
         assert result.transcribed_text == "Svenska text från läroboken"
         assert result.recognition_statistics.total_elements == 50
         assert result.recognition_statistics.successfully_transcribed == 50
@@ -222,8 +222,8 @@ class TestOCRProcessor:
 
         result = processor._parse_and_analyze_recognition_stats(test_json)
 
-        # Should return OCRResponse object
-        assert isinstance(result, OCRResponse)
+        # Should return OCRResult object
+        assert isinstance(result, OCRResult)
         assert result.transcribed_text == "This is the main content of the page."
         assert result.recognition_statistics.total_elements == 100
         assert result.recognition_statistics.successfully_transcribed == 95
@@ -263,8 +263,8 @@ class TestOCRProcessor:
 
         result = processor._parse_and_analyze_recognition_stats(test_json)
 
-        # Should return OCRResponse object
-        assert isinstance(result, OCRResponse)
+        # Should return OCRResult object
+        assert isinstance(result, OCRResult)
         assert result.transcribed_text == "This is plain text without statistics."
 
     def test_parse_and_analyze_recognition_stats_zero_total(self):
@@ -285,8 +285,8 @@ class TestOCRProcessor:
 
         result = processor._parse_and_analyze_recognition_stats(test_json)
 
-        # Should return OCRResponse object without raising error
-        assert isinstance(result, OCRResponse)
+        # Should return OCRResult object without raising error
+        assert isinstance(result, OCRResult)
         assert result.transcribed_text == "Some content."
 
     def test_parse_and_analyze_recognition_stats_boundary_percentage(self):
@@ -308,7 +308,7 @@ class TestOCRProcessor:
         result = processor._parse_and_analyze_recognition_stats(test_json)
 
         # Should succeed (not raise error) since 90% is acceptable
-        assert isinstance(result, OCRResponse)
+        assert isinstance(result, OCRResult)
         assert result.transcribed_text == "Content."
 
     def test_extract_text_with_stats_parsing(self):
@@ -336,8 +336,8 @@ class TestOCRProcessor:
         processor = OCRProcessor(settings=self.settings, client=mock_client)
         result = processor.extract_text(mock_image)
 
-        # Verify result is OCRResponse object with text
-        assert isinstance(result, OCRResponse)
+        # Verify result is OCRResult object with text
+        assert isinstance(result, OCRResult)
         assert result.transcribed_text == "Extracted Swedish text content."
         assert result.recognition_statistics.successfully_transcribed == 95
 

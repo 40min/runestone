@@ -12,13 +12,6 @@ from pydantic import BaseModel
 from runestone.core.prompt_builder.types import ImprovementMode
 
 
-class OCRResult(BaseModel):
-    """Schema for OCR processing results."""
-
-    text: str
-    character_count: int
-
-
 class GrammarFocus(BaseModel):
     """Schema for grammar focus analysis."""
 

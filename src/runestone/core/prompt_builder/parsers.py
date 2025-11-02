@@ -14,12 +14,11 @@ from runestone.core.prompt_builder.types import ImprovementMode
 from runestone.core.prompt_builder.validators import (
     AnalysisResponse,
     GrammarFocusResponse,
-    OCRResponse,
-    RecognitionStatistics,
     SearchNeededResponse,
     VocabularyItemResponse,
     VocabularyResponse,
 )
+from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 
 
 class ResponseParser:
@@ -34,7 +33,7 @@ class ResponseParser:
         """Initialize the response parser."""
         pass
 
-    def parse_ocr_response(self, response: str) -> OCRResponse:
+    def parse_ocr_response(self, response: str) -> OCRResult:
         """
         Parse OCR response with validation.
 
@@ -59,7 +58,7 @@ class ResponseParser:
             if "error" in data:
                 raise ResponseParseError(data["error"])
 
-            return OCRResponse(**data)
+            return OCRResult(**data)
         except ResponseParseError:
             # Re-raise parse errors without attempting fallback
             raise
@@ -254,7 +253,7 @@ class ResponseParser:
         # Remove any leading/trailing whitespace
         return response
 
-    def _fallback_ocr_parse(self, response: str) -> OCRResponse:
+    def _fallback_ocr_parse(self, response: str) -> OCRResult:
         """
         Fallback parser for malformed OCR responses.
 
@@ -265,7 +264,7 @@ class ResponseParser:
             response: Raw response text
 
         Returns:
-            OCRResponse object with OCR data structure
+            OCRResult object with OCR data structure
 
         Raises:
             ResponseParseError: If no meaningful text can be extracted
@@ -287,7 +286,7 @@ class ResponseParser:
             fixed_text = re.sub(r"(\w+):", r'"\1":', fixed_text)
             try:
                 data = json.loads(fixed_text)
-                return OCRResponse(**data)
+                return OCRResult(**data)
             except (json.JSONDecodeError, Exception):
                 pass  # Continue with regex extraction
 
@@ -336,7 +335,7 @@ class ResponseParser:
         if not transcribed_text:
             raise ResponseParseError("Could not extract transcribed text from malformed OCR response")
 
-        return OCRResponse(
+        return OCRResult(
             transcribed_text=transcribed_text,
             recognition_statistics=RecognitionStatistics(
                 total_elements=total_elements,
