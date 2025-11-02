@@ -18,12 +18,19 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   return (
     <Box
       sx={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        backgroundColor: 'rgba(0, 0, 0, 0.3)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 4,
-        py: 8,
+        zIndex: 9999,
+        pointerEvents: 'none',
         ...sx,
       }}
     >
