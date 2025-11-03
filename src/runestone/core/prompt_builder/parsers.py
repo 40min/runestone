@@ -11,15 +11,9 @@ from typing import Any, Dict, Optional
 
 from runestone.core.prompt_builder.exceptions import ResponseParseError
 from runestone.core.prompt_builder.types import ImprovementMode
-from runestone.core.prompt_builder.validators import (
-    AnalysisResponse,
-    GrammarFocusResponse,
-    OCRResponse,
-    RecognitionStatistics,
-    SearchNeededResponse,
-    VocabularyItemResponse,
-    VocabularyResponse,
-)
+from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
+from runestone.schemas.ocr import OCRResult, RecognitionStatistics
+from runestone.schemas.vocabulary import VocabularyResponse
 
 
 class ResponseParser:
@@ -34,7 +28,7 @@ class ResponseParser:
         """Initialize the response parser."""
         pass
 
-    def parse_ocr_response(self, response: str) -> OCRResponse:
+    def parse_ocr_response(self, response: str) -> OCRResult:
         """
         Parse OCR response with validation.
 
@@ -59,7 +53,7 @@ class ResponseParser:
             if "error" in data:
                 raise ResponseParseError(data["error"])
 
-            return OCRResponse(**data)
+            return OCRResult(**data)
         except ResponseParseError:
             # Re-raise parse errors without attempting fallback
             raise
@@ -72,7 +66,7 @@ class ResponseParser:
                     f"Failed to parse OCR response: {str(e)}. Fallback also failed: {str(fallback_error)}"
                 )
 
-    def parse_analysis_response(self, response: str) -> AnalysisResponse:
+    def parse_analysis_response(self, response: str) -> ContentAnalysis:
         """
         Parse content analysis response with automatic fallback.
 
@@ -92,7 +86,7 @@ class ResponseParser:
         """
         try:
             data = self._parse_json(response)
-            return AnalysisResponse(**data)
+            return ContentAnalysis(**data)
         except Exception as e:
             # Try fallback parsing
             try:
@@ -254,7 +248,7 @@ class ResponseParser:
         # Remove any leading/trailing whitespace
         return response
 
-    def _fallback_ocr_parse(self, response: str) -> OCRResponse:
+    def _fallback_ocr_parse(self, response: str) -> OCRResult:
         """
         Fallback parser for malformed OCR responses.
 
@@ -265,7 +259,7 @@ class ResponseParser:
             response: Raw response text
 
         Returns:
-            OCRResponse object with OCR data structure
+            OCRResult object with OCR data structure
 
         Raises:
             ResponseParseError: If no meaningful text can be extracted
@@ -287,7 +281,7 @@ class ResponseParser:
             fixed_text = re.sub(r"(\w+):", r'"\1":', fixed_text)
             try:
                 data = json.loads(fixed_text)
-                return OCRResponse(**data)
+                return OCRResult(**data)
             except (json.JSONDecodeError, Exception):
                 pass  # Continue with regex extraction
 
@@ -336,7 +330,7 @@ class ResponseParser:
         if not transcribed_text:
             raise ResponseParseError("Could not extract transcribed text from malformed OCR response")
 
-        return OCRResponse(
+        return OCRResult(
             transcribed_text=transcribed_text,
             recognition_statistics=RecognitionStatistics(
                 total_elements=total_elements,
@@ -346,7 +340,7 @@ class ResponseParser:
             ),
         )
 
-    def _fallback_analysis_parse(self, response: str) -> AnalysisResponse:
+    def _fallback_analysis_parse(self, response: str) -> ContentAnalysis:
         """
         Fallback parser for malformed analysis responses.
 
@@ -384,7 +378,7 @@ class ResponseParser:
             fixed_text = re.sub(r"(\w+):", r'"\1":', fixed_text)
             try:
                 parsed_json = json.loads(fixed_text)
-                return AnalysisResponse(**parsed_json)
+                return ContentAnalysis(**parsed_json)
             except (json.JSONDecodeError, Exception):
                 pass  # Continue with regex extraction
 
@@ -415,7 +409,7 @@ class ResponseParser:
         vocab_matches = re.finditer(vocab_pattern, response, re.IGNORECASE)
         for match in vocab_matches:
             vocabulary.append(
-                VocabularyItemResponse(
+                VocabularyItem(
                     swedish=match.group(1),
                     english=match.group(2),
                     example_phrase=match.group(3) if match.group(3) else None,
@@ -467,8 +461,8 @@ class ResponseParser:
             if not lines:
                 raise ResponseParseError("Could not extract meaningful analysis data from malformed response")
 
-        return AnalysisResponse(
-            grammar_focus=GrammarFocusResponse(
+        return ContentAnalysis(
+            grammar_focus=GrammarFocus(
                 has_explicit_rules=has_explicit_rules,
                 topic=topic,
                 explanation=explanation,
@@ -476,7 +470,7 @@ class ResponseParser:
             ),
             vocabulary=vocabulary,
             core_topics=core_topics,
-            search_needed=SearchNeededResponse(
+            search_needed=SearchNeeded(
                 should_search=should_search,
                 query_suggestions=query_suggestions,
             ),

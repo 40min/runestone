@@ -9,7 +9,6 @@ from typing import Annotated, List
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
-from runestone.api.mappers import convert_analysis_response, convert_ocr_response, convert_resource_request_to_analysis
 from runestone.api.schemas import (
     AnalysisRequest,
     CheatsheetContent,
@@ -88,10 +87,10 @@ async def process_ocr(
         # Run OCR on image bytes
         ocr_result = processor.run_ocr(content)
 
-        # OCRResponse object - use mapper to convert
+        # OCRResult object - return directly (unified schema)
         stats = ocr_result.recognition_statistics
         logger.debug(f"[API] Result stats: {stats.successfully_transcribed}/{stats.total_elements} elements")
-        return convert_ocr_response(ocr_result)
+        return ocr_result
 
     except RunestoneError as e:
         logger.error(f"[API] RunestoneError: {type(e).__name__}: {str(e)}")
@@ -144,10 +143,10 @@ async def analyze_content(
         # Run content analysis
         analysis_result = processor.run_analysis(request.text)
 
-        # AnalysisResponse object - use mapper to convert
+        # ContentAnalysis object - return directly (unified schema)
         vocab_count = len(analysis_result.vocabulary)
         logger.debug(f"[API] Found {vocab_count} vocabulary items")
-        return convert_analysis_response(analysis_result)
+        return analysis_result
 
     except RunestoneError as e:
         logger.error(f"[API] RunestoneError during analysis: {type(e).__name__}: {str(e)}")
@@ -195,11 +194,11 @@ async def find_resources(
         HTTPException: For various error conditions
     """
     try:
-        # Convert API request to internal AnalysisResponse format
-        analysis_data = convert_resource_request_to_analysis(request.analysis)
-
-        # Run resource search with the converted data
-        extra_info = processor.run_resource_search(analysis_data)
+        # Run resource search with the simplified parameters
+        extra_info = processor.run_resource_search(
+            core_topics=request.analysis.core_topics,
+            search_needed=request.analysis.search_needed,
+        )
 
         # Return response
         return ResourceResponse(extra_info=extra_info)

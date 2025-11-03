@@ -11,7 +11,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from runestone.core.prompt_builder.validators import AnalysisResponse, OCRResponse
+from runestone.schemas.analysis import ContentAnalysis
+from runestone.schemas.ocr import OCRResult
 
 
 class ResultFormatter:
@@ -28,8 +29,8 @@ class ResultFormatter:
 
     def format_console_output(
         self,
-        ocr_result: OCRResponse,
-        analysis: AnalysisResponse,
+        ocr_result: OCRResult,
+        analysis: ContentAnalysis,
         extra_info: str,
     ) -> None:
         """
@@ -63,7 +64,7 @@ class ResultFormatter:
         footer_text = Text("✨ Analysis complete!", style="bold green")
         self.console.print(Panel(footer_text, box=box.ROUNDED))
 
-    def _format_recognized_text(self, ocr_result: OCRResponse) -> None:
+    def _format_recognized_text(self, ocr_result: OCRResult) -> None:
         """Format the recognized text section."""
         text = ocr_result.transcribed_text or "No text extracted"
 
@@ -80,7 +81,7 @@ class ResultFormatter:
         self.console.print(panel)
         self.console.print()
 
-    def _format_grammar_focus(self, analysis: AnalysisResponse) -> None:
+    def _format_grammar_focus(self, analysis: ContentAnalysis) -> None:
         """Format the grammar focus section."""
         grammar = analysis.grammar_focus
         topic = grammar.topic or "No topic identified"
@@ -103,7 +104,7 @@ class ResultFormatter:
         self.console.print(panel)
         self.console.print()
 
-    def _format_vocabulary(self, analysis: AnalysisResponse) -> None:
+    def _format_vocabulary(self, analysis: ContentAnalysis) -> None:
         """Format the vocabulary section."""
         vocab_list = analysis.vocabulary
 
@@ -151,8 +152,8 @@ class ResultFormatter:
 
     def format_markdown_output(
         self,
-        ocr_result: OCRResponse,
-        analysis: AnalysisResponse,
+        ocr_result: OCRResult,
+        analysis: ContentAnalysis,
         resources: str,
     ) -> str:
         """

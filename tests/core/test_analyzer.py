@@ -11,12 +11,7 @@ from runestone.config import Settings
 from runestone.core.analyzer import ContentAnalyzer
 from runestone.core.console import setup_console
 from runestone.core.exceptions import ContentAnalysisError
-from runestone.core.prompt_builder.validators import (
-    AnalysisResponse,
-    GrammarFocusResponse,
-    SearchNeededResponse,
-    VocabularyItemResponse,
-)
+from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
 
 
 class TestContentAnalyzer:
@@ -40,19 +35,19 @@ class TestContentAnalyzer:
     def test_analyze_content_success(self):
         """Test successful content analysis."""
         # Mock analysis result
-        analysis_result = AnalysisResponse(
-            grammar_focus=GrammarFocusResponse(
+        analysis_result = ContentAnalysis(
+            grammar_focus=GrammarFocus(
                 has_explicit_rules=True,
                 topic="Swedish greetings",
                 explanation="Basic greeting patterns in Swedish",
                 rules="Hej [hello] - greeting\nHur mår du? [how are you?] - question form",
             ),
             vocabulary=[
-                VocabularyItemResponse(swedish="hej", english="hello"),
-                VocabularyItemResponse(swedish="jag heter", english="my name is"),
+                VocabularyItem(swedish="hej", english="hello"),
+                VocabularyItem(swedish="jag heter", english="my name is"),
             ],
             core_topics=["greetings", "introductions"],
-            search_needed=SearchNeededResponse(
+            search_needed=SearchNeeded(
                 should_search=True,
                 query_suggestions=["Swedish greetings", "Swedish introductions"],
             ),
@@ -68,11 +63,11 @@ class TestContentAnalyzer:
         result = analyzer.analyze_content(self.sample_text)
 
         # Verify result structure
-        assert isinstance(result, AnalysisResponse)
-        assert isinstance(result.grammar_focus, GrammarFocusResponse)
+        assert isinstance(result, ContentAnalysis)
+        assert isinstance(result.grammar_focus, GrammarFocus)
         assert isinstance(result.vocabulary, list)
         assert isinstance(result.core_topics, list)
-        assert isinstance(result.search_needed, SearchNeededResponse)
+        assert isinstance(result.search_needed, SearchNeeded)
 
         # Verify specific content
         assert result.grammar_focus.topic == "Swedish greetings"
@@ -101,11 +96,11 @@ class TestContentAnalyzer:
         result = analyzer.analyze_content(self.sample_text)
 
         # Should get fallback analysis with default structure
-        assert isinstance(result, AnalysisResponse)
-        assert isinstance(result.grammar_focus, GrammarFocusResponse)
+        assert isinstance(result, ContentAnalysis)
+        assert isinstance(result.grammar_focus, GrammarFocus)
         assert isinstance(result.vocabulary, list)
         assert isinstance(result.core_topics, list)
-        assert isinstance(result.search_needed, SearchNeededResponse)
+        assert isinstance(result.search_needed, SearchNeeded)
         # Fallback provides minimal valid structure
         assert result.grammar_focus.topic == "Swedish language practice"
         assert isinstance(result.vocabulary, list)
@@ -133,14 +128,14 @@ class TestContentAnalyzer:
         result = analyzer.analyze_content(self.sample_text)
 
         # Should get fallback analysis that preserves extracted data and fills missing fields
-        assert isinstance(result, AnalysisResponse)
-        assert isinstance(result.grammar_focus, GrammarFocusResponse)
+        assert isinstance(result, ContentAnalysis)
+        assert isinstance(result.grammar_focus, GrammarFocus)
         assert isinstance(result.vocabulary, list)
         # The topic from the partial JSON should be preserved
         assert result.grammar_focus.topic == "Swedish greetings"
         # Missing fields should be filled with defaults
         assert result.grammar_focus.explanation != ""
-        assert isinstance(result.search_needed, SearchNeededResponse)
+        assert isinstance(result.search_needed, SearchNeeded)
 
     def test_analyze_content_no_response(self):
         """Test handling of empty response."""
@@ -158,27 +153,19 @@ class TestContentAnalyzer:
 
     def test_find_extra_learning_info_no_search_needed(self):
         """Test resource finding when search is not needed."""
-        analysis = AnalysisResponse(
-            grammar_focus=GrammarFocusResponse(has_explicit_rules=False, topic="", explanation=""),
-            vocabulary=[],
-            core_topics=[],
-            search_needed=SearchNeededResponse(should_search=False, query_suggestions=[]),
-        )
+        core_topics = []
+        search_needed = SearchNeeded(should_search=False, query_suggestions=[])
 
         mock_client = Mock()
         analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
-        resources = analyzer.find_extra_learning_info(analysis)
+        resources = analyzer.find_extra_learning_info(core_topics, search_needed)
 
         assert resources == ""
 
     def test_find_extra_learning_info_with_search(self):
         """Test resource finding with search queries."""
-        analysis = AnalysisResponse(
-            grammar_focus=GrammarFocusResponse(has_explicit_rules=True, topic="Swedish greetings", explanation=""),
-            vocabulary=[],
-            core_topics=["greetings"],
-            search_needed=SearchNeededResponse(should_search=True, query_suggestions=["Swedish greetings"]),
-        )
+        core_topics = ["greetings"]
+        search_needed = SearchNeeded(should_search=True, query_suggestions=["Swedish greetings"])
 
         # Mock search response with educational material
         mock_search_response = (
@@ -191,7 +178,7 @@ class TestContentAnalyzer:
         mock_client.search_resources.return_value = mock_search_response
 
         analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
-        resources = analyzer.find_extra_learning_info(analysis)
+        resources = analyzer.find_extra_learning_info(core_topics, search_needed)
 
         # Should return a string with educational material
         assert isinstance(resources, str)
@@ -200,12 +187,8 @@ class TestContentAnalyzer:
 
     def test_find_extra_learning_info_fallback(self):
         """Test fallback behavior when search fails."""
-        analysis = AnalysisResponse(
-            grammar_focus=GrammarFocusResponse(has_explicit_rules=True, topic="Swedish greetings", explanation=""),
-            vocabulary=[],
-            core_topics=["greetings"],
-            search_needed=SearchNeededResponse(should_search=True, query_suggestions=["Swedish greetings"]),
-        )
+        core_topics = ["greetings"]
+        search_needed = SearchNeeded(should_search=True, query_suggestions=["Swedish greetings"])
 
         # Mock search response with empty text (simulating failure)
         mock_search_response = ""
@@ -214,7 +197,7 @@ class TestContentAnalyzer:
         mock_client.search_resources.return_value = mock_search_response
 
         analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
-        resources = analyzer.find_extra_learning_info(analysis)
+        resources = analyzer.find_extra_learning_info(core_topics, search_needed)
 
         # Should return error message when LLM fails
         assert isinstance(resources, str)
@@ -230,7 +213,7 @@ class TestContentAnalyzer:
         fallback_data = parser._fallback_analysis_parse("invalid response")
 
         # Check required structure
-        assert isinstance(fallback_data, AnalysisResponse)
+        assert isinstance(fallback_data, ContentAnalysis)
         assert isinstance(fallback_data.vocabulary, list)
         assert isinstance(fallback_data.core_topics, list)
         assert fallback_data.grammar_focus.topic == "Swedish language practice"
@@ -243,6 +226,6 @@ class TestContentAnalyzer:
         fallback_data = parser._fallback_analysis_parse("invalid response")
 
         # Check that rules field is present and None
-        assert isinstance(fallback_data, AnalysisResponse)
+        assert isinstance(fallback_data, ContentAnalysis)
         assert hasattr(fallback_data.grammar_focus, "rules")
         assert fallback_data.grammar_focus.rules is None

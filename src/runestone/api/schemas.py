@@ -1,8 +1,9 @@
 """
 Pydantic models for API request/response schemas.
 
-This module defines the data models used for API communication,
-ensuring type safety and validation for the Runestone web API.
+This module serves as the API layer's schema facade, re-exporting
+unified schemas from the core layer and defining API-specific models.
+This provides a stable API contract and encapsulates internal schema organization.
 """
 
 from typing import List, Optional
@@ -11,46 +12,36 @@ from pydantic import BaseModel
 
 from runestone.core.prompt_builder.types import ImprovementMode
 
+# Re-export unified schemas for API use
+# This provides a stable API contract and encapsulates internal schema organization
+from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
+from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 
-class OCRResult(BaseModel):
-    """Schema for OCR processing results."""
-
-    text: str
-    character_count: int
-
-
-class GrammarFocus(BaseModel):
-    """Schema for grammar focus analysis."""
-
-    topic: str
-    explanation: str
-    has_explicit_rules: bool
-    rules: Optional[str] = None
-
-
-class VocabularyItem(BaseModel):
-    """Schema for individual vocabulary items."""
-
-    swedish: str
-    english: str
-    example_phrase: Optional[str] = None
-    known: bool = False
-
-
-class SearchNeeded(BaseModel):
-    """Schema for search requirements."""
-
-    should_search: bool
-    query_suggestions: List[str]
-
-
-class ContentAnalysis(BaseModel):
-    """Schema for content analysis results."""
-
-    grammar_focus: GrammarFocus
-    vocabulary: List[VocabularyItem]
-    core_topics: List[str]
-    search_needed: SearchNeeded
+# Define the public API contract
+__all__ = [
+    # Unified schemas (re-exported)
+    "ContentAnalysis",
+    "GrammarFocus",
+    "SearchNeeded",
+    "VocabularyItem",
+    "OCRResult",
+    "RecognitionStatistics",
+    # API-specific request/response models
+    "AnalysisRequest",
+    "ResourceRequest",
+    "ResourceRequestData",
+    "ResourceResponse",
+    "ErrorResponse",
+    "HealthResponse",
+    "VocabularyItemCreate",
+    "VocabularyUpdate",
+    "VocabularySaveRequest",
+    "Vocabulary",
+    "VocabularyImproveRequest",
+    "VocabularyImproveResponse",
+    "CheatsheetInfo",
+    "CheatsheetContent",
+]
 
 
 class AnalysisRequest(BaseModel):
@@ -60,9 +51,9 @@ class AnalysisRequest(BaseModel):
 
 
 class ResourceRequestData(BaseModel):
-    """Minimal schema for resource search request data."""
+    """Simplified schema for resource search request data - only required fields."""
 
-    core_topics: List[str]
+    core_topics: list[str] = []
     search_needed: SearchNeeded
 
 

@@ -14,14 +14,8 @@ from runestone.core.console import setup_console
 from runestone.core.exceptions import RunestoneError
 from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
-from runestone.core.prompt_builder.validators import (
-    AnalysisResponse,
-    GrammarFocusResponse,
-    OCRResponse,
-    RecognitionStatistics,
-    SearchNeededResponse,
-    VocabularyItemResponse,
-)
+from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
+from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 from runestone.services.vocabulary_service import VocabularyService
 
 
@@ -77,7 +71,7 @@ class TestRunestoneIntegration:
         mock_image_open.return_value = mock_image
 
         # Mock OCR results
-        mock_ocr_result = OCRResponse(
+        mock_ocr_result = OCRResult(
             transcribed_text="Hej, vad heter du?",
             recognition_statistics=RecognitionStatistics(
                 total_elements=17,
@@ -88,19 +82,19 @@ class TestRunestoneIntegration:
         )
 
         # Mock analysis results
-        mock_analysis = AnalysisResponse(
-            grammar_focus=GrammarFocusResponse(
+        mock_analysis = ContentAnalysis(
+            grammar_focus=GrammarFocus(
                 has_explicit_rules=False,
                 topic="Swedish questions",
                 explanation="Basic question formation in Swedish",
                 rules=None,
             ),
             vocabulary=[
-                VocabularyItemResponse(swedish="hej", english="hello", example_phrase=None),
-                VocabularyItemResponse(swedish="vad", english="what", example_phrase=None),
+                VocabularyItem(swedish="hej", english="hello", example_phrase=None),
+                VocabularyItem(swedish="vad", english="what", example_phrase=None),
             ],
             core_topics=["questions", "greetings"],
-            search_needed=SearchNeededResponse(
+            search_needed=SearchNeeded(
                 should_search=True,
                 query_suggestions=["Swedish questions"],
             ),
@@ -133,12 +127,14 @@ class TestRunestoneIntegration:
         image_bytes = b"fake image data"
         ocr_result = processor.run_ocr(image_bytes)
         analysis_result = processor.run_analysis(ocr_result.transcribed_text)
-        resources_result = processor.run_resource_search(analysis_result)
+        resources_result = processor.run_resource_search(analysis_result.core_topics, analysis_result.search_needed)
 
         # Verify workflow execution
         mock_ocr_processor.extract_text.assert_called_once()
         mock_content_analyzer.analyze_content.assert_called_once_with("Hej, vad heter du?")
-        mock_content_analyzer.find_extra_learning_info.assert_called_once_with(mock_analysis)
+        mock_content_analyzer.find_extra_learning_info.assert_called_once_with(
+            mock_analysis.core_topics, mock_analysis.search_needed
+        )
 
         # Verify result structure
         assert ocr_result == mock_ocr_result
@@ -180,7 +176,7 @@ class TestRunestoneIntegration:
         mock_image_open.return_value = mock_image
 
         # Mock empty OCR result
-        mock_ocr_result = OCRResponse(
+        mock_ocr_result = OCRResult(
             transcribed_text="",
             recognition_statistics=RecognitionStatistics(
                 total_elements=0,
@@ -211,7 +207,7 @@ class TestRunestoneIntegration:
     @patch("runestone.core.processor.ResultFormatter")
     def test_display_results_console(self, mock_formatter):
         """Test console result display."""
-        mock_ocr_result = OCRResponse(
+        mock_ocr_result = OCRResult(
             transcribed_text="test",
             recognition_statistics=RecognitionStatistics(
                 total_elements=4,
@@ -220,11 +216,11 @@ class TestRunestoneIntegration:
                 unable_to_recognize=0,
             ),
         )
-        mock_analysis = AnalysisResponse(
-            grammar_focus=GrammarFocusResponse(has_explicit_rules=False, topic="", explanation="", rules=None),
+        mock_analysis = ContentAnalysis(
+            grammar_focus=GrammarFocus(has_explicit_rules=False, topic="", explanation="", rules=None),
             vocabulary=[],
             core_topics=[],
-            search_needed=SearchNeededResponse(should_search=False, query_suggestions=[]),
+            search_needed=SearchNeeded(should_search=False, query_suggestions=[]),
         )
         mock_results = {
             "ocr_result": mock_ocr_result,
@@ -255,7 +251,7 @@ class TestRunestoneIntegration:
     @patch("runestone.core.processor.ResultFormatter")
     def test_display_results_markdown(self, mock_formatter):
         """Test markdown result display."""
-        mock_ocr_result = OCRResponse(
+        mock_ocr_result = OCRResult(
             transcribed_text="test",
             recognition_statistics=RecognitionStatistics(
                 total_elements=4,
@@ -264,11 +260,11 @@ class TestRunestoneIntegration:
                 unable_to_recognize=0,
             ),
         )
-        mock_analysis = AnalysisResponse(
-            grammar_focus=GrammarFocusResponse(has_explicit_rules=False, topic="", explanation="", rules=None),
+        mock_analysis = ContentAnalysis(
+            grammar_focus=GrammarFocus(has_explicit_rules=False, topic="", explanation="", rules=None),
             vocabulary=[],
             core_topics=[],
-            search_needed=SearchNeededResponse(should_search=False, query_suggestions=[]),
+            search_needed=SearchNeeded(should_search=False, query_suggestions=[]),
         )
         mock_results = {
             "ocr_result": mock_ocr_result,

@@ -18,7 +18,7 @@ from runestone.core.logging_config import get_logger
 from runestone.core.prompt_builder.builder import PromptBuilder
 from runestone.core.prompt_builder.exceptions import ResponseParseError
 from runestone.core.prompt_builder.parsers import ResponseParser
-from runestone.core.prompt_builder.validators import OCRResponse
+from runestone.schemas.ocr import OCRResult
 
 
 class OCRProcessor:
@@ -83,7 +83,7 @@ class OCRProcessor:
         except Exception as e:
             raise ImageProcessingError(f"Failed to load image: {str(e)}")
 
-    def _parse_and_analyze_recognition_stats(self, extracted_text: str) -> OCRResponse:
+    def _parse_and_analyze_recognition_stats(self, extracted_text: str) -> OCRResult:
         """
         Parse JSON response from OCR and analyze recognition quality.
 
@@ -91,7 +91,7 @@ class OCRProcessor:
             extracted_text: JSON string from OCR response
 
         Returns:
-            OCRResponse object
+            OCRResult object
 
         Raises:
             OCRError: If recognition percentage is below 90% or parsing fails
@@ -155,7 +155,7 @@ class OCRProcessor:
             else:
                 return image
 
-    def extract_text(self, image: Image.Image) -> OCRResponse:
+    def extract_text(self, image: Image.Image) -> OCRResult:
         """
         Extract text from a Swedish textbook page image with enhanced preprocessing.
 
@@ -163,7 +163,7 @@ class OCRProcessor:
             image: PIL Image object to process
 
         Returns:
-            OCRResponse object containing extracted text and metadata
+            OCRResult object containing extracted text and metadata
 
         Raises:
             OCRError: If text extraction fails
@@ -232,7 +232,6 @@ class OCRProcessor:
             processing_time = time.time() - start_time
             self.logger.info(f"[OCRProcessor] OCR processing completed in {processing_time:.2f} seconds")
 
-            return ocr_response
             return ocr_response
 
         except OCRError:
