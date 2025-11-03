@@ -1,8 +1,9 @@
 """
 Pydantic models for API request/response schemas.
 
-This module defines the data models used for API communication,
-ensuring type safety and validation for the Runestone web API.
+This module serves as the API layer's schema facade, re-exporting
+unified schemas from the core layer and defining API-specific models.
+This provides a stable API contract and encapsulates internal schema organization.
 """
 
 from typing import List, Optional
@@ -10,16 +11,37 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from runestone.core.prompt_builder.types import ImprovementMode
+
+# Re-export unified schemas for API use
+# This provides a stable API contract and encapsulates internal schema organization
 from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
 from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 
-# Import unified schemas instead of defining duplicates
-GrammarFocus = GrammarFocus
-VocabularyItem = VocabularyItem
-SearchNeeded = SearchNeeded
-ContentAnalysis = ContentAnalysis
-OCRResult = OCRResult
-RecognitionStatistics = RecognitionStatistics
+# Define the public API contract
+__all__ = [
+    # Unified schemas (re-exported)
+    "ContentAnalysis",
+    "GrammarFocus",
+    "SearchNeeded",
+    "VocabularyItem",
+    "OCRResult",
+    "RecognitionStatistics",
+    # API-specific request/response models
+    "AnalysisRequest",
+    "ResourceRequest",
+    "ResourceRequestData",
+    "ResourceResponse",
+    "ErrorResponse",
+    "HealthResponse",
+    "VocabularyItemCreate",
+    "VocabularyUpdate",
+    "VocabularySaveRequest",
+    "Vocabulary",
+    "VocabularyImproveRequest",
+    "VocabularyImproveResponse",
+    "CheatsheetInfo",
+    "CheatsheetContent",
+]
 
 
 class AnalysisRequest(BaseModel):

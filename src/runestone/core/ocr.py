@@ -233,7 +233,6 @@ class OCRProcessor:
             self.logger.info(f"[OCRProcessor] OCR processing completed in {processing_time:.2f} seconds")
 
             return ocr_response
-            return ocr_response
 
         except OCRError:
             self.logger.error("[OCRProcessor] OCRError caught, re-raising")
