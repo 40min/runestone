@@ -7,10 +7,10 @@ portion logic for multiple concurrent users.
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List
 
 import httpx
 
+from runestone.core.exceptions import VocabularyOperationError, WordNotFoundError, WordNotInSelectionError
 from runestone.db.repository import VocabularyRepository
 from runestone.state.state_manager import StateManager
 from runestone.state.state_types import UserData, WordOfDay
@@ -237,7 +237,7 @@ class RuneRecallService:
 
         return len(user_data.daily_selection) < original_length
 
-    def _select_daily_portion(self, db_user_id: int) -> List[Dict]:
+    def _select_daily_portion(self, db_user_id: int) -> list[dict]:
         """
         Select a daily portion of words for recall based on user's vocabulary and cooldown.
 
@@ -262,7 +262,7 @@ class RuneRecallService:
             for word in words
         ]
 
-    def _send_word_message(self, chat_id: int, word: Dict) -> bool:
+    def _send_word_message(self, chat_id: int, word: dict) -> bool:
         """
         Send a vocabulary word message to a Telegram chat.
 
@@ -390,159 +390,75 @@ class RuneRecallService:
         """
         self.state_manager.update_user(username, user_data)
 
-    def remove_word_completely(self, username: str, word_phrase: str) -> Dict[str, Any]:
+    def remove_word_completely(self, username: str, word_phrase: str) -> None:
         """
         Remove word from both database and daily_selection.
 
-        Args:
-            username: Username of the user
-            word_phrase: Word phrase to remove completely
-
-        Returns:
-            Dictionary with 'success' bool, 'message' str, and optional 'removed_from_selection' bool
+        Raises:
+            WordNotFoundError: If word doesn't exist in user's vocabulary
+            VocabularyOperationError: If operation fails
         """
-        try:
-            user_data = self.state_manager.get_user(username)
-            if not user_data:
-                return {"success": False, "message": f"User '{username}' not found"}
+        user_data = self.state_manager.get_user(username)
+        if not user_data:
+            raise VocabularyOperationError(f"User '{username}' not found")
 
-            # Find the word in database by word_phrase and user_id
-            matching_word = self.vocabulary_repository.get_vocabulary_item_by_word_phrase(
-                word_phrase, user_data.db_user_id
-            )
+        matching_word = self.vocabulary_repository.get_vocabulary_item_by_word_phrase(word_phrase, user_data.db_user_id)
 
-            if not matching_word:
-                return {"success": False, "message": f"Word '{word_phrase}' not found in your vocabulary"}
+        if not matching_word:
+            raise WordNotFoundError(word_phrase, username)
 
-            # Remove from database (set in_learn = False)
-            db_success = self.vocabulary_repository.delete_vocabulary_item_by_word_phrase(
-                word_phrase, user_data.db_user_id
-            )
+        # Remove from database
+        if not self.vocabulary_repository.delete_vocabulary_item_by_word_phrase(word_phrase, user_data.db_user_id):
+            raise VocabularyOperationError("Failed to remove word from database")
 
-            if not db_success:
-                return {"success": False, "message": f"Failed to remove word '{word_phrase}' from vocabulary"}
+        # Remove from daily_selection and maintain count
+        was_in_selection = self.remove_word_from_daily_selection(user_data, word_phrase)
+        if was_in_selection:
+            self.maintain_daily_selection(username, user_data)
 
-            # Remove from daily_selection
-            removed_from_selection = self.remove_word_from_daily_selection(user_data, word_phrase)
+        self.update_user_daily_selection(username, user_data)
+        logger.info(f"User {username} removed word '{word_phrase}'")
+        # Returns nothing - success is implicit
 
-            # Maintain target word count (adds replacements if needed)
-            added_count = 0
-            if removed_from_selection:
-                added_count = self.maintain_daily_selection(username, user_data)
-
-            # Update user data in state
-            self.update_user_daily_selection(username, user_data)
-
-            # Prepare success message
-            status_msg = "removed from vocabulary"
-            if removed_from_selection:
-                status_msg += " and daily selection"
-                if added_count > 0:
-                    word_word = "word" if added_count == 1 else "words"
-                    status_msg += f" (added {added_count} replacement {word_word})"
-                elif len(user_data.daily_selection) < self.words_per_day:
-                    status_msg += " (no replacement available - words in cooldown)"
-
-            logger.info(f"User {username} removed word '{word_phrase}' from vocabulary")
-
-            return {
-                "success": True,
-                "message": f"Word '{word_phrase}' {status_msg}.",
-                "removed_from_selection": removed_from_selection,
-                "replacements_added": added_count,
-            }
-
-        except Exception as e:
-            logger.error(f"Error removing word '{word_phrase}' for user {username}: {e}")
-            return {"success": False, "message": "An error occurred while removing the word"}
-
-    def postpone_word(self, username: str, word_phrase: str) -> Dict[str, Any]:
+    def postpone_word(self, username: str, word_phrase: str) -> None:
         """
         Remove word from daily_selection only (postpone learning).
 
-        Args:
-            username: Username of the user
-            word_phrase: Word phrase to postpone
-
-        Returns:
-            Dictionary with 'success' bool and 'message' str
+        Raises:
+            WordNotInSelectionError: If word is not in today's selection
+            VocabularyOperationError: If operation fails
         """
-        try:
-            user_data = self.state_manager.get_user(username)
-            if not user_data:
-                return {"success": False, "message": f"User '{username}' not found"}
+        user_data = self.state_manager.get_user(username)
+        if not user_data:
+            raise VocabularyOperationError(f"User '{username}' not found")
 
-            # Remove from daily_selection
-            removed_from_selection = self.remove_word_from_daily_selection(user_data, word_phrase)
+        if not self.remove_word_from_daily_selection(user_data, word_phrase):
+            raise WordNotInSelectionError(word_phrase)
 
-            if removed_from_selection:
-                # Maintain target word count (adds replacements if needed)
-                added_count = self.maintain_daily_selection(username, user_data)
+        self.maintain_daily_selection(username, user_data)
+        self.update_user_daily_selection(username, user_data)
+        logger.info(f"User {username} postponed word '{word_phrase}'")
+        # Returns nothing - success is implicit
 
-                # Update user data in state
-                self.update_user_daily_selection(username, user_data)
-
-                # Prepare success message
-                status_msg = "postponed (removed from today's selection)"
-                if added_count > 0:
-                    word_word = "word" if added_count == 1 else "words"
-                    status_msg += f" (added {added_count} replacement {word_word})"
-                elif len(user_data.daily_selection) < self.words_per_day:
-                    status_msg += " (no replacement available - words in cooldown)"
-                message = f"Word '{word_phrase}' {status_msg}."
-
-                logger.info(f"User {username} postponed word '{word_phrase}'")
-                return {
-                    "success": True,
-                    "message": message,
-                    "replacements_added": added_count,
-                }
-            else:
-                return {"success": False, "message": f"Word '{word_phrase}' was not in today's selection."}
-
-        except Exception as e:
-            logger.error(f"Error postponing word '{word_phrase}' for user {username}: {e}")
-            return {"success": False, "message": "An error occurred while postponing the word"}
-
-    def bump_words(self, username: str, user_data) -> Dict[str, Any]:
+    def bump_words(self, username: str, user_data) -> None:
         """
         Replace current daily selection with a new portion of words.
 
-        Args:
-            username: Username of the user
-            user_data: UserData object for the user
-
-        Returns:
-            Dictionary with 'success' bool and 'message' str
+        Raises:
+            VocabularyOperationError: If operation fails
         """
-        try:
-            logger.info(f"User {username} requested to bump words")
+        logger.info(f"User {username} requested to bump words")
 
-            # Clear current daily selection
-            user_data.daily_selection = []
-            user_data.next_word_index = 0
+        user_data.daily_selection = []
+        user_data.next_word_index = 0
 
-            # Select new daily portion
-            portion_words = self._select_daily_portion(user_data.db_user_id)
+        portion_words = self._select_daily_portion(user_data.db_user_id)
 
-            if portion_words:
-                daily_selection_list = [
-                    WordOfDay(id_=word["id"], word_phrase=word["word_phrase"]) for word in portion_words
-                ]
-                user_data.daily_selection = daily_selection_list
-                self.state_manager.update_user(username, user_data)
+        if portion_words:
+            user_data.daily_selection = [
+                WordOfDay(id_=word["id"], word_phrase=word["word_phrase"]) for word in portion_words
+            ]
 
-                logger.info(f"User {username} bumped words - selected {len(portion_words)} new words")
-                return {
-                    "success": True,
-                    "message": f"Daily selection updated! Selected {len(portion_words)} new words for today.",
-                }
-            else:
-                # No words available, still update the state
-                self.state_manager.update_user(username, user_data)
-                logger.info(f"User {username} bumped words but no words available")
-                return {"success": True, "message": "Daily selection cleared. No new words available at this time."}
-
-        except Exception as e:
-            logger.error(f"Error bumping words for user {username}: {e}")
-            return {"success": False, "message": "An error occurred while updating your word selection"}
+        self.state_manager.update_user(username, user_data)
+        logger.info(f"User {username} bumped words - selected {len(portion_words)} new words")
+        # Returns nothing - success is implicit

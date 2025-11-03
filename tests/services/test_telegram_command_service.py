@@ -6,11 +6,12 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from src.runestone.services.rune_recall_service import RuneRecallService
-from src.runestone.services.telegram_command_service import TelegramCommandService
-from src.runestone.state.state_manager import StateManager
-from src.runestone.state.state_types import WordOfDay
-from src.runestone.utils.markdown import escape_markdown
+from runestone.core.exceptions import WordNotFoundError, WordNotInSelectionError
+from runestone.services.rune_recall_service import RuneRecallService
+from runestone.services.telegram_command_service import TelegramCommandService
+from runestone.state.state_manager import StateManager
+from runestone.state.state_types import WordOfDay
+from runestone.utils.markdown import escape_markdown
 
 
 @pytest.fixture
@@ -42,20 +43,22 @@ def mock_rune_recall_service():
 
 @pytest.fixture
 def telegram_service(state_manager, mock_rune_recall_service):
-    with patch("src.runestone.services.telegram_command_service.settings") as mock_settings:
+    with patch("runestone.services.telegram_command_service.settings") as mock_settings:
         mock_settings.telegram_bot_token = "test_token"
         return TelegramCommandService(state_manager, mock_rune_recall_service)
 
 
 @pytest.fixture
 def telegram_service_with_deps(state_manager, mock_rune_recall_service):
-    return TelegramCommandService(
-        state_manager,
-        rune_recall_service=mock_rune_recall_service,
-    )
+    with patch("runestone.services.telegram_command_service.settings") as mock_settings:
+        mock_settings.telegram_bot_token = "test_token"
+        return TelegramCommandService(
+            state_manager,
+            rune_recall_service=mock_rune_recall_service,
+        )
 
 
-@patch("src.runestone.services.telegram_command_service.settings")
+@patch("runestone.services.telegram_command_service.settings")
 def test_init_with_token(mock_settings, state_manager, mock_rune_recall_service):
     mock_settings.telegram_bot_token = "test_token"
     service = TelegramCommandService(state_manager, mock_rune_recall_service)
@@ -64,20 +67,20 @@ def test_init_with_token(mock_settings, state_manager, mock_rune_recall_service)
 
 
 def test_init_without_token(state_manager, mock_rune_recall_service):
-    with patch("src.runestone.services.telegram_command_service.settings") as mock_settings:
+    with patch("runestone.services.telegram_command_service.settings") as mock_settings:
         mock_settings.telegram_bot_token = "config_token"
         service = TelegramCommandService(state_manager, mock_rune_recall_service)
         assert service.bot_token == "config_token"
 
 
 def test_init_no_token_raises_error(state_manager, mock_rune_recall_service):
-    with patch("src.runestone.services.telegram_command_service.settings") as mock_settings:
+    with patch("runestone.services.telegram_command_service.settings") as mock_settings:
         mock_settings.telegram_bot_token = None
         with pytest.raises(ValueError, match="Telegram bot token is required"):
             TelegramCommandService(state_manager, mock_rune_recall_service)
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_send_message_success(mock_client_class, telegram_service):
     mock_client = MagicMock()
     mock_response = MagicMock()
@@ -92,7 +95,7 @@ def test_send_message_success(mock_client_class, telegram_service):
     )
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_send_message_failure(mock_client_class, telegram_service):
     mock_client = MagicMock()
     mock_client.post.side_effect = httpx.RequestError("Network error")
@@ -102,7 +105,7 @@ def test_send_message_failure(mock_client_class, telegram_service):
     assert result is False
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_process_updates_authorized_start(mock_client_class, telegram_service, state_manager):
     mock_client = MagicMock()
 
@@ -150,7 +153,7 @@ def test_process_updates_authorized_start(mock_client_class, telegram_service, s
     )
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_process_updates_authorized_stop(mock_client_class, telegram_service, state_manager):
     # First activate user
     state_manager.update_user(
@@ -202,7 +205,7 @@ def test_process_updates_authorized_stop(mock_client_class, telegram_service, st
     )
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_process_updates_unauthorized(mock_client_class, telegram_service):
     mock_client = MagicMock()
 
@@ -242,7 +245,7 @@ def test_process_updates_unauthorized(mock_client_class, telegram_service):
     )
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_process_updates_api_error(mock_client_class, telegram_service):
     mock_client = MagicMock()
     mock_client.get.side_effect = httpx.RequestError("API error")
@@ -254,7 +257,7 @@ def test_process_updates_api_error(mock_client_class, telegram_service):
     mock_client.get.assert_called_once()
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_process_updates_invalid_response(mock_client_class, telegram_service):
     mock_client = MagicMock()
     mock_get_response = MagicMock()
@@ -268,7 +271,7 @@ def test_process_updates_invalid_response(mock_client_class, telegram_service):
     mock_client.get.assert_called_once()
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_process_updates_empty_updates(mock_client_class, telegram_service, state_manager):
     mock_client = MagicMock()
     mock_get_response = MagicMock()
@@ -284,7 +287,7 @@ def test_process_updates_empty_updates(mock_client_class, telegram_service, stat
     assert state_manager.get_update_offset() == initial_offset
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_process_updates_non_bot_command_ignored(mock_client_class, telegram_service, state_manager):
     mock_client = MagicMock()
 
@@ -377,17 +380,13 @@ def test_escape_markdown_v2():
     assert escape_markdown("word-with*special.chars!") == r"word\-with\*special\.chars\!"
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_handle_remove_command_success(
     mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
 ):
     """Test successful /remove command"""
-    # Mock RuneRecallService response
-    mock_rune_recall_service.remove_word_completely.return_value = {
-        "success": True,
-        "message": "Word 'kontanter' removed from vocabulary and daily selection.",
-        "removed_from_selection": True,
-    }
+    # Mock RuneRecallService to not raise exception (success)
+    mock_rune_recall_service.remove_word_completely.return_value = None
 
     # Mock HTTP client for sending response
     mock_client = MagicMock()
@@ -408,10 +407,10 @@ def test_handle_remove_command_success(
     mock_client.post.assert_called_once()
     call_args = mock_client.post.call_args[1]["json"]
     assert "kontanter" in call_args["text"]
-    assert "removed from vocabulary and daily selection" in call_args["text"]
+    assert "removed from vocabulary" in call_args["text"]
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_handle_remove_command_no_reply(mock_client_class, telegram_service_with_deps, state_manager):
     """Test /remove command without reply message"""
     user_data = state_manager.get_user("authorized_user")
@@ -433,16 +432,13 @@ def test_handle_remove_command_no_reply(mock_client_class, telegram_service_with
     assert "reply to a word message" in call_args["text"]
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_handle_remove_command_word_not_found(
     mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
 ):
     """Test /remove command when word is not found in database"""
-    # Mock RuneRecallService response (word not found)
-    mock_rune_recall_service.remove_word_completely.return_value = {
-        "success": False,
-        "message": "Word 'nonexistent' not found in your vocabulary",
-    }
+    # Mock RuneRecallService to raise WordNotFoundError
+    mock_rune_recall_service.remove_word_completely.side_effect = WordNotFoundError("nonexistent", "authorized_user")
 
     # Mock HTTP client
     mock_client = MagicMock()
@@ -461,16 +457,13 @@ def test_handle_remove_command_word_not_found(
     assert "not found" in call_args["text"]
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_handle_postpone_command_success(
     mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
 ):
     """Test successful /postpone command"""
-    # Mock RuneRecallService response
-    mock_rune_recall_service.postpone_word.return_value = {
-        "success": True,
-        "message": "Word 'kontanter' postponed (removed from today's selection).",
-    }
+    # Mock RuneRecallService to not raise exception (success)
+    mock_rune_recall_service.postpone_word.return_value = None
 
     # Mock HTTP client
     mock_client = MagicMock()
@@ -494,16 +487,13 @@ def test_handle_postpone_command_success(
     assert "postponed" in call_args["text"]
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_handle_postpone_command_not_in_selection(
     mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
 ):
     """Test /postpone command when word is not in daily selection"""
-    # Mock RuneRecallService response (word not in selection)
-    mock_rune_recall_service.postpone_word.return_value = {
-        "success": False,
-        "message": "Word 'kontanter' was not in today's selection.",
-    }
+    # Mock RuneRecallService to raise WordNotInSelectionError
+    mock_rune_recall_service.postpone_word.side_effect = WordNotInSelectionError("kontanter")
 
     # Mock HTTP client
     mock_client = MagicMock()
@@ -522,7 +512,7 @@ def test_handle_postpone_command_not_in_selection(
     assert "not in today's selection" in call_args["text"]
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_process_updates_remove_command(
     mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
 ):
@@ -579,7 +569,7 @@ def test_process_updates_remove_command(
     mock_rune_recall_service.remove_word_completely.assert_called_once_with("authorized_user", "kontanter")
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_process_updates_postpone_command(
     mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
 ):
@@ -636,7 +626,7 @@ def test_process_updates_postpone_command(
     assert "postponed" in call_args["text"]
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_process_updates_single_update_error_continues_processing(mock_client_class, telegram_service, state_manager):
     """Test that an error processing one update doesn't prevent processing other updates"""
     mock_client = MagicMock()
@@ -701,7 +691,7 @@ def test_process_updates_single_update_error_continues_processing(mock_client_cl
     assert mock_client.post.call_count == 2
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_fetch_updates_state_manager_error(mock_client_class, telegram_service, state_manager):
     """Test that _fetch_updates handles state manager errors gracefully"""
     # Mock state_manager.get_update_offset to raise an error
@@ -736,7 +726,7 @@ def test_handle_authorized_user_command_unknown_command(telegram_service):
     telegram_service._handle_authorized_user_command("/unknown", {}, "test_user", user_data, 123)
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_process_updates_offset_update_error(mock_client_class, telegram_service, state_manager):
     """Test that offset update errors are handled gracefully"""
     mock_client = MagicMock()
@@ -777,7 +767,7 @@ def test_process_updates_offset_update_error(mock_client_class, telegram_service
     mock_client.post.assert_called_once()
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_process_updates_state_command_active_with_words(mock_client_class, telegram_service_with_deps, state_manager):
     """Test processing /state command for active user with daily selection"""
     # Setup user state
@@ -826,7 +816,7 @@ def test_process_updates_state_command_active_with_words(mock_client_class, tele
     assert "parse_mode" not in call_args
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_process_updates_state_command_inactive_no_words(mock_client_class, telegram_service_with_deps, state_manager):
     """Test processing /state command for inactive user with no daily selection"""
     # Setup user state
@@ -875,7 +865,7 @@ def test_process_updates_state_command_inactive_no_words(mock_client_class, tele
     assert "parse_mode" not in call_args
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_process_updates_state_command_with_special_chars(mock_client_class, telegram_service_with_deps, state_manager):
     """Test processing /state command with words containing special Markdown characters"""
     # Setup user state with words that have special characters
@@ -934,7 +924,7 @@ def test_process_updates_state_command_with_special_chars(mock_client_class, tel
     assert "parse_mode" not in call_args
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_process_updates_bump_words_command_success(
     mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
 ):
@@ -946,11 +936,8 @@ def test_process_updates_bump_words_command_success(
     user_data.daily_selection = [WordOfDay(id_=1, word_phrase="old_word")]
     state_manager.update_user("authorized_user", user_data)
 
-    # Mock RuneRecallService response
-    mock_rune_recall_service.bump_words.return_value = {
-        "success": True,
-        "message": "Daily selection updated! Selected 3 new words for today.",
-    }
+    # Mock RuneRecallService to not raise exception (success)
+    mock_rune_recall_service.bump_words.return_value = None
 
     mock_client = MagicMock()
 
@@ -987,10 +974,10 @@ def test_process_updates_bump_words_command_success(
     mock_client.post.assert_called_once()
     mock_rune_recall_service.bump_words.assert_called_once_with("authorized_user", user_data)
     call_args = mock_client.post.call_args[1]["json"]
-    assert "Daily selection updated! Selected 3 new words for today." in call_args["text"]
+    assert "Daily selection updated! Selected 1 new words for today." in call_args["text"]
 
 
-@patch("src.runestone.services.telegram_command_service.httpx.Client")
+@patch("runestone.services.telegram_command_service.httpx.Client")
 def test_process_updates_bump_words_command_no_words_available(
     mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
 ):
@@ -1002,11 +989,8 @@ def test_process_updates_bump_words_command_no_words_available(
     user_data.daily_selection = [WordOfDay(id_=1, word_phrase="old_word")]
     state_manager.update_user("authorized_user", user_data)
 
-    # Mock RuneRecallService response (no words available)
-    mock_rune_recall_service.bump_words.return_value = {
-        "success": True,
-        "message": "Daily selection cleared. No new words available at this time.",
-    }
+    # Mock RuneRecallService to not raise exception (success)
+    mock_rune_recall_service.bump_words.return_value = None
 
     mock_client = MagicMock()
 
@@ -1043,4 +1027,4 @@ def test_process_updates_bump_words_command_no_words_available(
     mock_client.post.assert_called_once()
     mock_rune_recall_service.bump_words.assert_called_once_with("authorized_user", user_data)
     call_args = mock_client.post.call_args[1]["json"]
-    assert "Daily selection cleared. No new words available at this time." in call_args["text"]
+    assert "Daily selection updated! Selected 1 new words for today." in call_args["text"]

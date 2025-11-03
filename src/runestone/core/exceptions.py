@@ -59,4 +59,30 @@ class UserNotAuthorised(RunestoneError):
 class VocabularyItemExists(RunestoneError):
     """Raised when attempting to create or update a vocabulary item with a duplicate word_phrase."""
 
+
+class VocabularyOperationError(RunestoneError):
+    """Base exception for vocabulary operations."""
+
+    pass
+
+
+class WordNotFoundError(VocabularyOperationError):
+    """Raised when a word is not found in user's vocabulary."""
+
+    def __init__(self, word_phrase: str, username: str):
+        self.word_phrase = word_phrase
+        self.username = username
+        super().__init__(
+            message=f"Word '{word_phrase}' not found",
+            details=f"User '{username}' does not have '{word_phrase}' in vocabulary",
+        )
+
+
+class WordNotInSelectionError(VocabularyOperationError):
+    """Raised when a word is not in today's daily selection."""
+
+    def __init__(self, word_phrase: str):
+        self.word_phrase = word_phrase
+        super().__init__(message=f"Word '{word_phrase}' not in today's selection")
+
     pass

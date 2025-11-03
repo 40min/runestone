@@ -5,6 +5,7 @@ from typing import Optional
 import httpx
 
 from runestone.config import settings
+from runestone.core.exceptions import VocabularyOperationError, WordNotFoundError, WordNotInSelectionError
 from runestone.services.rune_recall_service import RuneRecallService
 from runestone.state.state_manager import StateManager
 
@@ -212,19 +213,31 @@ class TelegramCommandService:
             self._send_message(chat_id, "Could not find a word to remove in the replied message.")
             return
 
-        # Delegate to RuneRecallService
-        result = self.rune_recall_service.remove_word_completely(username, word_phrase)
+        try:
+            self.rune_recall_service.remove_word_completely(username, word_phrase)
+            # Success - format message here
+            self._send_message(chat_id, f"Word '{word_phrase}' removed from vocabulary.")
 
-        # Send response based on result
-        self._send_message(chat_id, result["message"])
+        except WordNotFoundError:
+            self._send_message(chat_id, f"Word '{word_phrase}' not found in your vocabulary.")
+        except VocabularyOperationError as e:
+            self._send_message(chat_id, f"Error: {e.message}")
+            logger.error(f"Failed to remove word for {username}: {e.details}")
 
     def _handle_bump_words_command(self, username: str, user_data, chat_id: int) -> None:
         """Handle the /bump_words command to replace current daily selection with new words."""
-        # Delegate to RuneRecallService
-        result = self.rune_recall_service.bump_words(username, user_data)
 
-        # Send response based on result
-        self._send_message(chat_id, result["message"])
+        try:
+            self.rune_recall_service.bump_words(username, user_data)
+            # Success - format message here
+            count = len(user_data.daily_selection)
+            if count > 0:
+                self._send_message(chat_id, f"Daily selection updated! Selected {count} new words for today.")
+            else:
+                self._send_message(chat_id, "Daily selection cleared. No new words available at this time.")
+
+        except VocabularyOperationError as e:
+            self._send_message(chat_id, f"Error: {e.message}")
 
     def _handle_state_command(self, username: str, user_data, chat_id: int) -> None:
         """Handle the /state command to show user's current state."""
@@ -257,8 +270,12 @@ class TelegramCommandService:
             self._send_message(chat_id, "Could not find a word to postpone in the replied message.")
             return
 
-        # Delegate to RuneRecallService
-        result = self.rune_recall_service.postpone_word(username, word_phrase)
+        try:
+            self.rune_recall_service.postpone_word(username, word_phrase)
+            # Success - format message here
+            self._send_message(chat_id, f"Word '{word_phrase}' postponed (removed from today's selection).")
 
-        # Send response based on result
-        self._send_message(chat_id, result["message"])
+        except WordNotInSelectionError:
+            self._send_message(chat_id, f"Word '{word_phrase}' was not in today's selection.")
+        except VocabularyOperationError as e:
+            self._send_message(chat_id, f"Error: {e.message}")
