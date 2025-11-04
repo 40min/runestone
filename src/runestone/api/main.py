@@ -11,6 +11,7 @@ from typing import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from runestone.api.auth_endpoints import router as auth_router
 from runestone.api.endpoints import grammar_router
 from runestone.api.endpoints import router as api_router
 from runestone.config import settings
@@ -60,6 +61,13 @@ def create_application() -> FastAPI:
         grammar_router,
         prefix="/api",
         tags=["grammar"],
+    )
+
+    # Include auth router
+    app.include_router(
+        auth_router,
+        prefix="/api/auth",
+        tags=["auth"],
     )
 
     return app
