@@ -20,6 +20,7 @@ from runestone.core.processor import RunestoneProcessor
 from runestone.db.database import get_db
 from runestone.db.repository import VocabularyRepository
 from runestone.services.grammar_service import GrammarService
+from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 
 
@@ -173,3 +174,18 @@ def get_grammar_service(settings: Annotated[Settings, Depends(get_settings)]) ->
         GrammarService: Service instance for grammar operations
     """
     return GrammarService(settings.cheatsheets_dir)
+
+
+def get_user_service(
+    repo: Annotated[VocabularyRepository, Depends(get_vocabulary_repository)],
+) -> UserService:
+    """
+    Dependency injection for user service.
+
+    Args:
+        repo: VocabularyRepository from dependency injection
+
+    Returns:
+        UserService: Service instance with vocabulary repository dependency
+    """
+    return UserService(repo)

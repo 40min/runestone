@@ -86,3 +86,9 @@ class WordNotInSelectionError(VocabularyOperationError):
         super().__init__(message=f"Word '{word_phrase}' not in today's selection")
 
     pass
+
+
+class UserNotFoundError(ValueError):
+    """Raised when a user is not found."""
+
+    pass

@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from runestone.api.auth_endpoints import router as auth_router
 from runestone.api.endpoints import grammar_router
 from runestone.api.endpoints import router as api_router
+from runestone.api.user_endpoints import router as user_router
 from runestone.config import settings
 from runestone.core.logging_config import setup_logging
 from runestone.db.database import setup_database
@@ -68,6 +69,13 @@ def create_application() -> FastAPI:
         auth_router,
         prefix="/api/auth",
         tags=["auth"],
+    )
+
+    # Include user router
+    app.include_router(
+        user_router,
+        prefix="/api",
+        tags=["users"],
     )
 
     return app

@@ -260,3 +260,15 @@ class VocabularyRepository:
         )
         self.db.commit()
         return deleted_rows > 0
+
+    def get_words_in_learn_count(self, user_id: int) -> int:
+        """Get count of vocabulary items with in_learn=True for a user."""
+        return self.db.query(Vocabulary).filter(Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True)).count()
+
+    def get_words_learned_count(self, user_id: int) -> int:
+        """Get count of vocabulary items with in_learn=True AND learned_times > 0 for a user."""
+        return (
+            self.db.query(Vocabulary)
+            .filter(Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True), Vocabulary.learned_times > 0)
+            .count()
+        )
