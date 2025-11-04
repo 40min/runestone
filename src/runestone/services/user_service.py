@@ -10,18 +10,16 @@ from ..auth.security import hash_password
 from ..core.exceptions import UserNotFoundError
 from ..core.logging_config import get_logger
 from ..db.models import User
-from ..db.repository import VocabularyRepository
+from ..db.user_repository import UserRepository
+from ..db.vocabulary_repository import VocabularyRepository
 
 
-# TODO: service should use a separate repository dedicated to users,
-# we need to add it into db-pkg, also repository.py should be renamed
-# into vocabulary_repository.py (dedicated dependancies should be created
-# for users and vocabulary in dependencies.py)
 class UserService:
     """Service for user-related business logic."""
 
-    def __init__(self, vocabulary_repository: VocabularyRepository):
-        """Initialize service with vocabulary repository."""
+    def __init__(self, user_repository: UserRepository, vocabulary_repository: VocabularyRepository):
+        """Initialize service with user and vocabulary repositories."""
+        self.user_repo = user_repository
         self.vocab_repo = vocabulary_repository
         self.logger = get_logger(__name__)
 
@@ -31,6 +29,8 @@ class UserService:
         words_in_learn_count = self.vocab_repo.get_words_in_learn_count(user.id)
         words_learned_count = self.vocab_repo.get_words_learned_count(user.id)
 
+        # TODO: fresh data from db should be fetched, not data from the time
+        # of login
         return UserProfileResponse(
             id=user.id,
             email=user.email,
@@ -63,27 +63,25 @@ class UserService:
             if hasattr(user, key):
                 setattr(user, key, value)
 
-        # Save changes
-        self.vocab_repo.db.commit()
-        self.vocab_repo.db.refresh(user)
+        # Save changes using user repository
+        self.user_repo.update(user)
 
         # Return updated profile
         return self.get_user_profile(user)
 
     def increment_pages_recognised_count(self, user: User) -> None:
         """Increment the pages recognised count for a user."""
-        user.pages_recognised_count += 1
-        self.vocab_repo.db.commit()
+        self.user_repo.increment_pages_recognised_count(user.id)
 
     def reset_user_password(self, email: str, new_password: str = "test123test") -> User:
         """Reset user password by email."""
         # Find user by email
-        user = self.vocab_repo.db.query(User).filter(User.email == email).first()
+        user = self.user_repo.get_by_email(email)
         if not user:
             raise UserNotFoundError(f"User with email '{email}' not found")
 
         # Hash and set new password
         user.hashed_password = hash_password(new_password)
-        self.vocab_repo.db.commit()
+        self.user_repo.update(user)
 
         return user

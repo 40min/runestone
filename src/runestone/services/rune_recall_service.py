@@ -11,7 +11,7 @@ from datetime import datetime
 import httpx
 
 from runestone.core.exceptions import VocabularyOperationError, WordNotFoundError, WordNotInSelectionError
-from runestone.db.repository import VocabularyRepository
+from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.state.state_manager import StateManager
 from runestone.state.state_types import UserData, WordOfDay
 from runestone.utils.markdown import escape_markdown

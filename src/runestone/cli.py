@@ -27,7 +27,7 @@ from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
 from runestone.core.prompt_builder.builder import PromptBuilder
 from runestone.core.prompt_builder.types import ImprovementMode
-from runestone.db.repository import VocabularyRepository
+from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.services.vocabulary_service import VocabularyService
 
 # Load environment variables from .env file

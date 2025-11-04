@@ -33,7 +33,8 @@ def mock_llm_client():
 def test_user(db_session):
     """Create a test user for authentication tests."""
     user = User(
-        username="testuser",
+        name="Test User",
+        surname="Testsson",
         email="test@example.com",
         hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYQmP7XzL6",  # "password"
     )

@@ -41,7 +41,7 @@ class TestVocabularyService:
             VocabularyItemCreate(word_phrase="en banan", translation="a banana", example_phrase=None),
         ]
 
-        result = service.save_vocabulary(items)
+        result = service.save_vocabulary(items, user_id=1, enrich=False)
         db_session.commit()
 
         assert result == {"message": "Vocabulary saved successfully"}
@@ -113,7 +113,7 @@ class TestVocabularyService:
         db_session.commit()
 
         # Get all for user 1
-        result = service.get_vocabulary(limit=20, user_id=1)
+        result = service.get_vocabulary(user_id=1, limit=20)
         assert len(result) == 2
         assert isinstance(result[0], VocabularySchema)
         # Since timestamps are the same, order by id desc (most recent insertion first)
@@ -121,7 +121,7 @@ class TestVocabularyService:
         assert result[1].word_phrase == "ett äpple"  # Lower id
 
         # Get all for user 2
-        result = service.get_vocabulary(limit=20, user_id=2)
+        result = service.get_vocabulary(user_id=2, limit=20)
         assert len(result) == 1
         assert result[0].word_phrase == "ett päron"
 
@@ -210,7 +210,7 @@ class TestVocabularyService:
             translation="a red apple",
             in_learn=False,
         )
-        updated_vocab = service.update_vocabulary_item(vocab.id, update_data)
+        updated_vocab = service.update_vocabulary_item(vocab.id, update_data, user_id=1)
 
         # Verify the update
         assert isinstance(updated_vocab, VocabularySchema)
@@ -825,10 +825,10 @@ class TestVocabularyService:
         # Test with precise=False (partial search)
         with patch.object(service.repo, "get_vocabulary") as mock_repo:
             mock_repo.return_value = [vocab1, vocab2]
-            result = service.get_vocabulary(limit=20, search_query="apple", precise=False, user_id=1)
+            result = service.get_vocabulary(user_id=1, limit=20, search_query="apple", precise=False)
 
             # Verify repo called with precise=False
-            mock_repo.assert_called_once_with(20, "apple", False, 1)
+            mock_repo.assert_called_once_with(1, 20, "apple", False)
             assert len(result) == 2
 
         # Test with precise=True (exact search)
@@ -837,7 +837,7 @@ class TestVocabularyService:
             result = service.get_vocabulary(limit=20, search_query="apple", precise=True, user_id=1)
 
             # Verify repo called with precise=True
-            mock_repo.assert_called_once_with(20, "apple", True, 1)
+            mock_repo.assert_called_once_with(1, 20, "apple", True)
             assert len(result) == 1
 
         # Test default precise=False when not specified

@@ -11,6 +11,7 @@ from runestone.config import Settings
 from runestone.core.console import setup_console
 from runestone.core.exceptions import RunestoneError
 from runestone.core.processor import RunestoneProcessor
+from runestone.db.user_repository import UserRepository
 from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
 from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 from runestone.services.vocabulary_service import VocabularyService
@@ -77,12 +78,13 @@ class TestRunestoneProcessor:
                 ocr_processor=mock_ocr_instance,
                 content_analyzer=mock_analyzer_instance,
                 vocabulary_service=Mock(spec=VocabularyService),
+                user_repository=Mock(spec=UserRepository),
                 verbose=True,
             )
 
             # Test the stateless workflow
             ocr_result = processor.run_ocr(b"fake image data")
-            analysis_result = processor.run_analysis(ocr_result.transcribed_text)
+            analysis_result = processor.run_analysis(ocr_result.transcribed_text, user_id=1)
             resources_result = processor.run_resource_search(analysis_result.core_topics, analysis_result.search_needed)
 
             # Verify results
@@ -144,12 +146,13 @@ class TestRunestoneProcessor:
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_repository=Mock(spec=UserRepository),
             verbose=False,
         )
 
         # Test the stateless workflow
         ocr_result = processor.run_ocr(b"fake image data")
-        analysis_result = processor.run_analysis(ocr_result.transcribed_text)
+        analysis_result = processor.run_analysis(ocr_result.transcribed_text, user_id=1)
         resources_result = processor.run_resource_search(analysis_result.core_topics, analysis_result.search_needed)
 
         # Verify results
@@ -188,6 +191,7 @@ class TestRunestoneProcessor:
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_repository=Mock(spec=UserRepository),
             verbose=True,
         )
 
@@ -228,6 +232,7 @@ class TestRunestoneProcessor:
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_repository=Mock(spec=UserRepository),
             verbose=False,
         )
         result = processor.run_ocr(b"fake image data")
@@ -255,6 +260,7 @@ class TestRunestoneProcessor:
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_repository=Mock(spec=UserRepository),
             verbose=False,
         )
         result = processor.run_analysis("Sample text")
@@ -279,6 +285,7 @@ class TestRunestoneProcessor:
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_repository=Mock(spec=UserRepository),
             verbose=False,
         )
         result = processor.run_resource_search(core_topics, search_needed)
@@ -334,6 +341,7 @@ class TestRunestoneProcessor:
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_repository=Mock(spec=UserRepository),
             verbose=True,
         )
         result = processor.process_image(self.image_path)
@@ -399,6 +407,7 @@ class TestRunestoneProcessor:
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_repository=Mock(spec=UserRepository),
             verbose=True,
         )
 
@@ -439,6 +448,7 @@ class TestRunestoneProcessor:
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_repository=Mock(spec=UserRepository),
             verbose=True,
         )
 

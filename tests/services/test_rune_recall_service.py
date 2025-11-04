@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from runestone.core.exceptions import VocabularyOperationError, WordNotFoundError, WordNotInSelectionError
 from runestone.db.database import Base
 from runestone.db.models import Vocabulary
-from runestone.db.repository import VocabularyRepository
+from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.services.rune_recall_service import RuneRecallService
 from runestone.state.state_manager import StateManager
 from runestone.state.state_types import WordOfDay

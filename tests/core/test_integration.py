@@ -14,6 +14,7 @@ from runestone.core.console import setup_console
 from runestone.core.exceptions import RunestoneError
 from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
+from runestone.db.user_repository import UserRepository
 from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
 from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 from runestone.services.vocabulary_service import VocabularyService
@@ -41,6 +42,7 @@ class TestRunestoneIntegration:
             ocr_processor=mock_ocr,
             content_analyzer=mock_analyzer,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_repository=Mock(spec=UserRepository),
             verbose=True,
         )
 
@@ -57,6 +59,7 @@ class TestRunestoneIntegration:
                 ocr_processor=None,
                 content_analyzer=None,
                 vocabulary_service=Mock(spec=VocabularyService),
+                user_repository=Mock(spec=UserRepository),
             )
 
         assert "Failed to initialize processor" in str(exc_info.value)
@@ -120,6 +123,7 @@ class TestRunestoneIntegration:
             ocr_processor=mock_ocr_processor,
             content_analyzer=mock_content_analyzer,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_repository=Mock(spec=UserRepository),
             verbose=True,
         )
 
@@ -160,6 +164,7 @@ class TestRunestoneIntegration:
             ocr_processor=mock_ocr_processor,
             content_analyzer=mock_content_analyzer,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_repository=Mock(spec=UserRepository),
         )
 
         with pytest.raises(RunestoneError) as exc_info:
@@ -196,6 +201,7 @@ class TestRunestoneIntegration:
             ocr_processor=mock_ocr_processor,
             content_analyzer=mock_content_analyzer,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_repository=Mock(spec=UserRepository),
         )
 
         with pytest.raises(RunestoneError) as exc_info:
@@ -239,6 +245,7 @@ class TestRunestoneIntegration:
             ocr_processor=mock_ocr_processor,
             content_analyzer=mock_content_analyzer,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_repository=Mock(spec=UserRepository),
         )
         processor.display_results_console(mock_results)
 
@@ -284,6 +291,7 @@ class TestRunestoneIntegration:
             ocr_processor=mock_ocr_processor,
             content_analyzer=mock_content_analyzer,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_repository=Mock(spec=UserRepository),
         )
         processor.display_results_markdown(mock_results)
 
@@ -317,6 +325,7 @@ class TestRunestoneIntegration:
             ocr_processor=mock_ocr_processor,
             content_analyzer=mock_content_analyzer,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_repository=Mock(spec=UserRepository),
             verbose=True,
         )
         processor.save_results_to_file(mock_results, output_path)

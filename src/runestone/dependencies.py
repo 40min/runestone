@@ -18,7 +18,8 @@ from runestone.core.clients.factory import create_llm_client
 from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.database import get_db
-from runestone.db.repository import VocabularyRepository
+from runestone.db.user_repository import UserRepository
+from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.services.grammar_service import GrammarService
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
@@ -32,6 +33,19 @@ def get_settings() -> Settings:
         Settings: The global settings instance
     """
     return settings
+
+
+def get_user_repository(db: Annotated[Session, Depends(get_db)]) -> UserRepository:
+    """
+    Dependency injection for user repository.
+
+    Args:
+        db: Database session from FastAPI dependency injection
+
+    Returns:
+        UserRepository: Repository instance with database session
+    """
+    return UserRepository(db)
 
 
 def get_vocabulary_repository(db: Annotated[Session, Depends(get_db)]) -> VocabularyRepository:
@@ -147,6 +161,7 @@ def get_runestone_processor(
     ocr_processor: Annotated[OCRProcessor, Depends(get_ocr_processor)],
     content_analyzer: Annotated[ContentAnalyzer, Depends(get_content_analyzer)],
     vocabulary_service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+    user_repository: Annotated[UserRepository, Depends(get_user_repository)],
 ) -> RunestoneProcessor:
     """
     Dependency injection for Runestone processor.
@@ -156,11 +171,12 @@ def get_runestone_processor(
         ocr_processor: OCR processor from dependency injection
         content_analyzer: Content analyzer from dependency injection
         vocabulary_service: Vocabulary service from dependency injection
+        user_repository: User repository from dependency injection
 
     Returns:
         RunestoneProcessor: Runestone processor instance
     """
-    return RunestoneProcessor(settings, ocr_processor, content_analyzer, vocabulary_service=vocabulary_service)
+    return RunestoneProcessor(settings, ocr_processor, content_analyzer, vocabulary_service, user_repository)
 
 
 def get_grammar_service(settings: Annotated[Settings, Depends(get_settings)]) -> GrammarService:
@@ -177,15 +193,17 @@ def get_grammar_service(settings: Annotated[Settings, Depends(get_settings)]) ->
 
 
 def get_user_service(
-    repo: Annotated[VocabularyRepository, Depends(get_vocabulary_repository)],
+    user_repo: Annotated[UserRepository, Depends(get_user_repository)],
+    vocab_repo: Annotated[VocabularyRepository, Depends(get_vocabulary_repository)],
 ) -> UserService:
     """
     Dependency injection for user service.
 
     Args:
-        repo: VocabularyRepository from dependency injection
+        user_repo: UserRepository from dependency injection
+        vocab_repo: VocabularyRepository from dependency injection
 
     Returns:
-        UserService: Service instance with vocabulary repository dependency
+        UserService: Service instance with repository dependencies
     """
-    return UserService(repo)
+    return UserService(user_repo, vocab_repo)

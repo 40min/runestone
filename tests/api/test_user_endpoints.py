@@ -242,7 +242,7 @@ class TestVocabularyRepositoryStats:
 
     def test_get_words_in_learn_count(self, session: Session):
         """Test counting words in learning."""
-        from runestone.db.repository import VocabularyRepository
+        from runestone.db.vocabulary_repository import VocabularyRepository
 
         repo = VocabularyRepository(session)
 
@@ -251,6 +251,7 @@ class TestVocabularyRepositoryStats:
             email="stats@example.com",
             hashed_password="dummy",
             name="Stats User",
+            surname="User",
         )
         session.add(user)
         session.commit()
@@ -279,7 +280,7 @@ class TestVocabularyRepositoryStats:
 
     def test_get_words_learned_count(self, session: Session):
         """Test counting learned words."""
-        from runestone.db.repository import VocabularyRepository
+        from runestone.db.vocabulary_repository import VocabularyRepository
 
         repo = VocabularyRepository(session)
 

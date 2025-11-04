@@ -18,7 +18,7 @@ from ..core.prompt_builder.builder import PromptBuilder
 from ..core.prompt_builder.exceptions import ResponseParseError
 from ..core.prompt_builder.parsers import ResponseParser
 from ..db.models import Vocabulary
-from ..db.repository import VocabularyRepository
+from ..db.vocabulary_repository import VocabularyRepository
 from ..schemas.vocabulary import VocabularyResponse
 
 

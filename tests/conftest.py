@@ -15,7 +15,8 @@ from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from runestone.db.database import Base  # noqa: E402
-from runestone.db.repository import VocabularyRepository  # noqa: E402
+from runestone.db.user_repository import UserRepository  # noqa: E402
+from runestone.db.vocabulary_repository import VocabularyRepository  # noqa: E402
 
 
 @pytest.fixture
@@ -31,6 +32,12 @@ def db_session():
         db.close()
         # Dispose the engine to close all connections
         engine.dispose()
+
+
+@pytest.fixture
+def user_repository(db_session):
+    """Create a UserRepository instance."""
+    return UserRepository(db_session)
 
 
 @pytest.fixture

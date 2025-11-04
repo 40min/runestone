@@ -158,10 +158,6 @@ async def analyze_content(
         vocab_count = len(analysis_result.vocabulary)
         logger.debug(f"[API] Found {vocab_count} vocabulary items")
 
-        # TODO: make it in processor, not here
-        # Increment pages_recognised_count for successful analysis
-        user_service.increment_pages_recognised_count(current_user)
-
         return analysis_result
 
     except RunestoneError as e:

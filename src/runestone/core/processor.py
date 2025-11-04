@@ -18,6 +18,7 @@ from runestone.core.exceptions import RunestoneError
 from runestone.core.formatter import ResultFormatter
 from runestone.core.logging_config import get_logger
 from runestone.core.ocr import OCRProcessor
+from runestone.db.user_repository import UserRepository
 from runestone.schemas.analysis import ContentAnalysis, SearchNeeded
 from runestone.schemas.ocr import OCRResult
 from runestone.services.vocabulary_service import VocabularyService
@@ -32,6 +33,7 @@ class RunestoneProcessor:
         ocr_processor: OCRProcessor,
         content_analyzer: ContentAnalyzer,
         vocabulary_service: VocabularyService,
+        user_repository: UserRepository,
         verbose: Optional[bool] = None,
     ):
         """
@@ -43,6 +45,7 @@ class RunestoneProcessor:
             content_analyzer: Content analyzer instance
             verbose: Enable verbose logging. If None, uses settings.verbose
             vocabulary_service: Vocabulary service for marking known words
+            user_repository: User repository for user operations
         """
         # Use provided settings or create default
         self.settings = settings
@@ -55,11 +58,14 @@ class RunestoneProcessor:
                 raise RunestoneError("OCR processor cannot be None")
             if content_analyzer is None:
                 raise RunestoneError("Content analyzer cannot be None")
+            if user_repository is None:
+                raise RunestoneError("User repository cannot be None")
 
             self.ocr_processor = ocr_processor
             self.content_analyzer = content_analyzer
             self.formatter = ResultFormatter()
             self.vocabulary_service = vocabulary_service
+            self.user_repository = user_repository
         except Exception as e:
             raise RunestoneError(f"Failed to initialize processor: {str(e)}")
 
@@ -135,6 +141,12 @@ class RunestoneProcessor:
             # Mark known vocabulary if vocabulary_service is available
             if analysis.vocabulary:
                 self._mark_known_vocabulary(analysis, user_id)
+
+            # TODO: add method for incrementing on a service level,
+            # don't use repository directly
+            #
+            # Increment pages recognised count for successful analysis
+            self.user_repository.increment_pages_recognised_count(user_id)
 
             return analysis
 

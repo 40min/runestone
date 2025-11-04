@@ -184,7 +184,7 @@ class TestVocabularyRepository:
             VocabularyItemCreate(word_phrase="en banan", translation="a banana", example_phrase=None),
         ]
 
-        repo.add_vocabulary_items(items)
+        repo.add_vocabulary_items(items, user_id=1)
         db_session.commit()
 
         # Verify items were added
@@ -209,7 +209,7 @@ class TestVocabularyRepository:
             ),  # Same word_phrase
         ]
 
-        repo.add_vocabulary_items(items)
+        repo.add_vocabulary_items(items, user_id=1)
         db_session.commit()
 
         # Should only have one entry
