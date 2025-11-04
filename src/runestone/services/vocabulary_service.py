@@ -36,7 +36,7 @@ class VocabularyService:
         self.builder = PromptBuilder()
         self.parser = ResponseParser()
 
-    def save_vocabulary(self, items: List[VocabularyItemCreate], enrich: bool = True, user_id: int = 1) -> dict:
+    def save_vocabulary(self, items: List[VocabularyItemCreate], user_id: int, enrich: bool = True) -> dict:
         """Save vocabulary items, handling business logic."""
         # Get unique word_phrases from the batch
         batch_word_phrases = [item.word_phrase for item in items]
@@ -63,7 +63,7 @@ class VocabularyService:
 
         return {"message": "Vocabulary saved successfully"}
 
-    def save_vocabulary_item(self, item: VocabularyItemCreate, user_id: int = 1) -> VocabularySchema:
+    def save_vocabulary_item(self, item: VocabularyItemCreate, user_id: int) -> VocabularySchema:
         """Save a single vocabulary item, handling business logic."""
         # Check if the word_phrase already exists for the user
         existing = self.repo.get_existing_word_phrases_for_batch([item.word_phrase], user_id)
@@ -86,10 +86,10 @@ class VocabularyService:
         )
 
     def get_vocabulary(
-        self, limit: int, search_query: str | None = None, precise: bool = False, user_id: int = 1
+        self, user_id: int, limit: int, search_query: str | None = None, precise: bool = False
     ) -> List[VocabularySchema]:
         """Retrieve vocabulary items, optionally filtered by search query, converting to Pydantic models."""
-        vocabularies = self.repo.get_vocabulary(limit, search_query, precise, user_id)
+        vocabularies = self.repo.get_vocabulary(user_id, limit, search_query, precise)
         result = []
         for vocab in vocabularies:
             result.append(
@@ -109,7 +109,7 @@ class VocabularyService:
             )
         return result
 
-    def update_vocabulary_item(self, item_id: int, update: VocabularyUpdate, user_id: int = 1) -> VocabularySchema:
+    def update_vocabulary_item(self, item_id: int, update: VocabularyUpdate, user_id: int) -> VocabularySchema:
         """Update a vocabulary item and return the updated record."""
         vocab = self.repo.get_vocabulary_item(item_id, user_id)
         updates = update.model_dump(exclude_unset=True)
@@ -141,9 +141,7 @@ class VocabularyService:
             updated_at=updated_vocab.updated_at.isoformat() if updated_vocab.updated_at else None,
         )
 
-    def load_vocab_from_csv(
-        self, items: List[VocabularyItemCreate], skip_existence_check: bool, user_id: int = 1
-    ) -> dict:
+    def load_vocab_from_csv(self, items: List[VocabularyItemCreate], skip_existence_check: bool, user_id: int) -> dict:
         """Load vocabulary items from CSV data, handling parsing, filtering, and insertion logic."""
         original_count = len(items)
 
@@ -290,6 +288,6 @@ class VocabularyService:
         """Get existing word phrases from the repository."""
         return list(self.repo.get_existing_word_phrases_for_batch(word_phrases, user_id))
 
-    def delete_vocabulary_item(self, item_id: int, user_id: int = 1) -> bool:
+    def delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
         """Completely delete a vocabulary item from the database."""
         return self.repo.hard_delete_vocabulary_item(item_id, user_id)

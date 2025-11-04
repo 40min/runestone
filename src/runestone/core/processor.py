@@ -102,7 +102,7 @@ class RunestoneProcessor:
             else:
                 raise RunestoneError(f"OCR processing failed: {type(e).__name__}: {str(e)}")
 
-    def run_analysis(self, text: str, user_id: int = 1) -> ContentAnalysis:
+    def run_analysis(self, text: str, user_id: int) -> ContentAnalysis:
         """
         Analyze extracted text content and mark known vocabulary.
 
@@ -146,7 +146,7 @@ class RunestoneProcessor:
             else:
                 raise RunestoneError(f"Content analysis failed: {str(e)}")
 
-    def _mark_known_vocabulary(self, analysis: ContentAnalysis, user_id: int = 1) -> None:
+    def _mark_known_vocabulary(self, analysis: ContentAnalysis, user_id: int) -> None:
         """
         Mark vocabulary items as known if they exist in the user's database.
 
