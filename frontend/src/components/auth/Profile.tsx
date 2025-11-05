@@ -4,6 +4,7 @@ import { Box, TextField } from "@mui/material";
 import { useAuth } from "../../context/AuthContext";
 import { useAuthActions } from "../../hooks/useAuth";
 import { ErrorAlert } from "../ui";
+import AuthButton from "./AuthButton";
 
 const Profile: React.FC = () => {
   const { userData } = useAuth();
@@ -216,32 +217,17 @@ const Profile: React.FC = () => {
         }}
       />
 
-      <Box
-        component="button"
+      <AuthButton
         type="submit"
+        loading={loading}
+        loadingText="Updating..."
         onClick={(e) => {
           e.preventDefault();
           handleSubmit(e);
         }}
-        disabled={loading}
-        sx={{
-          mt: 2,
-          padding: "10px 20px",
-          backgroundColor: "var(--primary-color)",
-          color: "white",
-          border: "none",
-          borderRadius: "6px",
-          cursor: loading ? "not-allowed" : "pointer",
-          fontSize: "14px",
-          fontWeight: "bold",
-          opacity: loading ? 0.6 : 1,
-          "&:hover": {
-            opacity: 0.9,
-          },
-        }}
       >
-        {loading ? "Updating..." : "Update Profile"}
-      </Box>
+        Update Profile
+      </AuthButton>
     </Box>
   );
 };

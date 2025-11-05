@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { CustomButton, ErrorAlert } from "../ui";
 import { Box, TextField } from "@mui/material";
 import { useAuthActions } from "../../hooks/useAuth";
+import AuthButton from "./AuthButton";
 
 interface RegisterProps {
   onSwitchToLogin: () => void;
@@ -167,32 +168,17 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
         }}
       />
 
-      <Box
-        component="button"
+      <AuthButton
         type="submit"
+        loading={loading}
+        loadingText="Registering..."
         onClick={(e) => {
           e.preventDefault();
           handleSubmit(e);
         }}
-        disabled={loading}
-        sx={{
-          mt: 2,
-          padding: "10px 20px",
-          backgroundColor: "var(--primary-color)",
-          color: "white",
-          border: "none",
-          borderRadius: "6px",
-          cursor: loading ? "not-allowed" : "pointer",
-          fontSize: "14px",
-          fontWeight: "bold",
-          opacity: loading ? 0.6 : 1,
-          "&:hover": {
-            opacity: 0.9,
-          },
-        }}
       >
-        {loading ? "Registering..." : "Register"}
-      </Box>
+        Register
+      </AuthButton>
 
       <CustomButton
         onClick={onSwitchToLogin}

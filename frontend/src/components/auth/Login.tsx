@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Box, TextField } from "@mui/material";
 import { useAuthActions } from "../../hooks/useAuth";
 import { ErrorAlert } from "../ui";
+import AuthButton from "./AuthButton";
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState("");
@@ -87,32 +88,17 @@ const Login: React.FC = () => {
         }}
       />
 
-      <Box
-        component="button"
+      <AuthButton
         type="submit"
+        loading={loading}
+        loadingText="Logging in..."
         onClick={(e) => {
           e.preventDefault();
           handleSubmit(e);
         }}
-        disabled={loading}
-        sx={{
-          mt: 2,
-          padding: '10px 20px',
-          backgroundColor: 'var(--primary-color)',
-          color: 'white',
-          border: 'none',
-          borderRadius: '6px',
-          cursor: loading ? 'not-allowed' : 'pointer',
-          fontSize: '14px',
-          fontWeight: 'bold',
-          opacity: loading ? 0.6 : 1,
-          '&:hover': {
-            opacity: 0.9,
-          },
-        }}
       >
-        {loading ? "Logging in..." : "Login"}
-      </Box>
+        Login
+      </AuthButton>
     </Box>
   );
 };
