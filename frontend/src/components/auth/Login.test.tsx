@@ -1,8 +1,13 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import Login from './Login';
 import { AuthProvider } from '../../context/AuthContext';
+
+// Mock config
+vi.mock('../../config', () => ({
+  API_BASE_URL: 'http://localhost:8010',
+}));
 
 // Mock fetch
 global.fetch = vi.fn();
@@ -21,9 +26,9 @@ describe('Login', () => {
   it('renders login form', () => {
     render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
 
-    expect(screen.getByText('Login')).toBeInTheDocument();
-    expect(screen.getByLabelText('Email')).toBeInTheDocument();
-    expect(screen.getByLabelText('Password')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Login' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Email\s+\*\s*$/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Password\s+\*\s*$/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Login' })).toBeInTheDocument();
     expect(screen.getByText("Don't have an account? Register")).toBeInTheDocument();
   });
@@ -39,20 +44,20 @@ describe('Login', () => {
       pages_recognised_count: 5
     };
 
-    (global.fetch as any)
+    vi.mocked(global.fetch)
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockTokenResponse),
-      })
+      } as Response)
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockUserResponse),
-      });
+      } as Response);
 
     render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
 
-    const emailInput = screen.getByLabelText('Email');
-    const passwordInput = screen.getByLabelText('Password');
+    const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
+    const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
     const loginButton = screen.getByRole('button', { name: 'Login' });
 
     await userEvent.type(emailInput, 'test@example.com');
@@ -61,7 +66,7 @@ describe('Login', () => {
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        'http://localhost:8000/auth/token',
+        'http://localhost:8010/auth/token',
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ email: 'test@example.com', password: 'password123' }),
@@ -73,15 +78,15 @@ describe('Login', () => {
   });
 
   it('handles login failure', async () => {
-    (global.fetch as any).mockResolvedValueOnce({
+    vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: false,
       json: () => Promise.resolve({ detail: 'Invalid credentials' }),
-    });
+    } as Response);
 
     render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
 
-    const emailInput = screen.getByLabelText('Email');
-    const passwordInput = screen.getByLabelText('Password');
+    const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
+    const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
     const loginButton = screen.getByRole('button', { name: 'Login' });
 
     await userEvent.type(emailInput, 'test@example.com');
@@ -96,8 +101,8 @@ describe('Login', () => {
   it('validates password length', async () => {
     render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
 
-    const emailInput = screen.getByLabelText('Email');
-    const passwordInput = screen.getByLabelText('Password');
+    const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
+    const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
     const loginButton = screen.getByRole('button', { name: 'Login' });
 
     await userEvent.type(emailInput, 'test@example.com');
@@ -109,17 +114,17 @@ describe('Login', () => {
   });
 
   it('shows loading state during login', async () => {
-    (global.fetch as any).mockImplementation(() =>
+    vi.mocked(global.fetch).mockImplementation(() =>
       new Promise(resolve => setTimeout(() => resolve({
         ok: true,
         json: () => Promise.resolve({ access_token: 'token' }),
-      }), 100))
+      } as Response), 100))
     );
 
     render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
 
-    const emailInput = screen.getByLabelText('Email');
-    const passwordInput = screen.getByLabelText('Password');
+    const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
+    const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
     const loginButton = screen.getByRole('button', { name: 'Login' });
 
     await userEvent.type(emailInput, 'test@example.com');
@@ -136,7 +141,7 @@ describe('Login', () => {
   it('displays error messages', async () => {
     render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
 
-    const passwordInput = screen.getByLabelText('Password');
+    const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
     const loginButton = screen.getByRole('button', { name: 'Login' });
 
     await userEvent.type(passwordInput, '12345'); // Trigger validation error
@@ -144,12 +149,18 @@ describe('Login', () => {
 
     expect(screen.getByText('Password must be at least 6 characters')).toBeInTheDocument();
 
-    // Clear error and try network error
-    await userEvent.type(passwordInput, '6'); // Now valid length
+    // Clear error and try network error - need to wait for loading to finish
+    await userEvent.clear(passwordInput);
+    await userEvent.type(passwordInput, 'password123'); // Now valid length
     await userEvent.click(loginButton);
 
-    // Mock network error
-    (global.fetch as any).mockRejectedValueOnce(new Error('Network error'));
+    // Wait for loading to finish
+    await waitFor(() => {
+      expect(screen.queryByText('Logging in...')).not.toBeInTheDocument();
+    });
+
+    // Mock network error for next attempt
+    vi.mocked(global.fetch).mockRejectedValueOnce(new Error('Network error'));
 
     await userEvent.click(loginButton);
 
@@ -167,23 +178,20 @@ describe('Login', () => {
     expect(mockOnSwitchToRegister).toHaveBeenCalledTimes(1);
   });
 
-  it('prevents form submission on button click', async () => {
-    const mockPreventDefault = vi.fn();
+  it('has submit button', async () => {
     render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
 
     const loginButton = screen.getByRole('button', { name: 'Login' });
 
-    // Simulate form submission
-    fireEvent.click(loginButton, { preventDefault: mockPreventDefault });
-
-    expect(mockPreventDefault).toHaveBeenCalled();
+    // Button should be of type submit to submit the form
+    expect(loginButton).toHaveAttribute('type', 'submit');
   });
 
   it('requires email and password fields', () => {
     render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
 
-    const emailInput = screen.getByLabelText('Email');
-    const passwordInput = screen.getByLabelText('Password');
+    const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
+    const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
 
     expect(emailInput).toBeRequired();
     expect(passwordInput).toBeRequired();

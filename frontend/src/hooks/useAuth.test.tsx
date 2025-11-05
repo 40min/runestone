@@ -1,14 +1,29 @@
 import React from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import { useAuthActions } from './useAuth';
 import { AuthProvider } from '../context/AuthContext';
 
 /// <reference types="vitest/globals" />
 
+// Mock config
+vi.mock('../config', () => ({
+  API_BASE_URL: 'http://localhost:8010',
+}));
+
 // Mock fetch
-(globalThis as any).fetch = vi.fn();
+vi.stubGlobal('fetch', vi.fn());
+
+// Mock localStorage
+const mockLocalStorage = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+};
+Object.defineProperty(window, 'localStorage', {
+  value: mockLocalStorage,
+});
 
 describe('useAuthActions', () => {
   const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -17,6 +32,8 @@ describe('useAuthActions', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset localStorage mock to return null by default
+    mockLocalStorage.getItem.mockReturnValue(null);
   });
 
   it('handles successful login', async () => {
@@ -30,22 +47,22 @@ describe('useAuthActions', () => {
       pages_recognised_count: 5
     };
 
-    (global.fetch as any)
+    vi.mocked(global.fetch)
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockTokenResponse),
-      })
+      } as Response)
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockUserResponse),
-      });
+      } as Response);
 
     const { result } = renderHook(() => useAuthActions(), { wrapper });
 
     await result.current.login({ email: 'test@example.com', password: 'password123' });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8000/auth/token',
+      'http://localhost:8010/auth/token',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ email: 'test@example.com', password: 'password123' }),
@@ -53,26 +70,30 @@ describe('useAuthActions', () => {
     );
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8000/users/me',
+      'http://localhost:8010/users/me',
       expect.any(Object)
     );
 
-    expect(result.current.loading).toBe(false);
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
     expect(result.current.error).toBe(null);
   });
 
   it('handles login failure', async () => {
-    (global.fetch as any).mockResolvedValueOnce({
+    vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: false,
       json: () => Promise.resolve({ detail: 'Invalid credentials' }),
-    });
+    } as Response);
 
     const { result } = renderHook(() => useAuthActions(), { wrapper });
 
     await expect(result.current.login({ email: 'test@example.com', password: 'wrong' })).rejects.toThrow('Invalid credentials');
 
-    expect(result.current.loading).toBe(false);
-    expect(result.current.error).toBe('Invalid credentials');
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(result.current.error).toBe('Invalid credentials');
+    });
   });
 
   it('handles successful registration', async () => {
@@ -87,19 +108,19 @@ describe('useAuthActions', () => {
       pages_recognised_count: 0
     };
 
-    (globalThis.fetch as any)
+    vi.mocked(globalThis.fetch)
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockRegisterResponse),
-      })
+      } as Response)
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockTokenResponse),
-      })
+      } as Response)
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockUserResponse),
-      });
+      } as Response);
 
     const { result } = renderHook(() => useAuthActions(), { wrapper });
 
@@ -111,7 +132,7 @@ describe('useAuthActions', () => {
     });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8000/auth/register',
+      'http://localhost:8010/auth/register',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
@@ -125,19 +146,21 @@ describe('useAuthActions', () => {
 
     // Should automatically login after registration
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8000/auth/token',
+      'http://localhost:8010/auth/token',
       expect.any(Object)
     );
 
-    expect(result.current.loading).toBe(false);
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
     expect(result.current.error).toBe(null);
   });
 
   it('handles registration failure', async () => {
-    (global.fetch as any).mockResolvedValueOnce({
+    vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: false,
       json: () => Promise.resolve({ detail: 'Email already exists' }),
-    });
+    } as Response);
 
     const { result } = renderHook(() => useAuthActions(), { wrapper });
 
@@ -146,8 +169,10 @@ describe('useAuthActions', () => {
       password: 'password123'
     })).rejects.toThrow('Email already exists');
 
-    expect(result.current.loading).toBe(false);
-    expect(result.current.error).toBe('Email already exists');
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(result.current.error).toBe('Email already exists');
+    });
   });
 
   it('handles successful profile update', async () => {
@@ -160,15 +185,17 @@ describe('useAuthActions', () => {
       pages_recognised_count: 5
     };
 
-    (global.fetch as any).mockResolvedValueOnce({
+    vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve(mockUpdateResponse),
-    });
+    } as Response);
 
     // Mock localStorage
     const mockLocalStorage = {
       getItem: vi.fn(() => 'existing-token'),
       setItem: vi.fn(),
+      removeItem: vi.fn(),
+      clear: vi.fn(),
     };
     Object.defineProperty(window, 'localStorage', {
       value: mockLocalStorage,
@@ -183,7 +210,7 @@ describe('useAuthActions', () => {
     });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8000/users/me',
+      'http://localhost:8010/users/me',
       expect.objectContaining({
         method: 'PUT',
         body: JSON.stringify({
@@ -194,15 +221,17 @@ describe('useAuthActions', () => {
       })
     );
 
-    expect(result.current.loading).toBe(false);
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
     expect(result.current.error).toBe(null);
   });
 
   it('handles profile update failure', async () => {
-    (global.fetch as any).mockResolvedValueOnce({
+    vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: false,
       json: () => Promise.resolve({ detail: 'Update failed' }),
-    });
+    } as Response);
 
     const { result } = renderHook(() => useAuthActions(), { wrapper });
 
@@ -210,51 +239,61 @@ describe('useAuthActions', () => {
       name: 'New Name'
     })).rejects.toThrow('Update failed');
 
-    expect(result.current.loading).toBe(false);
-    expect(result.current.error).toBe('Update failed');
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(result.current.error).toBe('Update failed');
+    });
   });
 
   it('sets loading state during operations', async () => {
-    (global.fetch as any).mockImplementation(() =>
+    vi.mocked(global.fetch).mockImplementation(() =>
       new Promise(resolve => setTimeout(() => resolve({
         ok: true,
         json: () => Promise.resolve({ access_token: 'token' }),
-      }), 100))
+      } as Response), 100))
     );
 
     const { result } = renderHook(() => useAuthActions(), { wrapper });
 
     const loginPromise = result.current.login({ email: 'test@example.com', password: 'password123' });
 
-    expect(result.current.loading).toBe(true);
+    await waitFor(() => {
+      expect(result.current.loading).toBe(true);
+    });
 
     await loginPromise;
 
-    expect(result.current.loading).toBe(false);
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
   });
 
   it('resets error state on new operations', async () => {
     // First operation fails
-    (global.fetch as any).mockResolvedValueOnce({
+    vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: false,
       json: () => Promise.resolve({ detail: 'First error' }),
-    });
+    } as Response);
 
     const { result } = renderHook(() => useAuthActions(), { wrapper });
 
     await expect(result.current.login({ email: 'test@example.com', password: 'wrong' })).rejects.toThrow();
 
-    expect(result.current.error).toBe('First error');
+    await waitFor(() => {
+      expect(result.current.error).toBe('First error');
+    });
 
     // Second operation should reset error
-    (global.fetch as any).mockResolvedValueOnce({
+    vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve({ access_token: 'token' }),
-    });
+    } as Response);
 
     await result.current.login({ email: 'test@example.com', password: 'correct' });
 
-    expect(result.current.error).toBe(null);
+    await waitFor(() => {
+      expect(result.current.error).toBe(null);
+    });
   });
 
   it('auto-logs in after successful registration', async () => {
@@ -269,19 +308,19 @@ describe('useAuthActions', () => {
       pages_recognised_count: 0
     };
 
-    (global.fetch as any)
+    vi.mocked(global.fetch)
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockRegisterResponse),
-      })
+      } as Response)
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockTokenResponse),
-      })
+      } as Response)
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockUserResponse),
-      });
+      } as Response);
 
     const { result } = renderHook(() => useAuthActions(), { wrapper });
 
@@ -292,7 +331,7 @@ describe('useAuthActions', () => {
 
     // Verify login was called with registration credentials
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8000/auth/token',
+      'http://localhost:8010/auth/token',
       expect.objectContaining({
         body: JSON.stringify({
           email: 'new@example.com',

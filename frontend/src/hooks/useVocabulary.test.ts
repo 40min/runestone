@@ -65,7 +65,15 @@ describe('useVocabulary', () => {
       expect(result.current.error).toBeNull();
     });
 
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/vocabulary', {});
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:8010/api/vocabulary',
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+    );
   });
 
   it('should handle fetch error', async () => {
@@ -73,6 +81,7 @@ describe('useVocabulary', () => {
       ok: false,
       status: 500,
       statusText: 'Internal Server Error',
+      json: () => Promise.resolve({ detail: 'Failed to fetch vocabulary: HTTP 500' }),
     });
 
     const { result } = renderHook(() => useVocabulary());
@@ -165,7 +174,15 @@ describe('useRecentVocabulary', () => {
       expect(result.current.error).toBeNull();
     });
 
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/vocabulary?limit=20', {});
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:8010/api/vocabulary?limit=20',
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+    );
   });
 
   it('should fetch vocabulary with search query and limit=100', async () => {
@@ -198,7 +215,15 @@ describe('useRecentVocabulary', () => {
       expect(result.current.error).toBeNull();
     });
 
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=false', {});
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=false',
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+    );
   });
   it('should include precise=true when precise search is enabled', async () => {
     const mockVocabularyResponse = [
@@ -230,7 +255,15 @@ describe('useRecentVocabulary', () => {
       expect(result.current.error).toBeNull();
     });
 
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=true', {});
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=true',
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+    );
   });
 
   it('should refetch when search query changes', async () => {
@@ -294,8 +327,26 @@ describe('useRecentVocabulary', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
-    expect(mockFetch).toHaveBeenNthCalledWith(1, 'http://localhost:8010/api/vocabulary?limit=20', {});
-    expect(mockFetch).toHaveBeenNthCalledWith(2, 'http://localhost:8010/api/vocabulary?search_query=bra&limit=100&precise=false', {});
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:8010/api/vocabulary?limit=20',
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+    );
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:8010/api/vocabulary?search_query=bra&limit=100&precise=false',
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+    );
   });
   it('should refetch when precise search flag changes', async () => {
     const mockVocabularyResponse1 = [
@@ -359,12 +410,22 @@ describe('useRecentVocabulary', () => {
     expect(mockFetch).toHaveBeenNthCalledWith(
       1,
       'http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=false',
-      {}
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
     );
     expect(mockFetch).toHaveBeenNthCalledWith(
       2,
       'http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=true',
-      {}
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
     );
   });
 
@@ -373,7 +434,7 @@ describe('useRecentVocabulary', () => {
       ok: false,
       status: 500,
       statusText: 'Internal Server Error',
-      json: () => Promise.resolve({}),
+      json: () => Promise.resolve({ detail: 'Failed to fetch recent vocabulary: HTTP 500' }),
     });
 
     const { result } = renderHook(() => useRecentVocabulary('test'));
@@ -457,7 +518,7 @@ describe('useRecentVocabulary', () => {
       .mockResolvedValueOnce({
         ok: false,
         status: 500,
-        json: () => Promise.resolve({}),
+        json: () => Promise.resolve({ detail: 'Failed to create vocabulary item: HTTP 500' }),
       });
 
     const { result } = renderHook(() => useRecentVocabulary());
@@ -570,7 +631,7 @@ describe('useRecentVocabulary', () => {
       .mockResolvedValueOnce({
         ok: false,
         status: 500,
-        json: () => Promise.resolve({}),
+        json: () => Promise.resolve({ detail: 'Failed to update vocabulary item: HTTP 500' }),
       });
 
     const { result } = renderHook(() => useRecentVocabulary());
@@ -680,7 +741,7 @@ describe('useRecentVocabulary', () => {
       .mockResolvedValueOnce({
         ok: false,
         status: 500,
-        json: () => Promise.resolve({}),
+        json: () => Promise.resolve({ detail: 'Failed to delete vocabulary item: HTTP 500' }),
       });
 
     const { result } = renderHook(() => useRecentVocabulary());

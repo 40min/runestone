@@ -552,7 +552,7 @@ describe('useImageProcessing', () => {
 
     expect(result.current.analysisResult).toBeNull();
     expect(result.current.resourcesResult).toBeNull();
-    expect(result.current.error).toBe('Analysis failed');
+    expect(result.current.error).toBe('Request failed');
     expect(result.current.processingStep).toBe('IDLE');
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
