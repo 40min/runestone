@@ -190,16 +190,8 @@ describe('useAuthActions', () => {
       json: () => Promise.resolve(mockUpdateResponse),
     } as Response);
 
-    // Mock localStorage
-    const mockLocalStorage = {
-      getItem: vi.fn(() => 'existing-token'),
-      setItem: vi.fn(),
-      removeItem: vi.fn(),
-      clear: vi.fn(),
-    };
-    Object.defineProperty(window, 'localStorage', {
-      value: mockLocalStorage,
-    });
+    // Use the existing top-level mockLocalStorage
+    mockLocalStorage.getItem.mockReturnValue('existing-token');
 
     const { result } = renderHook(() => useAuthActions(), { wrapper });
 
@@ -213,6 +205,9 @@ describe('useAuthActions', () => {
       'http://localhost:8010/users/me',
       expect.objectContaining({
         method: 'PUT',
+        headers: expect.objectContaining({
+          'Authorization': 'Bearer existing-token',
+        }),
         body: JSON.stringify({
           name: 'Updated',
           surname: 'Name',
@@ -255,14 +250,21 @@ describe('useAuthActions', () => {
 
     const { result } = renderHook(() => useAuthActions(), { wrapper });
 
-    const loginPromise = result.current.login({ email: 'test@example.com', password: 'password123' });
+    // Start the operation
+    const loginPromise = result.current.login({
+      email: 'test@example.com',
+      password: 'password123'
+    });
 
+    // Check loading state after operation starts
     await waitFor(() => {
       expect(result.current.loading).toBe(true);
     });
 
+    // Wait for operation to complete
     await loginPromise;
 
+    // Verify loading is cleared
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
@@ -339,5 +341,91 @@ describe('useAuthActions', () => {
         }),
       })
     );
+  });
+
+  it('handles updateProfile without token', async () => {
+    mockLocalStorage.getItem.mockReturnValue(null);
+
+    // Mock API to reject when there's no valid token
+    vi.mocked(global.fetch).mockRejectedValueOnce(
+      new Error('Authentication required. Please log in again.')
+    );
+
+    const { result } = renderHook(() => useAuthActions(), { wrapper });
+
+    // When there's no token, updateProfile should throw
+    await expect(result.current.updateProfile({
+      name: 'New Name'
+    })).rejects.toThrow('Authentication required');
+  });
+
+  it('handles concurrent register and login operations', async () => {
+    const mockRegisterResponse = { success: true };
+
+    vi.mocked(global.fetch)
+      .mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockRegisterResponse),
+      } as Response);
+
+    const { result } = renderHook(() => useAuthActions(), { wrapper });
+
+    // Start both operations
+    const registerPromise = result.current.register({
+      email: 'test@example.com',
+      password: 'password123'
+    });
+
+    const loginPromise = result.current.login({
+      email: 'test@example.com',
+      password: 'password123'
+    });
+
+    // Both should complete without errors
+    await Promise.all([registerPromise, loginPromise]);
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+  });
+
+  it('handles profile update with password change', async () => {
+    const mockUpdateResponse = {
+      id: 1,
+      email: 'test@example.com',
+      name: 'Test',
+      surname: 'User',
+      timezone: 'UTC',
+      pages_recognised_count: 5
+    };
+
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockUpdateResponse),
+    } as Response);
+
+    mockLocalStorage.getItem.mockReturnValue('existing-token');
+
+    const { result } = renderHook(() => useAuthActions(), { wrapper });
+
+    await result.current.updateProfile({
+      name: 'Test',
+      password: 'newpassword123'
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://localhost:8010/users/me',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          name: 'Test',
+          password: 'newpassword123'
+        }),
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
   });
 });

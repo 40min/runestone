@@ -31,10 +31,13 @@ describe('useApi', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset mock to default implementation
+    // Reset mock to complete default implementation
     vi.mocked(AuthContext.useAuth).mockReturnValue({
       token: null,
+      userData: null,
+      login: vi.fn(),
       logout: vi.fn(),
+      isAuthenticated: () => false,
     });
   });
 
@@ -48,7 +51,10 @@ describe('useApi', () => {
     // Set up auth context with token
     vi.mocked(AuthContext.useAuth).mockReturnValue({
       token: 'test-token',
+      userData: null,
+      login: vi.fn(),
       logout: vi.fn(),
+      isAuthenticated: () => true,
     });
 
     const { result } = renderHook(() => useApi(), {
@@ -83,7 +89,10 @@ describe('useApi', () => {
     // Mock the auth context
     vi.mocked(AuthContext.useAuth).mockReturnValue({
       token: 'test-token',
+      userData: null,
+      login: vi.fn(),
       logout: mockLogout,
+      isAuthenticated: () => true,
     });
 
     const { result } = renderHook(() => useApi(), { wrapper });
@@ -142,7 +151,10 @@ describe('useApi', () => {
     // Mock useAuth to return a token
     vi.mocked(AuthContext.useAuth).mockReturnValue({
       token: 'mock-token-from-context',
+      userData: null,
+      login: vi.fn(),
       logout: vi.fn(),
+      isAuthenticated: () => true,
     });
 
     const { result } = renderHook(() => useApi(), { wrapper });
@@ -200,5 +212,122 @@ describe('useApi', () => {
         method: 'GET',
       })
     );
+  });
+
+  it('preserves custom headers when provided', async () => {
+    const mockResponse = { data: 'test' };
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockResponse),
+    } as Response);
+
+    vi.mocked(AuthContext.useAuth).mockReturnValue({
+      token: 'test-token',
+      userData: null,
+      login: vi.fn(),
+      logout: vi.fn(),
+      isAuthenticated: () => true,
+    });
+
+    const { result } = renderHook(() => useApi(), { wrapper });
+
+    await result.current('/test-endpoint', {
+      headers: {
+        'X-Custom-Header': 'custom-value',
+      },
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://localhost:8010/test-endpoint',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'Authorization': 'Bearer test-token',
+          'Content-Type': 'application/json',
+          'X-Custom-Header': 'custom-value',
+        }),
+      })
+    );
+  });
+
+  it('handles PUT requests', async () => {
+    const mockResponse = { success: true };
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockResponse),
+    } as Response);
+
+    const { result } = renderHook(() => useApi(), { wrapper });
+
+    const updateData = { name: 'Updated' };
+    await result.current('/users/me', {
+      method: 'PUT',
+      body: updateData,
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://localhost:8010/users/me',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify(updateData),
+      })
+    );
+  });
+
+  it('handles DELETE requests', async () => {
+    const mockResponse = { success: true };
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockResponse),
+    } as Response);
+
+    const { result } = renderHook(() => useApi(), { wrapper });
+
+    await result.current('/users/1', {
+      method: 'DELETE',
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://localhost:8010/users/1',
+      expect.objectContaining({
+        method: 'DELETE',
+      })
+    );
+  });
+
+  it('handles PATCH requests', async () => {
+    const mockResponse = { success: true };
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockResponse),
+    } as Response);
+
+    const { result } = renderHook(() => useApi(), { wrapper });
+
+    const patchData = { status: 'active' };
+    await result.current('/users/1', {
+      method: 'PATCH',
+      body: patchData,
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://localhost:8010/users/1',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify(patchData),
+      })
+    );
+  });
+
+  it('handles responses without JSON body', async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 204,
+      json: () => Promise.reject(new Error('No content')),
+    } as Response);
+
+    const { result } = renderHook(() => useApi(), { wrapper });
+
+    // Should throw when trying to parse non-existent JSON
+    await expect(result.current('/test-endpoint')).rejects.toThrow('No content');
   });
 });

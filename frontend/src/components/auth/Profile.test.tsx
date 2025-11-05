@@ -218,7 +218,7 @@ describe('Profile', () => {
     expect(screen.getByText('150')).toBeInTheDocument();
   });
 
-  it('handles null values in stats', () => {
+  it('handles null values in stats by displaying zero', () => {
     const userDataWithNulls = {
       ...mockUserData,
       words_in_learn_count: null,
@@ -242,9 +242,153 @@ describe('Profile', () => {
 
     render(<Profile />, { wrapper: wrapperWithNulls });
 
-    expect(screen.getAllByText('Words Learning:')[0]).toBeInTheDocument();
-    expect(screen.getAllByText('Words Learned:')[0]).toBeInTheDocument();
-    // Just verify the labels exist, not the specific values since they both show 0
+    // Verify labels exist
+    expect(screen.getByText('Words Learning:')).toBeInTheDocument();
+    expect(screen.getByText('Words Learned:')).toBeInTheDocument();
+
+    // Verify null values are displayed as 0
+    const statsSection = screen.getByText('Words Learning:').closest('div');
+    expect(statsSection).toHaveTextContent('0');
+
+    const learnedSection = screen.getByText('Words Learned:').closest('div');
+    expect(learnedSection).toHaveTextContent('0');
+  });
+
+  it('handles timezone selection', async () => {
+    const updatedUserData = {
+      ...mockUserData,
+      timezone: 'America/New_York'
+    };
+
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(updatedUserData),
+    } as Response);
+
+    render(<Profile />, { wrapper });
+
+    const timezoneInput = screen.getByLabelText('Timezone');
+    const updateButton = screen.getByRole('button', { name: 'Update Profile' });
+
+    await userEvent.clear(timezoneInput);
+    await userEvent.type(timezoneInput, 'America/New_York');
+    await userEvent.click(updateButton);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8010/users/me',
+        expect.objectContaining({
+          body: JSON.stringify({
+            name: 'Test',
+            surname: 'User',
+            timezone: 'America/New_York'
+          }),
+        })
+      );
+    });
+  });
+
+  it('handles successful password change', async () => {
+    const updatedUserData = { ...mockUserData };
+
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(updatedUserData),
+    } as Response);
+
+    render(<Profile />, { wrapper });
+
+    const passwordInput = screen.getByLabelText('New Password (optional)');
+    const confirmPasswordInput = screen.getByLabelText('Confirm New Password');
+    const updateButton = screen.getByRole('button', { name: 'Update Profile' });
+
+    await userEvent.type(passwordInput, 'newpassword123');
+    await userEvent.type(confirmPasswordInput, 'newpassword123');
+    await userEvent.click(updateButton);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8010/users/me',
+        expect.objectContaining({
+          body: JSON.stringify({
+            name: 'Test',
+            surname: 'User',
+            timezone: 'UTC',
+            password: 'newpassword123'
+          }),
+        })
+      );
+    });
+
+    expect(screen.getByText('Profile updated successfully!')).toBeInTheDocument();
+  });
+
+  it('handles partial profile update (only name)', async () => {
+    const updatedUserData = {
+      ...mockUserData,
+      name: 'NewName'
+    };
+
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(updatedUserData),
+    } as Response);
+
+    render(<Profile />, { wrapper });
+
+    const nameInput = screen.getByLabelText('Name');
+    const updateButton = screen.getByRole('button', { name: 'Update Profile' });
+
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, 'NewName');
+    await userEvent.click(updateButton);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8010/users/me',
+        expect.objectContaining({
+          body: JSON.stringify({
+            name: 'NewName',
+            surname: 'User',
+            timezone: 'UTC'
+          }),
+        })
+      );
+    });
+  });
+
+  it('handles partial profile update (only timezone)', async () => {
+    const updatedUserData = {
+      ...mockUserData,
+      timezone: 'PST'
+    };
+
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(updatedUserData),
+    } as Response);
+
+    render(<Profile />, { wrapper });
+
+    const timezoneInput = screen.getByLabelText('Timezone');
+    const updateButton = screen.getByRole('button', { name: 'Update Profile' });
+
+    await userEvent.clear(timezoneInput);
+    await userEvent.type(timezoneInput, 'PST');
+    await userEvent.click(updateButton);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8010/users/me',
+        expect.objectContaining({
+          body: JSON.stringify({
+            name: 'Test',
+            surname: 'User',
+            timezone: 'PST'
+          }),
+        })
+      );
+    });
   });
 
   it('does not render when userData is null', () => {

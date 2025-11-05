@@ -14,10 +14,20 @@ Object.defineProperty(window, 'localStorage', {
 });
 
 describe('AuthContext', () => {
+  let consoleSpy: any;
+
   beforeEach(() => {
     mockLocalStorage.getItem.mockClear();
     mockLocalStorage.setItem.mockClear();
     mockLocalStorage.removeItem.mockClear();
+  });
+
+  afterEach(() => {
+    // Clean up console spy if it exists
+    if (consoleSpy) {
+      consoleSpy.mockRestore();
+      consoleSpy = null;
+    }
   });
 
   const TestComponent = () => {
@@ -75,7 +85,7 @@ describe('AuthContext', () => {
       return null;
     });
 
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     render(
       <AuthProvider>
@@ -88,8 +98,6 @@ describe('AuthContext', () => {
     expect(screen.getByTestId('isAuthenticated')).toHaveTextContent('false');
     expect(consoleSpy).toHaveBeenCalledWith('Failed to parse stored user data:', expect.any(Error));
     expect(mockLocalStorage.removeItem).toHaveBeenCalledWith('runestone_user_data');
-
-    consoleSpy.mockRestore();
   });
 
   it('updates state on login', async () => {
@@ -208,5 +216,92 @@ describe('AuthContext', () => {
     expect(() => render(<TestComponentNoProvider />)).toThrow(
       'useAuth must be used within an AuthProvider'
     );
+  });
+
+  it('updates userData after login', async () => {
+    mockLocalStorage.getItem.mockReturnValue(null);
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    const loginButton = screen.getByText('Login');
+    fireEvent.click(loginButton);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('isAuthenticated')).toHaveTextContent('true');
+    });
+
+    // Verify userData was updated
+    const userData = JSON.parse(screen.getByTestId('userData').textContent || '{}');
+    expect(userData).toEqual({
+      id: 1,
+      email: 'test@example.com',
+      name: 'Test',
+      surname: 'User',
+      timezone: 'UTC',
+      pages_recognised_count: 0
+    });
+  });
+
+  it('handles concurrent login and logout gracefully', async () => {
+    mockLocalStorage.getItem.mockReturnValue(null);
+
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    const loginButton = screen.getByText('Login');
+    const logoutButton = screen.getByText('Logout');
+
+    // Trigger login and logout almost simultaneously
+    fireEvent.click(loginButton);
+    fireEvent.click(logoutButton);
+
+    await waitFor(() => {
+      // Should end up logged out
+      expect(screen.getByTestId('isAuthenticated')).toHaveTextContent('false');
+      expect(screen.getByTestId('token')).toHaveTextContent('null');
+      expect(screen.getByTestId('userData')).toHaveTextContent('null');
+    });
+  });
+
+  it('persists authentication state across re-renders', () => {
+    const mockUserData = {
+      id: 1,
+      email: 'test@example.com',
+      name: 'Test',
+      surname: 'User',
+      timezone: 'UTC',
+      pages_recognised_count: 5
+    };
+
+    mockLocalStorage.getItem.mockImplementation((key: string) => {
+      if (key === 'runestone_token') return 'stored-token';
+      if (key === 'runestone_user_data') return JSON.stringify(mockUserData);
+      return null;
+    });
+
+    const { rerender } = render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    expect(screen.getByTestId('isAuthenticated')).toHaveTextContent('true');
+
+    // Re-render should maintain state
+    rerender(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+
+    expect(screen.getByTestId('isAuthenticated')).toHaveTextContent('true');
+    expect(screen.getByTestId('token')).toHaveTextContent('stored-token');
   });
 });
