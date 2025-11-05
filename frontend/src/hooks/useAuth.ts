@@ -113,10 +113,12 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     setError(null);
 
     try {
+      const token = localStorage.getItem('runestone_token');
       const response = await fetch(`${API_BASE_URL}/users/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
         },
         body: JSON.stringify(updates),
       });
