@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import type { FormEvent } from "react";
 import { CustomButton, ErrorAlert } from "../ui";
-import { Box, TextField } from "@mui/material";
+import { Box } from "@mui/material";
 import { useAuthActions } from "../../hooks/useAuth";
 import AuthButton from "./AuthButton";
+import AuthTextField from "./AuthTextField";
 
 interface RegisterProps {
   onSwitchToLogin: () => void;
@@ -66,106 +67,50 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
       </h2>
 
       {error && <ErrorAlert message={error} />}
-      {/* TODO: rewrite with standart components */}
-      <TextField
+
+      <AuthTextField
         label="Email"
+        name="email"
         type="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         required
-        fullWidth
-        sx={{
-          "& .MuiOutlinedInput-root": {
-            color: "white",
-            "& fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-            "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.5)" },
-            "&.Mui-focused fieldset": {
-              borderColor: "rgba(255, 255, 255, 0.8)",
-            },
-          },
-          "& .MuiInputLabel-root": { color: "rgba(255, 255, 255, 0.7)" },
-          "& .MuiInputLabel-root.Mui-focused": { color: "white" },
-        }}
+        autoComplete="email"
+        autoFocus
       />
 
-      <TextField
+      <AuthTextField
         label="Password (min. 6 characters)"
+        name="password"
         type="password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         required
-        fullWidth
-        sx={{
-          "& .MuiOutlinedInput-root": {
-            color: "white",
-            "& fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-            "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.5)" },
-            "&.Mui-focused fieldset": {
-              borderColor: "rgba(255, 255, 255, 0.8)",
-            },
-          },
-          "& .MuiInputLabel-root": { color: "rgba(255, 255, 255, 0.7)" },
-          "& .MuiInputLabel-root.Mui-focused": { color: "white" },
-        }}
+        autoComplete="new-password"
       />
 
-      <TextField
+      <AuthTextField
         label="Confirm Password"
+        name="confirmPassword"
         type="password"
         value={confirmPassword}
         onChange={(e) => setConfirmPassword(e.target.value)}
         required
-        fullWidth
-        sx={{
-          "& .MuiOutlinedInput-root": {
-            color: "white",
-            "& fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-            "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.5)" },
-            "&.Mui-focused fieldset": {
-              borderColor: "rgba(255, 255, 255, 0.8)",
-            },
-          },
-          "& .MuiInputLabel-root": { color: "rgba(255, 255, 255, 0.7)" },
-          "& .MuiInputLabel-root.Mui-focused": { color: "white" },
-        }}
+        autoComplete="new-password"
       />
 
-      <TextField
+      <AuthTextField
         label="Name (optional)"
+        name="name"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        fullWidth
-        sx={{
-          "& .MuiOutlinedInput-root": {
-            color: "white",
-            "& fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-            "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.5)" },
-            "&.Mui-focused fieldset": {
-              borderColor: "rgba(255, 255, 255, 0.8)",
-            },
-          },
-          "& .MuiInputLabel-root": { color: "rgba(255, 255, 255, 0.7)" },
-          "& .MuiInputLabel-root.Mui-focused": { color: "white" },
-        }}
       />
 
-      <TextField
+      <AuthTextField
         label="Surname (optional)"
+        name="surname"
         value={surname}
         onChange={(e) => setSurname(e.target.value)}
-        fullWidth
-        sx={{
-          "& .MuiOutlinedInput-root": {
-            color: "white",
-            "& fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-            "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.5)" },
-            "&.Mui-focused fieldset": {
-              borderColor: "rgba(255, 255, 255, 0.8)",
-            },
-          },
-          "& .MuiInputLabel-root": { color: "rgba(255, 255, 255, 0.7)" },
-          "& .MuiInputLabel-root.Mui-focused": { color: "white" },
-        }}
       />
 
       <AuthButton
