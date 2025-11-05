@@ -21,10 +21,17 @@ interface RegisterData extends LoginCredentials {
   surname?: string;
 }
 
+interface UpdateProfileData {
+  name?: string | null;
+  surname?: string | null;
+  timezone?: string;
+  password?: string;
+}
+
 interface UseAuthActionsReturn {
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
-  updateProfile: (updates: Partial<UserData> & { password?: string }) => Promise<void>;
+  updateProfile: (updates: UpdateProfileData) => Promise<void>;
   logout: () => void;
   loading: boolean;
   error: string | null;
@@ -81,7 +88,7 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     }
   };
 
-  const updateProfile = async (updates: Partial<UserData> & { password?: string }) => {
+  const updateProfile = async (updates: UpdateProfileData) => {
     setLoading(true);
     setError(null);
 
