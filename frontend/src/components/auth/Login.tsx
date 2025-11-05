@@ -2,10 +2,14 @@ import React, { useState } from "react";
 import type { FormEvent } from "react";
 import { Box, TextField } from "@mui/material";
 import { useAuthActions } from "../../hooks/useAuth";
-import { ErrorAlert } from "../ui";
+import { CustomButton, ErrorAlert } from "../ui";
 import AuthButton from "./AuthButton";
 
-const Login: React.FC = () => {
+interface LoginProps {
+  onSwitchToRegister?: () => void;
+}
+
+const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -99,6 +103,14 @@ const Login: React.FC = () => {
       >
         Login
       </AuthButton>
+
+      <CustomButton
+        onClick={onSwitchToRegister}
+        variant="secondary"
+        sx={{ mt: 1 }}
+      >
+        Don't have an account? Register
+      </CustomButton>
     </Box>
   );
 };

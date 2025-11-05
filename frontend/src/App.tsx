@@ -55,7 +55,7 @@ function App() {
     if (authView === "register") {
       return <Register onSwitchToLogin={() => setAuthView("login")} />;
     }
-    return <Login />;
+    return <Login onSwitchToRegister={() => setAuthView("register")} />;
   }
 
   return (
