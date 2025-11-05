@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import type { FormEvent } from "react";
-import { Box } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { useAuth } from "../../context/AuthContext";
 import { useAuthActions } from "../../hooks/useAuth";
 import { ErrorAlert } from "../ui";
@@ -102,7 +102,16 @@ const Profile: React.FC = () => {
         sx={{ color: "rgba(255, 255, 255, 0.7)", textAlign: "center", mb: 2 }}
       >
         <div>Email: {userData.email}</div>
-        <div>Stats: {userData.pages_recognised_count} page(s) recognized</div>
+        <Typography variant="body1" sx={{ mb: 1 }}>
+          <strong>Pages Recognised:</strong>{" "}
+          {userData.pages_recognised_count || 0}
+        </Typography>
+        <Typography variant="body1" sx={{ mb: 1 }}>
+          <strong>Words Learning:</strong> {userData.words_in_learn_count || 0}
+        </Typography>
+        <Typography variant="body1" sx={{ mb: 1 }}>
+          <strong>Words Learned:</strong> {userData.words_learned_count || 0}
+        </Typography>
       </Box>
 
       {error && <ErrorAlert message={error} />}
