@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { API_BASE_URL } from '../config';
 import { useAuth as useAuthContext } from '../context/AuthContext';
+import { useApi } from '../utils/api';
 
 interface UserData {
   id: number;
@@ -32,6 +32,7 @@ interface UseAuthActionsReturn {
 
 export const useAuthActions = (): UseAuthActionsReturn => {
   const { login: contextLogin, logout: contextLogout } = useAuthContext();
+  const api = useApi();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,33 +41,13 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/token`, {
+      const data = await api<{ access_token: string }>('/auth/token', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(credentials),
+        body: credentials,
       });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({ detail: 'Login failed' }));
-        throw new Error(data.detail || 'Login failed');
-      }
-
-      const data = await response.json();
 
       // Fetch user data
-      const userResponse = await fetch(`${API_BASE_URL}/users/me`, {
-        headers: {
-          Authorization: `Bearer ${data.access_token}`,
-        },
-      });
-
-      if (!userResponse.ok) {
-        throw new Error('Failed to fetch user data');
-      }
-
-      const userData: UserData = await userResponse.json();
+      const userData: UserData = await api<UserData>('/users/me');
 
       // Store token and user data
       contextLogin(data.access_token, userData);
@@ -84,18 +65,10 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      await api('/auth/register', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
+        body: data,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Registration failed' }));
-        throw new Error(errorData.detail || 'Registration failed');
-      }
 
       // Automatically log in after successful registration
       await login({ email: data.email, password: data.password });
@@ -113,22 +86,10 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     setError(null);
 
     try {
-      const token = localStorage.getItem('runestone_token');
-      const response = await fetch(`${API_BASE_URL}/users/me`, {
+      const updatedUserData: UserData = await api<UserData>('/users/me', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-        body: JSON.stringify(updates),
+        body: updates,
       });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({ detail: 'Update failed' }));
-        throw new Error(data.detail || 'Update failed');
-      }
-
-      const updatedUserData: UserData = await response.json();
 
       // Update stored user data
       const currentToken = localStorage.getItem('runestone_token');

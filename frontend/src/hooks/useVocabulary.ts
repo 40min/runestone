@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { API_BASE_URL } from '../config';
-import { useAuth } from '../context/AuthContext';
+import { useApi } from '../utils/api';
 import type { VocabularyImprovementMode } from '../constants';
 
 interface SavedVocabularyItem {
@@ -43,28 +43,13 @@ const useVocabulary = (): UseVocabularyReturn => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasFetchedRef = useRef(false);
-  const { token, logout } = useAuth();
+  const api = useApi();
 
   const fetchVocabulary = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
-        ...(Object.keys(headers).length > 0 ? { headers } : {}),
-      });
-      if (!response.ok) {
-        if (response.status === 401) {
-          logout();
-          return;
-        }
-        throw new Error(`Failed to fetch vocabulary: HTTP ${response.status}`);
-      }
-      const data: SavedVocabularyItem[] = await response.json();
+      const data: SavedVocabularyItem[] = await api<SavedVocabularyItem[]>('/api/vocabulary');
       setVocabulary(data);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch vocabulary';
@@ -72,7 +57,7 @@ const useVocabulary = (): UseVocabularyReturn => {
     } finally {
       setLoading(false);
     }
-  }, [token, logout]);
+  }, [api]);
 
   useEffect(() => {
     if (!hasFetchedRef.current) {
@@ -97,7 +82,7 @@ export const useRecentVocabulary = (searchQuery?: string, preciseSearch = false)
   const [error, setError] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<SavedVocabularyItem | null>(null);
-  const { token, logout } = useAuth();
+  const api = useApi();
 
   const fetchRecentVocabulary = useCallback(async () => {
     setLoading(true);
@@ -111,22 +96,7 @@ export const useRecentVocabulary = (searchQuery?: string, preciseSearch = false)
       } else {
         params.append('limit', '20');
       }
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      const response = await fetch(`${API_BASE_URL}/api/vocabulary?${params.toString()}`, {
-        ...(Object.keys(headers).length > 0 ? { headers } : {}),
-      });
-      if (!response.ok) {
-        if (response.status === 401) {
-          logout();
-          return;
-        }
-        throw new Error(`Failed to fetch recent vocabulary: HTTP ${response.status}`);
-      }
-      const data: SavedVocabularyItem[] = await response.json();
+      const data: SavedVocabularyItem[] = await api<SavedVocabularyItem[]>(`/api/vocabulary?${params.toString()}`);
       setRecentVocabulary(data);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch recent vocabulary';
@@ -134,7 +104,7 @@ export const useRecentVocabulary = (searchQuery?: string, preciseSearch = false)
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, preciseSearch, token, logout]);
+  }, [searchQuery, preciseSearch, api]);
 
   const openEditModal = useCallback((item: SavedVocabularyItem | null) => {
     setEditingItem(item);
@@ -147,85 +117,30 @@ export const useRecentVocabulary = (searchQuery?: string, preciseSearch = false)
   }, []);
 
   const updateVocabularyItem = useCallback(async (id: number, updates: Partial<SavedVocabularyItem>) => {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${API_BASE_URL}/api/vocabulary/${id}`, {
+    const updatedItem: SavedVocabularyItem = await api<SavedVocabularyItem>(`/api/vocabulary/${id}`, {
       method: 'PUT',
-      ...(Object.keys(headers).length > 0 ? { headers } : { 'Content-Type': 'application/json' }),
-      body: JSON.stringify(updates),
+      body: updates,
     });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        logout();
-        return;
-      }
-      const errorData = await response.json().catch(() => ({}));
-      const errorMessage = errorData.detail || `Failed to update vocabulary item: HTTP ${response.status}`;
-      throw new Error(errorMessage);
-    }
-
-    const updatedItem: SavedVocabularyItem = await response.json();
     setRecentVocabulary(prev => prev.map(item => item.id === id ? updatedItem : item));
     closeEditModal();
-  }, [closeEditModal, token, logout]);
+  }, [closeEditModal, api]);
 
   const createVocabularyItem = useCallback(async (item: Partial<SavedVocabularyItem>) => {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${API_BASE_URL}/api/vocabulary/item`, {
+    const newItem: SavedVocabularyItem = await api<SavedVocabularyItem>('/api/vocabulary/item', {
       method: 'POST',
-      ...(Object.keys(headers).length > 0 ? { headers } : { 'Content-Type': 'application/json' }),
-      body: JSON.stringify(item),
+      body: item,
     });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        logout();
-        return;
-      }
-      const errorData = await response.json().catch(() => ({}));
-      const errorMessage = errorData.detail || `Failed to create vocabulary item: HTTP ${response.status}`;
-      throw new Error(errorMessage);
-    }
-
-    const newItem: SavedVocabularyItem = await response.json();
     setRecentVocabulary(prev => [newItem, ...prev]);
     closeEditModal();
-  }, [closeEditModal, token, logout]);
+  }, [closeEditModal, api]);
 
   const deleteVocabularyItem = useCallback(async (id: number) => {
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${API_BASE_URL}/api/vocabulary/${id}`, {
+    await api(`/api/vocabulary/${id}`, {
       method: 'DELETE',
-      ...(Object.keys(headers).length > 0 ? { headers } : {}),
     });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        logout();
-        return;
-      }
-      throw new Error(`Failed to delete vocabulary item: HTTP ${response.status}`);
-    }
-
     setRecentVocabulary(prev => prev.filter(item => item.id !== id));
     closeEditModal();
-  }, [closeEditModal, token, logout]);
+  }, [closeEditModal, api]);
 
   useEffect(() => {
     fetchRecentVocabulary();
@@ -250,6 +165,8 @@ export const improveVocabularyItem = async (
   wordPhrase: string,
   mode: VocabularyImprovementMode
 ): Promise<{ translation?: string; example_phrase?: string; extra_info?: string }> => {
+  // Note: This function doesn't use useApi because it's not a hook
+  // and doesn't have access to authentication context
   const response = await fetch(`${API_BASE_URL}/api/vocabulary/improve`, {
     method: 'POST',
     headers: {
