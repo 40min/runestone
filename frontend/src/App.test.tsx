@@ -1,6 +1,37 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App';
+import { AuthProvider } from './context/AuthContext';
+
+// Mock localStorage
+const mockLocalStorage = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+};
+Object.defineProperty(window, 'localStorage', {
+  value: mockLocalStorage,
+});
+
+// Wrapper component for tests - provides authenticated state
+const wrapper = ({ children }: { children: React.ReactNode }) => {
+  // Mock authenticated state
+  mockLocalStorage.getItem.mockImplementation((key: string) => {
+    if (key === 'runestone_token') return 'mock-token';
+    if (key === 'runestone_user_data') return JSON.stringify({
+      id: 1,
+      email: 'test@example.com',
+      name: 'Test',
+      surname: 'User',
+      timezone: 'UTC',
+      pages_recognised_count: 0,
+    });
+    return null;
+  });
+
+  return <AuthProvider>{children}</AuthProvider>;
+};
 
 // Mock the useImageProcessing hook
 const mockProcessImage = vi.fn();
@@ -34,7 +65,7 @@ describe('App', () => {
   });
 
   it('renders the main application', () => {
-    render(<App />);
+    render(<App />, { wrapper });
 
     expect(screen.getByText('Analyze Your Swedish Textbook Page')).toBeInTheDocument();
     expect(screen.getByText('Upload an image to get an instant analysis of the text, grammar, and vocabulary.')).toBeInTheDocument();
@@ -42,7 +73,7 @@ describe('App', () => {
   });
 
   it('handles file selection and calls processImage', async () => {
-    render(<App />);
+    render(<App />, { wrapper });
 
     const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
@@ -53,7 +84,7 @@ describe('App', () => {
   });
 
   it('renders header component', () => {
-    render(<App />);
+    render(<App />, { wrapper });
 
     // Check for header element
     expect(document.querySelector('header')).toBeInTheDocument();
@@ -61,7 +92,7 @@ describe('App', () => {
 
   it('should call only recognizeImage when "Recognize only" is checked', async () => {
     mockRecognizeImage.mockResolvedValue({ text: 'OCR Text', character_count: 8 });
-    render(<App />);
+    render(<App />, { wrapper });
 
     const recognizeOnlyCheckbox = screen.getByLabelText('Recognize only');
     await userEvent.click(recognizeOnlyCheckbox);
@@ -77,7 +108,7 @@ describe('App', () => {
 
   it('should call both recognizeImage and analyzeText when "Recognize only" is unchecked', async () => {
     mockRecognizeImage.mockResolvedValue({ text: 'OCR Text', character_count: 8 });
-    render(<App />);
+    render(<App />, { wrapper });
 
     // Ensure checkbox is unchecked (default state)
     const recognizeOnlyCheckbox = screen.getByLabelText('Recognize only');

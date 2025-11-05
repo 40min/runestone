@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { API_BASE_URL } from "../config";
+import { useAuth } from "../context/AuthContext";
 
 export interface OCRResult {
   text: string;
@@ -67,6 +68,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentImage, setCurrentImage] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const { token, logout } = useAuth();
 
   const reset = () => {
     setOcrResult(null);
@@ -142,11 +144,16 @@ const useImageProcessing = (): UseImageProcessingReturn => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ text: text }),
       });
 
       if (!analyzeResponse.ok) {
+        if (analyzeResponse.status === 401) {
+          logout();
+          throw new Error("Unauthorized");
+        }
         const errorData = await analyzeResponse
           .json()
           .catch(() => ({ error: "Unknown error" }));
@@ -167,6 +174,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
             analysis: {
@@ -177,6 +185,10 @@ const useImageProcessing = (): UseImageProcessingReturn => {
         });
 
         if (!resourcesResponse.ok) {
+          if (resourcesResponse.status === 401) {
+            logout();
+            throw new Error("Unauthorized");
+          }
           const errorData = await resourcesResponse
             .json()
             .catch(() => ({ error: "Unknown error" }));
@@ -237,11 +249,16 @@ const useImageProcessing = (): UseImageProcessingReturn => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ items: transformedItems, enrich }),
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          logout();
+          throw new Error("Unauthorized");
+        }
         const errorData = await response
           .json()
           .catch(() => ({ error: "Unknown error" }));

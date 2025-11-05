@@ -11,6 +11,18 @@ vi.mock('../config', () => ({
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch;
 
+// Mock AuthContext
+vi.mock('../context/AuthContext', () => ({
+  useAuth: () => ({
+    token: null,
+    userData: null,
+    login: vi.fn(),
+    logout: vi.fn(),
+    isAuthenticated: () => false,
+  }),
+  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 describe('useImageProcessing', () => {
   beforeEach(() => {
     mockFetch.mockClear();

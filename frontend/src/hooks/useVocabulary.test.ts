@@ -12,6 +12,21 @@ vi.mock('../config', () => ({
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch as unknown as typeof fetch;
 
+// Mock AuthContext
+vi.mock('../context/AuthContext', () => {
+  const mockLogout = vi.fn();
+  return {
+    useAuth: () => ({
+      token: null,
+      userData: null,
+      login: vi.fn(),
+      logout: mockLogout,
+      isAuthenticated: () => false,
+    }),
+    AuthProvider: ({ children }: { children: React.ReactNode }) => children,
+  };
+});
+
 describe('useVocabulary', () => {
   beforeEach(() => {
     mockFetch.mockClear();
@@ -50,7 +65,7 @@ describe('useVocabulary', () => {
       expect(result.current.error).toBeNull();
     });
 
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/vocabulary');
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/vocabulary', {});
   });
 
   it('should handle fetch error', async () => {
@@ -128,7 +143,12 @@ describe('useRecentVocabulary', () => {
         word_phrase: 'hej',
         translation: 'hello',
         example_phrase: 'Hej, hur mår du?',
+        extra_info: null,
+        in_learn: false,
+        last_learned: null,
+        learned_times: 0,
         created_at: '2023-10-27T10:00:00Z',
+        updated_at: '2023-10-27T10:00:00Z',
       },
     ];
 
@@ -145,7 +165,7 @@ describe('useRecentVocabulary', () => {
       expect(result.current.error).toBeNull();
     });
 
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/vocabulary?limit=20');
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/vocabulary?limit=20', {});
   });
 
   it('should fetch vocabulary with search query and limit=100', async () => {
@@ -156,7 +176,12 @@ describe('useRecentVocabulary', () => {
         word_phrase: 'hej',
         translation: 'hello',
         example_phrase: 'Hej, hur mår du?',
+        extra_info: null,
+        in_learn: false,
+        last_learned: null,
+        learned_times: 0,
         created_at: '2023-10-27T10:00:00Z',
+        updated_at: '2023-10-27T10:00:00Z',
       },
     ];
 
@@ -173,7 +198,7 @@ describe('useRecentVocabulary', () => {
       expect(result.current.error).toBeNull();
     });
 
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=false');
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=false', {});
   });
   it('should include precise=true when precise search is enabled', async () => {
     const mockVocabularyResponse = [
@@ -183,7 +208,12 @@ describe('useRecentVocabulary', () => {
         word_phrase: 'hej',
         translation: 'hello',
         example_phrase: 'Hej, hur mår du?',
+        extra_info: null,
+        in_learn: false,
+        last_learned: null,
+        learned_times: 0,
         created_at: '2023-10-27T10:00:00Z',
+        updated_at: '2023-10-27T10:00:00Z',
       },
     ];
 
@@ -200,7 +230,7 @@ describe('useRecentVocabulary', () => {
       expect(result.current.error).toBeNull();
     });
 
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=true');
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=true', {});
   });
 
   it('should refetch when search query changes', async () => {
@@ -211,7 +241,12 @@ describe('useRecentVocabulary', () => {
         word_phrase: 'hej',
         translation: 'hello',
         example_phrase: 'Hej, hur mår du?',
+        extra_info: null,
+        in_learn: false,
+        last_learned: null,
+        learned_times: 0,
         created_at: '2023-10-27T10:00:00Z',
+        updated_at: '2023-10-27T10:00:00Z',
       },
     ];
 
@@ -222,7 +257,12 @@ describe('useRecentVocabulary', () => {
         word_phrase: 'bra',
         translation: 'good',
         example_phrase: 'Jag mår bra idag.',
+        extra_info: null,
+        in_learn: false,
+        last_learned: null,
+        learned_times: 0,
         created_at: '2023-10-27T10:05:00Z',
+        updated_at: '2023-10-27T10:05:00Z',
       },
     ];
 
@@ -254,8 +294,8 @@ describe('useRecentVocabulary', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
-    expect(mockFetch).toHaveBeenNthCalledWith(1, 'http://localhost:8010/api/vocabulary?limit=20');
-    expect(mockFetch).toHaveBeenNthCalledWith(2, 'http://localhost:8010/api/vocabulary?search_query=bra&limit=100&precise=false');
+    expect(mockFetch).toHaveBeenNthCalledWith(1, 'http://localhost:8010/api/vocabulary?limit=20', {});
+    expect(mockFetch).toHaveBeenNthCalledWith(2, 'http://localhost:8010/api/vocabulary?search_query=bra&limit=100&precise=false', {});
   });
   it('should refetch when precise search flag changes', async () => {
     const mockVocabularyResponse1 = [
@@ -265,7 +305,12 @@ describe('useRecentVocabulary', () => {
         word_phrase: 'hej',
         translation: 'hello',
         example_phrase: 'Hej, hur mår du?',
+        extra_info: null,
+        in_learn: false,
+        last_learned: null,
+        learned_times: 0,
         created_at: '2023-10-27T10:00:00Z',
+        updated_at: '2023-10-27T10:00:00Z',
       },
     ];
 
@@ -276,7 +321,12 @@ describe('useRecentVocabulary', () => {
         word_phrase: 'hej',
         translation: 'hi',
         example_phrase: 'Hej!',
+        extra_info: null,
+        in_learn: false,
+        last_learned: null,
+        learned_times: 0,
         created_at: '2023-10-28T10:00:00Z',
+        updated_at: '2023-10-28T10:00:00Z',
       },
     ];
 
@@ -308,11 +358,13 @@ describe('useRecentVocabulary', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(mockFetch).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=false'
+      'http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=false',
+      {}
     );
     expect(mockFetch).toHaveBeenNthCalledWith(
       2,
-      'http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=true'
+      'http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=true',
+      {}
     );
   });
 
@@ -321,6 +373,7 @@ describe('useRecentVocabulary', () => {
       ok: false,
       status: 500,
       statusText: 'Internal Server Error',
+      json: () => Promise.resolve({}),
     });
 
     const { result } = renderHook(() => useRecentVocabulary('test'));
@@ -416,11 +469,9 @@ describe('useRecentVocabulary', () => {
 
     // Try to create item - should throw
     await expect(
-      act(async () => {
-        await result.current.createVocabularyItem({
-          word_phrase: 'tack',
-          translation: 'thanks',
-        });
+      result.current.createVocabularyItem({
+        word_phrase: 'tack',
+        translation: 'thanks',
       })
     ).rejects.toThrow('Failed to create vocabulary item: HTTP 500');
   });
@@ -432,8 +483,10 @@ describe('useRecentVocabulary', () => {
       word_phrase: 'hej',
       translation: 'hello',
       example_phrase: 'Hej, hur mår du?',
+      extra_info: null,
       in_learn: true,
       last_learned: null,
+      learned_times: 0,
       created_at: '2023-10-27T10:00:00Z',
       updated_at: '2023-10-27T10:00:00Z',
     };
@@ -501,8 +554,10 @@ describe('useRecentVocabulary', () => {
       word_phrase: 'hej',
       translation: 'hello',
       example_phrase: 'Hej, hur mår du?',
+      extra_info: null,
       in_learn: true,
       last_learned: null,
+      learned_times: 0,
       created_at: '2023-10-27T10:00:00Z',
       updated_at: '2023-10-27T10:00:00Z',
     };
@@ -527,10 +582,8 @@ describe('useRecentVocabulary', () => {
 
     // Try to update item - should throw
     await expect(
-      act(async () => {
-        await result.current.updateVocabularyItem(1, {
-          word_phrase: 'hej då',
-        });
+      result.current.updateVocabularyItem(1, {
+        word_phrase: 'hej då',
       })
     ).rejects.toThrow('Failed to update vocabulary item: HTTP 500');
   });
@@ -543,8 +596,10 @@ describe('useRecentVocabulary', () => {
         word_phrase: 'hej',
         translation: 'hello',
         example_phrase: 'Hej, hur mår du?',
+        extra_info: null,
         in_learn: true,
         last_learned: null,
+        learned_times: 0,
         created_at: '2023-10-27T10:00:00Z',
         updated_at: '2023-10-27T10:00:00Z',
       },
@@ -554,8 +609,10 @@ describe('useRecentVocabulary', () => {
         word_phrase: 'bra',
         translation: 'good',
         example_phrase: 'Jag mår bra idag.',
+        extra_info: null,
         in_learn: true,
         last_learned: null,
+        learned_times: 0,
         created_at: '2023-10-27T10:05:00Z',
         updated_at: '2023-10-27T10:05:00Z',
       },
@@ -607,8 +664,10 @@ describe('useRecentVocabulary', () => {
       word_phrase: 'hej',
       translation: 'hello',
       example_phrase: 'Hej, hur mår du?',
+      extra_info: null,
       in_learn: true,
       last_learned: null,
+      learned_times: 0,
       created_at: '2023-10-27T10:00:00Z',
       updated_at: '2023-10-27T10:00:00Z',
     };
@@ -633,9 +692,7 @@ describe('useRecentVocabulary', () => {
 
     // Try to delete item - should throw
     await expect(
-      act(async () => {
-        await result.current.deleteVocabularyItem(1);
-      })
+      result.current.deleteVocabularyItem(1)
     ).rejects.toThrow('Failed to delete vocabulary item: HTTP 500');
   });
 });
@@ -657,7 +714,7 @@ describe('improveVocabularyItem', () => {
       json: () => Promise.resolve(mockResponse),
     });
 
-    const result = await improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS);
+    const result = await improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS, null, () => {});
 
     expect(result).toEqual(mockResponse);
     expect(mockFetch).toHaveBeenCalledWith(
@@ -685,7 +742,7 @@ describe('improveVocabularyItem', () => {
       json: () => Promise.resolve(mockResponse),
     });
 
-    const result = await improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY);
+    const result = await improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY, null, () => {});
 
     expect(result).toEqual(mockResponse);
     expect(mockFetch).toHaveBeenCalledWith(
@@ -711,7 +768,7 @@ describe('improveVocabularyItem', () => {
       json: () => Promise.resolve({}),
     });
 
-    await expect(improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS)).rejects.toThrow(
+    await expect(improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS, null, () => {})).rejects.toThrow(
       'Failed to improve vocabulary item: HTTP 500'
     );
   });
@@ -719,6 +776,6 @@ describe('improveVocabularyItem', () => {
   it('should handle network error', async () => {
     mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
-    await expect(improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS)).rejects.toThrow('Network error');
+    await expect(improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS, null, () => {})).rejects.toThrow('Network error');
   });
 });

@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import useGrammar from './useGrammar';
 
@@ -66,7 +66,9 @@ describe('useGrammar', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    await result.current.fetchCheatsheetContent('test.md');
+    await act(async () => {
+      await result.current.fetchCheatsheetContent('test.md');
+    });
 
     await waitFor(() => {
       expect(result.current.selectedCheatsheet).toEqual(mockContent);
@@ -89,7 +91,9 @@ describe('useGrammar', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    await result.current.fetchCheatsheetContent('test.md');
+    await act(async () => {
+      await result.current.fetchCheatsheetContent('test.md');
+    });
 
     await waitFor(() => {
       expect(result.current.error).toBe('Network error');
