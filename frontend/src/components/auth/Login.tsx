@@ -2,26 +2,27 @@ import React, { useState } from "react";
 import type { FormEvent } from "react";
 import { Box, TextField } from "@mui/material";
 import { useAuthActions } from "../../hooks/useAuth";
+import { ErrorAlert } from "../ui";
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [localError, setLocalError] = useState("");
-  const { login, loading, error } = useAuthActions();
+  const [error, setError] = useState("");
+  const { login, loading } = useAuthActions();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setLocalError("");
+    setError("");
 
     if (password.length < 6) {
-      setLocalError("Password must be at least 6 characters");
+      setError("Password must be at least 6 characters");
       return;
     }
 
     try {
       await login({ email, password });
-    } catch {
-      // Error is handled by the hook
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
     }
   };
 
@@ -46,19 +47,7 @@ const Login: React.FC = () => {
         Login
       </h2>
 
-      {(error || localError) && (
-        <Box
-          sx={{
-            p: 2,
-            backgroundColor: "rgba(211, 47, 47, 0.1)",
-            border: "1px solid rgba(211, 47, 47, 0.5)",
-            borderRadius: 1,
-            color: "#f44336",
-          }}
-        >
-          {error || localError}
-        </Box>
-      )}
+      {error && <ErrorAlert message={error} />}
 
       <TextField
         label="Email"

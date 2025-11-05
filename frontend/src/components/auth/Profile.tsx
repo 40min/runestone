@@ -3,10 +3,11 @@ import type { FormEvent } from "react";
 import { Box, TextField } from "@mui/material";
 import { useAuth } from "../../context/AuthContext";
 import { useAuthActions } from "../../hooks/useAuth";
+import { ErrorAlert } from "../ui";
 
 const Profile: React.FC = () => {
   const { userData } = useAuth();
-  const { updateProfile, loading, error } = useAuthActions();
+  const { updateProfile, loading } = useAuthActions();
   const [formData, setFormData] = useState({
     name: "",
     surname: "",
@@ -15,7 +16,7 @@ const Profile: React.FC = () => {
     confirmPassword: "",
   });
   const [successMessage, setSuccessMessage] = useState("");
-  const [localError, setLocalError] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (userData) {
@@ -35,16 +36,16 @@ const Profile: React.FC = () => {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setLocalError("");
+    setError("");
     setSuccessMessage("");
 
     if (formData.password && formData.password !== formData.confirmPassword) {
-      setLocalError("Passwords do not match");
+      setError("Passwords do not match");
       return;
     }
 
     if (formData.password && formData.password.length < 6) {
-      setLocalError("Password must be at least 6 characters");
+      setError("Password must be at least 6 characters");
       return;
     }
 
@@ -66,16 +67,14 @@ const Profile: React.FC = () => {
         password: "",
         confirmPassword: "",
       }));
-    } catch {
-      // Error is handled by the hook
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
     }
   };
 
   if (!userData) {
     return null;
   }
-
-  const displayError = error || localError;
 
   return (
     <Box
@@ -104,19 +103,7 @@ const Profile: React.FC = () => {
         <div>Stats: {userData.pages_recognised_count} page(s) recognized</div>
       </Box>
 
-      {displayError && (
-        <Box
-          sx={{
-            p: 2,
-            backgroundColor: "rgba(211, 47, 47, 0.1)",
-            border: "1px solid rgba(211, 47, 47, 0.5)",
-            borderRadius: 1,
-            color: "#f44336",
-          }}
-        >
-          {displayError}
-        </Box>
-      )}
+      {error && <ErrorAlert message={error} />}
 
       {successMessage && (
         <Box

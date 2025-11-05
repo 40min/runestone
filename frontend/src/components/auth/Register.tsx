@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import type { FormEvent } from "react";
-import { CustomButton } from "../ui";
+import { CustomButton, ErrorAlert } from "../ui";
 import { Box, TextField } from "@mui/material";
 import { useAuthActions } from "../../hooks/useAuth";
 
@@ -14,20 +14,20 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [surname, setSurname] = useState("");
-  const [localError, setLocalError] = useState("");
-  const { register, loading, error } = useAuthActions();
+  const [error, setError] = useState("");
+  const { register, loading } = useAuthActions();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setLocalError("");
+    setError("");
 
     if (password !== confirmPassword) {
-      setLocalError("Passwords do not match");
+      setError("Passwords do not match");
       return;
     }
 
     if (password.length < 6) {
-      setLocalError("Password must be at least 6 characters");
+      setError("Password must be at least 6 characters");
       return;
     }
 
@@ -38,8 +38,8 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
         name: name || undefined,
         surname: surname || undefined,
       });
-    } catch {
-      // Error is handled by the hook
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
     }
   };
 
@@ -64,19 +64,7 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
         Register
       </h2>
 
-      {(error || localError) && (
-        <Box
-          sx={{
-            p: 2,
-            backgroundColor: "rgba(211, 47, 47, 0.1)",
-            border: "1px solid rgba(211, 47, 47, 0.5)",
-            borderRadius: 1,
-            color: "#f44336",
-          }}
-        >
-          {error || localError}
-        </Box>
-      )}
+      {error && <ErrorAlert message={error} />}
       {/* TODO: rewrite with standart components */}
       <TextField
         label="Email"
