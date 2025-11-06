@@ -55,7 +55,8 @@ class TestUserProfileEndpoints:
                     "translation": "a pear",
                     "in_learn": False,  # Not in learning
                 },
-            ]
+            ],
+            "enrich": False,  # Disable enrichment for tests
         }
         client.post("/api/vocabulary", json=vocab_payload)
 

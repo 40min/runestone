@@ -1,6 +1,3 @@
-import json
-import os
-import tempfile
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
@@ -17,22 +14,6 @@ from runestone.services.rune_recall_service import RuneRecallService
 from runestone.state.state_manager import StateManager
 from runestone.state.state_types import WordOfDay
 from runestone.utils.markdown import escape_markdown
-
-
-@pytest.fixture
-def temp_state_file():
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        default_state = {
-            "update_offset": 0,
-            "users": {
-                "active_user": {"db_user_id": 1, "chat_id": 123, "is_active": True, "daily_selection": []},
-                "inactive_user": {"db_user_id": 2, "chat_id": 456, "is_active": False, "daily_selection": []},
-            },
-        }
-        json.dump(default_state, f)
-        f.flush()
-        yield f.name
-    os.unlink(f.name)
 
 
 @pytest.fixture
