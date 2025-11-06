@@ -10,7 +10,6 @@ from unittest.mock import Mock
 from sqlalchemy.orm import Session
 
 from runestone.db.models import User, Vocabulary
-from runestone.dependencies import get_runestone_processor
 
 
 class TestUserProfileEndpoints:
@@ -179,10 +178,9 @@ class TestUserProfileEndpoints:
 class TestPageRecognitionCounter:
     """Test cases for page recognition counter functionality."""
 
-    def test_analyze_content_increments_counter(self, client):
+    def test_analyze_content_increments_counter(self, client_with_mock_processor):
         """Test that successful analysis increments pages_recognised_count."""
-        # Mock processor for analysis
-        mock_processor_instance = Mock()
+        client, mock_processor_instance = client_with_mock_processor
 
         from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
 
@@ -204,9 +202,6 @@ class TestPageRecognitionCounter:
         )
         mock_processor_instance.run_analysis.return_value = mock_analysis_result
 
-        # Override the dependency
-        client.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
-
         # Perform analysis
         payload = {"text": "Hej, vad heter du?"}
         response = client.post("/api/analyze", json=payload)
@@ -216,26 +211,16 @@ class TestPageRecognitionCounter:
         # Verify processor was called
         mock_processor_instance.run_analysis.assert_called_once_with("Hej, vad heter du?", 1)  # user_id = 1
 
-        # Clean up
-        client.app.dependency_overrides.clear()
-
-    def test_analyze_content_failure_does_not_increment(self, client):
+    def test_analyze_content_failure_does_not_increment(self, client_with_mock_processor):
         """Test that failed analysis does not increment pages_recognised_count."""
-        # Mock processor to raise error
-        mock_processor_instance = Mock()
+        client, mock_processor_instance = client_with_mock_processor
         mock_processor_instance.run_analysis.side_effect = Exception("Analysis failed")
-
-        # Override the dependency
-        client.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
 
         # Perform analysis (should fail)
         payload = {"text": "Hej, vad heter du?"}
         response = client.post("/api/analyze", json=payload)
 
         assert response.status_code == 500
-
-        # Clean up
-        client.app.dependency_overrides.clear()
 
 
 class TestVocabularyRepositoryStats:

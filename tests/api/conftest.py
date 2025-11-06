@@ -10,13 +10,10 @@ from unittest.mock import Mock
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from runestone.api.main import app
 from runestone.auth.dependencies import get_current_user
-from runestone.db.database import Base, get_db
-from runestone.db.models import User
+from runestone.db.database import get_db
 from runestone.dependencies import get_llm_client
 
 
@@ -31,7 +28,9 @@ def mock_llm_client():
 
 @pytest.fixture(scope="function")
 def client(mock_llm_client, db_with_test_user) -> Generator[TestClient, None, None]:
-    """Create a test client with in-memory database and mocked LLM client for testing."""
+    """
+    Create a test client with in-memory database and mocked LLM client for testing.
+    """
     db, test_user = db_with_test_user
 
     # Override the database dependency for testing
@@ -62,7 +61,7 @@ def client_no_db() -> TestClient:
 
 
 @pytest.fixture(scope="function")
-def client_with_overrides(mock_llm_client):
+def client_with_overrides(mock_llm_client, db_with_test_user):
     """
     Factory fixture for creating test clients with customizable dependency overrides.
 
@@ -71,6 +70,7 @@ def client_with_overrides(mock_llm_client):
 
     Args:
         mock_llm_client: Mocked LLM client from conftest
+        db_with_test_user: Database session with test user from root conftest
 
     Returns:
         function: Factory function that accepts override parameters
@@ -83,8 +83,6 @@ def client_with_overrides(mock_llm_client):
             response = client.post("/api/vocabulary/improve", json=data)
             assert response.status_code == 200
     """
-    from sqlalchemy.pool import StaticPool
-
     from runestone.dependencies import get_grammar_service, get_vocabulary_service
 
     def _create_client(
@@ -95,57 +93,29 @@ def client_with_overrides(mock_llm_client):
         current_user=None,
         db_override=None,
     ):
-        # Database setup
-        test_db_url = "sqlite:///:memory:"
-
-        engine = create_engine(test_db_url, connect_args={"check_same_thread": False}, poolclass=StaticPool)
-        Base.metadata.create_all(bind=engine)
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-        # Create test user if needed
-        if current_user is None:
-            import uuid
-
-            unique_email = f"test-{uuid.uuid4()}@example.com"
-            test_user = User(
-                name="Test User",
-                surname="Testsson",
-                email=unique_email,
-                hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYQmP7XzL6",
-            )
-            db = SessionLocal()
-            db.add(test_user)
-            db.commit()
-            db.refresh(test_user)
-            db.close()
+        db, test_user = db_with_test_user
 
         # Setup overrides
         def override_get_db():
-            db = SessionLocal()
-            try:
-                yield db
-            finally:
-                db.close()
+            # Return the same session (already created with test user)
+            yield db
 
         def override_get_llm_client():
             return llm_client or mock_llm_client
 
         def override_get_current_user():
-            if current_user:
-                return current_user
-            db = SessionLocal()
-            try:
-                user = db.query(User).filter(User.email == unique_email).first()
-                return user
-            finally:
-                db.close()
+            return current_user or test_user
 
         # Apply overrides
+        # Only override get_db if a custom db_override is provided
+        # Otherwise, let the default dependency injection handle it
         overrides = {
-            get_db: db_override or override_get_db,
             get_llm_client: override_get_llm_client,
             get_current_user: override_get_current_user,
         }
+
+        if db_override is not None:
+            overrides[get_db] = db_override
 
         if vocabulary_service:
             overrides[get_vocabulary_service] = lambda: vocabulary_service
@@ -167,15 +137,13 @@ def client_with_overrides(mock_llm_client):
             "grammar_service": grammar_service,
             "processor": processor,
             "llm_client": llm_client or mock_llm_client,
-            "current_user": current_user,
+            "current_user": current_user or test_user,
         }
 
         yield client, mocks
 
         # Cleanup
         app.dependency_overrides.clear()
-        Base.metadata.drop_all(bind=engine)
-        engine.dispose()
 
     return _create_client
 
