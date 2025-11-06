@@ -4,35 +4,13 @@ Tests for grammar API endpoints.
 This module tests the grammar API endpoints defined in endpoints.py.
 """
 
-import os
-import tempfile
 from unittest.mock import Mock
-
-import pytest
 
 from runestone.dependencies import get_grammar_service
 
 
 class TestGrammarEndpoints:
     """Test cases for grammar endpoints."""
-
-    @pytest.fixture
-    def temp_cheatsheets_dir(self):
-        """Create a temporary directory with test cheatsheet files."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create test markdown files
-            files = {
-                "adjectiv-komparation.md": "# Adjectiv Komparation\n\nContent about adjective comparison.",
-                "objectspronomen.md": "# Objectspronomen\n\nContent about object pronouns.",
-                "presens-perfect.md": "# Presens Perfect\n\nContent about present perfect tense.",
-            }
-
-            for filename, content in files.items():
-                filepath = os.path.join(temp_dir, filename)
-                with open(filepath, "w", encoding="utf-8") as f:
-                    f.write(content)
-
-            yield temp_dir
 
     def test_list_cheatsheets_success(self, client_no_db, temp_cheatsheets_dir):
         """Test successful listing of cheatsheets."""

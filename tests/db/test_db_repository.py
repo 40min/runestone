@@ -13,54 +13,25 @@ from runestone.db.models import Vocabulary as VocabularyModel
 
 
 @pytest.fixture
-def vocab_factory():
-    """Factory fixture for creating VocabularyModel instances with defaults."""
-
-    def _create_vocab(
-        user_id=1,
-        word_phrase="",
-        translation="",
-        example_phrase=None,
-        created_at=None,
-        in_learn=True,
-        last_learned=None,
-        learned_times=0,
-    ):
-        """Create a VocabularyModel instance with provided or default values."""
-        return VocabularyModel(
-            user_id=user_id,
-            word_phrase=word_phrase,
-            translation=translation,
-            example_phrase=example_phrase,
-            created_at=created_at,
-            in_learn=in_learn,
-            last_learned=last_learned,
-            learned_times=learned_times,
-        )
-
-    return _create_vocab
-
-
-@pytest.fixture
-def basic_vocab_items(vocab_factory):
+def basic_vocab_items(vocabulary_model_factory):
     """Create a set of basic vocabulary items for testing."""
     return [
-        vocab_factory(
+        vocabulary_model_factory(
             word_phrase="ett äpple",
             translation="an apple",
             created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
         ),
-        vocab_factory(
+        vocabulary_model_factory(
             word_phrase="en banan",
             translation="a banana",
             created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
         ),
-        vocab_factory(
+        vocabulary_model_factory(
             word_phrase="ett päron",
             translation="a pear",
             created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
         ),
-        vocab_factory(
+        vocabulary_model_factory(
             user_id=2,
             word_phrase="en kiwi",
             translation="a kiwi",
@@ -70,25 +41,25 @@ def basic_vocab_items(vocab_factory):
 
 
 @pytest.fixture
-def wildcard_test_items(vocab_factory):
+def wildcard_test_items(vocabulary_model_factory):
     """Create vocabulary items for wildcard testing."""
     return [
-        vocab_factory(
+        vocabulary_model_factory(
             word_phrase="ett äpple",
             translation="an apple",
             created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
         ),
-        vocab_factory(
+        vocabulary_model_factory(
             word_phrase="en banan",
             translation="a banana",
             created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
         ),
-        vocab_factory(
+        vocabulary_model_factory(
             word_phrase="ett päron",
             translation="a pear",
             created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
         ),
-        vocab_factory(
+        vocabulary_model_factory(
             word_phrase="en katt",
             translation="a cat",
             created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
@@ -97,20 +68,20 @@ def wildcard_test_items(vocab_factory):
 
 
 @pytest.fixture
-def mixed_wildcard_items(vocab_factory):
+def mixed_wildcard_items(vocabulary_model_factory):
     """Create vocabulary items for mixed wildcard testing."""
     return [
-        vocab_factory(
+        vocabulary_model_factory(
             word_phrase="att lära sig",
             translation="to learn",
             created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
         ),
-        vocab_factory(
+        vocabulary_model_factory(
             word_phrase="att läsa",
             translation="to read",
             created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
         ),
-        vocab_factory(
+        vocabulary_model_factory(
             word_phrase="att leka",
             translation="to play",
             created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
@@ -119,25 +90,25 @@ def mixed_wildcard_items(vocab_factory):
 
 
 @pytest.fixture
-def special_char_items(vocab_factory):
+def special_char_items(vocabulary_model_factory):
     """Create vocabulary items with SQL special characters for testing escaping."""
     return [
-        vocab_factory(
+        vocabulary_model_factory(
             word_phrase="100% säker",
             translation="100% sure",
             created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
         ),
-        vocab_factory(
+        vocabulary_model_factory(
             word_phrase="ett_exempel",
             translation="an example",
             created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
         ),
-        vocab_factory(
+        vocabulary_model_factory(
             word_phrase="back\\slash",
             translation="backslash",
             created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
         ),
-        vocab_factory(
+        vocabulary_model_factory(
             word_phrase="normal word",
             translation="normal",
             created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
@@ -146,20 +117,20 @@ def special_char_items(vocab_factory):
 
 
 @pytest.fixture
-def edge_case_items(vocab_factory):
+def edge_case_items(vocabulary_model_factory):
     """Create vocabulary items for wildcard edge case testing."""
     return [
-        vocab_factory(
+        vocabulary_model_factory(
             word_phrase="test",
             translation="test",
             created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
         ),
-        vocab_factory(
+        vocabulary_model_factory(
             word_phrase="testing",
             translation="testing",
             created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
         ),
-        vocab_factory(
+        vocabulary_model_factory(
             word_phrase="t",
             translation="single t",
             created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
@@ -532,21 +503,21 @@ class TestVocabularyRepository:
         result = repo.get_vocabulary(limit=20, search_query=None, user_id=1)
         assert len(result) == 3  # None should return all
 
-    def test_get_vocabulary_with_escaped_wildcards(self, repo, db_session, vocab_factory):
+    def test_get_vocabulary_with_escaped_wildcards(self, repo, db_session, vocabulary_model_factory):
         """Test that escaped wildcards are treated as literal characters (bug fix test)."""
         # Add test data with literal wildcard characters
         test_items = [
-            vocab_factory(
+            vocabulary_model_factory(
                 word_phrase="file*.txt",
                 translation="a file with asterisk",
                 created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
             ),
-            vocab_factory(
+            vocabulary_model_factory(
                 word_phrase="test?.py",
                 translation="a file with question mark",
                 created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
             ),
-            vocab_factory(
+            vocabulary_model_factory(
                 word_phrase="normal file",
                 translation="a normal file",
                 created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
@@ -574,21 +545,21 @@ class TestVocabularyRepository:
         assert "file*.txt" in phrases
         assert "normal file" in phrases
 
-    def test_get_vocabulary_with_escaped_wildcards_in_pattern(self, repo, db_session, vocab_factory):
+    def test_get_vocabulary_with_escaped_wildcards_in_pattern(self, repo, db_session, vocabulary_model_factory):
         """Test complex patterns with both escaped and unescaped wildcards."""
         # Add test data
         test_items = [
-            vocab_factory(
+            vocabulary_model_factory(
                 word_phrase="log_2024*.txt",
                 translation="log file with wildcard",
                 created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
             ),
-            vocab_factory(
+            vocabulary_model_factory(
                 word_phrase="log_2024_jan.txt",
                 translation="january log",
                 created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
             ),
-            vocab_factory(
+            vocabulary_model_factory(
                 word_phrase="log-2024.txt",
                 translation="dash log",
                 created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
@@ -1277,26 +1248,26 @@ class TestVocabularyRepository:
         db_vocab_none = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab_with_none.id).first()
         assert db_vocab_none.learned_times == 1
 
-    def test_get_vocabulary_with_precise_search(self, repo, db_session, vocab_factory):
+    def test_get_vocabulary_with_precise_search(self, repo, db_session, vocabulary_model_factory):
         """Test precise search functionality (exact case-insensitive match)."""
         # Add test data with case variations
         test_items = [
-            vocab_factory(
+            vocabulary_model_factory(
                 word_phrase="apple",
                 translation="äpple",
                 created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
             ),
-            vocab_factory(
+            vocabulary_model_factory(
                 word_phrase="APPLE",
                 translation="ÄPPLE",
                 created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
             ),
-            vocab_factory(
+            vocabulary_model_factory(
                 word_phrase="pineapple",
                 translation="ananas",
                 created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
             ),
-            vocab_factory(
+            vocabulary_model_factory(
                 word_phrase="app",
                 translation="app",
                 created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
@@ -1338,15 +1309,17 @@ class TestVocabularyRepository:
         result = repo.get_vocabulary(limit=20, search_query="", precise=True, user_id=1)
         assert len(result) == 4
 
-    def test_get_vocabulary_precise_vs_partial_comparison(self, repo, db_session, vocab_factory):
+    def test_get_vocabulary_precise_vs_partial_comparison(self, repo, db_session, vocabulary_model_factory):
         """Test that precise and partial search produce different results."""
         # Add test data
         test_items = [
-            vocab_factory(word_phrase="test", translation="test", created_at=datetime(2023, 1, 1, tzinfo=timezone.utc)),
-            vocab_factory(
+            vocabulary_model_factory(
+                word_phrase="test", translation="test", created_at=datetime(2023, 1, 1, tzinfo=timezone.utc)
+            ),
+            vocabulary_model_factory(
                 word_phrase="testing", translation="testing", created_at=datetime(2023, 1, 2, tzinfo=timezone.utc)
             ),
-            vocab_factory(
+            vocabulary_model_factory(
                 word_phrase="contest", translation="contest", created_at=datetime(2023, 1, 3, tzinfo=timezone.utc)
             ),
         ]

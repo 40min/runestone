@@ -16,16 +16,17 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from runestone.db.database import Base  # noqa: E402
+from runestone.db.models import User  # noqa: E402
 from runestone.db.user_repository import UserRepository  # noqa: E402
 from runestone.db.vocabulary_repository import VocabularyRepository  # noqa: E402
 
 
 @pytest.fixture(scope="function")
-def db_session():
+def db_engine():
     """
-    Create a fresh in-memory SQLite database for each test (complete isolation).
+    Create a fresh test database engine for each test (complete isolation).
 
-    Uses in-memory SQLite with unique name per test to ensure:
+    Uses in-memory SQLite to ensure:
     - No data pollution between tests
     - Safe parallel test execution
     - Easy debugging (each test starts clean)
@@ -33,22 +34,66 @@ def db_session():
     Performance: In-memory databases are fast enough that per-test
     creation has minimal impact (~1-5ms overhead per test).
     """
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,  # Required for in-memory databases
-    )
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    yield engine
+    Base.metadata.drop_all(bind=engine)
+    engine.dispose()
+
+
+@pytest.fixture(scope="function")
+def db_session_factory(db_engine):
+    """Create a session factory for the test database."""
+    return sessionmaker(autocommit=False, autoflush=False, bind=db_engine)
+
+
+@pytest.fixture(scope="function")
+def db_with_test_user(db_session_factory):
+    """
+    Create a database session with a pre-created test user.
+
+    Each test gets a fresh database with a unique test user.
+    No cleanup needed as the entire database is disposed after the test.
+
+    Returns:
+        tuple: (Session, User) - Database session and test user
+    """
+    import uuid
+
+    db = db_session_factory()
+    unique_email = f"test-{uuid.uuid4()}@example.com"
+    test_user = User(
+        name="Test User",
+        surname="Testsson",
+        email=unique_email,
+        hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYQmP7XzL6",
+    )
+    db.add(test_user)
+    db.commit()
+    db.refresh(test_user)
+
+    try:
+        yield db, test_user
+    finally:
+        db.close()
+
+
+@pytest.fixture(scope="function")
+def db_session(db_engine):
+    """
+    Create a fresh database session for each test.
+
+    Each test gets a completely isolated database session with no
+    data from previous tests. This ensures test independence and
+    makes debugging easier.
+    """
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db_engine)
     db = SessionLocal()
     try:
         yield db
     finally:
-        # Cleanup
         db.rollback()
         db.close()
-        Base.metadata.drop_all(bind=engine)
-        engine.dispose()
 
 
 @pytest.fixture

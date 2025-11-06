@@ -3,11 +3,8 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from runestone.core.exceptions import VocabularyOperationError, WordNotFoundError, WordNotInSelectionError
-from runestone.db.database import Base
 from runestone.db.models import Vocabulary
 from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.services.rune_recall_service import RuneRecallService
@@ -23,58 +20,47 @@ def state_manager(temp_state_file):
 
 
 @pytest.fixture
-def test_db():
+def test_db(db_session, vocabulary_model_factory):
     """Create a test database with sample vocabulary data."""
-    test_db_url = "sqlite:///:memory:"
-    engine = create_engine(test_db_url, connect_args={"check_same_thread": False})
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    # Add sample vocabulary for user 1
+    words = [
+        vocabulary_model_factory(
+            user_id=1,
+            word_phrase="hello",
+            translation="hej",
+            example_phrase="Hello, how are you?",
+            in_learn=True,
+            last_learned=None,
+        ),
+        vocabulary_model_factory(
+            user_id=1,
+            word_phrase="goodbye",
+            translation="hej då",
+            example_phrase="Goodbye, see you later!",
+            in_learn=True,
+            last_learned=None,
+        ),
+        vocabulary_model_factory(
+            user_id=1,
+            word_phrase="thank you",
+            translation="tack",
+            example_phrase="Thank you for your help.",
+            in_learn=True,
+            last_learned=None,
+        ),
+        vocabulary_model_factory(
+            user_id=2,
+            word_phrase="water",
+            translation="vatten",
+            example_phrase="I need water.",
+            in_learn=True,
+            last_learned=None,
+        ),
+    ]
+    db_session.add_all(words)
+    db_session.commit()
 
-    db = SessionLocal()
-    try:
-        # Add sample vocabulary for user 1
-        words = [
-            Vocabulary(
-                user_id=1,
-                word_phrase="hello",
-                translation="hej",
-                example_phrase="Hello, how are you?",
-                in_learn=True,
-                last_learned=None,
-            ),
-            Vocabulary(
-                user_id=1,
-                word_phrase="goodbye",
-                translation="hej då",
-                example_phrase="Goodbye, see you later!",
-                in_learn=True,
-                last_learned=None,
-            ),
-            Vocabulary(
-                user_id=1,
-                word_phrase="thank you",
-                translation="tack",
-                example_phrase="Thank you for your help.",
-                in_learn=True,
-                last_learned=None,
-            ),
-            Vocabulary(
-                user_id=2,
-                word_phrase="water",
-                translation="vatten",
-                example_phrase="I need water.",
-                in_learn=True,
-                last_learned=None,
-            ),
-        ]
-        db.add_all(words)
-        db.commit()
-
-        yield db
-    finally:
-        db.close()
-        # Dispose the engine to close all connections
-        engine.dispose()
+    yield db_session
 
 
 @pytest.fixture
