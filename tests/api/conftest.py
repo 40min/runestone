@@ -27,31 +27,23 @@ def mock_llm_client():
 
 
 @pytest.fixture(scope="function")
-def client(mock_llm_client, db_with_test_user) -> Generator[TestClient, None, None]:
+def client(client_with_overrides, db_with_test_user) -> Generator[TestClient, None, None]:
     """
     Create a test client with in-memory database and mocked LLM client for testing.
-    """
-    db, test_user = db_with_test_user
 
-    # Override the database dependency for testing
+    This fixture is a simple consumer of the client_with_overrides factory
+    with default parameters (empty overrides dict).
+    """
+    db, _ = db_with_test_user
+
+    # Setup db override function
     def override_get_db():
-        # Return the same session (already created)
+        # Return the same session (already created with test user)
         yield db
 
-    # Override the LLM client dependency to use mocked client
-    def override_get_llm_client():
-        return mock_llm_client
-
-    # Override the current user dependency to use test user
-    def override_get_current_user():
-        return test_user
-
-    app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_llm_client] = override_get_llm_client
-    app.dependency_overrides[get_current_user] = override_get_current_user
-    client = TestClient(app)
+    client_gen = client_with_overrides(db_override=override_get_db)
+    client, _ = next(client_gen)
     yield client
-    app.dependency_overrides.clear()
 
 
 @pytest.fixture(scope="function")
