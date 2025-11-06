@@ -17,7 +17,7 @@ from runestone.api.main import app
 from runestone.auth.dependencies import get_current_user
 from runestone.db.database import Base, get_db
 from runestone.db.models import User
-from runestone.dependencies import get_llm_client, get_runestone_processor
+from runestone.dependencies import get_llm_client
 
 
 @pytest.fixture(scope="function")
@@ -181,22 +181,23 @@ def client_with_overrides(mock_llm_client):
 
 
 @pytest.fixture(scope="function")
-def client_with_mock_processor(client):
-    """Fixture to provide a client with a mocked RunestoneProcessor.
-
-    This fixture automatically sets up the dependency override and cleans it up
-    after the test, reducing boilerplate in tests that need to mock the processor.
-
-    Yields:
-        tuple: (TestClient, Mock) - The test client and the mocked processor instance
+def client_with_mock_processor(client_with_overrides, mock_processor):
     """
-    mock_processor_instance = Mock()
-    client.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
+    Create a test client with mocked RunestoneProcessor using the client_with_overrides factory.
 
-    yield client, mock_processor_instance
+    Returns:
+        tuple: (TestClient, Mock) - The test client and mock processor instance
 
-    # Teardown: clear the override automatically after the test runs
-    client.app.dependency_overrides.clear()
+    Example:
+        def test_resource_endpoint(client_with_mock_processor):
+            client, mock_processor = client_with_mock_processor
+            mock_processor.run_resource_search.return_value = "custom response"
+            response = client.post("/api/resources", json=data)
+            assert response.status_code == 200
+    """
+    client_gen = client_with_overrides(processor=mock_processor)
+    client, mocks = next(client_gen)
+    return client, mocks["processor"]
 
 
 # ==============================================================================
@@ -242,36 +243,3 @@ def client_with_mock_grammar_service(client_with_overrides, mock_grammar_service
     client_gen = client_with_overrides(grammar_service=mock_grammar_service)
     client, mocks = next(client_gen)
     return client, mock_grammar_service
-
-
-@pytest.fixture
-def client_with_custom_user(client):
-    """
-    Create a test client with a custom mock user.
-
-    Returns:
-        function: Factory function that creates client with custom user
-
-    Example:
-        def test_user_specific(client_with_custom_user):
-            client, user = client_with_custom_user(user_id=42, email="custom@test.com")
-            response = client.get("/api/user/profile")
-            assert response.status_code == 200
-    """
-
-    def _create(user_id=1, email="test@example.com", name="Test", surname="User"):
-        from unittest.mock import Mock
-
-        mock_user = Mock()
-        mock_user.id = user_id
-        mock_user.email = email
-        mock_user.name = name
-        mock_user.surname = surname
-
-        # Override current user
-        from runestone.auth.dependencies import get_current_user
-
-        app.dependency_overrides[get_current_user] = lambda: mock_user
-        return client, mock_user
-
-    return _create
