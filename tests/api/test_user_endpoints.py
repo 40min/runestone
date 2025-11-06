@@ -56,7 +56,9 @@ class TestUserProfileEndpoints:
         # Update one item to be learned
         response = client.get("/api/vocabulary")
         vocab_items = response.json()
-        learned_item_id = vocab_items[0]["id"]
+        # Find the item with "ett äpple" which has in_learn=True
+        apple_item = next(item for item in vocab_items if item["word_phrase"] == "ett äpple")
+        learned_item_id = apple_item["id"]
 
         update_payload = {"learned_times": 1}
         client.put(f"/api/vocabulary/{learned_item_id}", json=update_payload)
