@@ -28,8 +28,28 @@ class TestUserProfileEndpoints:
         assert "created_at" in data
         assert "updated_at" in data
 
-    def test_get_user_profile_with_vocabulary_stats(self, client):
+    def test_get_user_profile_with_vocabulary_stats(self, client_with_overrides, db_with_test_user):
         """Test user profile with vocabulary statistics."""
+        # Get the test user and database session from the fixture
+        db, test_user = db_with_test_user
+
+        # Create a vocabulary repository and service that use the same database session
+        from unittest.mock import Mock
+
+        from runestone.db.vocabulary_repository import VocabularyRepository
+        from runestone.services.vocabulary_service import VocabularyService
+
+        # Mock settings to avoid dependency injection issues
+        mock_settings = Mock()
+        mock_settings.vocabulary_enrichment_enabled = True
+
+        # Create the repository and service with the test database session
+        vocab_repo = VocabularyRepository(db)
+        vocab_service = VocabularyService(vocab_repo, mock_settings, Mock())
+
+        client_gen = client_with_overrides(vocabulary_service=vocab_service)
+        client, _ = next(client_gen)
+
         # Save some vocabulary items
         vocab_payload = {
             "items": [
@@ -55,13 +75,20 @@ class TestUserProfileEndpoints:
 
         # Update one item to be learned
         response = client.get("/api/vocabulary")
+        if response.status_code != 200:
+            print(f"Response status: {response.status_code}")
+            print(f"Response content: {response.content}")
         vocab_items = response.json()
         # Find the item with "ett äpple" which has in_learn=True
         apple_item = next(item for item in vocab_items if item["word_phrase"] == "ett äpple")
         learned_item_id = apple_item["id"]
 
-        update_payload = {"learned_times": 1}
-        client.put(f"/api/vocabulary/{learned_item_id}", json=update_payload)
+        # Use update_last_learned method to properly increment learned_times
+        from runestone.dependencies import get_vocabulary_repository
+
+        repo = get_vocabulary_repository(db)
+        vocab = repo.get_vocabulary_item(learned_item_id, test_user.id)
+        repo.update_last_learned(vocab)
 
         # Get user profile
         response = client.get("/api/me")
