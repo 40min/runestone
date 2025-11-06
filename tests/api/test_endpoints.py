@@ -15,7 +15,7 @@ from runestone.dependencies import get_runestone_processor, get_vocabulary_servi
 class TestOCREndpoints:
     """Test cases for OCR-related endpoints."""
 
-    def test_ocr_success(self, client_no_db):
+    def test_ocr_success(self, client):
         """Test successful OCR processing."""
         # Mock processor
         mock_processor_instance = Mock()
@@ -33,13 +33,13 @@ class TestOCREndpoints:
         mock_processor_instance.run_ocr.return_value = mock_ocr_result
 
         # Override the dependency
-        client_no_db.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
+        client.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
 
         # Create a mock image file
         image_content = b"fake image data"
         files = {"file": ("test.jpg", io.BytesIO(image_content), "image/jpeg")}
 
-        response = client_no_db.post("/api/ocr", files=files)
+        response = client.post("/api/ocr", files=files)
 
         assert response.status_code == 200
         data = response.json()
@@ -52,76 +52,76 @@ class TestOCREndpoints:
         mock_processor_instance.run_ocr.assert_called_once_with(image_content)
 
         # Clean up
-        client_no_db.app.dependency_overrides.clear()
+        client.app.dependency_overrides.clear()
 
-    def test_ocr_invalid_file_type(self, client_no_db):
+    def test_ocr_invalid_file_type(self, client):
         """Test OCR with invalid file type."""
         # Create a mock text file
         files = {"file": ("test.txt", io.BytesIO(b"text content"), "text/plain")}
 
-        response = client_no_db.post("/api/ocr", files=files)
+        response = client.post("/api/ocr", files=files)
 
         assert response.status_code == 400
         data = response.json()
         assert "Invalid file type" in data["detail"]
 
-    def test_ocr_file_too_large(self, client_no_db):
+    def test_ocr_file_too_large(self, client):
         """Test OCR with file that's too large."""
         # Create a large file (11MB)
         large_content = b"x" * (11 * 1024 * 1024)
         files = {"file": ("large.jpg", io.BytesIO(large_content), "image/jpeg")}
 
-        response = client_no_db.post("/api/ocr", files=files)
+        response = client.post("/api/ocr", files=files)
 
         assert response.status_code == 400
         data = response.json()
         assert "File too large" in data["detail"]
 
-    def test_ocr_processing_failure(self, client_no_db):
+    def test_ocr_processing_failure(self, client):
         """Test handling of OCR failure."""
         mock_processor_instance = Mock()
         mock_processor_instance.run_ocr.side_effect = RunestoneError("OCR failed")
 
         # Override the dependency
-        client_no_db.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
+        client.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
 
         # Create a mock image file
         image_content = b"fake image data"
         files = {"file": ("test.jpg", io.BytesIO(image_content), "image/jpeg")}
 
-        response = client_no_db.post("/api/ocr", files=files)
+        response = client.post("/api/ocr", files=files)
 
         assert response.status_code == 500
         data = response.json()
         assert "OCR failed" in data["detail"]
 
         # Clean up
-        client_no_db.app.dependency_overrides.clear()
+        client.app.dependency_overrides.clear()
 
-    def test_ocr_unexpected_error(self, client_no_db):
+    def test_ocr_unexpected_error(self, client):
         """Test handling of unexpected OCR errors."""
         mock_processor_instance = Mock()
         mock_processor_instance.run_ocr.side_effect = Exception("Unexpected error")
 
         # Override the dependency
-        client_no_db.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
+        client.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
 
         # Create a mock image file
         image_content = b"fake image data"
         files = {"file": ("test.jpg", io.BytesIO(image_content), "image/jpeg")}
 
-        response = client_no_db.post("/api/ocr", files=files)
+        response = client.post("/api/ocr", files=files)
 
         assert response.status_code == 500
         data = response.json()
         assert "Unexpected error" in data["detail"]
 
         # Clean up
-        client_no_db.app.dependency_overrides.clear()
+        client.app.dependency_overrides.clear()
 
-    def test_ocr_no_file(self, client_no_db):
+    def test_ocr_no_file(self, client):
         """Test OCR without file upload."""
-        response = client_no_db.post("/api/ocr")
+        response = client.post("/api/ocr")
 
         assert response.status_code == 422  # Validation error
 
@@ -129,7 +129,7 @@ class TestOCREndpoints:
 class TestAnalysisEndpoints:
     """Test cases for content analysis endpoints."""
 
-    def test_analyze_success(self, client_no_db):
+    def test_analyze_success(self, client):
         """Test successful content analysis."""
         # Mock processor
         mock_processor_instance = Mock()
@@ -138,9 +138,7 @@ class TestAnalysisEndpoints:
 
         mock_analysis_result = ContentAnalysis(
             grammar_focus=GrammarFocus(
-                topic="Swedish questions",
-                explanation="Basic question formation",
-                has_explicit_rules=False,
+                topic="Swedish questions", explanation="Basic question formation", has_explicit_rules=False, rules=""
             ),
             vocabulary=[
                 VocabularyItem(swedish="hej", english="hello", example_phrase=None, known=False),
@@ -155,12 +153,12 @@ class TestAnalysisEndpoints:
         mock_processor_instance.run_analysis.return_value = mock_analysis_result
 
         # Override the dependency
-        client_no_db.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
+        client.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
 
         # Test request payload
         payload = {"text": "Hej, vad heter du?"}
 
-        response = client_no_db.post("/api/analyze", json=payload)
+        response = client.post("/api/analyze", json=payload)
 
         assert response.status_code == 200
         data = response.json()
@@ -176,29 +174,29 @@ class TestAnalysisEndpoints:
         assert data["vocabulary"][1]["known"] is True
 
         # Verify processor was called
-        mock_processor_instance.run_analysis.assert_called_once_with("Hej, vad heter du?")
+        mock_processor_instance.run_analysis.assert_called_once_with("Hej, vad heter du?", 1)
 
         # Clean up
-        client_no_db.app.dependency_overrides.clear()
+        client.app.dependency_overrides.clear()
 
-    def test_analyze_empty_text(self, client_no_db):
+    def test_analyze_empty_text(self, client):
         """Test analysis with empty text."""
         mock_processor_instance = Mock()
         mock_processor_instance.run_analysis.side_effect = RunestoneError("No text provided for analysis")
 
         # Override the dependency
-        client_no_db.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
+        client.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
 
         payload = {"text": ""}
 
-        response = client_no_db.post("/api/analyze", json=payload)
+        response = client.post("/api/analyze", json=payload)
 
         assert response.status_code == 500
         data = response.json()
         assert "No text provided for analysis" in data["detail"]
 
         # Clean up
-        client_no_db.app.dependency_overrides.clear()
+        client.app.dependency_overrides.clear()
 
 
 class TestResourceEndpoints:
@@ -474,7 +472,7 @@ class TestSettingsDependency:
     """Test cases for dependency injection."""
 
     @patch("runestone.dependencies.settings")
-    def test_settings_dependency_injection(self, mock_settings, client_no_db):
+    def test_settings_dependency_injection(self, mock_settings, client):
         """Test that settings are properly injected."""
         mock_settings.llm_provider = "test_provider"
         mock_settings.verbose = True
@@ -658,7 +656,8 @@ class TestSettingsDependency:
         assert items_arg[0].word_phrase == request_data["items"][0]["word_phrase"]
         assert items_arg[0].translation == request_data["items"][0]["translation"]
         assert items_arg[0].example_phrase == request_data["items"][0]["example_phrase"]
-        assert call_args.args[1] is True  # Verify enrich parameter
+        assert call_args.args[1] == 1  # Verify user_id parameter
+        assert call_args.args[2] is True  # Verify enrich parameter
 
         # Clean up
         client.app.dependency_overrides.clear()
@@ -699,7 +698,8 @@ class TestSettingsDependency:
         assert items_arg[0].word_phrase == request_data["items"][0]["word_phrase"]
         assert items_arg[0].translation == request_data["items"][0]["translation"]
         assert items_arg[0].example_phrase == request_data["items"][0]["example_phrase"]
-        assert call_args.args[1] is False  # Verify enrich parameter
+        assert call_args.args[1] == 1  # Verify user_id parameter
+        assert call_args.args[2] is False  # Verify enrich parameter
 
         # Clean up
         client.app.dependency_overrides.clear()
@@ -739,7 +739,8 @@ class TestSettingsDependency:
         assert items_arg[0].word_phrase == request_data["items"][0]["word_phrase"]
         assert items_arg[0].translation == request_data["items"][0]["translation"]
         assert items_arg[0].example_phrase == request_data["items"][0]["example_phrase"]
-        assert call_args.args[1] is True  # Verify enrich parameter (default value)
+        assert call_args.args[1] == 1  # Verify user_id parameter
+        assert call_args.args[2] is True  # Verify enrich parameter (default value)
 
         # Clean up
 

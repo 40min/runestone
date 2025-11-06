@@ -153,8 +153,9 @@ class TestDependencyProviders:
         mock_runestone_processor_class.return_value = mock_processor
 
         # Execute
+        mock_user_repo = Mock()
         result = get_runestone_processor(
-            mock_settings, mock_ocr_processor, mock_content_analyzer, mock_vocabulary_service, Mock()
+            mock_settings, mock_ocr_processor, mock_content_analyzer, mock_vocabulary_service, mock_user_repo
         )
 
         # Assert
@@ -164,7 +165,7 @@ class TestDependencyProviders:
             mock_ocr_processor,
             mock_content_analyzer,
             mock_vocabulary_service,
-            Mock(),
+            mock_user_repo,
         )
 
     @patch("runestone.dependencies.VocabularyService")

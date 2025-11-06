@@ -130,7 +130,7 @@ class TestRunestoneIntegration:
         # Simulate the workflow step by step
         image_bytes = b"fake image data"
         ocr_result = processor.run_ocr(image_bytes)
-        analysis_result = processor.run_analysis(ocr_result.transcribed_text)
+        analysis_result = processor.run_analysis(ocr_result.transcribed_text, user_id=1)
         resources_result = processor.run_resource_search(analysis_result.core_topics, analysis_result.search_needed)
 
         # Verify workflow execution
@@ -206,7 +206,7 @@ class TestRunestoneIntegration:
 
         with pytest.raises(RunestoneError) as exc_info:
             ocr_result = processor.run_ocr(b"fake image data")
-            processor.run_analysis(ocr_result.transcribed_text)
+            processor.run_analysis(ocr_result.transcribed_text, user_id=1)
 
         assert "No text provided for analysis" in str(exc_info.value)
 

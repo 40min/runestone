@@ -69,7 +69,7 @@ class TestVocabularyService:
             ),  # Same word_phrase
         ]
 
-        result = service.save_vocabulary(items)
+        result = service.save_vocabulary(items, user_id=1)
         db_session.commit()
 
         assert result == {"message": "Vocabulary saved successfully"}
@@ -239,7 +239,7 @@ class TestVocabularyService:
 
         # Update only one field
         update_data = VocabularyUpdate(in_learn=False)
-        updated_vocab = service.update_vocabulary_item(vocab.id, update_data)
+        updated_vocab = service.update_vocabulary_item(vocab.id, update_data, user_id=1)
 
         # Verify only in_learn changed
         assert updated_vocab.word_phrase == "ett äpple"
@@ -274,7 +274,7 @@ class TestVocabularyService:
         update_data = VocabularyUpdate(word_phrase="en banan")
 
         with pytest.raises(VocabularyItemExists, match="Vocabulary item with word_phrase 'en banan' already exists"):
-            service.update_vocabulary_item(vocab1.id, update_data)
+            service.update_vocabulary_item(vocab1.id, update_data, user_id=1)
 
         # Verify vocab1 was not updated
         db_vocab1 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab1.id).first()
@@ -846,5 +846,5 @@ class TestVocabularyService:
             result = service.get_vocabulary(limit=20, search_query="apple", user_id=1)
 
             # Verify repo called with precise=False (default)
-            mock_repo.assert_called_once_with(20, "apple", False, 1)
+            mock_repo.assert_called_once_with(1, 20, "apple", False)
             assert len(result) == 2

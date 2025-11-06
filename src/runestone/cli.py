@@ -193,7 +193,8 @@ def process(
         )
 
         # Process the image
-        result = processor.process_image(image_path)
+        # for tool we'll use default user_id=1
+        result = processor.process_image(image_path, user_id=1)
 
         # Output results
         if output_format == "console":

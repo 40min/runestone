@@ -259,7 +259,7 @@ class RunestoneProcessor:
         except Exception as e:
             raise RunestoneError(f"Failed to generate markdown output: {str(e)}")
 
-    def process_image(self, image_path: Path) -> Dict[str, Any]:
+    def process_image(self, image_path: Path, user_id: int) -> Dict[str, Any]:
         """
         Process an image file through the complete Runestone workflow.
 
@@ -288,7 +288,7 @@ class RunestoneProcessor:
                 raise RunestoneError("No text extracted from image")
 
             # Step 2: Content analysis
-            analysis = self.run_analysis(extracted_text)
+            analysis = self.run_analysis(extracted_text, user_id)
 
             # Step 3: Resource search
             extra_info = self.run_resource_search(analysis.core_topics, analysis.search_needed)

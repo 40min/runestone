@@ -29,8 +29,6 @@ class UserService:
         words_in_learn_count = self.vocab_repo.get_words_in_learn_count(user.id)
         words_learned_count = self.vocab_repo.get_words_learned_count(user.id)
 
-        # TODO: fresh data from db should be fetched, not data from the time
-        # of login
         return UserProfileResponse(
             id=user.id,
             email=user.email,
@@ -64,10 +62,10 @@ class UserService:
                 setattr(user, key, value)
 
         # Save changes using user repository
-        self.user_repo.update(user)
+        updated_user = self.user_repo.update(user)
 
         # Return updated profile
-        return self.get_user_profile(user)
+        return self.get_user_profile(updated_user)
 
     def increment_pages_recognised_count(self, user: User) -> None:
         """Increment the pages recognised count for a user."""

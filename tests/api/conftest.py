@@ -30,41 +30,36 @@ def mock_llm_client():
 
 
 @pytest.fixture(scope="function")
-def test_user(db_session):
-    """Create a test user for authentication tests."""
-    user = User(
-        name="Test User",
-        surname="Testsson",
-        email="test@example.com",
-        hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYQmP7XzL6",  # "password"
-    )
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
-    return user
-
-
-@pytest.fixture(scope="function")
-def mock_current_user(test_user):
-    """Mock the get_current_user dependency to return the test user."""
-
-    def mock_get_current_user():
-        return test_user
-
-    return mock_get_current_user
-
-
-@pytest.fixture(scope="function")
-def client(mock_llm_client, mock_current_user) -> Generator[TestClient, None, None]:
+def client(mock_llm_client) -> Generator[TestClient, None, None]:
     """Create a test client with in-memory database and mocked LLM client for testing."""
-    # Use a shared in-memory database for faster testing
-    # The 'file::memory:?cache=shared' URI allows multiple connections to share the same in-memory database
-    test_db_url = "sqlite:///file::memory:?cache=shared&uri=true"
+    # Use a shared in-memory database for each test
+    # The file:memdb?mode=memory&cache=shared syntax creates a shared in-memory database
+    # that can be accessed by multiple connections within the same process
+    import uuid
+
+    db_name = f"memdb{uuid.uuid4().hex}"
+    test_db_url = f"sqlite:///file:{db_name}?mode=memory&cache=shared&uri=true"
 
     # Create a single engine for all tests in this fixture
     engine = create_engine(test_db_url, connect_args={"check_same_thread": False, "uri": True})
     Base.metadata.create_all(bind=engine)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    # Create a test user with unique email to avoid conflicts
+    import uuid
+
+    unique_email = f"test-{uuid.uuid4()}@example.com"
+    test_user = User(
+        name="Test User",
+        surname="Testsson",
+        email=unique_email,
+        hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYQmP7XzL6",  # "password"
+    )
+    db = SessionLocal()
+    db.add(test_user)
+    db.commit()
+    db.refresh(test_user)
+    db.close()
 
     # Override the database dependency for testing
     def override_get_db():
@@ -78,9 +73,14 @@ def client(mock_llm_client, mock_current_user) -> Generator[TestClient, None, No
     def override_get_llm_client():
         return mock_llm_client
 
-    # Override the current user dependency to use mocked user
+    # Override the current user dependency to use test user
     def override_get_current_user():
-        return mock_current_user()
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.email == unique_email).first()
+            return user
+        finally:
+            db.close()
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_llm_client] = override_get_llm_client
@@ -97,7 +97,7 @@ def client_no_db() -> TestClient:
 
 
 @pytest.fixture(scope="function")
-def client_with_mock_processor(client_no_db):
+def client_with_mock_processor(client):
     """Fixture to provide a client with a mocked RunestoneProcessor.
 
     This fixture automatically sets up the dependency override and cleans it up
@@ -107,9 +107,9 @@ def client_with_mock_processor(client_no_db):
         tuple: (TestClient, Mock) - The test client and the mocked processor instance
     """
     mock_processor_instance = Mock()
-    client_no_db.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
+    client.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
 
-    yield client_no_db, mock_processor_instance
+    yield client, mock_processor_instance
 
     # Teardown: clear the override automatically after the test runs
-    client_no_db.app.dependency_overrides.clear()
+    client.app.dependency_overrides.clear()

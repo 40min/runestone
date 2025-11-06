@@ -254,7 +254,7 @@ class TestVocabularyRepository:
             ),
         ]
 
-        repo.upsert_vocabulary_items(items)
+        repo.upsert_vocabulary_items(items, user_id=1)
         db_session.commit()
 
         # Verify existing item was updated

@@ -263,7 +263,7 @@ class TestRunestoneProcessor:
             user_repository=Mock(spec=UserRepository),
             verbose=False,
         )
-        result = processor.run_analysis("Sample text")
+        result = processor.run_analysis("Sample text", user_id=1)
 
         assert result == mock_analysis
         mock_analyzer_instance.analyze_content.assert_called_once_with("Sample text")
@@ -344,7 +344,7 @@ class TestRunestoneProcessor:
             user_repository=Mock(spec=UserRepository),
             verbose=True,
         )
-        result = processor.process_image(self.image_path)
+        result = processor.process_image(self.image_path, user_id=1)
 
         # Verify results structure
         assert "ocr_result" in result
@@ -412,7 +412,7 @@ class TestRunestoneProcessor:
         )
 
         with pytest.raises(RunestoneError) as exc_info:
-            processor.process_image(self.image_path)
+            processor.process_image(self.image_path, user_id=1)
 
         assert "No text extracted from image" in str(exc_info.value)
 
@@ -453,7 +453,7 @@ class TestRunestoneProcessor:
         )
 
         with pytest.raises(RunestoneError) as exc_info:
-            processor.process_image(self.image_path)
+            processor.process_image(self.image_path, user_id=1)
 
         assert "OCR processing failed" in str(exc_info.value)
         assert mock_logger.error.call_count == 2

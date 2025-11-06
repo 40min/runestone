@@ -18,14 +18,14 @@ class TestUserProfileEndpoints:
 
     def test_get_user_profile_success(self, client):
         """Test successful retrieval of user profile with stats."""
-        response = client.get("/api/users/me")
+        response = client.get("/api/me")
 
         assert response.status_code == 200
         data = response.json()
 
         # Verify response structure
         assert data["id"] == 1
-        assert data["email"] == "test@example.com"
+        assert "test-" in data["email"] and "@example.com" in data["email"]
         assert data["name"] == "Test User"
         assert data["surname"] == "Testsson"
         assert data["timezone"] == "UTC"
@@ -68,7 +68,7 @@ class TestUserProfileEndpoints:
         client.put(f"/api/vocabulary/{learned_item_id}", json=update_payload)
 
         # Get user profile
-        response = client.get("/api/users/me")
+        response = client.get("/api/me")
         assert response.status_code == 200
         data = response.json()
 
@@ -84,7 +84,7 @@ class TestUserProfileEndpoints:
             "timezone": "Europe/Stockholm",
         }
 
-        response = client.put("/api/users/me", json=update_payload)
+        response = client.put("/api/me", json=update_payload)
 
         assert response.status_code == 200
         data = response.json()
@@ -95,7 +95,7 @@ class TestUserProfileEndpoints:
         assert data["timezone"] == "Europe/Stockholm"
 
         # Verify unchanged fields
-        assert data["email"] == "test@example.com"
+        assert "test-" in data["email"] and "@example.com" in data["email"]
 
     def test_update_user_profile_partial(self, client):
         """Test partial user profile update."""
@@ -104,7 +104,7 @@ class TestUserProfileEndpoints:
             # surname and timezone not provided
         }
 
-        response = client.put("/api/users/me", json=update_payload)
+        response = client.put("/api/me", json=update_payload)
 
         assert response.status_code == 200
         data = response.json()
@@ -122,7 +122,7 @@ class TestUserProfileEndpoints:
             "password": "newpassword123",
         }
 
-        response = client.put("/api/users/me", json=update_payload)
+        response = client.put("/api/me", json=update_payload)
 
         assert response.status_code == 200
 
@@ -136,7 +136,7 @@ class TestUserProfileEndpoints:
             "password": "123",  # Too short
         }
 
-        response = client.put("/api/users/me", json=update_payload)
+        response = client.put("/api/me", json=update_payload)
 
         assert response.status_code == 400
         data = response.json()
@@ -150,7 +150,7 @@ class TestUserProfileEndpoints:
             "timezone": "",
         }
 
-        response = client.put("/api/users/me", json=update_payload)
+        response = client.put("/api/me", json=update_payload)
 
         assert response.status_code == 200
         data = response.json()
@@ -162,23 +162,23 @@ class TestUserProfileEndpoints:
 
     def test_get_user_profile_unauthorized(self, client_no_db):
         """Test accessing user profile without authentication."""
-        response = client_no_db.get("/api/users/me")
+        response = client_no_db.get("/api/me")
 
-        assert response.status_code == 401
+        assert response.status_code == 403
 
     def test_update_user_profile_unauthorized(self, client_no_db):
         """Test updating user profile without authentication."""
         update_payload = {"name": "New Name"}
 
-        response = client_no_db.put("/api/users/me", json=update_payload)
+        response = client_no_db.put("/api/me", json=update_payload)
 
-        assert response.status_code == 401
+        assert response.status_code == 403
 
 
 class TestPageRecognitionCounter:
     """Test cases for page recognition counter functionality."""
 
-    def test_analyze_content_increments_counter(self, client_no_db):
+    def test_analyze_content_increments_counter(self, client):
         """Test that successful analysis increments pages_recognised_count."""
         # Mock processor for analysis
         mock_processor_instance = Mock()
@@ -204,11 +204,11 @@ class TestPageRecognitionCounter:
         mock_processor_instance.run_analysis.return_value = mock_analysis_result
 
         # Override the dependency
-        client_no_db.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
+        client.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
 
         # Perform analysis
         payload = {"text": "Hej, vad heter du?"}
-        response = client_no_db.post("/api/analyze", json=payload)
+        response = client.post("/api/analyze", json=payload)
 
         assert response.status_code == 200
 
@@ -216,35 +216,35 @@ class TestPageRecognitionCounter:
         mock_processor_instance.run_analysis.assert_called_once_with("Hej, vad heter du?", 1)  # user_id = 1
 
         # Clean up
-        client_no_db.app.dependency_overrides.clear()
+        client.app.dependency_overrides.clear()
 
-    def test_analyze_content_failure_does_not_increment(self, client_no_db):
+    def test_analyze_content_failure_does_not_increment(self, client):
         """Test that failed analysis does not increment pages_recognised_count."""
         # Mock processor to raise error
         mock_processor_instance = Mock()
         mock_processor_instance.run_analysis.side_effect = Exception("Analysis failed")
 
         # Override the dependency
-        client_no_db.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
+        client.app.dependency_overrides[get_runestone_processor] = lambda: mock_processor_instance
 
         # Perform analysis (should fail)
         payload = {"text": "Hej, vad heter du?"}
-        response = client_no_db.post("/api/analyze", json=payload)
+        response = client.post("/api/analyze", json=payload)
 
         assert response.status_code == 500
 
         # Clean up
-        client_no_db.app.dependency_overrides.clear()
+        client.app.dependency_overrides.clear()
 
 
 class TestVocabularyRepositoryStats:
     """Test cases for vocabulary repository statistics methods."""
 
-    def test_get_words_in_learn_count(self, session: Session):
+    def test_get_words_in_learn_count(self, db_session: Session):
         """Test counting words in learning."""
         from runestone.db.vocabulary_repository import VocabularyRepository
 
-        repo = VocabularyRepository(session)
+        repo = VocabularyRepository(db_session)
 
         # Create test user
         user = User(
@@ -253,8 +253,8 @@ class TestVocabularyRepositoryStats:
             name="Stats User",
             surname="User",
         )
-        session.add(user)
-        session.commit()
+        db_session.add(user)
+        db_session.commit()
 
         # Add vocabulary items
         vocab_payload = {
@@ -267,9 +267,15 @@ class TestVocabularyRepositoryStats:
 
         # Use vocabulary service to save items
         from runestone.api.schemas import VocabularyItemCreate
+        from runestone.db.vocabulary_repository import VocabularyRepository
         from runestone.services.vocabulary_service import VocabularyService
 
-        service = VocabularyService(session)
+        # Create service with proper dependencies
+        vocab_repo = VocabularyRepository(db_session)
+        # Mock settings and llm_client for service
+        mock_settings = Mock()
+        mock_llm_client = Mock()
+        service = VocabularyService(vocab_repo, mock_settings, mock_llm_client)
         service.save_vocabulary(
             [VocabularyItemCreate(**item) for item in vocab_payload["items"]], user.id, enrich=False
         )
@@ -278,11 +284,11 @@ class TestVocabularyRepositoryStats:
         count = repo.get_words_in_learn_count(user.id)
         assert count == 2  # word1, word2
 
-    def test_get_words_learned_count(self, session: Session):
+    def test_get_words_learned_count(self, db_session: Session):
         """Test counting learned words."""
         from runestone.db.vocabulary_repository import VocabularyRepository
 
-        repo = VocabularyRepository(session)
+        repo = VocabularyRepository(db_session)
 
         # Create test user
         user = User(
@@ -290,8 +296,8 @@ class TestVocabularyRepositoryStats:
             hashed_password="dummy",
             name="Learned User",
         )
-        session.add(user)
-        session.commit()
+        db_session.add(user)
+        db_session.commit()
 
         # Add vocabulary items
         vocab_payload = {
@@ -305,19 +311,24 @@ class TestVocabularyRepositoryStats:
 
         # Use vocabulary service to save items
         from runestone.api.schemas import VocabularyItemCreate
+        from runestone.db.vocabulary_repository import VocabularyRepository
         from runestone.services.vocabulary_service import VocabularyService
 
-        service = VocabularyService(session)
+        # Create service with proper dependencies
+        vocab_repo = VocabularyRepository(db_session)
+        mock_settings = Mock()
+        mock_llm_client = Mock()
+        service = VocabularyService(vocab_repo, mock_settings, mock_llm_client)
 
         items = [VocabularyItemCreate(**item) for item in vocab_payload["items"]]
         service.save_vocabulary(items, user.id, enrich=False)
 
         # Update learned_times for some items
-        vocab_items = session.query(Vocabulary).filter(Vocabulary.user_id == user.id).all()
+        vocab_items = db_session.query(Vocabulary).filter(Vocabulary.user_id == user.id).all()
         vocab_items[0].learned_times = 1  # word1 learned
         vocab_items[1].learned_times = 2  # word2 learned
         # word3 not learned
-        session.commit()
+        db_session.commit()
 
         # Test stats
         count = repo.get_words_learned_count(user.id)

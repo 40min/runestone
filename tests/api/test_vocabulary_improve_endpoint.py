@@ -5,20 +5,59 @@ from fastapi.testclient import TestClient
 
 from runestone.api.main import app
 from runestone.api.schemas import ImprovementMode, VocabularyImproveRequest, VocabularyImproveResponse
-from runestone.dependencies import get_vocabulary_service
+from runestone.auth.dependencies import get_current_user
+from runestone.dependencies import get_llm_client, get_vocabulary_service
 
 
+# TODO: such fixtures should be in conftest.py, we have something
+# similar. It is needed to generalise common setup and create
+# customised fixtures if something need to be mocked like here
 @pytest.fixture
-def client_with_mock_service():
+def client_with_mock_service(mock_llm_client):
     """Create a test client with mocked vocabulary service."""
     # Create mock service
     mock_service = Mock()
 
-    # Override the dependency
+    # Use the same setup as the main client fixture
+    import uuid
+
+    db_name = f"memdb{uuid.uuid4().hex}"
+    test_db_url = f"sqlite:///file:{db_name}?mode=memory&cache=shared&uri=true"
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from runestone.db.database import Base, get_db
+
+    engine = create_engine(test_db_url, connect_args={"check_same_thread": False, "uri": True})
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+    def override_get_db():
+        db = SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    def override_get_llm_client():
+        return mock_llm_client
+
+    def override_get_current_user():
+        # Create a simple test user mock
+        test_user = Mock()
+        test_user.id = 1
+        test_user.email = "test@example.com"
+        test_user.name = "Test"
+        test_user.surname = "User"
+        return test_user
+
     def override_get_vocabulary_service():
         return mock_service
 
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_llm_client] = override_get_llm_client
     app.dependency_overrides[get_vocabulary_service] = override_get_vocabulary_service
+    app.dependency_overrides[get_current_user] = override_get_current_user
     client = TestClient(app)
 
     yield client, mock_service
