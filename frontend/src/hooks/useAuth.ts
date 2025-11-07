@@ -54,7 +54,7 @@ export const useAuthActions = (): UseAuthActionsReturn => {
       });
 
       // Get fresh user data with the new token (now properly authenticated!)
-      const userData: UserData = await apiRequest<UserData>("/api/me", {}, data.access_token);
+      const userData: UserData = await apiRequest<UserData>("/api/me", { method: "GET" }, data.access_token);
 
       // Update with real user data
       contextLogin(data.access_token, userData);
