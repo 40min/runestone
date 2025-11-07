@@ -91,7 +91,10 @@ describe('Register Component', () => {
       await user.type(confirmPasswordInput, 'differentpassword');
       await user.click(registerButton);
 
-      expect(screen.getByText("Passwords do not match")).toBeInTheDocument();
+      // Error should appear in snackbar
+      await waitFor(() => {
+        expect(screen.getByText("Passwords do not match")).toBeInTheDocument();
+      });
     });
 
     it('should show error when password is too short', async () => {
@@ -108,7 +111,10 @@ describe('Register Component', () => {
       await user.type(confirmPasswordInput, '123');
       await user.click(registerButton);
 
-      expect(screen.getByText("Password must be at least 6 characters")).toBeInTheDocument();
+      // Error should appear in snackbar
+      await waitFor(() => {
+        expect(screen.getByText("Password must be at least 6 characters")).toBeInTheDocument();
+      });
     });
 
     it('should not submit with empty required fields', async () => {
@@ -357,7 +363,9 @@ describe('Register Component', () => {
       await user.type(confirmPasswordInput, 'different');
       await user.click(registerButton);
 
-      expect(screen.getByText('Passwords do not match')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Passwords do not match')).toBeInTheDocument();
+      });
 
       // Now correct the password - trigger validation again
       await user.clear(confirmPasswordInput);
@@ -366,8 +374,10 @@ describe('Register Component', () => {
       // Re-click to trigger validation, error should clear
       await user.click(registerButton);
 
-      // Error should no longer appear
-      expect(screen.queryByText('Passwords do not match')).not.toBeInTheDocument();
+      // Error should no longer appear in snackbar
+      await waitFor(() => {
+        expect(screen.queryByText('Passwords do not match')).not.toBeInTheDocument();
+      });
     });
 
     it('should validate email format (server-side validation)', async () => {
@@ -401,8 +411,10 @@ describe('Register Component', () => {
         expect(mockRegister).toHaveBeenCalled();
       });
 
-      // Error message appears
-      expect(screen.getByText(/Invalid email format/)).toBeInTheDocument();
+      // Error message appears in snackbar
+      await waitFor(() => {
+        expect(screen.getByText(/Invalid email format/)).toBeInTheDocument();
+      });
     });
   });
 });

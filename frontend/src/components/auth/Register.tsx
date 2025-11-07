@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import type { FormEvent } from "react";
-import { CustomButton, ErrorAlert } from "../ui";
-import { Box } from "@mui/material";
+import { Box, Snackbar, Alert } from "@mui/material";
+import type { AlertColor } from "@mui/material";
 import { useAuthActions } from "../../hooks/useAuth";
+import { CustomButton } from "../ui";
 import AuthButton from "./AuthButton";
 import AuthTextField from "./AuthTextField";
 
@@ -16,20 +17,35 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [surname, setSurname] = useState("");
-  const [error, setError] = useState("");
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: AlertColor;
+  }>({
+    open: false,
+    message: "",
+    severity: "error",
+  });
   const { register, loading } = useAuthActions();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError("");
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match");
+      setSnackbar({
+        open: true,
+        message: "Passwords do not match",
+        severity: "error",
+      });
       return;
     }
 
     if (password.length < 6) {
-      setError("Password must be at least 6 characters");
+      setSnackbar({
+        open: true,
+        message: "Password must be at least 6 characters",
+        severity: "error",
+      });
       return;
     }
 
@@ -41,7 +57,17 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
         surname: surname || undefined,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      const errorMessage =
+        err instanceof Error ? err.message : "An error occurred";
+
+      // Log technical details to console
+      console.error("Registration error:", err);
+
+      setSnackbar({
+        open: true,
+        message: errorMessage,
+        severity: "error",
+      });
     }
   };
 
@@ -65,8 +91,6 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
       <h2 className="text-3xl font-bold text-white text-center mb-4">
         Register
       </h2>
-
-      {error && <ErrorAlert message={error} />}
 
       <AuthTextField
         label="Email"
@@ -132,6 +156,21 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
       >
         Already have an account? Login
       </CustomButton>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
