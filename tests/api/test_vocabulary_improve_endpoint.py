@@ -1,35 +1,9 @@
-from unittest.mock import Mock
-
-import pytest
-from fastapi.testclient import TestClient
-
-from runestone.api.main import app
 from runestone.api.schemas import ImprovementMode, VocabularyImproveRequest, VocabularyImproveResponse
-from runestone.dependencies import get_vocabulary_service
 
 
-@pytest.fixture
-def client_with_mock_service():
-    """Create a test client with mocked vocabulary service."""
-    # Create mock service
-    mock_service = Mock()
-
-    # Override the dependency
-    def override_get_vocabulary_service():
-        return mock_service
-
-    app.dependency_overrides[get_vocabulary_service] = override_get_vocabulary_service
-    client = TestClient(app)
-
-    yield client, mock_service
-
-    # Clean up
-    app.dependency_overrides.clear()
-
-
-def test_improve_vocabulary_success(client_with_mock_service):
+def test_improve_vocabulary_success(client_with_mock_vocabulary_service):
     """Test successful vocabulary improvement endpoint with ALL_FIELDS mode."""
-    client, mock_service = client_with_mock_service
+    client, mock_service = client_with_mock_vocabulary_service
 
     # Mock service response
     mock_response = VocabularyImproveResponse(
@@ -57,9 +31,9 @@ def test_improve_vocabulary_success(client_with_mock_service):
     assert call_args.mode == ImprovementMode.ALL_FIELDS
 
 
-def test_improve_vocabulary_example_only(client_with_mock_service):
+def test_improve_vocabulary_example_only(client_with_mock_vocabulary_service):
     """Test vocabulary improvement endpoint with EXAMPLE_ONLY mode."""
-    client, mock_service = client_with_mock_service
+    client, mock_service = client_with_mock_vocabulary_service
 
     # Mock service response
     mock_response = VocabularyImproveResponse(
@@ -87,9 +61,9 @@ def test_improve_vocabulary_example_only(client_with_mock_service):
     assert call_args.mode == ImprovementMode.EXAMPLE_ONLY
 
 
-def test_improve_vocabulary_extra_info_only(client_with_mock_service):
+def test_improve_vocabulary_extra_info_only(client_with_mock_vocabulary_service):
     """Test vocabulary improvement endpoint with EXTRA_INFO_ONLY mode."""
-    client, mock_service = client_with_mock_service
+    client, mock_service = client_with_mock_vocabulary_service
 
     # Mock service response
     mock_response = VocabularyImproveResponse(
@@ -117,9 +91,9 @@ def test_improve_vocabulary_extra_info_only(client_with_mock_service):
     assert call_args.mode == ImprovementMode.EXTRA_INFO_ONLY
 
 
-def test_improve_vocabulary_service_error(client_with_mock_service):
+def test_improve_vocabulary_service_error(client_with_mock_vocabulary_service):
     """Test vocabulary improvement endpoint with service error."""
-    client, mock_service = client_with_mock_service
+    client, mock_service = client_with_mock_vocabulary_service
 
     # Mock service to raise exception
     mock_service.improve_item.side_effect = Exception("LLM service error")
@@ -136,9 +110,9 @@ def test_improve_vocabulary_service_error(client_with_mock_service):
     assert response_data["detail"] == "An internal error occurred while improving vocabulary."
 
 
-def test_improve_vocabulary_invalid_request(client_with_mock_service):
+def test_improve_vocabulary_invalid_request(client_with_mock_vocabulary_service):
     """Test vocabulary improvement endpoint with invalid request."""
-    client, mock_service = client_with_mock_service
+    client, mock_service = client_with_mock_vocabulary_service
 
     # Test with missing required field
     request_data = {
@@ -154,9 +128,9 @@ def test_improve_vocabulary_invalid_request(client_with_mock_service):
     assert "detail" in response_data
 
 
-def test_improve_vocabulary_empty_response(client_with_mock_service):
+def test_improve_vocabulary_empty_response(client_with_mock_vocabulary_service):
     """Test vocabulary improvement endpoint with empty response."""
-    client, mock_service = client_with_mock_service
+    client, mock_service = client_with_mock_vocabulary_service
 
     # Mock service response with empty fields
     mock_response = VocabularyImproveResponse(translation=None, example_phrase="", extra_info=None)
@@ -175,9 +149,9 @@ def test_improve_vocabulary_empty_response(client_with_mock_service):
     assert response_data["extra_info"] is None
 
 
-def test_improve_vocabulary_default_mode(client_with_mock_service):
+def test_improve_vocabulary_default_mode(client_with_mock_vocabulary_service):
     """Test vocabulary improvement endpoint with default mode (EXAMPLE_ONLY)."""
-    client, mock_service = client_with_mock_service
+    client, mock_service = client_with_mock_vocabulary_service
 
     # Mock service response
     mock_response = VocabularyImproveResponse(

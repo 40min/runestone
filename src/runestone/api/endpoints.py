@@ -25,9 +25,11 @@ from runestone.api.schemas import (
     VocabularySaveRequest,
     VocabularyUpdate,
 )
+from runestone.auth.dependencies import get_current_user
 from runestone.core.exceptions import RunestoneError, VocabularyItemExists
 from runestone.core.logging_config import get_logger
 from runestone.core.processor import RunestoneProcessor
+from runestone.db.models import User
 from runestone.dependencies import get_grammar_service, get_runestone_processor, get_vocabulary_service
 from runestone.services.grammar_service import GrammarService
 from runestone.services.vocabulary_service import VocabularyService
@@ -49,6 +51,7 @@ logger = get_logger(__name__)
 async def process_ocr(
     file: Annotated[UploadFile, File(description="Image file to process")],
     processor: Annotated[RunestoneProcessor, Depends(get_runestone_processor)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> OCRResult:
     """
     Extract text from a Swedish textbook image using OCR.
@@ -121,6 +124,7 @@ async def process_ocr(
 async def analyze_content(
     request: AnalysisRequest,
     processor: Annotated[RunestoneProcessor, Depends(get_runestone_processor)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> ContentAnalysis:
     """
     Analyze extracted text content.
@@ -141,11 +145,12 @@ async def analyze_content(
 
     try:
         # Run content analysis
-        analysis_result = processor.run_analysis(request.text)
+        analysis_result = processor.run_analysis(request.text, current_user)
 
         # ContentAnalysis object - return directly (unified schema)
         vocab_count = len(analysis_result.vocabulary)
         logger.debug(f"[API] Found {vocab_count} vocabulary items")
+
         return analysis_result
 
     except RunestoneError as e:
@@ -177,6 +182,7 @@ async def analyze_content(
 async def find_resources(
     request: ResourceRequest,
     processor: Annotated[RunestoneProcessor, Depends(get_runestone_processor)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> ResourceResponse:
     """
     Find additional learning resources based on content analysis.
@@ -227,6 +233,7 @@ async def find_resources(
 async def save_vocabulary(
     request: VocabularySaveRequest,
     service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
     """
     Save vocabulary items to the database.
@@ -245,7 +252,7 @@ async def save_vocabulary(
         HTTPException: For database errors
     """
     try:
-        return service.save_vocabulary(request.items, request.enrich)
+        return service.save_vocabulary(request.items, current_user.id, request.enrich)
 
     except Exception as e:
         raise HTTPException(
@@ -267,6 +274,7 @@ async def save_vocabulary(
 async def save_vocabulary_item(
     request: VocabularyItemCreate,
     service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> Vocabulary:
     """
     Save a single vocabulary item to the database.
@@ -285,7 +293,7 @@ async def save_vocabulary_item(
         HTTPException: For database errors
     """
     try:
-        return service.save_vocabulary_item(request)
+        return service.save_vocabulary_item(request, current_user.id)
 
     except VocabularyItemExists as e:
         raise HTTPException(
@@ -310,6 +318,7 @@ async def save_vocabulary_item(
 )
 async def get_vocabulary(
     service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
     limit: int = 100,
     search_query: str | None = None,
     precise: bool = False,
@@ -340,7 +349,7 @@ async def get_vocabulary(
                 detail="Limit must be between 1 and 100",
             )
 
-        return service.get_vocabulary(limit, search_query, precise)
+        return service.get_vocabulary(current_user.id, limit, search_query, precise)
 
     except HTTPException:
         raise
@@ -365,6 +374,7 @@ async def update_vocabulary(
     item_id: int,
     request: VocabularyUpdate,
     service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> Vocabulary:
     """
     Update a vocabulary item.
@@ -384,7 +394,7 @@ async def update_vocabulary(
         HTTPException: For not found or database errors
     """
     try:
-        return service.update_vocabulary_item(item_id, request)
+        return service.update_vocabulary_item(item_id, request, current_user.id)
 
     except VocabularyItemExists as e:
         raise HTTPException(
@@ -415,6 +425,7 @@ async def update_vocabulary(
 async def delete_vocabulary(
     item_id: int,
     service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
     """
     Delete a vocabulary item completely from the database.
@@ -433,7 +444,7 @@ async def delete_vocabulary(
         HTTPException: For not found or database errors
     """
     try:
-        deleted = service.delete_vocabulary_item(item_id)
+        deleted = service.delete_vocabulary_item(item_id, current_user.id)
 
         if not deleted:
             raise ValueError(f"Vocabulary item with id {item_id} not found")
@@ -465,6 +476,7 @@ async def delete_vocabulary(
 async def improve_vocabulary(
     request: VocabularyImproveRequest,
     service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> VocabularyImproveResponse:
     """
     Improve a vocabulary item using LLM.

@@ -13,6 +13,7 @@ from runestone.core.exceptions import RunestoneError
 from runestone.core.processor import RunestoneProcessor
 from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
 from runestone.schemas.ocr import OCRResult, RecognitionStatistics
+from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 
 
@@ -71,18 +72,24 @@ class TestRunestoneProcessor:
             3.2,
             4.8,
         ]  # Start OCR, end OCR, start analysis, end analysis, start extra, end extra
+
+        # Create a mock user for testing
+        mock_user = Mock()
+        mock_user.id = 1
+
         with patch("runestone.core.processor.time.time", side_effect=time_values):
             processor = RunestoneProcessor(
                 settings=self.settings,
                 ocr_processor=mock_ocr_instance,
                 content_analyzer=mock_analyzer_instance,
                 vocabulary_service=Mock(spec=VocabularyService),
+                user_service=Mock(spec=UserService),
                 verbose=True,
             )
 
             # Test the stateless workflow
             ocr_result = processor.run_ocr(b"fake image data")
-            analysis_result = processor.run_analysis(ocr_result.transcribed_text)
+            analysis_result = processor.run_analysis(ocr_result.transcribed_text, user=mock_user)
             resources_result = processor.run_resource_search(analysis_result.core_topics, analysis_result.search_needed)
 
             # Verify results
@@ -139,17 +146,22 @@ class TestRunestoneProcessor:
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
         mock_analyzer_instance.find_extra_learning_info.return_value = ""
 
+        # Create a mock user for testing
+        mock_user = Mock()
+        mock_user.id = 1
+
         processor = RunestoneProcessor(
             settings=self.settings,
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_service=Mock(spec=UserService),
             verbose=False,
         )
 
         # Test the stateless workflow
         ocr_result = processor.run_ocr(b"fake image data")
-        analysis_result = processor.run_analysis(ocr_result.transcribed_text)
+        analysis_result = processor.run_analysis(ocr_result.transcribed_text, user=mock_user)
         resources_result = processor.run_resource_search(analysis_result.core_topics, analysis_result.search_needed)
 
         # Verify results
@@ -188,6 +200,7 @@ class TestRunestoneProcessor:
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_service=Mock(spec=UserService),
             verbose=True,
         )
 
@@ -228,6 +241,7 @@ class TestRunestoneProcessor:
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_service=Mock(spec=UserService),
             verbose=False,
         )
         result = processor.run_ocr(b"fake image data")
@@ -250,17 +264,26 @@ class TestRunestoneProcessor:
         # Mock OCR (not directly used in this test, but needed for processor init)
         mock_ocr_instance = Mock()
 
+        # Mock user service
+        mock_user_service = Mock(spec=UserService)
+
+        # Create a mock user object
+        mock_user = Mock()
+        mock_user.id = 1
+
         processor = RunestoneProcessor(
             settings=self.settings,
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_service=mock_user_service,
             verbose=False,
         )
-        result = processor.run_analysis("Sample text")
+        result = processor.run_analysis("Sample text", user=mock_user)
 
         assert result == mock_analysis
         mock_analyzer_instance.analyze_content.assert_called_once_with("Sample text")
+        mock_user_service.increment_pages_recognised_count.assert_called_once_with(mock_user)
 
     def test_run_resource_search_success(self):
         """Test successful resource search."""
@@ -279,6 +302,7 @@ class TestRunestoneProcessor:
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_service=Mock(spec=UserService),
             verbose=False,
         )
         result = processor.run_resource_search(core_topics, search_needed)
@@ -329,14 +353,19 @@ class TestRunestoneProcessor:
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
         mock_analyzer_instance.find_extra_learning_info.return_value = "Extra info"
 
+        # Create a mock user for testing
+        mock_user = Mock()
+        mock_user.id = 1
+
         processor = RunestoneProcessor(
             settings=self.settings,
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_service=Mock(spec=UserService),
             verbose=True,
         )
-        result = processor.process_image(self.image_path)
+        result = processor.process_image(self.image_path, user=mock_user)
 
         # Verify results structure
         assert "ocr_result" in result
@@ -394,16 +423,21 @@ class TestRunestoneProcessor:
         # Mock analyzer (not directly used in this test, but needed for processor init)
         mock_analyzer_instance = Mock()
 
+        # Create a mock user for testing
+        mock_user = Mock()
+        mock_user.id = 1
+
         processor = RunestoneProcessor(
             settings=self.settings,
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_service=Mock(spec=UserService),
             verbose=True,
         )
 
         with pytest.raises(RunestoneError) as exc_info:
-            processor.process_image(self.image_path)
+            processor.process_image(self.image_path, user=mock_user)
 
         assert "No text extracted from image" in str(exc_info.value)
 
@@ -434,16 +468,21 @@ class TestRunestoneProcessor:
         # Mock analyzer (not directly used in this test, but needed for processor init)
         mock_analyzer_instance = Mock()
 
+        # Create a mock user for testing
+        mock_user = Mock()
+        mock_user.id = 1
+
         processor = RunestoneProcessor(
             settings=self.settings,
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
             vocabulary_service=Mock(spec=VocabularyService),
+            user_service=Mock(spec=UserService),
             verbose=True,
         )
 
         with pytest.raises(RunestoneError) as exc_info:
-            processor.process_image(self.image_path)
+            processor.process_image(self.image_path, user=mock_user)
 
         assert "OCR processing failed" in str(exc_info.value)
         assert mock_logger.error.call_count == 2

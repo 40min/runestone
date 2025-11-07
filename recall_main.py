@@ -20,7 +20,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from runestone.config import settings
 from runestone.core.logging_config import setup_logging
 from runestone.db.database import SessionLocal, setup_database
-from runestone.db.repository import VocabularyRepository
+from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.services.rune_recall_service import RuneRecallService
 from runestone.services.telegram_command_service import TelegramCommandService
 from runestone.state.state_manager import StateManager

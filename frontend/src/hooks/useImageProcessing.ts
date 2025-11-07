@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { API_BASE_URL } from "../config";
+import { useApi } from "../utils/api";
 
 export interface OCRResult {
   text: string;
@@ -67,6 +68,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentImage, setCurrentImage] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const api = useApi();
 
   const reset = () => {
     setOcrResult(null);
@@ -138,55 +140,25 @@ const useImageProcessing = (): UseImageProcessingReturn => {
     try {
       setProcessingStep("ANALYZING");
       setProgress(60);
-      const analyzeResponse = await fetch(`${API_BASE_URL}/api/analyze`, {
+      const analysisData: ContentAnalysis = await api<ContentAnalysis>('/api/analyze', {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ text: text }),
+        body: { text },
       });
-
-      if (!analyzeResponse.ok) {
-        const errorData = await analyzeResponse
-          .json()
-          .catch(() => ({ error: "Unknown error" }));
-        throw new Error(
-          errorData.error ||
-            `Analysis failed: HTTP ${analyzeResponse.status}: ${analyzeResponse.statusText}`
-        );
-      }
-
-      const analysisData: ContentAnalysis = await analyzeResponse.json();
       setAnalysisResult(analysisData);
       setProgress(80);
 
       if (analysisData.search_needed.should_search) {
         setProcessingStep("RESOURCES");
         setProgress(90);
-        const resourcesResponse = await fetch(`${API_BASE_URL}/api/resources`, {
+        const resourcesData = await api<{ extra_info: string }>('/api/resources', {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
+          body: {
             analysis: {
               core_topics: analysisData.core_topics,
               search_needed: analysisData.search_needed,
             },
-          }),
+          },
         });
-
-        if (!resourcesResponse.ok) {
-          const errorData = await resourcesResponse
-            .json()
-            .catch(() => ({ error: "Unknown error" }));
-          throw new Error(
-            errorData.error ||
-              `Resources failed: HTTP ${resourcesResponse.status}: ${resourcesResponse.statusText}`
-          );
-        }
-
-        const resourcesData = await resourcesResponse.json();
         setResourcesResult(resourcesData.extra_info);
         setProgress(100);
       } else {
@@ -233,23 +205,10 @@ const useImageProcessing = (): UseImageProcessingReturn => {
         example_phrase: item.example_phrase,
       }));
 
-      const response = await fetch(`${API_BASE_URL}/api/vocabulary`, {
+      await api('/api/vocabulary', {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ items: transformedItems, enrich }),
+        body: { items: transformedItems, enrich },
       });
-
-      if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => ({ error: "Unknown error" }));
-        throw new Error(
-          errorData.error ||
-            `Save failed: HTTP ${response.status}: ${response.statusText}`
-        );
-      }
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to save vocabulary";

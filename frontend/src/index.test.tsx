@@ -1,11 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import App from './App';
+import { AuthProvider } from './context/AuthContext';
+
+// Wrapper component for tests
+const wrapper = ({ children }: { children: React.ReactNode }) => (
+  <AuthProvider>{children}</AuthProvider>
+);
 
 describe('Font Loading', () => {
   it('should not have @import statements for external fonts', () => {
     // Render the app to ensure styles are loaded
-    render(<App />);
+    render(<App />, { wrapper });
 
     // Check that no style elements contain @import statements
     const styleElements = document.querySelectorAll('style');
@@ -35,7 +41,7 @@ describe('Font Loading', () => {
 
 describe('CSP Compliance', () => {
   it('should only use local stylesheets', () => {
-    render(<App />);
+    render(<App />, { wrapper });
 
     // Check that all stylesheets are local (relative paths or same origin)
     const styleLinks = document.querySelectorAll('link[rel="stylesheet"]');

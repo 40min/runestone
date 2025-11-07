@@ -18,8 +18,10 @@ from runestone.core.exceptions import RunestoneError
 from runestone.core.formatter import ResultFormatter
 from runestone.core.logging_config import get_logger
 from runestone.core.ocr import OCRProcessor
+from runestone.db.models import User
 from runestone.schemas.analysis import ContentAnalysis, SearchNeeded
 from runestone.schemas.ocr import OCRResult
+from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 
 
@@ -32,6 +34,7 @@ class RunestoneProcessor:
         ocr_processor: OCRProcessor,
         content_analyzer: ContentAnalyzer,
         vocabulary_service: VocabularyService,
+        user_service: UserService,
         verbose: Optional[bool] = None,
     ):
         """
@@ -41,8 +44,9 @@ class RunestoneProcessor:
             settings: Centralized application settings
             ocr_processor: OCR processor instance
             content_analyzer: Content analyzer instance
-            verbose: Enable verbose logging. If None, uses settings.verbose
             vocabulary_service: Vocabulary service for marking known words
+            user_service: User service for user operations
+            verbose: Enable verbose logging. If None, uses settings.verbose
         """
         # Use provided settings or create default
         self.settings = settings
@@ -55,11 +59,14 @@ class RunestoneProcessor:
                 raise RunestoneError("OCR processor cannot be None")
             if content_analyzer is None:
                 raise RunestoneError("Content analyzer cannot be None")
+            if user_service is None:
+                raise RunestoneError("User service cannot be None")
 
             self.ocr_processor = ocr_processor
             self.content_analyzer = content_analyzer
             self.formatter = ResultFormatter()
             self.vocabulary_service = vocabulary_service
+            self.user_service = user_service
         except Exception as e:
             raise RunestoneError(f"Failed to initialize processor: {str(e)}")
 
@@ -102,13 +109,13 @@ class RunestoneProcessor:
             else:
                 raise RunestoneError(f"OCR processing failed: {type(e).__name__}: {str(e)}")
 
-    def run_analysis(self, text: str, user_id: int = 1) -> ContentAnalysis:
+    def run_analysis(self, text: str, user: User) -> ContentAnalysis:
         """
         Analyze extracted text content and mark known vocabulary.
 
         Args:
             text: Extracted text from OCR
-            user_id: User ID for checking known vocabulary (default: 1)
+            user: User object for checking known vocabulary and incrementing stats
 
         Returns:
             Content analysis results with known vocabulary marked
@@ -134,7 +141,10 @@ class RunestoneProcessor:
 
             # Mark known vocabulary if vocabulary_service is available
             if analysis.vocabulary:
-                self._mark_known_vocabulary(analysis, user_id)
+                self._mark_known_vocabulary(analysis, user.id)
+
+            # Increment pages recognised count for successful analysis
+            self.user_service.increment_pages_recognised_count(user)
 
             return analysis
 
@@ -146,7 +156,7 @@ class RunestoneProcessor:
             else:
                 raise RunestoneError(f"Content analysis failed: {str(e)}")
 
-    def _mark_known_vocabulary(self, analysis: ContentAnalysis, user_id: int = 1) -> None:
+    def _mark_known_vocabulary(self, analysis: ContentAnalysis, user_id: int) -> None:
         """
         Mark vocabulary items as known if they exist in the user's database.
 
@@ -247,12 +257,13 @@ class RunestoneProcessor:
         except Exception as e:
             raise RunestoneError(f"Failed to generate markdown output: {str(e)}")
 
-    def process_image(self, image_path: Path) -> Dict[str, Any]:
+    def process_image(self, image_path: Path, user: User) -> Dict[str, Any]:
         """
         Process an image file through the complete Runestone workflow.
 
         Args:
             image_path: Path to the image file to process
+            user: User object for analysis and statistics
 
         Returns:
             Complete processing results dictionary with ocr_result, analysis, and extra_info
@@ -276,7 +287,7 @@ class RunestoneProcessor:
                 raise RunestoneError("No text extracted from image")
 
             # Step 2: Content analysis
-            analysis = self.run_analysis(extracted_text)
+            analysis = self.run_analysis(extracted_text, user)
 
             # Step 3: Resource search
             extra_info = self.run_resource_search(analysis.core_topics, analysis.search_needed)

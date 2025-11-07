@@ -24,7 +24,7 @@ class VocabularyRepository:
         """Initialize repository with database session."""
         self.db = db
 
-    def get_existing_word_phrases_for_batch(self, word_phrases: List[str], user_id: int = 1) -> set[str]:
+    def get_existing_word_phrases_for_batch(self, word_phrases: List[str], user_id: int) -> set[str]:
         """Get existing word_phrases for a user from the given batch."""
         if not word_phrases:
             return set()
@@ -35,7 +35,7 @@ class VocabularyRepository:
         )
         return {row[0] for row in result}
 
-    def batch_insert_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int = 1):
+    def batch_insert_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int):
         """Batch insert vocabulary items (assumes duplicates are already filtered)."""
         vocab_objects = [
             Vocabulary(
@@ -52,7 +52,7 @@ class VocabularyRepository:
         self.db.add_all(vocab_objects)
         self.db.commit()
 
-    def insert_vocabulary_item(self, item: VocabularyItemCreate, user_id: int = 1) -> Vocabulary:
+    def insert_vocabulary_item(self, item: VocabularyItemCreate, user_id: int) -> Vocabulary:
         """Insert a single vocabulary item."""
         vocab = Vocabulary(
             user_id=user_id,
@@ -68,7 +68,7 @@ class VocabularyRepository:
         self.db.refresh(vocab)
         return vocab
 
-    def upsert_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int = 1):
+    def upsert_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int):
         """Upsert vocabulary items: update if exists, insert if not."""
         if not items:
             return
@@ -98,7 +98,7 @@ class VocabularyRepository:
         self.db.execute(stmt)
         self.db.commit()
 
-    def add_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int = 1):
+    def add_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int):
         """Add vocabulary items to the database, handling uniqueness (legacy method)."""
         # Get unique word_phrases from the batch
         batch_word_phrases = [item.word_phrase for item in items]
@@ -120,7 +120,7 @@ class VocabularyRepository:
             self.batch_insert_vocabulary_items(filtered_items, user_id)
 
     def get_vocabulary(
-        self, limit: int, search_query: str | None = None, precise: bool = False, user_id: int = 1
+        self, user_id: int, limit: int, search_query: str | None = None, precise: bool = False
     ) -> List[Vocabulary]:
         r"""Retrieve vocabulary items for a user, optionally filtered by search query with wildcard support.
 
@@ -260,3 +260,15 @@ class VocabularyRepository:
         )
         self.db.commit()
         return deleted_rows > 0
+
+    def get_words_in_learn_count(self, user_id: int) -> int:
+        """Get count of vocabulary items with in_learn=True for a user."""
+        return self.db.query(Vocabulary).filter(Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True)).count()
+
+    def get_words_learned_count(self, user_id: int) -> int:
+        """Get count of vocabulary items with in_learn=True AND learned_times > 0 for a user."""
+        return (
+            self.db.query(Vocabulary)
+            .filter(Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True), Vocabulary.learned_times > 0)
+            .count()
+        )

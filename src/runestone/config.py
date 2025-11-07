@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     recall_end_hour: int = 22  # 10 PM
     recall_interval_minutes: int = 60
 
+    # JWT Configuration
+    jwt_secret_key: str
+    jwt_algorithm: str = "HS256"
+    jwt_expiration_days: int = 7
+    min_password_length: int = 6
+
     # Vocabulary Learning Configuration
     words_per_day: int = 5
     cooldown_days: int = 7

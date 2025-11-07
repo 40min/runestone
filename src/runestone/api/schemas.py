@@ -41,6 +41,8 @@ __all__ = [
     "VocabularyImproveResponse",
     "CheatsheetInfo",
     "CheatsheetContent",
+    "UserProfileResponse",
+    "UserProfileUpdate",
 ]
 
 
@@ -153,3 +155,32 @@ class CheatsheetContent(BaseModel):
     """Schema for cheatsheet content."""
 
     content: str
+
+
+class UserProfileResponse(BaseModel):
+    """Schema for user profile response with stats."""
+
+    id: int
+    email: str
+    name: str
+    surname: Optional[str] = None
+    timezone: str
+    pages_recognised_count: int
+    words_in_learn_count: int
+    words_learned_count: int
+    created_at: str
+    updated_at: str
+
+
+class UserProfileUpdate(BaseModel):
+    """Schema for updating user profile."""
+
+    name: Optional[str] = None
+    surname: Optional[str] = None
+    timezone: Optional[str] = None
+    password: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str

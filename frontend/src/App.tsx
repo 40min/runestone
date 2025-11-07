@@ -3,18 +3,26 @@ import FileUpload from "./components/FileUpload";
 import ResultsDisplay from "./components/ResultsDisplay";
 import VocabularyView from "./components/VocabularyView";
 import GrammarView from "./components/GrammarView";
+import Login from "./components/auth/Login";
+import Register from "./components/auth/Register";
+import Profile from "./components/auth/Profile";
 import useImageProcessing from "./hooks/useImageProcessing";
 import { useState } from "react";
 import StyledCheckbox from "./components/ui/StyledCheckbox";
-import { CustomButton } from "./components/ui"; // Import CustomButton
-import { BrainCircuit } from "lucide-react"; // Import BrainCircuit
-import { Box } from "@mui/material"; // Import Box for layout
+import { CustomButton } from "./components/ui";
+import { BrainCircuit } from "lucide-react";
+import { Box } from "@mui/material";
+import { useAuth } from "./context/AuthContext";
+
+type AuthView = "login" | "register";
 
 function App() {
   const [currentView, setCurrentView] = useState<
-    "analyzer" | "vocabulary" | "grammar"
+    "analyzer" | "vocabulary" | "grammar" | "profile"
   >("analyzer");
   const [recognizeOnly, setRecognizeOnly] = useState(false);
+  const [authView, setAuthView] = useState<AuthView>("login");
+  const { isAuthenticated } = useAuth();
 
   const {
     processImage,
@@ -41,6 +49,14 @@ function App() {
 
   const isAnalyzeButtonDisabled =
     processingStep === "ANALYZING" || processingStep === "RESOURCES";
+
+  // If not authenticated, show auth views
+  if (!isAuthenticated()) {
+    if (authView === "register") {
+      return <Register onSwitchToLogin={() => setAuthView("login")} />;
+    }
+    return <Login onSwitchToRegister={() => setAuthView("register")} />;
+  }
 
   return (
     <div className="bg-[#1a102b] min-h-screen">
@@ -105,8 +121,10 @@ function App() {
               </>
             ) : currentView === "vocabulary" ? (
               <VocabularyView />
-            ) : (
+            ) : currentView === "grammar" ? (
               <GrammarView />
+            ) : (
+              <Profile />
             )}
           </div>
         </main>
