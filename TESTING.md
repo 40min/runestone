@@ -5,6 +5,7 @@ This guide documents the testing strategy and infrastructure for the Runestone p
 ## Table of Contents
 
 - [Testing Architecture](#testing-architecture)
+- [Testing Strategy](#testing-strategy)
 - [Database Isolation Strategy](#database-isolation-strategy)
 - [Key Fixtures](#key-fixtures)
 - [Writing New Tests](#writing-new-tests)
@@ -21,6 +22,184 @@ All test configuration and shared fixtures are centralized in:
 - `tests/conftest.py`: Root configuration and shared fixtures
 - `tests/api/conftest.py`: API-specific fixtures
 - `tests/db/conftest.py`: Database-specific fixtures (if needed)
+
+## Testing Strategy
+
+### Testing Philosophy
+
+The Runestone project employs a **hybrid testing approach** that combines the best of both patching and fixture-based testing. This strategy was chosen after architectural evaluation to optimize for test speed, maintainability, and reliability.
+
+#### Hybrid Approach Overview
+- **Patches for Unit Tests**: Service and unit tests use `@patch` decorators to mock external dependencies
+- **Fixtures for Integration Tests**: API and integration tests use specialized fixtures to mock entire services
+- **Factory Pattern for Complex Scenarios**: The `client_with_overrides` fixture provides flexible mocking for complex test scenarios
+
+#### Why This Approach is Optimal
+- **Performance**: Patches are lightweight and fast for unit tests
+- **Isolation**: Fixtures provide complete service isolation for integration tests
+- **Flexibility**: Factory fixtures allow customization without boilerplate
+- **Maintainability**: Clear separation of concerns between test types
+- **Reliability**: Consistent mocking patterns reduce test flakiness
+
+#### Benefits of Each Approach
+- **Patches**: Minimal setup, fast execution, focused on specific functions
+- **Fixtures**: Realistic integration testing, automatic cleanup, shared setup
+- **Factory Fixtures**: Maximum flexibility, complex scenarios, reusable configurations
+
+### When to Use Each Approach
+
+#### Service/Unit Tests → Use `@patch` decorators
+Use patches when testing individual functions or methods that have external dependencies:
+- Database operations
+- API calls to external services
+- File system operations
+- Complex business logic with multiple dependencies
+
+#### API/Integration Tests → Use specialized fixtures
+Use fixtures when testing complete workflows or API endpoints:
+- Full request/response cycles
+- Authentication and authorization
+- Database transactions
+- Service integrations
+
+#### Complex Scenarios → Use `client_with_overrides`
+Use the factory fixture for advanced testing needs:
+- Multiple service mocks required
+- Custom user contexts
+- Specific database states
+- Non-standard configurations
+
+### Available Fixtures
+
+#### Public API Client Fixtures
+Located in `tests/api/conftest.py`:
+
+- **`client`**: Standard test client with fresh database and authenticated user
+- **`client_with_mock_processor`**: Client with mocked RunestoneProcessor
+- **`client_with_mock_vocabulary_service`**: Client with mocked vocabulary service
+- **`client_with_mock_grammar_service`**: Client with mocked grammar service
+- **`client_with_overrides`**: Factory fixture for customizable client configurations
+
+#### `client_with_overrides` Parameters
+The factory fixture accepts these override parameters:
+- `vocabulary_service`: Custom vocabulary service instance
+- `grammar_service`: Custom grammar service instance
+- `processor`: Custom RunestoneProcessor instance
+- `llm_client`: Custom LLM client
+- `current_user`: Custom user object for authentication
+- `db_override`: Custom database session
+
+Returns: `(client, mocks_dict)` where `mocks_dict` contains all created mock objects.
+
+### Decision Matrix
+
+| Test Type | Scenario | Recommended Approach | Example |
+|-----------|----------|---------------------|---------|
+| Service/Unit | Single method with DB dependency | `@patch` decorator | `test_user_service.py` |
+| Service/Unit | Complex business logic | `@patch` decorators | `test_vocabulary_service.py` |
+| API/Integration | Basic endpoint testing | `client` fixture | Simple CRUD operations |
+| API/Integration | Mocked service response | `client_with_mock_*` fixtures | Grammar cheatsheets endpoint |
+| API/Integration | Multiple service mocks | `client_with_overrides` | Complex vocabulary improvement |
+| Complex | Custom user authentication | `client_with_overrides` | Admin-only endpoints |
+| Complex | Specific database state | `client_with_overrides` | Data migration testing |
+| Complex | Non-standard service config | `client_with_overrides` | Error handling scenarios |
+
+### Code Examples
+
+#### Service Test Using Patches
+```python
+from unittest.mock import patch
+import pytest
+
+def test_improve_vocabulary_success(vocabulary_service, db_with_test_user):
+    """Test successful vocabulary improvement with mocked processor."""
+    db, test_user = db_with_test_user
+
+    # Create test vocabulary item
+    vocab_item = Vocabulary(
+        user_id=test_user.id,
+        word_phrase="hello",
+        translation="hej"
+    )
+    db.add(vocab_item)
+    db.commit()
+
+    # Mock the processor's improve_item method
+    with patch.object(vocabulary_service.processor, 'improve_item') as mock_improve:
+        mock_improve.return_value = {
+            "translation": "improved translation",
+            "example_phrase": "improved example"
+        }
+
+        # Call the service method
+        result = vocabulary_service.improve_item(test_user.id, "hello")
+
+        # Verify the result
+        assert result["translation"] == "improved translation"
+        assert result["example_phrase"] == "improved example"
+        mock_improve.assert_called_once_with("hello")
+```
+
+#### API Test Using Fixtures
+```python
+def test_get_grammar_cheatsheets(client_with_mock_grammar_service):
+    """Test grammar cheatsheets endpoint with mocked service."""
+    client, mock_service = client_with_mock_grammar_service
+
+    # Configure the mock response
+    mock_service.list_cheatsheets.return_value = [
+        {"title": "Pronouns", "content": "Content here"},
+        {"title": "Verbs", "content": "Verb content"}
+    ]
+
+    # Make the API request
+    response = client.get("/api/grammar/cheatsheets")
+
+    # Verify the response
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["title"] == "Pronouns"
+
+    # Verify the service was called correctly
+    mock_service.list_cheatsheets.assert_called_once()
+```
+
+#### Complex Scenario Using `client_with_overrides`
+```python
+def test_vocabulary_improvement_with_custom_services(client_with_overrides):
+    """Test vocabulary improvement with multiple custom service mocks."""
+    # Create custom mock services
+    mock_vocab_service = Mock()
+    mock_vocab_service.improve_item.return_value = {
+        "translation": "custom translation",
+        "example_phrase": "custom example"
+    }
+
+    mock_grammar_service = Mock()
+    mock_grammar_service.validate_grammar.return_value = True
+
+    # Create client with custom overrides
+    client, mocks = client_with_overrides(
+        vocabulary_service=mock_vocab_service,
+        grammar_service=mock_grammar_service
+    )
+
+    # Make request that uses both services
+    response = client.post("/api/vocabulary/improve", json={
+        "word_phrase": "test",
+        "translation": "test translation"
+    })
+
+    # Verify response
+    assert response.status_code == 200
+    data = response.json()
+    assert data["translation"] == "custom translation"
+
+    # Verify both services were used
+    mock_vocab_service.improve_item.assert_called_once()
+    mock_grammar_service.validate_grammar.assert_called_once()
+```
 
 ## Database Isolation Strategy
 
