@@ -31,6 +31,9 @@ def client(client_with_overrides, db_with_test_user):
 
     This fixture is a simple consumer of the client_with_overrides factory
     with default parameters (empty overrides dict).
+
+    The database session is accessible via client.db for direct database operations.
+    The test user is accessible via client.user for user-related operations.
     """
     db, test_user = db_with_test_user
 
@@ -50,6 +53,10 @@ def client(client_with_overrides, db_with_test_user):
 
     client_gen = client_with_overrides(vocabulary_service=vocab_service)
     client, mocks = next(client_gen)
+
+    # Attach database session and user as attributes
+    client.db = db
+    client.user = test_user
 
     yield client
 

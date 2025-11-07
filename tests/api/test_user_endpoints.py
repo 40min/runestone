@@ -28,27 +28,8 @@ class TestUserProfileEndpoints:
         assert "created_at" in data
         assert "updated_at" in data
 
-    def test_get_user_profile_with_vocabulary_stats(self, client_with_overrides, db_with_test_user):
+    def test_get_user_profile_with_vocabulary_stats(self, client):
         """Test user profile with vocabulary statistics."""
-        # Get the test user and database session from the fixture
-        db, test_user = db_with_test_user
-
-        # Create a vocabulary repository and service that use the same database session
-        from unittest.mock import Mock
-
-        from runestone.db.vocabulary_repository import VocabularyRepository
-        from runestone.services.vocabulary_service import VocabularyService
-
-        # Mock settings to avoid dependency injection issues
-        mock_settings = Mock()
-        mock_settings.vocabulary_enrichment_enabled = True
-
-        # Create the repository and service with the test database session
-        vocab_repo = VocabularyRepository(db)
-        vocab_service = VocabularyService(vocab_repo, mock_settings, Mock())
-
-        client_gen = client_with_overrides(vocabulary_service=vocab_service)
-        client, _ = next(client_gen)
 
         # Save some vocabulary items
         vocab_payload = {
@@ -84,10 +65,10 @@ class TestUserProfileEndpoints:
         learned_item_id = apple_item["id"]
 
         # Use update_last_learned method to properly increment learned_times
-        from runestone.dependencies import get_vocabulary_repository
+        from runestone.db.vocabulary_repository import VocabularyRepository
 
-        repo = get_vocabulary_repository(db)
-        vocab = repo.get_vocabulary_item(learned_item_id, test_user.id)
+        repo = VocabularyRepository(client.db)
+        vocab = repo.get_vocabulary_item(learned_item_id, client.user.id)
         repo.update_last_learned(vocab)
 
         # Get user profile
