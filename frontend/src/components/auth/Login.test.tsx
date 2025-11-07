@@ -67,8 +67,10 @@ describe("Login", () => {
     await userEvent.click(loginButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8010/api/auth",
+      // Check first call - authentication request
+      expect(global.fetch).toHaveBeenNthCalledWith(
+        1,
+        "http://localhost:8010/api/auth/",
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({
@@ -76,6 +78,19 @@ describe("Login", () => {
             password: "password123",
           }),
         })
+      );
+
+      // Check second call - user data request with token (now properly authenticated!)
+      expect(global.fetch).toHaveBeenNthCalledWith(
+        2,
+        "http://localhost:8010/api/me",
+        {
+          method: "GET",
+          headers: {
+            "Authorization": "Bearer test-token",
+            "Content-Type": "application/json",
+          },
+        }
       );
     });
 

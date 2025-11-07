@@ -62,7 +62,7 @@ describe('useAuthActions', () => {
     await result.current.login({ email: 'test@example.com', password: 'password123' });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8010/api/auth',
+      'http://localhost:8010/api/auth/',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ email: 'test@example.com', password: 'password123' }),
@@ -70,7 +70,7 @@ describe('useAuthActions', () => {
     );
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8010/users/me',
+      'http://localhost:8010/api/me',
       expect.any(Object)
     );
 
@@ -146,8 +146,11 @@ describe('useAuthActions', () => {
 
     // Should automatically login after registration
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8010/api/auth',
-      expect.any(Object)
+      'http://localhost:8010/api/auth/',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ email: 'test@example.com', password: 'password123' }),
+      })
     );
 
     await waitFor(() => {
@@ -202,7 +205,7 @@ describe('useAuthActions', () => {
     });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8010/users/me',
+      'http://localhost:8010/api/me',
       expect.objectContaining({
         method: 'PUT',
         headers: expect.objectContaining({
@@ -331,10 +334,23 @@ describe('useAuthActions', () => {
       password: 'password123'
     });
 
+    // Verify registration was called first
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://localhost:8010/api/auth/register',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          email: 'new@example.com',
+          password: 'password123'
+        }),
+      })
+    );
+
     // Verify login was called with registration credentials
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8010/api/auth',
+      'http://localhost:8010/api/auth/',
       expect.objectContaining({
+        method: 'POST',
         body: JSON.stringify({
           email: 'new@example.com',
           password: 'password123'
@@ -414,7 +430,7 @@ describe('useAuthActions', () => {
     });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8010/users/me',
+      'http://localhost:8010/api/me',
       expect.objectContaining({
         method: 'PUT',
         body: JSON.stringify({

@@ -95,7 +95,7 @@ describe("Profile", () => {
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8010/users/me",
+        "http://localhost:8010/api/me",
         expect.objectContaining({
           method: "PUT",
           body: JSON.stringify({
@@ -290,7 +290,7 @@ describe("Profile", () => {
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8010/users/me",
+        "http://localhost:8010/api/me",
         expect.objectContaining({
           body: JSON.stringify({
             name: "Test",
@@ -322,7 +322,7 @@ describe("Profile", () => {
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8010/users/me",
+        "http://localhost:8010/api/me",
         expect.objectContaining({
           body: JSON.stringify({
             name: "Test",
@@ -361,7 +361,7 @@ describe("Profile", () => {
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8010/users/me",
+        "http://localhost:8010/api/me",
         expect.objectContaining({
           body: JSON.stringify({
             name: "NewName",
@@ -395,7 +395,7 @@ describe("Profile", () => {
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8010/users/me",
+        "http://localhost:8010/api/me",
         expect.objectContaining({
           body: JSON.stringify({
             name: "Test",
@@ -455,7 +455,7 @@ describe("Profile", () => {
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8010/users/me",
+        "http://localhost:8010/api/me",
         expect.objectContaining({
           method: "PUT",
           body: JSON.stringify({

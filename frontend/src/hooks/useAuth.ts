@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { useAuth as useAuthContext } from '../context/AuthContext';
-import { useApi } from '../utils/api';
+import { useState } from "react";
+import { useAuth as useAuthContext } from "../context/AuthContext";
+import { useApi, apiRequest } from "../utils/api";
 
 interface UserData {
   id: number;
@@ -48,18 +48,19 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     setError(null);
 
     try {
-      const data = await api<{ access_token: string }>('/api/auth', {
-        method: 'POST',
+      const data = await api<{ access_token: string }>("/api/auth/", {
+        method: "POST",
         body: credentials,
       });
 
-      // Fetch user data
-      const userData: UserData = await api<UserData>('/users/me');
+      // Get fresh user data with the new token (now properly authenticated!)
+      const userData: UserData = await apiRequest<UserData>("/api/me", {}, data.access_token);
 
-      // Store token and user data
+      // Update with real user data
       contextLogin(data.access_token, userData);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+      const errorMessage =
+        err instanceof Error ? err.message : "An error occurred";
       setError(errorMessage);
       throw err;
     } finally {
@@ -72,15 +73,16 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     setError(null);
 
     try {
-      await api('/api/auth/register', {
-        method: 'POST',
+      await api("/api/auth/register", {
+        method: "POST",
         body: data,
       });
 
       // Automatically log in after successful registration
       await login({ email: data.email, password: data.password });
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+      const errorMessage =
+        err instanceof Error ? err.message : "An error occurred";
       setError(errorMessage);
       throw err;
     } finally {
@@ -93,18 +95,19 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     setError(null);
 
     try {
-      const updatedUserData: UserData = await api<UserData>('/users/me', {
-        method: 'PUT',
+      const updatedUserData: UserData = await api<UserData>("/api/me", {
+        method: "PUT",
         body: updates,
       });
 
       // Update stored user data
-      const currentToken = localStorage.getItem('runestone_token');
+      const currentToken = localStorage.getItem("runestone_token");
       if (currentToken) {
         contextLogin(currentToken, updatedUserData);
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+      const errorMessage =
+        err instanceof Error ? err.message : "An error occurred";
       setError(errorMessage);
       throw err;
     } finally {
