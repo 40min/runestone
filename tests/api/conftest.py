@@ -144,12 +144,8 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
         overrides = {
             get_llm_client: override_get_llm_client,
             get_current_user: override_get_current_user,
+            get_db: db_override or override_get_db,
         }
-
-        if db_override is not None:
-            overrides[get_db] = db_override
-        else:
-            overrides[get_db] = override_get_db
 
         if vocabulary_service:
             overrides[get_vocabulary_service] = lambda: vocabulary_service
