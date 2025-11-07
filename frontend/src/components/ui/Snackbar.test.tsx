@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import Snackbar from "./Snackbar";
@@ -39,14 +39,18 @@ describe("Snackbar", () => {
 
     expect(screen.getByText("Test message")).toBeInTheDocument();
 
-    vi.advanceTimersByTime(1000);
+    // Advance timer by 1000ms (autoHideDuration) - this triggers handleClose in useEffect
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
 
-    await waitFor(
-      () => {
-        expect(defaultProps.onClose).toHaveBeenCalled();
-      },
-      { timeout: 2000 }
-    );
+    // Advance additional 300ms for the handleClose timeout - this triggers onClose
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    // onClose should have been called by now
+    expect(defaultProps.onClose).toHaveBeenCalled();
 
     vi.useRealTimers();
   });
