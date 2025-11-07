@@ -8,9 +8,9 @@ from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
+from runestone.api.schemas import LoginRequest
 from runestone.auth.security import create_access_token, hash_password, verify_password
 from runestone.config import settings
 from runestone.db.database import get_db
@@ -68,13 +68,13 @@ async def register(user_data: dict, db: Annotated[Session, Depends(get_db)]):
     return {"message": "User registered successfully", "user_id": db_user.id}
 
 
-@router.post("/token")
-async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Annotated[Session, Depends(get_db)]):
+@router.post("/")
+async def login(login_data: LoginRequest, db: Annotated[Session, Depends(get_db)]):
     """
     Authenticate user and return access token.
 
     Args:
-        form_data: OAuth2 form data with username (email) and password
+        login_data: Login request with email and password
         db: Database session
 
     Returns:
@@ -83,8 +83,8 @@ async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: 
     Raises:
         HTTPException: If credentials are invalid
     """
-    user = db.query(User).filter(User.email == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    user = db.query(User).filter(User.email == login_data.email).first()
+    if not user or not verify_password(login_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",

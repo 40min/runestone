@@ -9,6 +9,12 @@ export interface ApiClientOptions {
   headers?: Record<string, string>;
 }
 
+// Type for validation error items
+interface ValidationErrorItem {
+  msg?: string;
+  [key: string]: unknown;
+}
+
 // Custom hook that provides authenticated API client
 export const useApi = () => {
   const { token, logout } = useAuth();
@@ -46,14 +52,34 @@ export const useApi = () => {
     // Handle 401 Unauthorized - automatically logout
     if (response.status === 401) {
       logout();
-      throw new Error('Authentication required. Please log in again.');
+      // Continue to error handling below to use backend error message
     }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({
         detail: 'An error occurred',
       }));
-      throw new Error(error.detail || 'Request failed');
+
+      // Handle different error formats
+      let errorMessage = 'Request failed';
+      if (typeof error.detail === 'string') {
+        errorMessage = error.detail;
+      } else if (error.detail && typeof error.detail === 'object') {
+        // Handle validation errors from FastAPI with multiple fields
+        if (Array.isArray(error.detail)) {
+          errorMessage = error.detail.map((err: ValidationErrorItem) =>
+            typeof err === 'string' ? err : (err.msg ?? 'Validation error')
+          ).join(', ');
+        } else if (error.detail.message) {
+          errorMessage = error.detail.message;
+        } else {
+          errorMessage = JSON.stringify(error.detail);
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      throw new Error(errorMessage);
     }
 
     return response.json();
@@ -91,7 +117,27 @@ export const apiRequest = async <T>(
     const error = await response.json().catch(() => ({
       detail: 'An error occurred',
     }));
-    throw new Error(error.detail || 'Request failed');
+
+    // Handle different error formats
+    let errorMessage = 'Request failed';
+    if (typeof error.detail === 'string') {
+      errorMessage = error.detail;
+    } else if (error.detail && typeof error.detail === 'object') {
+      // Handle validation errors from FastAPI with multiple fields
+      if (Array.isArray(error.detail)) {
+        errorMessage = error.detail.map((err: ValidationErrorItem) =>
+          typeof err === 'string' ? err : err.msg || 'Validation error'
+        ).join(', ');
+      } else if (error.detail.message) {
+        errorMessage = error.detail.message;
+      } else {
+        errorMessage = JSON.stringify(error.detail);
+      }
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+
+    throw new Error(errorMessage);
   }
 
   return response.json();

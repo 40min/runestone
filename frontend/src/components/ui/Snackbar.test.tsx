@@ -1,0 +1,75 @@
+import React from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import Snackbar from './Snackbar';
+
+describe('Snackbar', () => {
+  const defaultProps = {
+    message: 'Test message',
+    open: true,
+    onClose: jest.fn(),
+  };
+
+  it('renders with default props', () => {
+    render(<Snackbar {...defaultProps} />);
+    expect(screen.getByText('Test message')).toBeInTheDocument();
+  });
+
+  it('does not render when open is false', () => {
+    render(<Snackbar {...defaultProps} open={false} />);
+    expect(screen.queryByText('Test message')).not.toBeInTheDocument();
+  });
+
+  it('calls onClose when close button is clicked', async () => {
+    const user = userEvent.setup();
+    render(<Snackbar {...defaultProps} />);
+
+    const closeButton = screen.getByRole('button');
+    await user.click(closeButton);
+
+    await waitFor(() => {
+      expect(defaultProps.onClose).toHaveBeenCalled();
+    });
+  });
+
+  it('auto-hides after specified duration', async () => {
+    jest.useFakeTimers();
+    render(<Snackbar {...defaultProps} autoHideDuration={1000} />);
+
+    expect(screen.getByText('Test message')).toBeInTheDocument();
+
+    jest.advanceTimersByTime(1000);
+
+    await waitFor(() => {
+      expect(defaultProps.onClose).toHaveBeenCalled();
+    });
+
+    jest.useRealTimers();
+  });
+
+  it('displays different icons for different severities', () => {
+    const { rerender } = render(<Snackbar {...defaultProps} severity="success" />);
+    expect(screen.getByTestId('CheckCircleIcon')).toBeInTheDocument();
+
+    rerender(<Snackbar {...defaultProps} severity="error" />);
+    expect(screen.getByTestId('ErrorIcon')).toBeInTheDocument();
+
+    rerender(<Snackbar {...defaultProps} severity="warning" />);
+    expect(screen.getByTestId('WarningIcon')).toBeInTheDocument();
+
+    rerender(<Snackbar {...defaultProps} severity="info" />);
+    expect(screen.getByTestId('InfoIcon')).toBeInTheDocument();
+  });
+
+  it('wraps long text appropriately', () => {
+    const longMessage = 'This is a very long message that should wrap properly within the snackbar component without causing layout issues or overflow problems on different screen sizes.';
+    render(<Snackbar {...defaultProps} message={longMessage} />);
+
+    const messageElement = screen.getByText(longMessage);
+    expect(messageElement).toBeInTheDocument();
+    expect(messageElement).toHaveStyle({
+      wordWrap: 'break-word',
+      overflowWrap: 'break-word',
+    });
+  });
+});

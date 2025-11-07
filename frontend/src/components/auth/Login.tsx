@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import type { FormEvent } from "react";
-import { Box, TextField } from "@mui/material";
+import { Box, TextField, Snackbar, Alert } from "@mui/material";
+import type { AlertColor } from "@mui/material";
 import { useAuthActions } from "../../hooks/useAuth";
-import { CustomButton, ErrorAlert } from "../ui";
+import { CustomButton } from "../ui";
 import AuthButton from "./AuthButton";
 
 interface LoginProps {
@@ -12,22 +13,34 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: AlertColor;
+  }>({
+    open: false,
+    message: "",
+    severity: "error",
+  });
   const { login, loading } = useAuthActions();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError("");
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
-      return;
-    }
 
     try {
       await login({ email, password });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      const errorMessage =
+        err instanceof Error ? err.message : "An error occurred";
+
+      // Log technical details to console
+      console.error("Login error:", err);
+
+      setSnackbar({
+        open: true,
+        message: errorMessage,
+        severity: "error",
+      });
     }
   };
 
@@ -48,11 +61,7 @@ const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
         backdropFilter: "blur(10px)",
       }}
     >
-      <h2 className="text-3xl font-bold text-white text-center mb-4">
-        Login
-      </h2>
-
-      {error && <ErrorAlert message={error} />}
+      <h2 className="text-3xl font-bold text-white text-center mb-4">Login</h2>
 
       <TextField
         label="Email"
@@ -66,7 +75,9 @@ const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
             color: "white",
             "& fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
             "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.5)" },
-            "&.Mui-focused fieldset": { borderColor: "rgba(255, 255, 255, 0.8)" },
+            "&.Mui-focused fieldset": {
+              borderColor: "rgba(255, 255, 255, 0.8)",
+            },
           },
           "& .MuiInputLabel-root": { color: "rgba(255, 255, 255, 0.7)" },
           "& .MuiInputLabel-root.Mui-focused": { color: "white" },
@@ -85,7 +96,9 @@ const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
             color: "white",
             "& fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
             "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.5)" },
-            "&.Mui-focused fieldset": { borderColor: "rgba(255, 255, 255, 0.8)" },
+            "&.Mui-focused fieldset": {
+              borderColor: "rgba(255, 255, 255, 0.8)",
+            },
           },
           "& .MuiInputLabel-root": { color: "rgba(255, 255, 255, 0.7)" },
           "& .MuiInputLabel-root.Mui-focused": { color: "white" },
@@ -111,6 +124,21 @@ const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
       >
         Don't have an account? Register
       </CustomButton>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

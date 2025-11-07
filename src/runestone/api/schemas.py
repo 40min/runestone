@@ -179,3 +179,8 @@ class UserProfileUpdate(BaseModel):
     surname: Optional[str] = None
     timezone: Optional[str] = None
     password: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str

@@ -48,7 +48,7 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     setError(null);
 
     try {
-      const data = await api<{ access_token: string }>('/auth/token', {
+      const data = await api<{ access_token: string }>('/api/auth', {
         method: 'POST',
         body: credentials,
       });
@@ -72,7 +72,7 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     setError(null);
 
     try {
-      await api('/auth/register', {
+      await api('/api/auth/register', {
         method: 'POST',
         body: data,
       });
