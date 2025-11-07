@@ -65,7 +65,7 @@ def upgrade() -> None:
 
         # Add the proper user_id column
         if "user_id" not in vocabulary_columns:
-            batch_op.add_column(sa.Column("user_id", sa.Integer(), nullable=False))
+            batch_op.add_column(sa.Column("user_id", sa.Integer(), nullable=False, server_default='1'))
 
         # Copy data from temp column to user_id
         op.execute("UPDATE vocabulary SET user_id = user_id_temp")
