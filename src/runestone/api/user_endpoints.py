@@ -37,8 +37,6 @@ async def get_user_profile(
     Returns user profile information including vocabulary statistics.
     """
     try:
-        # TODO: fresh data from db should be fetched, not data from the time
-        # of login
         return service.get_user_profile(current_user)
     except Exception as e:
         logger.error(f"Failed to get user profile for user {current_user.id}: {e}")

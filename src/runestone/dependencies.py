@@ -61,6 +61,23 @@ def get_vocabulary_repository(db: Annotated[Session, Depends(get_db)]) -> Vocabu
     return VocabularyRepository(db)
 
 
+def get_user_service(
+    user_repo: Annotated[UserRepository, Depends(get_user_repository)],
+    vocab_repo: Annotated[VocabularyRepository, Depends(get_vocabulary_repository)],
+) -> UserService:
+    """
+    Dependency injection for user service.
+
+    Args:
+        user_repo: UserRepository from dependency injection
+        vocab_repo: VocabularyRepository from dependency injection
+
+    Returns:
+        UserService: Service instance with repository dependencies
+    """
+    return UserService(user_repo, vocab_repo)
+
+
 def get_llm_client(settings: Annotated[Settings, Depends(get_settings)]) -> BaseLLMClient:
     """
     Dependency injection for LLM client.
@@ -161,7 +178,7 @@ def get_runestone_processor(
     ocr_processor: Annotated[OCRProcessor, Depends(get_ocr_processor)],
     content_analyzer: Annotated[ContentAnalyzer, Depends(get_content_analyzer)],
     vocabulary_service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
-    user_repository: Annotated[UserRepository, Depends(get_user_repository)],
+    user_service: Annotated[UserService, Depends(get_user_service)],
 ) -> RunestoneProcessor:
     """
     Dependency injection for Runestone processor.
@@ -171,12 +188,12 @@ def get_runestone_processor(
         ocr_processor: OCR processor from dependency injection
         content_analyzer: Content analyzer from dependency injection
         vocabulary_service: Vocabulary service from dependency injection
-        user_repository: User repository from dependency injection
+        user_service: User service from dependency injection
 
     Returns:
         RunestoneProcessor: Runestone processor instance
     """
-    return RunestoneProcessor(settings, ocr_processor, content_analyzer, vocabulary_service, user_repository)
+    return RunestoneProcessor(settings, ocr_processor, content_analyzer, vocabulary_service, user_service)
 
 
 def get_grammar_service(settings: Annotated[Settings, Depends(get_settings)]) -> GrammarService:
@@ -190,20 +207,3 @@ def get_grammar_service(settings: Annotated[Settings, Depends(get_settings)]) ->
         GrammarService: Service instance for grammar operations
     """
     return GrammarService(settings.cheatsheets_dir)
-
-
-def get_user_service(
-    user_repo: Annotated[UserRepository, Depends(get_user_repository)],
-    vocab_repo: Annotated[VocabularyRepository, Depends(get_vocabulary_repository)],
-) -> UserService:
-    """
-    Dependency injection for user service.
-
-    Args:
-        user_repo: UserRepository from dependency injection
-        vocab_repo: VocabularyRepository from dependency injection
-
-    Returns:
-        UserService: Service instance with repository dependencies
-    """
-    return UserService(user_repo, vocab_repo)

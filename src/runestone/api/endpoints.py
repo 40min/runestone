@@ -30,14 +30,8 @@ from runestone.core.exceptions import RunestoneError, VocabularyItemExists
 from runestone.core.logging_config import get_logger
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.models import User
-from runestone.dependencies import (
-    get_grammar_service,
-    get_runestone_processor,
-    get_user_service,
-    get_vocabulary_service,
-)
+from runestone.dependencies import get_grammar_service, get_runestone_processor, get_vocabulary_service
 from runestone.services.grammar_service import GrammarService
-from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 
 router = APIRouter()
@@ -131,7 +125,6 @@ async def analyze_content(
     request: AnalysisRequest,
     processor: Annotated[RunestoneProcessor, Depends(get_runestone_processor)],
     current_user: Annotated[User, Depends(get_current_user)],
-    user_service: Annotated[UserService, Depends(get_user_service)],
 ) -> ContentAnalysis:
     """
     Analyze extracted text content.
@@ -152,7 +145,7 @@ async def analyze_content(
 
     try:
         # Run content analysis
-        analysis_result = processor.run_analysis(request.text, current_user.id)
+        analysis_result = processor.run_analysis(request.text, current_user)
 
         # ContentAnalysis object - return directly (unified schema)
         vocab_count = len(analysis_result.vocabulary)

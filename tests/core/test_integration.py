@@ -14,9 +14,9 @@ from runestone.core.console import setup_console
 from runestone.core.exceptions import RunestoneError
 from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
-from runestone.db.user_repository import UserRepository
 from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
 from runestone.schemas.ocr import OCRResult, RecognitionStatistics
+from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 
 
@@ -42,7 +42,7 @@ class TestRunestoneIntegration:
             ocr_processor=mock_ocr,
             content_analyzer=mock_analyzer,
             vocabulary_service=Mock(spec=VocabularyService),
-            user_repository=Mock(spec=UserRepository),
+            user_service=Mock(spec=UserService),
             verbose=True,
         )
 
@@ -59,7 +59,7 @@ class TestRunestoneIntegration:
                 ocr_processor=None,
                 content_analyzer=None,
                 vocabulary_service=Mock(spec=VocabularyService),
-                user_repository=Mock(spec=UserRepository),
+                user_service=Mock(spec=UserService),
             )
 
         assert "Failed to initialize processor" in str(exc_info.value)
@@ -117,20 +117,24 @@ class TestRunestoneIntegration:
         mock_formatter_instance = Mock()
         mock_formatter.return_value = mock_formatter_instance
 
+        # Create a mock user for testing
+        mock_user = Mock()
+        mock_user.id = 1
+
         # Run processor with new stateless workflow
         processor = RunestoneProcessor(
             settings=self.settings,
             ocr_processor=mock_ocr_processor,
             content_analyzer=mock_content_analyzer,
             vocabulary_service=Mock(spec=VocabularyService),
-            user_repository=Mock(spec=UserRepository),
+            user_service=Mock(spec=UserService),
             verbose=True,
         )
 
         # Simulate the workflow step by step
         image_bytes = b"fake image data"
         ocr_result = processor.run_ocr(image_bytes)
-        analysis_result = processor.run_analysis(ocr_result.transcribed_text, user_id=1)
+        analysis_result = processor.run_analysis(ocr_result.transcribed_text, user=mock_user)
         resources_result = processor.run_resource_search(analysis_result.core_topics, analysis_result.search_needed)
 
         # Verify workflow execution
@@ -164,7 +168,7 @@ class TestRunestoneIntegration:
             ocr_processor=mock_ocr_processor,
             content_analyzer=mock_content_analyzer,
             vocabulary_service=Mock(spec=VocabularyService),
-            user_repository=Mock(spec=UserRepository),
+            user_service=Mock(spec=UserService),
         )
 
         with pytest.raises(RunestoneError) as exc_info:
@@ -196,17 +200,21 @@ class TestRunestoneIntegration:
 
         mock_content_analyzer = Mock(spec=ContentAnalyzer)
 
+        # Create a mock user for testing
+        mock_user = Mock()
+        mock_user.id = 1
+
         processor = RunestoneProcessor(
             settings=self.settings,
             ocr_processor=mock_ocr_processor,
             content_analyzer=mock_content_analyzer,
             vocabulary_service=Mock(spec=VocabularyService),
-            user_repository=Mock(spec=UserRepository),
+            user_service=Mock(spec=UserService),
         )
 
         with pytest.raises(RunestoneError) as exc_info:
             ocr_result = processor.run_ocr(b"fake image data")
-            processor.run_analysis(ocr_result.transcribed_text, user_id=1)
+            processor.run_analysis(ocr_result.transcribed_text, user=mock_user)
 
         assert "No text provided for analysis" in str(exc_info.value)
 
@@ -245,7 +253,7 @@ class TestRunestoneIntegration:
             ocr_processor=mock_ocr_processor,
             content_analyzer=mock_content_analyzer,
             vocabulary_service=Mock(spec=VocabularyService),
-            user_repository=Mock(spec=UserRepository),
+            user_service=Mock(spec=UserService),
         )
         processor.display_results_console(mock_results)
 
@@ -291,7 +299,7 @@ class TestRunestoneIntegration:
             ocr_processor=mock_ocr_processor,
             content_analyzer=mock_content_analyzer,
             vocabulary_service=Mock(spec=VocabularyService),
-            user_repository=Mock(spec=UserRepository),
+            user_service=Mock(spec=UserService),
         )
         processor.display_results_markdown(mock_results)
 
@@ -325,7 +333,7 @@ class TestRunestoneIntegration:
             ocr_processor=mock_ocr_processor,
             content_analyzer=mock_content_analyzer,
             vocabulary_service=Mock(spec=VocabularyService),
-            user_repository=Mock(spec=UserRepository),
+            user_service=Mock(spec=UserService),
             verbose=True,
         )
         processor.save_results_to_file(mock_results, output_path)

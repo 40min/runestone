@@ -27,7 +27,10 @@ from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
 from runestone.core.prompt_builder.builder import PromptBuilder
 from runestone.core.prompt_builder.types import ImprovementMode
+from runestone.db.models import User
+from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
+from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 
 # Load environment variables from .env file
@@ -184,17 +187,30 @@ def process(
         ocr_processor = OCRProcessor(settings, ocr_llm_client)
         content_analyzer = ContentAnalyzer(settings, llm_client)
 
+        # For CLI, create a simple user object (id=1 for backward compatibility)
+        mock_user = User(id=1, email="cli@runestone.local", name="CLI User", hashed_password="", timezone="UTC")
+
+        # Create user service (minimal setup for CLI)
+        user_repo = UserRepository.__new__(UserRepository)  # Create without db for minimal functionality
+        vocab_repo = VocabularyRepository.__new__(VocabularyRepository)  # Create without db for minimal functionality
+        user_service = UserService(user_repo, vocab_repo)
+
+        # Create vocabulary service with mock LLM
+        vocab_service = VocabularyService(vocab_repo, settings, llm_client)
+
         # Initialize processor with dependencies
         processor = RunestoneProcessor(
             settings=settings,
             ocr_processor=ocr_processor,
             content_analyzer=content_analyzer,
+            vocabulary_service=vocab_service,
+            user_service=user_service,
             verbose=verbose,
         )
 
         # Process the image
         # for tool we'll use default user_id=1
-        result = processor.process_image(image_path, user_id=1)
+        result = processor.process_image(image_path, user=mock_user)
 
         # Output results
         if output_format == "console":
