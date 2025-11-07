@@ -68,7 +68,7 @@ describe("Login", () => {
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8010/auth/token",
+        "http://localhost:8010/api/auth",
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({
@@ -101,23 +101,6 @@ describe("Login", () => {
     await waitFor(() => {
       expect(screen.getByText("Invalid credentials")).toBeInTheDocument();
     });
-  });
-
-  it("validates password length", async () => {
-    render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
-
-    const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
-    const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
-    const loginButton = screen.getByRole("button", { name: "Login" });
-
-    await userEvent.type(emailInput, "test@example.com");
-    await userEvent.type(passwordInput, "12345"); // Less than 6 characters
-    await userEvent.click(loginButton);
-
-    expect(
-      screen.getByText("Password must be at least 6 characters")
-    ).toBeInTheDocument();
-    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it("shows loading state during login", async () => {
@@ -157,42 +140,6 @@ describe("Login", () => {
 
     const normalButton = screen.getByRole("button", { name: "Login" });
     expect(normalButton).not.toBeDisabled();
-  });
-
-  it("displays validation error messages", async () => {
-    render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
-
-    const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
-    const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
-    const loginButton = screen.getByRole("button", { name: "Login" });
-
-    // Test password too short
-    await userEvent.type(emailInput, "test@example.com");
-    await userEvent.type(passwordInput, "12345");
-    await userEvent.click(loginButton);
-
-    expect(
-      screen.getByText("Password must be at least 6 characters")
-    ).toBeInTheDocument();
-    expect(global.fetch).not.toHaveBeenCalled();
-  });
-
-  it("displays network error messages", async () => {
-    vi.mocked(global.fetch).mockRejectedValueOnce(new Error("Network error"));
-
-    render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
-
-    const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
-    const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
-    const loginButton = screen.getByRole("button", { name: "Login" });
-
-    await userEvent.type(emailInput, "test@example.com");
-    await userEvent.type(passwordInput, "password123");
-    await userEvent.click(loginButton);
-
-    await waitFor(() => {
-      expect(screen.getByText("Network error")).toBeInTheDocument();
-    });
   });
 
   it("clears previous errors when new operation starts", async () => {

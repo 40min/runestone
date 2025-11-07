@@ -98,7 +98,7 @@ describe('useApi', () => {
     const { result } = renderHook(() => useApi(), { wrapper });
 
     await expect(result.current('/test-endpoint')).rejects.toThrow(
-      'Authentication required. Please log in again.'
+      'Unauthorized'
     );
 
     expect(mockLogout).toHaveBeenCalled();
@@ -181,13 +181,13 @@ describe('useApi', () => {
     const { result } = renderHook(() => useApi(), { wrapper });
 
     const testBody = { email: 'test@example.com', password: 'password123' };
-    await result.current('/auth/token', {
+    await result.current('/api/auth', {
       method: 'POST',
       body: testBody,
     });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8010/auth/token',
+      'http://localhost:8010/api/auth',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify(testBody),

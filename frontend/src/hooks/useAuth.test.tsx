@@ -62,7 +62,7 @@ describe('useAuthActions', () => {
     await result.current.login({ email: 'test@example.com', password: 'password123' });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8010/auth/token',
+      'http://localhost:8010/api/auth',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ email: 'test@example.com', password: 'password123' }),
@@ -132,7 +132,7 @@ describe('useAuthActions', () => {
     });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8010/auth/register',
+      'http://localhost:8010/api/auth/register',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
@@ -146,7 +146,7 @@ describe('useAuthActions', () => {
 
     // Should automatically login after registration
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8010/auth/token',
+      'http://localhost:8010/api/auth',
       expect.any(Object)
     );
 
@@ -333,7 +333,7 @@ describe('useAuthActions', () => {
 
     // Verify login was called with registration credentials
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8010/auth/token',
+      'http://localhost:8010/api/auth',
       expect.objectContaining({
         body: JSON.stringify({
           email: 'new@example.com',
