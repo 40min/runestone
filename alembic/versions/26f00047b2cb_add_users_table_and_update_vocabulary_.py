@@ -29,7 +29,7 @@ def upgrade() -> None:
     existing_tables = set(inspector.get_table_names())
     vocabulary_columns = {col["name"] for col in inspector.get_columns("vocabulary")}
 
-    # Create users table only if it doesn't exist
+    # Create users table if it doesn't exist
     if "users" not in existing_tables:
         op.create_table(
             "users",
@@ -50,32 +50,36 @@ def upgrade() -> None:
             sa.UniqueConstraint("email"),
         )
 
-    # Add user_id column to vocabulary table in a robust way
-    with op.batch_alter_table("vocabulary", schema=None) as batch_op:
-        # Check if user_id_temp already exists (from partial migration)
-        if "user_id_temp" not in vocabulary_columns:
-            batch_op.add_column(sa.Column("user_id_temp", sa.Integer(), nullable=True))
+    # Create default user if it doesn't exist
+    # Check if user with id=1 exists
+    result = conn.execute(sa.text("SELECT COUNT(*) FROM users WHERE id = 1"))
+    user_count = result.scalar()
 
-        # Populate user_id_temp with default user ID
-        op.execute("UPDATE vocabulary SET user_id_temp = 1 WHERE user_id_temp IS NULL")
+    if user_count == 0:
+        # Insert default user
+        conn.execute(
+            sa.text(
+                """
+                INSERT INTO users (id, email, hashed_password, name, surname, timezone, pages_recognised_count)
+                VALUES (1, 'user1@example.com',
+                        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LeE8e0zqjzKj1Q9K',
+                        '40min', NULL, 'UTC', 0)
+            """
+            )
+        )
 
-        # Only drop user_id if it exists (it shouldn't exist in initial state)
-        if "user_id" in vocabulary_columns:
-            batch_op.drop_column("user_id")
+    # Add user_id column to vocabulary table if it doesn't exist
+    if "user_id" not in vocabulary_columns:
+        with op.batch_alter_table("vocabulary", schema=None) as batch_op:
+            batch_op.add_column(sa.Column("user_id", sa.Integer(), nullable=False, server_default="1"))
 
-        # Add the proper user_id column
-        if "user_id" not in vocabulary_columns:
-            batch_op.add_column(sa.Column("user_id", sa.Integer(), nullable=False, server_default='1'))
+    # Update all vocabulary rows to have user_id = 1
+    op.execute(sa.text("UPDATE vocabulary SET user_id = 1 WHERE user_id IS NULL OR user_id = 0"))
 
-        # Copy data from temp column to user_id
-        op.execute("UPDATE vocabulary SET user_id = user_id_temp")
-
-        # Drop temp column
-        batch_op.drop_column("user_id_temp")
-
-        # Check if foreign key constraint already exists
-        existing_constraints = {const["name"] for const in inspector.get_foreign_keys("vocabulary")}
-        if "fk_vocabulary_user_id" not in existing_constraints:
+    # Add foreign key constraint if it doesn't exist
+    existing_constraints = {const["name"] for const in inspector.get_foreign_keys("vocabulary")}
+    if "fk_vocabulary_user_id" not in existing_constraints:
+        with op.batch_alter_table("vocabulary", schema=None) as batch_op:
             batch_op.create_foreign_key("fk_vocabulary_user_id", "users", ["user_id"], ["id"])
 
 
@@ -95,29 +99,11 @@ def downgrade() -> None:
     # Check existing columns
     vocabulary_columns = {col["name"] for col in inspector.get_columns("vocabulary")}
 
-    # Convert back to nullable integer without foreign key using batch mode
-    with op.batch_alter_table("vocabulary", schema=None) as batch_op:
-        # Only add temp column if it doesn't exist
-        if "user_id_old" not in vocabulary_columns:
-            batch_op.add_column(sa.Column("user_id_old", sa.Integer(), nullable=True))
-
-        # Copy current user_id to temp column
-        op.execute("UPDATE vocabulary SET user_id_old = user_id")
-
-        # Drop current user_id column if it exists
-        if "user_id" in vocabulary_columns:
+    # Remove user_id column and add it back as nullable
+    if "user_id" in vocabulary_columns:
+        with op.batch_alter_table("vocabulary", schema=None) as batch_op:
             batch_op.drop_column("user_id")
-
-        # Add new user_id column as nullable
-        if "user_id" not in vocabulary_columns:
-            batch_op.add_column(sa.Column("user_id", sa.Integer(), nullable=False))
-
-        # Copy data back
-        op.execute("UPDATE vocabulary SET user_id = user_id_old WHERE user_id_old IS NOT NULL")
-        op.execute("UPDATE vocabulary SET user_id = 1 WHERE user_id IS NULL")
-
-        # Drop temp column
-        batch_op.drop_column("user_id_old")
+            batch_op.add_column(sa.Column("user_id", sa.Integer(), nullable=True))
 
     # Drop users table
     op.drop_table("users")
