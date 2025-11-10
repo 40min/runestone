@@ -178,6 +178,77 @@ class TestUserProfileEndpoints:
 
         assert response.status_code == 403
 
+    def test_update_user_profile_email_success(self, client):
+        """Test successful user email update."""
+        update_payload = {
+            "email": "newemail@example.com",
+        }
+
+        response = client.put("/api/me", json=update_payload)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify email was updated
+        assert data["email"] == "newemail@example.com"
+
+        # Verify other fields remain unchanged
+        assert data["name"] == "Test User"
+        assert data["surname"] == "Testsson"
+        assert data["timezone"] == "UTC"
+
+    def test_update_user_profile_email_duplicate(self, client):
+        """Test user email update with duplicate email should fail."""
+        # First, create a second user with a different email
+        from datetime import datetime
+
+        from runestone.auth.security import hash_password
+        from runestone.db.models import User
+        from runestone.db.user_repository import UserRepository
+
+        user_repo = UserRepository(client.db)
+        second_user = User(
+            email="existing@example.com",
+            hashed_password=hash_password("password123"),
+            name="Second User",
+            surname="Testsson",
+            timezone="UTC",
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        user_repo.create(second_user)
+
+        # Try to update the first user's email to the second user's email
+        update_payload = {
+            "email": "existing@example.com",
+        }
+
+        response = client.put("/api/me", json=update_payload)
+
+        assert response.status_code == 400
+        data = response.json()
+        assert "Email address is already registered by another user" in data["detail"]
+
+    def test_update_user_profile_email_no_change(self, client):
+        """Test user email update with the same email (no actual change)."""
+        # Get current user profile
+        initial_response = client.get("/api/me")
+        assert initial_response.status_code == 200
+        current_email = initial_response.json()["email"]
+
+        # Update with the same email
+        update_payload = {
+            "email": current_email,
+        }
+
+        response = client.put("/api/me", json=update_payload)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify email remains the same
+        assert data["email"] == current_email
+
 
 class TestPageRecognitionCounter:
     """Test cases for page recognition counter functionality."""

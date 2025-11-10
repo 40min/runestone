@@ -49,6 +49,13 @@ class UserService:
             if len(update_data.password) < 6:
                 raise ValueError("Password must be at least 6 characters long")
 
+        # Check if email is being updated and validate uniqueness
+        if update_data.email is not None and update_data.email != user.email:
+            # Check if the new email is already registered by another user
+            existing_user = self.user_repo.get_by_email(update_data.email)
+            if existing_user is not None and existing_user.id != user.id:
+                raise ValueError("Email address is already registered by another user")
+
         # Update user fields
         update_dict = update_data.model_dump(exclude_unset=True)
 

@@ -167,6 +167,50 @@ def mock_processor():
     return mock
 
 
+@pytest.fixture
+def mock_user_repo():
+    """Create a mocked UserRepository."""
+    from unittest.mock import Mock
+
+    return Mock()
+
+
+@pytest.fixture
+def mock_vocab_repo():
+    """Create a mocked VocabularyRepository."""
+    from unittest.mock import Mock
+
+    return Mock()
+
+
+@pytest.fixture
+def user_service(mock_user_repo, mock_vocab_repo):
+    """Create a UserService instance with mocked repositories."""
+    from runestone.services.user_service import UserService
+
+    return UserService(mock_user_repo, mock_vocab_repo)
+
+
+@pytest.fixture
+def user():
+    """Create a real User instance for testing."""
+    from datetime import datetime
+
+    from runestone.db.models import User
+
+    return User(
+        id=1,
+        email="test@example.com",
+        hashed_password="hashedpassword",
+        name="Test User",
+        surname="Testsson",
+        timezone="UTC",
+        pages_recognised_count=0,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+
+
 # ==============================================================================
 # Factory Fixtures for Test Data
 # ==============================================================================
