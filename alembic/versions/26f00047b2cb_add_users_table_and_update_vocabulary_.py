@@ -62,7 +62,7 @@ def upgrade() -> None:
                 """
                 INSERT INTO users (id, email, hashed_password, name, surname, timezone, pages_recognised_count)
                 VALUES (1, 'user1@example.com',
-                        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LeE8e0zqjzKj1Q9K',
+                        '$pbkdf2-sha256$29000$917rHYNQak0pBcB4z5nTug$Ba9.08/ZshwcrLgC/isZRFGnOK5zkqAQeBDW/mx42sI',
                         '40min', NULL, 'UTC', 0)
             """
             )
