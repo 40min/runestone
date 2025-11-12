@@ -21,10 +21,24 @@ vi.mock('../hooks/useVocabulary', () => ({
   })),
 }));
 
+// Mock the useApi hook
+vi.mock('../utils/api', () => ({
+  useApi: vi.fn(() => vi.fn()), // Return a mock API function
+}));
+
 import VocabularyView from "./VocabularyView";
 import { useRecentVocabulary } from '../hooks/useVocabulary';
+import { AuthProvider } from '../context/AuthContext';
 
 const mockUseRecentVocabulary = vi.mocked(useRecentVocabulary);
+
+const renderWithAuthProvider = (component: React.ReactElement) => {
+  return render(
+    <AuthProvider>
+      {component}
+    </AuthProvider>
+  );
+};
 
 describe("VocabularyView", () => {
   beforeEach(() => {
@@ -46,7 +60,22 @@ describe("VocabularyView", () => {
       deleteVocabularyItem: vi.fn(),
     });
 
-    render(<VocabularyView />);
+  it("renders loading state on initial load", () => {
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [],
+      loading: true,
+      error: null,
+      refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+    });
+
+    renderWithAuthProvider(<VocabularyView />);
 
     expect(screen.getByRole("progressbar")).toBeInTheDocument();
   });
@@ -77,7 +106,7 @@ describe("VocabularyView", () => {
       deleteVocabularyItem: vi.fn(),
     });
 
-    const { rerender } = render(<VocabularyView />);
+    const { rerender } = renderWithAuthProvider(<VocabularyView />);
 
     // Now simulate a search that triggers loading
     mockUseRecentVocabulary.mockReturnValue({
@@ -119,7 +148,7 @@ describe("VocabularyView", () => {
       deleteVocabularyItem: vi.fn(),
     });
 
-    render(<VocabularyView />);
+    renderWithAuthProvider(<VocabularyView />);
 
     expect(screen.getByText(errorMessage)).toBeInTheDocument();
   });
@@ -139,7 +168,7 @@ describe("VocabularyView", () => {
       deleteVocabularyItem: vi.fn(),
     });
 
-    render(<VocabularyView />);
+    renderWithAuthProvider(<VocabularyView />);
 
     expect(screen.getByText("Recent Vocabulary")).toBeInTheDocument();
     expect(screen.getByText("No vocabulary saved yet.")).toBeInTheDocument();
@@ -161,7 +190,7 @@ describe("VocabularyView", () => {
       deleteVocabularyItem: vi.fn(),
     });
 
-    render(<VocabularyView />);
+    renderWithAuthProvider(<VocabularyView />);
 
     const searchInput = screen.getByPlaceholderText("Search vocabulary...");
     expect(searchInput).toBeInTheDocument();
@@ -182,7 +211,7 @@ describe("VocabularyView", () => {
       deleteVocabularyItem: vi.fn(),
     });
 
-    render(<VocabularyView />);
+    renderWithAuthProvider(<VocabularyView />);
 
     const searchButton = screen.getByRole("button", { name: /search/i });
     expect(searchButton).toBeInTheDocument();
@@ -203,7 +232,7 @@ describe("VocabularyView", () => {
       deleteVocabularyItem: vi.fn(),
     });
 
-    render(<VocabularyView />);
+    renderWithAuthProvider(<VocabularyView />);
 
     const searchInput = screen.getByPlaceholderText("Search vocabulary...");
     const searchButton = screen.getByRole("button", { name: /search/i });
@@ -231,7 +260,7 @@ describe("VocabularyView", () => {
 
     mockUseRecentVocabulary.mockReturnValue(mockHookReturn);
 
-    render(<VocabularyView />);
+    renderWithAuthProvider(<VocabularyView />);
 
     const checkbox = screen.getByLabelText("Precise search");
     expect(checkbox).toBeInTheDocument();
@@ -259,7 +288,7 @@ describe("VocabularyView", () => {
       deleteVocabularyItem: vi.fn(),
     });
 
-    render(<VocabularyView />);
+    renderWithAuthProvider(<VocabularyView />);
 
     const searchInput = screen.getByPlaceholderText("Search vocabulary...");
     fireEvent.change(searchInput, { target: { value: 'hello' } });
@@ -285,7 +314,7 @@ describe("VocabularyView", () => {
       deleteVocabularyItem: vi.fn(),
     });
 
-    render(<VocabularyView />);
+    renderWithAuthProvider(<VocabularyView />);
 
     const searchInput = screen.getByPlaceholderText("Search vocabulary...");
     fireEvent.change(searchInput, { target: { value: 'nonexistent' } });
@@ -342,7 +371,7 @@ describe("VocabularyView", () => {
       deleteVocabularyItem: vi.fn(),
     });
 
-    render(<VocabularyView />);
+    renderWithAuthProvider(<VocabularyView />);
 
     expect(screen.getByText("Recent Vocabulary")).toBeInTheDocument();
 
@@ -401,7 +430,7 @@ describe("VocabularyView", () => {
       deleteVocabularyItem: vi.fn(),
     });
 
-    render(<VocabularyView />);
+    renderWithAuthProvider(<VocabularyView />);
 
     // Should display dash for null example_phrase and null extra_info
     expect(screen.getAllByText("—")).toHaveLength(2);

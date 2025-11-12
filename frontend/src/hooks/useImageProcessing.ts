@@ -71,7 +71,6 @@ const useImageProcessing = (): UseImageProcessingReturn => {
   const [progress, setProgress] = useState(0);
   const api = useApi();
   const { token } = useAuth();
-  const { token } = useAuth();
 
   const reset = () => {
     setOcrResult(null);
