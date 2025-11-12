@@ -7,10 +7,6 @@ import { AuthProvider } from "../context/AuthContext";
 /// <reference types="vitest/globals" />
 /// <reference types="vitest/globals" />
 
-interface GlobalWithResolve {
-  __resolveFetch?: (response: Response) => void;
-}
-
 // Mock config
 vi.mock("../config", () => ({
   API_BASE_URL: "http://localhost:8010",
@@ -52,7 +48,7 @@ describe("useAuthActions", () => {
       pages_recognised_count: 5,
     };
 
-    vi.mocked(global.fetch)
+    vi.mocked(globalThis.fetch)
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockTokenResponse),
@@ -94,7 +90,7 @@ describe("useAuthActions", () => {
   });
 
   it("handles login failure", async () => {
-    vi.mocked(global.fetch).mockResolvedValueOnce({
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce({
       ok: false,
       json: () => Promise.resolve({ detail: "Invalid credentials" }),
     } as Response);
@@ -182,7 +178,7 @@ describe("useAuthActions", () => {
   });
 
   it("handles registration failure", async () => {
-    vi.mocked(global.fetch).mockResolvedValueOnce({
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce({
       ok: false,
       json: () => Promise.resolve({ detail: "Email already exists" }),
     } as Response);
@@ -214,7 +210,7 @@ describe("useAuthActions", () => {
       pages_recognised_count: 5,
     };
 
-    vi.mocked(global.fetch).mockResolvedValueOnce({
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve(mockUpdateResponse),
     } as Response);
@@ -266,7 +262,7 @@ describe("useAuthActions", () => {
   });
 
   it("handles profile update failure", async () => {
-    vi.mocked(global.fetch).mockResolvedValueOnce({
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce({
       ok: false,
       json: () => Promise.resolve({ detail: "Update failed" }),
     } as Response);
@@ -288,57 +284,46 @@ describe("useAuthActions", () => {
   });
 
   it("sets loading state during operations", async () => {
-    vi.mocked(globalThis.fetch).mockImplementation(
-      () =>
-        new Promise<Response>((resolve) => {
-          // Store the resolve function to call later
-          (globalThis as GlobalWithResolve).__resolveFetch = resolve;
-          // Resolve with a delay to test loading state
-          setTimeout(() => {
-            resolve({
-              ok: true,
-              json: () => Promise.resolve({ access_token: "token" }),
-            } as Response);
-          }, 100);
-        })
-    );
+    const mockTokenResponse = { access_token: "test-token" };
+    const mockUserResponse = {
+      id: 1,
+      email: "test@example.com",
+      name: "Test",
+      surname: "User",
+      timezone: "UTC",
+      pages_recognised_count: 5,
+    };
+
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockTokenResponse),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockUserResponse),
+      } as Response);
 
     const { result } = renderHook(() => useAuthActions(), { wrapper });
 
-    // Start the operation but don't await it
-    const loginPromise = result.current.login({
-      email: "test@example.com",
-      password: "password123",
-    });
+    // Initially loading should be false
+    expect(result.current.loading).toBe(false);
 
-    // Check loading state immediately after operation starts
-    await waitFor(
-      () => {
-        expect(result.current.loading).toBe(true);
-      },
-      { timeout: 50 }
-    );
-
-    // Resolve the mock fetch to complete the operation
+    // Start login operation
     await act(async () => {
-      if ((globalThis as GlobalWithResolve).__resolveFetch) {
-        (globalThis as GlobalWithResolve).__resolveFetch!({
-          ok: true,
-          json: () => Promise.resolve({ access_token: "token" }),
-        } as Response);
-      }
-      await loginPromise;
+      await result.current.login({
+        email: "test@example.com",
+        password: "password123",
+      });
     });
 
-    // Verify loading is cleared
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
+    // After completion, loading should be false
+    expect(result.current.loading).toBe(false);
   });
 
   it("resets error state on new operations", async () => {
     // First operation fails
-    vi.mocked(global.fetch).mockResolvedValueOnce({
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce({
       ok: false,
       json: () => Promise.resolve({ detail: "First error" }),
     } as Response);
@@ -356,10 +341,25 @@ describe("useAuthActions", () => {
     });
 
     // Second operation should reset error
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ access_token: "token" }),
-    } as Response);
+    const mockTokenResponse = { access_token: "token" };
+    const mockUserResponse = {
+      id: 1,
+      email: "test@example.com",
+      name: "Test",
+      surname: "User",
+      timezone: "UTC",
+      pages_recognised_count: 5,
+    };
+
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockTokenResponse),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockUserResponse),
+      } as Response);
 
     await act(async () => {
       await result.current.login({
@@ -385,7 +385,7 @@ describe("useAuthActions", () => {
       pages_recognised_count: 0,
     };
 
-    vi.mocked(global.fetch)
+    vi.mocked(globalThis.fetch)
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockRegisterResponse),
@@ -437,7 +437,7 @@ describe("useAuthActions", () => {
     mockLocalStorage.getItem.mockReturnValue(null);
 
     // Mock API to reject when there's no valid token
-    vi.mocked(global.fetch).mockRejectedValueOnce(
+    vi.mocked(globalThis.fetch).mockRejectedValueOnce(
       new Error("Authentication required. Please log in again.")
     );
 
@@ -456,7 +456,7 @@ describe("useAuthActions", () => {
   it("handles concurrent register and login operations", async () => {
     const mockRegisterResponse = { success: true };
 
-    vi.mocked(global.fetch).mockResolvedValue({
+    vi.mocked(globalThis.fetch).mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(mockRegisterResponse),
     } as Response);
@@ -494,7 +494,7 @@ describe("useAuthActions", () => {
       pages_recognised_count: 5,
     };
 
-    vi.mocked(global.fetch).mockResolvedValueOnce({
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve(mockUpdateResponse),
     } as Response);

@@ -800,16 +800,13 @@ describe('improveVocabularyItem', () => {
     expect(result).toEqual(mockResponse);
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/api/vocabulary/improve'),
-      expect.objectContaining({
+      {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           word_phrase: 'hej',
           mode: VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS,
         }),
-      })
+      }
     );
   });
 
@@ -841,16 +838,13 @@ describe('improveVocabularyItem', () => {
     expect(result).toEqual(mockResponse);
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/api/vocabulary/improve'),
-      expect.objectContaining({
+      {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           word_phrase: 'hej',
           mode: VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY,
         }),
-      })
+      }
     );
   });
 

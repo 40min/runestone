@@ -66,7 +66,27 @@ describe("VocabularyView", () => {
   });
 
   it("renders inline loading indicator after initial load", async () => {
-    // First render with data to complete initial load
+    // Start with loading=true to simulate initial load
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [],
+      loading: true,
+      error: null,
+      refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+    });
+
+    const { rerender } = renderWithAuthProvider(<VocabularyView />);
+
+    // Should show full-page spinner during initial load
+    expect(screen.getByRole("progressbar")).toBeInTheDocument();
+
+    // Complete initial load with data
     mockUseRecentVocabulary.mockReturnValue({
       recentVocabulary: [{
         id: 1,
@@ -93,11 +113,28 @@ describe("VocabularyView", () => {
       deleteVocabularyItem: vi.fn(),
     });
 
-    const { rerender } = renderWithAuthProvider(<VocabularyView />);
+    rerender(<VocabularyView />);
 
-    // Now simulate a search that triggers loading
+    // Wait for initial load to complete
+    await waitFor(() => {
+      expect(screen.getByText("hej")).toBeInTheDocument();
+    });
+
+    // Now simulate a search that triggers loading after initial load
     mockUseRecentVocabulary.mockReturnValue({
-      recentVocabulary: [],
+      recentVocabulary: [{
+        id: 1,
+        user_id: 1,
+        word_phrase: "hej",
+        translation: "hello",
+        example_phrase: null,
+        extra_info: null,
+        in_learn: false,
+        last_learned: null,
+        learned_times: 0,
+        created_at: "2023-10-27T10:00:00Z",
+        updated_at: "2023-10-27T10:00:00Z",
+      }],
       loading: true,
       error: null,
       refetch: vi.fn(),
