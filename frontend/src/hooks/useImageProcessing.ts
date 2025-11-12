@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { API_BASE_URL } from "../config";
 import { useApi } from "../utils/api";
+import { useAuth } from "../context/AuthContext";
 
 export interface OCRResult {
   text: string;
@@ -69,6 +70,8 @@ const useImageProcessing = (): UseImageProcessingReturn => {
   const [currentImage, setCurrentImage] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const api = useApi();
+  const { token } = useAuth();
+  const { token } = useAuth();
 
   const reset = () => {
     setOcrResult(null);
@@ -98,22 +101,29 @@ const useImageProcessing = (): UseImageProcessingReturn => {
       const formData = new FormData();
       formData.append("file", file);
 
-      const ocrResponse = await fetch(`${API_BASE_URL}/api/ocr`, {
+      const url = `${API_BASE_URL}/api/ocr`;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(url, {
         method: "POST",
         body: formData,
+        headers,
       });
 
-      if (!ocrResponse.ok) {
-        const errorData = await ocrResponse
+      if (!response.ok) {
+        const errorData = await response
           .json()
           .catch(() => ({ error: "Unknown error" }));
         throw new Error(
           errorData.error ||
-            `OCR failed: HTTP ${ocrResponse.status}: ${ocrResponse.statusText}`
+            `OCR failed: HTTP ${response.status}: ${response.statusText}`
         );
       }
 
-      const ocrData: OCRResult = await ocrResponse.json();
+      const ocrData: OCRResult = await response.json();
       setOcrResult(ocrData);
       setProgress(50);
       setProcessingStep("DONE");
