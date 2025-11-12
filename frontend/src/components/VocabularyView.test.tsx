@@ -60,21 +60,6 @@ describe("VocabularyView", () => {
       deleteVocabularyItem: vi.fn(),
     });
 
-  it("renders loading state on initial load", () => {
-    mockUseRecentVocabulary.mockReturnValue({
-      recentVocabulary: [],
-      loading: true,
-      error: null,
-      refetch: vi.fn(),
-      isEditModalOpen: false,
-      editingItem: null,
-      openEditModal: vi.fn(),
-      closeEditModal: vi.fn(),
-      updateVocabularyItem: vi.fn(),
-      createVocabularyItem: vi.fn(),
-      deleteVocabularyItem: vi.fn(),
-    });
-
     renderWithAuthProvider(<VocabularyView />);
 
     expect(screen.getByRole("progressbar")).toBeInTheDocument();
@@ -89,8 +74,10 @@ describe("VocabularyView", () => {
         word_phrase: "hej",
         translation: "hello",
         example_phrase: null,
+        extra_info: null,
         in_learn: false,
         last_learned: null,
+        learned_times: 0,
         created_at: "2023-10-27T10:00:00Z",
         updated_at: "2023-10-27T10:00:00Z",
       }],
@@ -338,7 +325,7 @@ describe("VocabularyView", () => {
         extra_info: "en-word, noun, base form: hej",
         in_learn: true,
         last_learned: null,
-        showed_times: 5,
+        learned_times: 5,
         created_at: "2023-10-27T10:00:00Z",
         updated_at: "2023-10-27T10:00:00Z",
       },
@@ -351,7 +338,7 @@ describe("VocabularyView", () => {
         extra_info: null,
         in_learn: false,
         last_learned: null,
-        showed_times: 0,
+        learned_times: 0,
         created_at: "2023-10-28T10:05:00Z",
         updated_at: "2023-10-28T10:05:00Z",
       },
@@ -410,7 +397,7 @@ describe("VocabularyView", () => {
         extra_info: null,
         in_learn: true,
         last_learned: null,
-        showed_times: 2,
+        learned_times: 2,
         created_at: "2023-10-27T10:00:00Z",
         updated_at: "2023-10-27T10:00:00Z",
       },

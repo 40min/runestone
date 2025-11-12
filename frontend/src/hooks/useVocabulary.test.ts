@@ -2,6 +2,7 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import useVocabulary, { useRecentVocabulary, improveVocabularyItem } from './useVocabulary';
 import { VOCABULARY_IMPROVEMENT_MODES } from '../constants';
+import { ApiClientOptions } from '../utils/api';
 
 // Mock config
 vi.mock('../config', () => ({
@@ -782,7 +783,7 @@ describe('improveVocabularyItem', () => {
     });
 
     // Create a mock API function that simulates the real API behavior
-    const mockApi = async (url: string, options: any) => {
+    const mockApi = async <T>(url: string, options: ApiClientOptions = {}): Promise<T> => {
       // Convert the body object to JSON string (like real API would do)
       const response = await mockFetch(url, {
         ...options,
@@ -823,7 +824,7 @@ describe('improveVocabularyItem', () => {
     });
 
     // Create a mock API function that simulates the real API behavior
-    const mockApi = async (url: string, options: any) => {
+    const mockApi = async <T>(url: string, options: ApiClientOptions = {}): Promise<T> => {
       // Convert the body object to JSON string (like real API would do)
       const response = await mockFetch(url, {
         ...options,
@@ -862,7 +863,7 @@ describe('improveVocabularyItem', () => {
     });
 
     // Create a mock API function
-    const mockApi = async (url: string, options: any) => {
+    const mockApi = async <T>(url: string, options: ApiClientOptions = {}): Promise<T> => {
       const response = await mockFetch(url, options);
       if (!response.ok) {
         throw new Error(`Failed to improve vocabulary item: HTTP ${response.status}`);
@@ -879,7 +880,7 @@ describe('improveVocabularyItem', () => {
     mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
     // Create a mock API function
-    const mockApi = async (url: string, options: any) => {
+    const mockApi = async <T>(url: string, options: ApiClientOptions = {}): Promise<T> => {
       const response = await mockFetch(url, options);
       if (!response.ok) {
         throw new Error(`Failed to improve vocabulary item: HTTP ${response.status}`);

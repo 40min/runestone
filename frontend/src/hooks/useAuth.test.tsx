@@ -5,6 +5,11 @@ import { useAuthActions } from "./useAuth";
 import { AuthProvider } from "../context/AuthContext";
 
 /// <reference types="vitest/globals" />
+/// <reference types="vitest/globals" />
+
+interface GlobalWithResolve {
+  __resolveFetch?: (response: Response) => void;
+}
 
 // Mock config
 vi.mock("../config", () => ({
@@ -283,11 +288,11 @@ describe("useAuthActions", () => {
   });
 
   it("sets loading state during operations", async () => {
-    vi.mocked(global.fetch).mockImplementation(
+    vi.mocked(globalThis.fetch).mockImplementation(
       () =>
-        new Promise((resolve) => {
+        new Promise<Response>((resolve) => {
           // Store the resolve function to call later
-          (global as any).__resolveFetch = resolve;
+          (globalThis as GlobalWithResolve).__resolveFetch = resolve;
           // Resolve with a delay to test loading state
           setTimeout(() => {
             resolve({
@@ -316,8 +321,8 @@ describe("useAuthActions", () => {
 
     // Resolve the mock fetch to complete the operation
     await act(async () => {
-      if ((global as any).__resolveFetch) {
-        (global as any).__resolveFetch({
+      if ((globalThis as GlobalWithResolve).__resolveFetch) {
+        (globalThis as GlobalWithResolve).__resolveFetch!({
           ok: true,
           json: () => Promise.resolve({ access_token: "token" }),
         } as Response);
