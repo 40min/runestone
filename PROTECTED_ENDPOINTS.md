@@ -28,7 +28,7 @@ All endpoints below require `Authorization: Bearer <jwt_token>` header:
 
 ### Authentication
 - `POST /api/auth/register` - User registration
-- `POST /api/auth/token` - User login (returns JWT)
+- `POST /api/auth/` - User login (returns JWT)
 
 ## Frontend Authentication Implementation
 
