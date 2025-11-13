@@ -770,6 +770,19 @@ describe('improveVocabularyItem', () => {
     mockFetch.mockClear();
   });
 
+  // Create a mock API function that simulates the real API behavior
+  const mockApi = async <T>(url: string, options: ApiClientOptions = {}): Promise<T> => {
+    // Convert the body object to JSON string (like real API would do)
+    const response = await mockFetch(url, {
+      ...options,
+      body: typeof options.body === 'object' ? JSON.stringify(options.body) : options.body
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to improve vocabulary item: HTTP ${response.status}`);
+    }
+    return response.json();
+  };
+
   it('should improve vocabulary item with all_fields mode successfully', async () => {
     const mockResponse = {
       translation: 'hello',
@@ -781,19 +794,6 @@ describe('improveVocabularyItem', () => {
       ok: true,
       json: () => Promise.resolve(mockResponse),
     });
-
-    // Create a mock API function that simulates the real API behavior
-    const mockApi = async <T>(url: string, options: ApiClientOptions = {}): Promise<T> => {
-      // Convert the body object to JSON string (like real API would do)
-      const response = await mockFetch(url, {
-        ...options,
-        body: typeof options.body === 'object' ? JSON.stringify(options.body) : options.body
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to improve vocabulary item: HTTP ${response.status}`);
-      }
-      return response.json();
-    };
 
     const result = await improveVocabularyItem(mockApi, 'hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS);
 
@@ -820,19 +820,6 @@ describe('improveVocabularyItem', () => {
       json: () => Promise.resolve(mockResponse),
     });
 
-    // Create a mock API function that simulates the real API behavior
-    const mockApi = async <T>(url: string, options: ApiClientOptions = {}): Promise<T> => {
-      // Convert the body object to JSON string (like real API would do)
-      const response = await mockFetch(url, {
-        ...options,
-        body: typeof options.body === 'object' ? JSON.stringify(options.body) : options.body
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to improve vocabulary item: HTTP ${response.status}`);
-      }
-      return response.json();
-    };
-
     const result = await improveVocabularyItem(mockApi, 'hej', VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY);
 
     expect(result).toEqual(mockResponse);
@@ -856,15 +843,6 @@ describe('improveVocabularyItem', () => {
       json: () => Promise.resolve({}),
     });
 
-    // Create a mock API function
-    const mockApi = async <T>(url: string, options: ApiClientOptions = {}): Promise<T> => {
-      const response = await mockFetch(url, options);
-      if (!response.ok) {
-        throw new Error(`Failed to improve vocabulary item: HTTP ${response.status}`);
-      }
-      return response.json();
-    };
-
     await expect(improveVocabularyItem(mockApi, 'hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS)).rejects.toThrow(
       'Failed to improve vocabulary item: HTTP 500'
     );
@@ -872,15 +850,6 @@ describe('improveVocabularyItem', () => {
 
   it('should handle network error', async () => {
     mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-    // Create a mock API function
-    const mockApi = async <T>(url: string, options: ApiClientOptions = {}): Promise<T> => {
-      const response = await mockFetch(url, options);
-      if (!response.ok) {
-        throw new Error(`Failed to improve vocabulary item: HTTP ${response.status}`);
-      }
-      return response.json();
-    };
 
     await expect(improveVocabularyItem(mockApi, 'hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS)).rejects.toThrow('Network error');
   });
