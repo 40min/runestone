@@ -70,7 +70,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
   const [currentImage, setCurrentImage] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const api = useApi();
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
 
   const reset = () => {
     setOcrResult(null);
@@ -113,6 +113,9 @@ const useImageProcessing = (): UseImageProcessingReturn => {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          logout();
+        }
         const errorData = await response
           .json()
           .catch(() => ({ error: "Unknown error" }));
