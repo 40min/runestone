@@ -4,6 +4,7 @@ import AutoFixNormal from "@mui/icons-material/AutoFixNormal";
 import AutoFixHigh from "@mui/icons-material/AutoFixHigh";
 import { CustomButton, StyledCheckbox } from "./ui";
 import { improveVocabularyItem } from "../hooks/useVocabulary";
+import { useApi } from "../utils/api";
 import { VOCABULARY_IMPROVEMENT_MODES, type VocabularyImprovementMode } from "../constants";
 
 interface SavedVocabularyItem {
@@ -62,6 +63,9 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   const [isImproving, setIsImproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Get authenticated API client
+  const api = useApi();
+
   useEffect(() => {
     setError(null);
     if (item) {
@@ -109,7 +113,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
     setError("");
     setIsImproving(true);
     try {
-      const result = await improveVocabularyItem(wordPhrase.trim(), mode);
+      const result = await improveVocabularyItem(api, wordPhrase.trim(), mode);
       if (result.translation) {
         setTranslation(result.translation);
       }

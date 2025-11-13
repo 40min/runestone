@@ -1,6 +1,7 @@
 import React from "react";
 import "@testing-library/jest-dom";
-import { vi } from "vitest";
+import { vi, afterEach } from "vitest";
+import { cleanup } from "@testing-library/react";
 
 // Mock URL.createObjectURL and URL.revokeObjectURL
 Object.defineProperty(window.URL, "createObjectURL", {
@@ -17,6 +18,16 @@ Object.defineProperty(window.URL, "revokeObjectURL", {
 Object.defineProperty(window, "alert", {
   writable: true,
   value: vi.fn(),
+});
+
+// Global cleanup patterns
+afterEach(() => {
+  // Clean up React components after each test
+  cleanup();
+  // Clear all mocks
+  vi.clearAllMocks();
+  // Reset all mock implementations
+  vi.resetAllMocks();
 });
 
 // Helper to create test wrapper with AuthProvider

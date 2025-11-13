@@ -2,6 +2,7 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import useVocabulary, { useRecentVocabulary, improveVocabularyItem } from './useVocabulary';
 import { VOCABULARY_IMPROVEMENT_MODES } from '../constants';
+import { ApiClientOptions } from '../utils/api';
 
 // Mock config
 vi.mock('../config', () => ({
@@ -529,12 +530,14 @@ describe('useRecentVocabulary', () => {
     });
 
     // Try to create item - should throw
-    await expect(
-      result.current.createVocabularyItem({
-        word_phrase: 'tack',
-        translation: 'thanks',
-      })
-    ).rejects.toThrow('Failed to create vocabulary item: HTTP 500');
+    await act(async () => {
+      await expect(
+        result.current.createVocabularyItem({
+          word_phrase: 'tack',
+          translation: 'thanks',
+        })
+      ).rejects.toThrow('Failed to create vocabulary item: HTTP 500');
+    });
   });
 
   it('should update vocabulary item successfully', async () => {
@@ -642,11 +645,13 @@ describe('useRecentVocabulary', () => {
     });
 
     // Try to update item - should throw
-    await expect(
-      result.current.updateVocabularyItem(1, {
-        word_phrase: 'hej då',
-      })
-    ).rejects.toThrow('Failed to update vocabulary item: HTTP 500');
+    await act(async () => {
+      await expect(
+        result.current.updateVocabularyItem(1, {
+          word_phrase: 'hej då',
+        })
+      ).rejects.toThrow('Failed to update vocabulary item: HTTP 500');
+    });
   });
 
   it('should delete vocabulary item successfully', async () => {
@@ -752,9 +757,11 @@ describe('useRecentVocabulary', () => {
     });
 
     // Try to delete item - should throw
-    await expect(
-      result.current.deleteVocabularyItem(1)
-    ).rejects.toThrow('Failed to delete vocabulary item: HTTP 500');
+    await act(async () => {
+      await expect(
+        result.current.deleteVocabularyItem(1)
+      ).rejects.toThrow('Failed to delete vocabulary item: HTTP 500');
+    });
   });
 });
 
@@ -762,6 +769,19 @@ describe('improveVocabularyItem', () => {
   beforeEach(() => {
     mockFetch.mockClear();
   });
+
+  // Create a mock API function that simulates the real API behavior
+  const mockApi = async <T>(url: string, options: ApiClientOptions = {}): Promise<T> => {
+    // Convert the body object to JSON string (like real API would do)
+    const response = await mockFetch(url, {
+      ...options,
+      body: typeof options.body === 'object' ? JSON.stringify(options.body) : options.body
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to improve vocabulary item: HTTP ${response.status}`);
+    }
+    return response.json();
+  };
 
   it('should improve vocabulary item with all_fields mode successfully', async () => {
     const mockResponse = {
@@ -775,21 +795,18 @@ describe('improveVocabularyItem', () => {
       json: () => Promise.resolve(mockResponse),
     });
 
-    const result = await improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS, null, () => {});
+    const result = await improveVocabularyItem(mockApi, 'hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS);
 
     expect(result).toEqual(mockResponse);
     expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:8010/api/vocabulary/improve',
-      expect.objectContaining({
+      expect.stringContaining('/api/vocabulary/improve'),
+      {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           word_phrase: 'hej',
           mode: VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS,
         }),
-      })
+      }
     );
   });
 
@@ -803,21 +820,18 @@ describe('improveVocabularyItem', () => {
       json: () => Promise.resolve(mockResponse),
     });
 
-    const result = await improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY, null, () => {});
+    const result = await improveVocabularyItem(mockApi, 'hej', VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY);
 
     expect(result).toEqual(mockResponse);
     expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:8010/api/vocabulary/improve',
-      expect.objectContaining({
+      expect.stringContaining('/api/vocabulary/improve'),
+      {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           word_phrase: 'hej',
           mode: VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY,
         }),
-      })
+      }
     );
   });
 
@@ -829,7 +843,7 @@ describe('improveVocabularyItem', () => {
       json: () => Promise.resolve({}),
     });
 
-    await expect(improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS, null, () => {})).rejects.toThrow(
+    await expect(improveVocabularyItem(mockApi, 'hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS)).rejects.toThrow(
       'Failed to improve vocabulary item: HTTP 500'
     );
   });
@@ -837,6 +851,6 @@ describe('improveVocabularyItem', () => {
   it('should handle network error', async () => {
     mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
-    await expect(improveVocabularyItem('hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS, null, () => {})).rejects.toThrow('Network error');
+    await expect(improveVocabularyItem(mockApi, 'hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS)).rejects.toThrow('Network error');
   });
 });

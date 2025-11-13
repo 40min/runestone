@@ -91,6 +91,7 @@ describe('useImageProcessing', () => {
     expect(mockFetch).toHaveBeenNthCalledWith(1, 'http://localhost:8010/api/ocr', {
       method: 'POST',
       body: expect.any(FormData),
+      headers: {},
     });
     expect(mockFetch).toHaveBeenNthCalledWith(2, 'http://localhost:8010/api/analyze', {
       method: 'POST',
@@ -409,6 +410,7 @@ describe('useImageProcessing', () => {
     expect(mockFetch).toHaveBeenNthCalledWith(1, 'http://localhost:8010/api/ocr', {
       method: 'POST',
       body: expect.any(FormData),
+      headers: {},
     });
     expect(mockFetch).toHaveBeenNthCalledWith(2, 'http://localhost:8010/api/analyze', {
       method: 'POST',
@@ -443,6 +445,7 @@ describe('useImageProcessing', () => {
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:8010/api/ocr', {
       method: 'POST',
       body: expect.any(FormData),
+      headers: {},
     });
   });
 

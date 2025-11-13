@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AddEditVocabularyModal from "./AddEditVocabularyModal";
 import { VOCABULARY_IMPROVEMENT_MODES } from "../constants";
+import { AuthProvider } from "../context/AuthContext";
 
 // Mock the useVocabulary hook
 vi.mock("../hooks/useVocabulary", () => ({
@@ -11,6 +12,11 @@ vi.mock("../hooks/useVocabulary", () => ({
 import { improveVocabularyItem } from "../hooks/useVocabulary";
 
 const mockImproveVocabularyItem = vi.mocked(improveVocabularyItem);
+
+// Mock the useApi hook
+vi.mock("../utils/api", () => ({
+  useApi: vi.fn(() => vi.fn()), // Return a mock API function
+}));
 
 describe("AddEditVocabularyModal", () => {
   const mockOnClose = vi.fn();
@@ -25,6 +31,14 @@ describe("AddEditVocabularyModal", () => {
     onDelete: mockOnDelete,
   };
 
+  const renderWithAuthProvider = (component: React.ReactElement) => {
+    return render(
+      <AuthProvider>
+        {component}
+      </AuthProvider>
+    );
+  };
+
   beforeEach(() => {
     mockOnClose.mockClear();
     mockOnSave.mockClear();
@@ -33,7 +47,7 @@ describe("AddEditVocabularyModal", () => {
   });
 
   it("renders the modal for adding a new item", () => {
-    render(<AddEditVocabularyModal {...defaultProps} />);
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
     expect(screen.getByText("Add Vocabulary Item")).toBeInTheDocument();
     expect(screen.getByLabelText("Swedish Word/Phrase")).toBeInTheDocument();
@@ -56,7 +70,7 @@ describe("AddEditVocabularyModal", () => {
       created_at: "2023-10-27T10:00:00Z",
     };
 
-    render(<AddEditVocabularyModal {...defaultProps} item={existingItem} />);
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} item={existingItem} />);
 
     expect(screen.getByText("Edit Vocabulary Item")).toBeInTheDocument();
     expect(screen.getByDisplayValue("hej")).toBeInTheDocument();
@@ -66,7 +80,7 @@ describe("AddEditVocabularyModal", () => {
 
   it("calls onClose when close button is clicked", async () => {
     const user = userEvent.setup();
-    render(<AddEditVocabularyModal {...defaultProps} />);
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
     const closeButton = screen.getByRole("button", { name: /×/ });
     await user.click(closeButton);
@@ -76,7 +90,7 @@ describe("AddEditVocabularyModal", () => {
 
   it("calls onClose when Cancel button is clicked", async () => {
     const user = userEvent.setup();
-    render(<AddEditVocabularyModal {...defaultProps} />);
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
     const cancelButton = screen.getByRole("button", { name: "Cancel" });
     await user.click(cancelButton);
@@ -92,7 +106,7 @@ describe("AddEditVocabularyModal", () => {
       extra_info: "en-word, noun, base form: hej",
     });
 
-    render(<AddEditVocabularyModal {...defaultProps} />);
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
     // Fill word phrase first
     const wordInput = screen.getByLabelText("Swedish Word/Phrase");
@@ -103,7 +117,7 @@ describe("AddEditVocabularyModal", () => {
     await user.click(fillAllButton);
 
     await waitFor(() => {
-      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS);
+      expect(mockImproveVocabularyItem).toHaveBeenCalledWith(expect.any(Function), "hej", VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS);
     });
 
     // Check that fields are filled
@@ -120,7 +134,7 @@ describe("AddEditVocabularyModal", () => {
       example_phrase: "Hej, hur mår du?",
     });
 
-    render(<AddEditVocabularyModal {...defaultProps} />);
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
     // Fill word phrase first
     const wordInput = screen.getByLabelText("Swedish Word/Phrase");
@@ -131,7 +145,7 @@ describe("AddEditVocabularyModal", () => {
     await user.click(fillExampleButton);
 
     await waitFor(() => {
-      expect(mockImproveVocabularyItem).toHaveBeenCalledWith("hej", VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY);
+      expect(mockImproveVocabularyItem).toHaveBeenCalledWith(expect.any(Function), "hej", VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY);
     });
 
     // Check that example phrase is filled
@@ -141,7 +155,7 @@ describe("AddEditVocabularyModal", () => {
   });
 
   it("disables fill buttons when word phrase is empty", () => {
-    render(<AddEditVocabularyModal {...defaultProps} />);
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
     const fillAllButton = screen.getByTitle("Fill All");
     const fillExampleButton = screen.getByTitle("Fill Example");
@@ -154,7 +168,7 @@ describe("AddEditVocabularyModal", () => {
     const user = userEvent.setup();
     mockImproveVocabularyItem.mockImplementation(() => new Promise(() => {})); // Never resolves
 
-    render(<AddEditVocabularyModal {...defaultProps} />);
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
     // Fill word phrase first
     const wordInput = screen.getByLabelText("Swedish Word/Phrase");
@@ -173,7 +187,7 @@ describe("AddEditVocabularyModal", () => {
 
   it("calls onSave when Add Item button is clicked with valid data", async () => {
     const user = userEvent.setup();
-    render(<AddEditVocabularyModal {...defaultProps} />);
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
     const wordInput = screen.getByLabelText("Swedish Word/Phrase");
     const translationInput = screen.getByLabelText("English Translation");
@@ -196,7 +210,7 @@ describe("AddEditVocabularyModal", () => {
   });
   it("calls onSave with in_learn: false when checkbox is unchecked", async () => {
     const user = userEvent.setup();
-    render(<AddEditVocabularyModal {...defaultProps} />);
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
     const wordInput = screen.getByLabelText("Swedish Word/Phrase");
     const translationInput = screen.getByLabelText("English Translation");
@@ -219,7 +233,7 @@ describe("AddEditVocabularyModal", () => {
   });
 
   it("does not call onSave when required fields are empty", () => {
-    render(<AddEditVocabularyModal {...defaultProps} />);
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
     const saveButton = screen.getByRole("button", { name: "Add Item" });
 
@@ -232,7 +246,7 @@ describe("AddEditVocabularyModal", () => {
     const user = userEvent.setup();
     mockOnSave.mockRejectedValue(new Error("Save failed"));
 
-    render(<AddEditVocabularyModal {...defaultProps} />);
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
     const wordInput = screen.getByLabelText("Swedish Word/Phrase");
     const translationInput = screen.getByLabelText("English Translation");
@@ -252,7 +266,7 @@ describe("AddEditVocabularyModal", () => {
     const user = userEvent.setup();
     mockImproveVocabularyItem.mockRejectedValue(new Error("Improve failed"));
 
-    render(<AddEditVocabularyModal {...defaultProps} />);
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
     const wordInput = screen.getByLabelText("Swedish Word/Phrase");
     await user.type(wordInput, "hej");
@@ -277,7 +291,7 @@ describe("AddEditVocabularyModal", () => {
       created_at: "2023-10-27T10:00:00Z",
     };
 
-    render(<AddEditVocabularyModal {...defaultProps} item={existingItem} />);
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} item={existingItem} />);
 
     expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
@@ -295,7 +309,7 @@ describe("AddEditVocabularyModal", () => {
       created_at: "2023-10-27T10:00:00Z",
     };
 
-    render(<AddEditVocabularyModal {...defaultProps} item={existingItem} />);
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} item={existingItem} />);
 
     const deleteButton = screen.getByRole("button", { name: "Delete" });
     await user.click(deleteButton);
@@ -305,7 +319,7 @@ describe("AddEditVocabularyModal", () => {
 
   it("toggles in learning checkbox", async () => {
     const user = userEvent.setup();
-    render(<AddEditVocabularyModal {...defaultProps} />);
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
     const checkbox = screen.getByRole("checkbox", { name: "In Learning" });
     expect(checkbox).toBeChecked(); // Now defaults to true
