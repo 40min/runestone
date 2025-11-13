@@ -11,6 +11,10 @@ All endpoints below require `Authorization: Bearer <jwt_token>` header:
 - `POST /api/analyze` - Analyze text content
 - `POST /api/resources` - Find learning resources
 
+### User Management Endpoints
+- `GET /api/me` - Get current user profile
+- `PUT /api/me` - Update current user profile
+
 ### Vocabulary Management Endpoints
 - `POST /api/vocabulary` - Save multiple vocabulary items
 - `POST /api/vocabulary/item` - Save single vocabulary item
