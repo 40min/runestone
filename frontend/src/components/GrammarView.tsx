@@ -72,9 +72,9 @@ const GrammarView: React.FC = () => {
         </Box>
       )}
 
-      <Box sx={{ display: "flex", gap: 4, mt: 6 }}>
+      <Box sx={{ display: "flex", gap: 2, mt: 6 }}>
         {/* Left Pane: Cheatsheet List */}
-        <Box sx={{ flex: 1, maxWidth: "300px" }}>
+        <Box sx={{ flexShrink: 0, width: "220px" }}>
           <ContentCard>
             <Typography
               variant="h6"
@@ -187,7 +187,7 @@ const GrammarView: React.FC = () => {
         </Box>
 
         {/* Right Pane: Content Display */}
-        <Box sx={{ flex: 2 }}>
+        <Box sx={{ flex: 1 }}>
           <ContentCard>
             {selectedFilename ? (
               <>
