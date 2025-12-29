@@ -48,7 +48,7 @@ describe("Profile", () => {
     render(<Profile />, { wrapper });
 
     expect(screen.getByText("Profile")).toBeInTheDocument();
-    expect(screen.getByText("Email: test@example.com")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("test@example.com")).toBeInTheDocument();
     expect(screen.getAllByText("Pages Recognised:")[0]).toBeInTheDocument();
     expect(screen.getByText("10")).toBeInTheDocument();
     expect(screen.getAllByText("Words Learning:")[0]).toBeInTheDocument();
@@ -466,6 +466,110 @@ describe("Profile", () => {
           }),
         })
       );
+    });
+  });
+
+  // Email editing tests
+
+  it("renders email field and allows editing", async () => {
+    render(<Profile />, { wrapper });
+
+    const emailInput = screen.getByLabelText("Email");
+    expect(emailInput).toBeInTheDocument();
+    expect(emailInput).toHaveValue("test@example.com");
+
+    await userEvent.clear(emailInput);
+    await userEvent.type(emailInput, "newemail@example.com");
+
+    expect(emailInput).toHaveValue("newemail@example.com");
+  });
+
+  it("populates email field with user's current email", () => {
+    render(<Profile />, { wrapper });
+
+    const emailInput = screen.getByLabelText("Email");
+    expect(emailInput).toHaveValue("test@example.com");
+  });
+
+  it("handles successful email update", async () => {
+    const updatedUserData = {
+      ...mockUserData,
+      email: "newemail@example.com",
+    };
+
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(updatedUserData),
+    } as Response);
+
+    render(<Profile />, { wrapper });
+
+    const emailInput = screen.getByLabelText("Email");
+    const updateButton = screen.getByRole("button", { name: "Update Profile" });
+
+    await userEvent.clear(emailInput);
+    await userEvent.type(emailInput, "newemail@example.com");
+    await userEvent.click(updateButton);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        "http://localhost:8010/api/me",
+        expect.objectContaining({
+          method: "PUT",
+          body: JSON.stringify({
+            name: "Test",
+            surname: "User",
+            timezone: "UTC",
+            email: "newemail@example.com",
+          }),
+        })
+      );
+    });
+
+    expect(
+      screen.getByText("Profile updated successfully!")
+    ).toBeInTheDocument();
+  });
+
+  it("shows error when updating to duplicate email", async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: false,
+      json: () => Promise.resolve({ detail: "Email already in use" }),
+    } as Response);
+
+    render(<Profile />, { wrapper });
+
+    const emailInput = screen.getByLabelText("Email");
+    const updateButton = screen.getByRole("button", { name: "Update Profile" });
+
+    await userEvent.clear(emailInput);
+    await userEvent.type(emailInput, "existing@example.com");
+    await userEvent.click(updateButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("Email already in use")).toBeInTheDocument();
+    });
+  });
+
+  it("does not include email in payload when unchanged", async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockUserData),
+    } as Response);
+
+    render(<Profile />, { wrapper });
+
+    const nameInput = screen.getByLabelText("Name");
+    const updateButton = screen.getByRole("button", { name: "Update Profile" });
+
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, "UpdatedName");
+    await userEvent.click(updateButton);
+
+    await waitFor(() => {
+      const fetchCall = global.fetch.mock.calls[0];
+      const requestBody = JSON.parse(fetchCall[1].body);
+      expect(requestBody).not.toHaveProperty("email");
     });
   });
 });

@@ -26,6 +26,7 @@ interface UpdateProfileData {
   surname?: string | null;
   timezone?: string;
   password?: string;
+  email?: string;
 }
 
 interface UseAuthActionsReturn {
