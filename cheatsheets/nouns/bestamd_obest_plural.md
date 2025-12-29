@@ -29,7 +29,7 @@
 | Ending | Rule | Examples |
 |--------|------|----------|
 | **-or** | Ends in -a | en gata → gat**or** • en flicka → flick**or** |
-| **-ar** | Ends in -e, -el, -er, -en, -ing | en bulle → bull**ar** • en cykel → cykl**ar** • en tidning → tidning**ar** |
+| **-ar** | Ends in -e, -el, -er, -en, -ing; **or** many one-syllable words ending in consonant | en bulle → bull**ar** • en cykel → cykl**ar** • en gård → gård**ar** • en dag → dag**ar** |
 | **-er** | Stress on last syllable; -an, -ion, -ör, -ist | en mobil → mobil**er** • en student → student**er** • en frisör → frisör**er** |
 | **-r** | One syllable + long vowel | en sko → sko**r** • en ko → ko**r** |
 | **no change** | Professions in -are, -iker | en lärare → lärare • en elektriker → elektriker |
@@ -85,6 +85,7 @@
 | chair | en stol | stolen | stolar | stolarna |
 | car | en bil | bilen | bilar | bilarna |
 | day | en dag | dagen | dagar | dagarna |
+| farm/yard | en gård | gården | gårdar | gårdarna |
 | window | ett fönster | fönstret | fönster | fönstren |
 | teacher | en lärare | läraren | lärare | lärarna |
 
