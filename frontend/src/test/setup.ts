@@ -24,10 +24,9 @@ Object.defineProperty(window, "alert", {
 afterEach(() => {
   // Clean up React components after each test
   cleanup();
-  // Clear all mocks
+  // Only clear mock call history, don't reset implementations
+  // This is faster and sufficient for most tests
   vi.clearAllMocks();
-  // Reset all mock implementations
-  vi.resetAllMocks();
 });
 
 // Helper to create test wrapper with AuthProvider
