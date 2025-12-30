@@ -5,7 +5,6 @@ This module contains tests for the vocabulary repository.
 """
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import Mock
 
 import pytest
 from sqlalchemy.orm import Session
@@ -14,7 +13,6 @@ from runestone.api.schemas import VocabularyItemCreate
 from runestone.db.models import User
 from runestone.db.models import Vocabulary as VocabularyModel
 from runestone.db.vocabulary_repository import VocabularyRepository
-from runestone.services.vocabulary_service import VocabularyService
 
 
 @pytest.fixture
@@ -1349,7 +1347,7 @@ class TestVocabularyRepositoryStats:
     """Test cases for vocabulary repository statistics methods."""
 
     def test_get_words_in_learn_count(self, db_session: Session):
-        """Test counting words in learning."""
+        """Test counting words in learning (in_learn=True AND last_learned IS NOT NULL)."""
         repo = VocabularyRepository(db_session)
 
         # Create test user
@@ -1363,68 +1361,120 @@ class TestVocabularyRepositoryStats:
         db_session.commit()
 
         # Add vocabulary items
-        vocab_payload = {
-            "items": [
-                {"word_phrase": "word1", "translation": "trans1", "in_learn": True},
-                {"word_phrase": "word2", "translation": "trans2", "in_learn": True},
-                {"word_phrase": "word3", "translation": "trans3", "in_learn": False},
-            ]
-        }
+        vocab_items = [
+            VocabularyModel(
+                user_id=user.id,
+                word_phrase="word1",
+                translation="trans1",
+                in_learn=True,
+                last_learned=datetime.now(timezone.utc),  # Has last_learned
+            ),
+            VocabularyModel(
+                user_id=user.id,
+                word_phrase="word2",
+                translation="trans2",
+                in_learn=True,
+                last_learned=datetime.now(timezone.utc),  # Has last_learned
+            ),
+            VocabularyModel(
+                user_id=user.id,
+                word_phrase="word3",
+                translation="trans3",
+                in_learn=False,  # Not in learning
+            ),
+            VocabularyModel(
+                user_id=user.id,
+                word_phrase="word4",
+                translation="trans4",
+                in_learn=True,
+                last_learned=None,  # No last_learned, shouldn't be counted
+            ),
+        ]
+        db_session.add_all(vocab_items)
+        db_session.commit()
 
-        # Use vocabulary service to save items
-        # Create service with proper dependencies
-        vocab_repo = VocabularyRepository(db_session)
-        mock_settings = Mock()
-        mock_llm_client = Mock()
-        service = VocabularyService(vocab_repo, mock_settings, mock_llm_client)
-        service.save_vocabulary(
-            [VocabularyItemCreate(**item) for item in vocab_payload["items"]], user.id, enrich=False
-        )
-
-        # Test stats
+        # Test stats - only word1 and word2 should be counted (in_learn=True AND last_learned IS NOT NULL)
         count = repo.get_words_in_learn_count(user.id)
-        assert count == 2  # word1, word2
+        assert count == 2
 
-    def test_get_words_learned_count(self, db_session: Session):
-        """Test counting learned words."""
+    def test_get_words_skipped_count(self, db_session: Session):
+        """Test counting skipped words (in_learn=False)."""
         repo = VocabularyRepository(db_session)
 
         # Create test user
         user = User(
-            email="learned@example.com",
+            email="skipped@example.com",
             hashed_password="dummy",
-            name="Learned User",
+            name="Skipped User",
         )
         db_session.add(user)
         db_session.commit()
 
         # Add vocabulary items
-        vocab_payload = {
-            "items": [
-                {"word_phrase": "word1", "translation": "trans1", "in_learn": True},
-                {"word_phrase": "word2", "translation": "trans2", "in_learn": True},
-                {"word_phrase": "word3", "translation": "trans3", "in_learn": True},
-                {"word_phrase": "word4", "translation": "trans4", "in_learn": False},  # Not in learn
-            ]
-        }
-
-        # Use vocabulary service to save items
-        # Create service with proper dependencies
-        vocab_repo = VocabularyRepository(db_session)
-        mock_settings = Mock()
-        mock_llm_client = Mock()
-        service = VocabularyService(vocab_repo, mock_settings, mock_llm_client)
-
-        items = [VocabularyItemCreate(**item) for item in vocab_payload["items"]]
-        service.save_vocabulary(items, user.id, enrich=False)
-
-        # Update learned_times for some items
-        vocab_items = db_session.query(VocabularyModel).filter(VocabularyModel.user_id == user.id).all()
-        vocab_items[0].learned_times = 1  # word1 learned
-        vocab_items[1].learned_times = 2  # word2 learned
-        # word3 not learned
+        vocab_items = [
+            VocabularyModel(
+                user_id=user.id,
+                word_phrase="word1",
+                translation="trans1",
+                in_learn=True,
+            ),
+            VocabularyModel(
+                user_id=user.id,
+                word_phrase="word2",
+                translation="trans2",
+                in_learn=False,  # Skipped
+            ),
+            VocabularyModel(
+                user_id=user.id,
+                word_phrase="word3",
+                translation="trans3",
+                in_learn=False,  # Skipped
+            ),
+        ]
+        db_session.add_all(vocab_items)
         db_session.commit()
 
-        # Test stats
-        count = repo.get_words_learned_count(user.id)
-        assert count == 2  # word1, word2
+        # Test stats - word2 and word3 should be counted (in_learn=False)
+        count = repo.get_words_skipped_count(user.id)
+        assert count == 2
+
+    def test_get_overall_words_count(self, db_session: Session):
+        """Test counting all words for a user."""
+        repo = VocabularyRepository(db_session)
+
+        # Create test user
+        user = User(
+            email="overall@example.com",
+            hashed_password="dummy",
+            name="Overall User",
+        )
+        db_session.add(user)
+        db_session.commit()
+
+        # Add vocabulary items
+        vocab_items = [
+            VocabularyModel(
+                user_id=user.id,
+                word_phrase="word1",
+                translation="trans1",
+                in_learn=True,
+            ),
+            VocabularyModel(
+                user_id=user.id,
+                word_phrase="word2",
+                translation="trans2",
+                in_learn=True,
+            ),
+            VocabularyModel(
+                user_id=user.id,
+                word_phrase="word3",
+                translation="trans3",
+                in_learn=False,
+            ),
+        ]
+        db_session.add_all(vocab_items)
+        db_session.commit()
+
+        # Test stats - all 3 words should be counted
+        count = repo.get_overall_words_count(user.id)
+        assert count == 3

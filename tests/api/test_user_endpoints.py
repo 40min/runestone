@@ -27,7 +27,8 @@ class TestUserProfileEndpoints:
         assert data["timezone"] == "UTC"
         assert data["pages_recognised_count"] == 0
         assert data["words_in_learn_count"] == 0
-        assert data["words_learned_count"] == 0
+        assert data["words_skipped_count"] == 0
+        assert data["overall_words_count"] == 0
         assert "created_at" in data
         assert "updated_at" in data
 
@@ -78,8 +79,12 @@ class TestUserProfileEndpoints:
         data = response.json()
 
         # Verify stats
-        assert data["words_in_learn_count"] == 2  # ett äpple, en banan
-        assert data["words_learned_count"] == 1  # ett äpple (learned_times > 0)
+        # words_in_learn_count: count of words with in_learn=True AND last_learned IS NOT NULL
+        assert data["words_in_learn_count"] == 1  # Only ett äpple (has last_learned)
+        # words_skipped_count: count of words with in_learn=False
+        assert data["words_skipped_count"] == 1  # ett päron (in_learn=False)
+        # overall_words_count: total count of all words
+        assert data["overall_words_count"] == 3  # All three words
 
     def test_update_user_profile_success(self, client):
         """Test successful user profile update."""

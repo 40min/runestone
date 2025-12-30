@@ -29,7 +29,8 @@ class UserService:
         """Get user profile with stats."""
         # Get vocabulary stats
         words_in_learn_count = self.vocab_repo.get_words_in_learn_count(user.id)
-        words_learned_count = self.vocab_repo.get_words_learned_count(user.id)
+        words_skipped_count = self.vocab_repo.get_words_skipped_count(user.id)
+        overall_words_count = self.vocab_repo.get_overall_words_count(user.id)
 
         return UserProfileResponse(
             id=user.id,
@@ -39,7 +40,8 @@ class UserService:
             timezone=user.timezone,
             pages_recognised_count=user.pages_recognised_count,
             words_in_learn_count=words_in_learn_count,
-            words_learned_count=words_learned_count,
+            words_skipped_count=words_skipped_count,
+            overall_words_count=overall_words_count,
             created_at=user.created_at.isoformat() if user.created_at else None,
             updated_at=user.updated_at.isoformat() if user.updated_at else None,
         )

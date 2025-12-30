@@ -28,7 +28,8 @@ def mock_vocab_repo():
     mock = Mock()
     # Set default return values for count methods used by get_user_profile
     mock.get_words_in_learn_count.return_value = 0
-    mock.get_words_learned_count.return_value = 0
+    mock.get_words_skipped_count.return_value = 0
+    mock.get_overall_words_count.return_value = 0
     return mock
 
 

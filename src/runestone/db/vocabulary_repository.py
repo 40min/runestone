@@ -262,13 +262,17 @@ class VocabularyRepository:
         return deleted_rows > 0
 
     def get_words_in_learn_count(self, user_id: int) -> int:
-        """Get count of vocabulary items with in_learn=True for a user."""
-        return self.db.query(Vocabulary).filter(Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True)).count()
-
-    def get_words_learned_count(self, user_id: int) -> int:
-        """Get count of vocabulary items with in_learn=True AND learned_times > 0 for a user."""
+        """Get count of vocabulary items with in_learn=True AND last_learned IS NOT NULL for a user."""
         return (
             self.db.query(Vocabulary)
-            .filter(Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True), Vocabulary.learned_times > 0)
+            .filter(Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True), Vocabulary.last_learned.isnot(None))
             .count()
         )
+
+    def get_words_skipped_count(self, user_id: int) -> int:
+        """Get count of vocabulary items with in_learn=False for a user."""
+        return self.db.query(Vocabulary).filter(Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(False)).count()
+
+    def get_overall_words_count(self, user_id: int) -> int:
+        """Get total count of all vocabulary items for a user."""
+        return self.db.query(Vocabulary).filter(Vocabulary.user_id == user_id).count()

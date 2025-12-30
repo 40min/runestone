@@ -115,7 +115,10 @@ const Profile: React.FC = () => {
           <strong>Words Learning:</strong> {userData.words_in_learn_count || 0}
         </Typography>
         <Typography variant="body1" sx={{ mb: 1 }}>
-          <strong>Words Learned:</strong> {userData.words_learned_count || 0}
+          <strong>Words Skipped:</strong> {userData.words_skipped_count || 0}
+        </Typography>
+        <Typography variant="body1" sx={{ mb: 1 }}>
+          <strong>Overall Words:</strong> {userData.overall_words_count || 0}
         </Typography>
       </Box>
 

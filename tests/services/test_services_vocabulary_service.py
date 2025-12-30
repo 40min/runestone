@@ -4,6 +4,7 @@ Tests for vocabulary service functionality.
 This module contains tests for the vocabulary service.
 """
 
+from datetime import datetime, timezone
 from unittest.mock import Mock
 
 import pytest
@@ -125,11 +126,10 @@ class TestVocabularyService:
         assert len(result) == 1
         assert result[0].word_phrase == "ett päron"
 
-    def test_get_vocabulary_recent(self, service, db_session):
-        """Test retrieving the most recent vocabulary items."""
-        from datetime import datetime, timezone
+        # Clear existing items to test sorting with new items
+        db_session.query(VocabularyModel).delete()
+        db_session.commit()
 
-        # Add test data with different creation times
         vocab1 = VocabularyModel(
             user_id=1,
             word_phrase="ett äpple",
