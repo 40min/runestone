@@ -5,6 +5,9 @@ This module tests the user profile endpoints including GET/PUT /api/users/me
 and related functionality.
 """
 
+from runestone.db.vocabulary_repository import VocabularyRepository
+from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
+
 
 class TestUserProfileEndpoints:
     """Test cases for user profile endpoints."""
@@ -65,8 +68,6 @@ class TestUserProfileEndpoints:
         learned_item_id = apple_item["id"]
 
         # Use update_last_learned method to properly increment learned_times
-        from runestone.db.vocabulary_repository import VocabularyRepository
-
         repo = VocabularyRepository(client.db)
         vocab = repo.get_vocabulary_item(learned_item_id, client.user.id)
         repo.update_last_learned(vocab)
@@ -197,26 +198,10 @@ class TestUserProfileEndpoints:
         assert data["surname"] == "Testsson"
         assert data["timezone"] == "UTC"
 
-    def test_update_user_profile_email_duplicate(self, client):
+    def test_update_user_profile_email_duplicate(self, client, user_factory):
         """Test user email update with duplicate email should fail."""
-        # First, create a second user with a different email
-        from datetime import datetime
-
-        from runestone.auth.security import hash_password
-        from runestone.db.models import User
-        from runestone.db.user_repository import UserRepository
-
-        user_repo = UserRepository(client.db)
-        second_user = User(
-            email="existing@example.com",
-            hashed_password=hash_password("password123"),
-            name="Second User",
-            surname="Testsson",
-            timezone="UTC",
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
-        )
-        user_repo.create(second_user)
+        # Create a second user with a specific email
+        user_factory(email="existing@example.com")
 
         # Try to update the first user's email to the second user's email
         update_payload = {
@@ -256,8 +241,6 @@ class TestPageRecognitionCounter:
     def test_analyze_content_increments_counter(self, client_with_mock_processor):
         """Test that successful analysis increments pages_recognised_count."""
         client, mock_processor_instance = client_with_mock_processor
-
-        from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
 
         mock_analysis_result = ContentAnalysis(
             grammar_focus=GrammarFocus(

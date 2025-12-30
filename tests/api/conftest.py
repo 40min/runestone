@@ -5,6 +5,7 @@ This module provides reusable test fixtures for API testing,
 including database setup and test client configuration.
 """
 
+import uuid
 from unittest.mock import Mock
 
 import pytest
@@ -12,6 +13,8 @@ from fastapi.testclient import TestClient
 
 from runestone.api.main import app
 from runestone.auth.dependencies import get_current_user
+from runestone.auth.security import hash_password
+from runestone.db.models import User
 from runestone.dependencies import get_llm_client
 
 
@@ -297,3 +300,43 @@ def mock_grammar_service():
 # ==============================================================================
 # Test Data Fixtures
 # ==============================================================================
+
+
+@pytest.fixture
+def user_factory(db_session_factory):
+    """
+    Factory fixture for creating User instances in tests.
+
+    Provides a convenient way to create test users with customizable attributes.
+    Uses a unique email to avoid conflicts between tests.
+
+    Args:
+        db_session_factory: Database session factory from root conftest
+
+    Returns:
+        function: Factory function that accepts User attributes as keyword arguments
+
+    Example:
+        def test_user_email_duplicate(client, user_factory):
+            user_factory(email="existing@example.com")
+            # ... rest of test
+    """
+
+    def _create_user(**kwargs):
+        db = db_session_factory()
+        user_data = {
+            "email": f"user-{uuid.uuid4()}@example.com",
+            "hashed_password": hash_password("password123"),
+            "name": "Factory User",
+            "surname": "Testsson",
+            "timezone": "UTC",
+            **kwargs,
+        }
+        user = User(**user_data)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        db.close()
+        return user
+
+    return _create_user
