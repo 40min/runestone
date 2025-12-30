@@ -4,6 +4,8 @@ Tests for user service.
 This module contains unit tests for the UserService class.
 """
 
+import pytest
+
 
 class TestUserService:
     """Test cases for UserService."""
@@ -33,11 +35,8 @@ class TestUserService:
         update_data = UserProfileUpdate(email="existing@example.com")
 
         # Should raise ValueError
-        try:
+        with pytest.raises(ValueError, match="Email address is already registered by another user"):
             user_service.update_user_profile(user, update_data)
-            assert False, "Expected ValueError was not raised"
-        except ValueError as e:
-            assert "Email address is already registered by another user" in str(e)
 
         # Verify get_by_email was called
         mock_user_repo.get_by_email.assert_called_once_with("existing@example.com")
@@ -103,11 +102,8 @@ class TestUserService:
         update_data = UserProfileUpdate(email="taken@example.com")
 
         # Should raise ValueError
-        try:
+        with pytest.raises(ValueError, match="Email address is already registered by another user"):
             user_service.update_user_profile(user, update_data)
-            assert False, "Expected ValueError was not raised"
-        except ValueError as e:
-            assert "Email address is already registered by another user" in str(e)
 
     def test_update_user_profile_email_same_user_allowed(self, user_service, mock_user_repo, mock_vocab_repo, user):
         """Test that updating to own email (from different case) is allowed."""
@@ -153,11 +149,8 @@ class TestUserService:
         update_data = UserProfileUpdate(email="newemail@example.com")
 
         # Should raise ValueError with user-friendly message
-        try:
+        with pytest.raises(ValueError, match="Email address is already registered by another user"):
             user_service.update_user_profile(user, update_data)
-            assert False, "Expected ValueError was not raised"
-        except ValueError as e:
-            assert "Email address is already registered by another user" in str(e)
 
         # Verify update was called
         mock_user_repo.update.assert_called_once()
@@ -186,11 +179,8 @@ class TestUserService:
         update_data = UserProfileUpdate(email="newemail@example.com")
 
         # Should raise ValueError with user-friendly message
-        try:
+        with pytest.raises(ValueError, match="Email address is already registered by another user"):
             user_service.update_user_profile(user, update_data)
-            assert False, "Expected ValueError was not raised"
-        except ValueError as e:
-            assert "Email address is already registered by another user" in str(e)
 
     def test_update_user_profile_other_integrity_error_raised(
         self, user_service, mock_user_repo, mock_vocab_repo, user
@@ -214,8 +204,5 @@ class TestUserService:
         update_data = UserProfileUpdate(email="newemail@example.com")
 
         # Should re-raise the IntegrityError
-        try:
+        with pytest.raises(IntegrityError):
             user_service.update_user_profile(user, update_data)
-            assert False, "Expected IntegrityError was not raised"
-        except IntegrityError:
-            pass  # Expected - the other integrity error should be re-raised
