@@ -87,7 +87,7 @@ describe("Login", () => {
         {
           method: "GET",
           headers: {
-            "Authorization": "Bearer test-token",
+            Authorization: "Bearer test-token",
             "Content-Type": "application/json",
           },
         }
@@ -103,6 +103,9 @@ describe("Login", () => {
       json: () => Promise.resolve({ detail: "Invalid credentials" }),
     } as Response);
 
+    // Spy on console.error to suppress expected error output
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
     render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
 
     const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
@@ -116,6 +119,9 @@ describe("Login", () => {
     await waitFor(() => {
       expect(screen.getByText("Invalid credentials")).toBeInTheDocument();
     });
+
+    // Restore console.error
+    consoleSpy.mockRestore();
   });
 
   it("shows loading state during login", async () => {
@@ -161,6 +167,9 @@ describe("Login", () => {
     // First show an error
     vi.mocked(global.fetch).mockRejectedValueOnce(new Error("First error"));
 
+    // Spy on console.error to suppress expected error output
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
     render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
 
     const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
@@ -191,6 +200,9 @@ describe("Login", () => {
     await waitFor(() => {
       expect(screen.queryByText("First error")).not.toBeInTheDocument();
     });
+
+    // Restore console.error
+    consoleSpy.mockRestore();
   });
 
   it("calls onSwitchToRegister when register link is clicked", async () => {
@@ -227,6 +239,9 @@ describe("Login", () => {
       json: () => Promise.resolve({ detail: "Email is required" }),
     } as Response);
 
+    // Spy on console.error to suppress expected error output
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
     render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
 
     const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
@@ -243,6 +258,9 @@ describe("Login", () => {
 
     // Component shows error from server
     expect(screen.getByText("Email is required")).toBeInTheDocument();
+
+    // Restore console.error
+    consoleSpy.mockRestore();
   });
 
   it("does not validate email format (server-side validation)", async () => {
@@ -250,6 +268,9 @@ describe("Login", () => {
       ok: false,
       json: () => Promise.resolve({ detail: "Invalid email format" }),
     } as Response);
+
+    // Spy on console.error to suppress expected error output
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
 
@@ -268,6 +289,9 @@ describe("Login", () => {
 
     // Component shows error from server
     expect(screen.getByText("Invalid email format")).toBeInTheDocument();
+
+    // Restore console.error
+    consoleSpy.mockRestore();
   });
 
   it("handles network timeout gracefully", async () => {
@@ -277,6 +301,9 @@ describe("Login", () => {
           setTimeout(() => reject(new Error("Request timeout")), 100)
         )
     );
+
+    // Spy on console.error to suppress expected error output
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
 
@@ -294,5 +321,8 @@ describe("Login", () => {
       },
       { timeout: 2000 }
     );
+
+    // Restore console.error
+    consoleSpy.mockRestore();
   });
 });

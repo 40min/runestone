@@ -1,6 +1,6 @@
 import React from "react";
 import { renderHook, waitFor, act } from "@testing-library/react";
-import { vi } from "vitest";
+import { vi, expect } from "vitest";
 import { useAuthActions } from "./useAuth";
 import { AuthProvider } from "../context/AuthContext";
 
@@ -558,11 +558,29 @@ describe("useAuthActions", () => {
 
     mockLocalStorage.getItem.mockReturnValue("existing-token");
 
+    // Provide proper user data JSON to avoid parse error
+    mockLocalStorage.getItem.mockImplementation((key) => {
+      if (key === "runestone_token") return "existing-token";
+      if (key === "runestone_user_data") {
+        return JSON.stringify({
+          id: 1,
+          email: "test@example.com",
+          name: "Test",
+          surname: "User",
+          timezone: "UTC",
+          pages_recognised_count: 5,
+        });
+      }
+      return null;
+    });
+
     const { result } = renderHook(() => useAuthActions(), { wrapper });
 
-    await result.current.updateProfile({
-      name: "Test",
-      email: "newemail@example.com",
+    await act(async () => {
+      await result.current.updateProfile({
+        name: "Test",
+        email: "newemail@example.com",
+      });
     });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
