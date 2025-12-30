@@ -541,14 +541,14 @@ describe("useAuthActions", () => {
 
   // Email-related tests
 
-  it('includes email in API request payload when updating profile', async () => {
+  it("includes email in API request payload when updating profile", async () => {
     const mockUpdateResponse = {
       id: 1,
-      email: 'newemail@example.com',
-      name: 'Test',
-      surname: 'User',
-      timezone: 'UTC',
-      pages_recognised_count: 5
+      email: "newemail@example.com",
+      name: "Test",
+      surname: "User",
+      timezone: "UTC",
+      pages_recognised_count: 5,
     };
 
     vi.mocked(global.fetch).mockResolvedValueOnce({
@@ -556,64 +556,28 @@ describe("useAuthActions", () => {
       json: () => Promise.resolve(mockUpdateResponse),
     } as Response);
 
-    mockLocalStorage.getItem.mockReturnValue('existing-token');
+    mockLocalStorage.getItem.mockReturnValue("existing-token");
 
     const { result } = renderHook(() => useAuthActions(), { wrapper });
 
     await result.current.updateProfile({
-      name: 'Test',
-      email: 'newemail@example.com'
+      name: "Test",
+      email: "newemail@example.com",
     });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8010/api/me',
+      "http://localhost:8010/api/me",
       expect.objectContaining({
-        method: 'PUT',
+        method: "PUT",
         headers: expect.objectContaining({
-          'Authorization': 'Bearer existing-token',
+          Authorization: "Bearer existing-token",
         }),
         body: JSON.stringify({
-          name: 'Test',
-          email: 'newemail@example.com'
+          name: "Test",
+          email: "newemail@example.com",
         }),
       })
     );
-
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
-    expect(result.current.error).toBe(null);
-  });
-
-  it('updates user context with new email after successful profile update', async () => {
-    const mockUpdateResponse = {
-      id: 1,
-      email: 'updated@example.com',
-      name: 'Test',
-      surname: 'User',
-      timezone: 'UTC',
-      pages_recognised_count: 5
-    };
-
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockUpdateResponse),
-    } as Response);
-
-    mockLocalStorage.getItem.mockReturnValue('existing-token');
-
-    const { result } = renderHook(() => useAuthActions(), { wrapper });
-
-    await result.current.updateProfile({
-      email: 'updated@example.com'
-    });
-
-    // Verify the API was called with the updated email
-    await waitFor(() => {
-      const fetchCall = global.fetch.mock.calls[0];
-      const requestBody = JSON.parse(fetchCall[1].body);
-      expect(requestBody.email).toBe('updated@example.com');
-    });
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);

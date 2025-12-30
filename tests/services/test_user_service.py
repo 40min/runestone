@@ -127,3 +127,95 @@ class TestUserService:
         # Should succeed (get_by_email was called but returned same user)
         assert result is not None
         mock_user_repo.get_by_email.assert_called_once_with("current@example.com")
+
+    def test_update_user_profile_email_toctou_race_condition(self, user_service, mock_user_repo, mock_vocab_repo, user):
+        """Test TOCTOU race condition: IntegrityError is caught and converted to ValueError."""
+        from sqlalchemy.exc import IntegrityError
+
+        from runestone.api.schemas import UserProfileUpdate
+
+        # Set user email to a new one and mock get_by_email to return None
+        # (simulating the case where email is available at check time)
+        user.email = "old@example.com"
+        mock_user_repo.get_by_email.return_value = None
+
+        # Mock update to raise IntegrityError (simulating race condition)
+        # where another user took the email between check and update
+        integrity_error = IntegrityError(
+            'Duplicate key value violates unique constraint "users_email_key"',
+            'Duplicate key value violates unique constraint "users_email_key"',
+            "ORIGINAL ERROR: psycopg2.errors.UniqueViolation: "
+            'duplicate key value violates unique constraint "users_email_key"',
+        )
+        mock_user_repo.update.side_effect = integrity_error
+
+        # Try to update email
+        update_data = UserProfileUpdate(email="newemail@example.com")
+
+        # Should raise ValueError with user-friendly message
+        try:
+            user_service.update_user_profile(user, update_data)
+            assert False, "Expected ValueError was not raised"
+        except ValueError as e:
+            assert "Email address is already registered by another user" in str(e)
+
+        # Verify update was called
+        mock_user_repo.update.assert_called_once()
+
+    def test_update_user_profile_email_toctou_sqlite_constraint(
+        self, user_service, mock_user_repo, mock_vocab_repo, user
+    ):
+        """Test TOCTOU race condition with SQLite-style UNIQUE constraint failed message."""
+        from sqlalchemy.exc import IntegrityError
+
+        from runestone.api.schemas import UserProfileUpdate
+
+        # Set user email
+        user.email = "old@example.com"
+        mock_user_repo.get_by_email.return_value = None
+
+        # Mock update to raise IntegrityError with SQLite-style message
+        integrity_error = IntegrityError(
+            "(sqlite3.IntegrityError) UNIQUE constraint failed: users.email",
+            "(sqlite3.IntegrityError) UNIQUE constraint failed: users.email",
+            "UNIQUE constraint failed: users.email",
+        )
+        mock_user_repo.update.side_effect = integrity_error
+
+        # Try to update email
+        update_data = UserProfileUpdate(email="newemail@example.com")
+
+        # Should raise ValueError with user-friendly message
+        try:
+            user_service.update_user_profile(user, update_data)
+            assert False, "Expected ValueError was not raised"
+        except ValueError as e:
+            assert "Email address is already registered by another user" in str(e)
+
+    def test_update_user_profile_other_integrity_error_raised(
+        self, user_service, mock_user_repo, mock_vocab_repo, user
+    ):
+        """Test that non-email IntegrityError is re-raised."""
+        from sqlalchemy.exc import IntegrityError
+
+        from runestone.api.schemas import UserProfileUpdate
+
+        # Set user email
+        user.email = "old@example.com"
+        mock_user_repo.get_by_email.return_value = None
+
+        # Mock update to raise IntegrityError with a different constraint
+        integrity_error = IntegrityError(
+            "Foreign key violation", "Foreign key violation", "FOREIGN KEY constraint failed"
+        )
+        mock_user_repo.update.side_effect = integrity_error
+
+        # Try to update
+        update_data = UserProfileUpdate(email="newemail@example.com")
+
+        # Should re-raise the IntegrityError
+        try:
+            user_service.update_user_profile(user, update_data)
+            assert False, "Expected IntegrityError was not raised"
+        except IntegrityError:
+            pass  # Expected - the other integrity error should be re-raised
