@@ -108,39 +108,6 @@ def vocabulary_repository(db_session):
     return VocabularyRepository(db_session)
 
 
-# ==============================================================================
-# Mock Service Fixtures
-# ==============================================================================
-
-
-@pytest.fixture
-def mock_vocabulary_service():
-    """Create a standardized mock VocabularyService."""
-    from unittest.mock import Mock
-
-    from runestone.api.schemas import VocabularyImproveResponse
-
-    mock = Mock()
-    # Set sensible defaults
-    mock.improve_item.return_value = VocabularyImproveResponse(
-        translation="mock translation", example_phrase="mock example", extra_info="mock info"
-    )
-    mock.save_vocabulary.return_value = {"message": "Vocabulary saved successfully"}
-    mock.get_vocabulary.return_value = []
-    return mock
-
-
-@pytest.fixture
-def mock_grammar_service():
-    """Create a standardized mock GrammarService."""
-    from unittest.mock import Mock
-
-    mock = Mock()
-    mock.list_cheatsheets.return_value = []
-    mock.get_cheatsheet_content.return_value = "# Mock Content"
-    return mock
-
-
 @pytest.fixture
 def mock_processor():
     """Create a standardized mock RunestoneProcessor."""
@@ -165,11 +132,6 @@ def mock_processor():
         search_needed=SearchNeeded(should_search=False, query_suggestions=[]),
     )
     return mock
-
-
-# ==============================================================================
-# Factory Fixtures for Test Data
-# ==============================================================================
 
 
 @pytest.fixture
@@ -219,45 +181,9 @@ def vocabulary_model_factory():
     return _create
 
 
-@pytest.fixture
-def mock_user_factory():
-    """Factory for creating mock user objects."""
-    from unittest.mock import Mock
-
-    def _create(id=1, email="test@example.com", name="Test", surname="User"):
-        user = Mock()
-        user.id = id
-        user.email = email
-        user.name = name
-        user.surname = surname
-        return user
-
-    return _create
-
-
 # ==============================================================================
-# Temporary File/Directory Fixtures
+# Cheatsheet Test Fixtures
 # ==============================================================================
-
-
-@pytest.fixture
-def temp_state_file():
-    """Create a temporary state file with default configuration."""
-    import json
-    import tempfile
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        default_state = {
-            "update_offset": 0,
-            "users": {
-                "active_user": {"db_user_id": 1, "chat_id": 123, "is_active": True, "daily_selection": []},
-                "inactive_user": {"db_user_id": 2, "chat_id": 456, "is_active": False, "daily_selection": []},
-            },
-        }
-        json.dump(default_state, f)
-        f.flush()
-        yield f.name
-    os.unlink(f.name)
 
 
 @pytest.fixture

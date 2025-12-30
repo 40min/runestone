@@ -16,6 +16,7 @@ const Profile: React.FC = () => {
     timezone: "UTC",
     password: "",
     confirmPassword: "",
+    email: "",
   });
   const [successMessage, setSuccessMessage] = useState("");
   const [error, setError] = useState("");
@@ -28,6 +29,7 @@ const Profile: React.FC = () => {
         timezone: userData.timezone || "UTC",
         password: "",
         confirmPassword: "",
+        email: userData.email || "",
       });
     }
   }, [userData]);
@@ -60,6 +62,10 @@ const Profile: React.FC = () => {
 
       if (formData.password) {
         updateData.password = formData.password;
+      }
+
+      if (formData.email && formData.email !== userData.email) {
+        updateData.email = formData.email;
       }
 
       await updateProfile(updateData);
@@ -101,7 +107,6 @@ const Profile: React.FC = () => {
       <Box
         sx={{ color: "rgba(255, 255, 255, 0.7)", textAlign: "center", mb: 2 }}
       >
-        <div>Email: {userData.email}</div>
         <Typography variant="body1" sx={{ mb: 1 }}>
           <strong>Pages Recognised:</strong>{" "}
           {userData.pages_recognised_count || 0}
@@ -113,6 +118,14 @@ const Profile: React.FC = () => {
           <strong>Words Learned:</strong> {userData.words_learned_count || 0}
         </Typography>
       </Box>
+
+      <AuthTextField
+        label="Email"
+        name="email"
+        type="email"
+        value={formData.email}
+        onChange={(e) => handleChange("email", e.target.value)}
+      />
 
       {error && <ErrorAlert message={error} />}
 

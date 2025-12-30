@@ -5,6 +5,9 @@ This module tests the user profile endpoints including GET/PUT /api/users/me
 and related functionality.
 """
 
+from runestone.db.vocabulary_repository import VocabularyRepository
+from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
+
 
 class TestUserProfileEndpoints:
     """Test cases for user profile endpoints."""
@@ -65,8 +68,6 @@ class TestUserProfileEndpoints:
         learned_item_id = apple_item["id"]
 
         # Use update_last_learned method to properly increment learned_times
-        from runestone.db.vocabulary_repository import VocabularyRepository
-
         repo = VocabularyRepository(client.db)
         vocab = repo.get_vocabulary_item(learned_item_id, client.user.id)
         repo.update_last_learned(vocab)
@@ -178,6 +179,61 @@ class TestUserProfileEndpoints:
 
         assert response.status_code == 403
 
+    def test_update_user_profile_email_success(self, client):
+        """Test successful user email update."""
+        update_payload = {
+            "email": "newemail@example.com",
+        }
+
+        response = client.put("/api/me", json=update_payload)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify email was updated
+        assert data["email"] == "newemail@example.com"
+
+        # Verify other fields remain unchanged
+        assert data["name"] == "Test User"
+        assert data["surname"] == "Testsson"
+        assert data["timezone"] == "UTC"
+
+    def test_update_user_profile_email_duplicate(self, client, user_factory):
+        """Test user email update with duplicate email should fail."""
+        # Create a second user with a specific email
+        user_factory(email="existing@example.com")
+
+        # Try to update the first user's email to the second user's email
+        update_payload = {
+            "email": "existing@example.com",
+        }
+
+        response = client.put("/api/me", json=update_payload)
+
+        assert response.status_code == 400
+        data = response.json()
+        assert "Email address is already registered by another user" in data["detail"]
+
+    def test_update_user_profile_email_no_change(self, client):
+        """Test user email update with the same email (no actual change)."""
+        # Get current user profile
+        initial_response = client.get("/api/me")
+        assert initial_response.status_code == 200
+        current_email = initial_response.json()["email"]
+
+        # Update with the same email
+        update_payload = {
+            "email": current_email,
+        }
+
+        response = client.put("/api/me", json=update_payload)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify email remains the same
+        assert data["email"] == current_email
+
 
 class TestPageRecognitionCounter:
     """Test cases for page recognition counter functionality."""
@@ -185,8 +241,6 @@ class TestPageRecognitionCounter:
     def test_analyze_content_increments_counter(self, client_with_mock_processor):
         """Test that successful analysis increments pages_recognised_count."""
         client, mock_processor_instance = client_with_mock_processor
-
-        from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
 
         mock_analysis_result = ContentAnalysis(
             grammar_focus=GrammarFocus(

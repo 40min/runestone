@@ -1,6 +1,6 @@
 import React from "react";
 import { renderHook, waitFor, act } from "@testing-library/react";
-import { vi } from "vitest";
+import { vi, expect } from "vitest";
 import { useAuthActions } from "./useAuth";
 import { AuthProvider } from "../context/AuthContext";
 
@@ -537,5 +537,69 @@ describe("useAuthActions", () => {
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
+  });
+
+  // Email-related tests
+
+  it("includes email in API request payload when updating profile", async () => {
+    const mockUpdateResponse = {
+      id: 1,
+      email: "newemail@example.com",
+      name: "Test",
+      surname: "User",
+      timezone: "UTC",
+      pages_recognised_count: 5,
+    };
+
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockUpdateResponse),
+    } as Response);
+
+    mockLocalStorage.getItem.mockReturnValue("existing-token");
+
+    // Provide proper user data JSON to avoid parse error
+    mockLocalStorage.getItem.mockImplementation((key) => {
+      if (key === "runestone_token") return "existing-token";
+      if (key === "runestone_user_data") {
+        return JSON.stringify({
+          id: 1,
+          email: "test@example.com",
+          name: "Test",
+          surname: "User",
+          timezone: "UTC",
+          pages_recognised_count: 5,
+        });
+      }
+      return null;
+    });
+
+    const { result } = renderHook(() => useAuthActions(), { wrapper });
+
+    await act(async () => {
+      await result.current.updateProfile({
+        name: "Test",
+        email: "newemail@example.com",
+      });
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:8010/api/me",
+      expect.objectContaining({
+        method: "PUT",
+        headers: expect.objectContaining({
+          Authorization: "Bearer existing-token",
+        }),
+        body: JSON.stringify({
+          name: "Test",
+          email: "newemail@example.com",
+        }),
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+    expect(result.current.error).toBe(null);
   });
 });

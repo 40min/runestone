@@ -262,6 +262,9 @@ describe('Register Component', () => {
         error: null,
       });
 
+      // Spy on console.error to suppress expected error output
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
       renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
 
       const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
@@ -277,6 +280,9 @@ describe('Register Component', () => {
       await waitFor(() => {
         expect(screen.getByText("Registration failed")).toBeInTheDocument();
       });
+
+      // Restore console.error
+      consoleSpy.mockRestore();
     });
   });
 
@@ -394,6 +400,9 @@ describe('Register Component', () => {
         error: null,
       });
 
+      // Spy on console.error to suppress expected error output
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
       renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
 
       const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
@@ -415,6 +424,9 @@ describe('Register Component', () => {
       await waitFor(() => {
         expect(screen.getByText(/Invalid email format/)).toBeInTheDocument();
       });
+
+      // Restore console.error
+      consoleSpy.mockRestore();
     });
   });
 });

@@ -552,6 +552,9 @@ describe("ResultsDisplay", () => {
     };
     Object.assign(navigator, { clipboard: mockClipboard });
 
+    // Spy on console.error to suppress expected error output
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
     render(
       <ResultsDisplay
         ocrResult={mockOcrResult}
@@ -583,6 +586,9 @@ describe("ResultsDisplay", () => {
         screen.getByText("Failed to copy vocabulary. Please try again.")
       ).toBeInTheDocument();
     });
+
+    // Restore console.error
+    consoleSpy.mockRestore();
   });
 
   it("handles clipboard API not available by attempting fallback", async () => {
@@ -714,6 +720,9 @@ describe("ResultsDisplay", () => {
     };
     Object.assign(navigator, { clipboard: mockClipboard });
 
+    // Spy on console.error to suppress expected error output
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
     render(
       <ResultsDisplay
         ocrResult={mockOcrResult}
@@ -735,6 +744,9 @@ describe("ResultsDisplay", () => {
         screen.getByText("Failed to copy recognized text. Please try again.")
       ).toBeInTheDocument();
     });
+
+    // Restore console.error
+    consoleSpy.mockRestore();
   });
 
   it("handles OCR text copy when clipboard API is not available by attempting fallback", async () => {

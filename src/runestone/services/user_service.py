@@ -5,6 +5,8 @@ This module contains service classes that handle business logic
 for user-related operations.
 """
 
+from sqlalchemy.exc import IntegrityError
+
 from ..api.schemas import UserProfileResponse, UserProfileUpdate
 from ..auth.security import hash_password
 from ..core.exceptions import UserNotFoundError
@@ -49,6 +51,13 @@ class UserService:
             if len(update_data.password) < 6:
                 raise ValueError("Password must be at least 6 characters long")
 
+        # Check if email is being updated and validate uniqueness
+        if update_data.email is not None and update_data.email != user.email:
+            # Check if the new email is already registered by another user
+            existing_user = self.user_repo.get_by_email(update_data.email)
+            if existing_user is not None and existing_user.id != user.id:
+                raise ValueError("Email address is already registered by another user")
+
         # Update user fields
         update_dict = update_data.model_dump(exclude_unset=True)
 
@@ -62,7 +71,15 @@ class UserService:
                 setattr(user, key, value)
 
         # Save changes using user repository
-        updated_user = self.user_repo.update(user)
+        try:
+            updated_user = self.user_repo.update(user)
+        except IntegrityError as e:
+            # Handle race condition TOCTOU: another user may have taken this email
+            # Check for unique constraint violation on email column
+            error_str = str(e)
+            if "users_email_key" in error_str or "UNIQUE constraint failed: users.email" in error_str:
+                raise ValueError("Email address is already registered by another user") from e
+            raise  # Re-raise other integrity errors
 
         # Return updated profile
         return self.get_user_profile(updated_user)
