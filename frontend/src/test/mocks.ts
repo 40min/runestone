@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { vi } from "vitest";
 
 export const createMockAuthContext = (overrides = {}) => ({
   token: null,
@@ -21,13 +21,14 @@ export const createMockUseAuthActions = (overrides = {}) => ({
 
 export const createMockUserData = (overrides = {}) => ({
   id: 1,
-  email: 'test@example.com',
-  name: 'Test',
-  surname: 'User',
-  timezone: 'UTC',
+  email: "test@example.com",
+  name: "Test",
+  surname: "User",
+  timezone: "UTC",
   pages_recognised_count: 0,
   words_in_learn_count: 0,
-  words_learned_count: 0,
+  words_skipped_count: 0,
+  overall_words_count: 0,
   ...overrides,
 });
 
@@ -38,18 +39,20 @@ export const setupMockLocalStorage = () => {
     removeItem: vi.fn(),
     clear: vi.fn(),
   };
-  Object.defineProperty(window, 'localStorage', {
+  Object.defineProperty(window, "localStorage", {
     value: mockLocalStorage,
     writable: true,
   });
   return mockLocalStorage;
 };
 
-export const setupAuthenticatedLocalStorage = (userData = createMockUserData()) => {
+export const setupAuthenticatedLocalStorage = (
+  userData = createMockUserData()
+) => {
   const mockLocalStorage = setupMockLocalStorage();
   mockLocalStorage.getItem.mockImplementation((key: string) => {
-    if (key === 'runestone_token') return 'test-token';
-    if (key === 'runestone_user_data') return JSON.stringify(userData);
+    if (key === "runestone_token") return "test-token";
+    if (key === "runestone_user_data") return JSON.stringify(userData);
     return null;
   });
   return mockLocalStorage;

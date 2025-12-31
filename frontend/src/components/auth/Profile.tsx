@@ -43,6 +43,11 @@ const Profile: React.FC = () => {
     setError("");
     setSuccessMessage("");
 
+    if (!userData) {
+      setError("User data not available");
+      return;
+    }
+
     if (formData.password && formData.password !== formData.confirmPassword) {
       setError("Passwords do not match");
       return;

@@ -15,7 +15,8 @@ interface UserData {
   timezone: string | null;
   pages_recognised_count: number;
   words_in_learn_count?: number;
-  words_learned_count?: number;
+  words_skipped_count: number;
+  overall_words_count: number;
 }
 
 // Auth context interface
