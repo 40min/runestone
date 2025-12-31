@@ -88,7 +88,7 @@ class TestVocabularyService:
         assert apple_vocab.learned_times == 0
 
     def test_get_vocabulary(self, service, db_session):
-        """Test retrieving all vocabulary items."""
+        """Test retrieving vocabulary items filtered by user."""
         # Add some test data
         vocab1 = VocabularyModel(
             user_id=1,
@@ -126,10 +126,9 @@ class TestVocabularyService:
         assert len(result) == 1
         assert result[0].word_phrase == "ett päron"
 
-        # Clear existing items to test sorting with new items
-        db_session.query(VocabularyModel).delete()
-        db_session.commit()
-
+    def test_get_vocabulary_recent(self, service, db_session):
+        """Test retrieving vocabulary items sorted by creation date (most recent first)."""
+        # Add test data with specific creation dates
         vocab1 = VocabularyModel(
             user_id=1,
             word_phrase="ett äpple",
