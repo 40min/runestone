@@ -21,7 +21,8 @@ describe("Profile", () => {
     timezone: "UTC",
     pages_recognised_count: 10,
     words_in_learn_count: 25,
-    words_learned_count: 150,
+    words_skipped_count: 150,
+    overall_words_count: 200,
   };
 
   const wrapper = ({ children }: { children: React.ReactNode }) => {
@@ -53,8 +54,10 @@ describe("Profile", () => {
     expect(screen.getByText("10")).toBeInTheDocument();
     expect(screen.getAllByText("Words Learning:")[0]).toBeInTheDocument();
     expect(screen.getByText("25")).toBeInTheDocument();
-    expect(screen.getAllByText("Words Learned:")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Words Skipped:")[0]).toBeInTheDocument();
     expect(screen.getByText("150")).toBeInTheDocument();
+    expect(screen.getAllByText("Overall Words:")[0]).toBeInTheDocument();
+    expect(screen.getByText("200")).toBeInTheDocument();
   });
 
   it("displays form fields with user data", () => {
@@ -225,15 +228,18 @@ describe("Profile", () => {
     expect(screen.getByText("10")).toBeInTheDocument();
     expect(screen.getAllByText("Words Learning:")[0]).toBeInTheDocument();
     expect(screen.getByText("25")).toBeInTheDocument();
-    expect(screen.getAllByText("Words Learned:")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Words Skipped:")[0]).toBeInTheDocument();
     expect(screen.getByText("150")).toBeInTheDocument();
+    expect(screen.getAllByText("Overall Words:")[0]).toBeInTheDocument();
+    expect(screen.getByText("200")).toBeInTheDocument();
   });
 
   it("handles null values in stats by displaying zero", () => {
     const userDataWithNulls = {
       ...mockUserData,
       words_in_learn_count: null,
-      words_learned_count: null,
+      words_skipped_count: null,
+      overall_words_count: null,
     };
 
     const wrapperWithNulls = ({ children }: { children: React.ReactNode }) => {
@@ -258,14 +264,18 @@ describe("Profile", () => {
 
     // Verify labels exist
     expect(screen.getByText("Words Learning:")).toBeInTheDocument();
-    expect(screen.getByText("Words Learned:")).toBeInTheDocument();
+    expect(screen.getByText("Words Skipped:")).toBeInTheDocument();
+    expect(screen.getByText("Overall Words:")).toBeInTheDocument();
 
     // Verify null values are displayed as 0
     const statsSection = screen.getByText("Words Learning:").closest("div");
     expect(statsSection).toHaveTextContent("0");
 
-    const learnedSection = screen.getByText("Words Learned:").closest("div");
-    expect(learnedSection).toHaveTextContent("0");
+    const skippedSection = screen.getByText("Words Skipped:").closest("div");
+    expect(skippedSection).toHaveTextContent("0");
+
+    const overallSection = screen.getByText("Overall Words:").closest("div");
+    expect(overallSection).toHaveTextContent("0");
   });
 
   it("handles timezone selection", async () => {

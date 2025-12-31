@@ -167,7 +167,8 @@ class UserProfileResponse(BaseModel):
     timezone: str
     pages_recognised_count: int
     words_in_learn_count: int
-    words_learned_count: int
+    words_skipped_count: int
+    overall_words_count: int
     created_at: str
     updated_at: str
 
