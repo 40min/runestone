@@ -6,18 +6,7 @@ import React, {
   type ReactNode,
 } from "react";
 
-// User data interface matching backend User model
-interface UserData {
-  id: number;
-  email: string;
-  name: string | null;
-  surname: string | null;
-  timezone: string | null;
-  pages_recognised_count: number;
-  words_in_learn_count?: number;
-  words_skipped_count: number;
-  overall_words_count: number;
-}
+import type { UserData } from "../types/auth";
 
 // Auth context interface
 interface AuthContextType {
@@ -107,3 +96,4 @@ const useAuth = (): AuthContextType => {
 
 // eslint-disable-next-line react-refresh/only-export-components
 export { AuthProvider, AuthContext, useAuth };
+export type { UserData };

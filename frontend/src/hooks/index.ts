@@ -1,2 +1,2 @@
-export { useAuthActions } from './useAuth';
-export type { UserData, LoginCredentials, RegisterData } from './useAuth';
+export { useAuthActions } from "./useAuth";
+export type { LoginCredentials, RegisterData } from "./useAuth";

@@ -1,15 +1,7 @@
 import { useState } from "react";
 import { useAuth as useAuthContext } from "../context/AuthContext";
 import { useApi, apiRequest } from "../utils/api";
-
-interface UserData {
-  id: number;
-  email: string;
-  name: string | null;
-  surname: string | null;
-  timezone: string | null;
-  pages_recognised_count: number;
-}
+import type { UserData } from "../types/auth";
 
 interface LoginCredentials {
   email: string;
@@ -130,4 +122,4 @@ export const useAuthActions = (): UseAuthActionsReturn => {
   };
 };
 
-export type { UserData, LoginCredentials, RegisterData };
+export type { LoginCredentials, RegisterData };
