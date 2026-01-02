@@ -131,6 +131,7 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
         processor=None,
         llm_client=None,
         current_user=None,
+        agent_service=None,
         db_override=None,
     ):
         db, test_user = db_with_test_user
@@ -166,6 +167,11 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
 
             overrides[get_runestone_processor] = lambda: processor
 
+        if agent_service:
+            from runestone.dependencies import get_agent_service
+
+            overrides[get_agent_service] = lambda: agent_service
+
         for dep, override in overrides.items():
             app.dependency_overrides[dep] = override
 
@@ -190,6 +196,7 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
             "processor": processor,
             "llm_client": llm_client or mock_llm_client,
             "current_user": current_user or test_user,
+            "agent_service": agent_service,
         }
 
         yield client, mocks
@@ -265,6 +272,19 @@ def client_with_mock_grammar_service(client_with_overrides, mock_grammar_service
     return client, mock_grammar_service
 
 
+@pytest.fixture(scope="function")
+def client_with_mock_agent_service(client_with_overrides, mock_agent_service):
+    """
+    Create a test client with mocked agent service.
+
+    Returns:
+        tuple: (TestClient, Mock) - The test client and mock agent service
+    """
+    client_gen = client_with_overrides(agent_service=mock_agent_service)
+    client, mocks = next(client_gen)
+    return client, mock_agent_service
+
+
 # ==============================================================================
 # Mock Service Fixtures
 # ==============================================================================
@@ -294,6 +314,16 @@ def mock_grammar_service():
     mock = Mock()
     mock.list_cheatsheets.return_value = []
     mock.get_cheatsheet_content.return_value = "# Mock Content"
+    return mock
+
+
+@pytest.fixture
+def mock_agent_service():
+    """Create a standardized mock AgentService."""
+    from unittest.mock import Mock
+
+    mock = Mock()
+    mock.generate_response.return_value = "Mock response"
     return mock
 
 
