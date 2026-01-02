@@ -3,6 +3,7 @@ import FileUpload from "./components/FileUpload";
 import ResultsDisplay from "./components/ResultsDisplay";
 import VocabularyView from "./components/VocabularyView";
 import GrammarView from "./components/GrammarView";
+import ChatView from "./components/ChatView";
 import Login from "./components/auth/Login";
 import Register from "./components/auth/Register";
 import Profile from "./components/auth/Profile";
@@ -18,7 +19,7 @@ type AuthView = "login" | "register";
 
 function App() {
   const [currentView, setCurrentView] = useState<
-    "analyzer" | "vocabulary" | "grammar" | "profile"
+    "analyzer" | "vocabulary" | "grammar" | "chat" | "profile"
   >("analyzer");
   const [recognizeOnly, setRecognizeOnly] = useState(false);
   const [authView, setAuthView] = useState<AuthView>("login");
@@ -123,6 +124,8 @@ function App() {
               <VocabularyView />
             ) : currentView === "grammar" ? (
               <GrammarView />
+            ) : currentView === "chat" ? (
+              <ChatView />
             ) : (
               <Profile />
             )}

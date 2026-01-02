@@ -11,6 +11,7 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from runestone.agent.service import AgentService
 from runestone.config import Settings, settings
 from runestone.core.analyzer import ContentAnalyzer
 from runestone.core.clients.base import BaseLLMClient
@@ -207,3 +208,16 @@ def get_grammar_service(settings: Annotated[Settings, Depends(get_settings)]) ->
         GrammarService: Service instance for grammar operations
     """
     return GrammarService(settings.cheatsheets_dir)
+
+
+def get_agent_service(settings: Annotated[Settings, Depends(get_settings)]) -> AgentService:
+    """
+    Dependency injection for agent service.
+
+    Args:
+        settings: Application settings from dependency injection
+
+    Returns:
+        AgentService: Service instance for chat agent operations
+    """
+    return AgentService(settings)

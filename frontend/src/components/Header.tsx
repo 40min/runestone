@@ -1,12 +1,12 @@
 import React from 'react';
 import { Typography, Box } from '@mui/material';
-import { Diamond, User, LogOut } from 'lucide-react';
+import { Diamond, User, LogOut, MessageCircle } from 'lucide-react';
 import { CustomButton } from './ui';
 import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
-  currentView: 'analyzer' | 'vocabulary' | 'grammar' | 'profile';
-  onViewChange: (view: 'analyzer' | 'vocabulary' | 'grammar' | 'profile') => void;
+  currentView: 'analyzer' | 'vocabulary' | 'grammar' | 'chat' | 'profile';
+  onViewChange: (view: 'analyzer' | 'vocabulary' | 'grammar' | 'chat' | 'profile') => void;
 }
 
 const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
@@ -83,6 +83,21 @@ const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
            }}
          >
            Grammar
+         </CustomButton>
+         <CustomButton
+           variant="secondary"
+           onClick={() => onViewChange('chat')}
+           sx={{
+             color: currentView === 'chat' ? 'var(--primary-color)' : '#9ca3af',
+             backgroundColor: currentView === 'chat' ? 'rgba(147, 51, 234, 0.1)' : 'transparent',
+             '&:hover': {
+               color: 'white',
+               backgroundColor: currentView === 'chat' ? 'rgba(147, 51, 234, 0.2)' : 'rgba(156, 163, 175, 0.1)',
+             },
+           }}
+         >
+           <MessageCircle size={16} style={{ marginRight: 4 }} />
+           Chat
          </CustomButton>
          <CustomButton
            variant="secondary"

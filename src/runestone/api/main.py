@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from runestone.api.auth_endpoints import router as auth_router
+from runestone.api.chat_endpoints import router as chat_router
 from runestone.api.endpoints import grammar_router
 from runestone.api.endpoints import router as api_router
 from runestone.api.user_endpoints import router as user_router
@@ -76,6 +77,13 @@ def create_application() -> FastAPI:
         user_router,
         prefix="/api",
         tags=["users"],
+    )
+
+    # Include chat router
+    app.include_router(
+        chat_router,
+        prefix="/api/chat",
+        tags=["chat"],
     )
 
     return app
