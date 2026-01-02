@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     words_per_day: int = 5
     cooldown_days: int = 7
 
+    # Chat Agent Configuration
+    chat_provider: str = "openrouter"
+    chat_model: str = "x-ai/grok-2-1212"
+    agent_persona: str = "default"
+
     class Config:
         """Pydantic configuration."""
 
