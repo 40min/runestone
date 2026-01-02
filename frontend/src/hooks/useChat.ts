@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from 'uuid';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useApi } from '../utils/api';
 
@@ -32,7 +33,7 @@ export const useChat = (): UseChatReturn => {
       if (!userMessage.trim() || isLoading) return;
 
       const newUserMessage: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: uuidv4(),
         role: 'user',
         content: userMessage.trim(),
       };
@@ -52,7 +53,7 @@ export const useChat = (): UseChatReturn => {
         });
 
         const assistantMessage: ChatMessage = {
-          id: crypto.randomUUID(),
+          id: uuidv4(),
           role: 'assistant',
           content: data.message,
         };
