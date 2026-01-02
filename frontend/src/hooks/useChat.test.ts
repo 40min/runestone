@@ -74,14 +74,18 @@ describe('useChat', () => {
     // Verify messages state was updated
     await waitFor(() => {
       expect(result.current.messages).toHaveLength(2);
-      expect(result.current.messages[0]).toEqual({
-        role: 'user',
-        content: 'Hej! Hur mår du?',
-      });
-      expect(result.current.messages[1]).toEqual({
-        role: 'assistant',
-        content: 'Hej! Jag mår bra, tack!',
-      });
+      expect(result.current.messages[0]).toEqual(
+        expect.objectContaining({
+          role: 'user',
+          content: 'Hej! Hur mår du?',
+        })
+      );
+      expect(result.current.messages[1]).toEqual(
+        expect.objectContaining({
+          role: 'assistant',
+          content: 'Hej! Jag mår bra, tack!',
+        })
+      );
       expect(result.current.isLoading).toBe(false);
       expect(result.current.error).toBeNull();
     });
@@ -140,14 +144,18 @@ describe('useChat', () => {
 
     await waitFor(() => {
       expect(result.current.messages).toHaveLength(4);
-      expect(result.current.messages[2]).toEqual({
-        role: 'user',
-        content: 'What is my name?',
-      });
-      expect(result.current.messages[3]).toEqual({
-        role: 'assistant',
-        content: 'Your name is Alice!',
-      });
+      expect(result.current.messages[2]).toEqual(
+        expect.objectContaining({
+          role: 'user',
+          content: 'What is my name?',
+        })
+      );
+      expect(result.current.messages[3]).toEqual(
+        expect.objectContaining({
+          role: 'assistant',
+          content: 'Your name is Alice!',
+        })
+      );
     });
   });
 
@@ -169,10 +177,12 @@ describe('useChat', () => {
       expect(result.current.isLoading).toBe(false);
       // User message should still be added
       expect(result.current.messages).toHaveLength(1);
-      expect(result.current.messages[0]).toEqual({
-        role: 'user',
-        content: 'Test message',
-      });
+      expect(result.current.messages[0]).toEqual(
+        expect.objectContaining({
+          role: 'user',
+          content: 'Test message',
+        })
+      );
     });
   });
 

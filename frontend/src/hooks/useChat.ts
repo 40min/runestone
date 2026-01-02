@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useApi } from '../utils/api';
 
 interface ChatMessage {
+  id: string;
   role: 'user' | 'assistant';
   content: string;
 }
@@ -31,6 +32,7 @@ export const useChat = (): UseChatReturn => {
       if (!userMessage.trim() || isLoading) return;
 
       const newUserMessage: ChatMessage = {
+        id: crypto.randomUUID(),
         role: 'user',
         content: userMessage.trim(),
       };
@@ -45,11 +47,12 @@ export const useChat = (): UseChatReturn => {
           method: 'POST',
           body: {
             message: userMessage.trim(),
-            history: messagesRef.current,
+            history: messagesRef.current.map(({ role, content }) => ({ role, content })),
           },
         });
 
         const assistantMessage: ChatMessage = {
+          id: crypto.randomUUID(),
           role: 'assistant',
           content: data.message,
         };

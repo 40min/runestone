@@ -80,8 +80,8 @@ const ChatView: React.FC = () => {
         {messages.length === 0 ? (
           <ChatEmptyState />
         ) : (
-          messages.map((msg, index) => (
-            <ChatMessageBubble key={index} role={msg.role} content={msg.content} />
+          messages.map((msg) => (
+            <ChatMessageBubble key={msg.id} role={msg.role} content={msg.content} />
           ))
         )}
 
