@@ -34,13 +34,24 @@ class AgentService:
         self.persona = load_persona(settings.agent_persona)
 
         # Initialize the LangChain chat model
+        # Determine API key and base URL based on provider
+        if settings.chat_provider == "openrouter":
+            api_key = settings.openrouter_api_key
+            api_base = "https://openrouter.ai/api/v1"
+        elif settings.chat_provider == "openai":
+            api_key = settings.openai_api_key
+            api_base = None
+        else:
+            raise ValueError(f"Unsupported chat provider: {settings.chat_provider}")
+
+        if not api_key:
+            raise ValueError(f"API key for {settings.chat_provider} is not configured")
+
         # Using ChatOpenAI which works with OpenRouter and other OpenAI-compatible APIs
         self.chat_model = ChatOpenAI(
             model=settings.chat_model,
-            openai_api_key=(
-                settings.openrouter_api_key if settings.chat_provider == "openrouter" else settings.openai_api_key
-            ),
-            openai_api_base="https://openrouter.ai/api/v1" if settings.chat_provider == "openrouter" else None,
+            openai_api_key=api_key,
+            openai_api_base=api_base,
             temperature=0.7,
         )
 
