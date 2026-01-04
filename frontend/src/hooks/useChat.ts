@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useApi } from '../utils/api';
 
 interface ChatMessage {
@@ -13,6 +13,7 @@ interface UseChatReturn {
   isLoading: boolean;
   error: string | null;
   sendMessage: (message: string) => Promise<void>;
+  startNewChat: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -21,12 +22,24 @@ export const useChat = (): UseChatReturn => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const api = useApi();
-  const messagesRef = useRef<ChatMessage[]>([]);
 
-  // Keep messagesRef in sync with messages state
+  // Fetch history on mount
   useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
+    const fetchHistory = async () => {
+      setIsLoading(true);
+      try {
+        const data = await api<{ messages: ChatMessage[] }>('/api/chat/history');
+        setMessages(data.messages);
+      } catch (err) {
+        console.error('Failed to fetch chat history:', err);
+        setError('Failed to load chat history. Starting fresh.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, [api]);
 
   const sendMessage = useCallback(
     async (userMessage: string) => {
@@ -38,7 +51,7 @@ export const useChat = (): UseChatReturn => {
         content: userMessage.trim(),
       };
 
-      // Add user message to chat
+      // Add user message to chat immediately for UI responsiveness
       setMessages((prev) => [...prev, newUserMessage]);
       setIsLoading(true);
       setError(null);
@@ -48,7 +61,6 @@ export const useChat = (): UseChatReturn => {
           method: 'POST',
           body: {
             message: userMessage.trim(),
-            history: messagesRef.current.map(({ role, content }) => ({ role, content })),
           },
         });
 
@@ -71,6 +83,20 @@ export const useChat = (): UseChatReturn => {
     [api, isLoading]
   );
 
+  const startNewChat = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await api('/api/chat/history', { method: 'DELETE' });
+      setMessages([]);
+    } catch (err) {
+      console.error('Failed to clear chat history:', err);
+      setError('Failed to start a new chat. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [api]);
+
   const clearError = useCallback(() => {
     setError(null);
   }, []);
@@ -80,6 +106,7 @@ export const useChat = (): UseChatReturn => {
     isLoading,
     error,
     sendMessage,
+    startNewChat,
     clearError,
   };
 };

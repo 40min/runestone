@@ -21,6 +21,11 @@ from runestone.db.user_repository import UserRepository  # noqa: E402
 from runestone.db.vocabulary_repository import VocabularyRepository  # noqa: E402
 
 
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
 @pytest.fixture(scope="function")
 def db_engine():
     """

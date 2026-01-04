@@ -18,9 +18,11 @@ from runestone.core.clients.base import BaseLLMClient
 from runestone.core.clients.factory import create_llm_client
 from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
+from runestone.db.chat_repository import ChatRepository
 from runestone.db.database import get_db
 from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
+from runestone.services.chat_service import ChatService
 from runestone.services.grammar_service import GrammarService
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
@@ -60,6 +62,19 @@ def get_vocabulary_repository(db: Annotated[Session, Depends(get_db)]) -> Vocabu
         VocabularyRepository: Repository instance with database session
     """
     return VocabularyRepository(db)
+
+
+def get_chat_repository(db: Annotated[Session, Depends(get_db)]) -> ChatRepository:
+    """
+    Dependency injection for chat repository.
+
+    Args:
+        db: Database session from FastAPI dependency injection
+
+    Returns:
+        ChatRepository: Repository instance with database session
+    """
+    return ChatRepository(db)
 
 
 def get_user_service(
@@ -221,3 +236,22 @@ def get_agent_service(settings: Annotated[Settings, Depends(get_settings)]) -> A
         AgentService: Service instance for chat agent operations
     """
     return AgentService(settings)
+
+
+def get_chat_service(
+    settings: Annotated[Settings, Depends(get_settings)],
+    repo: Annotated[ChatRepository, Depends(get_chat_repository)],
+    agent_service: Annotated[AgentService, Depends(get_agent_service)],
+) -> ChatService:
+    """
+    Dependency injection for chat service.
+
+    Args:
+        settings: Application settings from dependency injection
+        repo: ChatRepository from dependency injection
+        agent_service: AgentService from dependency injection
+
+    Returns:
+        ChatService: Service instance for chat operations
+    """
+    return ChatService(settings, repo, agent_service)

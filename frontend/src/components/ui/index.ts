@@ -14,3 +14,4 @@ export { ChatEmptyState } from './ChatEmptyState';
 export { ChatLoadingIndicator } from './ChatLoadingIndicator';
 export { ChatInput } from './ChatInput';
 export { ChatContainer } from './ChatContainer';
+export { NewChatButton } from './NewChatButton';

@@ -9,13 +9,14 @@ import {
   ChatLoadingIndicator,
   ChatInput,
   ChatContainer,
+  NewChatButton,
 } from './ui';
 import { useChat } from '../hooks/useChat';
 
 const ChatView: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { messages, isLoading, error, sendMessage } = useChat();
+  const { messages, isLoading, error, sendMessage, startNewChat } = useChat();
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -73,6 +74,11 @@ const ChatView: React.FC = () => {
         >
           Ask questions about Swedish vocabulary, grammar, or practice conversation
         </Typography>
+        <NewChatButton
+          onClick={startNewChat}
+          isLoading={isLoading}
+          hasMessages={messages.length > 0}
+        />
       </Box>
 
       {/* Messages Container */}
