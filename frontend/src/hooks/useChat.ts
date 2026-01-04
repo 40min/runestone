@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useApi } from '../utils/api';
 
 interface ChatMessage {
@@ -22,24 +22,68 @@ export const useChat = (): UseChatReturn => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const api = useApi();
+  const lastFetchRef = useRef<number>(0);
+  const STALE_THRESHOLD = 10000; // 10 seconds
 
-  // Fetch history on mount
+  const fetchHistory = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await api<{ messages: ChatMessage[] }>('/api/chat/history');
+      setMessages(data.messages);
+      lastFetchRef.current = Date.now();
+    } catch (err) {
+      console.error('Failed to fetch chat history:', err);
+      setError('Failed to load chat history. Starting fresh.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [api]);
+
+  // Initial fetch
   useEffect(() => {
-    const fetchHistory = async () => {
-      setIsLoading(true);
-      try {
-        const data = await api<{ messages: ChatMessage[] }>('/api/chat/history');
-        setMessages(data.messages);
-      } catch (err) {
-        console.error('Failed to fetch chat history:', err);
-        setError('Failed to load chat history. Starting fresh.');
-      } finally {
-        setIsLoading(false);
+    fetchHistory();
+  }, [fetchHistory]);
+
+  // Tab synchronization (Broadcast Channel + Window Focus/Visibility)
+  useEffect(() => {
+    const channel = new BroadcastChannel('runestone_chat_sync');
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data === 'CHAT_UPDATED') {
+        // Known change, fetch immediately
+        fetchHistory();
       }
     };
 
-    fetchHistory();
-  }, [api]);
+    const handleFocus = () => {
+      // Only re-fetch if we haven't fetched recently
+      const isStale = Date.now() - lastFetchRef.current > STALE_THRESHOLD;
+      if (isStale) {
+        fetchHistory();
+      }
+    };
+
+    channel.addEventListener('message', handleMessage);
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        handleFocus();
+      }
+    });
+
+    return () => {
+      channel.removeEventListener('message', handleMessage);
+      channel.close();
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [fetchHistory]);
+
+  const broadcastChange = useCallback(() => {
+    const channel = new BroadcastChannel('runestone_chat_sync');
+    channel.postMessage('CHAT_UPDATED');
+    channel.close();
+  }, []);
 
   const sendMessage = useCallback(
     async (userMessage: string) => {
@@ -71,6 +115,7 @@ export const useChat = (): UseChatReturn => {
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
+        broadcastChange();
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : 'An error occurred';
@@ -80,7 +125,7 @@ export const useChat = (): UseChatReturn => {
         setIsLoading(false);
       }
     },
-    [api, isLoading]
+    [api, isLoading, broadcastChange]
   );
 
   const startNewChat = useCallback(async () => {
@@ -89,13 +134,14 @@ export const useChat = (): UseChatReturn => {
     try {
       await api('/api/chat/history', { method: 'DELETE' });
       setMessages([]);
+      broadcastChange();
     } catch (err) {
       console.error('Failed to clear chat history:', err);
       setError('Failed to start a new chat. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  }, [api]);
+  }, [api, broadcastChange]);
 
   const clearError = useCallback(() => {
     setError(null);
