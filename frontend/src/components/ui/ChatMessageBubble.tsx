@@ -17,7 +17,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
     >
       <Box
         sx={{
-          maxWidth: '70%',
+          maxWidth: { xs: '85%', md: '70%' },
           padding: '12px 16px',
           borderRadius: '12px',
           backgroundColor:

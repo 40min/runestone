@@ -12,7 +12,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ children }) => {
         flex: 1,
         overflowY: 'auto',
         mb: 2,
-        px: 2,
+        px: { xs: 1, md: 2 },
         '&::-webkit-scrollbar': {
           width: '8px',
         },

@@ -43,7 +43,7 @@ const ChatView: React.FC = () => {
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        height: 'calc(100vh - 200px)',
+        height: { xs: 'calc(100dvh - 140px)', md: 'calc(100vh - 200px)' },
         maxWidth: '900px',
         margin: '0 auto',
         backgroundColor: '#1a102b',
@@ -53,7 +53,7 @@ const ChatView: React.FC = () => {
       <Box
         sx={{
           textAlign: 'center',
-          mb: 3,
+          mb: { xs: 2, md: 3 },
         }}
       >
         <Typography
@@ -62,6 +62,7 @@ const ChatView: React.FC = () => {
             color: 'white',
             fontWeight: 'bold',
             mb: 1,
+            fontSize: { xs: '1.5rem', md: '2.125rem' },
           }}
         >
           Chat with Your Swedish Teacher
@@ -69,7 +70,7 @@ const ChatView: React.FC = () => {
         <Typography
           sx={{
             color: '#9ca3af',
-            fontSize: '1rem',
+            fontSize: { xs: '0.875rem', md: '1rem' },
           }}
         >
           Ask questions about Swedish vocabulary, grammar, or practice conversation
@@ -102,8 +103,9 @@ const ChatView: React.FC = () => {
       <Box
         sx={{
           display: 'flex',
-          gap: 2,
+          gap: { xs: 1, md: 2 },
           alignItems: 'flex-end',
+          pb: { xs: 1, md: 0 },
         }}
       >
         <ChatInput
@@ -117,8 +119,8 @@ const ChatView: React.FC = () => {
           onClick={handleSendMessage}
           disabled={!inputMessage.trim() || isLoading}
           sx={{
-            minWidth: '56px',
-            height: '56px',
+            minWidth: { xs: '48px', md: '56px' },
+            height: { xs: '48px', md: '56px' },
             borderRadius: '12px',
           }}
         >

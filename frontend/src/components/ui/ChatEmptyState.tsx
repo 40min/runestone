@@ -28,7 +28,7 @@ export const ChatEmptyState: React.FC<ChatEmptyStateProps> = ({
       <Typography variant="h6" sx={{ mb: 1 }}>
         {title}
       </Typography>
-      <Typography sx={{ textAlign: 'center', maxWidth: '400px' }}>
+      <Typography sx={{ textAlign: 'center', maxWidth: { xs: '90%', md: '400px' } }}>
         {description}
       </Typography>
     </Box>

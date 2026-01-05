@@ -63,7 +63,7 @@ function App() {
     <div className="bg-[#1a102b] min-h-screen">
       <div className="layout-container flex h-full grow flex-col">
         <Header currentView={currentView} onViewChange={setCurrentView} />
-        <main className="flex flex-1 justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <main className="flex flex-1 justify-center py-4 px-2 sm:py-12 sm:px-6 lg:px-8">
           <div className="w-full max-w-7xl space-y-10">
             {currentView === "analyzer" ? (
               <>
