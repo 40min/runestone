@@ -24,6 +24,21 @@ def test_send_message_success(client_with_mock_agent_service, db_session):
     mock_agent_service.generate_response.assert_called_once()
 
 
+def test_send_message_service_error(client_with_mock_agent_service, db_session):
+    """Test error handling when agent service fails."""
+    client, mock_agent_service = client_with_mock_agent_service
+    mock_agent_service.generate_response.side_effect = Exception("LLM API Error")
+
+    # Send message
+    chat_response = client.post(
+        "/api/chat/message",
+        json={"message": "Hello"},
+    )
+
+    assert chat_response.status_code == 500
+    assert "Failed to generate response" in chat_response.json()["detail"]
+
+
 def test_get_history_empty(client):
     """Test fetching empty chat history."""
     response = client.get("/api/chat/history")
