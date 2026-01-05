@@ -7,6 +7,10 @@ import {
   TableHead,
   TableRow,
   Paper,
+  Box,
+  Typography,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
 import StyledCheckbox from './StyledCheckbox';
@@ -43,6 +47,8 @@ function DataTable<T extends { id: string } & Record<string, unknown>>({
   rowCheckboxIdPrefix,
   sx = {},
 }: DataTableProps<T>) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const allSelected = data.length > 0 && data.every((row) => selectedItems.get(row.id));
   const someSelected = data.some((row) => selectedItems.get(row.id)) && !allSelected;
 
@@ -51,6 +57,99 @@ function DataTable<T extends { id: string } & Record<string, unknown>>({
       onSelectAll(checked);
     }
   };
+
+  if (isMobile) {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, ...sx }}>
+         {selectable && (
+          <Box sx={{
+            display: 'flex',
+            alignItems: 'center',
+            mb: 1,
+            p: 1.5,
+            backgroundColor: '#2a1f35',
+            borderRadius: '0.5rem',
+            border: '1px solid #4d3c63'
+          }}>
+             <StyledCheckbox
+              id={masterCheckboxId}
+              checked={allSelected}
+              indeterminate={someSelected}
+              onChange={handleSelectAll}
+            />
+            <Typography sx={{ ml: 1, color: 'white', fontWeight: 'bold' }}>
+              Select All
+            </Typography>
+          </Box>
+        )}
+        {data.map((row, index) => (
+          <Paper
+            key={row.id}
+            elevation={0}
+            onClick={() => onRowClick?.(row, index)}
+            sx={{
+              backgroundColor: '#2a1f35',
+              border: '1px solid #4d3c63',
+              borderRadius: '0.5rem',
+              p: 2,
+              cursor: onRowClick ? 'pointer' : 'default',
+              '&:hover': {
+                backgroundColor: onRowClick ? 'rgba(255, 255, 255, 0.05)' : '#2a1f35',
+              },
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1.5,
+            }}
+          >
+             {selectable && (
+               <Box sx={{
+                 position: 'absolute',
+                 top: 12,
+                 right: 12,
+                 zIndex: 1
+               }}
+               onClick={(e) => e.stopPropagation()} // Prevent row click when clicking checkbox
+               >
+                  <StyledCheckbox
+                    id={rowCheckboxIdPrefix ? `${rowCheckboxIdPrefix}-${row.id}` : undefined}
+                    checked={selectedItems.get(row.id) || false}
+                    onChange={(checked) => onSelectionChange?.(row.id, checked)}
+                  />
+               </Box>
+            )}
+
+            {columns.map((column) => {
+              const value = row[column.key as keyof T];
+              return (
+                <Box key={String(column.key)} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: '#9ca3af',
+                      textTransform: 'uppercase',
+                      fontWeight: 'bold',
+                      fontSize: '0.7rem'
+                    }}
+                  >
+                    {column.label}
+                  </Typography>
+                  <Box sx={{
+                    color: 'white',
+                    wordBreak: 'break-word',
+                    // Apply column specific styles if present, but ignore width percentages that might break mobile layout
+                    ...column.sx
+                  }}>
+                     {column.render ? column.render(value, row, index) : String(value || '—')}
+                  </Box>
+                </Box>
+              );
+            })}
+          </Paper>
+        ))}
+      </Box>
+    );
+  }
 
   return (
     <TableContainer
@@ -70,6 +169,7 @@ function DataTable<T extends { id: string } & Record<string, unknown>>({
                   color: 'white',
                   fontWeight: 'bold',
                   borderBottom: '1px solid #4d3c63',
+                  width: '48px', // Fixed width for checkbox column
                 }}
               >
                 <StyledCheckbox

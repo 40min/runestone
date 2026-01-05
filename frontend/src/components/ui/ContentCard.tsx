@@ -12,7 +12,7 @@ interface ContentCardProps {
 
 const ContentCard: React.FC<ContentCardProps> = ({
   children,
-  padding = 4,
+  padding = { xs: 2, md: 4 },
   backgroundColor = '#2a1f35',
   borderRadius = '0.5rem',
   sx = {},
