@@ -45,13 +45,13 @@ const useVocabulary = (): UseVocabularyReturn => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasFetchedRef = useRef(false);
-  const api = useApi();
+  const { get } = useApi();
 
   const fetchVocabulary = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data: SavedVocabularyItem[] = await api<SavedVocabularyItem[]>(
+      const data: SavedVocabularyItem[] = await get<SavedVocabularyItem[]>(
         "/api/vocabulary"
       );
       setVocabulary(data);
@@ -62,7 +62,7 @@ const useVocabulary = (): UseVocabularyReturn => {
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, [get]);
 
   useEffect(() => {
     if (!hasFetchedRef.current) {
@@ -94,7 +94,7 @@ export const useRecentVocabulary = (
   const [editingItem, setEditingItem] = useState<SavedVocabularyItem | null>(
     null
   );
-  const api = useApi();
+  const { get, post, put, delete: apiDelete } = useApi();
 
   const fetchRecentVocabulary = useCallback(async () => {
     setLoading(true);
@@ -108,7 +108,7 @@ export const useRecentVocabulary = (
       } else {
         params.append("limit", "20");
       }
-      const data: SavedVocabularyItem[] = await api<SavedVocabularyItem[]>(
+      const data: SavedVocabularyItem[] = await get<SavedVocabularyItem[]>(
         `/api/vocabulary?${params.toString()}`
       );
       setRecentVocabulary(data);
@@ -121,7 +121,7 @@ export const useRecentVocabulary = (
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, preciseSearch, api]);
+  }, [searchQuery, preciseSearch, get]);
 
   const openEditModal = useCallback((item: SavedVocabularyItem | null) => {
     setEditingItem(item);
@@ -135,45 +135,37 @@ export const useRecentVocabulary = (
 
   const updateVocabularyItem = useCallback(
     async (id: number, updates: Partial<SavedVocabularyItem>) => {
-      const updatedItem: SavedVocabularyItem = await api<SavedVocabularyItem>(
+      const updatedItem: SavedVocabularyItem = await put<SavedVocabularyItem>(
         `/api/vocabulary/${id}`,
-        {
-          method: "PUT",
-          body: updates,
-        }
+        updates
       );
       setRecentVocabulary((prev) =>
         prev.map((item) => (item.id === id ? updatedItem : item))
       );
       closeEditModal();
     },
-    [closeEditModal, api]
+    [closeEditModal, put]
   );
 
   const createVocabularyItem = useCallback(
     async (item: Partial<SavedVocabularyItem>) => {
-      const newItem: SavedVocabularyItem = await api<SavedVocabularyItem>(
+      const newItem: SavedVocabularyItem = await post<SavedVocabularyItem>(
         "/api/vocabulary/item",
-        {
-          method: "POST",
-          body: item,
-        }
+        item
       );
       setRecentVocabulary((prev) => [newItem, ...prev]);
       closeEditModal();
     },
-    [closeEditModal, api]
+    [closeEditModal, post]
   );
 
   const deleteVocabularyItem = useCallback(
     async (id: number) => {
-      await api(`/api/vocabulary/${id}`, {
-        method: "DELETE",
-      });
+      await apiDelete(`/api/vocabulary/${id}`);
       setRecentVocabulary((prev) => prev.filter((item) => item.id !== id));
       closeEditModal();
     },
-    [closeEditModal, api]
+    [closeEditModal, apiDelete]
   );
 
   useEffect(() => {
@@ -204,15 +196,12 @@ export const improveVocabularyItem = async (
   example_phrase?: string;
   extra_info?: string;
 }> => {
-  return api<{
+  return api.post<{
     translation?: string;
     example_phrase?: string;
     extra_info?: string;
   }>("/api/vocabulary/improve", {
-    method: "POST",
-    body: {
-      word_phrase: wordPhrase,
-      mode: mode,
-    },
+    word_phrase: wordPhrase,
+    mode: mode,
   });
 };

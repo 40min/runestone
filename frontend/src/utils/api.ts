@@ -1,12 +1,13 @@
-import { useCallback } from 'react';
-import { API_BASE_URL } from '../config';
-import { useAuth } from '../context/AuthContext';
+import { useCallback } from "react";
+import { API_BASE_URL } from "../config";
+import { useAuth } from "../context/AuthContext";
 
 // API client options interface
 export interface ApiClientOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method?: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
   body?: unknown;
   headers?: Record<string, string>;
+  token?: string; // Allow explicit token override
 }
 
 // Type for validation error items
@@ -15,130 +16,167 @@ interface ValidationErrorItem {
   [key: string]: unknown;
 }
 
+// Extract error message handling into a reusable function
+const extractErrorMessage = (error: Record<string, unknown>): string => {
+  const detail = error.detail;
+
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (detail && typeof detail === "object") {
+    // Handle validation errors from FastAPI with multiple fields
+    if (Array.isArray(detail)) {
+      return (detail as ValidationErrorItem[])
+        .map((err: ValidationErrorItem | string) =>
+          typeof err === "string" ? err : err.msg ?? "Validation error"
+        )
+        .join(", ");
+    }
+
+    const detailObj = detail as Record<string, unknown>;
+    if (typeof detailObj.message === "string") {
+      return detailObj.message;
+    }
+
+    return JSON.stringify(detail);
+  }
+
+  if (typeof error.message === "string") {
+    return error.message;
+  }
+
+  return "Request failed";
+};
+
+// Core API request function - can be used with or without auth context
+const makeRequest = async <T>(
+  endpoint: string,
+  options: ApiClientOptions,
+  contextToken: string | null,
+  logout?: () => void
+): Promise<T> => {
+  const url = `${API_BASE_URL}${endpoint}`;
+
+  // Use explicit token if provided, otherwise fall back to context token
+  const authToken = options.token ?? contextToken;
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...options.headers,
+  };
+
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
+  }
+
+  const requestOptions: RequestInit = {
+    method: options.method || "GET",
+    headers,
+  };
+
+  // Add body if provided and not GET method
+  if (options.body && options.method !== "GET") {
+    requestOptions.body = JSON.stringify(options.body);
+  }
+
+  const response = await fetch(url, requestOptions);
+
+  // Handle 401 Unauthorized - automatically logout if logout function provided
+  if (response.status === 401 && logout) {
+    logout();
+    // Continue to error handling below to use backend error message
+  }
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      detail: "An error occurred",
+    }));
+
+    throw new Error(extractErrorMessage(error));
+  }
+
+  // Handle 204 No Content responses
+  if (response.status === 204) {
+    return {} as T;
+  }
+
+  return response.json();
+};
+
 // Custom hook that provides authenticated API client
 export const useApi = () => {
   const { token, logout } = useAuth();
 
-  const apiClient = useCallback(async <T>(
-    endpoint: string,
-    options: ApiClientOptions = {}
-  ): Promise<T> => {
-    const url = `${API_BASE_URL}${endpoint}`;
-
-    const headers: Record<string, string> = {
-      ...(options.headers || {}),
-    };
-
-    // Automatically inject Authorization header if token exists
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const requestOptions: RequestInit = {
-      method: options.method || 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers,
-      },
-    };
-
-    // Add body if provided and not GET method
-    if (options.body && options.method !== 'GET') {
-      requestOptions.body = JSON.stringify(options.body);
-    }
-
-    const response = await fetch(url, requestOptions);
-
-    // Handle 401 Unauthorized - automatically logout
-    if (response.status === 401) {
-      logout();
-      // Continue to error handling below to use backend error message
-    }
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({
-        detail: 'An error occurred',
-      }));
-
-      // Handle different error formats
-      let errorMessage = 'Request failed';
-      if (typeof error.detail === 'string') {
-        errorMessage = error.detail;
-      } else if (error.detail && typeof error.detail === 'object') {
-        // Handle validation errors from FastAPI with multiple fields
-        if (Array.isArray(error.detail)) {
-          errorMessage = error.detail.map((err: ValidationErrorItem) =>
-            typeof err === 'string' ? err : (err.msg ?? 'Validation error')
-          ).join(', ');
-        } else if (error.detail.message) {
-          errorMessage = error.detail.message;
-        } else {
-          errorMessage = JSON.stringify(error.detail);
-        }
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-
-      throw new Error(errorMessage);
-    }
-
-    return response.status === 204 ? null : response.json();
-  }, [token, logout]);
-
-  return apiClient;
-};
-
-// API utility for standalone calls (non-hook contexts)
-// @deprecated Use useApi hook instead for automatic authentication
-export const apiRequest = async <T>(
-  endpoint: string,
-  options: RequestInit = {},
-  authToken?: string | null
-): Promise<T> => {
-  const url = `${API_BASE_URL}${endpoint}`;
-
-  const headers: Record<string, string> = {
-    ...(options.headers as Record<string, string> || {}),
-  };
-
-  if (authToken) {
-    headers['Authorization'] = `Bearer ${authToken}`;
-  }
-
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers,
+  // Main API client for requests that return data
+  const apiClient = useCallback(
+    async <T>(endpoint: string, options: ApiClientOptions = {}): Promise<T> => {
+      return makeRequest<T>(endpoint, options, token, logout);
     },
-  });
+    [token, logout]
+  );
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({
-      detail: 'An error occurred',
-    }));
+  // Specialized DELETE method that doesn't require a return type
+  const apiDelete = useCallback(
+    async (
+      endpoint: string,
+      options?: Omit<ApiClientOptions, "method">
+    ): Promise<void> => {
+      await apiClient(endpoint, { ...options, method: "DELETE" });
+    },
+    [apiClient]
+  );
 
-    // Handle different error formats
-    let errorMessage = 'Request failed';
-    if (typeof error.detail === 'string') {
-      errorMessage = error.detail;
-    } else if (error.detail && typeof error.detail === 'object') {
-      // Handle validation errors from FastAPI with multiple fields
-      if (Array.isArray(error.detail)) {
-        errorMessage = error.detail.map((err: ValidationErrorItem) =>
-          typeof err === 'string' ? err : err.msg || 'Validation error'
-        ).join(', ');
-      } else if (error.detail.message) {
-        errorMessage = error.detail.message;
-      } else {
-        errorMessage = JSON.stringify(error.detail);
-      }
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
+  // Convenience methods for common operations
+  const get = useCallback(
+    async <T>(
+      endpoint: string,
+      options?: Omit<ApiClientOptions, "method" | "body">
+    ): Promise<T> => {
+      return apiClient<T>(endpoint, { ...options, method: "GET" });
+    },
+    [apiClient]
+  );
 
-    throw new Error(errorMessage);
-  }
+  const post = useCallback(
+    async <T>(
+      endpoint: string,
+      body?: unknown,
+      options?: Omit<ApiClientOptions, "method" | "body">
+    ): Promise<T> => {
+      return apiClient<T>(endpoint, { ...options, body, method: "POST" });
+    },
+    [apiClient]
+  );
 
-  return response.status === 204 ? null : response.json();
+  const put = useCallback(
+    async <T>(
+      endpoint: string,
+      body?: unknown,
+      options?: Omit<ApiClientOptions, "method" | "body">
+    ): Promise<T> => {
+      return apiClient<T>(endpoint, { ...options, body, method: "PUT" });
+    },
+    [apiClient]
+  );
+
+  const patch = useCallback(
+    async <T>(
+      endpoint: string,
+      body?: unknown,
+      options?: Omit<ApiClientOptions, "method" | "body">
+    ): Promise<T> => {
+      return apiClient<T>(endpoint, { ...options, body, method: "PATCH" });
+    },
+    [apiClient]
+  );
+
+  return {
+    apiClient,
+    delete: apiDelete,
+    get,
+    post,
+    put,
+    patch,
+  };
 };

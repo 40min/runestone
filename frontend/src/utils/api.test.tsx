@@ -65,7 +65,7 @@ describe('useApi', () => {
       ),
     });
 
-    await result.current('/test-endpoint');
+    await result.current.apiClient('/test-endpoint');
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       'http://localhost:8010/test-endpoint',
@@ -97,7 +97,7 @@ describe('useApi', () => {
 
     const { result } = renderHook(() => useApi(), { wrapper });
 
-    await expect(result.current('/test-endpoint')).rejects.toThrow(
+    await expect(result.current.apiClient('/test-endpoint')).rejects.toThrow(
       'Unauthorized'
     );
 
@@ -113,7 +113,7 @@ describe('useApi', () => {
 
     const { result } = renderHook(() => useApi(), { wrapper });
 
-    const response = await result.current('/test-endpoint');
+    const response = await result.current.apiClient('/test-endpoint');
 
     expect(response).toEqual(mockResponse);
     expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -130,7 +130,7 @@ describe('useApi', () => {
 
     const { result } = renderHook(() => useApi(), { wrapper });
 
-    await expect(result.current('/test-endpoint')).rejects.toThrow('Bad Request');
+    await expect(result.current.apiClient('/test-endpoint')).rejects.toThrow('Bad Request');
   });
 
   it('handles network errors', async () => {
@@ -138,7 +138,7 @@ describe('useApi', () => {
 
     const { result } = renderHook(() => useApi(), { wrapper });
 
-    await expect(result.current('/test-endpoint')).rejects.toThrow('Network error');
+    await expect(result.current.apiClient('/test-endpoint')).rejects.toThrow('Network error');
   });
 
   it('retrieves token from AuthContext', async () => {
@@ -159,7 +159,7 @@ describe('useApi', () => {
 
     const { result } = renderHook(() => useApi(), { wrapper });
 
-    await result.current('/test-endpoint');
+    await result.current.apiClient('/test-endpoint');
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       'http://localhost:8010/test-endpoint',
@@ -181,7 +181,7 @@ describe('useApi', () => {
     const { result } = renderHook(() => useApi(), { wrapper });
 
     const testBody = { email: 'test@example.com', password: 'password123' };
-    await result.current('/api/auth', {
+    await result.current.apiClient('/api/auth', {
       method: 'POST',
       body: testBody,
     });
@@ -204,7 +204,7 @@ describe('useApi', () => {
 
     const { result } = renderHook(() => useApi(), { wrapper });
 
-    await result.current('/test-endpoint');
+    await result.current.apiClient('/test-endpoint');
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       'http://localhost:8010/test-endpoint',
@@ -231,7 +231,7 @@ describe('useApi', () => {
 
     const { result } = renderHook(() => useApi(), { wrapper });
 
-    await result.current('/test-endpoint', {
+    await result.current.apiClient('/test-endpoint', {
       headers: {
         'X-Custom-Header': 'custom-value',
       },
@@ -259,7 +259,7 @@ describe('useApi', () => {
     const { result } = renderHook(() => useApi(), { wrapper });
 
     const updateData = { name: 'Updated' };
-    await result.current('/users/me', {
+    await result.current.apiClient('/users/me', {
       method: 'PUT',
       body: updateData,
     });
@@ -282,7 +282,7 @@ describe('useApi', () => {
 
     const { result } = renderHook(() => useApi(), { wrapper });
 
-    await result.current('/users/1', {
+    await result.current.apiClient('/users/1', {
       method: 'DELETE',
     });
 
@@ -304,7 +304,7 @@ describe('useApi', () => {
     const { result } = renderHook(() => useApi(), { wrapper });
 
     const patchData = { status: 'active' };
-    await result.current('/users/1', {
+    await result.current.apiClient('/users/1', {
       method: 'PATCH',
       body: patchData,
     });
@@ -327,8 +327,8 @@ describe('useApi', () => {
 
     const { result } = renderHook(() => useApi(), { wrapper });
 
-    // Should return null for 204 responses instead of throwing
-    const response = await result.current('/test-endpoint');
-    expect(response).toBeNull();
+    // Should return empty object for 204 responses
+    const response = await result.current.apiClient('/test-endpoint');
+    expect(response).toEqual({});
   });
 });

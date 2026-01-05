@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth as useAuthContext } from "../context/AuthContext";
-import { useApi, apiRequest } from "../utils/api";
+import { useApi } from "../utils/api";
 import type { UserData } from "../types/auth";
 
 interface LoginCredentials {
@@ -32,7 +32,7 @@ interface UseAuthActionsReturn {
 
 export const useAuthActions = (): UseAuthActionsReturn => {
   const { login: contextLogin, logout: contextLogout } = useAuthContext();
-  const api = useApi();
+  const { post, get, put } = useApi();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,15 +41,16 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     setError(null);
 
     try {
-      const data = await api<{ access_token: string }>("/api/auth/", {
-        method: "POST",
-        body: credentials,
+      const data = await post<{ access_token: string }>(
+        "/api/auth/",
+        credentials
+      );
+
+      // Get fresh user data with the new token using explicit token override
+      const userData = await get<UserData>("/api/me", {
+        token: data.access_token,
       });
 
-      // Get fresh user data with the new token (now properly authenticated!)
-      const userData: UserData = await apiRequest<UserData>("/api/me", { method: "GET" }, data.access_token);
-
-      // Update with real user data
       contextLogin(data.access_token, userData);
     } catch (err) {
       const errorMessage =
@@ -66,12 +67,7 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     setError(null);
 
     try {
-      await api("/api/auth/register", {
-        method: "POST",
-        body: data,
-      });
-
-      // Automatically log in after successful registration
+      await post("/api/auth/register", data);
       await login({ email: data.email, password: data.password });
     } catch (err) {
       const errorMessage =
@@ -88,12 +84,8 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     setError(null);
 
     try {
-      const updatedUserData: UserData = await api<UserData>("/api/me", {
-        method: "PUT",
-        body: updates,
-      });
+      const updatedUserData = await put<UserData>("/api/me", updates);
 
-      // Update stored user data
       const currentToken = localStorage.getItem("runestone_token");
       if (currentToken) {
         contextLogin(currentToken, updatedUserData);

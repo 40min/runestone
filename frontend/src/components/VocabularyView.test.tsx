@@ -23,7 +23,14 @@ vi.mock('../hooks/useVocabulary', () => ({
 
 // Mock the useApi hook
 vi.mock('../utils/api', () => ({
-  useApi: vi.fn(() => vi.fn()), // Return a mock API function
+  useApi: vi.fn(() => ({
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    patch: vi.fn(),
+    apiClient: vi.fn(),
+  })),
 }));
 
 import VocabularyView from "./VocabularyView";

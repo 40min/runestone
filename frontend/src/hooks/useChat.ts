@@ -23,7 +23,7 @@ export const useChat = (): UseChatReturn => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const api = useApi();
+  const { get, post, delete: apiDelete } = useApi();
   const lastFetchRef = useRef<number>(0);
   const channelRef = useRef<BroadcastChannel | null>(null);
   const STALE_THRESHOLD = 10000; // 10 seconds
@@ -31,7 +31,7 @@ export const useChat = (): UseChatReturn => {
   const fetchHistory = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await api<{ messages: ChatMessage[] }>('/api/chat/history');
+      const data = await get<{ messages: ChatMessage[] }>('/api/chat/history');
       setMessages(data.messages || []);
       lastFetchRef.current = Date.now();
     } catch (err) {
@@ -42,7 +42,7 @@ export const useChat = (): UseChatReturn => {
     } finally {
       setIsLoading(false);
     }
-  }, [api]);
+  }, [get]);
 
   // Initial fetch
   useEffect(() => {
@@ -110,11 +110,8 @@ export const useChat = (): UseChatReturn => {
       setError(null);
 
       try {
-        const data = await api<{ message: string }>('/api/chat/message', {
-          method: 'POST',
-          body: {
-            message: userMessage.trim(),
-          },
+        const data = await post<{ message: string }>('/api/chat/message', {
+          message: userMessage.trim(),
         });
 
         const assistantMessage: ChatMessage = {
@@ -134,14 +131,14 @@ export const useChat = (): UseChatReturn => {
         setIsLoading(false);
       }
     },
-    [api, isLoading, broadcastChange]
+    [post, isLoading, broadcastChange]
   );
 
   const startNewChat = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      await api('/api/chat/history', { method: 'DELETE' });
+      await apiDelete('/api/chat/history');
       setMessages([]);
       broadcastChange();
     } catch (err) {
@@ -150,7 +147,7 @@ export const useChat = (): UseChatReturn => {
     } finally {
       setIsLoading(false);
     }
-  }, [api, broadcastChange]);
+  }, [apiDelete, broadcastChange]);
 
   const clearError = useCallback(() => {
     setError(null);

@@ -15,7 +15,14 @@ const mockImproveVocabularyItem = vi.mocked(improveVocabularyItem);
 
 // Mock the useApi hook
 vi.mock("../utils/api", () => ({
-  useApi: vi.fn(() => vi.fn()), // Return a mock API function
+  useApi: vi.fn(() => ({
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    patch: vi.fn(),
+    apiClient: vi.fn(),
+  })),
 }));
 
 describe("AddEditVocabularyModal", () => {
@@ -117,7 +124,11 @@ describe("AddEditVocabularyModal", () => {
     await user.click(fillAllButton);
 
     await waitFor(() => {
-      expect(mockImproveVocabularyItem).toHaveBeenCalledWith(expect.any(Function), "hej", VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS);
+      expect(mockImproveVocabularyItem).toHaveBeenCalledWith(
+        expect.any(Object),
+        "hej",
+        VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS
+      );
     });
 
     // Check that fields are filled
@@ -145,7 +156,11 @@ describe("AddEditVocabularyModal", () => {
     await user.click(fillExampleButton);
 
     await waitFor(() => {
-      expect(mockImproveVocabularyItem).toHaveBeenCalledWith(expect.any(Function), "hej", VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY);
+      expect(mockImproveVocabularyItem).toHaveBeenCalledWith(
+        expect.any(Object),
+        "hej",
+        VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY
+      );
     });
 
     // Check that example phrase is filled

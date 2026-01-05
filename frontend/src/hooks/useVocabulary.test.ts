@@ -770,18 +770,26 @@ describe('improveVocabularyItem', () => {
     mockFetch.mockClear();
   });
 
-  // Create a mock API function that simulates the real API behavior
-  const mockApi = async <T>(url: string, options: ApiClientOptions = {}): Promise<T> => {
-    // Convert the body object to JSON string (like real API would do)
-    const response = await mockFetch(url, {
-      ...options,
-      body: typeof options.body === 'object' ? JSON.stringify(options.body) : options.body
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to improve vocabulary item: HTTP ${response.status}`);
-    }
-    return response.json();
-  };
+  // Create a mock API object that simulates the real useApi behavior
+  const mockApi = {
+    post: async <T>(url: string, body?: unknown, options: Omit<ApiClientOptions, "method" | "body"> = {}): Promise<T> => {
+      const response = await mockFetch(url, {
+        ...options,
+        method: 'POST',
+        body: JSON.stringify(body)
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to improve vocabulary item: HTTP ${response.status}`);
+      }
+      return response.json();
+    },
+    // Add other methods if needed for completeness, though not used in these tests
+    get: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    patch: vi.fn(),
+    apiClient: vi.fn(),
+  } as unknown as ReturnType<typeof useApi>;
 
   it('should improve vocabulary item with all_fields mode successfully', async () => {
     const mockResponse = {

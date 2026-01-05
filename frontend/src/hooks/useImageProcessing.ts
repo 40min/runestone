@@ -69,7 +69,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentImage, setCurrentImage] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
-  const api = useApi();
+  const { post } = useApi();
   const { token, logout } = useAuth();
 
   const reset = () => {
@@ -152,23 +152,17 @@ const useImageProcessing = (): UseImageProcessingReturn => {
     try {
       setProcessingStep("ANALYZING");
       setProgress(60);
-      const analysisData: ContentAnalysis = await api<ContentAnalysis>('/api/analyze', {
-        method: "POST",
-        body: { text },
-      });
+      const analysisData: ContentAnalysis = await post<ContentAnalysis>('/api/analyze', { text });
       setAnalysisResult(analysisData);
       setProgress(80);
 
       if (analysisData.search_needed.should_search) {
         setProcessingStep("RESOURCES");
         setProgress(90);
-        const resourcesData = await api<{ extra_info: string }>('/api/resources', {
-          method: "POST",
-          body: {
-            analysis: {
-              core_topics: analysisData.core_topics,
-              search_needed: analysisData.search_needed,
-            },
+        const resourcesData = await post<{ extra_info: string }>('/api/resources', {
+          analysis: {
+            core_topics: analysisData.core_topics,
+            search_needed: analysisData.search_needed,
           },
         });
         setResourcesResult(resourcesData.extra_info);
@@ -217,10 +211,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
         example_phrase: item.example_phrase,
       }));
 
-      await api('/api/vocabulary', {
-        method: "POST",
-        body: { items: transformedItems, enrich },
-      });
+      await post('/api/vocabulary', { items: transformedItems, enrich });
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to save vocabulary";
