@@ -17,6 +17,8 @@ interface UseChatReturn {
   clearError: () => void;
 }
 
+const CLIENT_ID = uuidv4();
+
 export const useChat = (): UseChatReturn => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -29,11 +31,13 @@ export const useChat = (): UseChatReturn => {
     setIsLoading(true);
     try {
       const data = await api<{ messages: ChatMessage[] }>('/api/chat/history');
-      setMessages(data.messages);
+      setMessages(data.messages || []);
       lastFetchRef.current = Date.now();
     } catch (err) {
       console.error('Failed to fetch chat history:', err);
       setError('Failed to load chat history. Starting fresh.');
+      // Ensure messages is always an array
+      setMessages([]);
     } finally {
       setIsLoading(false);
     }
@@ -49,8 +53,8 @@ export const useChat = (): UseChatReturn => {
     const channel = new BroadcastChannel('runestone_chat_sync');
 
     const handleMessage = (event: MessageEvent) => {
-      if (event.data === 'CHAT_UPDATED') {
-        // Known change, fetch immediately
+      if (event.data?.type === 'CHAT_UPDATED' && event.data?.sender !== CLIENT_ID) {
+        // Known change from another tab, fetch immediately
         fetchHistory();
       }
     };
@@ -63,25 +67,27 @@ export const useChat = (): UseChatReturn => {
       }
     };
 
-    channel.addEventListener('message', handleMessage);
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', () => {
+    const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         handleFocus();
       }
-    });
+    };
+
+    channel.addEventListener('message', handleMessage);
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       channel.removeEventListener('message', handleMessage);
       channel.close();
       window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [fetchHistory]);
 
   const broadcastChange = useCallback(() => {
     const channel = new BroadcastChannel('runestone_chat_sync');
-    channel.postMessage('CHAT_UPDATED');
+    channel.postMessage({ type: 'CHAT_UPDATED', sender: CLIENT_ID });
     channel.close();
   }, []);
 

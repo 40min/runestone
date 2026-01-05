@@ -10,6 +10,7 @@ export const ChatLoadingIndicator: React.FC<ChatLoadingIndicatorProps> = ({
 }) => {
   return (
     <Box
+      data-testid="loading-indicator"
       sx={{
         display: 'flex',
         alignItems: 'center',
