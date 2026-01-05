@@ -318,7 +318,7 @@ describe('useApi', () => {
     );
   });
 
-  it('handles responses without JSON body', async () => {
+  it('handles responses without JSON body (204 No Content)', async () => {
     vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: true,
       status: 204,
@@ -327,7 +327,8 @@ describe('useApi', () => {
 
     const { result } = renderHook(() => useApi(), { wrapper });
 
-    // Should throw when trying to parse non-existent JSON
-    await expect(result.current('/test-endpoint')).rejects.toThrow('No content');
+    // Should return null for 204 responses instead of throwing
+    const response = await result.current('/test-endpoint');
+    expect(response).toBeNull();
   });
 });

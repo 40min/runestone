@@ -82,7 +82,7 @@ export const useApi = () => {
       throw new Error(errorMessage);
     }
 
-    return response.json();
+    return response.status === 204 ? null : response.json();
   }, [token, logout]);
 
   return apiClient;
@@ -140,5 +140,5 @@ export const apiRequest = async <T>(
     throw new Error(errorMessage);
   }
 
-  return response.json();
+  return response.status === 204 ? null : response.json();
 };
