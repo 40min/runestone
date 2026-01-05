@@ -144,7 +144,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
             >
               {item.id === 'chat' || item.id === 'profile' ? (
                  <span style={{ display: 'flex', alignItems: 'center' }}>
-                   {React.cloneElement(item.icon as React.ReactElement, { size: 16, style: { marginRight: 4 } })}
+                   {React.cloneElement(item.icon as React.ReactElement<{ size?: number; style?: React.CSSProperties }>, { size: 16, style: { marginRight: 4 } })}
                    {item.label}
                  </span>
               ) : (
