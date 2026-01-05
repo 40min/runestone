@@ -25,6 +25,7 @@ export const useChat = (): UseChatReturn => {
   const [error, setError] = useState<string | null>(null);
   const api = useApi();
   const lastFetchRef = useRef<number>(0);
+  const channelRef = useRef<BroadcastChannel | null>(null);
   const STALE_THRESHOLD = 10000; // 10 seconds
 
   const fetchHistory = useCallback(async () => {
@@ -51,6 +52,7 @@ export const useChat = (): UseChatReturn => {
   // Tab synchronization (Broadcast Channel + Window Focus/Visibility)
   useEffect(() => {
     const channel = new BroadcastChannel('runestone_chat_sync');
+    channelRef.current = channel;
 
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'CHAT_UPDATED' && event.data?.sender !== CLIENT_ID) {
@@ -80,15 +82,16 @@ export const useChat = (): UseChatReturn => {
     return () => {
       channel.removeEventListener('message', handleMessage);
       channel.close();
+      channelRef.current = null;
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [fetchHistory]);
 
   const broadcastChange = useCallback(() => {
-    const channel = new BroadcastChannel('runestone_chat_sync');
-    channel.postMessage({ type: 'CHAT_UPDATED', sender: CLIENT_ID });
-    channel.close();
+    if (channelRef.current) {
+      channelRef.current.postMessage({ type: 'CHAT_UPDATED', sender: CLIENT_ID });
+    }
   }, []);
 
   const sendMessage = useCallback(

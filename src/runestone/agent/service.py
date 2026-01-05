@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 class AgentService:
     """Service for managing chat agent interactions."""
 
+    MAX_HISTORY_MESSAGES = 20  # Maximum number of previous messages to include in context
+
     def __init__(self, settings: Settings):
         """
         Initialize the agent service.
@@ -73,7 +75,11 @@ class AgentService:
         """
         # Build the full message list
         system_prompt = self.persona["system_prompt"]
-        messages = build_messages(system_prompt, history, message)
+
+        # Truncate history if it's too long
+        truncated_history = history[-self.MAX_HISTORY_MESSAGES :] if history else []
+
+        messages = build_messages(system_prompt, truncated_history, message)
 
         # Convert to LangChain message format
         langchain_messages = self._convert_to_langchain_messages(messages)

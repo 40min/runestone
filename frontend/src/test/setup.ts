@@ -39,7 +39,7 @@ class MockBroadcastChannel {
     if (type === 'message') this.onmessage = listener as (event: MessageEvent) => void;
   }
   removeEventListener(_type: string, _listener: EventListenerOrEventListenerObject) { // eslint-disable-line @typescript-eslint/no-unused-vars
-    if (type === 'message') this.onmessage = null;
+    if (_type === 'message') this.onmessage = null;
   }
   dispatchEvent() { return true; }
 }
