@@ -20,8 +20,7 @@ logger = logging.getLogger(__name__)
 class AgentService:
     """Service for managing chat agent interactions."""
 
-    # Maximum number of messages to keep in history to avoid context window issues
-    MAX_HISTORY_MESSAGES = 20
+    MAX_HISTORY_MESSAGES = 20  # Maximum number of previous messages to include in context
 
     def __init__(self, settings: Settings):
         """
@@ -66,7 +65,7 @@ class AgentService:
 
         Args:
             message: The user's message
-            history: Previous conversation messages
+            history: Previous conversation messages (provided by backend)
 
         Returns:
             The assistant's response
@@ -74,11 +73,12 @@ class AgentService:
         Raises:
             Exception: If the LLM call fails
         """
-        # Truncate history if it's too long
-        truncated_history = self._truncate_history(history)
-
         # Build the full message list
         system_prompt = self.persona["system_prompt"]
+
+        # Truncate history if it's too long
+        truncated_history = history[-self.MAX_HISTORY_MESSAGES :] if history else []
+
         messages = build_messages(system_prompt, truncated_history, message)
 
         # Convert to LangChain message format
@@ -91,24 +91,6 @@ class AgentService:
         except Exception as e:
             logger.error(f"Error generating response: {e}")
             raise
-
-    def _truncate_history(self, history: list[ChatMessage]) -> list[ChatMessage]:
-        """
-        Truncate conversation history to avoid context window limits.
-
-        Keeps only the most recent messages.
-
-        Args:
-            history: Full conversation history
-
-        Returns:
-            Truncated history
-        """
-        if len(history) <= self.MAX_HISTORY_MESSAGES:
-            return history
-
-        logger.info(f"Truncating history from {len(history)} to {self.MAX_HISTORY_MESSAGES} messages")
-        return history[-self.MAX_HISTORY_MESSAGES :]
 
     def _convert_to_langchain_messages(self, messages: list[dict]) -> list:
         """

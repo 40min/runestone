@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     chat_model: str = "x-ai/grok-2-1212"
     agent_persona: str = "default"
 
+    # Chat History Configuration
+    chat_history_retention_days: int = 7
+
     class Config:
         """Pydantic configuration."""
 

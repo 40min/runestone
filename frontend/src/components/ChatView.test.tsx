@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ChatView from './ChatView';
 import { AuthProvider } from '../context/AuthContext';
@@ -31,10 +31,39 @@ Object.defineProperty(window, 'localStorage', {
   value: mockLocalStorage,
 });
 
+// Setup mock fetch to handle all requests
+const setupMockFetch = () => {
+  mockFetch.mockImplementation((url, options) => {
+    if (url.includes('/api/chat/history') && options?.method === 'DELETE') {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      });
+    }
+    if (url.includes('/api/chat/history')) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ messages: [] }),
+      });
+    }
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ message: 'Response' }),
+    });
+  });
+};
+
+// Helper to get the send button (last button in the chat input area)
+const getSendButton = () => {
+  const buttons = screen.getAllByRole('button');
+  return buttons[buttons.length - 1];
+};
+
 describe('ChatView', () => {
   beforeEach(() => {
     mockFetch.mockClear();
     mockLocalStorage.getItem.mockClear();
+    setupMockFetch();
   });
 
   it('renders the chat interface', () => {
@@ -65,19 +94,19 @@ describe('ChatView', () => {
   });
 
   it('sends a message when send button is clicked', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ message: 'Hej! Jag mår bra, tack!' }),
-    });
-
     render(
       <AuthProvider>
         <ChatView />
       </AuthProvider>
     );
 
+    // Wait for initial history fetch
+    await waitFor(() => {
+      expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
+    });
+
     const input = screen.getByPlaceholderText('Type your message...');
-    const sendButton = screen.getByRole('button');
+    const sendButton = getSendButton();
 
     fireEvent.change(input, { target: { value: 'Hej! Hur mår du?' } });
     fireEvent.click(sendButton);
@@ -98,20 +127,20 @@ describe('ChatView', () => {
   });
 
   it('displays user and assistant messages', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ message: 'Hej! Jag mår bra, tack!' }),
-    });
-
     render(
       <AuthProvider>
         <ChatView />
       </AuthProvider>
     );
 
+    // Wait for initial history fetch
+    await waitFor(() => {
+      expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
+    });
+
     const input = screen.getByPlaceholderText('Type your message...');
     fireEvent.change(input, { target: { value: 'Hej! Hur mår du?' } });
-    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(getSendButton());
 
     // Wait for user message to appear
     await waitFor(() => {
@@ -120,80 +149,7 @@ describe('ChatView', () => {
 
     // Wait for assistant message to appear
     await waitFor(() => {
-      expect(screen.getByText('Hej! Jag mår bra, tack!')).toBeInTheDocument();
-    });
-  });
-
-  it('shows loading state while waiting for response', async () => {
-    mockFetch.mockImplementation(
-      () =>
-        new Promise((resolve) =>
-          setTimeout(
-            () =>
-              resolve({
-                ok: true,
-                json: async () => ({ message: 'Response' }),
-              }),
-            100
-          )
-        )
-    );
-
-    render(
-      <AuthProvider>
-        <ChatView />
-      </AuthProvider>
-    );
-
-    const input = screen.getByPlaceholderText('Type your message...');
-    fireEvent.change(input, { target: { value: 'Test message' } });
-    fireEvent.click(screen.getByRole('button'));
-
-    // Check for loading indicator
-    await waitFor(() => {
-      expect(screen.getByText('Teacher is typing...')).toBeInTheDocument();
-    });
-  });
-
-  it('displays error message when API call fails', async () => {
-    mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-    render(
-      <AuthProvider>
-        <ChatView />
-      </AuthProvider>
-    );
-
-    const input = screen.getByPlaceholderText('Type your message...');
-    fireEvent.change(input, { target: { value: 'Test message' } });
-    fireEvent.click(screen.getByRole('button'));
-
-    await waitFor(() => {
-      expect(screen.getByText('Error')).toBeInTheDocument();
-      expect(screen.getByText('Network error')).toBeInTheDocument();
-    });
-  });
-
-  it('clears input after sending message', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ message: 'Response' }),
-    });
-
-    render(
-      <AuthProvider>
-        <ChatView />
-      </AuthProvider>
-    );
-
-    const input = screen.getByPlaceholderText(
-      'Type your message...'
-    ) as HTMLInputElement;
-    fireEvent.change(input, { target: { value: 'Test message' } });
-    fireEvent.click(screen.getByRole('button'));
-
-    await waitFor(() => {
-      expect(input.value).toBe('');
+      expect(screen.getByText('Response')).toBeInTheDocument();
     });
   });
 
@@ -204,36 +160,43 @@ describe('ChatView', () => {
       </AuthProvider>
     );
 
-    const sendButton = screen.getByRole('button');
+    const sendButton = getSendButton();
     expect(sendButton).toBeDisabled();
   });
 
   it('sends message on Enter key press', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ message: 'Response' }),
-    });
-
     render(
       <AuthProvider>
         <ChatView />
       </AuthProvider>
     );
 
+    // Wait for initial history fetch
+    await waitFor(() => {
+      expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
+    });
+
     const input = screen.getByPlaceholderText('Type your message...');
     fireEvent.change(input, { target: { value: 'Test message' } });
-    fireEvent.keyPress(input, { key: 'Enter', code: 'Enter', charCode: 13 });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalled();
     });
   });
 
-  it('includes conversation history in API request', async () => {
-    // First message
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ message: 'Nice to meet you!' }),
+  it('shows loading state while waiting for response', async () => {
+    let resolvePromise: (value: Response | PromiseLike<Response>) => void;
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/api/chat/history')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ messages: [] }),
+        });
+      }
+      return new Promise((resolve) => {
+        resolvePromise = resolve;
+      });
     });
 
     render(
@@ -242,27 +205,80 @@ describe('ChatView', () => {
       </AuthProvider>
     );
 
+    // Wait for initial history fetch
+    await waitFor(() => {
+      expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
+    });
+
     const input = screen.getByPlaceholderText('Type your message...');
-    fireEvent.change(input, { target: { value: 'My name is Alice' } });
-    fireEvent.click(screen.getByRole('button'));
+    fireEvent.change(input, { target: { value: 'Test message' } });
+    fireEvent.click(getSendButton());
 
+    // Check for loading indicator
     await waitFor(() => {
-      expect(screen.getByText('My name is Alice')).toBeInTheDocument();
+      expect(screen.getByText('Teacher is typing...')).toBeInTheDocument();
     });
 
-    // Second message with history
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ message: 'Your name is Alice!' }),
+    // Resolve the promise to clean up
+    await act(async () => {
+      resolvePromise!({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+  });
+
+  it('displays error message when API call fails', async () => {
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/api/chat/history')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ messages: [] }),
+        });
+      }
+      return Promise.reject(new Error('Network error'));
     });
 
-    fireEvent.change(input, { target: { value: 'What is my name?' } });
-    fireEvent.click(screen.getByRole('button'));
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    // Wait for initial history fetch
+    await waitFor(() => {
+      expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
+    });
+
+    const input = screen.getByPlaceholderText('Type your message...');
+    fireEvent.change(input, { target: { value: 'Test message' } });
+    fireEvent.click(getSendButton());
 
     await waitFor(() => {
-      const lastCall = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
-      const body = JSON.parse(lastCall[1].body);
-      expect(body.history).toHaveLength(2); // Previous user + assistant messages
+      expect(screen.getByText('Network error')).toBeInTheDocument();
+    });
+  });
+
+  it('clears input after sending message', async () => {
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    // Wait for initial history fetch
+    await waitFor(() => {
+      expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
+    });
+
+    const input = screen.getByPlaceholderText(
+      'Type your message...'
+    ) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'Test message' } });
+    fireEvent.click(getSendButton());
+
+    await waitFor(() => {
+      expect(input.value).toBe('');
     });
   });
 });
