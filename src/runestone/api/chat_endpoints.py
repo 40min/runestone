@@ -58,7 +58,7 @@ async def get_history(
     try:
         history = chat_service.get_history(current_user.id)
         # Convert models to schemas
-        messages = [ChatMessage(role=m.role, content=m.content, created_at=m.created_at) for m in history]
+        messages = [ChatMessage(id=m.id, role=m.role, content=m.content, created_at=m.created_at) for m in history]
         return ChatHistoryResponse(messages=messages)
     except Exception as e:
         logger.error(f"Error fetching chat history: {e}", exc_info=True)

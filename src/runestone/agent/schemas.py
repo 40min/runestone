@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 class ChatMessage(BaseModel):
     """A single chat message."""
 
+    id: Optional[int] = Field(None, description="Message ID")
     role: Literal["user", "assistant"] = Field(..., description="The role of the message sender")
     content: str = Field(..., description="The message content")
     created_at: Optional[datetime] = Field(None, description="Message creation timestamp")

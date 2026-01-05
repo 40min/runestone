@@ -53,7 +53,7 @@ class ChatService:
 
         # Convert models to schemas for the agent service
         context_schemas = [
-            ChatMessageSchema(role=m.role, content=m.content, created_at=m.created_at) for m in context_models
+            ChatMessageSchema(id=m.id, role=m.role, content=m.content, created_at=m.created_at) for m in context_models
         ]
 
         # 4. Generate assistant response
