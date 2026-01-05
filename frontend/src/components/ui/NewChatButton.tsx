@@ -21,11 +21,11 @@ export const NewChatButton: React.FC<NewChatButtonProps> = ({
         disabled={isLoading || !hasMessages}
         variant="secondary"
         sx={{
-          borderColor: '#4c1d95',
-          color: '#a78bfa',
+          borderColor: 'var(--primary-color)',
+          color: 'var(--primary-color)',
           '&:hover': {
-            borderColor: '#6d28d9',
-            backgroundColor: 'rgba(109, 40, 217, 0.1)',
+            borderColor: 'var(--primary-color)',
+            backgroundColor: 'rgba(56, 224, 123, 0.1)',
           },
           display: 'flex',
           alignItems: 'center',
