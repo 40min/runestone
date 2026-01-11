@@ -4,7 +4,7 @@ Tests for utility logic functions.
 This module contains unit tests for the logic utility functions.
 """
 
-from runestone.utils import deep_merge
+from runestone.utils.merge import deep_merge
 
 
 class TestDeepMerge:

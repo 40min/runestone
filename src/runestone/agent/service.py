@@ -2,25 +2,29 @@
 Service layer for the chat agent.
 
 This module contains the AgentService class that handles chat interactions
-using LangChain and LLM providers.
+using LangChain's ReAct agent pattern.
 """
 
+import json
 import logging
+from typing import Optional
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+from langgraph.prebuilt import create_react_agent
 
-from runestone.agent.prompts import build_messages, load_persona
+from runestone.agent.prompts import load_persona
 from runestone.agent.schemas import ChatMessage
+from runestone.agent.tools import create_update_memory_tool
 from runestone.config import Settings
 
 logger = logging.getLogger(__name__)
 
 
 class AgentService:
-    """Service for managing chat agent interactions."""
+    """Service for managing chat agent interactions using LangChain ReAct agent."""
 
-    MAX_HISTORY_MESSAGES = 20  # Maximum number of previous messages to include in context
+    MAX_HISTORY_MESSAGES = 20
 
     def __init__(self, settings: Settings):
         """
@@ -33,7 +37,6 @@ class AgentService:
         self.persona = load_persona(settings.agent_persona)
 
         # Initialize the LangChain chat model
-        # Determine API key and base URL based on provider
         if settings.chat_provider == "openrouter":
             api_key = settings.openrouter_api_key
             api_base = "https://openrouter.ai/api/v1"
@@ -46,7 +49,6 @@ class AgentService:
         if not api_key:
             raise ValueError(f"API key for {settings.chat_provider} is not configured")
 
-        # Using ChatOpenAI which works with OpenRouter and other OpenAI-compatible APIs
         self.chat_model = ChatOpenAI(
             model=settings.chat_model,
             openai_api_key=api_key,
@@ -59,59 +61,113 @@ class AgentService:
             f"model={settings.chat_model}, persona={settings.agent_persona}"
         )
 
-    def generate_response(self, message: str, history: list[ChatMessage]) -> str:
+    def build_agent(self, user_service, user):
         """
-        Generate a response to a user message.
+        Build a ReAct agent with tools bound to the current user context.
+
+        Args:
+            user_service: UserService instance for memory operations
+            user: User model instance
+
+        Returns:
+            A LangGraph ReAct agent executor
+        """
+        # Create tool with user context
+        update_memory_tool = create_update_memory_tool(user_service, user)
+        tools = [update_memory_tool]
+
+        # Build system prompt with persona and tool instructions
+        system_prompt = self.persona["system_prompt"]
+        system_prompt += """
+
+AVAILABLE TOOLS:
+You have access to a memory system. Use it to remember important information about the student:
+- personal_info: Store name, goals, preferences, background information
+- areas_to_improve: Track recurring mistakes, struggling concepts, weak areas
+- knowledge_strengths: Record mastered topics, successful exercises, strong points
+
+When you learn something new about the student, use the update_memory tool to store it.
+Use 'merge' operation to add/update specific keys without losing existing data.
+Use 'replace' operation only when you want to completely overwrite a category.
+"""
+
+        # Create the ReAct agent
+        agent = create_react_agent(
+            model=self.chat_model,
+            tools=tools,
+            prompt=system_prompt,
+        )
+
+        return agent
+
+    def generate_response(
+        self,
+        message: str,
+        history: list[ChatMessage],
+        user_service,
+        user,
+        memory_context: Optional[dict] = None,
+    ) -> str:
+        """
+        Generate a response to a user message using the ReAct agent.
 
         Args:
             message: The user's message
-            history: Previous conversation messages (provided by backend)
+            history: Previous conversation messages
+            user_service: UserService for memory operations
+            user: User model instance
+            memory_context: Optional dictionary containing student memory
 
         Returns:
-            The assistant's response
+            The agent's final text response
 
         Raises:
-            Exception: If the LLM call fails
+            Exception: If the agent invocation fails
         """
-        # Build the full message list
-        system_prompt = self.persona["system_prompt"]
+        # Build agent with current user context
+        agent = self.build_agent(user_service, user)
 
-        # Truncate history if it's too long
+        # Build conversation messages
+        messages = []
+
+        # Add memory context as initial system message if available
+        if memory_context:
+            active_memory = {k: v for k, v in memory_context.items() if v}
+            if active_memory:
+                memory_str = json.dumps(active_memory, indent=2)
+                memory_msg = f"STUDENT MEMORY:\n{memory_str}\n\nUse this information to personalize your teaching."
+                messages.append(SystemMessage(content=memory_msg))
+
+        # Add conversation history
         truncated_history = history[-self.MAX_HISTORY_MESSAGES :] if history else []
+        for msg in truncated_history:
+            if msg.role == "user":
+                messages.append(HumanMessage(content=msg.content))
+            elif msg.role == "assistant":
+                from langchain_core.messages import AIMessage
 
-        messages = build_messages(system_prompt, truncated_history, message)
+                messages.append(AIMessage(content=msg.content))
 
-        # Convert to LangChain message format
-        langchain_messages = self._convert_to_langchain_messages(messages)
+        # Add current user message
+        messages.append(HumanMessage(content=message))
 
         try:
-            # Call the LLM
-            response = self.chat_model.invoke(langchain_messages)
-            return response.content
+            # Invoke the agent - it handles tool execution automatically
+            result = agent.invoke({"messages": messages})
+
+            # Extract final response from agent result
+            # The result contains all messages including tool calls/results
+            # We want the last AI message content
+            final_messages = result.get("messages", [])
+            for msg in reversed(final_messages):
+                if hasattr(msg, "content") and msg.content:
+                    # Skip tool messages
+                    if hasattr(msg, "tool_call_id"):
+                        continue
+                    return msg.content
+
+            return "I'm sorry, I couldn't generate a response."
+
         except Exception as e:
             logger.error(f"Error generating response: {e}")
             raise
-
-    def _convert_to_langchain_messages(self, messages: list[dict]) -> list:
-        """
-        Convert message dictionaries to LangChain message objects.
-
-        Args:
-            messages: list of message dictionaries with 'role' and 'content'
-
-        Returns:
-            list of LangChain message objects
-        """
-        langchain_messages = []
-        for msg in messages:
-            role = msg["role"]
-            content = msg["content"]
-
-            if role == "system":
-                langchain_messages.append(SystemMessage(content=content))
-            elif role == "user":
-                langchain_messages.append(HumanMessage(content=content))
-            elif role == "assistant":
-                langchain_messages.append(AIMessage(content=content))
-
-        return langchain_messages

@@ -10,6 +10,7 @@ from runestone.agent.service import AgentService
 from runestone.config import Settings
 from runestone.db.chat_repository import ChatRepository
 from runestone.db.models import ChatMessage
+from runestone.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
@@ -17,17 +18,25 @@ logger = logging.getLogger(__name__)
 class ChatService:
     """Service to handle business logic of chat interactions."""
 
-    def __init__(self, settings: Settings, repository: ChatRepository, agent_service: AgentService):
+    def __init__(
+        self,
+        settings: Settings,
+        repository: ChatRepository,
+        user_service: UserService,
+        agent_service: AgentService,
+    ):
         """
         Initialize the chat service.
 
         Args:
             settings: Application settings
             repository: Chat repository for database operations
+            user_service: User service for user and memory operations
             agent_service: Agent service for LLM interactions
         """
         self.settings = settings
         self.repository = repository
+        self.user_service = user_service
         self.agent_service = agent_service
 
     async def process_message(self, user_id: int, message_text: str) -> str:
@@ -48,19 +57,32 @@ class ChatService:
         self.repository.truncate_history(user_id, self.settings.chat_history_retention_days)
 
         # 3. Fetch context for agent
-        # We fetch the most recent messages to provide context to the LLM
         context_models = self.repository.get_context_for_agent(user_id)
 
         # Convert models to schemas for the agent service
-        context_schemas = [
+        # Note: context_models includes the message we just saved at the end
+        history = [
             ChatMessageSchema(id=m.id, role=m.role, content=m.content, created_at=m.created_at) for m in context_models
         ]
 
-        # 4. Generate assistant response
-        # The last message in context_schemas is the one we just saved
-        assistant_text = self.agent_service.generate_response(message_text, context_schemas[:-1])
+        # 4. Get user and build memory context
+        user = self.user_service.get_user_by_id(user_id)
+        if not user:
+            raise ValueError(f"User {user_id} not found")
 
-        # 5. Save assistant message
+        memory = self.user_service.get_user_memory(user)
+
+        # 5. Generate response using the ReAct agent
+        # The agent handles tool execution automatically
+        assistant_text = self.agent_service.generate_response(
+            message=message_text,
+            history=history[:-1],  # Exclude current message (it's passed separately)
+            user_service=self.user_service,
+            user=user,
+            memory_context=memory,
+        )
+
+        # 6. Save assistant message
         self.repository.add_message(user_id, "assistant", assistant_text)
 
         return assistant_text

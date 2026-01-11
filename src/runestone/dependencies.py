@@ -241,6 +241,7 @@ def get_agent_service(settings: Annotated[Settings, Depends(get_settings)]) -> A
 def get_chat_service(
     settings: Annotated[Settings, Depends(get_settings)],
     repo: Annotated[ChatRepository, Depends(get_chat_repository)],
+    user_service: Annotated[UserService, Depends(get_user_service)],
     agent_service: Annotated[AgentService, Depends(get_agent_service)],
 ) -> ChatService:
     """
@@ -249,9 +250,10 @@ def get_chat_service(
     Args:
         settings: Application settings from dependency injection
         repo: ChatRepository from dependency injection
+        user_service: UserService from dependency injection
         agent_service: AgentService from dependency injection
 
     Returns:
         ChatService: Service instance for chat operations
     """
-    return ChatService(settings, repo, agent_service)
+    return ChatService(settings, repo, user_service, agent_service)

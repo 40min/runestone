@@ -28,6 +28,18 @@ class UserService:
         self.vocab_repo = vocabulary_repository
         self.logger = get_logger(__name__)
 
+    def get_user_by_id(self, user_id: int) -> Optional[User]:
+        """
+        Get a user by their ID.
+
+        Args:
+            user_id: The user's ID
+
+        Returns:
+            User model or None if not found
+        """
+        return self.user_repo.get_by_id(user_id)
+
     def _parse_memory_field(self, field_value: Optional[str]) -> Optional[dict]:
         """
         Safely parse a JSON memory field.
@@ -47,6 +59,14 @@ class UserService:
             self.logger.warning(f"Failed to parse memory field: {e}")
             return None
 
+    def get_user_memory(self, user: User) -> dict:
+        """Get user memory."""
+        return {
+            "personal_info": self._parse_memory_field(user.personal_info),
+            "areas_to_improve": self._parse_memory_field(user.areas_to_improve),
+            "knowledge_strengths": self._parse_memory_field(user.knowledge_strengths),
+        }
+
     def get_user_profile(self, user: User) -> UserProfileResponse:
         """Get user profile with stats."""
         # Get vocabulary stats
@@ -55,9 +75,7 @@ class UserService:
         overall_words_count = self.vocab_repo.get_overall_words_count(user.id)
 
         # Parse JSON memory fields with error handling
-        personal_info = self._parse_memory_field(user.personal_info)
-        areas_to_improve = self._parse_memory_field(user.areas_to_improve)
-        knowledge_strengths = self._parse_memory_field(user.knowledge_strengths)
+        memory = self.get_user_memory(user)
 
         return UserProfileResponse(
             id=user.id,
@@ -69,9 +87,9 @@ class UserService:
             words_in_learn_count=words_in_learn_count,
             words_skipped_count=words_skipped_count,
             overall_words_count=overall_words_count,
-            personal_info=personal_info,
-            areas_to_improve=areas_to_improve,
-            knowledge_strengths=knowledge_strengths,
+            personal_info=memory["personal_info"],
+            areas_to_improve=memory["areas_to_improve"],
+            knowledge_strengths=memory["knowledge_strengths"],
             created_at=user.created_at.isoformat() if user.created_at else None,
             updated_at=user.updated_at.isoformat() if user.updated_at else None,
         )
