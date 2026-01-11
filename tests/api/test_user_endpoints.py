@@ -287,3 +287,67 @@ class TestPageRecognitionCounter:
         response = client.post("/api/analyze", json=payload)
 
         assert response.status_code == 500
+
+
+class TestUserMemoryEndpoints:
+    """Test cases for user memory endpoints."""
+
+    def test_update_user_memory_success(self, client):
+        """Test successful update of user memory fields."""
+        memory_payload = {
+            "personal_info": {"name": "Anna", "goal": "B1"},
+            "areas_to_improve": {"grammar": "word order"},
+        }
+
+        response = client.put("/api/me", json=memory_payload)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["personal_info"] == {"name": "Anna", "goal": "B1"}
+        assert data["areas_to_improve"] == {"grammar": "word order"}
+        # Verify persistence
+        get_response = client.get("/api/me")
+        assert get_response.json()["personal_info"] == {"name": "Anna", "goal": "B1"}
+
+    def test_update_user_memory_invalid_json(self, client):
+        """Test update with invalid JSON (not a dict)."""
+        memory_payload = {
+            "personal_info": "not a dict",
+        }
+
+        response = client.put("/api/me", json=memory_payload)
+
+        assert response.status_code == 422  # Validation error
+
+    def test_clear_user_memory_all(self, client):
+        """Test clearing all user memory."""
+        # First set some memory
+        client.put("/api/me", json={"personal_info": {"a": 1}, "areas_to_improve": {"b": 2}})
+
+        # Clear all
+        response = client.delete("/api/me/memory")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["personal_info"] is None
+        assert data["areas_to_improve"] is None
+        assert data["knowledge_strengths"] is None
+
+    def test_clear_user_memory_category(self, client):
+        """Test clearing specific memory category."""
+        # First set some memory
+        client.put("/api/me", json={"personal_info": {"a": 1}, "areas_to_improve": {"b": 2}})
+
+        # Clear only personal_info
+        response = client.delete("/api/me/memory?category=personal_info")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["personal_info"] is None
+        assert data["areas_to_improve"] == {"b": 2}
+
+    def test_clear_user_memory_invalid_category(self, client):
+        """Test clearing invalid memory category."""
+        response = client.delete("/api/me/memory?category=invalid_field")
+        assert response.status_code == 400

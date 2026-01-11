@@ -206,3 +206,45 @@ class TestUserService:
         # Should re-raise the IntegrityError
         with pytest.raises(IntegrityError):
             user_service.update_user_profile(user, update_data)
+
+    def test_update_user_profile_memory_fields(self, user_service, mock_user_repo, mock_vocab_repo, user):
+        """Test updating memory fields with Pydantic validation."""
+        import json
+
+        from runestone.api.schemas import UserProfileUpdate
+
+        # Mock update to return updated user
+        mock_user_repo.update.return_value = user
+
+        # Test updating memory fields with dict
+        memory_data = {"key": "value"}
+        update_data = UserProfileUpdate(personal_info=memory_data)
+
+        # Verify that the model contains a string if passed a dict (due to validator)
+        assert isinstance(update_data.personal_info, str)
+        assert json.loads(update_data.personal_info) == memory_data
+
+        user_service.update_user_profile(user, update_data)
+
+        # Verify user attribute was updated with JSON string
+        assert user.personal_info == json.dumps(memory_data)
+        mock_user_repo.update.assert_called()
+
+    def test_update_user_profile_memory_invalid_json_input(self):
+        """Test that invalid memory field raises validation error in Pydantic."""
+        from pydantic import ValidationError
+
+        from runestone.api.schemas import UserProfileUpdate
+
+        # Should raise validation error (not dict)
+        with pytest.raises(ValidationError):
+            UserProfileUpdate(personal_info=["list"])
+
+    def test_clear_user_memory(self, user_service, mock_user_repo, user):
+        """Test clearing user memory."""
+        # Mock clear_user_memory repo method
+        mock_user_repo.clear_user_memory.return_value = user
+
+        user_service.clear_user_memory(user, "personal_info")
+
+        mock_user_repo.clear_user_memory.assert_called_once_with(user.id, "personal_info")

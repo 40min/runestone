@@ -23,6 +23,10 @@ class User(Base):
     surname = Column(String, nullable=True)
     timezone = Column(String, default="UTC", nullable=False)
     pages_recognised_count = Column(Integer, default=0, nullable=False)
+    # Agent memory fields (stored as JSON strings)
+    personal_info = Column(Text, nullable=True)  # Student identity, preferences, goals
+    areas_to_improve = Column(Text, nullable=True)  # Recurring struggles and error patterns
+    knowledge_strengths = Column(Text, nullable=True)  # Mastered skills and concepts
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
