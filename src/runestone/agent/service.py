@@ -9,13 +9,14 @@ import json
 import logging
 from typing import Optional
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
 from runestone.agent.prompts import load_persona
 from runestone.agent.schemas import ChatMessage
-from runestone.agent.tools import create_update_memory_tool
+from runestone.agent.tools import update_memory
 from runestone.config import Settings
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,21 @@ class AgentService:
         """
         self.settings = settings
         self.persona = load_persona(settings.agent_persona)
+        self.agent = self.build_agent()
+
+        logger.info(
+            f"Initialized AgentService with provider={settings.chat_provider}, "
+            f"model={settings.chat_model}, persona={settings.agent_persona}"
+        )
+
+    def build_agent(self):
+        """
+        Build a ReAct agent with tools.
+
+        Returns:
+            A LangGraph ReAct agent executor
+        """
+        settings = self.settings
 
         # Initialize the LangChain chat model
         if settings.chat_provider == "openrouter":
@@ -49,32 +65,14 @@ class AgentService:
         if not api_key:
             raise ValueError(f"API key for {settings.chat_provider} is not configured")
 
-        self.chat_model = ChatOpenAI(
+        chat_model = ChatOpenAI(
             model=settings.chat_model,
             openai_api_key=api_key,
             openai_api_base=api_base,
             temperature=0.7,
         )
 
-        logger.info(
-            f"Initialized AgentService with provider={settings.chat_provider}, "
-            f"model={settings.chat_model}, persona={settings.agent_persona}"
-        )
-
-    def build_agent(self, user_service, user):
-        """
-        Build a ReAct agent with tools bound to the current user context.
-
-        Args:
-            user_service: UserService instance for memory operations
-            user: User model instance
-
-        Returns:
-            A LangGraph ReAct agent executor
-        """
-        # Create tool with user context
-        update_memory_tool = create_update_memory_tool(user_service, user)
-        tools = [update_memory_tool]
+        tools = [update_memory]
 
         # Build system prompt with persona and tool instructions
         system_prompt = self.persona["system_prompt"]
@@ -93,14 +91,14 @@ Use 'replace' operation only when you want to completely overwrite a category.
 
         # Create the ReAct agent
         agent = create_react_agent(
-            model=self.chat_model,
+            model=chat_model,
             tools=tools,
             prompt=system_prompt,
         )
 
         return agent
 
-    def generate_response(
+    async def generate_response(
         self,
         message: str,
         history: list[ChatMessage],
@@ -124,9 +122,6 @@ Use 'replace' operation only when you want to completely overwrite a category.
         Raises:
             Exception: If the agent invocation fails
         """
-        # Build agent with current user context
-        agent = self.build_agent(user_service, user)
-
         # Build conversation messages
         messages = []
 
@@ -144,25 +139,29 @@ Use 'replace' operation only when you want to completely overwrite a category.
             if msg.role == "user":
                 messages.append(HumanMessage(content=msg.content))
             elif msg.role == "assistant":
-                from langchain_core.messages import AIMessage
-
                 messages.append(AIMessage(content=msg.content))
 
         # Add current user message
         messages.append(HumanMessage(content=message))
 
         try:
-            # Invoke the agent - it handles tool execution automatically
-            result = agent.invoke({"messages": messages})
+            # Invoke the agent with tool injection config
+            result = await self.agent.ainvoke(
+                {"messages": messages},
+                config=RunnableConfig(
+                    configurable={
+                        "user": user,
+                        "user_service": user_service,
+                    }
+                ),
+            )
 
             # Extract final response from agent result
-            # The result contains all messages including tool calls/results
-            # We want the last AI message content
             final_messages = result.get("messages", [])
             for msg in reversed(final_messages):
                 if hasattr(msg, "content") and msg.content:
-                    # Skip tool messages
-                    if hasattr(msg, "tool_call_id"):
+                    # Skip tool messages (ToolMessage or messages with tool_calls but no content)
+                    if hasattr(msg, "tool_call_id") or (hasattr(msg, "tool_calls") and msg.tool_calls):
                         continue
                     return msg.content
 

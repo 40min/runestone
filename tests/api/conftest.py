@@ -320,9 +320,9 @@ def mock_grammar_service():
 @pytest.fixture
 def mock_agent_service():
     """Create a standardized mock AgentService."""
-    from unittest.mock import Mock
+    from unittest.mock import AsyncMock
 
-    mock = Mock()
+    mock = AsyncMock()
     mock.generate_response.return_value = "Mock response"
     return mock
 

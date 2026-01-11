@@ -74,7 +74,7 @@ class ChatService:
 
         # 5. Generate response using the ReAct agent
         # The agent handles tool execution automatically
-        assistant_text = self.agent_service.generate_response(
+        assistant_text = await self.agent_service.generate_response(
             message=message_text,
             history=history[:-1],  # Exclude current message (it's passed separately)
             user_service=self.user_service,

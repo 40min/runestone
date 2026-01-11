@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth as useAuthContext } from "../context/AuthContext";
-import { useApi, apiClient } from "../utils/api";
+import { useApi } from "../utils/api";
 import type { UserData } from "../types/auth";
 
 interface LoginCredentials {
@@ -36,7 +36,7 @@ interface UseAuthActionsReturn {
 
 export const useAuthActions = (): UseAuthActionsReturn => {
   const { login: contextLogin, logout: contextLogout } = useAuthContext();
-  const { post, get, put } = useApi();
+  const { post, get, put, delete: apiDelete } = useApi();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -111,7 +111,7 @@ export const useAuthActions = (): UseAuthActionsReturn => {
         ? `/api/me/memory?category=${category}`
         : `/api/me/memory`;
 
-      await apiClient.delete(url);
+      await apiDelete(url);
 
       // Refresh user data
       const updatedUserData = await get<UserData>("/api/me");

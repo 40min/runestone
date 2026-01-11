@@ -22,7 +22,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import SaveIcon from "@mui/icons-material/Save";
 import CloseIcon from "@mui/icons-material/Close";
-import { UserData } from "../../types/auth";
+import type { UserData } from "../../types/auth";
 import { useAuthActions } from "../../hooks/useAuth";
 
 interface MemorySectionProps {

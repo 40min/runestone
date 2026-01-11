@@ -2,7 +2,7 @@
 Tests for ChatService.
 """
 
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -13,7 +13,7 @@ from runestone.services.chat_service import ChatService
 @pytest.fixture
 def mock_agent_service():
     """Create a mock AgentService."""
-    mock = Mock()
+    mock = AsyncMock()
     mock.generate_response.return_value = "Björn's reply"
     return mock
 
