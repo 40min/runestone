@@ -6,6 +6,7 @@ import { useAuthActions } from "../../hooks/useAuth";
 import { ErrorAlert } from "../ui";
 import AuthButton from "./AuthButton";
 import AuthTextField from "./AuthTextField";
+import { MemorySection } from "./MemorySection";
 
 const Profile: React.FC = () => {
   const { userData } = useAuth();
@@ -125,6 +126,10 @@ const Profile: React.FC = () => {
         <Typography variant="body1" sx={{ mb: 1 }}>
           <strong>Overall Words:</strong> {userData.overall_words_count || 0}
         </Typography>
+      </Box>
+
+      <Box sx={{ mb: 3 }}>
+        <MemorySection userData={userData} />
       </Box>
 
       <AuthTextField

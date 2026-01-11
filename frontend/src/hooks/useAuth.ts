@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth as useAuthContext } from "../context/AuthContext";
-import { useApi } from "../utils/api";
+import { useApi, apiClient } from "../utils/api";
 import type { UserData } from "../types/auth";
 
 interface LoginCredentials {
@@ -19,12 +19,16 @@ interface UpdateProfileData {
   timezone?: string;
   password?: string;
   email?: string;
+  personal_info?: Record<string, unknown> | null;
+  areas_to_improve?: Record<string, unknown> | null;
+  knowledge_strengths?: Record<string, unknown> | null;
 }
 
 interface UseAuthActionsReturn {
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   updateProfile: (updates: UpdateProfileData) => Promise<void>;
+  clearMemory: (category?: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
   error: string | null;
@@ -100,6 +104,30 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     }
   };
 
+  const clearMemory = async (category?: string) => {
+    setLoading(true);
+    try {
+      const url = category
+        ? `/api/me/memory?category=${category}`
+        : `/api/me/memory`;
+
+      await apiClient.delete(url);
+
+      // Refresh user data
+      const updatedUserData = await get<UserData>("/api/me");
+      const currentToken = localStorage.getItem("runestone_token");
+      if (currentToken) {
+        contextLogin(currentToken, updatedUserData);
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to clear memory";
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logout = () => {
     contextLogout();
   };
@@ -108,6 +136,7 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     login,
     register,
     updateProfile,
+    clearMemory,
     logout,
     loading,
     error,
