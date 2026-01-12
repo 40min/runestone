@@ -72,29 +72,35 @@ const ChatView: React.FC = () => {
       {/* Header */}
       <Box
         sx={{
-          textAlign: 'center',
-          mb: { xs: 2, md: 3 },
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          mb: { xs: 2, md: 2 },
+          gap: 2,
         }}
       >
-        <Typography
-          variant="h4"
-          sx={{
-            color: 'white',
-            fontWeight: 'bold',
-            mb: 1,
-            fontSize: { xs: '1.5rem', md: '2.125rem' },
-          }}
-        >
-          Chat with Your Swedish Teacher
-        </Typography>
-        <Typography
-          sx={{
-            color: '#9ca3af',
-            fontSize: { xs: '0.875rem', md: '1rem' },
-          }}
-        >
-          Ask questions about Swedish vocabulary, grammar, or practice conversation
-        </Typography>
+        <Box>
+          <Typography
+            variant="h5"
+            sx={{
+              color: 'white',
+              fontWeight: 'bold',
+              mb: 0.5,
+              fontSize: { xs: '1.25rem', md: '1.5rem' },
+            }}
+          >
+            Chat with Your Swedish Teacher
+          </Typography>
+          <Typography
+            sx={{
+              color: '#9ca3af',
+              fontSize: { xs: '0.75rem', md: '0.875rem' },
+            }}
+          >
+            Ask questions about Swedish vocabulary, grammar, or practice conversation
+          </Typography>
+        </Box>
         <NewChatButton
           onClick={startNewChat}
           isLoading={isLoading}

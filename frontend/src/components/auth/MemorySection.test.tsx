@@ -60,6 +60,9 @@ describe("MemorySection", () => {
   it("handles edit and save flow", async () => {
     render(<MemorySection userData={mockUserData} />);
 
+    // Open accordion
+    fireEvent.click(screen.getByText("Björn's Memory"));
+
     // Find edit button for Personal Info (first one)
     const editButtons = screen.getAllByTestId("EditIcon");
     fireEvent.click(editButtons[0].closest("button")!);
@@ -82,6 +85,9 @@ describe("MemorySection", () => {
   it("shows error for invalid JSON", async () => {
     render(<MemorySection userData={mockUserData} />);
 
+    // Open accordion
+    fireEvent.click(screen.getByText("Björn's Memory"));
+
     const editButtons = screen.getAllByTestId("EditIcon");
     fireEvent.click(editButtons[0].closest("button")!);
 
@@ -97,6 +103,9 @@ describe("MemorySection", () => {
 
   it("handles clear individual category", async () => {
     render(<MemorySection userData={mockUserData} />);
+
+    // Open accordion
+    fireEvent.click(screen.getByText("Björn's Memory"));
 
     // Find clear button for Personal Info
     const clearButtons = screen.getAllByTestId("DeleteIcon");
@@ -115,6 +124,9 @@ describe("MemorySection", () => {
 
   it("handles clear all memory", async () => {
     render(<MemorySection userData={mockUserData} />);
+
+    // Open accordion
+    fireEvent.click(screen.getByText("Björn's Memory"));
 
     const clearAllButton = screen.getByText("Clear All Memory");
     fireEvent.click(clearAllButton);
