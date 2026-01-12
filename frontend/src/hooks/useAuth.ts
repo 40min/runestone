@@ -29,13 +29,14 @@ interface UseAuthActionsReturn {
   register: (data: RegisterData) => Promise<void>;
   updateProfile: (updates: UpdateProfileData) => Promise<void>;
   clearMemory: (category?: string) => Promise<void>;
+  refreshUserData: () => Promise<void>;
   logout: () => void;
   loading: boolean;
   error: string | null;
 }
 
 export const useAuthActions = (): UseAuthActionsReturn => {
-  const { login: contextLogin, logout: contextLogout } = useAuthContext();
+  const { login: contextLogin, logout: contextLogout, updateUserData: contextUpdateUserData } = useAuthContext();
   const { post, get, put, delete: apiDelete } = useApi();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -132,11 +133,21 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     contextLogout();
   };
 
+  const refreshUserData = async (): Promise<void> => {
+    try {
+      const freshUserData = await get<UserData>("/api/me");
+      contextUpdateUserData(freshUserData);
+    } catch (error) {
+      console.error("Failed to refresh user data:", error);
+    }
+  };
+
   return {
     login,
     register,
     updateProfile,
     clearMemory,
+    refreshUserData,
     logout,
     loading,
     error,

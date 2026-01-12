@@ -15,6 +15,7 @@ interface AuthContextType {
   login: (token: string, userData: UserData) => void;
   logout: () => void;
   isAuthenticated: () => boolean;
+  updateUserData: (userData: UserData) => void;
 }
 
 // Create the context
@@ -49,7 +50,6 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // Login function
   const login = (newToken: string, newUserData: UserData) => {
     setToken(newToken);
     setUserData(newUserData);
@@ -69,9 +69,13 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     localStorage.removeItem("runestone_user_data");
   };
 
-  // Check if user is authenticated
   const isAuthenticated = (): boolean => {
     return token !== null && userData !== null;
+  };
+
+  const updateUserData = (newUserData: UserData): void => {
+    setUserData(newUserData);
+    localStorage.setItem("runestone_user_data", JSON.stringify(newUserData));
   };
 
   const value: AuthContextType = {
@@ -80,6 +84,7 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     logout,
     isAuthenticated,
+    updateUserData,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

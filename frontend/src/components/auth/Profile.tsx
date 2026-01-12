@@ -10,7 +10,7 @@ import { MemorySection } from "./MemorySection";
 
 const Profile: React.FC = () => {
   const { userData } = useAuth();
-  const { updateProfile, loading } = useAuthActions();
+  const { updateProfile, refreshUserData, loading } = useAuthActions();
   const [formData, setFormData] = useState({
     name: "",
     surname: "",
@@ -21,6 +21,11 @@ const Profile: React.FC = () => {
   });
   const [successMessage, setSuccessMessage] = useState("");
   const [error, setError] = useState("");
+
+  // Refresh user data on mount to get latest memory from agent
+  useEffect(() => {
+    refreshUserData();
+  }, [refreshUserData]);
 
   useEffect(() => {
     if (userData) {
