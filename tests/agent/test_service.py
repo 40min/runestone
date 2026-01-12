@@ -35,11 +35,11 @@ def mock_chat_model():
 
 
 @pytest.fixture
-def agent_service(mock_settings, mock_chat_model):
+def agent_service(mock_settings, mock_user_service, mock_chat_model):
     """Create an AgentService instance with mocked dependencies."""
     with patch("runestone.agent.service.ChatOpenAI", return_value=mock_chat_model):
         with patch("runestone.agent.service.create_agent"):
-            service = AgentService(mock_settings)
+            service = AgentService(mock_settings, mock_user_service)
             # Mock the agent executor
             service.agent = AsyncMock()
             return service
@@ -55,11 +55,11 @@ def mock_user():
     return MagicMock()
 
 
-def test_build_agent(mock_settings, mock_chat_model):
+def test_build_agent(mock_settings, mock_chat_model, mock_user_service):
     """Test that build_agent creates a ReAct agent with tools."""
     with patch("runestone.agent.service.ChatOpenAI", return_value=mock_chat_model):
         with patch("runestone.agent.service.create_agent") as mock_create_agent:
-            service = AgentService(mock_settings)
+            service = AgentService(mock_settings, mock_user_service)
             service.build_agent()
 
             mock_create_agent.assert_called()
@@ -79,7 +79,7 @@ async def test_generate_response_orchestration(agent_service, mock_user_service,
         "messages": [HumanMessage(content="Hello"), AIMessage(content="Hi there!")]
     }
 
-    response = await agent_service.generate_response(message, history, mock_user_service, mock_user)
+    response = await agent_service.generate_response(message, history, mock_user)
 
     assert response == "Hi there!"
     agent_service.agent.ainvoke.assert_called_once()
@@ -106,7 +106,7 @@ async def test_generate_response_with_history(agent_service, mock_user_service, 
 
     agent_service.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
 
-    await agent_service.generate_response(message, history, mock_user_service, mock_user)
+    await agent_service.generate_response(message, history, mock_user)
 
     invoke_args = agent_service.agent.ainvoke.call_args[0][0]
     messages = invoke_args["messages"]
@@ -124,7 +124,7 @@ async def test_generate_response_with_memory(agent_service, mock_user_service, m
 
     agent_service.agent.ainvoke.return_value = {"messages": [AIMessage(content="R")]}
 
-    await agent_service.generate_response("msg", [], mock_user_service, mock_user, memory_context)
+    await agent_service.generate_response("msg", [], mock_user, memory_context)
 
     invoke_args = agent_service.agent.ainvoke.call_args[0][0]
     messages = invoke_args["messages"]
@@ -134,13 +134,13 @@ async def test_generate_response_with_memory(agent_service, mock_user_service, m
     assert "Alice" in messages[0].content
 
 
-def test_openai_provider_configuration(mock_settings):
+def test_openai_provider_configuration(mock_settings, mock_user_service):
     """Test that OpenAI provider is configured correctly."""
     mock_settings.chat_provider = "openai"
 
     with patch("runestone.agent.service.ChatOpenAI") as mock_chat_openai:
         with patch("runestone.agent.service.create_agent"):
-            AgentService(mock_settings)
+            AgentService(mock_settings, mock_user_service)
 
             # Verify ChatOpenAI was called with correct parameters
             call_kwargs = mock_chat_openai.call_args[1]

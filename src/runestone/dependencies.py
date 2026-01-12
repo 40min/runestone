@@ -225,17 +225,21 @@ def get_grammar_service(settings: Annotated[Settings, Depends(get_settings)]) ->
     return GrammarService(settings.cheatsheets_dir)
 
 
-def get_agent_service(settings: Annotated[Settings, Depends(get_settings)]) -> AgentService:
+def get_agent_service(
+    settings: Annotated[Settings, Depends(get_settings)],
+    user_service: Annotated[UserService, Depends(get_user_service)],
+) -> AgentService:
     """
     Dependency injection for agent service.
 
     Args:
         settings: Application settings from dependency injection
+        user_service: UserService from dependency injection
 
     Returns:
         AgentService: Service instance for chat agent operations
     """
-    return AgentService(settings)
+    return AgentService(settings, user_service)
 
 
 def get_chat_service(

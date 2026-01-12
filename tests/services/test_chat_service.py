@@ -71,7 +71,6 @@ async def test_process_message_orchestration(chat_service, db_with_test_user, mo
     assert kwargs["message"] == "Hej Björn"
     assert kwargs["history"] == []
     assert kwargs["user"] == user
-    assert kwargs["user_service"] == mock_user_service
     # Verify memory context was built and passed
     assert "memory_context" in kwargs
 

@@ -7,7 +7,7 @@ using LangChain's ReAct agent pattern.
 
 import json
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -18,10 +18,8 @@ from runestone.agent.prompts import load_persona
 from runestone.agent.schemas import ChatMessage
 from runestone.agent.tools import AgentContext, update_memory
 from runestone.config import Settings
-
-if TYPE_CHECKING:
-    from runestone.db.models import User  # noqa: F401
-    from runestone.services.user_service import UserService  # noqa: F401
+from runestone.db.models import User
+from runestone.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
@@ -31,14 +29,16 @@ class AgentService:
 
     MAX_HISTORY_MESSAGES = 20
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, user_service: UserService):
         """
         Initialize the agent service.
 
         Args:
             settings: Application settings containing chat configuration
+            user_service: UserService for memory operations
         """
         self.settings = settings
+        self.user_service = user_service
         self.persona = load_persona(settings.agent_persona)
         self.agent = self.build_agent()
 
@@ -106,8 +106,7 @@ Use 'replace' operation only when you want to completely overwrite a category.
         self,
         message: str,
         history: list[ChatMessage],
-        user_service,
-        user,
+        user: User,
         memory_context: Optional[dict] = None,
     ) -> str:
         """
@@ -116,7 +115,6 @@ Use 'replace' operation only when you want to completely overwrite a category.
         Args:
             message: The user's message
             history: Previous conversation messages
-            user_service: UserService for memory operations
             user: User model instance
             memory_context: Optional dictionary containing student memory
 
@@ -151,7 +149,7 @@ Use 'replace' operation only when you want to completely overwrite a category.
         try:
             result = await self.agent.ainvoke(
                 {"messages": messages},
-                context=AgentContext(user=user, user_service=user_service),
+                context=AgentContext(user=user, user_service=self.user_service),
             )
 
             final_messages = result.get("messages", [])

@@ -77,7 +77,6 @@ class ChatService:
         assistant_text = await self.agent_service.generate_response(
             message=message_text,
             history=history[:-1],  # Exclude current message (it's passed separately)
-            user_service=self.user_service,
             user=user,
             memory_context=memory,
         )
