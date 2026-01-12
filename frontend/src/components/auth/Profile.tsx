@@ -6,10 +6,11 @@ import { useAuthActions } from "../../hooks/useAuth";
 import { ErrorAlert } from "../ui";
 import AuthButton from "./AuthButton";
 import AuthTextField from "./AuthTextField";
+import { MemorySection } from "./MemorySection";
 
 const Profile: React.FC = () => {
   const { userData } = useAuth();
-  const { updateProfile, loading } = useAuthActions();
+  const { updateProfile, refreshUserData, loading } = useAuthActions();
   const [formData, setFormData] = useState({
     name: "",
     surname: "",
@@ -20,6 +21,13 @@ const Profile: React.FC = () => {
   });
   const [successMessage, setSuccessMessage] = useState("");
   const [error, setError] = useState("");
+
+  // Refresh user data on mount to get latest memory from agent
+  useEffect(() => {
+    refreshUserData();
+    // Only run on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (userData) {
@@ -125,6 +133,10 @@ const Profile: React.FC = () => {
         <Typography variant="body1" sx={{ mb: 1 }}>
           <strong>Overall Words:</strong> {userData.overall_words_count || 0}
         </Typography>
+      </Box>
+
+      <Box sx={{ mb: 3 }}>
+        <MemorySection userData={userData} />
       </Box>
 
       <AuthTextField

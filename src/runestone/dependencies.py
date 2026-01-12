@@ -8,14 +8,13 @@ consistent object creation and configuration.
 
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from runestone.agent.service import AgentService
 from runestone.config import Settings, settings
 from runestone.core.analyzer import ContentAnalyzer
 from runestone.core.clients.base import BaseLLMClient
-from runestone.core.clients.factory import create_llm_client
 from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.chat_repository import ChatRepository
@@ -94,46 +93,30 @@ def get_user_service(
     return UserService(user_repo, vocab_repo)
 
 
-def get_llm_client(settings: Annotated[Settings, Depends(get_settings)]) -> BaseLLMClient:
+def get_llm_client(request: Request) -> BaseLLMClient:
     """
     Dependency injection for LLM client.
 
     Args:
-        settings: Application settings from dependency injection
+        request: FastAPI request object
 
     Returns:
-        BaseLLMClient: LLM client instance
+        BaseLLMClient: Cached LLM client instance
     """
-    return create_llm_client(settings=settings)
+    return request.app.state.llm_client
 
 
-def get_ocr_llm_client(
-    settings: Annotated[Settings, Depends(get_settings)],
-    llm_client: Annotated[BaseLLMClient, Depends(get_llm_client)],
-) -> BaseLLMClient:
+def get_ocr_llm_client(request: Request) -> BaseLLMClient:
     """
     Dependency injection for OCR-specific LLM client.
 
-    This function implements a fallback strategy:
-    - If ocr_llm_provider is configured, creates a dedicated OCR client
-    - Otherwise, returns the main LLM client (reuse for OCR)
-
     Args:
-        settings: Application settings from dependency injection
-        llm_client: Main LLM client from dependency injection (used as fallback)
+        request: FastAPI request object
 
     Returns:
-        BaseLLMClient: OCR-specific LLM client instance or main client
+        BaseLLMClient: Cached OCR-specific LLM client instance
     """
-    if settings.ocr_llm_provider:
-        # Create dedicated OCR client with OCR-specific settings
-        return create_llm_client(
-            settings=settings,
-            provider=settings.ocr_llm_provider,
-            model_name=settings.ocr_llm_model_name,
-        )
-    # Fall back to main client if no OCR-specific provider is configured
-    return llm_client
+    return request.app.state.ocr_llm_client
 
 
 def get_vocabulary_service(
@@ -212,35 +195,36 @@ def get_runestone_processor(
     return RunestoneProcessor(settings, ocr_processor, content_analyzer, vocabulary_service, user_service)
 
 
-def get_grammar_service(settings: Annotated[Settings, Depends(get_settings)]) -> GrammarService:
+def get_grammar_service(request: Request) -> GrammarService:
     """
     Dependency injection for grammar service.
 
     Args:
-        settings: Application settings from dependency injection
+        request: FastAPI request object
 
     Returns:
-        GrammarService: Service instance for grammar operations
+        GrammarService: Cached service instance for grammar operations
     """
-    return GrammarService(settings.cheatsheets_dir)
+    return request.app.state.grammar_service
 
 
-def get_agent_service(settings: Annotated[Settings, Depends(get_settings)]) -> AgentService:
+def get_agent_service(request: Request) -> AgentService:
     """
     Dependency injection for agent service.
 
     Args:
-        settings: Application settings from dependency injection
+        request: FastAPI request object
 
     Returns:
-        AgentService: Service instance for chat agent operations
+        AgentService: Cached service instance for chat agent operations
     """
-    return AgentService(settings)
+    return request.app.state.agent_service
 
 
 def get_chat_service(
     settings: Annotated[Settings, Depends(get_settings)],
     repo: Annotated[ChatRepository, Depends(get_chat_repository)],
+    user_service: Annotated[UserService, Depends(get_user_service)],
     agent_service: Annotated[AgentService, Depends(get_agent_service)],
 ) -> ChatService:
     """
@@ -249,9 +233,10 @@ def get_chat_service(
     Args:
         settings: Application settings from dependency injection
         repo: ChatRepository from dependency injection
+        user_service: UserService from dependency injection
         agent_service: AgentService from dependency injection
 
     Returns:
         ChatService: Service instance for chat operations
     """
-    return ChatService(settings, repo, agent_service)
+    return ChatService(settings, repo, user_service, agent_service)

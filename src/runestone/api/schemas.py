@@ -6,14 +6,13 @@ unified schemas from the core layer and defining API-specific models.
 This provides a stable API contract and encapsulates internal schema organization.
 """
 
-from typing import List, Optional
+import json
+from typing import Any, Optional
 
-from pydantic import BaseModel
+# This provides a stable API contract and encapsulates internal schema organization
+from pydantic import BaseModel, field_validator
 
 from runestone.core.prompt_builder.types import ImprovementMode
-
-# Re-export unified schemas for API use
-# This provides a stable API contract and encapsulates internal schema organization
 from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
 from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 
@@ -108,7 +107,7 @@ class VocabularyUpdate(BaseModel):
 class VocabularySaveRequest(BaseModel):
     """Schema for saving vocabulary request."""
 
-    items: List[VocabularyItemCreate]
+    items: list[VocabularyItemCreate]
     enrich: bool = True
 
 
@@ -169,6 +168,10 @@ class UserProfileResponse(BaseModel):
     words_in_learn_count: int
     words_skipped_count: int
     overall_words_count: int
+    # Agent memory fields
+    personal_info: Optional[dict] = None
+    areas_to_improve: Optional[dict] = None
+    knowledge_strengths: Optional[dict] = None
     created_at: str
     updated_at: str
 
@@ -181,6 +184,27 @@ class UserProfileUpdate(BaseModel):
     timezone: Optional[str] = None
     password: Optional[str] = None
     email: Optional[str] = None
+    # Agent memory fields (input as dict, serialized to JSON string)
+    personal_info: Optional[dict[str, Any] | str] = None
+    areas_to_improve: Optional[dict[str, Any] | str] = None
+    knowledge_strengths: Optional[dict[str, Any] | str] = None
+
+    @field_validator("personal_info", "areas_to_improve", "knowledge_strengths", mode="before")
+    @classmethod
+    def validate_memory_fields(cls, v: Optional[dict[str, Any] | str]) -> Optional[str]:
+        """Validate that memory fields are dicts and serialize to JSON string."""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            # Already a string (e.g. from tests or prior serialization), check if it's valid JSON
+            try:
+                json.loads(v)
+                return v
+            except json.JSONDecodeError as e:
+                raise ValueError("Provided string is not valid JSON.") from e
+        if not isinstance(v, dict):
+            raise ValueError("Must be a valid JSON object (dictionary)")
+        return json.dumps(v)
 
 
 class LoginRequest(BaseModel):

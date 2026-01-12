@@ -602,4 +602,84 @@ describe("useAuthActions", () => {
     });
     expect(result.current.error).toBe(null);
   });
+
+  it("refreshes user data from API", async () => {
+    const mockUserData = {
+      id: 1,
+      email: "test@example.com",
+      name: "Test",
+      surname: "User",
+      timezone: "UTC",
+      pages_recognised_count: 5,
+    };
+
+    const freshUserData = {
+      ...mockUserData,
+      name: "Refreshed",
+      memory: "Some memory from agent",
+    };
+
+    // Set up initial user data in localStorage
+    mockLocalStorage.getItem
+      .mockReturnValueOnce("existing-token")
+      .mockReturnValueOnce(JSON.stringify(mockUserData));
+
+    // Mock the refresh endpoint
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(freshUserData),
+    } as Response);
+
+    const { result } = renderHook(() => useAuthActions(), { wrapper });
+
+    await act(async () => {
+      await result.current.refreshUserData();
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:8010/api/me",
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({
+          Authorization: "Bearer existing-token",
+        }),
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+  });
+
+  it("handles refreshUserData failure gracefully", async () => {
+    const mockUserData = {
+      id: 1,
+      email: "test@example.com",
+      name: "Test",
+      surname: "User",
+      timezone: "UTC",
+      pages_recognised_count: 5,
+    };
+
+    // Set up initial user data in localStorage
+    mockLocalStorage.getItem
+      .mockReturnValueOnce("existing-token")
+      .mockReturnValueOnce(JSON.stringify(mockUserData));
+
+    // Mock the refresh endpoint to fail
+    vi.mocked(globalThis.fetch).mockRejectedValueOnce(
+      new Error("Failed to fetch")
+    );
+
+    const { result } = renderHook(() => useAuthActions(), { wrapper });
+
+    // Should not throw, just log error
+    await act(async () => {
+      await result.current.refreshUserData();
+    });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+  });
 });

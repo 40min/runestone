@@ -16,11 +16,31 @@ import { useChat } from '../hooks/useChat';
 const ChatView: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevMessagesLengthRef = useRef(0);
   const { messages, isLoading, error, sendMessage, startNewChat } = useChat();
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom only when appropriate
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const isNewMessage = messages.length > prevMessagesLengthRef.current;
+    const isUserMessage = isNewMessage && messages[messages.length - 1].role === 'user';
+
+    // Increased threshold to 150px to be more forgiving
+    const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 150;
+
+    if (isNewMessage) {
+      if (isUserMessage || isAtBottom) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    } else if (messages.length > 0 && prevMessagesLengthRef.current === 0) {
+      // Initial load of messages
+      messagesEndRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
+    }
+
+    prevMessagesLengthRef.current = messages.length;
   }, [messages]);
 
   const handleSendMessage = async () => {
@@ -52,29 +72,35 @@ const ChatView: React.FC = () => {
       {/* Header */}
       <Box
         sx={{
-          textAlign: 'center',
-          mb: { xs: 2, md: 3 },
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          mb: { xs: 2, md: 2 },
+          gap: 2,
         }}
       >
-        <Typography
-          variant="h4"
-          sx={{
-            color: 'white',
-            fontWeight: 'bold',
-            mb: 1,
-            fontSize: { xs: '1.5rem', md: '2.125rem' },
-          }}
-        >
-          Chat with Your Swedish Teacher
-        </Typography>
-        <Typography
-          sx={{
-            color: '#9ca3af',
-            fontSize: { xs: '0.875rem', md: '1rem' },
-          }}
-        >
-          Ask questions about Swedish vocabulary, grammar, or practice conversation
-        </Typography>
+        <Box>
+          <Typography
+            variant="h5"
+            sx={{
+              color: 'white',
+              fontWeight: 'bold',
+              mb: 0.5,
+              fontSize: { xs: '1.25rem', md: '1.5rem' },
+            }}
+          >
+            Chat with Your Swedish Teacher
+          </Typography>
+          <Typography
+            sx={{
+              color: '#9ca3af',
+              fontSize: { xs: '0.75rem', md: '0.875rem' },
+            }}
+          >
+            Ask questions about Swedish vocabulary, grammar, or practice conversation
+          </Typography>
+        </Box>
         <NewChatButton
           onClick={startNewChat}
           isLoading={isLoading}
@@ -83,7 +109,7 @@ const ChatView: React.FC = () => {
       </Box>
 
       {/* Messages Container */}
-      <ChatContainer>
+      <ChatContainer ref={scrollContainerRef}>
         {messages.length === 0 ? (
           <ChatEmptyState />
         ) : (

@@ -80,3 +80,43 @@ async def update_user_profile(
             status_code=500,
             detail="Failed to update user profile",
         )
+
+
+@router.delete(
+    "/me/memory",
+    response_model=UserProfileResponse,
+    responses={
+        200: {"description": "Memory cleared successfully"},
+        400: {"description": "Invalid category"},
+        401: {"description": "Not authenticated"},
+        500: {"description": "Failed to clear memory"},
+    },
+)
+async def clear_user_memory(
+    category: str | None = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+    service: Annotated[UserService, Depends(get_user_service)] = None,
+) -> UserProfileResponse:
+    """
+    Clear agent memory for the current user.
+
+    Args:
+        category: Optional memory category to clear ('personal_info', 'areas_to_improve', 'knowledge_strengths').
+                 If not provided, clears all memory fields.
+
+    Returns:
+        Updated user profile with cleared memory.
+    """
+    try:
+        return service.clear_user_memory(current_user, category)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error(f"Failed to clear memory for user {current_user.id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to clear memory",
+        )

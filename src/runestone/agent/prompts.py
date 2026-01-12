@@ -42,7 +42,7 @@ def load_persona(persona_name: str) -> Dict[str, str]:
     return persona_data
 
 
-def build_messages(system_prompt: str, history: List[ChatMessage], user_message: str) -> List[Dict[str, str]]:
+def build_messages(system_prompt: str, history: list[ChatMessage], user_message: str) -> List[Dict[str, str]]:
     """
     Build the full message list for the LLM.
 

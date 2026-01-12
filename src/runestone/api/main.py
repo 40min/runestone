@@ -11,14 +11,17 @@ from typing import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from runestone.agent.service import AgentService
 from runestone.api.auth_endpoints import router as auth_router
 from runestone.api.chat_endpoints import router as chat_router
 from runestone.api.endpoints import grammar_router
 from runestone.api.endpoints import router as api_router
 from runestone.api.user_endpoints import router as user_router
 from runestone.config import settings
+from runestone.core.clients.factory import create_llm_client
 from runestone.core.logging_config import setup_logging
 from runestone.db.database import setup_database
+from runestone.services.grammar_service import GrammarService
 
 
 @asynccontextmanager
@@ -28,6 +31,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     setup_logging(verbose=settings.verbose)
     # Verify database setup
     setup_database()
+
+    # Initialize expensive services once
+    app.state.llm_client = create_llm_client(settings=settings)
+    app.state.ocr_llm_client = (
+        create_llm_client(
+            settings=settings,
+            provider=settings.ocr_llm_provider,
+            model_name=settings.ocr_llm_model_name,
+        )
+        if settings.ocr_llm_provider
+        else app.state.llm_client
+    )
+    app.state.grammar_service = GrammarService(settings.cheatsheets_dir)
+    app.state.agent_service = AgentService(settings)
     yield
     # Shutdown
 

@@ -1,7 +1,6 @@
 import React from 'react';
 import { PlusCircle } from 'lucide-react';
 import CustomButton from './CustomButton';
-import { Box } from '@mui/material';
 
 interface NewChatButtonProps {
   onClick: () => void;
@@ -15,28 +14,27 @@ export const NewChatButton: React.FC<NewChatButtonProps> = ({
   hasMessages,
 }) => {
   return (
-    <Box sx={{ mt: 2, mb: 2, display: 'flex', justifyContent: 'center' }}>
-      <CustomButton
-        onClick={onClick}
-        disabled={isLoading || !hasMessages}
-        variant="secondary"
-        sx={{
+    <CustomButton
+      onClick={onClick}
+      disabled={isLoading || !hasMessages}
+      variant="secondary"
+      sx={{
+        borderColor: 'var(--primary-color)',
+        color: 'var(--primary-color)',
+        '&:hover': {
           borderColor: 'var(--primary-color)',
-          color: 'var(--primary-color)',
-          '&:hover': {
-            borderColor: 'var(--primary-color)',
-            backgroundColor: 'rgba(56, 224, 123, 0.1)',
-          },
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1,
-          px: 4,
-          py: 1,
-        }}
-      >
-        <PlusCircle size={18} />
-        Start New Chat
-      </CustomButton>
-    </Box>
+          backgroundColor: 'rgba(56, 224, 123, 0.1)',
+        },
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        px: 2, // Reduced from 4
+        py: 0.5, // Reduced from 1
+        fontSize: '0.875rem', // Smaller text
+      }}
+    >
+      <PlusCircle size={16} />
+      Start New Chat
+    </CustomButton>
   );
 };

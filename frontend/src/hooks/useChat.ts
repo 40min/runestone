@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useApi } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 
 interface ChatMessage {
   id: string;
@@ -24,32 +25,49 @@ export const useChat = (): UseChatReturn => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { get, post, delete: apiDelete } = useApi();
+  const { token } = useAuth();
   const lastFetchRef = useRef<number>(0);
   const channelRef = useRef<BroadcastChannel | null>(null);
-  const STALE_THRESHOLD = 10000; // 10 seconds
+
+  const fetchInProgressRef = useRef<boolean>(false);
 
   const fetchHistory = useCallback(async () => {
+    // Prevent redundant calls if already loading, fetching or no token
+    if (isLoading || fetchInProgressRef.current || !token) return;
+
+    fetchInProgressRef.current = true;
     setIsLoading(true);
     try {
       const data = await get<{ messages: ChatMessage[] }>('/api/chat/history');
-      setMessages(data.messages || []);
+      const newMessages = data.messages || [];
+
+      setMessages(prev => {
+        // Simple comparison to avoid unnecessary state updates
+        if (prev.length === newMessages.length &&
+            prev.every((msg, i) => msg.id === newMessages[i].id && msg.content === newMessages[i].content)) {
+          return prev;
+        }
+        return newMessages;
+      });
       lastFetchRef.current = Date.now();
     } catch (err) {
       console.error('Failed to fetch chat history:', err);
       setError('Failed to load chat history. Starting fresh.');
-      // Ensure messages is always an array
       setMessages([]);
     } finally {
       setIsLoading(false);
+      fetchInProgressRef.current = false;
     }
-  }, [get]);
+  }, [get, isLoading, token]);
 
   // Initial fetch
   useEffect(() => {
     fetchHistory();
-  }, [fetchHistory]);
+    // Only run on mount, but keep fetchHistory in deps for correctness
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Tab synchronization (Broadcast Channel + Window Focus/Visibility)
+  // Tab synchronization (Broadcast Channel)
   useEffect(() => {
     const channel = new BroadcastChannel('runestone_chat_sync');
     channelRef.current = channel;
@@ -61,30 +79,12 @@ export const useChat = (): UseChatReturn => {
       }
     };
 
-    const handleFocus = () => {
-      // Only re-fetch if we haven't fetched recently
-      const isStale = Date.now() - lastFetchRef.current > STALE_THRESHOLD;
-      if (isStale) {
-        fetchHistory();
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        handleFocus();
-      }
-    };
-
     channel.addEventListener('message', handleMessage);
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       channel.removeEventListener('message', handleMessage);
       channel.close();
       channelRef.current = null;
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [fetchHistory]);
 

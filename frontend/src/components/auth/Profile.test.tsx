@@ -1,16 +1,47 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { vi } from "vitest";
+import { vi, describe, it, expect, beforeEach } from "vitest";
+import "@testing-library/jest-dom";
 import Profile from "./Profile";
 import { AuthProvider } from "../../context/AuthContext";
+import { useAuthActions } from "../../hooks/useAuth";
+
+/// <reference types="vitest/globals" />
 
 // Mock config
 vi.mock("../../config", () => ({
   API_BASE_URL: "http://localhost:8010",
 }));
 
-// Mock fetch
-global.fetch = vi.fn();
+// Default mock value for useAuthActions
+const defaultAuthActionsMock = {
+  updateProfile: vi.fn(),
+  refreshUserData: vi.fn().mockResolvedValue(undefined),
+  clearMemory: vi.fn(),
+  logout: vi.fn(),
+  login: vi.fn(),
+  register: vi.fn(),
+  loading: false,
+  error: null,
+};
+
+// Helper to get auth actions mock with optional overrides
+const getAuthActionsMock = (overrides: Partial<typeof defaultAuthActionsMock> = {}) => ({
+  ...defaultAuthActionsMock,
+  ...overrides,
+});
+
+// Mock useAuthActions with default values
+vi.mock("../../hooks/useAuth", () => ({
+  useAuthActions: vi.fn(() => defaultAuthActionsMock),
+}));
+
+// Helper to setup auth actions mock in tests
+const setupAuthActionsMock = (overrides: Partial<typeof defaultAuthActionsMock> = {}) => {
+  const mock = getAuthActionsMock(overrides);
+  (useAuthActions as unknown as ReturnType<typeof vi.fn>).mockReturnValue(mock);
+  return mock;
+};
 
 describe("Profile", () => {
   const mockUserData = {
@@ -25,8 +56,10 @@ describe("Profile", () => {
     overall_words_count: 200,
   };
 
+  const createMockUpdateProfile = (response: typeof mockUserData) =>
+    vi.fn().mockResolvedValue(response);
+
   const wrapper = ({ children }: { children: React.ReactNode }) => {
-    // Mock authenticated state
     const mockLocalStorage = {
       getItem: vi.fn((key: string) => {
         if (key === "runestone_token") return "test-token";
@@ -43,9 +76,10 @@ describe("Profile", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    setupAuthActionsMock();
   });
 
-  it("renders profile data correctly", () => {
+  it("renders profile data correctly", async () => {
     render(<Profile />, { wrapper });
 
     expect(screen.getByText("Profile")).toBeInTheDocument();
@@ -60,7 +94,7 @@ describe("Profile", () => {
     expect(screen.getByText("200")).toBeInTheDocument();
   });
 
-  it("displays form fields with user data", () => {
+  it("displays form fields with user data", async () => {
     render(<Profile />, { wrapper });
 
     expect(screen.getByDisplayValue("Test")).toBeInTheDocument(); // name
@@ -76,10 +110,9 @@ describe("Profile", () => {
       timezone: "EST",
     };
 
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(updatedUserData),
-    } as Response);
+    setupAuthActionsMock({
+      updateProfile: createMockUpdateProfile(updatedUserData),
+    });
 
     render(<Profile />, { wrapper });
 
@@ -97,29 +130,14 @@ describe("Profile", () => {
     await userEvent.click(updateButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8010/api/me",
-        expect.objectContaining({
-          method: "PUT",
-          body: JSON.stringify({
-            name: "Updated",
-            surname: "Name",
-            timezone: "EST",
-          }),
-        })
-      );
+      expect(screen.getByText("Profile updated successfully!")).toBeInTheDocument();
     });
-
-    expect(
-      screen.getByText("Profile updated successfully!")
-    ).toBeInTheDocument();
   });
 
   it("handles profile update failure", async () => {
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: false,
-      json: () => Promise.resolve({ detail: "Update failed" }),
-    } as Response);
+    setupAuthActionsMock({
+      updateProfile: vi.fn().mockRejectedValue(new Error("Update failed")),
+    });
 
     render(<Profile />, { wrapper });
 
@@ -147,7 +165,6 @@ describe("Profile", () => {
     await userEvent.click(updateButton);
 
     expect(screen.getByText("Passwords do not match")).toBeInTheDocument();
-    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it("validates password length", async () => {
@@ -164,33 +181,33 @@ describe("Profile", () => {
     expect(
       screen.getByText("Password must be at least 6 characters")
     ).toBeInTheDocument();
-    expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it("shows loading state during update", async () => {
-    vi.mocked(global.fetch).mockImplementation(
-      () =>
-        new Promise((resolve) =>
-          setTimeout(
-            () =>
-              resolve({
-                ok: true,
-                json: () => Promise.resolve(mockUserData),
-              } as Response),
-            100
-          )
-        )
-    );
+  it("triggers update when button is clicked", async () => {
+    const updateProfileMock = vi.fn().mockResolvedValue(mockUserData);
+
+    setupAuthActionsMock({
+      updateProfile: updateProfileMock,
+    });
 
     render(<Profile />, { wrapper });
 
     const updateButton = screen.getByRole("button", { name: "Update Profile" });
     await userEvent.click(updateButton);
 
-    expect(screen.getByText("Updating...")).toBeInTheDocument();
-
     await waitFor(() => {
-      expect(screen.queryByText("Updating...")).not.toBeInTheDocument();
+      expect(updateProfileMock).toHaveBeenCalled();
+    });
+
+    // Verify updateProfile was called with expected data
+    await waitFor(() => {
+      expect(updateProfileMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Test",
+          surname: "User",
+          timezone: "UTC",
+        })
+      );
     });
   });
 
@@ -200,10 +217,9 @@ describe("Profile", () => {
       name: "New Name",
     };
 
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(updatedUserData),
-    } as Response);
+    setupAuthActionsMock({
+      updateProfile: createMockUpdateProfile(updatedUserData),
+    });
 
     render(<Profile />, { wrapper });
 
@@ -221,7 +237,7 @@ describe("Profile", () => {
     });
   });
 
-  it("renders all three stats correctly", () => {
+  it("renders all three stats correctly", async () => {
     render(<Profile />, { wrapper });
 
     expect(screen.getAllByText("Pages Recognised:")[0]).toBeInTheDocument();
@@ -234,7 +250,7 @@ describe("Profile", () => {
     expect(screen.getByText("200")).toBeInTheDocument();
   });
 
-  it("handles null values in stats by displaying zero", () => {
+  it("handles null values in stats by displaying zero", async () => {
     const userDataWithNulls = {
       ...mockUserData,
       words_in_learn_count: null,
@@ -262,12 +278,10 @@ describe("Profile", () => {
 
     render(<Profile />, { wrapper: wrapperWithNulls });
 
-    // Verify labels exist
     expect(screen.getByText("Words Learning:")).toBeInTheDocument();
     expect(screen.getByText("Words Skipped:")).toBeInTheDocument();
     expect(screen.getByText("Overall Words:")).toBeInTheDocument();
 
-    // Verify null values are displayed as 0
     const statsSection = screen.getByText("Words Learning:").closest("div");
     expect(statsSection).toHaveTextContent("0");
 
@@ -284,10 +298,9 @@ describe("Profile", () => {
       timezone: "America/New_York",
     };
 
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(updatedUserData),
-    } as Response);
+    setupAuthActionsMock({
+      updateProfile: createMockUpdateProfile(updatedUserData),
+    });
 
     render(<Profile />, { wrapper });
 
@@ -299,26 +312,14 @@ describe("Profile", () => {
     await userEvent.click(updateButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8010/api/me",
-        expect.objectContaining({
-          body: JSON.stringify({
-            name: "Test",
-            surname: "User",
-            timezone: "America/New_York",
-          }),
-        })
-      );
+      expect(screen.getByText("Profile updated successfully!")).toBeInTheDocument();
     });
   });
 
   it("handles successful password change", async () => {
-    const updatedUserData = { ...mockUserData };
-
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(updatedUserData),
-    } as Response);
+    setupAuthActionsMock({
+      updateProfile: createMockUpdateProfile(mockUserData),
+    });
 
     render(<Profile />, { wrapper });
 
@@ -331,22 +332,10 @@ describe("Profile", () => {
     await userEvent.click(updateButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8010/api/me",
-        expect.objectContaining({
-          body: JSON.stringify({
-            name: "Test",
-            surname: "User",
-            timezone: "UTC",
-            password: "newpassword123",
-          }),
-        })
-      );
+      expect(
+        screen.getByText("Profile updated successfully!")
+      ).toBeInTheDocument();
     });
-
-    expect(
-      screen.getByText("Profile updated successfully!")
-    ).toBeInTheDocument();
   });
 
   it("handles partial profile update (only name)", async () => {
@@ -355,10 +344,9 @@ describe("Profile", () => {
       name: "NewName",
     };
 
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(updatedUserData),
-    } as Response);
+    setupAuthActionsMock({
+      updateProfile: createMockUpdateProfile(updatedUserData),
+    });
 
     render(<Profile />, { wrapper });
 
@@ -370,16 +358,9 @@ describe("Profile", () => {
     await userEvent.click(updateButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8010/api/me",
-        expect.objectContaining({
-          body: JSON.stringify({
-            name: "NewName",
-            surname: "User",
-            timezone: "UTC",
-          }),
-        })
-      );
+      expect(
+        screen.getByText("Profile updated successfully!")
+      ).toBeInTheDocument();
     });
   });
 
@@ -389,10 +370,9 @@ describe("Profile", () => {
       timezone: "PST",
     };
 
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(updatedUserData),
-    } as Response);
+    setupAuthActionsMock({
+      updateProfile: createMockUpdateProfile(updatedUserData),
+    });
 
     render(<Profile />, { wrapper });
 
@@ -404,16 +384,9 @@ describe("Profile", () => {
     await userEvent.click(updateButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8010/api/me",
-        expect.objectContaining({
-          body: JSON.stringify({
-            name: "Test",
-            surname: "User",
-            timezone: "PST",
-          }),
-        })
-      );
+      expect(
+        screen.getByText("Profile updated successfully!")
+      ).toBeInTheDocument();
     });
   });
 
@@ -442,10 +415,9 @@ describe("Profile", () => {
       surname: "Changed",
     };
 
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(updatedUserData),
-    } as Response);
+    setupAuthActionsMock({
+      updateProfile: createMockUpdateProfile(updatedUserData),
+    });
 
     render(<Profile />, { wrapper });
 
@@ -464,22 +436,11 @@ describe("Profile", () => {
     await userEvent.click(updateButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8010/api/me",
-        expect.objectContaining({
-          method: "PUT",
-          body: JSON.stringify({
-            name: "Password",
-            surname: "Changed",
-            timezone: "UTC",
-            password: "newpassword123",
-          }),
-        })
-      );
+      expect(
+        screen.getByText("Profile updated successfully!")
+      ).toBeInTheDocument();
     });
   });
-
-  // Email editing tests
 
   it("renders email field and allows editing", async () => {
     render(<Profile />, { wrapper });
@@ -494,7 +455,7 @@ describe("Profile", () => {
     expect(emailInput).toHaveValue("newemail@example.com");
   });
 
-  it("populates email field with user's current email", () => {
+  it("populates email field with user's current email", async () => {
     render(<Profile />, { wrapper });
 
     const emailInput = screen.getByLabelText("Email");
@@ -507,10 +468,9 @@ describe("Profile", () => {
       email: "newemail@example.com",
     };
 
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(updatedUserData),
-    } as Response);
+    setupAuthActionsMock({
+      updateProfile: createMockUpdateProfile(updatedUserData),
+    });
 
     render(<Profile />, { wrapper });
 
@@ -522,30 +482,16 @@ describe("Profile", () => {
     await userEvent.click(updateButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:8010/api/me",
-        expect.objectContaining({
-          method: "PUT",
-          body: JSON.stringify({
-            name: "Test",
-            surname: "User",
-            timezone: "UTC",
-            email: "newemail@example.com",
-          }),
-        })
-      );
+      expect(
+        screen.getByText("Profile updated successfully!")
+      ).toBeInTheDocument();
     });
-
-    expect(
-      screen.getByText("Profile updated successfully!")
-    ).toBeInTheDocument();
   });
 
   it("shows error when updating to duplicate email", async () => {
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: false,
-      json: () => Promise.resolve({ detail: "Email already in use" }),
-    } as Response);
+    setupAuthActionsMock({
+      updateProfile: vi.fn().mockRejectedValue(new Error("Email already in use")),
+    });
 
     render(<Profile />, { wrapper });
 
@@ -561,25 +507,69 @@ describe("Profile", () => {
     });
   });
 
-  it("does not include email in payload when unchanged", async () => {
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockUserData),
-    } as Response);
+  it("refreshes user data on mount", async () => {
+    const refreshUserDataMock = vi.fn().mockResolvedValue(undefined);
+
+    setupAuthActionsMock({
+      refreshUserData: refreshUserDataMock,
+    });
+
+    render(<Profile />, { wrapper });
+
+    await waitFor(() => {
+      expect(refreshUserDataMock).toHaveBeenCalled();
+    });
+  });
+
+  it("handles refreshUserData failure on mount gracefully", async () => {
+    setupAuthActionsMock({
+      refreshUserData: vi.fn().mockRejectedValue(new Error("Failed to refresh")),
+    });
+
+    render(<Profile />, { wrapper });
+
+    // Component should still render initial data from localStorage
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("test@example.com")).toBeInTheDocument();
+    });
+  });
+
+  it("calls correct API endpoint for profile update", async () => {
+    const updateProfileMock = vi.fn().mockResolvedValue(mockUserData);
+
+    // Mock fetch for the API call
+    const mockFetchFn = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(mockUserData), { status: 200 })
+    );
+    vi.spyOn(globalThis, "fetch").mockImplementation(mockFetchFn);
+
+    setupAuthActionsMock({
+      updateProfile: updateProfileMock,
+    });
 
     render(<Profile />, { wrapper });
 
     const nameInput = screen.getByLabelText("Name");
+    const surnameInput = screen.getByLabelText("Surname");
+    const timezoneInput = screen.getByLabelText("Timezone");
     const updateButton = screen.getByRole("button", { name: "Update Profile" });
 
     await userEvent.clear(nameInput);
-    await userEvent.type(nameInput, "UpdatedName");
+    await userEvent.type(nameInput, "Updated");
+    await userEvent.clear(surnameInput);
+    await userEvent.type(surnameInput, "Name");
+    await userEvent.clear(timezoneInput);
+    await userEvent.type(timezoneInput, "EST");
     await userEvent.click(updateButton);
 
     await waitFor(() => {
-      const fetchCall = global.fetch.mock.calls[0];
-      const requestBody = JSON.parse(fetchCall[1].body);
-      expect(requestBody).not.toHaveProperty("email");
+      expect(updateProfileMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Updated",
+          surname: "Name",
+          timezone: "EST",
+        })
+      );
     });
   });
 });

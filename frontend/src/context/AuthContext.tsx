@@ -3,6 +3,7 @@ import React, {
   useState,
   useEffect,
   useContext,
+  useCallback,
   type ReactNode,
 } from "react";
 
@@ -15,6 +16,7 @@ interface AuthContextType {
   login: (token: string, userData: UserData) => void;
   logout: () => void;
   isAuthenticated: () => boolean;
+  updateUserData: (userData: UserData) => void;
 }
 
 // Create the context
@@ -27,60 +29,70 @@ interface AuthProviderProps {
 
 // Auth provider component
 const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(null);
-  const [userData, setUserData] = useState<UserData | null>(null);
-
-  // Load token and user data from localStorage on mount
-  useEffect(() => {
-    const storedToken = localStorage.getItem("runestone_token");
-    const storedUserData = localStorage.getItem("runestone_user_data");
-
-    if (storedToken) {
-      setToken(storedToken);
-    }
-
-    if (storedUserData) {
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem("runestone_token"));
+  const [userData, setUserData] = useState<UserData | null>(() => {
+    const stored = localStorage.getItem("runestone_user_data");
+    if (stored) {
       try {
-        setUserData(JSON.parse(storedUserData));
+        return JSON.parse(stored);
       } catch (error) {
         console.error("Failed to parse stored user data:", error);
         localStorage.removeItem("runestone_user_data");
       }
     }
+    return null;
+  });
+
+  // Keep in sync with localStorage if they change from other tabs
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "runestone_token") {
+        setToken(e.newValue);
+      }
+      if (e.key === "runestone_user_data") {
+        setUserData(e.newValue ? JSON.parse(e.newValue) : null);
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
-  // Login function
-  const login = (newToken: string, newUserData: UserData) => {
+  const login = useCallback((newToken: string, newUserData: UserData) => {
     setToken(newToken);
     setUserData(newUserData);
 
     // Store in localStorage
     localStorage.setItem("runestone_token", newToken);
     localStorage.setItem("runestone_user_data", JSON.stringify(newUserData));
-  };
+  }, []);
 
   // Logout function
-  const logout = () => {
+  const logout = useCallback(() => {
     setToken(null);
     setUserData(null);
 
     // Clear localStorage
     localStorage.removeItem("runestone_token");
     localStorage.removeItem("runestone_user_data");
-  };
+  }, []);
 
-  // Check if user is authenticated
-  const isAuthenticated = (): boolean => {
+  const isAuthenticated = useCallback((): boolean => {
     return token !== null && userData !== null;
-  };
+  }, [token, userData]);
 
-  const value: AuthContextType = {
+  const updateUserData = useCallback((newUserData: UserData): void => {
+    setUserData(newUserData);
+    localStorage.setItem("runestone_user_data", JSON.stringify(newUserData));
+  }, []);
+
+  const value = React.useMemo((): AuthContextType => ({
     token,
     userData,
     login,
     logout,
     isAuthenticated,
-  };
+    updateUserData,
+  }), [token, userData, login, logout, isAuthenticated, updateUserData]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
