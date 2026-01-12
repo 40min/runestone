@@ -78,6 +78,7 @@ class ChatService:
             message=message_text,
             history=history[:-1],  # Exclude current message (it's passed separately)
             user=user,
+            user_service=self.user_service,
             memory_context=memory,
         )
 

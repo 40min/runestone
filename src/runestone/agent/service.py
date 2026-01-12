@@ -29,16 +29,14 @@ class AgentService:
 
     MAX_HISTORY_MESSAGES = 20
 
-    def __init__(self, settings: Settings, user_service: UserService):
+    def __init__(self, settings: Settings):
         """
         Initialize the agent service.
 
         Args:
             settings: Application settings containing chat configuration
-            user_service: UserService for memory operations
         """
         self.settings = settings
-        self.user_service = user_service
         self.persona = load_persona(settings.agent_persona)
         self.agent = self.build_agent()
 
@@ -107,6 +105,7 @@ Use 'replace' operation only when you want to completely overwrite a category.
         message: str,
         history: list[ChatMessage],
         user: User,
+        user_service: UserService,
         memory_context: Optional[dict] = None,
     ) -> str:
         """
@@ -116,6 +115,7 @@ Use 'replace' operation only when you want to completely overwrite a category.
             message: The user's message
             history: Previous conversation messages
             user: User model instance
+            user_service: UserService instance to handle memory operations
             memory_context: Optional dictionary containing student memory
 
         Returns:
@@ -149,7 +149,7 @@ Use 'replace' operation only when you want to completely overwrite a category.
         try:
             result = await self.agent.ainvoke(
                 {"messages": messages},
-                context=AgentContext(user=user, user_service=self.user_service),
+                context=AgentContext(user=user, user_service=user_service),
             )
 
             final_messages = result.get("messages", [])
