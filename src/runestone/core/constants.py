@@ -6,7 +6,6 @@ and maintainability.
 """
 
 # Batch processing size for vocabulary operations
-# Batch processing size for vocabulary operations
 VOCABULARY_BATCH_SIZE = 100
 
 # Agent memory fields in User model
