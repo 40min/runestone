@@ -200,8 +200,8 @@ class UserProfileUpdate(BaseModel):
             try:
                 json.loads(v)
                 return v
-            except json.JSONDecodeError:
-                pass  # Fall through to error
+            except json.JSONDecodeError as e:
+                raise ValueError("Provided string is not valid JSON.") from e
         if not isinstance(v, dict):
             raise ValueError("Must be a valid JSON object (dictionary)")
         return json.dumps(v)
