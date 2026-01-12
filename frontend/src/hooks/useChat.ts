@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useApi } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 
 interface ChatMessage {
   id: string;
@@ -24,11 +25,18 @@ export const useChat = (): UseChatReturn => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { get, post, delete: apiDelete } = useApi();
+  const { token } = useAuth();
   const lastFetchRef = useRef<number>(0);
   const channelRef = useRef<BroadcastChannel | null>(null);
   const STALE_THRESHOLD = 10000; // 10 seconds
 
+  const fetchInProgressRef = useRef<boolean>(false);
+
   const fetchHistory = useCallback(async () => {
+    // Prevent redundant calls if already loading, fetching or no token
+    if (isLoading || fetchInProgressRef.current || !token) return;
+
+    fetchInProgressRef.current = true;
     setIsLoading(true);
     try {
       const data = await get<{ messages: ChatMessage[] }>('/api/chat/history');
@@ -37,17 +45,19 @@ export const useChat = (): UseChatReturn => {
     } catch (err) {
       console.error('Failed to fetch chat history:', err);
       setError('Failed to load chat history. Starting fresh.');
-      // Ensure messages is always an array
       setMessages([]);
     } finally {
       setIsLoading(false);
+      fetchInProgressRef.current = false;
     }
-  }, [get]);
+  }, [get, isLoading, token]);
 
   // Initial fetch
   useEffect(() => {
     fetchHistory();
-  }, [fetchHistory]);
+    // Only run on mount, but keep fetchHistory in deps for correctness
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Tab synchronization (Broadcast Channel + Window Focus/Visibility)
   useEffect(() => {

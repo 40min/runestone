@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useAuth as useAuthContext } from "../context/AuthContext";
 import { useApi } from "../utils/api";
 import type { UserData } from "../types/auth";
@@ -36,7 +36,7 @@ interface UseAuthActionsReturn {
 }
 
 export const useAuthActions = (): UseAuthActionsReturn => {
-  const { login: contextLogin, logout: contextLogout, updateUserData: contextUpdateUserData } = useAuthContext();
+  const { login: contextLogin, logout: contextLogout, updateUserData: contextUpdateUserData, token } = useAuthContext();
   const { post, get, put, delete: apiDelete } = useApi();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -145,14 +145,23 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     contextLogout();
   }, [contextLogout]);
 
+  const refreshInProgressRef = useRef<boolean>(false);
+
   const refreshUserData = useCallback(async (): Promise<void> => {
+    if (loading || refreshInProgressRef.current || !token) {
+      return;
+    }
+
+    refreshInProgressRef.current = true;
     try {
       const freshUserData = await get<UserData>("/api/me");
       contextUpdateUserData(freshUserData);
     } catch (error) {
       console.error("Failed to refresh user data:", error);
+    } finally {
+      refreshInProgressRef.current = false;
     }
-  }, [get, contextUpdateUserData]);
+  }, [get, contextUpdateUserData, loading, token]);
 
   return {
     login,

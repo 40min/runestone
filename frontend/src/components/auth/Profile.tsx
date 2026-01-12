@@ -25,7 +25,9 @@ const Profile: React.FC = () => {
   // Refresh user data on mount to get latest memory from agent
   useEffect(() => {
     refreshUserData();
-  }, [refreshUserData]);
+    // Only run on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (userData) {
