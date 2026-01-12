@@ -16,11 +16,31 @@ import { useChat } from '../hooks/useChat';
 const ChatView: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevMessagesLengthRef = useRef(0);
   const { messages, isLoading, error, sendMessage, startNewChat } = useChat();
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom only when appropriate
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const isNewMessage = messages.length > prevMessagesLengthRef.current;
+    const isUserMessage = isNewMessage && messages[messages.length - 1].role === 'user';
+
+    // Increased threshold to 150px to be more forgiving
+    const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 150;
+
+    if (isNewMessage) {
+      if (isUserMessage || isAtBottom) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    } else if (messages.length > 0 && prevMessagesLengthRef.current === 0) {
+      // Initial load of messages
+      messagesEndRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
+    }
+
+    prevMessagesLengthRef.current = messages.length;
   }, [messages]);
 
   const handleSendMessage = async () => {
@@ -83,7 +103,7 @@ const ChatView: React.FC = () => {
       </Box>
 
       {/* Messages Container */}
-      <ChatContainer>
+      <ChatContainer ref={scrollContainerRef}>
         {messages.length === 0 ? (
           <ChatEmptyState />
         ) : (
