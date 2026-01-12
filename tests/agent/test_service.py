@@ -38,7 +38,7 @@ def mock_chat_model():
 def agent_service(mock_settings, mock_chat_model):
     """Create an AgentService instance with mocked dependencies."""
     with patch("runestone.agent.service.ChatOpenAI", return_value=mock_chat_model):
-        with patch("runestone.agent.service.create_react_agent"):
+        with patch("runestone.agent.service.create_agent"):
             service = AgentService(mock_settings)
             # Mock the agent executor
             service.agent = AsyncMock()
@@ -58,7 +58,7 @@ def mock_user():
 def test_build_agent(mock_settings, mock_chat_model):
     """Test that build_agent creates a ReAct agent with tools."""
     with patch("runestone.agent.service.ChatOpenAI", return_value=mock_chat_model):
-        with patch("runestone.agent.service.create_react_agent") as mock_create_agent:
+        with patch("runestone.agent.service.create_agent") as mock_create_agent:
             service = AgentService(mock_settings)
             service.build_agent()
 
@@ -66,7 +66,7 @@ def test_build_agent(mock_settings, mock_chat_model):
             call_kwargs = mock_create_agent.call_args[1]
             assert call_kwargs["model"] == mock_chat_model
             assert len(call_kwargs["tools"]) == 1
-            assert "AVAILABLE TOOLS" in call_kwargs["prompt"]
+            assert "AVAILABLE TOOLS" in call_kwargs["system_prompt"]
 
 
 @pytest.mark.anyio
@@ -84,10 +84,11 @@ async def test_generate_response_orchestration(agent_service, mock_user_service,
     assert response == "Hi there!"
     agent_service.agent.ainvoke.assert_called_once()
 
-    # Verify context injection in config
-    config = agent_service.agent.ainvoke.call_args[1].get("config")
-    assert config["configurable"]["user"] == mock_user
-    assert config["configurable"]["user_service"] == mock_user_service
+    # Verify context injection (via AgentContext)
+    call_kwargs = agent_service.agent.ainvoke.call_args[1]
+    context = call_kwargs.get("context")
+    assert context.user == mock_user
+    assert context.user_service == mock_user_service
 
     # Verify inputs to invoke
     invoke_args = agent_service.agent.ainvoke.call_args[0][0]
@@ -138,11 +139,12 @@ def test_openai_provider_configuration(mock_settings):
     mock_settings.chat_provider = "openai"
 
     with patch("runestone.agent.service.ChatOpenAI") as mock_chat_openai:
-        with patch("runestone.agent.service.create_react_agent"):
+        with patch("runestone.agent.service.create_agent"):
             AgentService(mock_settings)
 
             # Verify ChatOpenAI was called with correct parameters
             call_kwargs = mock_chat_openai.call_args[1]
             assert call_kwargs["model"] == "test-model"
-            assert call_kwargs["openai_api_key"] == "test-openai-key"
-            assert call_kwargs["openai_api_base"] is None  # No custom base for OpenAI
+            # The implementation uses api_key parameter, not openai_api_key
+            assert call_kwargs["api_key"] is not None
+            assert call_kwargs.get("base_url") is None  # No custom base for OpenAI

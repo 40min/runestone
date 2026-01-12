@@ -3,11 +3,26 @@ Tool definitions for the agent using LangChain's @tool decorator.
 """
 
 import json
-from typing import Annotated, Any, Literal
+import logging
+from dataclasses import dataclass
+from typing import Any, Literal
 
-from langchain_core.tools import InjectedToolArg, tool
+from langchain.tools import ToolRuntime
+from langchain_core.tools import tool
 
+from runestone.db.models import User
 from runestone.utils.merge import deep_merge
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class AgentContext:
+    """Context passed to agent tools at runtime."""
+
+    user: User
+    # we can't use DI of FastAPI here, so had to put the service to context
+    user_service: Any
 
 
 @tool
@@ -15,8 +30,7 @@ def update_memory(
     category: Literal["personal_info", "areas_to_improve", "knowledge_strengths"],
     operation: Literal["merge", "replace"],
     data: dict,
-    user: Annotated[Any, InjectedToolArg],
-    user_service: Annotated[Any, InjectedToolArg],
+    runtime: ToolRuntime[AgentContext],
 ) -> str:
     """
     Update the student's memory profile with new information.
@@ -30,10 +44,14 @@ def update_memory(
         category: Which memory category to update
         operation: 'merge' to add/update keys, 'replace' to overwrite entirely
         data: JSON data to store (use descriptive keys like 'grammar_struggles')
+        runtime: Tool runtime context containing user and user_service
 
     Returns:
         Confirmation message
     """
+    user = runtime.context.user
+    user_service = runtime.context.user_service
+
     try:
         final_data = data
         if operation == "merge":
@@ -46,4 +64,5 @@ def update_memory(
         user_service.update_user_memory(user, category, final_data)
         return f"Successfully updated {category}."
     except Exception as e:
+        logger.error(f"Error updating memory for user {user.id}: {e}")
         return f"Error updating memory: {str(e)}"

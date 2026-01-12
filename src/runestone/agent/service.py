@@ -7,17 +7,21 @@ using LangChain's ReAct agent pattern.
 
 import json
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
+from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
-from langgraph.prebuilt import create_react_agent
+from pydantic import SecretStr
 
 from runestone.agent.prompts import load_persona
 from runestone.agent.schemas import ChatMessage
-from runestone.agent.tools import update_memory
+from runestone.agent.tools import AgentContext, update_memory
 from runestone.config import Settings
+
+if TYPE_CHECKING:
+    from runestone.db.models import User  # noqa: F401
+    from runestone.services.user_service import UserService  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +71,8 @@ class AgentService:
 
         chat_model = ChatOpenAI(
             model=settings.chat_model,
-            openai_api_key=api_key,
-            openai_api_base=api_base,
+            api_key=SecretStr(api_key) if api_key else None,
+            base_url=api_base,
             temperature=0.7,
         )
 
@@ -89,11 +93,11 @@ Use 'merge' operation to add/update specific keys without losing existing data.
 Use 'replace' operation only when you want to completely overwrite a category.
 """
 
-        # Create the ReAct agent
-        agent = create_react_agent(
+        agent = create_agent(
             model=chat_model,
             tools=tools,
-            prompt=system_prompt,
+            system_prompt=system_prompt,
+            context_schema=AgentContext,
         )
 
         return agent
@@ -145,22 +149,14 @@ Use 'replace' operation only when you want to completely overwrite a category.
         messages.append(HumanMessage(content=message))
 
         try:
-            # Invoke the agent with tool injection config
             result = await self.agent.ainvoke(
                 {"messages": messages},
-                config=RunnableConfig(
-                    configurable={
-                        "user": user,
-                        "user_service": user_service,
-                    }
-                ),
+                context=AgentContext(user=user, user_service=user_service),
             )
 
-            # Extract final response from agent result
             final_messages = result.get("messages", [])
             for msg in reversed(final_messages):
                 if hasattr(msg, "content") and msg.content:
-                    # Skip tool messages (ToolMessage or messages with tool_calls but no content)
                     if hasattr(msg, "tool_call_id") or (hasattr(msg, "tool_calls") and msg.tool_calls):
                         continue
                     return msg.content
