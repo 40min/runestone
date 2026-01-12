@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useAuth as useAuthContext } from "../context/AuthContext";
 import { useApi } from "../utils/api";
 import type { UserData } from "../types/auth";
@@ -41,106 +41,118 @@ export const useAuthActions = (): UseAuthActionsReturn => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const login = async (credentials: LoginCredentials) => {
-    setLoading(true);
-    setError(null);
+  const login = useCallback(
+    async (credentials: LoginCredentials) => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      const data = await post<{ access_token: string }>(
-        "/api/auth/",
-        credentials
-      );
+      try {
+        const data = await post<{ access_token: string }>(
+          "/api/auth/",
+          credentials
+        );
 
-      // Get fresh user data with the new token using explicit token override
-      const userData = await get<UserData>("/api/me", {
-        token: data.access_token,
-      });
+        // Get fresh user data with the new token using explicit token override
+        const userData = await get<UserData>("/api/me", {
+          token: data.access_token,
+        });
 
-      contextLogin(data.access_token, userData);
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "An error occurred";
-      setError(errorMessage);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const register = async (data: RegisterData) => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      await post("/api/auth/register", data);
-      await login({ email: data.email, password: data.password });
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "An error occurred";
-      setError(errorMessage);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateProfile = async (updates: UpdateProfileData) => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const updatedUserData = await put<UserData>("/api/me", updates);
-
-      const currentToken = localStorage.getItem("runestone_token");
-      if (currentToken) {
-        contextLogin(currentToken, updatedUserData);
+        contextLogin(data.access_token, userData);
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "An error occurred";
+        setError(errorMessage);
+        throw err;
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "An error occurred";
-      setError(errorMessage);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [post, get, contextLogin]
+  );
 
-  const clearMemory = async (category?: string) => {
-    setLoading(true);
-    try {
-      const url = category
-        ? `/api/me/memory?category=${category}`
-        : `/api/me/memory`;
+  const register = useCallback(
+    async (data: RegisterData) => {
+      setLoading(true);
+      setError(null);
 
-      await apiDelete(url);
-
-      // Refresh user data
-      const updatedUserData = await get<UserData>("/api/me");
-      const currentToken = localStorage.getItem("runestone_token");
-      if (currentToken) {
-        contextLogin(currentToken, updatedUserData);
+      try {
+        await post("/api/auth/register", data);
+        await login({ email: data.email, password: data.password });
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "An error occurred";
+        setError(errorMessage);
+        throw err;
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to clear memory";
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [post, login]
+  );
 
-  const logout = () => {
+  const updateProfile = useCallback(
+    async (updates: UpdateProfileData) => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const updatedUserData = await put<UserData>("/api/me", updates);
+
+        const currentToken = localStorage.getItem("runestone_token");
+        if (currentToken) {
+          contextLogin(currentToken, updatedUserData);
+        }
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "An error occurred";
+        setError(errorMessage);
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [put, contextLogin]
+  );
+
+  const clearMemory = useCallback(
+    async (category?: string) => {
+      setLoading(true);
+      try {
+        const url = category
+          ? `/api/me/memory?category=${category}`
+          : `/api/me/memory`;
+
+        await apiDelete(url);
+
+        // Refresh user data
+        const updatedUserData = await get<UserData>("/api/me");
+        const currentToken = localStorage.getItem("runestone_token");
+        if (currentToken) {
+          contextLogin(currentToken, updatedUserData);
+        }
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to clear memory";
+        setError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [apiDelete, get, contextLogin]
+  );
+
+  const logout = useCallback(() => {
     contextLogout();
-  };
+  }, [contextLogout]);
 
-  const refreshUserData = async (): Promise<void> => {
+  const refreshUserData = useCallback(async (): Promise<void> => {
     try {
       const freshUserData = await get<UserData>("/api/me");
       contextUpdateUserData(freshUserData);
     } catch (error) {
       console.error("Failed to refresh user data:", error);
     }
-  };
+  }, [get, contextUpdateUserData]);
 
   return {
     login,

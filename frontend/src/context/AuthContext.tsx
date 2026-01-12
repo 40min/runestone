@@ -3,6 +3,7 @@ import React, {
   useState,
   useEffect,
   useContext,
+  useCallback,
   type ReactNode,
 } from "react";
 
@@ -50,33 +51,33 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, []);
 
-  const login = (newToken: string, newUserData: UserData) => {
+  const login = useCallback((newToken: string, newUserData: UserData) => {
     setToken(newToken);
     setUserData(newUserData);
 
     // Store in localStorage
     localStorage.setItem("runestone_token", newToken);
     localStorage.setItem("runestone_user_data", JSON.stringify(newUserData));
-  };
+  }, []);
 
   // Logout function
-  const logout = () => {
+  const logout = useCallback(() => {
     setToken(null);
     setUserData(null);
 
     // Clear localStorage
     localStorage.removeItem("runestone_token");
     localStorage.removeItem("runestone_user_data");
-  };
+  }, []);
 
-  const isAuthenticated = (): boolean => {
+  const isAuthenticated = useCallback((): boolean => {
     return token !== null && userData !== null;
-  };
+  }, [token, userData]);
 
-  const updateUserData = (newUserData: UserData): void => {
+  const updateUserData = useCallback((newUserData: UserData): void => {
     setUserData(newUserData);
     localStorage.setItem("runestone_user_data", JSON.stringify(newUserData));
-  };
+  }, []);
 
   const value: AuthContextType = {
     token,
