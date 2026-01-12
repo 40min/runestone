@@ -82,13 +82,13 @@ const MemoryField: React.FC<MemoryFieldProps> = ({
             <IconButton onClick={handleSave} disabled={loading} color="primary">
               <SaveIcon />
             </IconButton>
-            <IconButton onClick={handleCancel} disabled={loading}>
+            <IconButton onClick={handleCancel} disabled={loading} sx={{ color: "white" }}>
               <CloseIcon />
             </IconButton>
           </>
         ) : (
           <>
-            <IconButton onClick={handleEdit} disabled={loading}>
+            <IconButton onClick={handleEdit} disabled={loading} sx={{ color: "white" }}>
               <EditIcon />
             </IconButton>
             <IconButton
@@ -121,14 +121,30 @@ const MemoryField: React.FC<MemoryFieldProps> = ({
       ) : (
         <Paper
           variant="outlined"
-          sx={{ p: 2, bgcolor: "background.default", minHeight: "80px" }}
+          sx={{
+            p: 2,
+            backgroundColor: "rgba(255, 255, 255, 0.03)",
+            borderColor: "rgba(255, 255, 255, 0.2)",
+            color: "white",
+            minHeight: "80px",
+          }}
         >
           {data && Object.keys(data).length > 0 ? (
-            <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: "0.875rem" }}>
+            <pre
+              style={{
+                margin: 0,
+                whiteSpace: "pre-wrap",
+                fontSize: "0.875rem",
+                color: "rgba(255, 255, 255, 0.9)",
+              }}
+            >
               {JSON.stringify(data, null, 2)}
             </pre>
           ) : (
-            <Typography variant="body2" color="text.secondary" fontStyle="italic">
+            <Typography
+              variant="body2"
+              sx={{ color: "rgba(255, 255, 255, 0.5)", fontStyle: "italic" }}
+            >
               No memory stored for this category yet.
             </Typography>
           )}
@@ -163,14 +179,34 @@ export const MemorySection: React.FC<MemorySectionProps> = ({ userData }) => {
   };
 
   return (
-    <Accordion defaultExpanded>
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Typography variant="h6">Björn's Memory</Typography>
+    <Accordion
+      sx={{
+        backgroundColor: "rgba(255, 255, 255, 0.05)",
+        backgroundImage: "none",
+        color: "white",
+        borderRadius: "8px !important",
+        border: "1px solid rgba(255, 255, 255, 0.1)",
+        "&:before": {
+          display: "none",
+        },
+      }}
+    >
+      <AccordionSummary
+        expandIcon={<ExpandMoreIcon sx={{ color: "white" }} />}
+        sx={{
+          "& .MuiAccordionSummary-content": {
+            my: 1,
+          },
+        }}
+      >
+        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+          Björn's Memory
+        </Typography>
       </AccordionSummary>
-      <AccordionDetails>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          This is what the AI agent remembers about you to personalize your learning.
-          You can edit or clear this information at any time.
+      <AccordionDetails sx={{ pt: 0 }}>
+        <Typography variant="body2" sx={{ mb: 3, color: "rgba(255, 255, 255, 0.6)" }}>
+          This is what the AI agent remembers about you to personalize your
+          learning. You can edit or clear this information at any time.
         </Typography>
 
         <MemoryField
