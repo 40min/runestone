@@ -163,6 +163,7 @@ class UserProfileResponse(BaseModel):
     email: str
     name: str
     surname: Optional[str] = None
+    mother_tongue: Optional[str] = None
     timezone: str
     pages_recognised_count: int
     words_in_learn_count: int
@@ -181,6 +182,7 @@ class UserProfileUpdate(BaseModel):
 
     name: Optional[str] = None
     surname: Optional[str] = None
+    mother_tongue: Optional[str] = None
     timezone: Optional[str] = None
     password: Optional[str] = None
     email: Optional[str] = None

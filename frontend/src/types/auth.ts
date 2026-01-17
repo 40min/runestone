@@ -4,6 +4,7 @@ export interface UserData {
   email: string;
   name: string | null;
   surname: string | null;
+  mother_tongue?: string | null;
   timezone: string | null;
   pages_recognised_count: number;
   words_in_learn_count?: number;

@@ -6,14 +6,24 @@ import { useAuthActions } from "../../hooks/useAuth";
 import { ErrorAlert } from "../ui";
 import AuthButton from "./AuthButton";
 import AuthTextField from "./AuthTextField";
+import LanguageAutocomplete from "./LanguageAutocomplete";
 import { MemorySection } from "./MemorySection";
 
 const Profile: React.FC = () => {
   const { userData } = useAuth();
   const { updateProfile, refreshUserData, loading } = useAuthActions();
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    surname: string;
+    mother_tongue: string;
+    timezone: string;
+    password: string;
+    confirmPassword: string;
+    email: string;
+  }>({
     name: "",
     surname: "",
+    mother_tongue: "",
     timezone: "UTC",
     password: "",
     confirmPassword: "",
@@ -34,6 +44,7 @@ const Profile: React.FC = () => {
       setFormData({
         name: userData.name || "",
         surname: userData.surname || "",
+        mother_tongue: userData.mother_tongue || "",
         timezone: userData.timezone || "UTC",
         password: "",
         confirmPassword: "",
@@ -70,6 +81,7 @@ const Profile: React.FC = () => {
       const updateData: Record<string, string | null> = {
         name: formData.name || null,
         surname: formData.surname || null,
+        mother_tongue: formData.mother_tongue || null,
         timezone: formData.timezone,
       };
 
@@ -175,6 +187,12 @@ const Profile: React.FC = () => {
         name="surname"
         value={formData.surname}
         onChange={(e) => handleChange("surname", e.target.value)}
+      />
+
+      <LanguageAutocomplete
+        label="Preferred Language (Mother Tongue)"
+        value={formData.mother_tongue || ""}
+        onChange={(value) => handleChange("mother_tongue", value)}
       />
 
       <AuthTextField

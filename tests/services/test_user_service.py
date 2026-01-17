@@ -248,3 +248,18 @@ class TestUserService:
         user_service.clear_user_memory(user, "personal_info")
 
         mock_user_repo.clear_user_memory.assert_called_once_with(user.id, "personal_info")
+
+    def test_update_user_profile_mother_tongue(self, user_service, mock_user_repo, mock_vocab_repo, user):
+        """Test updating mother tongue."""
+        from runestone.api.schemas import UserProfileUpdate
+
+        # Mock update to return updated user
+        mock_user_repo.update.return_value = user
+
+        # Test updating mother tongue
+        update_data = UserProfileUpdate(mother_tongue="Spanish")
+        user_service.update_user_profile(user, update_data)
+
+        # Verify user attribute was updated
+        assert user.mother_tongue == "Spanish"
+        mock_user_repo.update.assert_called()

@@ -82,6 +82,7 @@ class UserService:
             email=user.email,
             name=user.name,
             surname=user.surname,
+            mother_tongue=user.mother_tongue,
             timezone=user.timezone,
             pages_recognised_count=user.pages_recognised_count,
             words_in_learn_count=words_in_learn_count,

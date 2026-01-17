@@ -52,7 +52,9 @@ def mock_user_service():
 
 @pytest.fixture
 def mock_user():
-    return MagicMock()
+    user = MagicMock()
+    user.mother_tongue = None
+    return user
 
 
 def test_build_agent(mock_settings, mock_chat_model, mock_user_service):
@@ -132,6 +134,24 @@ async def test_generate_response_with_memory(agent_service, mock_user_service, m
     assert isinstance(messages[0], SystemMessage)
     assert "STUDENT MEMORY" in messages[0].content
     assert "Alice" in messages[0].content
+
+
+@pytest.mark.anyio
+async def test_generate_response_with_mother_tongue(agent_service, mock_user_service, mock_user):
+    """Test generate_response injects mother tongue context."""
+    mock_user.mother_tongue = "Spanish"
+
+    agent_service.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
+
+    await agent_service.generate_response("msg", [], mock_user, mock_user_service)
+
+    invoke_args = agent_service.agent.ainvoke.call_args[0][0]
+    messages = invoke_args["messages"]
+
+    # We expect the mother tongue system message to be present
+    # Depending on implementation, it might be the only system message or one of them.
+    # Based on code: if no memory_context, only this system message.
+    assert any(isinstance(m, SystemMessage) and "Spanish" in m.content for m in messages)
 
 
 def test_openai_provider_configuration(mock_settings, mock_user_service):
