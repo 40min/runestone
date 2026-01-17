@@ -137,8 +137,10 @@ Use 'replace' operation only when you want to completely overwrite a category.
 
         # Add user's mother tongue if available
         if user.mother_tongue:
-            language_msg = f"STUDENT'S MOTHER TONGUE: {user.mother_tongue}\n\nTake this "
-            +"into account when explaining concepts, specially for vocabulary and grammar."
+            language_msg = (
+                f"STUDENT'S MOTHER TONGUE: {user.mother_tongue}\n\nTake this "
+                "into account when explaining concepts, specially for vocabulary and grammar."
+            )
             messages.append(SystemMessage(content=language_msg))
 
         # Add conversation history
