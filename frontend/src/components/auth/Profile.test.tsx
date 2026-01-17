@@ -49,6 +49,7 @@ describe("Profile", () => {
     email: "test@example.com",
     name: "Test",
     surname: "User",
+    mother_tongue: "English",
     timezone: "UTC",
     pages_recognised_count: 10,
     words_in_learn_count: 25,
@@ -99,6 +100,7 @@ describe("Profile", () => {
 
     expect(screen.getByDisplayValue("Test")).toBeInTheDocument(); // name
     expect(screen.getByDisplayValue("User")).toBeInTheDocument(); // surname
+    expect(screen.getByDisplayValue("English")).toBeInTheDocument(); // mother_tongue
     expect(screen.getByDisplayValue("UTC")).toBeInTheDocument(); // timezone
   });
 
@@ -309,6 +311,30 @@ describe("Profile", () => {
 
     await userEvent.clear(timezoneInput);
     await userEvent.type(timezoneInput, "America/New_York");
+    await userEvent.click(updateButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("Profile updated successfully!")).toBeInTheDocument();
+    });
+  });
+
+  it("handles mother tongue selection", async () => {
+    const updatedUserData = {
+      ...mockUserData,
+      mother_tongue: "Swedish",
+    };
+
+    setupAuthActionsMock({
+      updateProfile: createMockUpdateProfile(updatedUserData),
+    });
+
+    render(<Profile />, { wrapper });
+
+    const languageInput = screen.getByLabelText("Preferred Language (Mother Tongue)");
+    const updateButton = screen.getByRole("button", { name: "Update Profile" });
+
+    await userEvent.clear(languageInput);
+    await userEvent.type(languageInput, "Swedish");
     await userEvent.click(updateButton);
 
     await waitFor(() => {

@@ -6,6 +6,7 @@ import { useAuthActions } from "../../hooks/useAuth";
 import { ErrorAlert } from "../ui";
 import AuthButton from "./AuthButton";
 import AuthTextField from "./AuthTextField";
+import LanguageAutocomplete from "./LanguageAutocomplete";
 import { MemorySection } from "./MemorySection";
 
 const Profile: React.FC = () => {
@@ -188,11 +189,10 @@ const Profile: React.FC = () => {
         onChange={(e) => handleChange("surname", e.target.value)}
       />
 
-      <AuthTextField
+      <LanguageAutocomplete
         label="Preferred Language (Mother Tongue)"
-        name="mother_tongue"
         value={formData.mother_tongue || ""}
-        onChange={(e) => handleChange("mother_tongue", e.target.value)}
+        onChange={(value) => handleChange("mother_tongue", value)}
       />
 
       <AuthTextField
