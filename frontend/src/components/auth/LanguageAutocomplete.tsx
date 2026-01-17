@@ -63,14 +63,8 @@ const LanguageAutocomplete: React.FC<LanguageAutocompleteProps> = ({
     <Autocomplete
       options={LANGUAGES}
       value={value || null}
-      onChange={(_event, newValue) => {
-        onChange(newValue || "");
-      }}
       onInputChange={(_event, newInputValue) => {
-        // Allow typing custom values if not in list
-        if (!LANGUAGES.includes(newInputValue)) {
-            onChange(newInputValue);
-        }
+        onChange(newInputValue || "");
       }}
       freeSolo
       renderInput={(params) => (
