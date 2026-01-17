@@ -127,6 +127,15 @@ Use 'replace' operation only when you want to completely overwrite a category.
         # Build conversation messages
         messages = []
 
+        # Add user's mother tongue if available
+        if user.mother_tongue:
+            language_msg = (
+                f"[IMPORTANT] STUDENT'S MOTHER TONGUE: {user.mother_tongue}\n\n"
+                "Respond only in the student's mother tongue. "
+                "Use this information to personalize your teaching."
+            )
+            messages.append(SystemMessage(content=language_msg))
+
         # Add memory context as initial system message if available
         if memory_context:
             active_memory = {k: v for k, v in memory_context.items() if v}
@@ -134,14 +143,6 @@ Use 'replace' operation only when you want to completely overwrite a category.
                 memory_str = json.dumps(active_memory, indent=2)
                 memory_msg = f"STUDENT MEMORY:\n{memory_str}\n\nUse this information to personalize your teaching."
                 messages.append(SystemMessage(content=memory_msg))
-
-        # Add user's mother tongue if available
-        if user.mother_tongue:
-            language_msg = (
-                f"STUDENT'S MOTHER TONGUE: {user.mother_tongue}\n\nTake this "
-                "into account when explaining concepts, specially for vocabulary and grammar."
-            )
-            messages.append(SystemMessage(content=language_msg))
 
         # Add conversation history
         truncated_history = history[-self.MAX_HISTORY_MESSAGES :] if history else []
