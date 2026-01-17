@@ -23,6 +23,7 @@ class User(Base):
     surname = Column(String, nullable=True)
     timezone = Column(String, default="UTC", nullable=False)
     pages_recognised_count = Column(Integer, default=0, nullable=False)
+    mother_tongue = Column(String, nullable=True)  # User's preferred language
     # Agent memory fields (stored as JSON strings)
     personal_info = Column(Text, nullable=True)  # Student identity, preferences, goals
     areas_to_improve = Column(Text, nullable=True)  # Recurring struggles and error patterns
