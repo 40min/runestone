@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box } from '@mui/material';
 import { Send } from 'lucide-react';
 import {
   CustomButton,
@@ -9,10 +9,10 @@ import {
   ChatLoadingIndicator,
   ChatInput,
   ChatContainer,
-  NewChatButton,
   ImageUploadButton,
 } from './ui';
 import { ImageSidebar } from './chat/ImageSidebar';
+import { ChatHeader } from './chat/ChatHeader';
 import { useChat } from '../hooks/useChat';
 import { useChatImageUpload } from '../hooks/useChatImageUpload';
 
@@ -91,43 +91,13 @@ const ChatView: React.FC = () => {
         }}
       >
       {/* Header */}
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
-          justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          mb: { xs: 2, md: 2 },
-          gap: 2,
-        }}
-      >
-        <Box>
-          <Typography
-            variant="h5"
-            sx={{
-              color: 'white',
-              fontWeight: 'bold',
-              mb: 0.5,
-              fontSize: { xs: '1.25rem', md: '1.5rem' },
-            }}
-          >
-            Chat with Your Swedish Teacher
-          </Typography>
-          <Typography
-            sx={{
-              color: '#9ca3af',
-              fontSize: { xs: '0.75rem', md: '0.875rem' },
-            }}
-          >
-            Ask questions about Swedish vocabulary, grammar, or practice conversation
-          </Typography>
-        </Box>
-        <NewChatButton
-          onClick={startNewChat}
-          isLoading={isLoading}
-          hasMessages={messages.length > 0}
-        />
-      </Box>
+      <ChatHeader
+        title="Chat with Your Swedish Teacher"
+        subtitle="Ask questions about Swedish vocabulary, grammar, or practice conversation"
+        onNewChat={startNewChat}
+        isLoading={isLoading}
+        hasMessages={messages.length > 0}
+      />
 
       {/* Messages Container */}
       <ChatContainer ref={scrollContainerRef}>
