@@ -10,6 +10,10 @@ global.fetch = mockFetch;
 // Mock scrollIntoView
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
+// Mock URL.createObjectURL and crypto.randomUUID
+global.URL.createObjectURL = vi.fn(() => 'blob:test-image-url');
+global.crypto.randomUUID = vi.fn(() => 'test-uuid');
+
 // Mock localStorage
 const mockLocalStorage = {
   getItem: vi.fn((key) => {
@@ -60,9 +64,24 @@ const getSendButton = () => {
 };
 
 describe('ChatView', () => {
+  const resetLocalStorage = () => {
+    mockLocalStorage.getItem.mockImplementation((key) => {
+      if (key === 'runestone_token') return 'test-token';
+      if (key === 'runestone_user_data') {
+        return JSON.stringify({
+          id: '1',
+          email: 'test@example.com',
+          username: 'testuser',
+        });
+      }
+      return null;
+    });
+  };
+
   beforeEach(() => {
     mockFetch.mockClear();
-    mockLocalStorage.getItem.mockClear();
+    vi.clearAllMocks();
+    resetLocalStorage();
     setupMockFetch();
   });
 
@@ -216,7 +235,7 @@ describe('ChatView', () => {
 
     // Check for loading indicator
     await waitFor(() => {
-      expect(screen.getByText('Teacher is typing...')).toBeInTheDocument();
+      expect(screen.getByText('Teacher is thinking...')).toBeInTheDocument();
     });
 
     // Resolve the promise to clean up
@@ -279,6 +298,286 @@ describe('ChatView', () => {
 
     await waitFor(() => {
       expect(input.value).toBe('');
+    });
+  });
+
+  it('clears uploaded images when starting a new chat', async () => {
+    // Setup mock to return existing chat history so the "New Chat" button is enabled
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/api/chat/history')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              messages: [{ id: '1', role: 'user', content: 'hello' }],
+            }),
+        });
+      }
+      if (url.includes('/api/chat/image')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ message: 'Translation for image' }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      });
+    });
+
+    const { container } = render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    // Wait for initial history fetch
+    await waitFor(() => {
+      expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
+    });
+
+    // 1. Upload an image
+    const file = new File(['(⌐□_□)'], 'chucknorris.png', { type: 'image/png' });
+    const fileInput = container.querySelector('input[type="file"]');
+    expect(fileInput).toBeInTheDocument();
+
+    if (fileInput) {
+      fireEvent.change(fileInput, { target: { files: [file] } });
+    }
+
+    // 2. Verifies the image is shown
+    await waitFor(() => {
+      expect(screen.getByAltText('Uploaded')).toBeInTheDocument();
+    });
+
+    // 3. Ensure button is enabled (since we mocked history to have messages)
+    await waitFor(() => {
+      const button = screen.getByRole('button', { name: /Start New Chat/i });
+      expect(button).not.toBeDisabled();
+    });
+
+    // 4. Click "Start New Chat"
+    const newChatButton = screen.getByRole('button', { name: /Start New Chat/i });
+    fireEvent.click(newChatButton);
+
+    // 5. Verifies the image is removed
+    await waitFor(() => {
+      expect(screen.queryByAltText('Uploaded')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows processing indicator when uploading an image', async () => {
+    let resolvePromise: (value: Response | PromiseLike<Response>) => void;
+    let uploadPromise: Promise<Response>; // Declare uploadPromise here
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/api/chat/history')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ messages: [] }),
+        });
+      }
+      if (url.includes('/api/chat/image')) {
+        uploadPromise = new Promise((resolve) => {
+          resolvePromise = resolve;
+        });
+        return uploadPromise;
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+
+    const { container } = render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    // Wait for initial history fetch
+    await waitFor(() => {
+      expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
+    });
+
+    const file = new File(['(⌐□_□)'], 'test.png', { type: 'image/png' });
+    const fileInput = container.querySelector('input[type="file"]');
+
+    if (fileInput) {
+      fireEvent.change(fileInput, { target: { files: [file] } });
+    }
+
+    // Check for processing indicator
+    await waitFor(() => {
+      expect(screen.getByText('Analyzing image...')).toBeInTheDocument();
+    });
+
+    // Resolve the promise to clean up
+    await act(async () => {
+      resolvePromise!({
+        ok: true,
+        json: async () => ({ message: 'Translation' }),
+      } as Response);
+    });
+    await uploadPromise; // Wait for the mock fetch promise to fully resolve
+
+    // After resolution, the loading indicator should be gone
+    await waitFor(() => {
+      expect(screen.queryByText('Analyzing image...')).not.toBeInTheDocument();
+    });
+  });
+
+  it('displays upload error message', async () => {
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/api/chat/history')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ messages: [] }),
+        });
+      }
+      if (url.includes('/api/chat/image')) {
+        return Promise.reject(new Error('Upload failed'));
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+
+    const { container } = render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    // Wait for initial history fetch
+    await waitFor(() => {
+      expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
+    });
+
+    const file = new File(['test'], 'test.png', { type: 'image/png' });
+    const fileInput = container.querySelector('input[type="file"]');
+
+    if (fileInput) {
+      fireEvent.change(fileInput, { target: { files: [file] } });
+    }
+
+    // Wait for error message to appear
+    await waitFor(() => {
+      expect(screen.getByText('Upload failed')).toBeInTheDocument();
+    });
+  });
+
+  it('displays images in sidebar after upload', async () => {
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/api/chat/history')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ messages: [] }),
+        });
+      }
+      if (url.includes('/api/chat/image')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ message: 'Translation' }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+
+    const { container } = render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    // Wait for initial history fetch
+    await waitFor(() => {
+      expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
+    });
+
+    const file = new File(['test'], 'test.png', { type: 'image/png' });
+    const fileInput = container.querySelector('input[type="file"]');
+
+    if (fileInput) {
+      fireEvent.change(fileInput, { target: { files: [file] } });
+    }
+
+    // Wait for image to appear in sidebar
+    await waitFor(() => {
+      expect(screen.getByAltText('Uploaded')).toBeInTheDocument();
+    });
+  });
+
+  it('disables inputs during image upload', async () => {
+    let resolvePromise: (value: Response | PromiseLike<Response>) => void;
+    let uploadPromise: Promise<Response>; // Declare uploadPromise here
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/api/chat/history')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ messages: [] }),
+        });
+      }
+      if (url.includes('/api/chat/image')) {
+        uploadPromise = new Promise((resolve) => {
+          resolvePromise = resolve;
+        });
+        return uploadPromise;
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+
+    const { container } = render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    // Wait for initial history fetch
+    await waitFor(() => {
+      expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
+    });
+
+    const input = screen.getByPlaceholderText('Type your message...') as HTMLInputElement;
+    const sendButton = getSendButton();
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+
+    // Type a message to enable send button
+    fireEvent.change(input, { target: { value: 'Test message' } });
+    expect(sendButton).not.toBeDisabled();
+
+    // Start upload
+    const file = new File(['test'], 'test.png', { type: 'image/png' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    // Wait for upload to start
+    await waitFor(() => {
+      expect(screen.getByText('Analyzing image...')).toBeInTheDocument();
+    });
+
+    // All inputs should be disabled during upload
+    expect(input).toBeDisabled();
+    expect(sendButton).toBeDisabled();
+    expect(fileInput).toBeDisabled();
+
+    // Resolve the upload
+    await act(async () => {
+      resolvePromise!({
+        ok: true,
+        json: async () => ({ message: 'Translation' }),
+      } as Response);
+    });
+
+    await uploadPromise; // Inputs should be enabled again
+    await waitFor(() => {
+      expect(input).not.toBeDisabled();
+      expect(fileInput).not.toBeDisabled();
     });
   });
 });

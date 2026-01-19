@@ -61,10 +61,15 @@ const makeRequest = async <T>(
   // Use explicit token if provided, otherwise fall back to context token
   const authToken = options.token ?? contextToken;
 
+  const isFormData = options.body instanceof FormData;
+
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...options.headers,
   };
+
+  if (!isFormData) {
+    headers["Content-Type"] = "application/json";
+  }
 
   if (authToken) {
     headers["Authorization"] = `Bearer ${authToken}`;
@@ -77,7 +82,9 @@ const makeRequest = async <T>(
 
   // Add body if provided and not GET method
   if (options.body && options.method !== "GET") {
-    requestOptions.body = JSON.stringify(options.body);
+    requestOptions.body = isFormData
+      ? (options.body as FormData)
+      : JSON.stringify(options.body);
   }
 
   const response = await fetch(url, requestOptions);

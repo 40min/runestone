@@ -36,12 +36,23 @@ def mock_user_service():
 
 
 @pytest.fixture
-def chat_service(db_session, mock_agent_service, mock_user_service):
+def mock_processor():
+    """Create a mock RunestoneProcessor."""
+    mock = Mock()
+    # Default behavior for successful OCR
+    mock_ocr_result = Mock()
+    mock_ocr_result.transcribed_text = "Hej världen"
+    mock.run_ocr.return_value = mock_ocr_result
+    return mock
+
+
+@pytest.fixture
+def chat_service(db_session, mock_agent_service, mock_user_service, mock_processor):
     """Create a ChatService instance with real repository and mock agent/user services."""
     repository = ChatRepository(db_session)
     mock_settings = Mock()
     mock_settings.chat_history_retention_days = 7
-    return ChatService(mock_settings, repository, mock_user_service, mock_agent_service)
+    return ChatService(mock_settings, repository, mock_user_service, mock_agent_service, mock_processor)
 
 
 @pytest.mark.anyio
@@ -97,6 +108,83 @@ async def test_process_message_with_history(chat_service, db_with_test_user, moc
     assert len(history) == 2
     assert history[0].content == "Message 1"
     assert history[1].content == "Björn's reply"
+
+
+@pytest.mark.anyio
+async def test_process_image_message_success(
+    chat_service, db_with_test_user, mock_agent_service, mock_user_service, mock_processor
+):
+    """Test successful image processing."""
+    db, user = db_with_test_user
+    mock_user_service.get_user_by_id.return_value = user
+
+    # Configure processor mock for this test
+    ocr_result = Mock()
+    ocr_result.transcribed_text = "Hej. Hur mår du?"
+    mock_processor.run_ocr.return_value = ocr_result
+
+    # Process image
+    response = await chat_service.process_image_message(user.id, b"fake_image_bytes")
+
+    assert response == "Björn's reply"
+
+    # Verify processor called
+    mock_processor.run_ocr.assert_called_once_with(b"fake_image_bytes")
+
+    # Verify agent call includes OCR text in prompt
+    mock_agent_service.generate_response.assert_called_once()
+    kwargs = mock_agent_service.generate_response.call_args.kwargs
+    assert "Hej. Hur mår du?" in kwargs["message"]
+
+    # Verify history persistence (only assistant message for images)
+    history = chat_service.get_history(user.id)
+    assert len(history) == 1
+    assert history[0].role == "assistant"
+    assert history[0].content == "Björn's reply"
+
+
+@pytest.mark.anyio
+async def test_process_image_message_ocr_failure(chat_service, db_with_test_user, mock_processor):
+    """Test handling of empty OCR results."""
+    db, user = db_with_test_user
+    from runestone.core.exceptions import RunestoneError
+
+    # Configure processor to return empty text
+    ocr_result = Mock()
+    ocr_result.transcribed_text = ""
+    mock_processor.run_ocr.return_value = ocr_result
+
+    with pytest.raises(RunestoneError, match="Could not recognize text"):
+        await chat_service.process_image_message(user.id, b"fake_image_bytes")
+
+
+@pytest.mark.anyio
+async def test_process_image_message_uses_mother_tongue(
+    chat_service, db_with_test_user, mock_agent_service, mock_user_service, mock_processor
+):
+    """Test that translation prompt uses user's mother tongue."""
+    db, user = db_with_test_user
+
+    # Set user's mother tongue
+    user.mother_tongue = "Spanish"
+    mock_user_service.get_user_by_id.return_value = user
+
+    # Configure processor mock
+    ocr_result = Mock()
+    ocr_result.transcribed_text = "Hej världen"
+    mock_processor.run_ocr.return_value = ocr_result
+
+    # Process image
+    await chat_service.process_image_message(user.id, b"fake_image_bytes")
+
+    # Verify agent was called with mother tongue in prompt
+    mock_agent_service.generate_response.assert_called_once()
+    kwargs = mock_agent_service.generate_response.call_args.kwargs
+    prompt = kwargs["message"]
+
+    # Verify Spanish is mentioned in the prompt
+    assert "Spanish" in prompt
+    assert "Hej världen" in prompt
 
 
 def test_clear_history(chat_service, db_with_test_user):

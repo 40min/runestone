@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     # Chat History Configuration
     chat_history_retention_days: int = 7
 
+    # Image Upload Configuration
+    chat_image_max_size_mb: int = 10
+
     class Config:
         """Pydantic configuration."""
 

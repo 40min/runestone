@@ -7,10 +7,12 @@ This module provides API endpoints for chat interactions with the teacher agent.
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 
-from runestone.agent.schemas import ChatHistoryResponse, ChatMessage, ChatRequest, ChatResponse
+from runestone.agent.schemas import ChatHistoryResponse, ChatMessage, ChatRequest, ChatResponse, ImageChatResponse
 from runestone.auth.dependencies import get_current_user
+from runestone.config import settings
+from runestone.core.exceptions import RunestoneError
 from runestone.db.models import User
 from runestone.dependencies import get_chat_service
 from runestone.services.chat_service import ChatService
@@ -63,6 +65,64 @@ async def get_history(
     except Exception as e:
         logger.error(f"Error fetching chat history: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch chat history.")
+
+
+@router.post("/image", response_model=ImageChatResponse)
+async def send_image(
+    file: Annotated[UploadFile, File(description="Image file to process")],
+    chat_service: Annotated[ChatService, Depends(get_chat_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> ImageChatResponse:
+    """
+    Upload an image with Swedish text for OCR and translation.
+
+    The endpoint performs OCR on the image and returns a phrase-by-phrase translation
+    from the teaching agent. The translation is saved to chat history.
+    """
+    # Validate file type
+    if not file.content_type or not file.content_type.startswith("image/"):
+        logger.warning(f"Invalid file type: {file.content_type}")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Please upload an image file.",
+        )
+
+    # Validate file size
+    content = await file.read()
+    file_size = len(content)
+    max_size_bytes = settings.chat_image_max_size_mb * 1024 * 1024
+
+    if file_size > max_size_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large. Maximum size is {settings.chat_image_max_size_mb}MB.",
+        )
+
+    try:
+        logger.info(f"User {current_user.email} uploaded image for OCR translation")
+
+        # Process OCR text through agent for translation
+        response_message = await chat_service.process_image_message(current_user.id, content)
+
+        logger.info(f"Generated translation response for user {current_user.email}")
+
+        return ImageChatResponse(message=response_message)
+
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except RunestoneError as e:
+        logger.error(f"OCR error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=400,
+            detail="Could not recognize text from image",
+        )
+    except Exception as e:
+        logger.error(f"Error processing image: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process image. Please try again.",
+        )
 
 
 @router.delete("/history", status_code=status.HTTP_204_NO_CONTENT)

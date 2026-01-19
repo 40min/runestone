@@ -91,3 +91,165 @@ def test_send_message_invalid_payload(client):
         json={"invalid": "field"},
     )
     assert chat_response.status_code == 422
+
+
+def test_send_image_success(client_with_mock_agent_service, db_session, monkeypatch):
+    """Test successful image upload with OCR and translation."""
+    import io
+    from unittest.mock import Mock
+
+    client, mock_agent_service = client_with_mock_agent_service
+    mock_agent_service.generate_response.return_value = (
+        "Here's the translated text: Hej (Hello). Hur mår du? (How are you?)"
+    )
+
+    # Mock the processor dependency
+    mock_processor = Mock()
+    # Create a proper OCRResult-like object
+    mock_ocr_result = Mock()
+    mock_ocr_result.transcribed_text = "Hej. Hur mår du?"
+    mock_ocr_result.character_count = 16
+    mock_processor.run_ocr.return_value = mock_ocr_result
+
+    from runestone.dependencies import get_runestone_processor
+
+    def override_processor():
+        return mock_processor
+
+    client.app.dependency_overrides[get_runestone_processor] = override_processor
+
+    # Create a fake image file
+    image_data = io.BytesIO(b"fake image content")
+    files = {"file": ("test.jpg", image_data, "image/jpeg")}
+
+    response = client.post("/api/chat/image", files=files)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "message" in data
+    assert "translated text" in data["message"].lower()
+    # mock_processor.run_ocr is called inside ChatService now, but since we mock
+    # the processor injected into ChatService, this assertion still holds.
+    mock_processor.run_ocr.assert_called_once()
+    mock_agent_service.generate_response.assert_called_once()
+
+
+def test_send_image_ocr_failure(client, monkeypatch):
+    """Test image upload when OCR returns empty text."""
+    import io
+    from unittest.mock import Mock
+
+    # Mock the processor dependency
+    mock_processor = Mock()
+    # Create a proper OCRResult-like object with empty text
+    mock_ocr_result = Mock()
+    mock_ocr_result.transcribed_text = ""
+    mock_ocr_result.character_count = 0
+    mock_processor.run_ocr.return_value = mock_ocr_result
+
+    from runestone.dependencies import get_runestone_processor
+
+    def override_processor():
+        return mock_processor
+
+    client.app.dependency_overrides[get_runestone_processor] = override_processor
+
+    # Create a fake image file
+    image_data = io.BytesIO(b"fake image content")
+    files = {"file": ("test.jpg", image_data, "image/jpeg")}
+
+    response = client.post("/api/chat/image", files=files)
+
+    assert response.status_code == 400
+    assert "Could not recognize text from image" in response.json()["detail"]
+
+
+def test_send_image_invalid_file_type(client):
+    """Test image upload with invalid file type."""
+    import io
+
+    # Create a fake non-image file
+    file_data = io.BytesIO(b"not an image")
+    files = {"file": ("test.txt", file_data, "text/plain")}
+
+    response = client.post("/api/chat/image", files=files)
+
+    assert response.status_code == 400
+    assert "Invalid file type" in response.json()["detail"]
+
+
+def test_send_image_requires_authentication(client):
+    """Test that image endpoint requires authentication."""
+    import io
+
+    from runestone.auth.dependencies import get_current_user
+
+    if get_current_user in client.app.dependency_overrides:
+        del client.app.dependency_overrides[get_current_user]
+
+    image_data = io.BytesIO(b"fake image content")
+    files = {"file": ("test.jpg", image_data, "image/jpeg")}
+
+    response = client.post("/api/chat/image", files=files)
+    assert response.status_code in (401, 403)
+
+
+def test_send_image_file_too_large(client_with_mock_agent_service):
+    """Test that files larger than configured limit are rejected."""
+    import io
+
+    from runestone.config import settings
+
+    client, _ = client_with_mock_agent_service
+
+    # Create a file larger than max size
+    large_file_size = (settings.chat_image_max_size_mb + 1) * 1024 * 1024
+    large_image_data = io.BytesIO(b"x" * large_file_size)
+    files = {"file": ("large.jpg", large_image_data, "image/jpeg")}
+
+    response = client.post("/api/chat/image", files=files)
+
+    assert response.status_code == 400
+    assert f"File too large. Maximum size is {settings.chat_image_max_size_mb}MB." in response.json()["detail"]
+
+
+def test_send_image_missing_file(client_with_mock_agent_service):
+    """Test that request without file parameter is rejected."""
+    client, _ = client_with_mock_agent_service
+
+    # Send request without files parameter
+    response = client.post("/api/chat/image")
+
+    assert response.status_code == 422  # Validation error
+
+
+def test_send_image_whitespace_only_ocr(client_with_mock_agent_service, monkeypatch):
+    """Test image upload when OCR returns only whitespace."""
+    import io
+    from unittest.mock import Mock
+
+    client, _ = client_with_mock_agent_service
+
+    # Mock the processor dependency
+    mock_processor = Mock()
+    # Create OCR result with whitespace-only text
+    mock_ocr_result = Mock()
+    mock_ocr_result.transcribed_text = "   \n\t  \n  "
+    mock_ocr_result.character_count = 10
+    mock_processor.run_ocr.return_value = mock_ocr_result
+
+    from runestone.dependencies import get_runestone_processor
+
+    def override_processor():
+        return mock_processor
+
+    client.app.dependency_overrides[get_runestone_processor] = override_processor
+
+    # Create a fake image file
+    image_data = io.BytesIO(b"fake image content")
+    files = {"file": ("test.jpg", image_data, "image/jpeg")}
+
+    response = client.post("/api/chat/image", files=files)
+
+    assert response.status_code == 400
+    assert "Could not recognize text from image" in response.json()["detail"]

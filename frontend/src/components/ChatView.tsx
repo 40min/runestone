@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box } from '@mui/material';
 import { Send } from 'lucide-react';
 import {
   CustomButton,
@@ -9,16 +9,22 @@ import {
   ChatLoadingIndicator,
   ChatInput,
   ChatContainer,
-  NewChatButton,
+  ImageUploadButton,
+  Snackbar,
 } from './ui';
+import { ImageSidebar } from './chat/ImageSidebar';
+import { ChatHeader } from './chat/ChatHeader';
 import { useChat } from '../hooks/useChat';
+import { useChatImageUpload } from '../hooks/useChatImageUpload';
 
 const ChatView: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef(0);
-  const { messages, isLoading, error, sendMessage, startNewChat } = useChat();
+  const { messages, isLoading, error, sendMessage, startNewChat, refreshHistory } = useChat();
+  const { uploadedImages, uploadImage, isUploading, error: uploadError, clearImages } = useChatImageUpload();
+  const [snackbarError, setSnackbarError] = useState<string | null>(null);
 
   // Auto-scroll to bottom only when appropriate
   useEffect(() => {
@@ -58,55 +64,51 @@ const ChatView: React.FC = () => {
     }
   };
 
+  const handleImageUpload = async (file: File) => {
+    const translationMessage = await uploadImage(file);
+    if (translationMessage) {
+      // Refresh chat history to show the new translation message
+      await refreshHistory();
+    }
+  };
+
+  const handleImageError = (message: string) => {
+    setSnackbarError(message);
+  };
+
+  const handleNewChat = async () => {
+    clearImages();
+    await startNewChat();
+  };
+
   return (
     <Box
       sx={{
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'row',
         height: { xs: 'calc(100dvh - 140px)', md: 'calc(100vh - 200px)' },
-        maxWidth: '900px',
+        maxWidth: '1100px',
         margin: '0 auto',
         backgroundColor: '#1a102b',
+        gap: 2,
       }}
     >
-      {/* Header */}
+      {/* Main chat area */}
       <Box
         sx={{
           display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
-          justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          mb: { xs: 2, md: 2 },
-          gap: 2,
+          flexDirection: 'column',
+          flex: 1,
         }}
       >
-        <Box>
-          <Typography
-            variant="h5"
-            sx={{
-              color: 'white',
-              fontWeight: 'bold',
-              mb: 0.5,
-              fontSize: { xs: '1.25rem', md: '1.5rem' },
-            }}
-          >
-            Chat with Your Swedish Teacher
-          </Typography>
-          <Typography
-            sx={{
-              color: '#9ca3af',
-              fontSize: { xs: '0.75rem', md: '0.875rem' },
-            }}
-          >
-            Ask questions about Swedish vocabulary, grammar, or practice conversation
-          </Typography>
-        </Box>
-        <NewChatButton
-          onClick={startNewChat}
-          isLoading={isLoading}
-          hasMessages={messages.length > 0}
-        />
-      </Box>
+      {/* Header */}
+      <ChatHeader
+        title="Chat with Your Swedish Teacher"
+        subtitle="Ask questions about Swedish vocabulary, grammar, or practice conversation"
+        onNewChat={handleNewChat}
+        isLoading={isLoading || isUploading}
+        hasMessages={messages.length > 0}
+      />
 
       {/* Messages Container */}
       <ChatContainer ref={scrollContainerRef}>
@@ -118,41 +120,62 @@ const ChatView: React.FC = () => {
           ))
         )}
 
-        {isLoading && <ChatLoadingIndicator />}
+        {isLoading && <ChatLoadingIndicator message="Teacher is thinking..." />}
+        {isUploading && <ChatLoadingIndicator message="Analyzing image..." />}
 
         {error && <ErrorAlert message={error} />}
 
         <div ref={messagesEndRef} />
       </ChatContainer>
 
-      {/* Input Area */}
-      <Box
-        sx={{
-          display: 'flex',
-          gap: { xs: 1, md: 2 },
-          alignItems: 'flex-end',
-          pb: { xs: 1, md: 0 },
-        }}
-      >
-        <ChatInput
-          value={inputMessage}
-          onChange={(e) => setInputMessage(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder="Type your message..."
-          disabled={isLoading}
-        />
-        <CustomButton
-          onClick={handleSendMessage}
-          disabled={!inputMessage.trim() || isLoading}
+        {/* Input Area */}
+        <Box
           sx={{
-            minWidth: { xs: '48px', md: '56px' },
-            height: { xs: '48px', md: '56px' },
-            borderRadius: '12px',
+            display: 'flex',
+            gap: { xs: 1, md: 2 },
+            alignItems: 'flex-end',
+            pb: { xs: 1, md: 0 },
           }}
         >
-          <Send size={20} />
-        </CustomButton>
+          <ChatInput
+            value={inputMessage}
+            onChange={(e) => setInputMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Type your message..."
+            disabled={isLoading || isUploading}
+          />
+          <ImageUploadButton
+            onFileSelect={handleImageUpload}
+            onError={handleImageError}
+            disabled={isLoading || isUploading}
+          />
+          <CustomButton
+            onClick={handleSendMessage}
+            disabled={!inputMessage.trim() || isLoading || isUploading}
+            sx={{
+              minWidth: { xs: '48px', md: '56px' },
+              height: { xs: '48px', md: '56px' },
+              borderRadius: '12px',
+            }}
+          >
+            <Send size={20} />
+          </CustomButton>
+        </Box>
+
+        {/* Upload error display */}
+        {uploadError && <ErrorAlert message={uploadError} sx={{ mt: 2, mb: 0 }} />}
       </Box>
+
+      {/* Image Sidebar */}
+      <ImageSidebar images={uploadedImages} />
+
+      {/* Validation Error Snackbar */}
+      <Snackbar
+        open={!!snackbarError}
+        message={snackbarError || ''}
+        severity="error"
+        onClose={() => setSnackbarError(null)}
+      />
     </Box>
   );
 };
