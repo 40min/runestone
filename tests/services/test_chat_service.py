@@ -158,6 +158,35 @@ async def test_process_image_message_ocr_failure(chat_service, db_with_test_user
         await chat_service.process_image_message(user.id, b"fake_image_bytes")
 
 
+@pytest.mark.anyio
+async def test_process_image_message_uses_mother_tongue(
+    chat_service, db_with_test_user, mock_agent_service, mock_user_service, mock_processor
+):
+    """Test that translation prompt uses user's mother tongue."""
+    db, user = db_with_test_user
+
+    # Set user's mother tongue
+    user.mother_tongue = "Spanish"
+    mock_user_service.get_user_by_id.return_value = user
+
+    # Configure processor mock
+    ocr_result = Mock()
+    ocr_result.transcribed_text = "Hej världen"
+    mock_processor.run_ocr.return_value = ocr_result
+
+    # Process image
+    await chat_service.process_image_message(user.id, b"fake_image_bytes")
+
+    # Verify agent was called with mother tongue in prompt
+    mock_agent_service.generate_response.assert_called_once()
+    kwargs = mock_agent_service.generate_response.call_args.kwargs
+    prompt = kwargs["message"]
+
+    # Verify Spanish is mentioned in the prompt
+    assert "Spanish" in prompt
+    assert "Hej världen" in prompt
+
+
 def test_clear_history(chat_service, db_with_test_user):
     """Test clearing history via service."""
     db, user = db_with_test_user

@@ -192,3 +192,62 @@ def test_send_image_requires_authentication(client):
 
     response = client.post("/api/chat/image", files=files)
     assert response.status_code in (401, 403)
+
+
+def test_send_image_file_too_large(client_with_mock_agent_service):
+    """Test that files larger than 10MB are rejected."""
+    import io
+
+    client, _ = client_with_mock_agent_service
+
+    # Create a file larger than 10MB (10 * 1024 * 1024 bytes)
+    large_file_size = 11 * 1024 * 1024  # 11MB
+    large_image_data = io.BytesIO(b"x" * large_file_size)
+    files = {"file": ("large.jpg", large_image_data, "image/jpeg")}
+
+    response = client.post("/api/chat/image", files=files)
+
+    assert response.status_code == 400
+    assert "File too large" in response.json()["detail"]
+
+
+def test_send_image_missing_file(client_with_mock_agent_service):
+    """Test that request without file parameter is rejected."""
+    client, _ = client_with_mock_agent_service
+
+    # Send request without files parameter
+    response = client.post("/api/chat/image")
+
+    assert response.status_code == 422  # Validation error
+
+
+def test_send_image_whitespace_only_ocr(client_with_mock_agent_service, monkeypatch):
+    """Test image upload when OCR returns only whitespace."""
+    import io
+    from unittest.mock import Mock
+
+    client, _ = client_with_mock_agent_service
+
+    # Mock the processor dependency
+    mock_processor = Mock()
+    # Create OCR result with whitespace-only text
+    mock_ocr_result = Mock()
+    mock_ocr_result.transcribed_text = "   \n\t  \n  "
+    mock_ocr_result.character_count = 10
+    mock_processor.run_ocr.return_value = mock_ocr_result
+
+    from runestone.dependencies import get_runestone_processor
+
+    def override_processor():
+        return mock_processor
+
+    client.app.dependency_overrides[get_runestone_processor] = override_processor
+
+    # Create a fake image file
+    image_data = io.BytesIO(b"fake image content")
+    files = {"file": ("test.jpg", image_data, "image/jpeg")}
+
+    response = client.post("/api/chat/image", files=files)
+
+    assert response.status_code == 400
+    assert "Could not recognize text from image" in response.json()["detail"]
