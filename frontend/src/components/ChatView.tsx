@@ -22,7 +22,7 @@ const ChatView: React.FC = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef(0);
   const { messages, isLoading, error, sendMessage, startNewChat, refreshHistory } = useChat();
-  const { uploadedImages, uploadImage, isUploading, error: uploadError } = useChatImageUpload();
+  const { uploadedImages, uploadImage, isUploading, error: uploadError, clearImages } = useChatImageUpload();
 
   // Auto-scroll to bottom only when appropriate
   useEffect(() => {
@@ -70,6 +70,11 @@ const ChatView: React.FC = () => {
     }
   };
 
+  const handleNewChat = () => {
+    startNewChat();
+    clearImages();
+  };
+
   return (
     <Box
       sx={{
@@ -94,7 +99,7 @@ const ChatView: React.FC = () => {
       <ChatHeader
         title="Chat with Your Swedish Teacher"
         subtitle="Ask questions about Swedish vocabulary, grammar, or practice conversation"
-        onNewChat={startNewChat}
+        onNewChat={handleNewChat}
         isLoading={isLoading}
         hasMessages={messages.length > 0}
       />

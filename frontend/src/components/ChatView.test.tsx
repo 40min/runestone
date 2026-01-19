@@ -10,6 +10,10 @@ global.fetch = mockFetch;
 // Mock scrollIntoView
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
+// Mock URL.createObjectURL and crypto.randomUUID
+global.URL.createObjectURL = vi.fn(() => 'blob:test-image-url');
+global.crypto.randomUUID = vi.fn(() => 'test-uuid');
+
 // Mock localStorage
 const mockLocalStorage = {
   getItem: vi.fn((key) => {
@@ -279,6 +283,71 @@ describe('ChatView', () => {
 
     await waitFor(() => {
       expect(input.value).toBe('');
+    });
+  });
+
+  it('clears uploaded images when starting a new chat', async () => {
+    // Setup mock to return existing chat history so the "New Chat" button is enabled
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/api/chat/history')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              messages: [{ id: '1', role: 'user', content: 'hello' }],
+            }),
+        });
+      }
+      if (url.includes('/api/chat/image')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ message: 'Translation for image' }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      });
+    });
+
+    const { container } = render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    // Wait for initial history fetch
+    await waitFor(() => {
+      expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
+    });
+
+    // 1. Upload an image
+    const file = new File(['(⌐□_□)'], 'chucknorris.png', { type: 'image/png' });
+    const fileInput = container.querySelector('input[type="file"]');
+    expect(fileInput).toBeInTheDocument();
+
+    if (fileInput) {
+      fireEvent.change(fileInput, { target: { files: [file] } });
+    }
+
+    // 2. Verifies the image is shown
+    await waitFor(() => {
+      expect(screen.getByAltText('Uploaded')).toBeInTheDocument();
+    });
+
+    // 3. Ensure button is enabled (since we mocked history to have messages)
+    await waitFor(() => {
+      const button = screen.getByRole('button', { name: /Start New Chat/i });
+      expect(button).not.toBeDisabled();
+    });
+
+    // 4. Click "Start New Chat"
+    const newChatButton = screen.getByRole('button', { name: /Start New Chat/i });
+    fireEvent.click(newChatButton);
+
+    // 5. Verifies the image is removed
+    await waitFor(() => {
+      expect(screen.queryByAltText('Uploaded')).not.toBeInTheDocument();
     });
   });
 });

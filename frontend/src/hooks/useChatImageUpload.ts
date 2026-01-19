@@ -13,6 +13,7 @@ interface UseChatImageUploadReturn {
   isUploading: boolean;
   error: string | null;
   clearError: () => void;
+  clearImages: () => void;
 }
 
 const MAX_IMAGES = 3;
@@ -73,11 +74,16 @@ export const useChatImageUpload = (): UseChatImageUploadReturn => {
     setError(null);
   }, []);
 
+  const clearImages = useCallback(() => {
+    setUploadedImages([]);
+  }, []);
+
   return {
     uploadedImages,
     uploadImage,
     isUploading,
     error,
     clearError,
+    clearImages,
   };
 };
