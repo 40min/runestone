@@ -16,6 +16,7 @@ interface UseChatReturn {
   sendMessage: (message: string) => Promise<void>;
   startNewChat: () => Promise<void>;
   clearError: () => void;
+  refreshHistory: () => Promise<void>;
 }
 
 const CLIENT_ID = uuidv4();
@@ -160,5 +161,6 @@ export const useChat = (): UseChatReturn => {
     sendMessage,
     startNewChat,
     clearError,
+    refreshHistory: fetchHistory,
   };
 };

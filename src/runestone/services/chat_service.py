@@ -87,6 +87,63 @@ class ChatService:
 
         return assistant_text
 
+    async def process_image_message(self, user_id: int, ocr_text: str) -> str:
+        """
+        Process OCR text and generate phrase-by-phrase translation.
+
+        Args:
+            user_id: ID of the user
+            ocr_text: Extracted text from OCR
+
+        Returns:
+            The assistant's translation response with intro text
+        """
+        # 1. Truncate old messages
+        self.repository.truncate_history(user_id, self.settings.chat_history_retention_days)
+
+        # 2. Fetch context for agent
+        context_models = self.repository.get_context_for_agent(user_id)
+
+        # Convert models to schemas for the agent service
+        history = [
+            ChatMessageSchema(id=m.id, role=m.role, content=m.content, created_at=m.created_at) for m in context_models
+        ]
+
+        # 3. Get user and build memory context
+        user = self.user_service.get_user_by_id(user_id)
+        if not user:
+            raise ValueError(f"User {user_id} not found")
+
+        memory = self.user_service.get_user_memory(user)
+
+        # 4. Build translation prompt with OCR text
+        # Determine intro text based on user's mother tongue
+        mother_tongue = user.mother_tongue or "English"
+
+        translation_prompt = f"""User uploaded an image with Swedish text. Please translate it phrase-by-phrase.
+
+OCR Text:
+{ocr_text}
+
+Instructions:
+1. Start your response with an intro like "Here's the translated text from your image:" (in {mother_tongue})
+2. Then provide phrase-by-phrase translation in format: "Swedish phrase (translation). Next phrase (translation)."
+3. Use {mother_tongue} for all translations."""
+
+        # 5. Generate response using the ReAct agent
+        assistant_text = await self.agent_service.generate_response(
+            message=translation_prompt,
+            history=history,
+            user=user,
+            user_service=self.user_service,
+            memory_context=memory,
+        )
+
+        # 6. Save assistant message (no user message saved for image uploads)
+        self.repository.add_message(user_id, "assistant", assistant_text)
+
+        return assistant_text
+
     def get_history(self, user_id: int) -> List[ChatMessage]:
         """
         Get the full chat history for a user.

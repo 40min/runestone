@@ -10,15 +10,19 @@ import {
   ChatInput,
   ChatContainer,
   NewChatButton,
+  ImageUploadButton,
 } from './ui';
+import { ImageSidebar } from './chat/ImageSidebar';
 import { useChat } from '../hooks/useChat';
+import { useChatImageUpload } from '../hooks/useChatImageUpload';
 
 const ChatView: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef(0);
-  const { messages, isLoading, error, sendMessage, startNewChat } = useChat();
+  const { messages, isLoading, error, sendMessage, startNewChat, refreshHistory } = useChat();
+  const { uploadedImages, uploadImage, isUploading, error: uploadError } = useChatImageUpload();
 
   // Auto-scroll to bottom only when appropriate
   useEffect(() => {
@@ -58,17 +62,34 @@ const ChatView: React.FC = () => {
     }
   };
 
+  const handleImageUpload = async (file: File) => {
+    const translationMessage = await uploadImage(file);
+    if (translationMessage) {
+      // Refresh chat history to show the new translation message
+      await refreshHistory();
+    }
+  };
+
   return (
     <Box
       sx={{
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'row',
         height: { xs: 'calc(100dvh - 140px)', md: 'calc(100vh - 200px)' },
-        maxWidth: '900px',
+        maxWidth: '1100px',
         margin: '0 auto',
         backgroundColor: '#1a102b',
+        gap: 2,
       }}
     >
+      {/* Main chat area */}
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+        }}
+      >
       {/* Header */}
       <Box
         sx={{
@@ -125,34 +146,45 @@ const ChatView: React.FC = () => {
         <div ref={messagesEndRef} />
       </ChatContainer>
 
-      {/* Input Area */}
-      <Box
-        sx={{
-          display: 'flex',
-          gap: { xs: 1, md: 2 },
-          alignItems: 'flex-end',
-          pb: { xs: 1, md: 0 },
-        }}
-      >
-        <ChatInput
-          value={inputMessage}
-          onChange={(e) => setInputMessage(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder="Type your message..."
-          disabled={isLoading}
-        />
-        <CustomButton
-          onClick={handleSendMessage}
-          disabled={!inputMessage.trim() || isLoading}
+        {/* Input Area */}
+        <Box
           sx={{
-            minWidth: { xs: '48px', md: '56px' },
-            height: { xs: '48px', md: '56px' },
-            borderRadius: '12px',
+            display: 'flex',
+            gap: { xs: 1, md: 2 },
+            alignItems: 'flex-end',
+            pb: { xs: 1, md: 0 },
           }}
         >
-          <Send size={20} />
-        </CustomButton>
+          <ChatInput
+            value={inputMessage}
+            onChange={(e) => setInputMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Type your message..."
+            disabled={isLoading || isUploading}
+          />
+          <ImageUploadButton
+            onFileSelect={handleImageUpload}
+            disabled={isLoading || isUploading}
+          />
+          <CustomButton
+            onClick={handleSendMessage}
+            disabled={!inputMessage.trim() || isLoading || isUploading}
+            sx={{
+              minWidth: { xs: '48px', md: '56px' },
+              height: { xs: '48px', md: '56px' },
+              borderRadius: '12px',
+            }}
+          >
+            <Send size={20} />
+          </CustomButton>
+        </Box>
+
+        {/* Upload error display */}
+        {uploadError && <ErrorAlert message={uploadError} sx={{ mt: 2, mb: 0 }} />}
       </Box>
+
+      {/* Image Sidebar */}
+      <ImageSidebar images={uploadedImages} />
     </Box>
   );
 };

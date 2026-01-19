@@ -38,3 +38,9 @@ class ChatHistoryResponse(BaseModel):
     """Response containing conversation history."""
 
     messages: List[ChatMessage] = Field(..., description="List of chat messages")
+
+
+class ImageChatResponse(BaseModel):
+    """Response from image OCR + translation."""
+
+    message: str = Field(..., description="The assistant's translation response")
