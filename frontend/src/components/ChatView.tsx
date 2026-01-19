@@ -70,9 +70,9 @@ const ChatView: React.FC = () => {
     }
   };
 
-  const handleNewChat = () => {
-    startNewChat();
+  const handleNewChat = async () => {
     clearImages();
+    await startNewChat();
   };
 
   return (
