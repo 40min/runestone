@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFil
 
 from runestone.agent.schemas import ChatHistoryResponse, ChatMessage, ChatRequest, ChatResponse, ImageChatResponse
 from runestone.auth.dependencies import get_current_user
+from runestone.config import settings
 from runestone.core.exceptions import RunestoneError
 from runestone.db.models import User
 from runestone.dependencies import get_chat_service
@@ -86,14 +87,15 @@ async def send_image(
             detail="Invalid file type. Please upload an image file.",
         )
 
-    # Validate file size (max 10MB)
+    # Validate file size
     content = await file.read()
     file_size = len(content)
+    max_size_bytes = settings.chat_image_max_size_mb * 1024 * 1024
 
-    if file_size > 10 * 1024 * 1024:  # 10MB
+    if file_size > max_size_bytes:
         raise HTTPException(
             status_code=400,
-            detail="File too large. Maximum size is 10MB.",
+            detail=f"File too large. Maximum size is {settings.chat_image_max_size_mb}MB.",
         )
 
     try:

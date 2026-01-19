@@ -195,20 +195,22 @@ def test_send_image_requires_authentication(client):
 
 
 def test_send_image_file_too_large(client_with_mock_agent_service):
-    """Test that files larger than 10MB are rejected."""
+    """Test that files larger than configured limit are rejected."""
     import io
+
+    from runestone.config import settings
 
     client, _ = client_with_mock_agent_service
 
-    # Create a file larger than 10MB (10 * 1024 * 1024 bytes)
-    large_file_size = 11 * 1024 * 1024  # 11MB
+    # Create a file larger than max size
+    large_file_size = (settings.chat_image_max_size_mb + 1) * 1024 * 1024
     large_image_data = io.BytesIO(b"x" * large_file_size)
     files = {"file": ("large.jpg", large_image_data, "image/jpeg")}
 
     response = client.post("/api/chat/image", files=files)
 
     assert response.status_code == 400
-    assert "File too large" in response.json()["detail"]
+    assert f"File too large. Maximum size is {settings.chat_image_max_size_mb}MB." in response.json()["detail"]
 
 
 def test_send_image_missing_file(client_with_mock_agent_service):
