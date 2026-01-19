@@ -10,6 +10,7 @@ import {
   ChatInput,
   ChatContainer,
   ImageUploadButton,
+  Snackbar,
 } from './ui';
 import { ImageSidebar } from './chat/ImageSidebar';
 import { ChatHeader } from './chat/ChatHeader';
@@ -23,6 +24,7 @@ const ChatView: React.FC = () => {
   const prevMessagesLengthRef = useRef(0);
   const { messages, isLoading, error, sendMessage, startNewChat, refreshHistory } = useChat();
   const { uploadedImages, uploadImage, isUploading, error: uploadError, clearImages } = useChatImageUpload();
+  const [snackbarError, setSnackbarError] = useState<string | null>(null);
 
   // Auto-scroll to bottom only when appropriate
   useEffect(() => {
@@ -68,6 +70,10 @@ const ChatView: React.FC = () => {
       // Refresh chat history to show the new translation message
       await refreshHistory();
     }
+  };
+
+  const handleImageError = (message: string) => {
+    setSnackbarError(message);
   };
 
   const handleNewChat = async () => {
@@ -140,6 +146,7 @@ const ChatView: React.FC = () => {
           />
           <ImageUploadButton
             onFileSelect={handleImageUpload}
+            onError={handleImageError}
             disabled={isLoading || isUploading}
           />
           <CustomButton
@@ -161,6 +168,14 @@ const ChatView: React.FC = () => {
 
       {/* Image Sidebar */}
       <ImageSidebar images={uploadedImages} />
+
+      {/* Validation Error Snackbar */}
+      <Snackbar
+        open={!!snackbarError}
+        message={snackbarError || ''}
+        severity="error"
+        onClose={() => setSnackbarError(null)}
+      />
     </Box>
   );
 };

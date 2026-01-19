@@ -4,10 +4,11 @@ import CustomButton from './CustomButton';
 
 interface ImageUploadButtonProps {
   onFileSelect: (file: File) => void;
+  onError?: (message: string) => void;
   disabled?: boolean;
 }
 
-const ImageUploadButton: React.FC<ImageUploadButtonProps> = ({ onFileSelect, disabled = false }) => {
+const ImageUploadButton: React.FC<ImageUploadButtonProps> = ({ onFileSelect, onError, disabled = false }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -15,7 +16,9 @@ const ImageUploadButton: React.FC<ImageUploadButtonProps> = ({ onFileSelect, dis
     if (file && file.type.startsWith('image/')) {
       onFileSelect(file);
     } else if (file) {
-      alert('Please select an image file');
+      if (onError) {
+        onError('Please select an image file');
+      }
     }
     // Reset input so same file can be selected again
     if (fileInputRef.current) {

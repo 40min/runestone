@@ -7,9 +7,11 @@ global.alert = vi.fn();
 
 describe('ImageUploadButton', () => {
   const mockOnFileSelect = vi.fn();
+  const mockOnError = vi.fn();
 
   beforeEach(() => {
     mockOnFileSelect.mockClear();
+    mockOnError.mockClear();
     vi.clearAllMocks();
   });
 
@@ -48,16 +50,19 @@ describe('ImageUploadButton', () => {
     expect(mockOnFileSelect).toHaveBeenCalledWith(file);
   });
 
-  it('shows alert for non-image file', () => {
-    const { container } = render(<ImageUploadButton onFileSelect={mockOnFileSelect} />);
+  it('calls onError for non-image file', () => {
+    const { container } = render(
+      <ImageUploadButton onFileSelect={mockOnFileSelect} onError={mockOnError} />
+    );
 
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(['test'], 'test.txt', { type: 'text/plain' });
 
     fireEvent.change(fileInput, { target: { files: [file] } });
 
-    expect(global.alert).toHaveBeenCalledWith('Please select an image file');
+    expect(mockOnError).toHaveBeenCalledWith('Please select an image file');
     expect(mockOnFileSelect).not.toHaveBeenCalled();
+    expect(global.alert).not.toHaveBeenCalled();
   });
 
   it('respects disabled state', () => {
@@ -91,7 +96,9 @@ describe('ImageUploadButton', () => {
   });
 
   it('handles no file selected', () => {
-    const { container } = render(<ImageUploadButton onFileSelect={mockOnFileSelect} />);
+    const { container } = render(
+      <ImageUploadButton onFileSelect={mockOnFileSelect} onError={mockOnError} />
+    );
 
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
 
@@ -99,6 +106,7 @@ describe('ImageUploadButton', () => {
     fireEvent.change(fileInput, { target: { files: [] } });
 
     expect(mockOnFileSelect).not.toHaveBeenCalled();
+    expect(mockOnError).not.toHaveBeenCalled();
     expect(global.alert).not.toHaveBeenCalled();
   });
 
