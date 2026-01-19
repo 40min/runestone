@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useApi } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -24,6 +24,19 @@ export const useChatImageUpload = (): UseChatImageUploadReturn => {
   const [error, setError] = useState<string | null>(null);
   const { post } = useApi();
   const { token } = useAuth();
+
+  // Keep track of current images for cleanup on unmount
+  const imagesRef = useRef<UploadedImage[]>([]);
+  useEffect(() => {
+    imagesRef.current = uploadedImages;
+  }, [uploadedImages]);
+
+  // Cleanup all object URLs on unmount
+  useEffect(() => {
+    return () => {
+      imagesRef.current.forEach((img) => URL.revokeObjectURL(img.url));
+    };
+  }, []);
 
   const uploadImage = useCallback(
     async (file: File): Promise<string | null> => {
@@ -54,8 +67,14 @@ export const useChatImageUpload = (): UseChatImageUploadReturn => {
         // Update images with FIFO behavior (max 3)
         setUploadedImages((prev) => {
           const updated = [...prev, newImage];
-          // Keep only the 3 most recent
-          return updated.slice(-MAX_IMAGES);
+          // Keep only the 3 most recent, revoking any that are removed
+          if (updated.length > MAX_IMAGES) {
+            const removed = updated.shift();
+            if (removed) {
+              URL.revokeObjectURL(removed.url);
+            }
+          }
+          return updated;
         });
 
         return translationMessage;
@@ -75,8 +94,10 @@ export const useChatImageUpload = (): UseChatImageUploadReturn => {
   }, []);
 
   const clearImages = useCallback(() => {
+    // Revoke all current URLs before clearing
+    uploadedImages.forEach((img) => URL.revokeObjectURL(img.url));
     setUploadedImages([]);
-  }, []);
+  }, [uploadedImages]);
 
   return {
     uploadedImages,
