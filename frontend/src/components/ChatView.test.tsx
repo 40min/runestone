@@ -220,7 +220,7 @@ describe('ChatView', () => {
 
     // Check for loading indicator
     await waitFor(() => {
-      expect(screen.getByText('Teacher is typing...')).toBeInTheDocument();
+      expect(screen.getByText('Teacher is thinking...')).toBeInTheDocument();
     });
 
     // Resolve the promise to clean up
@@ -348,6 +348,58 @@ describe('ChatView', () => {
     // 5. Verifies the image is removed
     await waitFor(() => {
       expect(screen.queryByAltText('Uploaded')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows processing indicator when uploading an image', async () => {
+    let resolvePromise: (value: Response | PromiseLike<Response>) => void;
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/api/chat/history')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ messages: [] }),
+        });
+      }
+      if (url.includes('/api/chat/image')) {
+        return new Promise((resolve) => {
+          resolvePromise = resolve;
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+
+    const { container } = render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    // Wait for initial history fetch
+    await waitFor(() => {
+      expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
+    });
+
+    const file = new File(['(⌐□_□)'], 'test.png', { type: 'image/png' });
+    const fileInput = container.querySelector('input[type="file"]');
+
+    if (fileInput) {
+      fireEvent.change(fileInput, { target: { files: [file] } });
+    }
+
+    // Check for processing indicator
+    await waitFor(() => {
+      expect(screen.getByText('Analyzing image...')).toBeInTheDocument();
+    });
+
+    // Resolve the promise to clean up
+    await act(async () => {
+      resolvePromise!({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Translation' }),
+      });
     });
   });
 });

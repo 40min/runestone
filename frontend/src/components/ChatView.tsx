@@ -100,7 +100,7 @@ const ChatView: React.FC = () => {
         title="Chat with Your Swedish Teacher"
         subtitle="Ask questions about Swedish vocabulary, grammar, or practice conversation"
         onNewChat={handleNewChat}
-        isLoading={isLoading}
+        isLoading={isLoading || isUploading}
         hasMessages={messages.length > 0}
       />
 
@@ -114,7 +114,8 @@ const ChatView: React.FC = () => {
           ))
         )}
 
-        {isLoading && <ChatLoadingIndicator />}
+        {isLoading && <ChatLoadingIndicator message="Teacher is thinking..." />}
+        {isUploading && <ChatLoadingIndicator message="Analyzing image..." />}
 
         {error && <ErrorAlert message={error} />}
 
