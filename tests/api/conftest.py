@@ -162,10 +162,14 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
             overrides[get_vocabulary_service] = lambda: vocabulary_service
         if grammar_service:
             overrides[get_grammar_service] = lambda: grammar_service
-        if processor:
-            from runestone.dependencies import get_runestone_processor
 
-            overrides[get_runestone_processor] = lambda: processor
+        # Always mock RunestoneProcessor to avoid deep dependency chain issues (e.g. app.state.ocr_llm_client)
+        from unittest.mock import Mock
+
+        from runestone.dependencies import get_runestone_processor
+
+        processor_instance = processor or Mock()
+        overrides[get_runestone_processor] = lambda: processor_instance
 
         if agent_service:
             from runestone.dependencies import get_agent_service

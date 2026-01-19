@@ -226,6 +226,7 @@ def get_chat_service(
     repo: Annotated[ChatRepository, Depends(get_chat_repository)],
     user_service: Annotated[UserService, Depends(get_user_service)],
     agent_service: Annotated[AgentService, Depends(get_agent_service)],
+    processor: Annotated[RunestoneProcessor, Depends(get_runestone_processor)],
 ) -> ChatService:
     """
     Dependency injection for chat service.
@@ -235,8 +236,9 @@ def get_chat_service(
         repo: ChatRepository from dependency injection
         user_service: UserService from dependency injection
         agent_service: AgentService from dependency injection
+        processor: RunestoneProcessor from dependency injection
 
     Returns:
         ChatService: Service instance for chat operations
     """
-    return ChatService(settings, repo, user_service, agent_service)
+    return ChatService(settings, repo, user_service, agent_service, processor)

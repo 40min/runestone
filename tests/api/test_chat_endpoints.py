@@ -107,7 +107,7 @@ def test_send_image_success(client_with_mock_agent_service, db_session, monkeypa
     mock_processor = Mock()
     # Create a proper OCRResult-like object
     mock_ocr_result = Mock()
-    mock_ocr_result.text = "Hej. Hur mår du?"
+    mock_ocr_result.transcribed_text = "Hej. Hur mår du?"
     mock_ocr_result.character_count = 16
     mock_processor.run_ocr.return_value = mock_ocr_result
 
@@ -128,6 +128,8 @@ def test_send_image_success(client_with_mock_agent_service, db_session, monkeypa
     data = response.json()
     assert "message" in data
     assert "translated text" in data["message"].lower()
+    # mock_processor.run_ocr is called inside ChatService now, but since we mock
+    # the processor injected into ChatService, this assertion still holds.
     mock_processor.run_ocr.assert_called_once()
     mock_agent_service.generate_response.assert_called_once()
 
@@ -141,7 +143,7 @@ def test_send_image_ocr_failure(client, monkeypatch):
     mock_processor = Mock()
     # Create a proper OCRResult-like object with empty text
     mock_ocr_result = Mock()
-    mock_ocr_result.text = ""
+    mock_ocr_result.transcribed_text = ""
     mock_ocr_result.character_count = 0
     mock_processor.run_ocr.return_value = mock_ocr_result
 

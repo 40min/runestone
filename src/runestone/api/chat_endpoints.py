@@ -12,9 +12,8 @@ from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFil
 from runestone.agent.schemas import ChatHistoryResponse, ChatMessage, ChatRequest, ChatResponse, ImageChatResponse
 from runestone.auth.dependencies import get_current_user
 from runestone.core.exceptions import RunestoneError
-from runestone.core.processor import RunestoneProcessor
 from runestone.db.models import User
-from runestone.dependencies import get_chat_service, get_runestone_processor
+from runestone.dependencies import get_chat_service
 from runestone.services.chat_service import ChatService
 
 logger = logging.getLogger(__name__)
@@ -71,7 +70,6 @@ async def get_history(
 async def send_image(
     file: Annotated[UploadFile, File(description="Image file to process")],
     chat_service: Annotated[ChatService, Depends(get_chat_service)],
-    processor: Annotated[RunestoneProcessor, Depends(get_runestone_processor)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> ImageChatResponse:
     """
@@ -101,20 +99,8 @@ async def send_image(
     try:
         logger.info(f"User {current_user.email} uploaded image for OCR translation")
 
-        # Run OCR on image bytes
-        ocr_result = processor.run_ocr(content)
-
-        if not ocr_result.transcribed_text or not ocr_result.transcribed_text.strip():
-            logger.warning("OCR returned empty text")
-            raise HTTPException(
-                status_code=400,
-                detail="Could not recognize text from image",
-            )
-
-        logger.info(f"OCR extracted {len(ocr_result.transcribed_text)} characters")
-
         # Process OCR text through agent for translation
-        response_message = await chat_service.process_image_message(current_user.id, ocr_result.transcribed_text)
+        response_message = await chat_service.process_image_message(current_user.id, content)
 
         logger.info(f"Generated translation response for user {current_user.email}")
 

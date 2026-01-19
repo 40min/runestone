@@ -8,6 +8,8 @@ from typing import List
 from runestone.agent.schemas import ChatMessage as ChatMessageSchema
 from runestone.agent.service import AgentService
 from runestone.config import Settings
+from runestone.core.exceptions import RunestoneError
+from runestone.core.processor import RunestoneProcessor
 from runestone.db.chat_repository import ChatRepository
 from runestone.db.models import ChatMessage
 from runestone.services.user_service import UserService
@@ -24,6 +26,7 @@ class ChatService:
         repository: ChatRepository,
         user_service: UserService,
         agent_service: AgentService,
+        processor: RunestoneProcessor,
     ):
         """
         Initialize the chat service.
@@ -33,11 +36,13 @@ class ChatService:
             repository: Chat repository for database operations
             user_service: User service for user and memory operations
             agent_service: Agent service for LLM interactions
+            processor: Runestone processor for OCR operations
         """
         self.settings = settings
         self.repository = repository
         self.user_service = user_service
         self.agent_service = agent_service
+        self.processor = processor
 
     async def process_message(self, user_id: int, message_text: str) -> str:
         """
@@ -87,21 +92,34 @@ class ChatService:
 
         return assistant_text
 
-    async def process_image_message(self, user_id: int, ocr_text: str) -> str:
+    async def process_image_message(self, user_id: int, image_content: bytes) -> str:
         """
-        Process OCR text and generate phrase-by-phrase translation.
+        Process image for OCR and generate translation response.
 
         Args:
             user_id: ID of the user
-            ocr_text: Extracted text from OCR
+            image_content: Image file content as bytes
 
         Returns:
-            The assistant's translation response with intro text
+            Translation response message
+
+        Raises:
+            RunestoneError: If OCR fails or returns empty text
         """
-        # 1. Truncate old messages
+        # 1. Run OCR on image content
+        ocr_result = self.processor.run_ocr(image_content)
+
+        if not ocr_result.transcribed_text or not ocr_result.transcribed_text.strip():
+            logger.warning("OCR returned empty text")
+            raise RunestoneError("Could not recognize text from image")
+
+        logger.info(f"OCR extracted {len(ocr_result.transcribed_text)} characters")
+        ocr_text = ocr_result.transcribed_text
+
+        # 2. Truncate old messages
         self.repository.truncate_history(user_id, self.settings.chat_history_retention_days)
 
-        # 2. Fetch context for agent
+        # 3. Fetch context for agent
         context_models = self.repository.get_context_for_agent(user_id)
 
         # Convert models to schemas for the agent service
@@ -109,14 +127,14 @@ class ChatService:
             ChatMessageSchema(id=m.id, role=m.role, content=m.content, created_at=m.created_at) for m in context_models
         ]
 
-        # 3. Get user and build memory context
+        # 4. Get user and build memory context
         user = self.user_service.get_user_by_id(user_id)
         if not user:
             raise ValueError(f"User {user_id} not found")
 
         memory = self.user_service.get_user_memory(user)
 
-        # 4. Build translation prompt with OCR text
+        # 5. Build translation prompt with OCR text
         # Determine intro text based on user's mother tongue
         mother_tongue = user.mother_tongue or "English"
 
@@ -130,7 +148,7 @@ Instructions:
 2. Then provide phrase-by-phrase translation in format: "Swedish phrase (translation). Next phrase (translation)."
 3. Use {mother_tongue} for all translations."""
 
-        # 5. Generate response using the ReAct agent
+        # 6. Generate response using the ReAct agent
         assistant_text = await self.agent_service.generate_response(
             message=translation_prompt,
             history=history,
@@ -139,7 +157,7 @@ Instructions:
             memory_context=memory,
         )
 
-        # 6. Save assistant message (no user message saved for image uploads)
+        # 7. Save assistant message (no user message saved for image uploads)
         self.repository.add_message(user_id, "assistant", assistant_text)
 
         return assistant_text
