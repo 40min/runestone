@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useApi } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import { generateId } from '../utils/id';
 
 interface UploadedImage {
   id: string;
@@ -60,7 +61,7 @@ export const useChatImageUpload = (): UseChatImageUploadReturn => {
         // Create image URL for sidebar
         const imageUrl = URL.createObjectURL(file);
         const newImage: UploadedImage = {
-          id: crypto.randomUUID(),
+          id: generateId(),
           url: imageUrl,
         };
 
