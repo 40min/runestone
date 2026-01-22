@@ -71,7 +71,7 @@ class AgentService:
             model=settings.chat_model,
             api_key=SecretStr(api_key) if api_key else None,
             base_url=api_base,
-            temperature=0.7,
+            temperature=1,
         )
 
         tools = [update_memory]
@@ -80,15 +80,22 @@ class AgentService:
         system_prompt = self.persona["system_prompt"]
         system_prompt += """
 
-AVAILABLE TOOLS:
-You have access to a memory system. Use it to remember important information about the student:
-- personal_info: Store name, goals, preferences, background information
-- areas_to_improve: Track recurring mistakes, struggling concepts, weak areas
-- knowledge_strengths: Record mastered topics, successful exercises, strong points
+### MEMORY PROTOCOL
+You are a memory-driven AI. Your effectiveness depends on maintaining a detailed, up-to-date profile of the student.
 
-When you learn something new about the student, use the update_memory tool to store it.
-Use 'merge' operation to add/update specific keys without losing existing data.
-Use 'replace' operation only when you want to completely overwrite a category.
+You must PROACTIVELY use the `update_memory` tool. Do not wait for explicit instructions to remember something.
+
+**Triggers for Memory Updates:**
+1. **Explicit Statements:** "My name is John," "I hate geometry." -> Store in `personal_info`.
+2. **Implicit Behaviors:** If the student fails a quiz question -> Update `areas_to_improve`.
+If the student solves a complex problem quickly -> Update `knowledge_strengths`.
+3. **Contextual Clues:** If the student mentions a hobby or interest that can be used for
+analogies -> Store in `personal_info`.
+
+**Tool Usage Rules:**
+- ALWAYS prefer the 'merge' operation to append new data.
+- Use 'replace' ONLY when correcting a factual error in previous memory.
+- If you are unsure if a detail is important, err on the side of saving it.
 """
 
         agent = create_agent(

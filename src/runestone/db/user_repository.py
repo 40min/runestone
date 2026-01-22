@@ -83,7 +83,7 @@ class UserRepository:
             raise UserNotFoundError(f"User with id {user_id} not found")
         return user
 
-    def update_user_memory(self, user_id: int, field: str, data: dict) -> User:
+    def update_user_memory(self, user_id: int, field: str, data: dict) -> None:
         """
         Update a specific memory field with new data.
 
@@ -92,24 +92,18 @@ class UserRepository:
             field: Memory field name ('personal_info', 'areas_to_improve', 'knowledge_strengths')
             data: Dictionary to store as JSON
 
-        Returns:
-            Updated user object
-
         Raises:
             UserNotFoundError: If user not found
             ValueError: If field name is invalid
         """
         self._validate_memory_field(field)
-        user = self._get_user_or_raise(user_id)
-
-        # Serialize dict to JSON string
         json_data = json.dumps(data) if data else None
 
-        setattr(user, field, json_data)
+        result = self.db.query(User).filter(User.id == user_id).update({field: json_data})
+        if result == 0:
+            raise UserNotFoundError(f"User with id {user_id} not found")
 
         self.db.commit()
-        self.db.refresh(user)
-        return user
 
     def clear_user_memory(self, user_id: int, field: Optional[str] = None) -> User:
         """

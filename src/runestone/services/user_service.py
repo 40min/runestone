@@ -163,7 +163,7 @@ class UserService:
         updated_user = self.user_repo.clear_user_memory(user.id, category)
         return self.get_user_profile(updated_user)
 
-    def update_user_memory(self, user: User, field: str, data: dict) -> UserProfileResponse:
+    def update_user_memory(self, user: User, field: str, data: dict) -> None:
         """
         Update a specific memory field for a user.
 
@@ -178,5 +178,4 @@ class UserService:
         Raises:
             ValueError: If field name is invalid
         """
-        updated_user = self.user_repo.update_user_memory(user.id, field, data)
-        return self.get_user_profile(updated_user)
+        self.user_repo.update_user_memory(user.id, field, data)

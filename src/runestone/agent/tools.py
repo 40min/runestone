@@ -5,12 +5,13 @@ Tool definitions for the agent using LangChain's @tool decorator.
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Literal
 
 from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 
 from runestone.db.models import User
+from runestone.services.user_service import UserService
 from runestone.utils.merge import deep_merge
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ class AgentContext:
 
     user: User
     # we can't use DI of FastAPI here, so had to put the service to context
-    user_service: Any
+    user_service: UserService
 
 
 @tool
@@ -50,7 +51,9 @@ def update_memory(
         Confirmation message
     """
     user = runtime.context.user
-    user_service = runtime.context.user_service
+    user_service: UserService = runtime.context.user_service
+
+    logger.info(f"Updating memory for user {user.id}: {category}")
 
     try:
         final_data = data
@@ -60,8 +63,10 @@ def update_memory(
             current_dict = json.loads(current_json) if current_json else {}
             final_data = deep_merge(current_dict, data)
 
+        logger.info(f"Final data for {category}: {final_data}")
         # Update memory via service
         user_service.update_user_memory(user, category, final_data)
+        logger.info(f"Successfully updated {category} for user {user.id}")
         return f"Successfully updated {category}."
     except Exception as e:
         logger.error(f"Error updating memory for user {user.id}: {e}")

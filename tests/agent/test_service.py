@@ -68,7 +68,7 @@ def test_build_agent(mock_settings, mock_chat_model, mock_user_service):
             call_kwargs = mock_create_agent.call_args[1]
             assert call_kwargs["model"] == mock_chat_model
             assert len(call_kwargs["tools"]) == 1
-            assert "AVAILABLE TOOLS" in call_kwargs["system_prompt"]
+            assert "MEMORY PROTOCOL" in call_kwargs["system_prompt"]
 
 
 @pytest.mark.anyio
