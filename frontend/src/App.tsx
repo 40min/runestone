@@ -8,7 +8,7 @@ import Login from "./components/auth/Login";
 import Register from "./components/auth/Register";
 import Profile from "./components/auth/Profile";
 import useImageProcessing from "./hooks/useImageProcessing";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import StyledCheckbox from "./components/ui/StyledCheckbox";
 import { CustomButton } from "./components/ui";
 import { BrainCircuit } from "lucide-react";
@@ -16,11 +16,20 @@ import { Box } from "@mui/material";
 import { useAuth } from "./context/AuthContext";
 
 type AuthView = "login" | "register";
+type ViewType = "analyzer" | "vocabulary" | "grammar" | "chat" | "profile";
+
+const STORAGE_KEY = "runestone_current_view";
+
+function getInitialView(): ViewType {
+  if (typeof window === "undefined") return "analyzer";
+  const stored = localStorage.getItem(STORAGE_KEY);
+  return stored && ["analyzer", "vocabulary", "grammar", "chat", "profile"].includes(stored)
+    ? (stored as ViewType)
+    : "analyzer";
+}
 
 function App() {
-  const [currentView, setCurrentView] = useState<
-    "analyzer" | "vocabulary" | "grammar" | "chat" | "profile"
-  >("analyzer");
+  const [currentView, setCurrentView] = useState<ViewType>(getInitialView);
   const [recognizeOnly, setRecognizeOnly] = useState(false);
   const [authView, setAuthView] = useState<AuthView>("login");
   const { isAuthenticated } = useAuth();
@@ -50,6 +59,11 @@ function App() {
 
   const isAnalyzeButtonDisabled =
     processingStep === "ANALYZING" || processingStep === "RESOURCES";
+
+  // Persist view changes to localStorage
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, currentView);
+  }, [currentView]);
 
   // If not authenticated, show auth views
   if (!isAuthenticated()) {
