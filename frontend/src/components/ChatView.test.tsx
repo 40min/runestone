@@ -580,4 +580,57 @@ describe('ChatView', () => {
       expect(fileInput).not.toBeDisabled();
     });
   });
+
+  it('scrolls to bottom when loading state starts', async () => {
+    let resolvePromise: (value: Response | PromiseLike<Response>) => void;
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/api/chat/history')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ messages: [] }),
+        });
+      }
+      // Return a pending promise for the message endpoint
+      if (url.includes('/api/chat/message')) {
+        return new Promise((resolve) => {
+          resolvePromise = resolve;
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    // Wait for initial history fetch
+    await waitFor(() => {
+      expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
+    });
+
+    const input = screen.getByPlaceholderText('Type your message...');
+    fireEvent.change(input, { target: { value: 'Test message' } });
+    fireEvent.click(getSendButton());
+
+    // Wait for loading indicator to appear
+    await waitFor(() => {
+      expect(screen.getByText('Teacher is thinking...')).toBeInTheDocument();
+    });
+
+    // Verify scrollIntoView was called when loading started
+    expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
+
+    // Resolve the promise to clean up
+    await act(async () => {
+      resolvePromise!({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+  });
 });

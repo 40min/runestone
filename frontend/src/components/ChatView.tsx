@@ -22,23 +22,42 @@ const ChatView: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef(0);
+  const prevLoadingRef = useRef(false);
   const { messages, isLoading, error, sendMessage, startNewChat, refreshHistory } = useChat();
   const { uploadedImages, uploadImage, isUploading, error: uploadError, clearImages } = useChatImageUpload();
   const [snackbarError, setSnackbarError] = useState<string | null>(null);
 
-  // Auto-scroll to bottom only when appropriate
+  // Auto-scroll to bottom when messages change or loading state changes
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
     const isNewMessage = messages.length > prevMessagesLengthRef.current;
-    const isUserMessage = isNewMessage && messages[messages.length - 1].role === 'user';
+    const isLoadingStarted = isLoading && !prevLoadingRef.current;
+    const isLoadingEnded = !isLoading && prevLoadingRef.current;
 
-    // Increased threshold to 150px to be more forgiving
+    // For user messages, only scroll if near bottom to avoid disrupting reading
+    // For assistant messages, always scroll to show the response
     const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 150;
 
     if (isNewMessage) {
-      if (isUserMessage || isAtBottom) {
+      const isUserMessage = messages[messages.length - 1].role === 'user';
+      if (isUserMessage) {
+        // For user messages, only scroll if user is already near bottom
+        if (isAtBottom) {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+      } else {
+        // For assistant messages, always scroll to show the response
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    } else if (isLoadingStarted) {
+      // When loading starts, scroll to show loading indicator
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } else if (isLoadingEnded && messages.length > 0) {
+      // When loading ends and there's an assistant message, scroll to ensure it's visible
+      const lastMessageIsAssistant = messages[messages.length - 1].role === 'assistant';
+      if (lastMessageIsAssistant) {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       }
     } else if (messages.length > 0 && prevMessagesLengthRef.current === 0) {
@@ -47,7 +66,8 @@ const ChatView: React.FC = () => {
     }
 
     prevMessagesLengthRef.current = messages.length;
-  }, [messages]);
+    prevLoadingRef.current = isLoading;
+  }, [messages, isLoading]);
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
