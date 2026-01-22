@@ -8,21 +8,49 @@ for database operations in the Runestone application.
 import logging
 import os
 
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from alembic import command
 from alembic.config import Config
 from runestone.config import settings
 
+logger = logging.getLogger(__name__)
+
+# Configure engine with SQLite-specific settings for concurrent access
+connect_args = {}
+poolclass = None
+
+if "sqlite" in settings.database_url:
+    connect_args = {
+        "check_same_thread": False,
+        "timeout": 30,  # Wait up to 30 seconds for locks
+    }
+    # Use StaticPool to maintain a single connection for thread safety
+    poolclass = StaticPool
+
 # Create SQLAlchemy engine
 engine = create_engine(
     settings.database_url,
-    connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {},
+    connect_args=connect_args,
+    poolclass=poolclass,
 )
 
-logger = logging.getLogger(__name__)
+
+# Enable WAL mode for SQLite
+@event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_conn, connection_record):
+    """Set SQLite pragmas for concurrent access."""
+    if "sqlite" in settings.database_url:
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=30000")  # 30 seconds in milliseconds
+        cursor.execute("PRAGMA synchronous=NORMAL")  # Better performance with WAL
+        cursor.close()
+        logger.debug("SQLite WAL mode and concurrent access settings enabled")
+
 
 # Create SessionLocal class
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
