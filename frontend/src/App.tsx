@@ -18,6 +18,14 @@ import { useAuth } from "./context/AuthContext";
 type AuthView = "login" | "register";
 type ViewType = "analyzer" | "vocabulary" | "grammar" | "chat" | "profile";
 
+const VIEW_NAMES: Record<ViewType, string> = {
+  analyzer: "Analyzer",
+  vocabulary: "Vocabulary",
+  grammar: "Grammar",
+  chat: "Chat",
+  profile: "Profile",
+};
+
 const STORAGE_KEY = "runestone_current_view";
 
 function getInitialView(): ViewType {
@@ -64,6 +72,18 @@ function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, currentView);
   }, [currentView]);
+
+  // Update title based on current view
+  useEffect(() => {
+    document.title = `Runestone | ${VIEW_NAMES[currentView]}`;
+  }, [currentView]);
+
+  // Update title for auth views
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      document.title = `Runestone | ${authView === "register" ? "Register" : "Login"}`;
+    }
+  }, [authView, isAuthenticated]);
 
   // If not authenticated, show auth views
   if (!isAuthenticated()) {
