@@ -778,6 +778,36 @@ class TestVocabularyRepository:
         assert len(result) == 2
         assert result_set == expected_set
 
+    def test_select_new_daily_words_prioritization(self, repo, db_session):
+        """Test that prioritized words are selected first in daily selection."""
+        # Add test items: 3 priority words, 3 regular words
+        priority_items = [
+            VocabularyModel(user_id=1, word_phrase=f"priority_{i}", translation="...", priority_learn=True)
+            for i in range(3)
+        ]
+        regular_items = [
+            VocabularyModel(user_id=1, word_phrase=f"regular_{i}", translation="...", priority_learn=False)
+            for i in range(3)
+        ]
+
+        db_session.add_all(priority_items + regular_items)
+        db_session.commit()
+
+        # Select with limit=4. Should get all 3 priority items + 1 regular item.
+        result = repo.select_new_daily_words(user_id=1, limit=4)
+
+        assert len(result) == 4
+        # First 3 should be priority items
+        priority_word_phrases = {item.word_phrase for item in priority_items}
+        for i in range(3):
+            assert result[i].word_phrase in priority_word_phrases
+            assert result[i].priority_learn is True
+
+        # Last one should be a regular item
+        regular_word_phrases = {item.word_phrase for item in regular_items}
+        assert result[3].word_phrase in regular_word_phrases
+        assert result[3].priority_learn is False
+
     def test_get_vocabulary_item_for_recall(self, repo, db_session):
         """Test getting a vocabulary item for recall (ensures in_learn=True)."""
         # Add test items

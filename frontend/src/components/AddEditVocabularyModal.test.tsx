@@ -63,6 +63,7 @@ describe("AddEditVocabularyModal", () => {
       screen.getByLabelText("Example Phrase (Optional)")
     ).toBeInTheDocument();
     expect(screen.getByText("In Learning")).toBeInTheDocument();
+    expect(screen.getByText("Priority Learn")).toBeInTheDocument();
   });
 
   it("renders the modal for editing an existing item", () => {
@@ -221,6 +222,7 @@ describe("AddEditVocabularyModal", () => {
       example_phrase: "Hej, hur mår du?",
       extra_info: null,
       in_learn: true,
+      priority_learn: false,
     });
   });
   it("calls onSave with in_learn: false when checkbox is unchecked", async () => {
@@ -244,6 +246,32 @@ describe("AddEditVocabularyModal", () => {
       example_phrase: null,
       extra_info: null,
       in_learn: false,
+      priority_learn: false,
+    });
+  });
+
+  it("calls onSave with priority_learn: true when Priority Learn checkbox is checked", async () => {
+    const user = userEvent.setup();
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
+
+    const wordInput = screen.getByLabelText("Swedish Word/Phrase");
+    const translationInput = screen.getByLabelText("English Translation");
+    const checkbox = screen.getByRole("checkbox", { name: "Priority Learn" });
+
+    await user.type(wordInput, "hej");
+    await user.type(translationInput, "hello");
+    await user.click(checkbox); // Check the checkbox
+
+    const saveButton = screen.getByRole("button", { name: "Add Item" });
+    await user.click(saveButton);
+
+    expect(mockOnSave).toHaveBeenCalledWith({
+      word_phrase: "hej",
+      translation: "hello",
+      example_phrase: null,
+      extra_info: null,
+      in_learn: true,
+      priority_learn: true,
     });
   });
 
