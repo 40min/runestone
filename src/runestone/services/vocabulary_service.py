@@ -80,6 +80,7 @@ class VocabularyService:
             example_phrase=vocab.example_phrase,
             extra_info=vocab.extra_info,
             in_learn=vocab.in_learn,
+            priority_learn=vocab.priority_learn,
             last_learned=vocab.last_learned.isoformat() if vocab.last_learned else None,
             created_at=vocab.created_at.isoformat() if vocab.created_at else None,
             updated_at=vocab.updated_at.isoformat() if vocab.updated_at else None,
@@ -101,6 +102,7 @@ class VocabularyService:
                     example_phrase=vocab.example_phrase,
                     extra_info=vocab.extra_info,
                     in_learn=vocab.in_learn,
+                    priority_learn=vocab.priority_learn,
                     last_learned=vocab.last_learned.isoformat() if vocab.last_learned else None,
                     learned_times=vocab.learned_times or 0,
                     created_at=vocab.created_at.isoformat() if vocab.created_at else None,
@@ -135,6 +137,7 @@ class VocabularyService:
             example_phrase=updated_vocab.example_phrase,
             extra_info=updated_vocab.extra_info,
             in_learn=updated_vocab.in_learn,
+            priority_learn=updated_vocab.priority_learn,
             last_learned=updated_vocab.last_learned.isoformat() if updated_vocab.last_learned else None,
             learned_times=updated_vocab.learned_times or 0,
             created_at=updated_vocab.created_at.isoformat() if updated_vocab.created_at else None,
@@ -251,6 +254,7 @@ class VocabularyService:
                         example_phrase=item.example_phrase,
                         extra_info=extra_info if extra_info else item.extra_info,
                         in_learn=item.in_learn,
+                        priority_learn=item.priority_learn,
                     )
                     enriched_items.append(enriched_item)
 
@@ -287,6 +291,28 @@ class VocabularyService:
     def get_existing_word_phrases(self, word_phrases: List[str], user_id: int) -> List[str]:
         """Get existing word phrases from the repository."""
         return list(self.repo.get_existing_word_phrases_for_batch(word_phrases, user_id))
+
+    def upsert_priority_word(self, word_phrase: str, translation: str, example_phrase: str, user_id: int) -> None:
+        """Upsert a word with priority_learn=True. Restores deleted words."""
+        existing = self.repo.get_vocabulary_item_by_word_phrase(word_phrase, user_id)
+        if existing:
+            if not existing.in_learn:
+                existing.in_learn = True
+                self.logger.info(f"Restored deleted word: {word_phrase}")
+            existing.priority_learn = True
+            self.repo.update_vocabulary_item(existing)
+            self.logger.info(f"Set priority for existing word: {word_phrase}")
+        else:
+            self.repo.insert_vocabulary_item(
+                VocabularyItemCreate(
+                    word_phrase=word_phrase,
+                    translation=translation,
+                    example_phrase=example_phrase,
+                    priority_learn=True,
+                ),
+                user_id,
+            )
+            self.logger.info(f"Created new priority word: {word_phrase}")
 
     def delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
         """Completely delete a vocabulary item from the database."""

@@ -116,7 +116,23 @@ const MemoryField: React.FC<MemoryFieldProps> = ({
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           disabled={loading}
-          sx={{ fontFamily: "monospace" }}
+          sx={{
+            fontFamily: "monospace",
+            "& .MuiInputBase-input": {
+              color: "rgba(255, 255, 255, 0.9)",
+            },
+            "& .MuiOutlinedInput-root": {
+              "& fieldset": {
+                borderColor: "rgba(255, 255, 255, 0.2)",
+              },
+              "&:hover fieldset": {
+                borderColor: "rgba(255, 255, 255, 0.4)",
+              },
+              "&.Mui-focused fieldset": {
+                borderColor: "white",
+              },
+            },
+          }}
         />
       ) : (
         <Paper

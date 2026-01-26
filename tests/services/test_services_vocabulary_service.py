@@ -847,3 +847,54 @@ class TestVocabularyService:
             # Verify repo called with precise=False (default)
             mock_repo.assert_called_once_with(1, 20, "apple", False)
             assert len(result) == 2
+
+    def test_upsert_priority_word_new(self, service, db_session):
+        """Test upserting a new priority word."""
+        service.upsert_priority_word(
+            word_phrase="nytt ord", translation="new word", example_phrase="Ett nytt ord.", user_id=1
+        )
+        db_session.commit()
+
+        vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "nytt ord").first()
+        assert vocab is not None
+        assert vocab.priority_learn is True
+        assert vocab.translation == "new word"
+        assert vocab.in_learn is True
+
+    def test_upsert_priority_word_existing(self, service, db_session):
+        """Test upserting an existing word to prioritize it."""
+        # Pre-add a regular word
+        vocab = VocabularyModel(
+            user_id=1, word_phrase="befintligt", translation="existing", priority_learn=False, in_learn=True
+        )
+        db_session.add(vocab)
+        db_session.commit()
+
+        service.upsert_priority_word(
+            word_phrase="befintligt", translation="ignored", example_phrase="ignored", user_id=1
+        )
+        db_session.commit()
+
+        # Refresh from DB
+        db_session.expire(vocab)
+        assert vocab.priority_learn is True
+        assert (
+            vocab.translation == "existing"
+        )  # Upsert of existing word doesn't change translation in current implementation
+
+    def test_upsert_priority_word_restore(self, service, db_session):
+        """Test that upserting a priority word restores it if it was soft-deleted."""
+        # Pre-add a soft-deleted word
+        vocab = VocabularyModel(
+            user_id=1, word_phrase="raderat", translation="deleted", priority_learn=False, in_learn=False
+        )
+        db_session.add(vocab)
+        db_session.commit()
+
+        service.upsert_priority_word(word_phrase="raderat", translation="...", example_phrase="...", user_id=1)
+        db_session.commit()
+
+        # Refresh from DB
+        db_session.expire(vocab)
+        assert vocab.in_learn is True
+        assert vocab.priority_learn is True

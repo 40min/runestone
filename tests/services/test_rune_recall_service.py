@@ -653,6 +653,9 @@ def test_remove_word_completely_success(rune_recall_service, state_manager):
         # Success case - no exception raised
         rune_recall_service.remove_word_completely("active_user", "kontanter")
 
+        # Verify priority flag was reset
+        assert mock_word.priority_learn is False
+
         # Verify repository calls
         rune_recall_service.vocabulary_repository.get_vocabulary_item_by_word_phrase.assert_called_once_with(
             "kontanter", 1
@@ -732,11 +735,24 @@ def test_postpone_word_success(rune_recall_service, state_manager):
         id=10, word_phrase="replacement", translation="repl", example_phrase="", in_learn=True, user_id=1
     )
 
-    with patch.object(
-        rune_recall_service.vocabulary_repository, "select_new_daily_words", return_value=[mock_replacement]
+    with (
+        patch.object(
+            rune_recall_service.vocabulary_repository, "select_new_daily_words", return_value=[mock_replacement]
+        ),
+        patch.object(
+            rune_recall_service.vocabulary_repository, "get_vocabulary_item_by_word_phrase", return_value=MagicMock()
+        ) as mock_get,
+        patch.object(rune_recall_service.vocabulary_repository, "update_vocabulary_item") as mock_update,
     ):
+        mock_vocab = mock_get.return_value
+        mock_vocab.priority_learn = True
+
         # Success case - no exception raised
         rune_recall_service.postpone_word("active_user", "kontanter")
+
+        # Verify priority flag was reset
+        assert mock_vocab.priority_learn is False
+        mock_update.assert_called_once_with(mock_vocab)
 
 
 def test_postpone_word_not_in_selection(rune_recall_service, state_manager):

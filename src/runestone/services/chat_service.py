@@ -13,6 +13,7 @@ from runestone.core.processor import RunestoneProcessor
 from runestone.db.chat_repository import ChatRepository
 from runestone.db.models import ChatMessage
 from runestone.services.user_service import UserService
+from runestone.services.vocabulary_service import VocabularyService
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class ChatService:
         user_service: UserService,
         agent_service: AgentService,
         processor: RunestoneProcessor,
+        vocabulary_service: VocabularyService,
     ):
         """
         Initialize the chat service.
@@ -43,6 +45,7 @@ class ChatService:
         self.user_service = user_service
         self.agent_service = agent_service
         self.processor = processor
+        self.vocabulary_service = vocabulary_service
 
     async def process_message(self, user_id: int, message_text: str) -> str:
         """
@@ -84,6 +87,7 @@ class ChatService:
             history=history[:-1],  # Exclude current message (it's passed separately)
             user=user,
             user_service=self.user_service,
+            vocabulary_service=self.vocabulary_service,
             memory_context=memory,
         )
 
@@ -154,6 +158,7 @@ Instructions:
             history=history,
             user=user,
             user_service=self.user_service,
+            vocabulary_service=self.vocabulary_service,
             memory_context=memory,
         )
 

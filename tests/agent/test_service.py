@@ -51,6 +51,11 @@ def mock_user_service():
 
 
 @pytest.fixture
+def mock_vocabulary_service():
+    return MagicMock()
+
+
+@pytest.fixture
 def mock_user():
     user = MagicMock()
     user.mother_tongue = None
@@ -67,12 +72,12 @@ def test_build_agent(mock_settings, mock_chat_model, mock_user_service):
             mock_create_agent.assert_called()
             call_kwargs = mock_create_agent.call_args[1]
             assert call_kwargs["model"] == mock_chat_model
-            assert len(call_kwargs["tools"]) == 1
+            assert len(call_kwargs["tools"]) == 2  # update_memory and prioritize_words_for_learning
             assert "MEMORY PROTOCOL" in call_kwargs["system_prompt"]
 
 
 @pytest.mark.anyio
-async def test_generate_response_orchestration(agent_service, mock_user_service, mock_user):
+async def test_generate_response_orchestration(agent_service, mock_user_service, mock_user, mock_vocabulary_service):
     """Test generate_response orchestration logic."""
     message = "Hello"
     history = []
@@ -81,7 +86,9 @@ async def test_generate_response_orchestration(agent_service, mock_user_service,
         "messages": [HumanMessage(content="Hello"), AIMessage(content="Hi there!")]
     }
 
-    response = await agent_service.generate_response(message, history, mock_user, mock_user_service)
+    response = await agent_service.generate_response(
+        message, history, mock_user, mock_user_service, mock_vocabulary_service
+    )
 
     assert response == "Hi there!"
     agent_service.agent.ainvoke.assert_called_once()
@@ -91,6 +98,7 @@ async def test_generate_response_orchestration(agent_service, mock_user_service,
     context = call_kwargs.get("context")
     assert context.user == mock_user
     assert context.user_service == mock_user_service
+    assert context.vocabulary_service == mock_vocabulary_service
 
     # Verify inputs to invoke
     invoke_args = agent_service.agent.ainvoke.call_args[0][0]
@@ -101,14 +109,14 @@ async def test_generate_response_orchestration(agent_service, mock_user_service,
 
 
 @pytest.mark.anyio
-async def test_generate_response_with_history(agent_service, mock_user_service, mock_user):
+async def test_generate_response_with_history(agent_service, mock_user_service, mock_user, mock_vocabulary_service):
     """Test generate_response with conversation history."""
     message = "Current msg"
     history = [ChatMessage(role="user", content="Old user msg"), ChatMessage(role="assistant", content="Old bot msg")]
 
     agent_service.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
 
-    await agent_service.generate_response(message, history, mock_user, mock_user_service)
+    await agent_service.generate_response(message, history, mock_user, mock_user_service, mock_vocabulary_service)
 
     invoke_args = agent_service.agent.ainvoke.call_args[0][0]
     messages = invoke_args["messages"]
@@ -120,13 +128,15 @@ async def test_generate_response_with_history(agent_service, mock_user_service, 
 
 
 @pytest.mark.anyio
-async def test_generate_response_with_memory(agent_service, mock_user_service, mock_user):
+async def test_generate_response_with_memory(agent_service, mock_user_service, mock_user, mock_vocabulary_service):
     """Test generate_response injects memory context."""
     memory_context = {"personal_info": {"name": "Alice"}}
 
     agent_service.agent.ainvoke.return_value = {"messages": [AIMessage(content="R")]}
 
-    await agent_service.generate_response("msg", [], mock_user, mock_user_service, memory_context)
+    await agent_service.generate_response(
+        "msg", [], mock_user, mock_user_service, mock_vocabulary_service, memory_context
+    )
 
     invoke_args = agent_service.agent.ainvoke.call_args[0][0]
     messages = invoke_args["messages"]
@@ -137,13 +147,15 @@ async def test_generate_response_with_memory(agent_service, mock_user_service, m
 
 
 @pytest.mark.anyio
-async def test_generate_response_with_mother_tongue(agent_service, mock_user_service, mock_user):
+async def test_generate_response_with_mother_tongue(
+    agent_service, mock_user_service, mock_user, mock_vocabulary_service
+):
     """Test generate_response injects mother tongue context."""
     mock_user.mother_tongue = "Spanish"
 
     agent_service.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
 
-    await agent_service.generate_response("msg", [], mock_user, mock_user_service)
+    await agent_service.generate_response("msg", [], mock_user, mock_user_service, mock_vocabulary_service)
 
     invoke_args = agent_service.agent.ainvoke.call_args[0][0]
     messages = invoke_args["messages"]

@@ -92,6 +92,7 @@ class VocabularyItemCreate(BaseModel):
     example_phrase: Optional[str] = None
     extra_info: Optional[str] = None
     in_learn: bool = True
+    priority_learn: bool = False
 
 
 class VocabularyUpdate(BaseModel):
@@ -102,6 +103,7 @@ class VocabularyUpdate(BaseModel):
     example_phrase: Optional[str] = None
     extra_info: Optional[str] = None
     in_learn: Optional[bool] = None
+    priority_learn: Optional[bool] = None
 
 
 class VocabularySaveRequest(BaseModel):
@@ -121,6 +123,7 @@ class Vocabulary(BaseModel):
     example_phrase: Optional[str] = None
     extra_info: Optional[str] = None
     in_learn: bool = True
+    priority_learn: bool = False
     last_learned: Optional[str] = None
     learned_times: int = 0
     created_at: str
