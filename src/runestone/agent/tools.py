@@ -92,7 +92,7 @@ def update_memory(
 
 
 @tool(args_schema=WordPrioritisationInput)
-def prioritize_words_for_learning(
+async def prioritize_words_for_learning(
     words: list[WordPrioritisationItem],
     runtime: ToolRuntime[AgentContext],
 ) -> str:
