@@ -1,5 +1,3 @@
-You're absolutely RIGHT! 🎯 Let me fix that:
-
 # Tidpunktsadverb Cheat Sheet 🕐
 
 ## The Golden Rule of Swedish Time Travel
