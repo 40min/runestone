@@ -15,6 +15,7 @@ interface SavedVocabularyItem {
   example_phrase: string | null;
   extra_info: string | null;
   in_learn: boolean;
+  priority_learn: boolean;
   last_learned: string | null;
   created_at: string;
 }
@@ -60,6 +61,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   const [examplePhrase, setExamplePhrase] = useState("");
   const [extraInfo, setExtraInfo] = useState("");
   const [inLearn, setInLearn] = useState(false);
+  const [priorityLearn, setPriorityLearn] = useState(false);
   const [isImproving, setIsImproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,12 +76,14 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
       setExamplePhrase(item.example_phrase || "");
       setExtraInfo(item.extra_info || "");
       setInLearn(item.in_learn);
+      setPriorityLearn(item.priority_learn);
     } else {
       setWordPhrase("");
       setTranslation("");
       setExamplePhrase("");
       setExtraInfo("");
       setInLearn(true);
+      setPriorityLearn(false);
     }
   }, [item, open]);
 
@@ -95,6 +99,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
         example_phrase: examplePhrase.trim() || null,
         extra_info: extraInfo.trim() || null,
         in_learn: inLearn,
+        priority_learn: priorityLearn,
       });
     } catch (err) {
       const errorMessage =
@@ -265,11 +270,18 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
           </Box>
 
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <StyledCheckbox
-              checked={inLearn}
-              onChange={setInLearn}
-              label="In Learning"
-            />
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              <StyledCheckbox
+                checked={inLearn}
+                onChange={setInLearn}
+                label="In Learning"
+              />
+              <StyledCheckbox
+                checked={priorityLearn}
+                onChange={setPriorityLearn}
+                label="Priority Learn"
+              />
+            </Box>
             <IconButton
               onClick={handleFillAll}
               disabled={!wordPhrase.trim() || isImproving}

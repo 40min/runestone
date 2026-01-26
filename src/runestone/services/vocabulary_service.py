@@ -288,6 +288,28 @@ class VocabularyService:
         """Get existing word phrases from the repository."""
         return list(self.repo.get_existing_word_phrases_for_batch(word_phrases, user_id))
 
+    def upsert_priority_word(self, word_phrase: str, translation: str, example_phrase: str, user_id: int) -> None:
+        """Upsert a word with priority_learn=True. Restores deleted words."""
+        existing = self.repo.get_vocabulary_item_by_word_phrase(word_phrase, user_id)
+        if existing:
+            if not existing.in_learn:
+                existing.in_learn = True
+                self.logger.info(f"Restored deleted word: {word_phrase}")
+            existing.priority_learn = True
+            self.repo.update_vocabulary_item(existing)
+            self.logger.info(f"Set priority for existing word: {word_phrase}")
+        else:
+            self.repo.insert_vocabulary_item(
+                VocabularyItemCreate(
+                    word_phrase=word_phrase,
+                    translation=translation,
+                    example_phrase=example_phrase,
+                    priority_learn=True,
+                ),
+                user_id,
+            )
+            self.logger.info(f"Created new priority word: {word_phrase}")
+
     def delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
         """Completely delete a vocabulary item from the database."""
         return self.repo.hard_delete_vocabulary_item(item_id, user_id)

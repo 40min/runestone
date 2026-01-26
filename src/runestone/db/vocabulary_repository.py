@@ -45,6 +45,7 @@ class VocabularyRepository:
                 example_phrase=item.example_phrase,
                 extra_info=item.extra_info,
                 in_learn=item.in_learn,
+                priority_learn=item.priority_learn,
                 last_learned=None,
             )
             for item in items
@@ -61,6 +62,7 @@ class VocabularyRepository:
             example_phrase=item.example_phrase,
             extra_info=item.extra_info,
             in_learn=item.in_learn,
+            priority_learn=item.priority_learn,
             last_learned=None,
         )
         self.db.add(vocab)
@@ -170,7 +172,10 @@ class VocabularyRepository:
         self, user_id: int, cooldown_days: int = 7, limit: int = 100, excluded_word_ids: Optional[List[int]] = None
     ) -> List[Vocabulary]:
         """
-        Select new daily words for a user randomly, excluding recently learned words.
+        Select new daily words for a user, prioritizing words marked for priority learning.
+
+        Words with priority_learn=True are selected first, then regular words fill remaining slots.
+        All words must be in_learn=True and outside the cooldown period.
 
         Args:
             user_id: Database user ID
@@ -179,22 +184,45 @@ class VocabularyRepository:
             excluded_word_ids: Optional list of word IDs to exclude (e.g., already in selection)
 
         Returns:
-            List of Vocabulary objects
+            List of Vocabulary objects (priority words first, then regular words)
         """
         cutoff_date = datetime.now() - timedelta(days=cooldown_days)
 
-        query = self.db.query(Vocabulary).filter(
+        # Build base filter conditions
+        base_filter = [
             Vocabulary.user_id == user_id,
             Vocabulary.in_learn.is_(True),
             or_(Vocabulary.last_learned.is_(None), Vocabulary.last_learned < cutoff_date),
+        ]
+
+        if excluded_word_ids:
+            base_filter.append(~Vocabulary.id.in_(excluded_word_ids))
+
+        # First: select priority words
+        prioritized = (
+            self.db.query(Vocabulary)
+            .filter(*base_filter, Vocabulary.priority_learn.is_(True))
+            .order_by(func.random())
+            .limit(limit)
+            .all()
         )
 
-        # Exclude specific word IDs if provided
-        if excluded_word_ids:
-            query = query.filter(~Vocabulary.id.in_(excluded_word_ids))
+        # If we have enough priority words, return them
+        if len(prioritized) >= limit:
+            return prioritized
 
-        result = query.order_by(func.random()).limit(limit).all()
-        return result
+        # Fill remaining slots with non-priority words
+        remaining = limit - len(prioritized)
+        prioritized_ids = [w.id for w in prioritized]
+
+        # Build filter for regular words (excluding already selected priority words)
+        regular_filter = base_filter + [Vocabulary.priority_learn.is_(False)]
+        if prioritized_ids:
+            regular_filter.append(~Vocabulary.id.in_(prioritized_ids))
+
+        regular = self.db.query(Vocabulary).filter(*regular_filter).order_by(func.random()).limit(remaining).all()
+
+        return prioritized + regular
 
     def get_vocabulary_item_for_recall(self, item_id: int, user_id: int) -> Vocabulary:
         """Get a vocabulary item by ID and user_id, ensuring it's in learning."""

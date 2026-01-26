@@ -160,6 +160,17 @@ const VocabularyView: React.FC = () => {
                 ),
               },
               {
+                key: "priority_learn",
+                label: "Priority",
+                render: (value) => (
+                  <StyledCheckbox
+                    checked={value as boolean}
+                    onChange={() => {}}
+                    sx={{ pointerEvents: "none" }}
+                  />
+                ),
+              },
+              {
                 key: "last_learned",
                 label: "Last Learned",
                 render: (value) => (

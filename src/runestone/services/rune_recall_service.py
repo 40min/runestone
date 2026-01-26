@@ -407,6 +407,9 @@ class RuneRecallService:
         if not matching_word:
             raise WordNotFoundError(word_phrase, username)
 
+        # Reset priority flag before deletion
+        matching_word.priority_learn = False
+
         # Remove from database
         if not self.vocabulary_repository.delete_vocabulary_item_by_word_phrase(word_phrase, user_data.db_user_id):
             raise VocabularyOperationError("Failed to remove word from database")
@@ -434,6 +437,12 @@ class RuneRecallService:
 
         if not self.remove_word_from_daily_selection(user_data, word_phrase):
             raise WordNotInSelectionError(word_phrase)
+
+        # Reset priority flag when postponing
+        vocab_item = self.vocabulary_repository.get_vocabulary_item_by_word_phrase(word_phrase, user_data.db_user_id)
+        if vocab_item:
+            vocab_item.priority_learn = False
+            self.vocabulary_repository.update_vocabulary_item(vocab_item)
 
         self.maintain_daily_selection(username, user_data)
         self.update_user_daily_selection(username, user_data)

@@ -2,6 +2,7 @@
 Tool definitions for the agent using LangChain's @tool decorator.
 """
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass
@@ -9,12 +10,28 @@ from typing import Literal
 
 from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 from runestone.db.models import User
 from runestone.services.user_service import UserService
+from runestone.services.vocabulary_service import VocabularyService
 from runestone.utils.merge import deep_merge
 
 logger = logging.getLogger(__name__)
+
+
+class WordPrioritisationItem(BaseModel):
+    """Input for a single word to prioritize."""
+
+    word_phrase: str = Field(..., description="The Swedish word or phrase")
+    translation: str = Field(..., description="Translation")
+    example_phrase: str = Field(..., description="Example sentence in Swedish")
+
+
+class WordPrioritisationInput(BaseModel):
+    """Input for prioritizing words for learning."""
+
+    words: list[WordPrioritisationItem] = Field(..., description="List of words to prioritize")
 
 
 @dataclass
@@ -24,6 +41,7 @@ class AgentContext:
     user: User
     # we can't use DI of FastAPI here, so had to put the service to context
     user_service: UserService
+    vocabulary_service: VocabularyService
 
 
 @tool
@@ -71,3 +89,45 @@ def update_memory(
     except Exception as e:
         logger.error(f"Error updating memory for user {user.id}: {e}")
         return f"Error updating memory: {str(e)}"
+
+
+@tool(args_schema=WordPrioritisationInput)
+def prioritize_words_for_learning(
+    words: list[WordPrioritisationItem],
+    runtime: ToolRuntime[AgentContext],
+) -> str:
+    """
+    Mark words for priority learning. Use when student uses another language
+    to express a word or constantly makes errors writing a word.
+
+    This tool runs in the background - returns immediately.
+    For each word:
+    - If deleted: restores it and marks for priority
+    - If exists: marks for priority
+    - If new: creates it with priority flag
+
+    Args:
+        words: List of words to prioritize for learning
+        runtime: Tool runtime context
+
+    Returns:
+        Immediate acknowledgment message
+    """
+    user = runtime.context.user
+    vocab_service = runtime.context.vocabulary_service
+
+    async def process_words():
+        for word_item in words:
+            try:
+                vocab_service.upsert_priority_word(
+                    word_phrase=word_item.word_phrase,
+                    translation=word_item.translation,
+                    example_phrase=word_item.example_phrase,
+                    user_id=user.id,
+                )
+                logger.info(f"Processed priority word: {word_item.word_phrase}")
+            except Exception as e:
+                logger.error(f"Failed to process {word_item.word_phrase}: {e}")
+
+    asyncio.create_task(process_words())
+    return f"Processing {len(words)} word(s) for priority learning in background."

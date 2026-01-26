@@ -38,7 +38,7 @@ class Vocabulary(Base):
     __tablename__ = "vocabulary"
 
     # Fields that can be updated via API
-    UPDATABLE_FIELDS = {"word_phrase", "translation", "example_phrase", "extra_info", "in_learn"}
+    UPDATABLE_FIELDS = {"word_phrase", "translation", "example_phrase", "extra_info", "in_learn", "priority_learn"}
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -47,6 +47,7 @@ class Vocabulary(Base):
     example_phrase = Column(Text, nullable=True)
     extra_info = Column(Text, nullable=True, default=None)
     in_learn = Column(Boolean, default=True)
+    priority_learn = Column(Boolean, default=False, server_default="0")
     last_learned = Column(DateTime(timezone=True), nullable=True)
     learned_times = Column(Integer, default=0, server_default="0", nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

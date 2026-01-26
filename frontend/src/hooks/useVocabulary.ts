@@ -10,6 +10,7 @@ interface SavedVocabularyItem {
   example_phrase: string | null;
   extra_info: string | null;
   in_learn: boolean;
+  priority_learn: boolean;
   last_learned: string | null;
   learned_times: number;
   created_at: string;

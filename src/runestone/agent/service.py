@@ -16,7 +16,7 @@ from pydantic import SecretStr
 
 from runestone.agent.prompts import load_persona
 from runestone.agent.schemas import ChatMessage
-from runestone.agent.tools import AgentContext, update_memory
+from runestone.agent.tools import AgentContext, prioritize_words_for_learning, update_memory
 from runestone.config import Settings
 from runestone.db.models import User
 from runestone.services.user_service import UserService
@@ -74,7 +74,7 @@ class AgentService:
             temperature=1,
         )
 
-        tools = [update_memory]
+        tools = [update_memory, prioritize_words_for_learning]
 
         # Build system prompt with persona and tool instructions
         system_prompt = self.persona["system_prompt"]
@@ -105,6 +105,15 @@ You are a memory-driven AI. Your effectiveness depends on maintaining a detailed
 - If you are unsure if a detail is important, save it anyway
 
 **If you learn something about the student and do NOT call update_memory, you are failing your core function.**
+
+### WORD PRIORITISATION PROTOCOL
+When you notice a student:
+- Using their mother tongue to express a Swedish word (e.g., "how do I say 'apple' in Swedish?")
+- Repeatedly misspelling or misusing a word
+- Struggling with specific vocabulary during conversation
+
+Call `prioritize_words_for_learning` to mark these words for priority learning.
+This ensures the word appears in their next daily recall session.
 """
 
         agent = create_agent(
@@ -122,6 +131,7 @@ You are a memory-driven AI. Your effectiveness depends on maintaining a detailed
         history: list[ChatMessage],
         user: User,
         user_service: UserService,
+        vocabulary_service,
         memory_context: Optional[dict] = None,
     ) -> str:
         """
@@ -174,7 +184,7 @@ You are a memory-driven AI. Your effectiveness depends on maintaining a detailed
         try:
             result = await self.agent.ainvoke(
                 {"messages": messages},
-                context=AgentContext(user=user, user_service=user_service),
+                context=AgentContext(user=user, user_service=user_service, vocabulary_service=vocabulary_service),
             )
 
             final_messages = result.get("messages", [])
