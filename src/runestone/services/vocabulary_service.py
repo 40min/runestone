@@ -80,6 +80,7 @@ class VocabularyService:
             example_phrase=vocab.example_phrase,
             extra_info=vocab.extra_info,
             in_learn=vocab.in_learn,
+            priority_learn=vocab.priority_learn,
             last_learned=vocab.last_learned.isoformat() if vocab.last_learned else None,
             created_at=vocab.created_at.isoformat() if vocab.created_at else None,
             updated_at=vocab.updated_at.isoformat() if vocab.updated_at else None,
@@ -101,6 +102,7 @@ class VocabularyService:
                     example_phrase=vocab.example_phrase,
                     extra_info=vocab.extra_info,
                     in_learn=vocab.in_learn,
+                    priority_learn=vocab.priority_learn,
                     last_learned=vocab.last_learned.isoformat() if vocab.last_learned else None,
                     learned_times=vocab.learned_times or 0,
                     created_at=vocab.created_at.isoformat() if vocab.created_at else None,
@@ -135,6 +137,7 @@ class VocabularyService:
             example_phrase=updated_vocab.example_phrase,
             extra_info=updated_vocab.extra_info,
             in_learn=updated_vocab.in_learn,
+            priority_learn=updated_vocab.priority_learn,
             last_learned=updated_vocab.last_learned.isoformat() if updated_vocab.last_learned else None,
             learned_times=updated_vocab.learned_times or 0,
             created_at=updated_vocab.created_at.isoformat() if updated_vocab.created_at else None,
@@ -251,6 +254,7 @@ class VocabularyService:
                         example_phrase=item.example_phrase,
                         extra_info=extra_info if extra_info else item.extra_info,
                         in_learn=item.in_learn,
+                        priority_learn=item.priority_learn,
                     )
                     enriched_items.append(enriched_item)
 
