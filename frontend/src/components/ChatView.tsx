@@ -235,52 +235,52 @@ const ChatView: React.FC = () => {
           <Box
             sx={{
               display: 'flex',
-              gap: 3,
+              gap: 1.5,
               alignItems: 'center',
               pl: 0.5,
             }}
           >
-            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-              <VoiceRecordButton
-                isRecording={isRecording}
-                isProcessing={isTranscribing}
-                duration={recordedDuration}
-                onStartRecording={handleStartRecording}
-                onStopRecording={handleStopRecording}
-                disabled={isAnyProcessing}
-              />
-              <ImageUploadButton
-                onFileSelect={handleImageUpload}
-                onError={handleImageError}
-                disabled={isAnyProcessing || isRecording}
-              />
-            </Box>
-
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={improveTranscription}
-                  onChange={(e) => setImproveTranscription(e.target.checked)}
-                  size="small"
-                  sx={{
-                    color: '#9ca3af',
-                    p: 0.5,
-                    '&.Mui-checked': {
-                      color: 'var(--primary-color)',
-                    },
-                  }}
-                />
-              }
-              label="Improve transcription"
-              sx={{
-                color: '#9ca3af',
-                m: 0,
-                '& .MuiFormControlLabel-label': {
-                  fontSize: '0.75rem',
-                },
-              }}
+            <VoiceRecordButton
+              isRecording={isRecording}
+              isProcessing={isTranscribing}
+              duration={recordedDuration}
+              onStartRecording={handleStartRecording}
+              onStopRecording={handleStopRecording}
+              disabled={isAnyProcessing}
+            />
+            <ImageUploadButton
+              onFileSelect={handleImageUpload}
+              onError={handleImageError}
+              disabled={isAnyProcessing || isRecording}
             />
           </Box>
+
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={improveTranscription}
+                onChange={(e) => setImproveTranscription(e.target.checked)}
+                size="small"
+                sx={{
+                  color: '#9ca3af',
+                  p: 0.5,
+                  '&.Mui-checked': {
+                    color: 'var(--primary-color)',
+                  },
+                }}
+              />
+            }
+            label="Improve transcription"
+            sx={{
+              color: '#9ca3af',
+              mt: 1,
+              pl: 2,
+              width: 'fit-content',
+              '& .MuiFormControlLabel-label': {
+                fontSize: '0.75rem',
+              },
+            }}
+          />
         </Box>
 
         {/* Upload error display */}
