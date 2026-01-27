@@ -9,7 +9,7 @@
 .PHONY: test-prompts-ocr test-prompts-analysis test-prompts-search test-prompts-vocabulary
 .PHONY: dev-test dev-full ci-lint ci-test
 .PHONY: db-init db-migrate db-upgrade db-downgrade db-current db-history
-.PHONY: init-state docker-up docker-down docker-build restart-recall rebuild-restart-recall rebuild-restart-all
+.PHONY: init-state docker-up docker-down docker-build restart-recall rebuild-restart-recall rebuild-restart-all rebuild-container
 
 # =============================================================================
 # HELP AND INFO
@@ -78,6 +78,7 @@ help:
 	@echo "  restart-recall   - Restart the recall container"
 	@echo "  rebuild-restart-recall - Rebuild and restart the recall container"
 	@echo "  rebuild-restart-all - Rebuild and restart all containers"
+	@echo "  rebuild-container - Rebuild specific container(s) (requires NAMES='name1 name2')"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  clean            - Clean temporary files and caches"
@@ -413,3 +414,20 @@ rebuild-restart-recall:
 rebuild-restart-all:
 	@echo "🔨 Rebuilding and restarting all containers..."
 	@docker compose up --build --force-recreate -d
+
+# Rebuild a container or group of containers with full cleanup
+rebuild-container:
+	@echo "🔄 Pulling latest changes from git..."
+	@git pull
+	@if [ -z "$(NAMES)" ]; then \
+		echo "❌ Error: NAMES is required. Usage: make rebuild-container NAMES='container1 container2'"; \
+		exit 1; \
+	fi
+	@echo "🛑 Stopping containers: $(NAMES)..."
+	sudo docker stop $(NAMES)
+	@echo "🗑️  Removing containers: $(NAMES)..."
+	sudo docker rm $(NAMES)
+	@echo "🧹 Removing images: $(NAMES)..."
+	sudo docker rmi $(NAMES)
+	@echo "🚀 Starting services with docker compose..."
+	sudo docker compose up -d
