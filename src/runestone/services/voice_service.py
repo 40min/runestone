@@ -11,6 +11,7 @@ import logging
 from openai import OpenAI
 
 from runestone.config import Settings
+from runestone.core.constants import LANGUAGE_CODE_MAP
 from runestone.core.exceptions import RunestoneError
 
 logger = logging.getLogger(__name__)
@@ -29,12 +30,13 @@ class VoiceService:
         self.settings = settings
         self._client = OpenAI(api_key=settings.openai_api_key)
 
-    async def transcribe_audio(self, audio_content: bytes) -> str:
+    async def transcribe_audio(self, audio_content: bytes, language: str | None = None) -> str:
         """
         Transcribe audio to text using OpenAI Whisper API.
 
         Args:
             audio_content: Raw audio bytes (WebM, WAV, MP3, etc. supported by Whisper)
+            language: Optional ISO-639-1 language code
 
         Returns:
             Transcribed text
@@ -47,10 +49,14 @@ class VoiceService:
             audio_file = io.BytesIO(audio_content)
             audio_file.name = "recording.webm"
 
-            response = self._client.audio.transcriptions.create(
-                model=self.settings.voice_transcription_model,
-                file=audio_file,
-            )
+            params = {
+                "model": self.settings.voice_transcription_model,
+                "file": audio_file,
+            }
+            if language:
+                params["language"] = language
+
+            response = self._client.audio.transcriptions.create(**params)
 
             transcribed_text = response.text
             if not transcribed_text:
@@ -112,23 +118,31 @@ class VoiceService:
             logger.warning("Falling back to unenhanced text")
             return text
 
-    async def process_voice_input(self, audio_content: bytes, improve: bool = True) -> str:
+    async def process_voice_input(self, audio_content: bytes, improve: bool = True, language: str | None = None) -> str:
         """
-        Process voice input: transcribe and optionally enhance.
+        Process voice input:
+        1. Transcribe audio (Whisper handles auto-detection if language is None)
+        2. Optionally enhance text with GPT
 
         Args:
             audio_content: Raw audio bytes
             improve: Whether to apply text enhancement
+            language: Optional full language name or ISO-639-1 code (e.g., from user profile)
 
         Returns:
-            Final transcribed (and optionally enhanced) text
-
-        Raises:
-            RunestoneError: If transcription fails
+            Final processed text
         """
-        transcribed_text = await self.transcribe_audio(audio_content)
-        logger.info(f"Transcribed audio to text: {transcribed_text}")
+        # Map full language name to ISO-639-1 if possible
+        whisper_lang = language
+        if language and language in LANGUAGE_CODE_MAP:
+            whisper_lang = LANGUAGE_CODE_MAP[language]
+            logger.info(f"Mapped language '{language}' to code '{whisper_lang}'")
 
+        # 1. Transcribe (with provided language or Whisper auto-detection)
+        transcribed_text = await self.transcribe_audio(audio_content, language=whisper_lang)
+        logger.info(f"Transcription completed (lang={whisper_lang}): {transcribed_text}")
+
+        # 2. Text enhancement
         if improve:
             return await self.enhance_text(transcribed_text)
 

@@ -190,7 +190,9 @@ async def transcribe_voice(
     try:
         logger.info(f"User {current_user.email} requested voice transcription (improve={improve})")
 
-        transcribed_text = await voice_service.process_voice_input(content, improve=improve)
+        transcribed_text = await voice_service.process_voice_input(
+            content, improve=improve, language=current_user.mother_tongue
+        )
 
         logger.info(f"Voice transcription completed for user {current_user.email}")
 

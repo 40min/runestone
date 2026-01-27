@@ -55,6 +55,19 @@ async def test_transcribe_audio_success(voice_service, mock_openai_client):
     call_kwargs = mock_openai_client.audio.transcriptions.create.call_args[1]
     assert call_kwargs["model"] == "whisper-1"
     assert "file" in call_kwargs
+    assert "language" not in call_kwargs
+
+
+@pytest.mark.anyio
+async def test_transcribe_audio_with_language(voice_service, mock_openai_client):
+    """Test audio transcription with explicit language."""
+    audio_content = b"fake_audio_content"
+    result = await voice_service.transcribe_audio(audio_content, language="sv")
+
+    assert result == "Hello world"
+    mock_openai_client.audio.transcriptions.create.assert_called_once()
+    call_kwargs = mock_openai_client.audio.transcriptions.create.call_args[1]
+    assert call_kwargs["language"] == "sv"
 
 
 @pytest.mark.anyio
@@ -108,28 +121,56 @@ async def test_enhance_text_api_error(voice_service, mock_openai_client):
 
 
 @pytest.mark.anyio
-async def test_process_voice_input_with_improve(voice_service):
-    """Test processing voice input with improvement enabled."""
-    # Mock internal methods to isolate flow logic
+async def test_process_voice_input_auto_detection(voice_service):
+    """Test the voice processing pipeline with auto-detection (language=None)."""
     voice_service.transcribe_audio = AsyncMock(return_value="raw text")
     voice_service.enhance_text = AsyncMock(return_value="enhanced text")
 
-    result = await voice_service.process_voice_input(b"audio", improve=True)
+    audio_content = b"audio"
+    result = await voice_service.process_voice_input(audio_content, improve=True, language=None)
 
     assert result == "enhanced text"
-    voice_service.transcribe_audio.assert_called_once_with(b"audio")
+    voice_service.transcribe_audio.assert_called_once_with(audio_content, language=None)
+    voice_service.enhance_text.assert_called_once_with("raw text")
+
+
+@pytest.mark.anyio
+async def test_process_voice_input_with_provided_language(voice_service):
+    """Test the voice processing pipeline with a specific language."""
+    voice_service.transcribe_audio = AsyncMock(return_value="raw text")
+    voice_service.enhance_text = AsyncMock(return_value="enhanced text")
+
+    audio_content = b"audio"
+    result = await voice_service.process_voice_input(audio_content, improve=True, language="sv")
+
+    assert result == "enhanced text"
+    voice_service.transcribe_audio.assert_called_once_with(audio_content, language="sv")
     voice_service.enhance_text.assert_called_once_with("raw text")
 
 
 @pytest.mark.anyio
 async def test_process_voice_input_without_improve(voice_service):
-    """Test processing voice input with improvement disabled."""
-    # Mock internal methods
+    """Test pipeline without enhancement."""
     voice_service.transcribe_audio = AsyncMock(return_value="raw text")
     voice_service.enhance_text = AsyncMock()
 
     result = await voice_service.process_voice_input(b"audio", improve=False)
 
     assert result == "raw text"
-    voice_service.transcribe_audio.assert_called_once_with(b"audio")
     voice_service.enhance_text.assert_not_called()
+    voice_service.transcribe_audio.assert_called_once()
+
+
+@pytest.mark.anyio
+async def test_process_voice_input_with_language_mapping(voice_service):
+    """Test that full language names are mapped to ISO-639-1 codes."""
+    voice_service.transcribe_audio = AsyncMock(return_value="raw text")
+    voice_service.enhance_text = AsyncMock(return_value="enhanced text")
+
+    audio_content = b"audio"
+    # "Swedish" should map to "sv"
+    result = await voice_service.process_voice_input(audio_content, improve=True, language="Swedish")
+
+    assert result == "enhanced text"
+    # Verify it was called with "sv" not "Swedish"
+    voice_service.transcribe_audio.assert_called_once_with(audio_content, language="sv")

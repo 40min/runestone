@@ -37,7 +37,6 @@ const LANGUAGES = [
   "Hungarian",
   "Romanian",
   "Greek",
-  "Ukrainian",
   "Hebrew",
   "Indonesian",
   "Thai",
