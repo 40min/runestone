@@ -25,6 +25,7 @@ from runestone.services.chat_service import ChatService
 from runestone.services.grammar_service import GrammarService
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
+from runestone.services.voice_service import VoiceService
 
 
 def get_settings() -> Settings:
@@ -244,3 +245,18 @@ def get_chat_service(
         ChatService: Service instance for chat operations
     """
     return ChatService(settings, repo, user_service, agent_service, processor, vocabulary_service)
+
+
+def get_voice_service(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> VoiceService:
+    """
+    Get voice service instance.
+
+    Args:
+        settings: Application settings from dependency injection
+
+    Returns:
+        VoiceService: Service instance for voice transcription operations
+    """
+    return VoiceService(settings)

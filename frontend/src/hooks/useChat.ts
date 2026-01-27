@@ -12,6 +12,7 @@ interface ChatMessage {
 interface UseChatReturn {
   messages: ChatMessage[];
   isLoading: boolean;
+  isFetchingHistory: boolean;
   error: string | null;
   sendMessage: (message: string) => Promise<void>;
   startNewChat: () => Promise<void>;
@@ -24,6 +25,7 @@ const CLIENT_ID = uuidv4();
 export const useChat = (): UseChatReturn => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingHistory, setIsFetchingHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { get, post, delete: apiDelete } = useApi();
   const { token } = useAuth();
@@ -37,7 +39,7 @@ export const useChat = (): UseChatReturn => {
     if (isLoading || fetchInProgressRef.current || !token) return;
 
     fetchInProgressRef.current = true;
-    setIsLoading(true);
+    setIsFetchingHistory(true);
     try {
       const data = await get<{ messages: ChatMessage[] }>('/api/chat/history');
       const newMessages = data.messages || [];
@@ -56,7 +58,7 @@ export const useChat = (): UseChatReturn => {
       setError('Failed to load chat history. Starting fresh.');
       setMessages([]);
     } finally {
-      setIsLoading(false);
+      setIsFetchingHistory(false);
       fetchInProgressRef.current = false;
     }
   }, [get, isLoading, token]);
@@ -157,6 +159,7 @@ export const useChat = (): UseChatReturn => {
   return {
     messages,
     isLoading,
+    isFetchingHistory,
     error,
     sendMessage,
     startNewChat,

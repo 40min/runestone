@@ -66,6 +66,12 @@ class Settings(BaseSettings):
     # Image Upload Configuration
     chat_image_max_size_mb: int = 10
 
+    # Voice Transcription Configuration
+    voice_transcription_model: str = "whisper-1"
+    voice_enhancement_model: str = "gpt-4o-mini"
+    voice_max_duration_seconds: int = 300
+    voice_max_file_size_mb: int = 25
+
     class Config:
         """Pydantic configuration."""
 

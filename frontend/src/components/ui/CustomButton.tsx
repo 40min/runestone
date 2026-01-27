@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
 
-interface CustomButtonProps {
+interface CustomButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'tab' | 'save';
   size?: 'small' | 'medium' | 'large';
   children: React.ReactNode;
@@ -24,8 +24,10 @@ const CustomButton: React.FC<CustomButtonProps> = ({
   fullWidth = false,
   sx,
   active = false,
+  ...props
 }) => {
   const getVariantStyles = (): SxProps<Theme> => {
+    // ... no changes here ...
     const baseStyles: SxProps<Theme> = {
       fontWeight: 'medium',
       textTransform: 'none',
@@ -115,6 +117,7 @@ const CustomButton: React.FC<CustomButtonProps> = ({
         ...getVariantStyles(),
         ...(sx || {}),
       } as SxProps<Theme>}
+      {...props}
     >
       {children}
     </Button>

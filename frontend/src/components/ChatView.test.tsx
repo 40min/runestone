@@ -57,10 +57,9 @@ const setupMockFetch = () => {
   });
 };
 
-// Helper to get the send button (last button in the chat input area)
+// Helper to get the send button
 const getSendButton = () => {
-  const buttons = screen.getAllByRole('button');
-  return buttons[buttons.length - 1];
+  return screen.getByRole('button', { name: /send message/i });
 };
 
 describe('ChatView', () => {
