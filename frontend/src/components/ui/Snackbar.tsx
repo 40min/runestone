@@ -39,28 +39,28 @@ const Snackbar: React.FC<SnackbarProps> = ({
   const getIcon = () => {
     switch (severity) {
       case 'success':
-        return <CheckCircle sx={{ color: '#10b981' }} />;
+        return <CheckCircle sx={{ color: '#34d399' }} />; // Lighter Emerald
       case 'error':
-        return <Error sx={{ color: '#ef4444' }} />;
+        return <Error sx={{ color: '#fca5a5' }} />; // Lighter Red
       case 'warning':
-        return <Warning sx={{ color: '#f59e0b' }} />;
+        return <Warning sx={{ color: '#fcd34d' }} />; // Lighter Amber
       case 'info':
       default:
-        return <Info sx={{ color: '#3b82f6' }} />;
+        return <Info sx={{ color: '#93c5fd' }} />; // Lighter Blue
     }
   };
 
   const getBackgroundColor = () => {
     switch (severity) {
       case 'success':
-        return 'rgba(16, 185, 129, 0.1)';
+        return '#064e3b'; // Dark Emerald
       case 'error':
-        return 'rgba(239, 68, 68, 0.1)';
+        return '#7f1d1d'; // Dark Red
       case 'warning':
-        return 'rgba(245, 158, 11, 0.1)';
+        return '#78350f'; // Dark Amber
       case 'info':
       default:
-        return 'rgba(59, 130, 246, 0.1)';
+        return '#1e3a8a'; // Dark Blue
     }
   };
 
@@ -84,14 +84,15 @@ const Snackbar: React.FC<SnackbarProps> = ({
     <Box
       sx={{
         position: 'fixed',
-        top: 24,
-        right: 24,
-        zIndex: 1400,
-        maxWidth: { xs: '90vw', sm: '80vw', md: '500px' },
-        minWidth: '300px',
+        bottom: { xs: 16, sm: 24 },
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 2000,
+        maxWidth: { xs: '95vw', sm: '80vw', md: '500px' },
+        minWidth: { xs: 'calc(100vw - 32px)', sm: '350px' },
       }}
     >
-      <Slide direction="left" in={visible} mountOnEnter unmountOnExit>
+      <Slide direction="up" in={visible} mountOnEnter unmountOnExit>
         <Box
           sx={{
             backgroundColor: getBackgroundColor(),
@@ -112,9 +113,10 @@ const Snackbar: React.FC<SnackbarProps> = ({
             <Typography
               variant="body2"
               sx={{
-                color: '#1f2937',
-                lineHeight: 1.4,
+                color: '#ffffff',
+                lineHeight: 1.5,
                 fontSize: '0.875rem',
+                fontWeight: 500,
               }}
             >
               {message}
@@ -124,10 +126,10 @@ const Snackbar: React.FC<SnackbarProps> = ({
             size="small"
             onClick={handleClose}
             sx={{
-              color: '#6b7280',
+              color: 'rgba(255, 255, 255, 0.7)',
               '&:hover': {
-                color: '#374151',
-                backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                color: '#ffffff',
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
               },
             }}
           >

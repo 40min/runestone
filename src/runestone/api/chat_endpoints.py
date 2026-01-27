@@ -7,15 +7,23 @@ This module provides API endpoints for chat interactions with the teacher agent.
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 
-from runestone.agent.schemas import ChatHistoryResponse, ChatMessage, ChatRequest, ChatResponse, ImageChatResponse
+from runestone.agent.schemas import (
+    ChatHistoryResponse,
+    ChatMessage,
+    ChatRequest,
+    ChatResponse,
+    ImageChatResponse,
+    VoiceTranscriptionResponse,
+)
 from runestone.auth.dependencies import get_current_user
 from runestone.config import settings
 from runestone.core.exceptions import RunestoneError
 from runestone.db.models import User
-from runestone.dependencies import get_chat_service
+from runestone.dependencies import get_chat_service, get_voice_service
 from runestone.services.chat_service import ChatService
+from runestone.services.voice_service import VoiceService
 
 logger = logging.getLogger(__name__)
 
@@ -139,3 +147,64 @@ async def clear_history(
     except Exception as e:
         logger.error(f"Error clearing chat history: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to clear chat history.")
+
+
+@router.post("/transcribe-voice", response_model=VoiceTranscriptionResponse)
+async def transcribe_voice(
+    file: Annotated[UploadFile, File(description="Audio file to transcribe (WebM format)")],
+    improve: Annotated[bool, Form(description="Whether to enhance the transcription")] = True,
+    voice_service: Annotated[VoiceService, Depends(get_voice_service)] = None,
+    current_user: Annotated[User, Depends(get_current_user)] = None,
+) -> VoiceTranscriptionResponse:
+    """
+    Transcribe voice audio to text.
+
+    The endpoint accepts audio files (WebM Opus format) and returns transcribed text.
+    Optionally, the transcription can be enhanced for grammar and clarity.
+    """
+    # Validate file type
+    if not file.content_type or not file.content_type.startswith("audio/"):
+        logger.warning(f"Invalid file type for voice transcription: {file.content_type}")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Please upload an audio file.",
+        )
+
+    # Read and validate file size
+    content = await file.read()
+    file_size = len(content)
+    max_size_bytes = settings.voice_max_file_size_mb * 1024 * 1024
+
+    if file_size > max_size_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large. Maximum size is {settings.voice_max_file_size_mb}MB.",
+        )
+
+    if file_size == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Empty audio file.",
+        )
+
+    try:
+        logger.info(f"User {current_user.email} requested voice transcription (improve={improve})")
+
+        transcribed_text = await voice_service.process_voice_input(content, improve=improve)
+
+        logger.info(f"Voice transcription completed for user {current_user.email}")
+
+        return VoiceTranscriptionResponse(text=transcribed_text)
+
+    except RunestoneError as e:
+        logger.error(f"Transcription error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        )
+    except Exception as e:
+        logger.error(f"Error processing voice: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to transcribe voice. Please try again.",
+        )

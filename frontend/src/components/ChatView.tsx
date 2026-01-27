@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box } from '@mui/material';
+import { Box, FormControlLabel, Checkbox } from '@mui/material';
 import { Send } from 'lucide-react';
 import {
   CustomButton,
@@ -11,11 +11,15 @@ import {
   ChatContainer,
   ImageUploadButton,
   Snackbar,
+  VoiceRecordButton,
 } from './ui';
 import { ImageSidebar } from './chat/ImageSidebar';
 import { ChatHeader } from './chat/ChatHeader';
 import { useChat } from '../hooks/useChat';
 import { useChatImageUpload } from '../hooks/useChatImageUpload';
+import { useVoiceRecording } from '../hooks/useVoiceRecording';
+
+const IMPROVE_TRANSCRIPTION_KEY = 'runestone_improve_transcription';
 
 const ChatView: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
@@ -26,6 +30,35 @@ const ChatView: React.FC = () => {
   const { messages, isLoading, error, sendMessage, startNewChat, refreshHistory } = useChat();
   const { uploadedImages, uploadImage, isUploading, error: uploadError, clearImages } = useChatImageUpload();
   const [snackbarError, setSnackbarError] = useState<string | null>(null);
+
+  // Voice recording with improve option
+  const [improveTranscription, setImproveTranscription] = useState(() => {
+    const stored = localStorage.getItem(IMPROVE_TRANSCRIPTION_KEY);
+    return stored === null ? true : stored === 'true';
+  });
+
+  const {
+    isRecording,
+    isProcessing: isTranscribing,
+    recordedDuration,
+    startRecording,
+    stopRecording,
+    error: voiceError,
+    clearError: clearVoiceError,
+  } = useVoiceRecording(improveTranscription);
+
+  // Persist improve setting
+  useEffect(() => {
+    localStorage.setItem(IMPROVE_TRANSCRIPTION_KEY, String(improveTranscription));
+  }, [improveTranscription]);
+
+  // Show voice errors in snackbar
+  useEffect(() => {
+    if (voiceError) {
+      setSnackbarError(voiceError);
+      clearVoiceError();
+    }
+  }, [voiceError, clearVoiceError]);
 
   // Auto-scroll to bottom when messages change or loading state changes
   useEffect(() => {
@@ -101,6 +134,19 @@ const ChatView: React.FC = () => {
     await startNewChat();
   };
 
+  const handleStartRecording = async () => {
+    await startRecording();
+  };
+
+  const handleStopRecording = async () => {
+    const transcribedText = await stopRecording();
+    if (transcribedText) {
+      setInputMessage(transcribedText);
+    }
+  };
+
+  const isAnyProcessing = isLoading || isUploading || isTranscribing;
+
   return (
     <Box
       sx={{
@@ -126,7 +172,7 @@ const ChatView: React.FC = () => {
         title="Chat with Your Swedish Teacher"
         subtitle="Ask questions about Swedish vocabulary, grammar, or practice conversation"
         onNewChat={handleNewChat}
-        isLoading={isLoading || isUploading}
+        isLoading={isAnyProcessing}
         hasMessages={messages.length > 0}
       />
 
@@ -142,6 +188,7 @@ const ChatView: React.FC = () => {
 
         {isLoading && <ChatLoadingIndicator message="Teacher is thinking..." />}
         {isUploading && <ChatLoadingIndicator message="Analyzing image..." />}
+        {isTranscribing && <ChatLoadingIndicator message="Transcribing voice..." />}
 
         {error && <ErrorAlert message={error} />}
 
@@ -152,34 +199,74 @@ const ChatView: React.FC = () => {
         <Box
           sx={{
             display: 'flex',
-            gap: { xs: 1, md: 2 },
-            alignItems: 'flex-end',
+            flexDirection: 'column',
+            gap: 1,
             pb: { xs: 1, md: 0 },
           }}
         >
-          <ChatInput
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Type your message..."
-            disabled={isLoading || isUploading}
-          />
-          <ImageUploadButton
-            onFileSelect={handleImageUpload}
-            onError={handleImageError}
-            disabled={isLoading || isUploading}
-          />
-          <CustomButton
-            onClick={handleSendMessage}
-            disabled={!inputMessage.trim() || isLoading || isUploading}
+          {/* Improve transcription checkbox - only show when recording or recently used */}
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={improveTranscription}
+                onChange={(e) => setImproveTranscription(e.target.checked)}
+                size="small"
+                sx={{
+                  color: '#9ca3af',
+                  '&.Mui-checked': {
+                    color: 'var(--primary-color)',
+                  },
+                }}
+              />
+            }
+            label="Improve transcription"
             sx={{
-              minWidth: { xs: '48px', md: '56px' },
-              height: { xs: '48px', md: '56px' },
-              borderRadius: '12px',
+              color: '#9ca3af',
+              '& .MuiFormControlLabel-label': {
+                fontSize: '0.875rem',
+              },
+            }}
+          />
+
+          <Box
+            sx={{
+              display: 'flex',
+              gap: { xs: 1, md: 2 },
+              alignItems: 'flex-end',
             }}
           >
-            <Send size={20} />
-          </CustomButton>
+            <ChatInput
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Type your message..."
+              disabled={isAnyProcessing || isRecording}
+            />
+            <VoiceRecordButton
+              isRecording={isRecording}
+              isProcessing={isTranscribing}
+              duration={recordedDuration}
+              onStartRecording={handleStartRecording}
+              onStopRecording={handleStopRecording}
+              disabled={isAnyProcessing}
+            />
+            <ImageUploadButton
+              onFileSelect={handleImageUpload}
+              onError={handleImageError}
+              disabled={isAnyProcessing || isRecording}
+            />
+            <CustomButton
+              onClick={handleSendMessage}
+              disabled={!inputMessage.trim() || isAnyProcessing || isRecording}
+              sx={{
+                minWidth: { xs: '48px', md: '56px' },
+                height: { xs: '48px', md: '56px' },
+                borderRadius: '12px',
+              }}
+            >
+              <Send size={20} />
+            </CustomButton>
+          </Box>
         </Box>
 
         {/* Upload error display */}

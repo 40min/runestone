@@ -44,3 +44,9 @@ class ImageChatResponse(BaseModel):
     """Response from image OCR + translation."""
 
     message: str = Field(..., description="The assistant's translation response")
+
+
+class VoiceTranscriptionResponse(BaseModel):
+    """Response from voice transcription."""
+
+    text: str = Field(..., description="The transcribed text from voice input")

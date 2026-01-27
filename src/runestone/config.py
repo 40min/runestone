@@ -66,6 +66,12 @@ class Settings(BaseSettings):
     # Image Upload Configuration
     chat_image_max_size_mb: int = 10
 
+    # Voice Transcription Configuration
+    voice_transcription_model: str = "openai/gpt-audio-mini"
+    voice_enhancement_model: str = "google/gemini-3-flash-preview"
+    voice_max_duration_seconds: int = 300
+    voice_max_file_size_mb: int = 25
+
     class Config:
         """Pydantic configuration."""
 
