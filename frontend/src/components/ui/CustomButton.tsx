@@ -14,7 +14,7 @@ interface CustomButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement
   active?: boolean; // For tab variant
 }
 
-const CustomButton: React.FC<CustomButtonProps> = ({
+const CustomButton = ({
   variant = 'primary',
   size = 'medium',
   children,
@@ -24,10 +24,10 @@ const CustomButton: React.FC<CustomButtonProps> = ({
   fullWidth = false,
   sx,
   active = false,
+  color: _color, // Omit from props spread to avoid MUI conflict
   ...props
-}) => {
+}: CustomButtonProps) => {
   const getVariantStyles = (): SxProps<Theme> => {
-    // ... no changes here ...
     const baseStyles: SxProps<Theme> = {
       fontWeight: 'medium',
       textTransform: 'none',
@@ -109,6 +109,9 @@ const CustomButton: React.FC<CustomButtonProps> = ({
 
   return (
     <Button
+      component="button"
+      variant="contained"
+      color="primary"
       onClick={onClick}
       disabled={disabled}
       startIcon={startIcon}
