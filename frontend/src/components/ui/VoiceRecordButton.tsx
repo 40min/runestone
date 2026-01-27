@@ -65,19 +65,15 @@ const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
   }
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-      {isRecording && (
-        <Box
-          sx={{
-            color: '#ef4444',
-            fontSize: '0.75rem',
-            fontWeight: 500,
-            minWidth: '35px',
-          }}
-        >
-          {formatDuration(duration)}
-        </Box>
-      )}
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 0.5,
+        minWidth: '40px'
+      }}
+    >
       <CustomButton
         onClick={handleClick}
         disabled={disabled || isProcessing}
@@ -107,6 +103,18 @@ const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
       >
         {isRecording ? <Square size={16} /> : <Mic size={18} />}
       </CustomButton>
+      {isRecording && (
+        <Box
+          sx={{
+            color: '#ef4444',
+            fontSize: '0.7rem',
+            fontWeight: 600,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {formatDuration(duration)}
+        </Box>
+      )}
     </Box>
   );
 };

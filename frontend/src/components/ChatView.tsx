@@ -237,7 +237,7 @@ const ChatView: React.FC = () => {
             sx={{
               display: 'flex',
               gap: 1.5,
-              alignItems: 'center',
+              alignItems: 'flex-start',
               pl: 0.5,
             }}
           >
