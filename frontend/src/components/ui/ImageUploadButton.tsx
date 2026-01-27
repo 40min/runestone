@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Plus } from 'lucide-react';
+import { Paperclip } from 'lucide-react';
 import CustomButton from './CustomButton';
 
 interface ImageUploadButtonProps {
@@ -35,13 +35,23 @@ const ImageUploadButton: React.FC<ImageUploadButtonProps> = ({ onFileSelect, onE
       <CustomButton
         onClick={handleClick}
         disabled={disabled}
+        variant="secondary"
         sx={{
-          minWidth: { xs: '48px', md: '56px' },
-          height: { xs: '48px', md: '56px' },
-          borderRadius: '12px',
+          minWidth: '40px',
+          height: '40px',
+          width: '40px',
+          borderRadius: '10px',
+          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+          color: '#9ca3af',
+          p: 0,
+          '&:hover': {
+            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            color: 'white',
+          },
         }}
+        size="small"
       >
-        <Plus size={20} />
+        <Paperclip size={18} />
       </CustomButton>
       <input
         ref={fileInputRef}

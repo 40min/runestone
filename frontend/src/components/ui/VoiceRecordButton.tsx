@@ -55,11 +55,11 @@ const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          minWidth: { xs: '48px', md: '56px' },
-          height: { xs: '48px', md: '56px' },
+          minWidth: '40px',
+          height: '40px',
         }}
       >
-        <CircularProgress size={24} sx={{ color: 'var(--primary-color)' }} />
+        <CircularProgress size={20} sx={{ color: 'var(--primary-color)' }} />
       </Box>
     );
   }
@@ -70,9 +70,9 @@ const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
         <Box
           sx={{
             color: '#ef4444',
-            fontSize: '0.875rem',
+            fontSize: '0.75rem',
             fontWeight: 500,
-            minWidth: '45px',
+            minWidth: '35px',
           }}
         >
           {formatDuration(duration)}
@@ -81,20 +81,31 @@ const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
       <CustomButton
         onClick={handleClick}
         disabled={disabled || isProcessing}
+        variant="secondary"
         sx={{
-          minWidth: { xs: '48px', md: '56px' },
-          height: { xs: '48px', md: '56px' },
-          borderRadius: '12px',
+          minWidth: '40px',
+          height: '40px',
+          width: '40px',
+          borderRadius: '10px',
+          backgroundColor: isRecording ? '#ef4444' : 'rgba(255, 255, 255, 0.05)',
+          color: isRecording ? 'white' : '#9ca3af',
+          p: 0,
           ...(isRecording && {
-            backgroundColor: '#ef4444',
             animation: `${pulse} 2s infinite`,
             '&:hover': {
               backgroundColor: '#dc2626',
             },
           }),
+          ...(!isRecording && {
+            '&:hover': {
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              color: 'white',
+            },
+          }),
         }}
+        size="small"
       >
-        {isRecording ? <Square size={20} /> : <Mic size={20} />}
+        {isRecording ? <Square size={16} /> : <Mic size={18} />}
       </CustomButton>
     </Box>
   );

@@ -200,39 +200,15 @@ const ChatView: React.FC = () => {
           sx={{
             display: 'flex',
             flexDirection: 'column',
-            gap: 1,
+            gap: 1.5,
             pb: { xs: 1, md: 0 },
           }}
         >
-          {/* Improve transcription checkbox - only show when recording or recently used */}
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={improveTranscription}
-                onChange={(e) => setImproveTranscription(e.target.checked)}
-                size="small"
-                sx={{
-                  color: '#9ca3af',
-                  '&.Mui-checked': {
-                    color: 'var(--primary-color)',
-                  },
-                }}
-              />
-            }
-            label="Improve transcription"
-            sx={{
-              color: '#9ca3af',
-              '& .MuiFormControlLabel-label': {
-                fontSize: '0.875rem',
-              },
-            }}
-          />
-
           <Box
             sx={{
               display: 'flex',
               gap: { xs: 1, md: 2 },
-              alignItems: 'flex-end',
+              alignItems: 'center',
             }}
           >
             <ChatInput
@@ -242,22 +218,10 @@ const ChatView: React.FC = () => {
               placeholder="Type your message..."
               disabled={isAnyProcessing || isRecording}
             />
-            <VoiceRecordButton
-              isRecording={isRecording}
-              isProcessing={isTranscribing}
-              duration={recordedDuration}
-              onStartRecording={handleStartRecording}
-              onStopRecording={handleStopRecording}
-              disabled={isAnyProcessing}
-            />
-            <ImageUploadButton
-              onFileSelect={handleImageUpload}
-              onError={handleImageError}
-              disabled={isAnyProcessing || isRecording}
-            />
             <CustomButton
               onClick={handleSendMessage}
               disabled={!inputMessage.trim() || isAnyProcessing || isRecording}
+              aria-label="Send message"
               sx={{
                 minWidth: { xs: '48px', md: '56px' },
                 height: { xs: '48px', md: '56px' },
@@ -266,6 +230,56 @@ const ChatView: React.FC = () => {
             >
               <Send size={20} />
             </CustomButton>
+          </Box>
+
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 3,
+              alignItems: 'center',
+              pl: 0.5,
+            }}
+          >
+            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+              <VoiceRecordButton
+                isRecording={isRecording}
+                isProcessing={isTranscribing}
+                duration={recordedDuration}
+                onStartRecording={handleStartRecording}
+                onStopRecording={handleStopRecording}
+                disabled={isAnyProcessing}
+              />
+              <ImageUploadButton
+                onFileSelect={handleImageUpload}
+                onError={handleImageError}
+                disabled={isAnyProcessing || isRecording}
+              />
+            </Box>
+
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={improveTranscription}
+                  onChange={(e) => setImproveTranscription(e.target.checked)}
+                  size="small"
+                  sx={{
+                    color: '#9ca3af',
+                    p: 0.5,
+                    '&.Mui-checked': {
+                      color: 'var(--primary-color)',
+                    },
+                  }}
+                />
+              }
+              label="Improve transcription"
+              sx={{
+                color: '#9ca3af',
+                m: 0,
+                '& .MuiFormControlLabel-label': {
+                  fontSize: '0.75rem',
+                },
+              }}
+            />
           </Box>
         </Box>
 
