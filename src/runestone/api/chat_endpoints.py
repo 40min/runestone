@@ -153,8 +153,8 @@ async def clear_history(
 async def transcribe_voice(
     file: Annotated[UploadFile, File(description="Audio file to transcribe (WebM format)")],
     improve: Annotated[bool, Form(description="Whether to enhance the transcription")] = True,
-    voice_service: Annotated[VoiceService, Depends(get_voice_service)] = None,
-    current_user: Annotated[User, Depends(get_current_user)] = None,
+    voice_service: Annotated[VoiceService, Depends(get_voice_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> VoiceTranscriptionResponse:
     """
     Transcribe voice audio to text.
