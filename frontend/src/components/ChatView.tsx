@@ -26,8 +26,8 @@ const ChatView: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef(0);
-  const prevLoadingRef = useRef(false);
-  const { messages, isLoading, error, sendMessage, startNewChat, refreshHistory } = useChat();
+  const prevIsAnyProcessingRef = useRef(false);
+  const { messages, isLoading, isFetchingHistory, error, sendMessage, startNewChat, refreshHistory } = useChat();
   const { uploadedImages, uploadImage, isUploading, error: uploadError, clearImages } = useChatImageUpload();
   const [snackbarError, setSnackbarError] = useState<string | null>(null);
 
@@ -46,6 +46,8 @@ const ChatView: React.FC = () => {
     error: voiceError,
     clearError: clearVoiceError,
   } = useVoiceRecording(improveTranscription);
+
+  const isAnyProcessing = isLoading || isUploading || isTranscribing || isFetchingHistory;
 
   // Persist improve setting
   useEffect(() => {
@@ -66,8 +68,8 @@ const ChatView: React.FC = () => {
     if (!container) return;
 
     const isNewMessage = messages.length > prevMessagesLengthRef.current;
-    const isLoadingStarted = isLoading && !prevLoadingRef.current;
-    const isLoadingEnded = !isLoading && prevLoadingRef.current;
+    const isProcessingStarted = isAnyProcessing && !prevIsAnyProcessingRef.current;
+    const isProcessingEnded = !isAnyProcessing && prevIsAnyProcessingRef.current;
 
     // For user messages, only scroll if near bottom to avoid disrupting reading
     // For assistant messages, always scroll to show the response
@@ -84,11 +86,11 @@ const ChatView: React.FC = () => {
         // For assistant messages, always scroll to show the response
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       }
-    } else if (isLoadingStarted) {
-      // When loading starts, scroll to show loading indicator
+    } else if (isProcessingStarted) {
+      // When processing starts, scroll to show loading indicator
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    } else if (isLoadingEnded && messages.length > 0) {
-      // When loading ends and there's an assistant message, scroll to ensure it's visible
+    } else if (isProcessingEnded && messages.length > 0) {
+      // When processing ends and there's an assistant message, scroll to ensure it's visible
       const lastMessageIsAssistant = messages[messages.length - 1].role === 'assistant';
       if (lastMessageIsAssistant) {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -99,8 +101,8 @@ const ChatView: React.FC = () => {
     }
 
     prevMessagesLengthRef.current = messages.length;
-    prevLoadingRef.current = isLoading;
-  }, [messages, isLoading]);
+    prevIsAnyProcessingRef.current = isAnyProcessing;
+  }, [messages, isAnyProcessing]);
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
@@ -145,7 +147,6 @@ const ChatView: React.FC = () => {
     }
   };
 
-  const isAnyProcessing = isLoading || isUploading || isTranscribing;
 
   return (
     <Box

@@ -94,7 +94,6 @@ class VoiceService:
                             "Fix grammar, punctuation, and clarity while preserving "
                             "the original meaning and tone. Return only the corrected text."
                             "The text is transcribed so could have some mistakes, please correct them."
-                            "The text could be on several languages (Swedish, English, Russian)"
                         ),
                     },
                     {
