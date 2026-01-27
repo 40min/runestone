@@ -2,10 +2,10 @@
 Voice transcription service.
 
 This module provides voice-to-text transcription functionality
-using OpenRouter's audio models with optional text enhancement.
+using OpenAI's Whisper API with optional text enhancement via GPT-4o-mini.
 """
 
-import base64
+import io
 import logging
 
 from openai import OpenAI
@@ -27,17 +27,14 @@ class VoiceService:
             settings: Application settings containing model configuration
         """
         self.settings = settings
-        self._client = OpenAI(
-            api_key=settings.openrouter_api_key,
-            base_url="https://openrouter.ai/api/v1",
-        )
+        self._client = OpenAI(api_key=settings.openai_api_key)
 
     async def transcribe_audio(self, audio_content: bytes) -> str:
         """
-        Transcribe audio to text using OpenRouter audio model.
+        Transcribe audio to text using OpenAI Whisper API.
 
         Args:
-            audio_content: Raw audio bytes (WebM Opus format expected)
+            audio_content: Raw audio bytes (WebM, WAV, MP3, etc. supported by Whisper)
 
         Returns:
             Transcribed text
@@ -46,36 +43,16 @@ class VoiceService:
             RunestoneError: If transcription fails
         """
         try:
-            # Encode audio as base64 for the API
-            audio_base64 = base64.b64encode(audio_content).decode("utf-8")
+            # Create a file-like object from bytes for the API
+            audio_file = io.BytesIO(audio_content)
+            audio_file.name = "recording.webm"
 
-            response = self._client.chat.completions.create(
+            response = self._client.audio.transcriptions.create(
                 model=self.settings.voice_transcription_model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": (
-                                    "Transcribe the following audio, this could be "
-                                    "on several languages (Swedish, English, Russian)"
-                                    "Return only the transcribed text, nothing else."
-                                ),
-                            },
-                            {
-                                "type": "input_audio",
-                                "input_audio": {
-                                    "data": audio_base64,
-                                    "format": "webm",
-                                },
-                            },
-                        ],
-                    }
-                ],
+                file=audio_file,
             )
 
-            transcribed_text = response.choices[0].message.content
+            transcribed_text = response.text
             if not transcribed_text:
                 raise RunestoneError("Transcription returned empty result")
 
