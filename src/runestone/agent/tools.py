@@ -60,6 +60,42 @@ class AgentContext:
 
 
 @tool
+async def read_memory(
+    runtime: ToolRuntime[AgentContext],
+) -> str:
+    """
+    Read the entire student memory profile.
+
+    Use this tool when you need context about the student to personalize your
+    teaching or when asked about what you know about the student.
+
+    Returns:
+    A JSON string containing all memory categories:
+        - personal_info: goals, preferences, name, background
+        - areas_to_improve: struggling concepts, recurring mistakes
+        - knowledge_strengths: mastered topics, successful applications
+    """
+    user_context = runtime.context.user
+    user_service = runtime.context.user_service
+
+    logger.info(f"Reading memory for user {user_context.id}")
+
+    # Fetch fresh user data from DB to ensure we don't use stale data
+    # if memory was updated in the same conversation turn.
+    user = user_service.get_user_by_id(user_context.id)
+    if not user:
+        return "Error: User not found."
+
+    memory = {
+        "personal_info": json.loads(user.personal_info) if user.personal_info else {},
+        "areas_to_improve": json.loads(user.areas_to_improve) if user.areas_to_improve else {},
+        "knowledge_strengths": json.loads(user.knowledge_strengths) if user.knowledge_strengths else {},
+    }
+
+    return json.dumps(memory, indent=2)
+
+
+@tool
 async def update_memory(
     category: Literal["personal_info", "areas_to_improve", "knowledge_strengths"],
     operation: Literal["merge", "replace"],

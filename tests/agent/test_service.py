@@ -72,7 +72,7 @@ def test_build_agent(mock_settings, mock_chat_model, mock_user_service):
             mock_create_agent.assert_called()
             call_kwargs = mock_create_agent.call_args[1]
             assert call_kwargs["model"] == mock_chat_model
-            assert len(call_kwargs["tools"]) == 2  # update_memory and prioritize_words_for_learning
+            assert len(call_kwargs["tools"]) == 3  # read_memory, update_memory and prioritize_words_for_learning
             assert "MEMORY PROTOCOL" in call_kwargs["system_prompt"]
 
 
@@ -125,25 +125,6 @@ async def test_generate_response_with_history(agent_service, mock_user_service, 
     assert messages[0].content == "Old user msg"
     assert messages[1].content == "Old bot msg"
     assert messages[2].content == "Current msg"
-
-
-@pytest.mark.anyio
-async def test_generate_response_with_memory(agent_service, mock_user_service, mock_user, mock_vocabulary_service):
-    """Test generate_response injects memory context."""
-    memory_context = {"personal_info": {"name": "Alice"}}
-
-    agent_service.agent.ainvoke.return_value = {"messages": [AIMessage(content="R")]}
-
-    await agent_service.generate_response(
-        "msg", [], mock_user, mock_user_service, mock_vocabulary_service, memory_context
-    )
-
-    invoke_args = agent_service.agent.ainvoke.call_args[0][0]
-    messages = invoke_args["messages"]
-    # System (Memory) + Current (1) = 2
-    assert isinstance(messages[0], SystemMessage)
-    assert "STUDENT MEMORY" in messages[0].content
-    assert "Alice" in messages[0].content
 
 
 @pytest.mark.anyio

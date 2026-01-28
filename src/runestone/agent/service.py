@@ -6,9 +6,7 @@ using LangChain's ReAct agent pattern.
 """
 
 import asyncio
-import json
 import logging
-from typing import Optional
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -17,10 +15,11 @@ from pydantic import SecretStr
 
 from runestone.agent.prompts import load_persona
 from runestone.agent.schemas import ChatMessage
-from runestone.agent.tools import AgentContext, prioritize_words_for_learning, update_memory
+from runestone.agent.tools import AgentContext, prioritize_words_for_learning, read_memory, update_memory
 from runestone.config import Settings
 from runestone.db.models import User
 from runestone.services.user_service import UserService
+from runestone.services.vocabulary_service import VocabularyService
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +74,7 @@ class AgentService:
             temperature=1,
         )
 
-        tools = [update_memory, prioritize_words_for_learning]
+        tools = [read_memory, update_memory, prioritize_words_for_learning]
 
         # Build system prompt with persona and tool instructions
         system_prompt = self.persona["system_prompt"]
@@ -89,23 +88,30 @@ statement and ask a follow-up question to keep the conversation going.
 - If the input is a statement, react to it.
 
 ### MEMORY PROTOCOL
-You are a memory-driven AI. Your effectiveness depends on maintaining a detailed, up-to-date profile of the student.
+You are a memory-driven AI. Your effectiveness depends on maintaining a detailed, up-to-date profile
+of the student and using it to personalize your teaching.
 
-**CRITICAL: You MUST call `update_memory` immediately when you learn something new. This is not optional.**
+**CRITICAL: Using Memory**
+- You MUST call `read_memory` at the start of a conversation or whenever you need context about the
+student's background, goals, or previous struggles.
+- Do NOT assume you know the student's current state without reading the memory.
 
-**When to Update Memory (call the tool NOW):**
-1. **Explicit Statements:** "My name is John," "I hate geometry." → Immediately call `update_memory` on `personal_info`.
-2. **Implicit Behaviors:** Student fails a quiz question → Immediately call `update_memory` on `areas_to_improve`.
-   Student solves a complex problem quickly → Immediately call `update_memory` on `knowledge_strengths`.
-3. **Contextual Clues:** Student mentions a hobby or interest → Immediately call `update_memory` on `personal_info`.
+**CRITICAL: Updating Memory**
+- You MUST call `update_memory` immediately when you learn something new. This is not optional.
+- **When to Update Memory (call the tool NOW):**
+    1. **Explicit Statements:** "My name is John," "I hate geometry." → Call `update_memory` on `personal_info`.
+    2. **Implicit Behaviors:** Student fails a quiz question → Call `update_memory` on `areas_to_improve`.
+    3. **Contextual Clues:** Student mentions a hobby or interest → Call `update_memory` on `personal_info`.
+
+**Memory Cleanup:**
+- On ending of education on some topic (e.g., the student has mastered a concept in `areas_to_improve`),
+you MUST read the memory again and remove the educated topic from it using the `replace` operation.
 
 **Tool Usage Rules:**
-- Call `update_memory` BEFORE you respond to the student
-- ALWAYS prefer the 'merge' operation to append new data
-- Use 'replace' for correcting a factual error in previous memory or removing mastered topics
-- If you are unsure if a detail is important, save it anyway
-
-**If you learn something about the student and do NOT call update_memory, you are failing your core function.**
+- Call memory tools BEFORE you respond to the student when needed.
+- ALWAYS prefer the 'merge' operation if you want to append new data.
+- Use 'replace' for correcting factual errors or removing mastered topics.
+- If you are unsure if a detail is important, save it anyway.
 
 ### WORD PRIORITISATION PROTOCOL
 When you notice a student:
@@ -132,8 +138,7 @@ This ensures the word appears in their next daily recall session.
         history: list[ChatMessage],
         user: User,
         user_service: UserService,
-        vocabulary_service,
-        memory_context: Optional[dict] = None,
+        vocabulary_service: VocabularyService,
     ) -> str:
         """
         Generate a response to a user message using the ReAct agent.
@@ -143,7 +148,6 @@ This ensures the word appears in their next daily recall session.
             history: Previous conversation messages
             user: User model instance
             user_service: UserService instance to handle memory operations
-            memory_context: Optional dictionary containing student memory
 
         Returns:
             The agent's final text response
@@ -162,14 +166,6 @@ This ensures the word appears in their next daily recall session.
                 "Use this information to personalize your teaching."
             )
             messages.append(SystemMessage(content=language_msg))
-
-        # Add memory context as initial system message if available
-        if memory_context:
-            active_memory = {k: v for k, v in memory_context.items() if v}
-            if active_memory:
-                memory_str = json.dumps(active_memory, indent=2)
-                memory_msg = f"STUDENT MEMORY:\n{memory_str}\n\nUse this information to personalize your teaching."
-                messages.append(SystemMessage(content=memory_msg))
 
         # Add conversation history
         truncated_history = history[-self.MAX_HISTORY_MESSAGES :] if history else []

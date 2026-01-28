@@ -78,8 +78,6 @@ class ChatService:
         if not user:
             raise ValueError(f"User {user_id} not found")
 
-        memory = self.user_service.get_user_memory(user)
-
         # 5. Generate response using the ReAct agent
         # The agent handles tool execution automatically
         assistant_text = await self.agent_service.generate_response(
@@ -88,7 +86,6 @@ class ChatService:
             user=user,
             user_service=self.user_service,
             vocabulary_service=self.vocabulary_service,
-            memory_context=memory,
         )
 
         # 6. Save assistant message
@@ -136,8 +133,6 @@ class ChatService:
         if not user:
             raise ValueError(f"User {user_id} not found")
 
-        memory = self.user_service.get_user_memory(user)
-
         # 5. Build translation prompt with OCR text
         # Determine intro text based on user's mother tongue
         mother_tongue = user.mother_tongue or "English"
@@ -159,7 +154,6 @@ Instructions:
             user=user,
             user_service=self.user_service,
             vocabulary_service=self.vocabulary_service,
-            memory_context=memory,
         )
 
         # 7. Save assistant message (no user message saved for image uploads)
