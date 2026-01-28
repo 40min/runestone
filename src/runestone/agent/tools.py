@@ -2,6 +2,7 @@
 Tool definitions for the agent using LangChain's @tool decorator.
 """
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass
@@ -54,10 +55,12 @@ class AgentContext:
     # we can't use DI of FastAPI here, so had to put the service to context
     user_service: UserService
     vocabulary_service: VocabularyService
+    # Lock to prevent concurrent database access from multiple tool calls
+    db_lock: "asyncio.Lock"
 
 
 @tool
-def update_memory(
+async def update_memory(
     category: Literal["personal_info", "areas_to_improve", "knowledge_strengths"],
     operation: Literal["merge", "replace"],
     data: dict,
@@ -85,29 +88,30 @@ def update_memory(
 
     logger.info(f"Updating memory for user {user.id}: {category}")
 
-    try:
-        final_data = data
-        if operation == "merge":
-            # Get current data to merge with
-            current_json = getattr(user, category)
-            current_dict = json.loads(current_json) if current_json else {}
-            final_data = deep_merge(current_dict, data)
-
-        # Update memory via service
-        user_service.update_user_memory(user, category, final_data)
-        return f"Successfully updated {category}."
-    except Exception as e:
-        logger.error(f"Error updating memory for user {user.id}: {e}")
-        # Ensure session is rolled back on error to avoid PendingRollbackError
+    async with runtime.context.db_lock:
         try:
-            user_service.user_repo.db.rollback()
-        except Exception:
-            pass
-        return f"Error updating memory: {str(e)}"
+            final_data = data
+            if operation == "merge":
+                # Get current data to merge with
+                current_json = getattr(user, category)
+                current_dict = json.loads(current_json) if current_json else {}
+                final_data = deep_merge(current_dict, data)
+
+            # Update memory via service
+            user_service.update_user_memory(user, category, final_data)
+            return f"Successfully updated {category}."
+        except Exception as e:
+            logger.error(f"Error updating memory for user {user.id}: {e}")
+            # Ensure session is rolled back on error to avoid PendingRollbackError
+            try:
+                user_service.user_repo.db.rollback()
+            except Exception:
+                pass
+            return f"Error updating memory: {str(e)}"
 
 
 @tool(args_schema=WordPrioritisationInput)
-def prioritize_words_for_learning(
+async def prioritize_words_for_learning(
     words: list[WordPrioritisationItem],
     runtime: ToolRuntime[AgentContext],
 ) -> str:
@@ -133,24 +137,25 @@ def prioritize_words_for_learning(
     processed_count = 0
     errors = []
 
-    for word_item in words:
-        try:
-            vocab_service.upsert_priority_word(
-                word_phrase=word_item.word_phrase,
-                translation=word_item.translation,
-                example_phrase=word_item.example_phrase,
-                user_id=user.id,
-            )
-            logger.info(f"Processed priority word: {word_item.word_phrase}")
-            processed_count += 1
-        except Exception as e:
-            logger.error(f"Failed to process {word_item.word_phrase}: {e}")
-            errors.append(f"{word_item.word_phrase}: {str(e)}")
-            # Rollback to keep session healthy
+    async with runtime.context.db_lock:
+        for word_item in words:
             try:
-                vocab_service.repo.db.rollback()
-            except Exception:
-                pass
+                vocab_service.upsert_priority_word(
+                    word_phrase=word_item.word_phrase,
+                    translation=word_item.translation,
+                    example_phrase=word_item.example_phrase,
+                    user_id=user.id,
+                )
+                logger.info(f"Processed priority word: {word_item.word_phrase}")
+                processed_count += 1
+            except Exception as e:
+                logger.error(f"Failed to process {word_item.word_phrase}: {e}")
+                errors.append(f"{word_item.word_phrase}: {str(e)}")
+                # Rollback to keep session healthy
+                try:
+                    vocab_service.repo.db.rollback()
+                except Exception:
+                    pass
 
     if errors:
         error_msg = "; ".join(errors)

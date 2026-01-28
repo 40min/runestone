@@ -5,6 +5,7 @@ This module contains the AgentService class that handles chat interactions
 using LangChain's ReAct agent pattern.
 """
 
+import asyncio
 import json
 import logging
 from typing import Optional
@@ -184,7 +185,12 @@ This ensures the word appears in their next daily recall session.
         try:
             result = await self.agent.ainvoke(
                 {"messages": messages},
-                context=AgentContext(user=user, user_service=user_service, vocabulary_service=vocabulary_service),
+                context=AgentContext(
+                    user=user,
+                    user_service=user_service,
+                    vocabulary_service=vocabulary_service,
+                    db_lock=asyncio.Lock(),
+                ),
             )
 
             final_messages = result.get("messages", [])

@@ -99,10 +99,13 @@ class UserRepository:
         self._validate_memory_field(field)
         json_data = json.dumps(data) if data else None
 
-        result = self.db.query(User).filter(User.id == user_id).update({field: json_data})
-        if result == 0:
+        # Fetch user first to ensure it's in the current session
+        user = self.get_by_id(user_id)
+        if not user:
             raise UserNotFoundError(f"User with id {user_id} not found")
 
+        # Update attribute and commit
+        setattr(user, field, json_data)
         self.db.commit()
 
     def clear_user_memory(self, user_id: int, field: Optional[str] = None) -> User:
