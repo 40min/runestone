@@ -24,7 +24,8 @@ const CustomButton = ({
   fullWidth = false,
   sx,
   active = false,
-  color: _color, // Omit from props spread to avoid MUI conflict
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  color: _, // Omit from props spread to avoid MUI conflict
   ...props
 }: CustomButtonProps) => {
   const getVariantStyles = (): SxProps<Theme> => {

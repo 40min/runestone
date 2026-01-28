@@ -2,7 +2,6 @@
 Tool definitions for the agent using LangChain's @tool decorator.
 """
 
-import asyncio
 import json
 import logging
 from dataclasses import dataclass
@@ -94,18 +93,21 @@ def update_memory(
             current_dict = json.loads(current_json) if current_json else {}
             final_data = deep_merge(current_dict, data)
 
-        logger.info(f"Final data for {category}: {final_data}")
         # Update memory via service
         user_service.update_user_memory(user, category, final_data)
-        logger.info(f"Successfully updated {category} for user {user.id}")
         return f"Successfully updated {category}."
     except Exception as e:
         logger.error(f"Error updating memory for user {user.id}: {e}")
+        # Ensure session is rolled back on error to avoid PendingRollbackError
+        try:
+            user_service.user_repo.db.rollback()
+        except Exception:
+            pass
         return f"Error updating memory: {str(e)}"
 
 
 @tool(args_schema=WordPrioritisationInput)
-async def prioritize_words_for_learning(
+def prioritize_words_for_learning(
     words: list[WordPrioritisationItem],
     runtime: ToolRuntime[AgentContext],
 ) -> str:
@@ -113,7 +115,6 @@ async def prioritize_words_for_learning(
     Mark words for priority learning. Use when student uses another language
     to express a word or constantly makes errors writing a word.
 
-    This tool runs in the background - returns immediately.
     For each word:
     - If deleted: restores it and marks for priority
     - If exists: marks for priority
@@ -124,23 +125,35 @@ async def prioritize_words_for_learning(
         runtime: Tool runtime context
 
     Returns:
-        Immediate acknowledgment message
+        Confirmation message
     """
     user = runtime.context.user
     vocab_service = runtime.context.vocabulary_service
 
-    async def process_words():
-        for word_item in words:
-            try:
-                vocab_service.upsert_priority_word(
-                    word_phrase=word_item.word_phrase,
-                    translation=word_item.translation,
-                    example_phrase=word_item.example_phrase,
-                    user_id=user.id,
-                )
-                logger.info(f"Processed priority word: {word_item.word_phrase}")
-            except Exception as e:
-                logger.error(f"Failed to process {word_item.word_phrase}: {e}")
+    processed_count = 0
+    errors = []
 
-    asyncio.create_task(process_words())
-    return f"Processing {len(words)} word(s) for priority learning in background."
+    for word_item in words:
+        try:
+            vocab_service.upsert_priority_word(
+                word_phrase=word_item.word_phrase,
+                translation=word_item.translation,
+                example_phrase=word_item.example_phrase,
+                user_id=user.id,
+            )
+            logger.info(f"Processed priority word: {word_item.word_phrase}")
+            processed_count += 1
+        except Exception as e:
+            logger.error(f"Failed to process {word_item.word_phrase}: {e}")
+            errors.append(f"{word_item.word_phrase}: {str(e)}")
+            # Rollback to keep session healthy
+            try:
+                vocab_service.repo.db.rollback()
+            except Exception:
+                pass
+
+    if errors:
+        error_msg = "; ".join(errors)
+        return f"Processed {processed_count} word(s). Errors: {error_msg}"
+
+    return f"Successfully processed {processed_count} word(s) for priority learning."
