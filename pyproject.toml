@@ -26,6 +26,7 @@ dependencies = [
     "langchain-openai>=0.0.5",
     "langchain-community>=0.0.20",
     "pyyaml>=6.0.0",
+    "openrouter>=0.0.8",
 ]
 
 [project.scripts]
