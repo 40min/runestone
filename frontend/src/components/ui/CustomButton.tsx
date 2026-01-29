@@ -113,7 +113,7 @@ const CustomButton = ({
   };
 
   const getMuiVariant = (): 'contained' | 'outlined' | 'text' => {
-    if (variant === 'tab') return 'text';
+    if (variant === 'tab' || variant === 'secondary') return 'text';
     return 'contained';
   };
 
