@@ -19,7 +19,7 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
   onTabChange,
 }) => {
   return (
-    <Box sx={{ borderBottom: '1px solid #3a2d4a', px: 1 }}>
+    <Box sx={{ borderBottom: '1px solid', borderColor: 'divider', px: 1 }}>
       <Box sx={{ display: 'flex', mb: '-1px', gap: 4 }}>
         {tabs.map((tab) => (
           <CustomButton
