@@ -70,15 +70,19 @@ const CustomButton = ({
       case 'tab':
         return {
           ...baseStyles,
-          px: 1,
-          py: 4,
+          px: 2,
+          py: 1,
+          borderRadius: 0,
           borderBottom: active ? '2px solid var(--primary-color)' : '2px solid transparent',
           color: active ? 'var(--primary-color)' : '#9ca3af',
-          fontSize: '0.875rem',
-          fontWeight: 'medium',
+          fontSize: '0.925rem',
+          fontWeight: active ? 'bold' : 'medium',
+          minWidth: 'auto',
+          backgroundColor: 'transparent',
           '&:hover': {
             color: 'white',
-            borderBottomColor: active ? 'var(--primary-color)' : '#6b7280',
+            backgroundColor: 'rgba(255, 255, 255, 0.05)',
+            borderBottomColor: active ? 'var(--primary-color)' : '#4b5563',
           },
         };
       case 'save':
@@ -108,10 +112,15 @@ const CustomButton = ({
     }
   };
 
+  const getMuiVariant = (): 'contained' | 'outlined' | 'text' => {
+    if (variant === 'tab' || variant === 'secondary') return 'text';
+    return 'contained';
+  };
+
   return (
     <Button
       component="button"
-      variant="contained"
+      variant={getMuiVariant()}
       color="primary"
       onClick={onClick}
       disabled={disabled}
