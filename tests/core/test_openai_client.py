@@ -69,7 +69,7 @@ class TestOpenAIClient:
         with pytest.raises(LLMError) as exc_info:
             client.improve_vocabulary_item(self.prompt)
 
-        assert "openai API error during vocabulary improvement: API error" in str(exc_info.value)
+        assert "Vocabulary improvement failed: API error" in str(exc_info.value)
 
     @patch("runestone.core.clients.openai_client.OpenAI")
     def test_improve_vocabulary_item_general_exception(self, mock_openai_class):
@@ -135,7 +135,7 @@ class TestOpenAIClient:
         with pytest.raises(LLMError) as exc_info:
             client.improve_vocabulary_batch(self.prompt)
 
-        assert "openai API error during vocabulary batch improvement: API error" in str(exc_info.value)
+        assert "Vocabulary batch improvement failed: API error" in str(exc_info.value)
 
     @patch("runestone.core.clients.openai_client.OpenAI")
     def test_improve_vocabulary_batch_general_exception(self, mock_openai_class):
