@@ -1253,6 +1253,20 @@ wheels = [
 ]
 
 [[package]]
+name = "openrouter"
+version = "0.1.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpcore" },
+    { name = "httpx" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f9/d9/56d56edadc1c4a973694a1e09329f1ab985813220123294c9d7d12a0f41e/openrouter-0.1.3.tar.gz", hash = "sha256:e780740539dd294cf7b596d4b6a81dea7d8b55320c70526c47e77c11a3653222", size = 136371, upload-time = "2026-01-22T01:30:23.999Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b8/ae/00daf34c0dd7d3bbe02d965b2031d0fad9ce541db6dfd9e130ac7d024ddb/openrouter-0.1.3-py3-none-any.whl", hash = "sha256:536dd9c4fc76c4f84217671f0c1c22e39ac6dedcfa745e0bd672c857bf754e9f", size = 281099, upload-time = "2026-01-22T01:30:25.167Z" },
+]
+
+[[package]]
 name = "orjson"
 version = "3.11.5"
 source = { registry = "https://pypi.org/simple" }
@@ -1825,6 +1839,7 @@ dependencies = [
     { name = "langchain-community" },
     { name = "langchain-openai" },
     { name = "openai" },
+    { name = "openrouter" },
     { name = "passlib", extra = ["bcrypt"] },
     { name = "pillow" },
     { name = "pre-commit" },
@@ -1863,6 +1878,7 @@ requires-dist = [
     { name = "langchain-community", specifier = ">=0.0.20" },
     { name = "langchain-openai", specifier = ">=0.0.5" },
     { name = "openai", specifier = ">=1.3.0" },
+    { name = "openrouter", specifier = ">=0.0.8" },
     { name = "passlib", extras = ["bcrypt"], specifier = ">=1.7.4" },
     { name = "pillow", specifier = ">=10.0.0" },
     { name = "pre-commit", specifier = ">=4.3.0" },
