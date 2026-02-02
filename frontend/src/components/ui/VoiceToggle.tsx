@@ -47,7 +47,7 @@ export const VoiceToggle: React.FC<VoiceToggleProps> = ({
               color: enabled ? (isPlaying ? 'secondary.main' : 'primary.main') : '#9ca3af',
               animation: isPlaying ? 'pulse 1.5s infinite ease-in-out' : 'none'
             }}>
-              {enabled ? (isPlaying ? <VolumeUp fontSize="small" /> : <VolumeUp fontSize="small" />) : <VolumeOff fontSize="small" />}
+              {enabled ? <VolumeUp fontSize="small" /> : <VolumeOff fontSize="small" />}
               <Box component="span" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
                 {isPlaying ? 'Speaking...' : 'Voice'}
               </Box>
