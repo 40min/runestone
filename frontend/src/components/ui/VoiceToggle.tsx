@@ -44,7 +44,7 @@ export const VoiceToggle: React.FC<VoiceToggleProps> = ({
               display: 'flex',
               alignItems: 'center',
               gap: 0.5,
-              color: enabled ? (isPlaying ? 'secondary.main' : 'primary.main') : 'text.secondary',
+              color: enabled ? (isPlaying ? 'secondary.main' : 'primary.main') : '#9ca3af',
               animation: isPlaying ? 'pulse 1.5s infinite ease-in-out' : 'none'
             }}>
               {enabled ? (isPlaying ? <VolumeUp fontSize="small" /> : <VolumeUp fontSize="small" />) : <VolumeOff fontSize="small" />}
