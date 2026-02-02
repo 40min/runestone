@@ -17,20 +17,8 @@ logger = logging.getLogger(__name__)
 class ConnectionManager:
     """Singleton manager for active WebSocket connections."""
 
-    _instance = None
-    _active_connections: dict[int, WebSocket] = {}
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(ConnectionManager, cls).__new__(cls)
-        return cls._instance
-
-    @classmethod
-    def get_instance(cls) -> "ConnectionManager":
-        """Get the singleton instance of ConnectionManager."""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
+    def __init__(self):
+        self._active_connections: dict[int, WebSocket] = {}
 
     def connect(self, user_id: int, websocket: WebSocket):
         """Register a new WebSocket connection for a user."""
@@ -49,4 +37,4 @@ class ConnectionManager:
 
 
 # Global instance
-connection_manager = ConnectionManager.get_instance()
+connection_manager = ConnectionManager()

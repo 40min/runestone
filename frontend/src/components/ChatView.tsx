@@ -23,6 +23,8 @@ import { useAudioPlayback } from '../hooks/useAudioPlayback';
 
 const IMPROVE_TRANSCRIPTION_KEY = 'runestone_improve_transcription';
 const VOICE_ENABLED_KEY = 'runestone_voice_enabled';
+const SPEECH_SPEED_KEY = 'runestone_speech_speed';
+const AUTOSEND_KEY = 'runestone_autosend';
 
 const ChatView: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
@@ -46,12 +48,12 @@ const ChatView: React.FC = () => {
   });
 
   const [speechSpeed, setSpeechSpeed] = useState(() => {
-    const stored = localStorage.getItem('runestone_speech_speed');
+    const stored = localStorage.getItem(SPEECH_SPEED_KEY);
     return stored ? parseFloat(stored) : 1.1;
   });
 
   const [autoSend, setAutoSend] = useState(() => {
-    const stored = localStorage.getItem('runestone_autosend');
+    const stored = localStorage.getItem(AUTOSEND_KEY);
     return stored === null ? false : stored === 'true';
   });
 
@@ -79,11 +81,11 @@ const ChatView: React.FC = () => {
   }, [voiceEnabled]);
 
   useEffect(() => {
-    localStorage.setItem('runestone_speech_speed', String(speechSpeed));
+    localStorage.setItem(SPEECH_SPEED_KEY, String(speechSpeed));
   }, [speechSpeed]);
 
   useEffect(() => {
-    localStorage.setItem('runestone_autosend', String(autoSend));
+    localStorage.setItem(AUTOSEND_KEY, String(autoSend));
   }, [autoSend]);
 
   // Show voice errors in snackbar
