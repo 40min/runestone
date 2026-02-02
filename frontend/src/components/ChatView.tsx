@@ -49,7 +49,7 @@ const ChatView: React.FC = () => {
 
   const [speechSpeed, setSpeechSpeed] = useState(() => {
     const stored = localStorage.getItem(SPEECH_SPEED_KEY);
-    return stored ? parseFloat(stored) : 1.1;
+    return stored && Number.isFinite(Number(stored)) ? Number(stored) : 1.1;
   });
 
   const [autoSend, setAutoSend] = useState(() => {
