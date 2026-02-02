@@ -42,7 +42,7 @@ class TTSService:
             speed: Speed of the speech (0.25 to 4.0)
 
         Yields:
-            Audio chunks as bytes (Opus format)
+            Audio chunks as bytes (mp3 format)
 
         Raises:
             Exception: If TTS API call fails

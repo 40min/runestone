@@ -245,6 +245,11 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
         };
 
         ws.onclose = () => {
+          // Only reconnect if this is the active connection
+          if (ws !== wsRef.current) {
+            return;
+          }
+
           console.log('Audio WebSocket closed, attempting reconnect...');
           setIsConnected(false);
           // Attempt reconnect after 3 seconds
