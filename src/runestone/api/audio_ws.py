@@ -9,14 +9,11 @@ import logging
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from runestone.auth.security import verify_token
+from runestone.core.connection_manager import connection_manager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# Global registry of active WebSocket connections per user
-# Key: user_id, Value: WebSocket connection
-active_connections: dict[int, WebSocket] = {}
 
 
 @router.websocket("/ws/audio")
@@ -52,7 +49,7 @@ async def audio_websocket(
         return
 
     await websocket.accept()
-    active_connections[user_id] = websocket
+    connection_manager.connect(user_id, websocket)
     logger.info(f"Audio WebSocket connected for user {user_id}")
 
     try:
@@ -65,4 +62,4 @@ async def audio_websocket(
     except Exception as e:
         logger.error(f"Audio WebSocket error for user {user_id}: {e}")
     finally:
-        active_connections.pop(user_id, None)
+        connection_manager.disconnect(user_id)

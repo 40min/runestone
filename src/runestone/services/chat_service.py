@@ -52,7 +52,13 @@ class ChatService:
         self.vocabulary_service = vocabulary_service
         self.tts_service = tts_service
 
-    async def process_message(self, user_id: int, message_text: str, tts_expected: bool = False) -> str:
+    async def process_message(
+        self,
+        user_id: int,
+        message_text: str,
+        tts_expected: bool = False,
+        speed: float = 1.0,
+    ) -> str:
         """
         Process a user message: save, truncate, fetch context, generate response, save response.
 
@@ -60,6 +66,7 @@ class ChatService:
             user_id: ID of the user
             message_text: The user's message
             tts_expected: Whether to synthesize TTS audio for the response
+            speed: Speed of the speech
 
         Returns:
             The assistant's response text
@@ -99,7 +106,7 @@ class ChatService:
 
         # 7. Push TTS audio if client expects it (non-blocking)
         if tts_expected:
-            asyncio.create_task(self.tts_service.push_audio_to_client(user_id, assistant_text))
+            asyncio.create_task(self.tts_service.push_audio_to_client(user_id, assistant_text, speed=speed))
 
         return assistant_text
 

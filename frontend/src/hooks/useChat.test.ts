@@ -97,6 +97,8 @@ describe('useChat', () => {
         },
         body: JSON.stringify({
           message: 'Hej! Hur mår du?',
+          tts_expected: false,
+          speed: 1,
         }),
       })
     );

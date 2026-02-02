@@ -14,7 +14,7 @@ interface UseChatReturn {
   isLoading: boolean;
   isFetchingHistory: boolean;
   error: string | null;
-  sendMessage: (message: string, ttsExpected?: boolean) => Promise<void>;
+  sendMessage: (message: string, ttsExpected?: boolean, speed?: number) => Promise<void>;
   startNewChat: () => Promise<void>;
   clearError: () => void;
   refreshHistory: () => Promise<void>;
@@ -98,7 +98,7 @@ export const useChat = (): UseChatReturn => {
   }, []);
 
   const sendMessage = useCallback(
-    async (userMessage: string, ttsExpected: boolean = false) => {
+    async (userMessage: string, ttsExpected: boolean = false, speed: number = 1.0) => {
       if (!userMessage.trim() || isLoading) return;
 
       const newUserMessage: ChatMessage = {
@@ -116,6 +116,7 @@ export const useChat = (): UseChatReturn => {
         const data = await post<{ message: string }>('/api/chat/message', {
           message: userMessage.trim(),
           tts_expected: ttsExpected,
+          speed: speed,
         });
 
         const assistantMessage: ChatMessage = {

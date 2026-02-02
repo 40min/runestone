@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, FormControlLabel, Checkbox } from '@mui/material';
+import { Box, FormControlLabel, Checkbox, Select, MenuItem, Typography } from '@mui/material';
 import { Send } from 'lucide-react';
 import {
   CustomButton,
@@ -45,6 +45,16 @@ const ChatView: React.FC = () => {
     return stored === 'true';
   });
 
+  const [speechSpeed, setSpeechSpeed] = useState(() => {
+    const stored = localStorage.getItem('runestone_speech_speed');
+    return stored ? parseFloat(stored) : 1.0;
+  });
+
+  const [autoSend, setAutoSend] = useState(() => {
+    const stored = localStorage.getItem('runestone_autosend');
+    return stored === null ? false : stored === 'true';
+  });
+
   const {
     isRecording,
     isProcessing: isTranscribing,
@@ -67,6 +77,14 @@ const ChatView: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(VOICE_ENABLED_KEY, String(voiceEnabled));
   }, [voiceEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('runestone_speech_speed', String(speechSpeed));
+  }, [speechSpeed]);
+
+  useEffect(() => {
+    localStorage.setItem('runestone_autosend', String(autoSend));
+  }, [autoSend]);
 
   // Show voice errors in snackbar
   useEffect(() => {
@@ -123,7 +141,7 @@ const ChatView: React.FC = () => {
 
     const messageToSend = inputMessage.trim();
     setInputMessage('');
-    await sendMessage(messageToSend, voiceEnabled);
+    await sendMessage(messageToSend, voiceEnabled, speechSpeed);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -157,7 +175,11 @@ const ChatView: React.FC = () => {
   const handleStopRecording = async () => {
     const transcribedText = await stopRecording();
     if (transcribedText) {
-      setInputMessage(transcribedText);
+      if (autoSend) {
+          await sendMessage(transcribedText, voiceEnabled, speechSpeed);
+      } else {
+        setInputMessage(transcribedText);
+      }
     }
   };
 
@@ -302,6 +324,49 @@ const ChatView: React.FC = () => {
               },
             }}
           />
+
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>Speed:</Typography>
+              <Select
+                value={speechSpeed}
+                onChange={(e) => setSpeechSpeed(Number(e.target.value))}
+                size="small"
+                variant="standard"
+                sx={{
+                  color: 'text.secondary',
+                  fontSize: '0.8rem',
+                  '& .MuiSelect-select': { py: 0, pr: 3 },
+                  '&:before': { borderColor: '#4b5563' }
+                }}
+              >
+                {[0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.2, 1.25].map(speed => (
+                  <MenuItem key={speed} value={speed}>{speed.toFixed(2)}x</MenuItem>
+                ))}
+              </Select>
+            </Box>
+
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={autoSend}
+                  onChange={(e) => setAutoSend(e.target.checked)}
+                  size="small"
+                  sx={{
+                    color: '#9ca3af',
+                    p: 0.5,
+                    '&.Mui-checked': { color: 'var(--primary-color)' },
+                  }}
+                />
+              }
+              label="Autosend"
+              sx={{
+                color: '#9ca3af',
+                width: 'fit-content',
+                '& .MuiFormControlLabel-label': { fontSize: '0.75rem' },
+              }}
+            />
+          </Box>
         </Box>
 
         {/* Upload error display */}

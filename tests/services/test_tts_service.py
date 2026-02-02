@@ -32,6 +32,7 @@ def test_synthesize_speech_stream(mock_settings):
             voice="onyx",
             input="Hello",
             response_format="mp3",
+            speed=1.0,
         )
 
 
@@ -41,8 +42,8 @@ async def test_push_audio_to_client_no_connection(mock_settings):
     with patch("runestone.services.tts_service.OpenAI"):
         service = TTSService(mock_settings)
 
-        # Should return silently if user_id not in active_connections
-        with patch("runestone.api.audio_ws.active_connections", {}):
+        # Should return silently if user_id not in connection_manager
+        with patch("runestone.services.tts_service.connection_manager.get_connection", return_value=None):
             await service.push_audio_to_client(user_id=1, text="Hello")
 
 
@@ -62,8 +63,8 @@ async def test_push_audio_to_client_success(mock_settings):
         mock_ws.send_bytes = AsyncMock()
         mock_ws.send_json = AsyncMock()
 
-        # patch active_connections
-        with patch("runestone.api.audio_ws.active_connections", {1: mock_ws}):
+        # patch connection_manager
+        with patch("runestone.services.tts_service.connection_manager.get_connection", return_value=mock_ws):
             await service.push_audio_to_client(user_id=1, text="Hello")
 
         # Verify chunks sent

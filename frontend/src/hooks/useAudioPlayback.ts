@@ -8,6 +8,10 @@ interface UseAudioPlaybackReturn {
   error: string | null;
 }
 
+interface ExtendedSourceBuffer extends SourceBuffer {
+  _pendingEndOfStream?: boolean;
+}
+
 /**
  * Hook for playing streamed TTS audio via WebSocket.
  *
@@ -24,8 +28,9 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
   const wsRef = useRef<WebSocket | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mediaSourceRef = useRef<MediaSource | null>(null);
-  const sourceBufferRef = useRef<SourceBuffer | null>(null);
+  const sourceBufferRef = useRef<ExtendedSourceBuffer | null>(null);
   const chunkQueueRef = useRef<ArrayBuffer[]>([]);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize Audio element once
   useEffect(() => {
@@ -50,13 +55,34 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
     setIsConnected(false);
   }, []);
 
+  const objectUrlRef = useRef<string | null>(null);
+
   const cleanupMediaSource = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+    }
+
     if (mediaSourceRef.current) {
       if (mediaSourceRef.current.readyState === 'open') {
-        mediaSourceRef.current.endOfStream();
+        try {
+          mediaSourceRef.current.endOfStream();
+        } catch {
+          // Ignore if already closed or failing
+        }
       }
       mediaSourceRef.current = null;
     }
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+      audioRef.current.src = '';
+    }
+
     sourceBufferRef.current = null;
     chunkQueueRef.current = [];
   }, []);
@@ -67,25 +93,58 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
     const mediaSource = new MediaSource();
     mediaSourceRef.current = mediaSource;
 
+    const url = URL.createObjectURL(mediaSource);
+    objectUrlRef.current = url;
     if (audioRef.current) {
-      audioRef.current.src = URL.createObjectURL(mediaSource);
+      audioRef.current.src = url;
     }
 
-    mediaSource.addEventListener('sourceopen', () => {
+    const onSourceOpen = () => {
+      mediaSource.removeEventListener('sourceopen', onSourceOpen);
+
+      if (mediaSource.readyState !== 'open') {
+          console.warn('MediaSource not open in sourceopen handler:', mediaSource.readyState);
+          return;
+      }
+
       try {
-        // MP3 is usually supported as 'audio/mpeg' in MSE
-        const sb = mediaSource.addSourceBuffer('audio/mpeg');
+        // We check for Opus WebM support. OpenAI sends Ogg/Opus.
+        // Note: MSE support for Ogg is rare. Chrome supports Opus only in WebM container for MSE.
+        // If the backend sends Ogg, this might still fail during appendBuffer in Chrome.
+        const mimeType = 'audio/mpeg';
+
+        console.debug('Initializing SourceBuffer with:', mimeType);
+        const sb = mediaSource.addSourceBuffer(mimeType);
         sourceBufferRef.current = sb;
 
         sb.addEventListener('updateend', () => {
-          if (chunkQueueRef.current.length > 0 && !sb.updating) {
+          if (chunkQueueRef.current.length > 0 && !sb.updating && mediaSource.readyState === 'open') {
             const nextChunk = chunkQueueRef.current.shift()!;
-            sb.appendBuffer(nextChunk);
+            try {
+                sb.appendBuffer(nextChunk);
+            } catch (e) {
+                console.error('Failed to append buffer from queue:', e);
+            }
+          } else if (chunkQueueRef.current.length === 0 && sb._pendingEndOfStream && !sb.updating && mediaSource.readyState === 'open') {
+            try {
+                mediaSource.endOfStream();
+                sb._pendingEndOfStream = false;
+                // Clear refs after stream is closed so next message starts fresh
+                mediaSourceRef.current = null;
+                sourceBufferRef.current = null;
+            } catch (e) {
+                console.warn('Error calling pending endOfStream:', e);
+            }
           }
         });
 
+        sb.addEventListener('error', (e) => {
+            console.error('SourceBuffer error:', e);
+            setError('Audio playback error occurred');
+        });
+
         // If we already have queued chunks, start appending
-        if (chunkQueueRef.current.length > 0) {
+        if (chunkQueueRef.current.length > 0 && !sb.updating) {
           const nextChunk = chunkQueueRef.current.shift()!;
           sb.appendBuffer(nextChunk);
         }
@@ -93,14 +152,18 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
         // Try to play as soon as we have data
         if (audioRef.current) {
           audioRef.current.play().catch(err => {
-            console.warn('Auto-play blocked or failed:', err);
+            if (err.name !== 'AbortError') {
+                console.warn('Auto-play blocked or failed:', err);
+            }
           });
         }
       } catch (e) {
         console.error('Failed to add SourceBuffer:', e);
-        setError('Streaming audio not supported in this browser');
+        setError('Streaming audio initialization failed');
       }
-    });
+    };
+
+    mediaSource.addEventListener('sourceopen', onSourceOpen);
   }, [cleanupMediaSource]);
 
   useEffect(() => {
@@ -156,19 +219,42 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
             const data = JSON.parse(event.data);
             if (data.status === 'complete') {
               console.log('Audio stream complete');
-              // We don't close MSE immediately in case there's still data to play
+              const sb = sourceBufferRef.current;
+              const ms = mediaSourceRef.current;
+
+              if (ms && ms.readyState === 'open') {
+                if (sb && sb.updating) {
+                  // Wait for the final update to finish before calling endOfStream
+                  sb._pendingEndOfStream = true;
+                } else {
+                  try {
+                    ms.endOfStream();
+                    mediaSourceRef.current = null;
+                    sourceBufferRef.current = null;
+                  } catch (e) {
+                    console.warn('Error calling endOfStream:', e);
+                  }
+                }
+              }
+              // We don't null out immediately here anymore because we might need to wait for updateend
             }
           }
         };
 
         ws.onerror = (e) => {
           console.error('Audio WebSocket error:', e);
-          setError('Audio connection error');
+          // Don't set error state immediately to avoid flashing UI, let reconnection handle it
         };
 
         ws.onclose = () => {
+          console.log('Audio WebSocket closed, attempting reconnect...');
           setIsConnected(false);
-          console.log('Audio WebSocket closed');
+          // Attempt reconnect after 3 seconds
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (enabled && token) {
+              connect();
+            }
+          }, 3000);
         };
       } catch (err) {
         setError('Failed to establish audio connection');
@@ -179,6 +265,9 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
     connect();
 
     return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
       cleanupWebSocket();
       cleanupMediaSource();
     };
