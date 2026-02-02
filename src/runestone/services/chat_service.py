@@ -2,7 +2,6 @@
 Service for managing chat interactions and history.
 """
 
-import asyncio
 import logging
 from typing import List
 
@@ -106,7 +105,8 @@ class ChatService:
 
         # 7. Push TTS audio if client expects it (non-blocking)
         if tts_expected:
-            asyncio.create_task(self.tts_service.push_audio_to_client(user_id, assistant_text, speed=speed))
+            # TTSService handles task management and cancellation internally
+            await self.tts_service.push_audio_to_client(user_id, assistant_text, speed=speed)
 
         return assistant_text
 
