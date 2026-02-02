@@ -17,3 +17,4 @@ export { ChatInput } from './ChatInput';
 export { ChatContainer } from './ChatContainer';
 export { NewChatButton } from './NewChatButton';
 export { default as VoiceRecordButton } from './VoiceRecordButton';
+export { VoiceToggle } from './VoiceToggle';

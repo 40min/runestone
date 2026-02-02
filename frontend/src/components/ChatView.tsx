@@ -12,14 +12,17 @@ import {
   ImageUploadButton,
   Snackbar,
   VoiceRecordButton,
+  VoiceToggle,
 } from './ui';
 import { ImageSidebar } from './chat/ImageSidebar';
 import { ChatHeader } from './chat/ChatHeader';
 import { useChat } from '../hooks/useChat';
 import { useChatImageUpload } from '../hooks/useChatImageUpload';
 import { useVoiceRecording } from '../hooks/useVoiceRecording';
+import { useAudioPlayback } from '../hooks/useAudioPlayback';
 
 const IMPROVE_TRANSCRIPTION_KEY = 'runestone_improve_transcription';
+const VOICE_ENABLED_KEY = 'runestone_voice_enabled';
 
 const ChatView: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
@@ -37,6 +40,11 @@ const ChatView: React.FC = () => {
     return stored === null ? true : stored === 'true';
   });
 
+  const [voiceEnabled, setVoiceEnabled] = useState(() => {
+    const stored = localStorage.getItem(VOICE_ENABLED_KEY);
+    return stored === 'true';
+  });
+
   const {
     isRecording,
     isProcessing: isTranscribing,
@@ -47,12 +55,18 @@ const ChatView: React.FC = () => {
     clearError: clearVoiceError,
   } = useVoiceRecording(improveTranscription);
 
+  const { isPlaying: isAudioPlaying } = useAudioPlayback(voiceEnabled);
+
   const isAnyProcessing = isLoading || isUploading || isTranscribing || isFetchingHistory;
 
-  // Persist improve setting
+  // Persist settings
   useEffect(() => {
     localStorage.setItem(IMPROVE_TRANSCRIPTION_KEY, String(improveTranscription));
   }, [improveTranscription]);
+
+  useEffect(() => {
+    localStorage.setItem(VOICE_ENABLED_KEY, String(voiceEnabled));
+  }, [voiceEnabled]);
 
   // Show voice errors in snackbar
   useEffect(() => {
@@ -109,7 +123,7 @@ const ChatView: React.FC = () => {
 
     const messageToSend = inputMessage.trim();
     setInputMessage('');
-    await sendMessage(messageToSend);
+    await sendMessage(messageToSend, voiceEnabled);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -253,6 +267,12 @@ const ChatView: React.FC = () => {
               onFileSelect={handleImageUpload}
               onError={handleImageError}
               disabled={isAnyProcessing || isRecording}
+            />
+            <VoiceToggle
+              enabled={voiceEnabled}
+              onChange={setVoiceEnabled}
+              isPlaying={isAudioPlaying}
+              disabled={isAnyProcessing}
             />
           </Box>
 

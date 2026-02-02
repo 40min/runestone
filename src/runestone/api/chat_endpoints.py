@@ -44,7 +44,9 @@ async def send_message(
         logger.info(f"User {current_user.email} sent message: {request.message[:50]}...")
 
         # Generate response using the chat service which handles persistence
-        response_message = await chat_service.process_message(current_user.id, request.message)
+        response_message = await chat_service.process_message(
+            current_user.id, request.message, tts_expected=request.tts_expected
+        )
 
         logger.info(f"Generated response for user {current_user.email}")
 

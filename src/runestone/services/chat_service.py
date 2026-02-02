@@ -2,6 +2,7 @@
 Service for managing chat interactions and history.
 """
 
+import asyncio
 import logging
 from typing import List
 
@@ -12,6 +13,7 @@ from runestone.core.exceptions import RunestoneError
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.chat_repository import ChatRepository
 from runestone.db.models import ChatMessage
+from runestone.services.tts_service import TTSService
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 
@@ -29,6 +31,7 @@ class ChatService:
         agent_service: AgentService,
         processor: RunestoneProcessor,
         vocabulary_service: VocabularyService,
+        tts_service: TTSService,
     ):
         """
         Initialize the chat service.
@@ -39,6 +42,7 @@ class ChatService:
             user_service: User service for user and memory operations
             agent_service: Agent service for LLM interactions
             processor: Runestone processor for OCR operations
+            tts_service: TTS service for text-to-speech synthesis
         """
         self.settings = settings
         self.repository = repository
@@ -46,14 +50,16 @@ class ChatService:
         self.agent_service = agent_service
         self.processor = processor
         self.vocabulary_service = vocabulary_service
+        self.tts_service = tts_service
 
-    async def process_message(self, user_id: int, message_text: str) -> str:
+    async def process_message(self, user_id: int, message_text: str, tts_expected: bool = False) -> str:
         """
         Process a user message: save, truncate, fetch context, generate response, save response.
 
         Args:
             user_id: ID of the user
             message_text: The user's message
+            tts_expected: Whether to synthesize TTS audio for the response
 
         Returns:
             The assistant's response text
@@ -90,6 +96,10 @@ class ChatService:
 
         # 6. Save assistant message
         self.repository.add_message(user_id, "assistant", assistant_text)
+
+        # 7. Push TTS audio if client expects it (non-blocking)
+        if tts_expected:
+            asyncio.create_task(self.tts_service.push_audio_to_client(user_id, assistant_text))
 
         return assistant_text
 

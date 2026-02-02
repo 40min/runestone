@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     voice_max_duration_seconds: int = 300
     voice_max_file_size_mb: int = 25
 
+    # TTS (Text-to-Speech) Configuration
+    tts_model: str = "gpt-4o-mini-tts"
+    tts_voice: str = "onyx"
+
     class Config:
         """Pydantic configuration."""
 
