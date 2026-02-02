@@ -108,9 +108,7 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
       }
 
       try {
-        // We check for Opus WebM support. OpenAI sends Ogg/Opus.
-        // Note: MSE support for Ogg is rare. Chrome supports Opus only in WebM container for MSE.
-        // If the backend sends Ogg, this might still fail during appendBuffer in Chrome.
+        // The backend provides an MP3 stream, so we use the 'audio/mpeg' MIME type.
         const mimeType = 'audio/mpeg';
 
         console.debug('Initializing SourceBuffer with:', mimeType);
