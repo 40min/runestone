@@ -132,6 +132,7 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
         llm_client=None,
         current_user=None,
         agent_service=None,
+        tts_service=None,
         db_override=None,
     ):
         db, test_user = db_with_test_user
@@ -176,6 +177,15 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
 
             overrides[get_agent_service] = lambda: agent_service
 
+        # Always mock TTSService to avoid OpenAI client initialization issues
+        from runestone.dependencies import get_tts_service
+
+        tts_service_instance = tts_service or Mock()
+        overrides[get_tts_service] = lambda: tts_service_instance
+
+        # Also inject into app.state to avoid attribute errors
+        app.state.tts_service = tts_service_instance
+
         for dep, override in overrides.items():
             app.dependency_overrides[dep] = override
 
@@ -201,6 +211,7 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
             "llm_client": llm_client or mock_llm_client,
             "current_user": current_user or test_user,
             "agent_service": agent_service,
+            "tts_service": tts_service_instance,
         }
 
         yield client, mocks

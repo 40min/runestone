@@ -25,6 +25,12 @@ def mock_vocabulary_service():
 
 
 @pytest.fixture
+def mock_tts_service():
+    """Create a mock TTSService."""
+    return Mock()
+
+
+@pytest.fixture
 def mock_user_service():
     """Create a mock UserService."""
     mock = Mock()
@@ -53,13 +59,21 @@ def mock_processor():
 
 
 @pytest.fixture
-def chat_service(db_session, mock_agent_service, mock_user_service, mock_processor, mock_vocabulary_service):
+def chat_service(
+    db_session, mock_agent_service, mock_user_service, mock_processor, mock_vocabulary_service, mock_tts_service
+):
     """Create a ChatService instance with real repository and mock agent/user services."""
     repository = ChatRepository(db_session)
     mock_settings = Mock()
     mock_settings.chat_history_retention_days = 7
     return ChatService(
-        mock_settings, repository, mock_user_service, mock_agent_service, mock_processor, mock_vocabulary_service
+        mock_settings,
+        repository,
+        mock_user_service,
+        mock_agent_service,
+        mock_processor,
+        mock_vocabulary_service,
+        mock_tts_service,
     )
 
 

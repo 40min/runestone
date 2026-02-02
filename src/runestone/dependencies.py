@@ -23,6 +23,7 @@ from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.services.chat_service import ChatService
 from runestone.services.grammar_service import GrammarService
+from runestone.services.tts_service import TTSService
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 from runestone.services.voice_service import VoiceService
@@ -222,6 +223,19 @@ def get_agent_service(request: Request) -> AgentService:
     return request.app.state.agent_service
 
 
+def get_tts_service(request: Request) -> TTSService:
+    """
+    Get TTS service singleton instance.
+
+    Args:
+        request: FastAPI request object
+
+    Returns:
+        TTSService: Cached singleton service instance for TTS operations
+    """
+    return request.app.state.tts_service
+
+
 def get_chat_service(
     settings: Annotated[Settings, Depends(get_settings)],
     repo: Annotated[ChatRepository, Depends(get_chat_repository)],
@@ -229,6 +243,7 @@ def get_chat_service(
     agent_service: Annotated[AgentService, Depends(get_agent_service)],
     processor: Annotated[RunestoneProcessor, Depends(get_runestone_processor)],
     vocabulary_service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+    tts_service: Annotated[TTSService, Depends(get_tts_service)],
 ) -> ChatService:
     """
     Get chat service instance.
@@ -240,11 +255,12 @@ def get_chat_service(
         agent_service: AgentService from dependency injection
         processor: RunestoneProcessor from dependency injection
         vocabulary_service: VocabularyService from dependency injection
+        tts_service: TTSService from dependency injection
 
     Returns:
         ChatService: Service instance for chat operations
     """
-    return ChatService(settings, repo, user_service, agent_service, processor, vocabulary_service)
+    return ChatService(settings, repo, user_service, agent_service, processor, vocabulary_service, tts_service)
 
 
 def get_voice_service(

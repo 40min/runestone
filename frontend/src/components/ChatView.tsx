@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, FormControlLabel, Checkbox } from '@mui/material';
+import { Box, FormControlLabel, Checkbox, Select, MenuItem, Typography } from '@mui/material';
 import { Send } from 'lucide-react';
 import {
   CustomButton,
@@ -12,14 +12,19 @@ import {
   ImageUploadButton,
   Snackbar,
   VoiceRecordButton,
+  VoiceToggle,
 } from './ui';
 import { ImageSidebar } from './chat/ImageSidebar';
 import { ChatHeader } from './chat/ChatHeader';
 import { useChat } from '../hooks/useChat';
 import { useChatImageUpload } from '../hooks/useChatImageUpload';
 import { useVoiceRecording } from '../hooks/useVoiceRecording';
+import { useAudioPlayback } from '../hooks/useAudioPlayback';
 
 const IMPROVE_TRANSCRIPTION_KEY = 'runestone_improve_transcription';
+const VOICE_ENABLED_KEY = 'runestone_voice_enabled';
+const SPEECH_SPEED_KEY = 'runestone_speech_speed';
+const AUTOSEND_KEY = 'runestone_autosend';
 
 const ChatView: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
@@ -37,6 +42,21 @@ const ChatView: React.FC = () => {
     return stored === null ? true : stored === 'true';
   });
 
+  const [voiceEnabled, setVoiceEnabled] = useState(() => {
+    const stored = localStorage.getItem(VOICE_ENABLED_KEY);
+    return stored === 'true';
+  });
+
+  const [speechSpeed, setSpeechSpeed] = useState(() => {
+    const stored = localStorage.getItem(SPEECH_SPEED_KEY);
+    return stored && Number.isFinite(Number(stored)) ? Number(stored) : 1.1;
+  });
+
+  const [autoSend, setAutoSend] = useState(() => {
+    const stored = localStorage.getItem(AUTOSEND_KEY);
+    return stored === null ? false : stored === 'true';
+  });
+
   const {
     isRecording,
     isProcessing: isTranscribing,
@@ -47,12 +67,26 @@ const ChatView: React.FC = () => {
     clearError: clearVoiceError,
   } = useVoiceRecording(improveTranscription);
 
+  const { isPlaying: isAudioPlaying } = useAudioPlayback(voiceEnabled);
+
   const isAnyProcessing = isLoading || isUploading || isTranscribing || isFetchingHistory;
 
-  // Persist improve setting
+  // Persist settings
   useEffect(() => {
     localStorage.setItem(IMPROVE_TRANSCRIPTION_KEY, String(improveTranscription));
   }, [improveTranscription]);
+
+  useEffect(() => {
+    localStorage.setItem(VOICE_ENABLED_KEY, String(voiceEnabled));
+  }, [voiceEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem(SPEECH_SPEED_KEY, String(speechSpeed));
+  }, [speechSpeed]);
+
+  useEffect(() => {
+    localStorage.setItem(AUTOSEND_KEY, String(autoSend));
+  }, [autoSend]);
 
   // Show voice errors in snackbar
   useEffect(() => {
@@ -109,7 +143,7 @@ const ChatView: React.FC = () => {
 
     const messageToSend = inputMessage.trim();
     setInputMessage('');
-    await sendMessage(messageToSend);
+    await sendMessage(messageToSend, voiceEnabled, speechSpeed);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -143,7 +177,11 @@ const ChatView: React.FC = () => {
   const handleStopRecording = async () => {
     const transcribedText = await stopRecording();
     if (transcribedText) {
-      setInputMessage(transcribedText);
+      if (autoSend) {
+          await sendMessage(transcribedText, voiceEnabled, speechSpeed);
+      } else {
+        setInputMessage(transcribedText);
+      }
     }
   };
 
@@ -233,55 +271,119 @@ const ChatView: React.FC = () => {
             </CustomButton>
           </Box>
 
-          <Box
-            sx={{
-              display: 'flex',
-              gap: 1.5,
-              alignItems: 'flex-start',
-              pl: 0.5,
-            }}
-          >
-            <VoiceRecordButton
-              isRecording={isRecording}
-              isProcessing={isTranscribing}
-              duration={recordedDuration}
-              onStartRecording={handleStartRecording}
-              onStopRecording={handleStopRecording}
-              disabled={isAnyProcessing}
-            />
-            <ImageUploadButton
-              onFileSelect={handleImageUpload}
-              onError={handleImageError}
-              disabled={isAnyProcessing || isRecording}
-            />
-          </Box>
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 2,
+                alignItems: 'center',
+                pl: 0.5,
+              }}
+            >
+              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                <ImageUploadButton
+                  onFileSelect={handleImageUpload}
+                  onError={handleImageError}
+                  disabled={isAnyProcessing || isRecording}
+                />
+                <VoiceRecordButton
+                  isRecording={isRecording}
+                  isProcessing={isTranscribing}
+                  duration={recordedDuration}
+                  onStartRecording={handleStartRecording}
+                  onStopRecording={handleStopRecording}
+                  disabled={isAnyProcessing}
+                />
+              </Box>
 
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={improveTranscription}
-                onChange={(e) => setImproveTranscription(e.target.checked)}
-                size="small"
-                sx={{
-                  color: '#9ca3af',
-                  p: 0.5,
-                  '&.Mui-checked': {
-                    color: 'var(--primary-color)',
-                  },
-                }}
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={autoSend}
+                      onChange={(e) => setAutoSend(e.target.checked)}
+                      size="small"
+                      sx={{
+                        color: '#9ca3af',
+                        p: 0.5,
+                        '&.Mui-checked': { color: 'var(--primary-color)' },
+                      }}
+                    />
+                  }
+                  label="Autosend"
+                  sx={{
+                    color: '#9ca3af',
+                    m: 0,
+                    '& .MuiFormControlLabel-label': { fontSize: '0.75rem' },
+                  }}
+                />
+
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={improveTranscription}
+                      onChange={(e) => setImproveTranscription(e.target.checked)}
+                      size="small"
+                      sx={{
+                        color: '#9ca3af',
+                        p: 0.5,
+                        '&.Mui-checked': {
+                          color: 'var(--primary-color)',
+                        },
+                      }}
+                    />
+                  }
+                  label="Improve transcription"
+                  sx={{
+                    color: '#9ca3af',
+                    m: 0,
+                    '& .MuiFormControlLabel-label': {
+                      fontSize: '0.75rem',
+                    },
+                  }}
+                />
+              </Box>
+            </Box>
+
+            <Box
+              sx={{
+                display: 'flex',
+                gap: 3,
+                alignItems: 'center',
+                pl: 0.5,
+                mt: 0.5,
+                pt: 1,
+                borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+              }}
+            >
+              <VoiceToggle
+                enabled={voiceEnabled}
+                onChange={setVoiceEnabled}
+                isPlaying={isAudioPlaying}
+                disabled={isAnyProcessing}
               />
-            }
-            label="Improve transcription"
-            sx={{
-              color: '#9ca3af',
-              mt: 1,
-              pl: 2,
-              width: 'fit-content',
-              '& .MuiFormControlLabel-label': {
-                fontSize: '0.75rem',
-              },
-            }}
-          />
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="caption" sx={{ color: '#9ca3af' }}>Speed:</Typography>
+                <Select
+                  value={speechSpeed}
+                  onChange={(e) => setSpeechSpeed(Number(e.target.value))}
+                  size="small"
+                  variant="standard"
+                  sx={{
+                    color: '#9ca3af',
+                    fontSize: '0.8rem',
+                    '& .MuiSelect-select': { py: 0, pr: 3 },
+                    '&:before': { borderColor: '#4b5563' },
+                    '&:hover:not(.Mui-disabled):before': { borderColor: '#9ca3af' }
+                  }}
+                >
+                  {[0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.2, 1.25].map(speed => (
+                    <MenuItem key={speed} value={speed}>{speed.toFixed(2)}x</MenuItem>
+                  ))}
+                </Select>
+              </Box>
+            </Box>
         </Box>
 
         {/* Upload error display */}

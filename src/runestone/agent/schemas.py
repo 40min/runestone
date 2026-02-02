@@ -26,6 +26,8 @@ class ChatRequest(BaseModel):
     """Request to send a chat message."""
 
     message: str = Field(..., description="The user's message", min_length=1)
+    tts_expected: bool = Field(False, description="Whether to synthesize TTS audio for the response")
+    speed: float = Field(1.0, description="Speed of the speech (0.25 to 4.0)", ge=0.25, le=4.0)
 
 
 class ChatResponse(BaseModel):

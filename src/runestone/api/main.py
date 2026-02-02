@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from runestone.agent.service import AgentService
+from runestone.api.audio_ws import router as audio_ws_router
 from runestone.api.auth_endpoints import router as auth_router
 from runestone.api.chat_endpoints import router as chat_router
 from runestone.api.endpoints import grammar_router
@@ -22,6 +23,7 @@ from runestone.core.clients.factory import create_llm_client
 from runestone.core.logging_config import setup_logging
 from runestone.db.database import setup_database
 from runestone.services.grammar_service import GrammarService
+from runestone.services.tts_service import TTSService
 
 
 @asynccontextmanager
@@ -45,6 +47,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     app.state.grammar_service = GrammarService(settings.cheatsheets_dir)
     app.state.agent_service = AgentService(settings)
+    app.state.tts_service = TTSService(settings)
     yield
     # Shutdown
 
@@ -101,6 +104,13 @@ def create_application() -> FastAPI:
         chat_router,
         prefix="/api/chat",
         tags=["chat"],
+    )
+
+    # Include audio WebSocket router
+    app.include_router(
+        audio_ws_router,
+        prefix="/api",
+        tags=["audio"],
     )
 
     return app
