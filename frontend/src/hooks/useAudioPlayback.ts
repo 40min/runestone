@@ -8,16 +8,10 @@ interface UseAudioPlaybackReturn {
   error: string | null;
 }
 
-interface ExtendedSourceBuffer extends SourceBuffer {
-  _pendingEndOfStream?: boolean;
-}
+
 
 /**
  * Hook for playing streamed TTS audio via WebSocket.
- *
- * It manages the WebSocket connection to the backend and
- * plays received audio chunks using the MediaSource API for
- * low-latency streaming playback.
  */
 export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
   const { token } = useAuth();
@@ -28,24 +22,14 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
   const wsRef = useRef<WebSocket | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mediaSourceRef = useRef<MediaSource | null>(null);
-  const sourceBufferRef = useRef<ExtendedSourceBuffer | null>(null);
+  const sourceBufferRef = useRef<SourceBuffer | null>(null);
   const chunkQueueRef = useRef<ArrayBuffer[]>([]);
+  const isCompleteRef = useRef<boolean>(false);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const endedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
 
-  // Initialize Audio element once
-  useEffect(() => {
-    const audio = new Audio();
-    audioRef.current = audio;
-
-    audio.onplay = () => setIsPlaying(true);
-    audio.onended = () => setIsPlaying(false);
-    audio.onpause = () => setIsPlaying(false);
-
-    return () => {
-      audio.pause();
-      audio.src = '';
-    };
-  }, []);
+  // --- Callbacks first to avoid TDZ ---
 
   const cleanupWebSocket = useCallback(() => {
     if (wsRef.current) {
@@ -55,12 +39,32 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
     setIsConnected(false);
   }, []);
 
-  const objectUrlRef = useRef<string | null>(null);
-
   const cleanupMediaSource = useCallback(() => {
     if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
+    if (endedTimeoutRef.current) {
+      clearTimeout(endedTimeoutRef.current);
+      endedTimeoutRef.current = null;
+    }
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      try {
+        if (audioRef.current.src) {
+          audioRef.current.removeAttribute('src');
+          audioRef.current.load();
+        }
+      } catch {
+        // Silent catch
+      }
+
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
     }
 
     if (mediaSourceRef.current) {
@@ -68,23 +72,44 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
         try {
           mediaSourceRef.current.endOfStream();
         } catch {
-          // Ignore if already closed or failing
+          // Ignore
         }
       }
       mediaSourceRef.current = null;
     }
 
-    if (audioRef.current) {
-      audioRef.current.pause();
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-        objectUrlRef.current = null;
-      }
-      audioRef.current.src = '';
-    }
-
     sourceBufferRef.current = null;
     chunkQueueRef.current = [];
+    isCompleteRef.current = false;
+  }, []);
+
+  const processQueue = useCallback(() => {
+    const sb = sourceBufferRef.current;
+    const ms = mediaSourceRef.current;
+
+    if (!sb || sb.updating || chunkQueueRef.current.length === 0) {
+      if (sb && !sb.updating && chunkQueueRef.current.length === 0 && isCompleteRef.current && ms && ms.readyState === 'open') {
+        try {
+          ms.endOfStream();
+          isCompleteRef.current = false;
+        } catch (e) {
+          console.warn('Error ending stream in processQueue:', e);
+        }
+      }
+      return;
+    }
+
+    if (!ms || ms.readyState !== 'open') {
+      return;
+    }
+
+    const nextChunk = chunkQueueRef.current.shift()!;
+    try {
+      sb.appendBuffer(nextChunk);
+    } catch (e) {
+      console.error('Failed to append buffer from queue:', e);
+      chunkQueueRef.current.unshift(nextChunk);
+    }
   }, []);
 
   const initializeMediaSource = useCallback(() => {
@@ -103,55 +128,39 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
       mediaSource.removeEventListener('sourceopen', onSourceOpen);
 
       if (mediaSource.readyState !== 'open') {
-          console.warn('MediaSource not open in sourceopen handler:', mediaSource.readyState);
-          return;
+        console.warn('MediaSource not open in sourceopen handler:', mediaSource.readyState);
+        return;
       }
 
       try {
-        // The backend provides an MP3 stream, so we use the 'audio/mpeg' MIME type.
         const mimeType = 'audio/mpeg';
-
-        console.debug('Initializing SourceBuffer with:', mimeType);
-        const sb = mediaSource.addSourceBuffer(mimeType) as ExtendedSourceBuffer;
+        const sb = mediaSource.addSourceBuffer(mimeType);
         sourceBufferRef.current = sb;
 
         sb.addEventListener('updateend', () => {
-          if (chunkQueueRef.current.length > 0 && !sb.updating && mediaSource.readyState === 'open') {
-            const nextChunk = chunkQueueRef.current.shift()!;
+          if (chunkQueueRef.current.length > 0) {
+            processQueue();
+          } else if (isCompleteRef.current && !sb.updating && mediaSource.readyState === 'open') {
             try {
-                sb.appendBuffer(nextChunk);
+              mediaSource.endOfStream();
+              isCompleteRef.current = false;
             } catch (e) {
-                console.error('Failed to append buffer from queue:', e);
-            }
-          } else if (chunkQueueRef.current.length === 0 && sb._pendingEndOfStream && !sb.updating && mediaSource.readyState === 'open') {
-            try {
-                mediaSource.endOfStream();
-                sb._pendingEndOfStream = false;
-                // Clear refs after stream is closed so next message starts fresh
-                mediaSourceRef.current = null;
-                sourceBufferRef.current = null;
-            } catch (e) {
-                console.warn('Error calling pending endOfStream:', e);
+              console.warn('Error calling pending endOfStream:', e);
             }
           }
         });
 
-        sb.addEventListener('error', (e) => {
-            console.error('SourceBuffer error:', e);
-            setError('Audio playback error occurred');
+        sb.addEventListener('error', () => {
+          console.error('SourceBuffer error');
+          setError('Audio playback error occurred');
         });
 
-        // If we already have queued chunks, start appending
-        if (chunkQueueRef.current.length > 0 && !sb.updating) {
-          const nextChunk = chunkQueueRef.current.shift()!;
-          sb.appendBuffer(nextChunk);
-        }
+        processQueue();
 
-        // Try to play as soon as we have data
         if (audioRef.current) {
           audioRef.current.play().catch(err => {
             if (err.name !== 'AbortError') {
-                console.warn('Auto-play blocked or failed:', err);
+              console.warn('Auto-play blocked or failed:', err);
             }
           });
         }
@@ -162,6 +171,49 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
     };
 
     mediaSource.addEventListener('sourceopen', onSourceOpen);
+  }, [cleanupMediaSource, processQueue]);
+
+  // --- Effects last ---
+
+  useEffect(() => {
+    const audio = new Audio();
+    audioRef.current = audio;
+
+    audio.onplay = () => {
+      setIsPlaying(true);
+    };
+    audio.onended = () => {
+      setIsPlaying(false);
+      if (endedTimeoutRef.current) clearTimeout(endedTimeoutRef.current);
+      endedTimeoutRef.current = setTimeout(() => {
+        setIsPlaying(current => {
+          if (!current) {
+            cleanupMediaSource();
+          }
+          return current;
+        });
+      }, 100);
+    };
+    audio.onpause = () => {
+      setIsPlaying(false);
+    };
+    audio.onwaiting = () => {};
+    audio.onstalled = () => {};
+    audio.onerror = () => {
+      if (audio.error && audio.src && !audio.src.startsWith('blob:')) {
+        console.error('Audio element error:', audio.error.message, 'code:', audio.error.code);
+      }
+      setIsPlaying(false);
+    };
+    return () => {
+      if (endedTimeoutRef.current) {
+        clearTimeout(endedTimeoutRef.current);
+        endedTimeoutRef.current = null;
+      }
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+    };
   }, [cleanupMediaSource]);
 
   useEffect(() => {
@@ -180,9 +232,7 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
           const base = API_BASE_URL.replace(/^http/, 'ws').replace(/\/$/, '');
           wsUrl = `${base}/api/ws/audio?token=${token}`;
         } else {
-          // Relative URL
           const host = window.location.host;
-          // Remove leading/trailing slashes from API_BASE_URL to avoid doubles
           const normalizedPath = API_BASE_URL.replace(/^\/+/, '').replace(/\/+$/, '');
           const path = normalizedPath ? `/${normalizedPath}` : '';
           wsUrl = `${protocol}//${host}${path}/api/ws/audio?token=${token}`;
@@ -194,72 +244,47 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
         ws.onopen = () => {
           setIsConnected(true);
           setError(null);
-          console.log('Audio WebSocket connected');
         };
 
         ws.onmessage = async (event) => {
           if (event.data instanceof Blob) {
             const arrayBuffer = await event.data.arrayBuffer();
+            chunkQueueRef.current.push(arrayBuffer);
 
-            // If MediaSource isn't ready, initialize it
             if (!mediaSourceRef.current) {
               initializeMediaSource();
-            }
-
-            if (sourceBufferRef.current && !sourceBufferRef.current.updating) {
-              try {
-                sourceBufferRef.current.appendBuffer(arrayBuffer);
-              } catch (e) {
-                console.warn('Error appending buffer directly, queuing:', e);
-                chunkQueueRef.current.push(arrayBuffer);
-              }
             } else {
-              chunkQueueRef.current.push(arrayBuffer);
+              processQueue();
             }
           } else {
             const data = JSON.parse(event.data);
             if (data.status === 'complete') {
-              console.log('Audio stream complete');
+              isCompleteRef.current = true;
+
               const sb = sourceBufferRef.current;
               const ms = mediaSourceRef.current;
 
-              if (ms && ms.readyState === 'open') {
-                if (sb && sb.updating) {
-                  // Wait for the final update to finish before calling endOfStream
-                  sb._pendingEndOfStream = true;
-                } else {
-                  try {
-                    ms.endOfStream();
-                    mediaSourceRef.current = null;
-                    sourceBufferRef.current = null;
-                  } catch (e) {
-                    console.warn('Error calling endOfStream:', e);
-                  }
+              if (ms && ms.readyState === 'open' && sb && !sb.updating && chunkQueueRef.current.length === 0) {
+                try {
+                  ms.endOfStream();
+                  isCompleteRef.current = false;
+                } catch (e) {
+                  console.warn('Error calling endOfStream:', e);
                 }
               }
-              // We don't null out immediately here anymore because we might need to wait for updateend
             }
           }
         };
 
         ws.onerror = (e) => {
           console.error('Audio WebSocket error:', e);
-          // Don't set error state immediately to avoid flashing UI, let reconnection handle it
         };
 
         ws.onclose = () => {
-          // Only reconnect if this is the active connection
-          if (ws !== wsRef.current) {
-            return;
-          }
-
-          console.log('Audio WebSocket closed, attempting reconnect...');
+          if (ws !== wsRef.current) return;
           setIsConnected(false);
-          // Attempt reconnect after 3 seconds
           reconnectTimeoutRef.current = setTimeout(() => {
-            if (enabled && token) {
-              connect();
-            }
+            if (enabled && token) connect();
           }, 3000);
         };
       } catch (err) {
@@ -277,7 +302,7 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
       cleanupWebSocket();
       cleanupMediaSource();
     };
-  }, [enabled, token, cleanupWebSocket, cleanupMediaSource, initializeMediaSource]);
+  }, [enabled, token, cleanupWebSocket, cleanupMediaSource, initializeMediaSource, processQueue]);
 
   return { isPlaying, isConnected, error };
 };

@@ -52,15 +52,20 @@ class TTSService:
         try:
             # Backpressure: limit concurrent calls to OpenAI API
             async with self._synthesis_semaphore:
-                response = await self._client.audio.speech.create(
+                async with self._client.audio.speech.with_streaming_response.create(
                     model=self.settings.tts_model,
                     voice=self.settings.tts_voice,
                     input=text,
                     response_format="mp3",
                     speed=speed,
-                )
-                async for chunk in await response.aiter_bytes(chunk_size=4096):
-                    yield chunk
+                ) as response:
+                    chunk_count = 0
+                    total_bytes = 0
+                    async for chunk in response.iter_bytes(chunk_size=4096):
+                        chunk_count += 1
+                        total_bytes += len(chunk)
+                        yield chunk
+                    logger.debug(f"TTS synthesis finished: {chunk_count} chunks, {total_bytes} bytes yielded")
         except Exception as e:
             logger.error(f"TTS synthesis failed: {e}", exc_info=True)
             raise
@@ -120,7 +125,7 @@ class TTSService:
             async for chunk in self.synthesize_speech_stream(text, speed=speed):
                 await websocket.send_bytes(chunk)
             await websocket.send_json({"status": "complete"})
-            logger.info(f"TTS audio pushed to user {user_id}")
+            logger.debug(f"TTS audio pushed to user {user_id}. All chunks sent.")
         except asyncio.CancelledError:
             logger.debug(f"TTS task for user {user_id} was cancelled")
             raise

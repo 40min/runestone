@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -22,16 +23,20 @@ async def test_synthesize_speech_stream(mock_settings):
         # Setup mock response
         mock_response = MagicMock()
 
-        # This is the async generator that will be returned after awaiting aiter_bytes()
+        # This is the async generator that will be returned by aiter_bytes()
         async def aiter_contents():
             for chunk in [b"chunk1", b"chunk2"]:
                 yield chunk
 
-        # aiter_bytes must be an async function (so it returns a coroutine)
-        # and that coroutine when awaited must return the async generator.
-        mock_response.aiter_bytes = AsyncMock(return_value=aiter_contents())
+        # aiter_bytes is now a method that returns the async generator
+        mock_response.aiter_bytes = MagicMock(return_value=aiter_contents())
 
-        mock_openai.return_value.audio.speech.create = AsyncMock(return_value=mock_response)
+        # Setup with_streaming_response.create as an async context manager
+        mock_openai.return_value.audio.speech.with_streaming_response.create = MagicMock()
+        mock_ctx = MagicMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_ctx.__aexit__ = AsyncMock(return_value=None)
+        mock_openai.return_value.audio.speech.with_streaming_response.create.return_value = mock_ctx
 
         service = TTSService(mock_settings)
         chunks = []
@@ -39,7 +44,7 @@ async def test_synthesize_speech_stream(mock_settings):
             chunks.append(chunk)
 
         assert chunks == [b"chunk1", b"chunk2"]
-        mock_openai.return_value.audio.speech.create.assert_called_once_with(
+        mock_openai.return_value.audio.speech.with_streaming_response.create.assert_called_once_with(
             model="gpt-4o-mini-tts",
             voice="onyx",
             input="Hello",
@@ -69,9 +74,14 @@ async def test_stream_audio_task_success(mock_settings):
         async def aiter_contents():
             yield b"chunk1"
 
-        mock_response.aiter_bytes = AsyncMock(return_value=aiter_contents())
+        mock_response.aiter_bytes = MagicMock(return_value=aiter_contents())
 
-        mock_openai.return_value.audio.speech.create = AsyncMock(return_value=mock_response)
+        # Setup with_streaming_response.create as an async context manager
+        mock_openai.return_value.audio.speech.with_streaming_response.create = MagicMock()
+        mock_ctx = MagicMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_ctx.__aexit__ = AsyncMock(return_value=None)
+        mock_openai.return_value.audio.speech.with_streaming_response.create.return_value = mock_ctx
 
         service = TTSService(mock_settings)
 
@@ -103,8 +113,6 @@ async def test_push_audio_to_client_manages_task(mock_settings):
         # Check that a task was created and stored
         assert 1 in service._active_tasks
         task = service._active_tasks[1]
-        import asyncio
-
         assert isinstance(task, asyncio.Task)
         await task  # Wait for it to finish
         service._stream_audio_task.assert_awaited_once_with(1, "Hello", 1.0)
@@ -115,7 +123,6 @@ async def test_push_audio_cancels_previous_task(mock_settings):
     """Test that new requests cancel previous ones."""
     with patch("runestone.services.tts_service.AsyncOpenAI"):
         service = TTSService(mock_settings)
-        import asyncio
 
         # Create a slow task that we can spy on
         async def slow_task(*args, **kwargs):
