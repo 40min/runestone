@@ -177,11 +177,14 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
         let wsUrl: string;
 
         if (API_BASE_URL.startsWith('http')) {
-          wsUrl = API_BASE_URL.replace(/^http/, 'ws') + '/api/ws/audio?token=' + token;
+          const base = API_BASE_URL.replace(/^http/, 'ws').replace(/\/$/, '');
+          wsUrl = `${base}/api/ws/audio?token=${token}`;
         } else {
           // Relative URL
           const host = window.location.host;
-          const path = API_BASE_URL.startsWith('/') ? API_BASE_URL : '/' + API_BASE_URL;
+          // Remove leading/trailing slashes from API_BASE_URL to avoid doubles
+          const normalizedPath = API_BASE_URL.replace(/^\/+/, '').replace(/\/+$/, '');
+          const path = normalizedPath ? `/${normalizedPath}` : '';
           wsUrl = `${protocol}//${host}${path}/api/ws/audio?token=${token}`;
         }
 

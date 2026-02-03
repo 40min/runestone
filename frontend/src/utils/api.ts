@@ -56,7 +56,10 @@ const makeRequest = async <T>(
   contextToken: string | null,
   logout?: () => void
 ): Promise<T> => {
-  const url = `${API_BASE_URL}${endpoint}`;
+  // Normalize slashes: ensure exactly one slash between API_BASE_URL and endpoint
+  const base = API_BASE_URL.replace(/\/+$/, "");
+  const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const url = `${base}${path}`;
 
   // Use explicit token if provided, otherwise fall back to context token
   const authToken = options.token ?? contextToken;
