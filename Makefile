@@ -10,6 +10,7 @@
 .PHONY: dev-test dev-full ci-lint ci-test
 .PHONY: db-init db-migrate db-upgrade db-downgrade db-current db-history
 .PHONY: init-state docker-up docker-down docker-build restart-recall rebuild-restart-recall rebuild-restart-all rebuild-container
+.PHONY: check-readiness
 
 # =============================================================================
 # HELP AND INFO
@@ -293,6 +294,12 @@ dev-test: install-dev lint-check test
 # Full development check workflow
 dev-full: install-dev lint test-coverage
 	@echo "✅ Full development workflow complete!"
+
+# Check readiness before commit (linting, tests, and frontend build dry-run)
+check-readiness: lint-check test
+	@echo "🏗️  Dry run for frontend build..."
+	@cd frontend && npm run build
+	@echo "✅ Readiness check complete! Code is ready for commit."
 
 # =============================================================================
 # CI/CD WORKFLOWS

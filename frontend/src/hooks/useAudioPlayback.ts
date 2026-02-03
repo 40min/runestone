@@ -30,7 +30,7 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
   const mediaSourceRef = useRef<MediaSource | null>(null);
   const sourceBufferRef = useRef<ExtendedSourceBuffer | null>(null);
   const chunkQueueRef = useRef<ArrayBuffer[]>([]);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Initialize Audio element once
   useEffect(() => {
@@ -112,7 +112,7 @@ export const useAudioPlayback = (enabled: boolean): UseAudioPlaybackReturn => {
         const mimeType = 'audio/mpeg';
 
         console.debug('Initializing SourceBuffer with:', mimeType);
-        const sb = mediaSource.addSourceBuffer(mimeType);
+        const sb = mediaSource.addSourceBuffer(mimeType) as ExtendedSourceBuffer;
         sourceBufferRef.current = sb;
 
         sb.addEventListener('updateend', () => {
