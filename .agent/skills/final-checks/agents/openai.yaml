@@ -1,4 +1,0 @@
-interface:
-  display_name: "Final Checks"
-  short_description: "Run tests and lint, fix issues, rerun."
-  default_prompt: "Use $final-checks to run the final test and lint pass for this feature."
