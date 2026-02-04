@@ -237,7 +237,7 @@ def search_news_with_dates(
     """
     try:
         results = []
-        with DDGS() as ddgs:
+        with DDGS(timeout=20) as ddgs:
             ddgs_results = ddgs.news(
                 query,
                 max_results=k,
