@@ -1,9 +1,14 @@
+import pytest
+
 from runestone.agent import tools as agent_tools
 from runestone.agent.tools import WordPrioritisationItem
 
 
 class FakeDDGS:
     """Fake DDGS class for testing news search functionality."""
+
+    def __init__(self, *args, **kwargs):
+        pass
 
     def __enter__(self):
         return self
@@ -44,7 +49,8 @@ def test_field_descriptions():
     assert "translation of the word_phrase" in translation_desc.lower()
 
 
-def test_search_news_with_dates_formats_results(monkeypatch):
+@pytest.mark.anyio
+async def test_search_news_with_dates_formats_results(monkeypatch):
     class FakeDDGSWithResults(FakeDDGS):
         def news(self, query, max_results, timelimit, region):
             return [
@@ -64,15 +70,20 @@ def test_search_news_with_dates_formats_results(monkeypatch):
 
     monkeypatch.setattr(agent_tools, "DDGS", FakeDDGSWithResults)
 
-    output = agent_tools.search_news_with_dates.invoke({"query": "ekonomi", "k": 2, "timelimit": "w"})
+    output = await agent_tools.search_news_with_dates.ainvoke({"query": "ekonomi", "k": 2, "timelimit": "w"})
 
-    assert "1. Svensk ekonomi växer:" in output
-    assert "2. Ny utbildningsreform:" in output
-    assert "[source: https://example.com/ekonomi" in output
-    assert "[source: https://example.se/utbildning" in output
+    assert output["query"] == "ekonomi"
+    assert output["timelimit"] == "w"
+    assert output["region"] == "se-sv"
+    assert output["swedish_only"] is False
+    assert output["results"][0]["title"] == "Svensk ekonomi växer"
+    assert output["results"][1]["title"] == "Ny utbildningsreform"
+    assert output["results"][0]["url"] == "https://example.com/ekonomi"
+    assert output["results"][1]["url"] == "https://example.se/utbildning"
 
 
-def test_search_news_with_dates_swedish_only_filters(monkeypatch):
+@pytest.mark.anyio
+async def test_search_news_with_dates_swedish_only_filters(monkeypatch):
     class FakeDDGSSwedishOnly(FakeDDGS):
         def news(self, query, max_results, timelimit, region):
             return [
@@ -92,13 +103,14 @@ def test_search_news_with_dates_swedish_only_filters(monkeypatch):
 
     monkeypatch.setattr(agent_tools, "DDGS", FakeDDGSSwedishOnly)
 
-    output = agent_tools.search_news_with_dates.invoke({"query": "nyheter", "swedish_only": True})
+    output = await agent_tools.search_news_with_dates.ainvoke({"query": "nyheter", "swedish_only": True})
 
-    assert "1. Svenska nyheter:" in output
-    assert "Global marknad" not in output
+    assert len(output["results"]) == 1
+    assert output["results"][0]["title"] == "Svenska nyheter"
 
 
-def test_search_news_with_dates_no_results_after_filter(monkeypatch):
+@pytest.mark.anyio
+async def test_search_news_with_dates_no_results_after_filter(monkeypatch):
     class FakeDDGSNoSwedish(FakeDDGS):
         def news(self, query, max_results, timelimit, region):
             return [
@@ -112,12 +124,13 @@ def test_search_news_with_dates_no_results_after_filter(monkeypatch):
 
     monkeypatch.setattr(agent_tools, "DDGS", FakeDDGSNoSwedish)
 
-    output = agent_tools.search_news_with_dates.invoke({"query": "marknad", "swedish_only": True})
+    output = await agent_tools.search_news_with_dates.ainvoke({"query": "marknad", "swedish_only": True})
 
-    assert output == "No news results found for that query and time period."
+    assert output["results"] == []
 
 
-def test_search_news_with_dates_clamps_k(monkeypatch):
+@pytest.mark.anyio
+async def test_search_news_with_dates_clamps_k(monkeypatch):
     class FakeDDGSClampsK(FakeDDGS):
         def news(self, query, max_results, timelimit, region):
             assert max_results == 10
@@ -125,6 +138,6 @@ def test_search_news_with_dates_clamps_k(monkeypatch):
 
     monkeypatch.setattr(agent_tools, "DDGS", FakeDDGSClampsK)
 
-    output = agent_tools.search_news_with_dates.invoke({"query": "ekonomi", "k": 999})
+    output = await agent_tools.search_news_with_dates.ainvoke({"query": "ekonomi", "k": 999})
 
-    assert output == "No news results found for that query and time period."
+    assert output["results"] == []
