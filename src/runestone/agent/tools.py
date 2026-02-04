@@ -214,6 +214,9 @@ async def prioritize_words_for_learning(
     return f"Successfully processed {processed_count} word(s) for priority learning."
 
 
+MAX_NEWS_TO_FETCH = 10
+
+
 @tool("search_news_with_dates")
 def search_news_with_dates(
     query: str,
@@ -236,6 +239,7 @@ def search_news_with_dates(
         A formatted list of news results with title, snippet, source URL, and date.
     """
     try:
+        k = max(1, min(k, MAX_NEWS_TO_FETCH))
         results = []
         with DDGS(timeout=20) as ddgs:
             ddgs_results = ddgs.news(

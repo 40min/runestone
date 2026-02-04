@@ -2,6 +2,19 @@ from runestone.agent import tools as agent_tools
 from runestone.agent.tools import WordPrioritisationItem
 
 
+class FakeDDGS:
+    """Fake DDGS class for testing news search functionality."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def news(self, query, max_results, timelimit, region):
+        return []
+
+
 def test_word_prioritisation_item_validation():
     """Test unicode escape decoding validation in WordPrioritisationItem."""
 
@@ -32,13 +45,7 @@ def test_field_descriptions():
 
 
 def test_search_news_with_dates_formats_results(monkeypatch):
-    class FakeDDGS:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
+    class FakeDDGSWithResults(FakeDDGS):
         def news(self, query, max_results, timelimit, region):
             return [
                 {
@@ -55,7 +62,7 @@ def test_search_news_with_dates_formats_results(monkeypatch):
                 },
             ]
 
-    monkeypatch.setattr(agent_tools, "DDGS", FakeDDGS)
+    monkeypatch.setattr(agent_tools, "DDGS", FakeDDGSWithResults)
 
     output = agent_tools.search_news_with_dates.invoke({"query": "ekonomi", "k": 2, "timelimit": "w"})
 
@@ -66,13 +73,7 @@ def test_search_news_with_dates_formats_results(monkeypatch):
 
 
 def test_search_news_with_dates_swedish_only_filters(monkeypatch):
-    class FakeDDGS:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
+    class FakeDDGSSwedishOnly(FakeDDGS):
         def news(self, query, max_results, timelimit, region):
             return [
                 {
@@ -89,7 +90,7 @@ def test_search_news_with_dates_swedish_only_filters(monkeypatch):
                 },
             ]
 
-    monkeypatch.setattr(agent_tools, "DDGS", FakeDDGS)
+    monkeypatch.setattr(agent_tools, "DDGS", FakeDDGSSwedishOnly)
 
     output = agent_tools.search_news_with_dates.invoke({"query": "nyheter", "swedish_only": True})
 
@@ -98,13 +99,7 @@ def test_search_news_with_dates_swedish_only_filters(monkeypatch):
 
 
 def test_search_news_with_dates_no_results_after_filter(monkeypatch):
-    class FakeDDGS:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
+    class FakeDDGSNoSwedish(FakeDDGS):
         def news(self, query, max_results, timelimit, region):
             return [
                 {
@@ -115,8 +110,21 @@ def test_search_news_with_dates_no_results_after_filter(monkeypatch):
                 }
             ]
 
-    monkeypatch.setattr(agent_tools, "DDGS", FakeDDGS)
+    monkeypatch.setattr(agent_tools, "DDGS", FakeDDGSNoSwedish)
 
     output = agent_tools.search_news_with_dates.invoke({"query": "marknad", "swedish_only": True})
+
+    assert output == "No news results found for that query and time period."
+
+
+def test_search_news_with_dates_clamps_k(monkeypatch):
+    class FakeDDGSClampsK(FakeDDGS):
+        def news(self, query, max_results, timelimit, region):
+            assert max_results == 10
+            return []
+
+    monkeypatch.setattr(agent_tools, "DDGS", FakeDDGSClampsK)
+
+    output = agent_tools.search_news_with_dates.invoke({"query": "ekonomi", "k": 999})
 
     assert output == "No news results found for that query and time period."
