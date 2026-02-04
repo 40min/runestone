@@ -23,13 +23,16 @@ async def test_synthesize_speech_stream(mock_settings):
         # Setup mock response
         mock_response = MagicMock()
 
-        # This is the async generator that will be returned by aiter_bytes()
+        # This is the async generator that will be returned by iter_bytes()
         async def aiter_contents():
             for chunk in [b"chunk1", b"chunk2"]:
                 yield chunk
 
-        # aiter_bytes is now a method that returns the async generator
-        mock_response.aiter_bytes = MagicMock(return_value=aiter_contents())
+        # iter_bytes is a method that returns the async generator and accepts chunk_size
+        def iter_bytes(*, chunk_size=4096):
+            return aiter_contents()
+
+        mock_response.iter_bytes = MagicMock(side_effect=iter_bytes)
 
         # Setup with_streaming_response.create as an async context manager
         mock_openai.return_value.audio.speech.with_streaming_response.create = MagicMock()
@@ -74,7 +77,10 @@ async def test_stream_audio_task_success(mock_settings):
         async def aiter_contents():
             yield b"chunk1"
 
-        mock_response.aiter_bytes = MagicMock(return_value=aiter_contents())
+        def iter_bytes(*, chunk_size=4096):
+            return aiter_contents()
+
+        mock_response.iter_bytes = MagicMock(side_effect=iter_bytes)
 
         # Setup with_streaming_response.create as an async context manager
         mock_openai.return_value.audio.speech.with_streaming_response.create = MagicMock()
