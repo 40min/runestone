@@ -7,7 +7,10 @@ import json
 import logging
 from dataclasses import dataclass
 from typing import Literal
+from urllib.parse import urlparse
 
+from duckduckgo_search import DDGS
+from duckduckgo_search.exceptions import DuckDuckGoSearchException
 from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field, field_validator
@@ -18,6 +21,18 @@ from runestone.services.vocabulary_service import VocabularyService
 from runestone.utils.merge import deep_merge
 
 logger = logging.getLogger(__name__)
+
+NewsTimeLimit = Literal["d", "w", "m", "y"]
+
+
+def _is_swedish_source(url: str) -> bool:
+    if not url:
+        return False
+    try:
+        netloc = urlparse(url).netloc.split(":")[0].lower()
+    except ValueError:
+        return False
+    return netloc.endswith(".se")
 
 
 class WordPrioritisationItem(BaseModel):
@@ -45,6 +60,25 @@ class WordPrioritisationInput(BaseModel):
     """Input for prioritizing words for learning."""
 
     words: list[WordPrioritisationItem] = Field(..., description="List of words to prioritize")
+
+
+class NewsResult(BaseModel):
+    """Single news result returned by the search tool."""
+
+    title: str
+    snippet: str
+    url: str
+    date: str
+
+
+class NewsResultsOutput(BaseModel):
+    """Structured output for news search results."""
+
+    query: str
+    timelimit: NewsTimeLimit
+    region: str
+    swedish_only: bool
+    results: list[NewsResult]
 
 
 @dataclass
@@ -198,3 +232,92 @@ async def prioritize_words_for_learning(
         return f"Processed {processed_count} word(s). Errors: {error_msg}"
 
     return f"Successfully processed {processed_count} word(s) for priority learning."
+
+
+MAX_NEWS_TO_FETCH = 10
+DDGS_TIMEOUT = 20
+
+
+def _fetch_news_sync(
+    query: str,
+    k: int,
+    timelimit: NewsTimeLimit,
+    region: str,
+) -> list[dict]:
+    with DDGS(timeout=DDGS_TIMEOUT) as ddgs:
+        return list(
+            ddgs.news(
+                query,
+                max_results=k,
+                timelimit=timelimit,
+                region=region,
+            )
+            or []
+        )
+
+
+@tool("search_news_with_dates")
+async def search_news_with_dates(
+    query: str,
+    k: int = MAX_NEWS_TO_FETCH,
+    timelimit: NewsTimeLimit = "m",
+    region: str = "se-sv",
+    swedish_only: bool = False,
+) -> dict:
+    """
+    Search Swedish-language news for a topic within a given time window.
+
+    Args:
+        query: Search query in Swedish (recommended) or English
+        k: Max number of results to return
+        timelimit: "d" (day), "w" (week), "m" (month), "y" (year)
+        region: DuckDuckGo region code for localization (default: Swedish)
+        swedish_only: If True, only return sources with a .se domain
+
+    Returns:
+        A structured dictionary containing the search results.
+    """
+    try:
+        k = max(1, min(k, MAX_NEWS_TO_FETCH))
+        results: list[NewsResult] = []
+        ddgs_results = await asyncio.to_thread(_fetch_news_sync, query, k, timelimit, region)
+
+        for item in ddgs_results:
+            title = item.get("title") or "Untitled"
+            snippet = item.get("body") or ""
+            url = item.get("url") or ""
+            date = item.get("date") or "unknown"
+
+            if swedish_only and not _is_swedish_source(url):
+                continue
+
+            results.append(
+                NewsResult(
+                    title=title,
+                    snippet=snippet,
+                    url=url,
+                    date=date,
+                )
+            )
+
+        if not results:
+            payload = NewsResultsOutput(
+                query=query,
+                timelimit=timelimit,
+                region=region,
+                swedish_only=swedish_only,
+                results=[],
+            )
+            return payload.model_dump()
+
+        payload = NewsResultsOutput(
+            query=query,
+            timelimit=timelimit,
+            region=region,
+            swedish_only=swedish_only,
+            results=results,
+        )
+        return payload.model_dump()
+    except DuckDuckGoSearchException as e:
+        logger.exception("News search failed for query='%s'", query)
+        return {"error": f"Error searching news: {str(e)}"}
