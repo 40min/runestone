@@ -145,3 +145,26 @@ async def test_search_news_with_dates_clamps_k(monkeypatch):
 
     assert output["tool"] == "search_news_with_dates"
     assert output["results"] == []
+
+
+@pytest.mark.anyio
+async def test_search_news_with_dates_rate_limited(monkeypatch):
+    from duckduckgo_search.exceptions import RatelimitException
+
+    call_count = {"count": 0}
+
+    def _raise_rate_limit(*_args, **_kwargs):
+        call_count["count"] += 1
+        raise RatelimitException("rate limited")
+
+    monkeypatch.setattr(agent_tools, "_fetch_news_sync", _raise_rate_limit)
+
+    async def _noop_sleep(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(agent_tools.asyncio, "sleep", _noop_sleep)
+
+    output = await agent_tools.search_news_with_dates.ainvoke({"query": "nyheter"})
+
+    assert output["error_type"] == "rate_limited"
+    assert call_count["count"] == agent_tools.DDGS_MAX_RETRIES + 1

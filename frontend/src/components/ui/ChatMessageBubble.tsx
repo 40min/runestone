@@ -20,6 +20,10 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
     }
     return null;
   };
+  const formatDate = (value: string) => {
+    if (!value) return value;
+    return value.replace(/\.\d+(?=Z|$)/, '');
+  };
 
   return (
     <Box
@@ -83,7 +87,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
                         rel="noopener noreferrer"
                         underline="hover"
                         sx={(theme) => ({
-                          color: theme.palette.text.primary,
+                          color: theme.palette.common.white,
                           fontSize: '0.9rem',
                           fontWeight: 500,
                         })}
@@ -93,7 +97,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
                     ) : (
                       <Typography
                         sx={(theme) => ({
-                          color: theme.palette.text.primary,
+                          color: theme.palette.common.white,
                           fontSize: '0.9rem',
                           fontWeight: 500,
                         })}
@@ -104,12 +108,12 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
                   })()}
                   <Typography
                     sx={(theme) => ({
-                      color: theme.palette.text.secondary,
+                      color: theme.palette.grey[300],
                       fontSize: '0.7rem',
                       mt: 0.25,
                     })}
                   >
-                    {source.date}
+                    {formatDate(source.date)}
                   </Typography>
                 </Box>
               ))}
