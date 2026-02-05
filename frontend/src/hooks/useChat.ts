@@ -3,10 +3,17 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useApi } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 
+interface NewsSource {
+  title: string;
+  url: string;
+  date: string;
+}
+
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  sources?: NewsSource[] | null;
 }
 
 interface UseChatReturn {
@@ -113,17 +120,18 @@ export const useChat = (): UseChatReturn => {
       setError(null);
 
       try {
-        const data = await post<{ message: string }>('/api/chat/message', {
-          message: userMessage.trim(),
-          tts_expected: ttsExpected,
-          speed: speed,
-        });
+      const data = await post<{ message: string; sources?: NewsSource[] | null }>('/api/chat/message', {
+        message: userMessage.trim(),
+        tts_expected: ttsExpected,
+        speed: speed,
+      });
 
-        const assistantMessage: ChatMessage = {
-          id: uuidv4(),
-          role: 'assistant',
-          content: data.message,
-        };
+      const assistantMessage: ChatMessage = {
+        id: uuidv4(),
+        role: 'assistant',
+        content: data.message,
+        sources: data.sources ?? undefined,
+      };
 
         setMessages((prev) => [...prev, assistantMessage]);
         broadcastChange();

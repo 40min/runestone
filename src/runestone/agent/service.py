@@ -6,10 +6,12 @@ using LangChain's ReAct agent pattern.
 """
 
 import asyncio
+import json
 import logging
+from typing import Any, Optional
 
 from langchain.agents import create_agent
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
@@ -151,7 +153,7 @@ titles, snippets, or URLs.
         user: User,
         user_service: UserService,
         vocabulary_service: VocabularyService,
-    ) -> str:
+    ) -> tuple[str, Optional[list[dict[str, str]]]]:
         """
         Generate a response to a user message using the ReAct agent.
 
@@ -162,7 +164,7 @@ titles, snippets, or URLs.
             user_service: UserService instance to handle memory operations
 
         Returns:
-            The agent's final text response
+            The agent's final text response and optional news sources
 
         Raises:
             Exception: If the agent invocation fails
@@ -202,14 +204,58 @@ titles, snippets, or URLs.
             )
 
             final_messages = result.get("messages", [])
+            sources = self._extract_news_sources(final_messages)
             for msg in reversed(final_messages):
                 if hasattr(msg, "content") and msg.content:
                     if hasattr(msg, "tool_call_id") or (hasattr(msg, "tool_calls") and msg.tool_calls):
                         continue
-                    return msg.content
+                    return msg.content, sources
 
-            return "I'm sorry, I couldn't generate a response."
+            return "I'm sorry, I couldn't generate a response.", None
 
         except Exception as e:
             logger.error(f"Error generating response: {e}")
             raise
+
+    @staticmethod
+    def _safe_json_loads(payload: Any) -> Optional[dict]:
+        if isinstance(payload, dict):
+            return payload
+        if not isinstance(payload, str):
+            return None
+        try:
+            return json.loads(payload)
+        except json.JSONDecodeError:
+            return None
+
+    def _extract_news_sources(self, messages: list[Any]) -> Optional[list[dict[str, str]]]:
+        for msg in reversed(messages):
+            if not isinstance(msg, ToolMessage):
+                continue
+            payload = self._safe_json_loads(msg.content)
+            if not payload or payload.get("tool") != "search_news_with_dates":
+                continue
+            if payload.get("error"):
+                return None
+            results = payload.get("results")
+            if not isinstance(results, list):
+                return None
+
+            sources = []
+            seen_urls = set()
+            for item in results:
+                if not isinstance(item, dict):
+                    continue
+                title = item.get("title")
+                url = item.get("url")
+                date = item.get("date")
+                if not title or not url or not date:
+                    continue
+                if url in seen_urls:
+                    continue
+                sources.append({"title": title, "url": url, "date": date})
+                seen_urls.add(url)
+
+            return sources or None
+
+        return None

@@ -2,6 +2,7 @@
 Service for managing chat interactions and history.
 """
 
+import json
 import logging
 from typing import List
 
@@ -57,7 +58,7 @@ class ChatService:
         message_text: str,
         tts_expected: bool = False,
         speed: float = 1.0,
-    ) -> str:
+    ) -> tuple[str, list[dict] | None]:
         """
         Process a user message: save, truncate, fetch context, generate response, save response.
 
@@ -68,7 +69,7 @@ class ChatService:
             speed: Speed of the speech
 
         Returns:
-            The assistant's response text
+            The assistant's response text and optional news sources
         """
         # 1. Save user message
         self.repository.add_message(user_id, "user", message_text)
@@ -92,7 +93,7 @@ class ChatService:
 
         # 5. Generate response using the ReAct agent
         # The agent handles tool execution automatically
-        assistant_text = await self.agent_service.generate_response(
+        assistant_text, sources = await self.agent_service.generate_response(
             message=message_text,
             history=history[:-1],  # Exclude current message (it's passed separately)
             user=user,
@@ -101,14 +102,14 @@ class ChatService:
         )
 
         # 6. Save assistant message
-        self.repository.add_message(user_id, "assistant", assistant_text)
+        self.repository.add_message(user_id, "assistant", assistant_text, sources=sources)
 
         # 7. Push TTS audio if client expects it (non-blocking)
         if tts_expected:
             # TTSService handles task management and cancellation internally
             await self.tts_service.push_audio_to_client(user_id, assistant_text, speed=speed)
 
-        return assistant_text
+        return assistant_text, sources
 
     async def process_image_message(self, user_id: int, image_content: bytes) -> str:
         """
@@ -165,7 +166,7 @@ Instructions:
 3. Use {mother_tongue} for all translations."""
 
         # 6. Generate response using the ReAct agent
-        assistant_text = await self.agent_service.generate_response(
+        assistant_text, _sources = await self.agent_service.generate_response(
             message=translation_prompt,
             history=history,
             user=user,
@@ -189,6 +190,16 @@ Instructions:
             List of ChatMessage models
         """
         return self.repository.get_raw_history(user_id)
+
+    @staticmethod
+    def deserialize_sources(payload: str | None) -> list[dict] | None:
+        if not payload:
+            return None
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError:
+            return None
+        return data if isinstance(data, list) else None
 
     def clear_history(self, user_id: int):
         """

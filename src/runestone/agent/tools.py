@@ -74,6 +74,7 @@ class NewsResult(BaseModel):
 class NewsResultsOutput(BaseModel):
     """Structured output for news search results."""
 
+    tool: str = Field("search_news_with_dates", description="Tool name for traceability")
     query: str
     timelimit: NewsTimeLimit
     region: str

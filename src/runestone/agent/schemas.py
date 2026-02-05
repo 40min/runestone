@@ -5,9 +5,17 @@ This module defines the data models for chat requests and responses.
 """
 
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
+
+
+class NewsSource(BaseModel):
+    """News source metadata for assistant responses."""
+
+    title: str = Field(..., description="Headline/title of the news article")
+    url: str = Field(..., description="URL of the news article")
+    date: str = Field(..., description="Published date string as returned by search")
 
 
 class ChatMessage(BaseModel):
@@ -16,6 +24,7 @@ class ChatMessage(BaseModel):
     id: Optional[int] = Field(None, description="Message ID")
     role: Literal["user", "assistant"] = Field(..., description="The role of the message sender")
     content: str = Field(..., description="The message content")
+    sources: Optional[list[NewsSource]] = Field(None, description="Optional list of cited news sources")
     created_at: Optional[datetime] = Field(None, description="Message creation timestamp")
 
     class Config:
@@ -34,12 +43,13 @@ class ChatResponse(BaseModel):
     """Response from the chat agent."""
 
     message: str = Field(..., description="The assistant's response")
+    sources: Optional[list[NewsSource]] = Field(None, description="Optional list of cited news sources")
 
 
 class ChatHistoryResponse(BaseModel):
     """Response containing conversation history."""
 
-    messages: List[ChatMessage] = Field(..., description="List of chat messages")
+    messages: list[ChatMessage] = Field(..., description="List of chat messages")
 
 
 class ImageChatResponse(BaseModel):
