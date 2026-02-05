@@ -4,17 +4,18 @@ Pydantic schemas for the chat agent.
 This module defines the data models for chat requests and responses.
 """
 
+import json
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 
 class NewsSource(BaseModel):
     """News source metadata for assistant responses."""
 
     title: str = Field(..., description="Headline/title of the news article")
-    url: str = Field(..., description="URL of the news article")
+    url: HttpUrl = Field(..., description="URL of the news article")
     date: str = Field(..., description="Published date string as returned by search")
 
 
@@ -26,6 +27,17 @@ class ChatMessage(BaseModel):
     content: str = Field(..., description="The message content")
     sources: Optional[list[NewsSource]] = Field(None, description="Optional list of cited news sources")
     created_at: Optional[datetime] = Field(None, description="Message creation timestamp")
+
+    @field_validator("sources", mode="before")
+    @classmethod
+    def deserialize_sources(cls, value):
+        if isinstance(value, str):
+            try:
+                data = json.loads(value)
+            except json.JSONDecodeError:
+                return None
+            return data if isinstance(data, list) else None
+        return value
 
     class Config:
         from_attributes = True

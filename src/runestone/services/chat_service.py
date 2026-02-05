@@ -2,7 +2,6 @@
 Service for managing chat interactions and history.
 """
 
-import json
 import logging
 from typing import List
 
@@ -189,26 +188,7 @@ Instructions:
             List of ChatMessage schemas with sources deserialized
         """
         history = self.repository.get_raw_history(user_id)
-        return [
-            ChatMessageSchema(
-                id=message.id,
-                role=message.role,
-                content=message.content,
-                sources=self.deserialize_sources(message.sources),
-                created_at=message.created_at,
-            )
-            for message in history
-        ]
-
-    @staticmethod
-    def deserialize_sources(payload: str | None) -> list[dict] | None:
-        if not payload:
-            return None
-        try:
-            data = json.loads(payload)
-        except json.JSONDecodeError:
-            return None
-        return data if isinstance(data, list) else None
+        return [ChatMessageSchema.model_validate(message) for message in history]
 
     def clear_history(self, user_id: int):
         """

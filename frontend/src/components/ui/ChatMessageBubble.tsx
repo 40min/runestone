@@ -53,7 +53,13 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
         </Typography>
         {hasSources && (
           <Box sx={{ mt: 1.5 }}>
-            <Typography sx={{ color: '#c4b5fd', fontSize: '0.75rem', mb: 0.5 }}>
+            <Typography
+              sx={(theme) => ({
+                color: theme.palette.primary.light,
+                fontSize: '0.75rem',
+                mb: 0.5,
+              })}
+            >
               Sources
             </Typography>
             <Box
@@ -76,17 +82,33 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
                         target="_blank"
                         rel="noopener noreferrer"
                         underline="hover"
-                        sx={{ color: '#f3f4f6', fontSize: '0.9rem', fontWeight: 500 }}
+                        sx={(theme) => ({
+                          color: theme.palette.text.primary,
+                          fontSize: '0.9rem',
+                          fontWeight: 500,
+                        })}
                       >
                         {source.title}
                       </Link>
                     ) : (
-                      <Typography sx={{ color: '#f3f4f6', fontSize: '0.9rem', fontWeight: 500 }}>
+                      <Typography
+                        sx={(theme) => ({
+                          color: theme.palette.text.primary,
+                          fontSize: '0.9rem',
+                          fontWeight: 500,
+                        })}
+                      >
                         {source.title}
                       </Typography>
                     );
                   })()}
-                  <Typography sx={{ color: '#9ca3af', fontSize: '0.7rem', mt: 0.25 }}>
+                  <Typography
+                    sx={(theme) => ({
+                      color: theme.palette.text.secondary,
+                      fontSize: '0.7rem',
+                      mt: 0.25,
+                    })}
+                  >
                     {source.date}
                   </Typography>
                 </Box>

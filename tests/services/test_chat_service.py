@@ -232,6 +232,6 @@ async def test_process_message_persists_sources(chat_service, db_with_test_user,
     history = chat_service.get_history(user.id)
     assistant_messages = [msg for msg in history if msg.role == "assistant"]
     assert len(assistant_messages) == 1
-    assert [source.model_dump() for source in assistant_messages[0].sources] == [
-        {"title": "Nyhet", "url": "https://example.com", "date": "2026-02-05"}
+    assert [source.model_dump(mode="json") for source in assistant_messages[0].sources] == [
+        {"title": "Nyhet", "url": "https://example.com/", "date": "2026-02-05"}
     ]
