@@ -1,7 +1,7 @@
 """add sources to chat messages
 
 Revision ID: 3f4a5e6b7c8d
-Revises: d669959e47fc
+Revises: 687468b4400f
 Create Date: 2026-02-05 00:00:00.000000
 
 """

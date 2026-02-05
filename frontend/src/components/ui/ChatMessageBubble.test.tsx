@@ -17,7 +17,7 @@ describe('ChatMessageBubble', () => {
     const link = screen.getByRole('link', { name: 'Nyhetstitel' });
     expect(link).toHaveAttribute('href', 'https://example.com/news');
     expect(link).toHaveAttribute('target', '_blank');
-    expect(link).toHaveAttribute('rel', 'noreferrer');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.getByText('2026-02-05')).toBeInTheDocument();
   });
 
@@ -32,5 +32,19 @@ describe('ChatMessageBubble', () => {
 
     expect(screen.queryByText('Sources')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Nyhetstitel' })).not.toBeInTheDocument();
+  });
+
+  it('renders invalid source URLs as plain text', () => {
+    render(
+      <ChatMessageBubble
+        role="assistant"
+        content="Här är nyheterna"
+        sources={[{ title: 'Skum länk', url: 'javascript:alert(1)', date: '2026-02-05' }]}
+      />
+    );
+
+    expect(screen.getByText('Sources')).toBeInTheDocument();
+    expect(screen.getByText('Skum länk')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Skum länk' })).not.toBeInTheDocument();
   });
 });

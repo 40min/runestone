@@ -186,3 +186,30 @@ async def test_generate_response_extracts_sources(agent_service, mock_user_servi
 
     assert response == "Svar med källor"
     assert sources == [{"title": "Nyhet", "url": "https://example.com", "date": "2026-02-05"}]
+
+
+@pytest.mark.anyio
+async def test_generate_response_filters_unsafe_urls(
+    agent_service, mock_user_service, mock_user, mock_vocabulary_service
+):
+    """Test that unsafe URLs are excluded from sources."""
+    agent_service.agent.ainvoke.return_value = {
+        "messages": [
+            ToolMessage(
+                content=(
+                    '{"tool":"search_news_with_dates","results":['
+                    '{"title":"Safe","url":"https://example.com","date":"2026-02-05"},'
+                    '{"title":"Unsafe","url":"javascript:alert(1)","date":"2026-02-05"}'
+                    "]}"
+                ),
+                tool_call_id="tool-call-2",
+            ),
+            AIMessage(content="Svar med källor"),
+        ]
+    }
+
+    _response, sources = await agent_service.generate_response(
+        "Nyheter", [], mock_user, mock_user_service, mock_vocabulary_service
+    )
+
+    assert sources == [{"title": "Safe", "url": "https://example.com", "date": "2026-02-05"}]

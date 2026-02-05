@@ -9,6 +9,17 @@ interface ChatMessageBubbleProps {
 
 export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, content, sources }) => {
   const hasSources = role === 'assistant' && sources && sources.length > 0;
+  const resolveSafeUrl = (url: string) => {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return parsed.toString();
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  };
 
   return (
     <Box
@@ -57,15 +68,24 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
             >
               {sources.map((source) => (
                 <Box component="li" key={source.url}>
-                  <Link
-                    href={source.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    underline="hover"
-                    sx={{ color: '#f3f4f6', fontSize: '0.9rem', fontWeight: 500 }}
-                  >
-                    {source.title}
-                  </Link>
+                  {(() => {
+                    const safeUrl = resolveSafeUrl(source.url);
+                    return safeUrl ? (
+                      <Link
+                        href={safeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        underline="hover"
+                        sx={{ color: '#f3f4f6', fontSize: '0.9rem', fontWeight: 500 }}
+                      >
+                        {source.title}
+                      </Link>
+                    ) : (
+                      <Typography sx={{ color: '#f3f4f6', fontSize: '0.9rem', fontWeight: 500 }}>
+                        {source.title}
+                      </Typography>
+                    );
+                  })()}
                   <Typography sx={{ color: '#9ca3af', fontSize: '0.7rem', mt: 0.25 }}>
                     {source.date}
                   </Typography>

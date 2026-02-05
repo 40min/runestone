@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -251,6 +252,8 @@ titles, snippets, or URLs.
                 date = item.get("date")
                 if not title or not url or not date:
                     continue
+                if not self._is_safe_url(url):
+                    continue
                 if url in seen_urls:
                     continue
                 sources.append({"title": title, "url": url, "date": date})
@@ -259,3 +262,13 @@ titles, snippets, or URLs.
             return sources or None
 
         return None
+
+    @staticmethod
+    def _is_safe_url(url: str) -> bool:
+        try:
+            parsed = urlparse(url)
+        except ValueError:
+            return False
+        if parsed.scheme not in {"http", "https"}:
+            return False
+        return bool(parsed.netloc)

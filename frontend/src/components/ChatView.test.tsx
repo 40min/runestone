@@ -186,7 +186,7 @@ describe('ChatView', () => {
       'https://example.com/news'
     );
     expect(screen.getByRole('link', { name: 'Nyhetstitel' })).toHaveAttribute('target', '_blank');
-    expect(screen.getByRole('link', { name: 'Nyhetstitel' })).toHaveAttribute('rel', 'noreferrer');
+    expect(screen.getByRole('link', { name: 'Nyhetstitel' })).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.getByText('2026-02-05')).toBeInTheDocument();
   });
 
