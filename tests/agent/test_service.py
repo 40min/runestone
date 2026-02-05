@@ -8,7 +8,7 @@ history management, and LLM interaction via LangChain agent.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from runestone.agent.schemas import ChatMessage
 from runestone.agent.service import AgentService
@@ -86,11 +86,12 @@ async def test_generate_response_orchestration(agent_service, mock_user_service,
         "messages": [HumanMessage(content="Hello"), AIMessage(content="Hi there!")]
     }
 
-    response = await agent_service.generate_response(
+    response, sources = await agent_service.generate_response(
         message, history, mock_user, mock_user_service, mock_vocabulary_service
     )
 
     assert response == "Hi there!"
+    assert sources is None
     agent_service.agent.ainvoke.assert_called_once()
 
     # Verify context injection (via AgentContext)
@@ -160,4 +161,28 @@ def test_openai_provider_configuration(mock_settings, mock_user_service):
             assert call_kwargs["model"] == "test-model"
             # The implementation uses api_key parameter, not openai_api_key
             assert call_kwargs["api_key"] is not None
-            assert call_kwargs.get("base_url") is None  # No custom base for OpenAI
+    assert call_kwargs.get("base_url") is None  # No custom base for OpenAI
+
+
+@pytest.mark.anyio
+async def test_generate_response_extracts_sources(agent_service, mock_user_service, mock_user, mock_vocabulary_service):
+    """Test that news tool output is converted into sources."""
+    agent_service.agent.ainvoke.return_value = {
+        "messages": [
+            ToolMessage(
+                content=(
+                    '{"tool":"search_news_with_dates","results":[{"title":"Nyhet","url":"https://example.com",'
+                    '"date":"2026-02-05"}]}'
+                ),
+                tool_call_id="tool-call-1",
+            ),
+            AIMessage(content="Svar med källor"),
+        ]
+    }
+
+    response, sources = await agent_service.generate_response(
+        "Nyheter", [], mock_user, mock_user_service, mock_vocabulary_service
+    )
+
+    assert response == "Svar med källor"
+    assert sources == [{"title": "Nyhet", "url": "https://example.com", "date": "2026-02-05"}]

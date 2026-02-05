@@ -12,7 +12,6 @@ from runestone.config import Settings
 from runestone.core.exceptions import RunestoneError
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.chat_repository import ChatRepository
-from runestone.db.models import ChatMessage
 from runestone.services.tts_service import TTSService
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
@@ -179,17 +178,27 @@ Instructions:
 
         return assistant_text
 
-    def get_history(self, user_id: int) -> List[ChatMessage]:
+    def get_history(self, user_id: int) -> List[ChatMessageSchema]:
         """
-        Get the full chat history for a user.
+        Get the full chat history for a user, ready for API responses.
 
         Args:
             user_id: ID of the user
 
         Returns:
-            List of ChatMessage models
+            List of ChatMessage schemas with sources deserialized
         """
-        return self.repository.get_raw_history(user_id)
+        history = self.repository.get_raw_history(user_id)
+        return [
+            ChatMessageSchema(
+                id=message.id,
+                role=message.role,
+                content=message.content,
+                sources=self.deserialize_sources(message.sources),
+                created_at=message.created_at,
+            )
+            for message in history
+        ]
 
     @staticmethod
     def deserialize_sources(payload: str | None) -> list[dict] | None:

@@ -72,6 +72,7 @@ async def test_search_news_with_dates_formats_results(monkeypatch):
 
     output = await agent_tools.search_news_with_dates.ainvoke({"query": "ekonomi", "k": 2, "timelimit": "w"})
 
+    assert output["tool"] == "search_news_with_dates"
     assert output["query"] == "ekonomi"
     assert output["timelimit"] == "w"
     assert output["region"] == "se-sv"
@@ -105,6 +106,7 @@ async def test_search_news_with_dates_swedish_only_filters(monkeypatch):
 
     output = await agent_tools.search_news_with_dates.ainvoke({"query": "nyheter", "swedish_only": True})
 
+    assert output["tool"] == "search_news_with_dates"
     assert len(output["results"]) == 1
     assert output["results"][0]["title"] == "Svenska nyheter"
 
@@ -126,6 +128,7 @@ async def test_search_news_with_dates_no_results_after_filter(monkeypatch):
 
     output = await agent_tools.search_news_with_dates.ainvoke({"query": "marknad", "swedish_only": True})
 
+    assert output["tool"] == "search_news_with_dates"
     assert output["results"] == []
 
 
@@ -140,4 +143,5 @@ async def test_search_news_with_dates_clamps_k(monkeypatch):
 
     output = await agent_tools.search_news_with_dates.ainvoke({"query": "ekonomi", "k": 999})
 
+    assert output["tool"] == "search_news_with_dates"
     assert output["results"] == []

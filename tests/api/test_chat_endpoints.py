@@ -9,7 +9,10 @@ request validation, and response handling.
 def test_send_message_success(client_with_mock_agent_service, db_session):
     """Test successful message sending."""
     client, mock_agent_service = client_with_mock_agent_service
-    mock_agent_service.generate_response.return_value = "Hej! Jag mår bra, tack!"
+    mock_agent_service.generate_response.return_value = (
+        "Hej! Jag mår bra, tack!",
+        [{"title": "Nyhet", "url": "https://example.com/news", "date": "2026-02-05"}],
+    )
 
     # Send a chat message - history is now managed by the backend
     chat_response = client.post(
@@ -21,7 +24,28 @@ def test_send_message_success(client_with_mock_agent_service, db_session):
     data = chat_response.json()
     assert "message" in data
     assert data["message"] == "Hej! Jag mår bra, tack!"
+    assert data["sources"] == [{"title": "Nyhet", "url": "https://example.com/news", "date": "2026-02-05"}]
     mock_agent_service.generate_response.assert_called_once()
+
+
+def test_history_includes_sources(client_with_mock_agent_service, db_session):
+    """Test that chat history returns sources for assistant messages."""
+    client, mock_agent_service = client_with_mock_agent_service
+    mock_agent_service.generate_response.return_value = (
+        "Svar med källor",
+        [{"title": "Nyhet", "url": "https://example.com/news", "date": "2026-02-05"}],
+    )
+
+    client.post("/api/chat/message", json={"message": "Hej!"})
+
+    response = client.get("/api/chat/history")
+    assert response.status_code == 200
+    data = response.json()
+    assistant_messages = [msg for msg in data["messages"] if msg["role"] == "assistant"]
+    assert len(assistant_messages) == 1
+    assert assistant_messages[0]["sources"] == [
+        {"title": "Nyhet", "url": "https://example.com/news", "date": "2026-02-05"}
+    ]
 
 
 def test_send_message_service_error(client_with_mock_agent_service, db_session):
@@ -100,7 +124,8 @@ def test_send_image_success(client_with_mock_agent_service, db_session, monkeypa
 
     client, mock_agent_service = client_with_mock_agent_service
     mock_agent_service.generate_response.return_value = (
-        "Here's the translated text: Hej (Hello). Hur mår du? (How are you?)"
+        "Here's the translated text: Hej (Hello). Hur mår du? (How are you?)",
+        None,
     )
 
     # Mock the processor dependency

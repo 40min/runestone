@@ -52,7 +52,17 @@ const setupMockFetch = () => {
     }
     return Promise.resolve({
       ok: true,
-      json: () => Promise.resolve({ message: 'Response' }),
+      json: () =>
+        Promise.resolve({
+          message: 'Response',
+          sources: [
+            {
+              title: 'Nyhetstitel',
+              url: 'https://example.com/news',
+              date: '2026-02-05',
+            },
+          ],
+        }),
     });
   });
 };
@@ -169,6 +179,15 @@ describe('ChatView', () => {
     await waitFor(() => {
       expect(screen.getByText('Response')).toBeInTheDocument();
     });
+
+    // Sources should render as link with date
+    expect(screen.getByRole('link', { name: 'Nyhetstitel' })).toHaveAttribute(
+      'href',
+      'https://example.com/news'
+    );
+    expect(screen.getByRole('link', { name: 'Nyhetstitel' })).toHaveAttribute('target', '_blank');
+    expect(screen.getByRole('link', { name: 'Nyhetstitel' })).toHaveAttribute('rel', 'noreferrer');
+    expect(screen.getByText('2026-02-05')).toBeInTheDocument();
   });
 
   it('disables send button when input is empty', () => {

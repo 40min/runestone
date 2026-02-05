@@ -14,7 +14,7 @@ from runestone.services.chat_service import ChatService
 def mock_agent_service():
     """Create a mock AgentService."""
     mock = AsyncMock()
-    mock.generate_response.return_value = "Björn's reply"
+    mock.generate_response.return_value = ("Björn's reply", None)
     return mock
 
 
@@ -85,9 +85,10 @@ async def test_process_message_orchestration(chat_service, db_with_test_user, mo
     # Configure mock user service to return the DB user
     mock_user_service.get_user_by_id.return_value = user
 
-    response = await chat_service.process_message(user.id, "Hej Björn")
+    response, sources = await chat_service.process_message(user.id, "Hej Björn")
 
     assert response == "Björn's reply"
+    assert sources is None
 
     # Verify persistence
     history = chat_service.get_history(user.id)
@@ -214,3 +215,23 @@ def test_clear_history(chat_service, db_with_test_user):
 
     chat_service.clear_history(user.id)
     assert len(chat_service.get_history(user.id)) == 0
+
+
+@pytest.mark.anyio
+async def test_process_message_persists_sources(chat_service, db_with_test_user, mock_agent_service, mock_user_service):
+    """Test that sources are stored and returned in history."""
+    db, user = db_with_test_user
+    mock_user_service.get_user_by_id.return_value = user
+    mock_agent_service.generate_response.return_value = (
+        "Svar med källor",
+        [{"title": "Nyhet", "url": "https://example.com", "date": "2026-02-05"}],
+    )
+
+    await chat_service.process_message(user.id, "Nyheter tack")
+
+    history = chat_service.get_history(user.id)
+    assistant_messages = [msg for msg in history if msg.role == "assistant"]
+    assert len(assistant_messages) == 1
+    assert [source.model_dump() for source in assistant_messages[0].sources] == [
+        {"title": "Nyhet", "url": "https://example.com", "date": "2026-02-05"}
+    ]
