@@ -338,7 +338,7 @@ def mock_agent_service():
     from unittest.mock import AsyncMock
 
     mock = AsyncMock()
-    mock.generate_response.return_value = "Mock response"
+    mock.generate_response.return_value = ("Mock response", None)
     return mock
 
 

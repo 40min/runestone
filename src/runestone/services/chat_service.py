@@ -11,7 +11,6 @@ from runestone.config import Settings
 from runestone.core.exceptions import RunestoneError
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.chat_repository import ChatRepository
-from runestone.db.models import ChatMessage
 from runestone.services.tts_service import TTSService
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
@@ -57,7 +56,7 @@ class ChatService:
         message_text: str,
         tts_expected: bool = False,
         speed: float = 1.0,
-    ) -> str:
+    ) -> tuple[str, list[dict] | None]:
         """
         Process a user message: save, truncate, fetch context, generate response, save response.
 
@@ -68,7 +67,7 @@ class ChatService:
             speed: Speed of the speech
 
         Returns:
-            The assistant's response text
+            The assistant's response text and optional news sources
         """
         # 1. Save user message
         self.repository.add_message(user_id, "user", message_text)
@@ -92,7 +91,7 @@ class ChatService:
 
         # 5. Generate response using the ReAct agent
         # The agent handles tool execution automatically
-        assistant_text = await self.agent_service.generate_response(
+        assistant_text, sources = await self.agent_service.generate_response(
             message=message_text,
             history=history[:-1],  # Exclude current message (it's passed separately)
             user=user,
@@ -101,14 +100,14 @@ class ChatService:
         )
 
         # 6. Save assistant message
-        self.repository.add_message(user_id, "assistant", assistant_text)
+        self.repository.add_message(user_id, "assistant", assistant_text, sources=sources)
 
         # 7. Push TTS audio if client expects it (non-blocking)
         if tts_expected:
             # TTSService handles task management and cancellation internally
             await self.tts_service.push_audio_to_client(user_id, assistant_text, speed=speed)
 
-        return assistant_text
+        return assistant_text, sources
 
     async def process_image_message(self, user_id: int, image_content: bytes) -> str:
         """
@@ -165,7 +164,7 @@ Instructions:
 3. Use {mother_tongue} for all translations."""
 
         # 6. Generate response using the ReAct agent
-        assistant_text = await self.agent_service.generate_response(
+        assistant_text, _sources = await self.agent_service.generate_response(
             message=translation_prompt,
             history=history,
             user=user,
@@ -178,17 +177,18 @@ Instructions:
 
         return assistant_text
 
-    def get_history(self, user_id: int) -> List[ChatMessage]:
+    def get_history(self, user_id: int) -> List[ChatMessageSchema]:
         """
-        Get the full chat history for a user.
+        Get the full chat history for a user, ready for API responses.
 
         Args:
             user_id: ID of the user
 
         Returns:
-            List of ChatMessage models
+            List of ChatMessage schemas with sources deserialized
         """
-        return self.repository.get_raw_history(user_id)
+        history = self.repository.get_raw_history(user_id)
+        return [ChatMessageSchema.model_validate(message) for message in history]
 
     def clear_history(self, user_id: int):
         """

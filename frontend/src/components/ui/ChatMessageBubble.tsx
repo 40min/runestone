@@ -1,12 +1,30 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Link, Typography } from '@mui/material';
 
 interface ChatMessageBubbleProps {
   role: 'user' | 'assistant';
   content: string;
+  sources?: { title: string; url: string; date: string }[] | null;
 }
 
-export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, content }) => {
+export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, content, sources }) => {
+  const hasSources = role === 'assistant' && sources && sources.length > 0;
+  const resolveSafeUrl = (url: string) => {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return parsed.toString();
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  };
+  const formatDate = (value: string) => {
+    if (!value) return value;
+    return value.replace(/\.\d+(?=Z|$)/, '');
+  };
+
   return (
     <Box
       sx={{
@@ -37,6 +55,71 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
         >
           {content}
         </Typography>
+        {hasSources && (
+          <Box sx={{ mt: 1.5 }}>
+            <Typography
+              sx={(theme) => ({
+                color: theme.palette.primary.light,
+                fontSize: '0.75rem',
+                mb: 0.5,
+              })}
+            >
+              Sources
+            </Typography>
+            <Box
+              component="ul"
+              sx={{
+                listStyle: 'none',
+                p: 0,
+                m: 0,
+                display: 'grid',
+                gap: 0.75,
+              }}
+            >
+              {sources.map((source) => (
+                <Box component="li" key={source.url}>
+                  {(() => {
+                    const safeUrl = resolveSafeUrl(source.url);
+                    return safeUrl ? (
+                      <Link
+                        href={safeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        underline="hover"
+                        sx={(theme) => ({
+                          color: theme.palette.common.white,
+                          fontSize: '0.9rem',
+                          fontWeight: 500,
+                        })}
+                      >
+                        {source.title}
+                      </Link>
+                    ) : (
+                      <Typography
+                        sx={(theme) => ({
+                          color: theme.palette.common.white,
+                          fontSize: '0.9rem',
+                          fontWeight: 500,
+                        })}
+                      >
+                        {source.title}
+                      </Typography>
+                    );
+                  })()}
+                  <Typography
+                    sx={(theme) => ({
+                      color: theme.palette.grey[300],
+                      fontSize: '0.7rem',
+                      mt: 0.25,
+                    })}
+                  >
+                    {formatDate(source.date)}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        )}
       </Box>
     </Box>
   );

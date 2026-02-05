@@ -10,7 +10,7 @@ from typing import Literal
 from urllib.parse import urlparse
 
 from duckduckgo_search import DDGS
-from duckduckgo_search.exceptions import DuckDuckGoSearchException
+from duckduckgo_search.exceptions import DuckDuckGoSearchException, RatelimitException
 from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field, field_validator
@@ -74,6 +74,7 @@ class NewsResult(BaseModel):
 class NewsResultsOutput(BaseModel):
     """Structured output for news search results."""
 
+    tool: str = Field("search_news_with_dates", description="Tool name for traceability")
     query: str
     timelimit: NewsTimeLimit
     region: str
@@ -236,6 +237,8 @@ async def prioritize_words_for_learning(
 
 MAX_NEWS_TO_FETCH = 10
 DDGS_TIMEOUT = 20
+DDGS_MAX_RETRIES = 2
+DDGS_RETRY_DELAYS = (0.3, 0.6)
 
 
 def _fetch_news_sync(
@@ -277,10 +280,30 @@ async def search_news_with_dates(
     Returns:
         A structured dictionary containing the search results.
     """
+    k = max(1, min(k, MAX_NEWS_TO_FETCH))
+    results: list[NewsResult] = []
+    ddgs_results = None
+
+    for attempt in range(DDGS_MAX_RETRIES + 1):
+        try:
+            ddgs_results = await asyncio.to_thread(_fetch_news_sync, query, k, timelimit, region)
+            break
+        except RatelimitException as e:
+            if attempt >= DDGS_MAX_RETRIES:
+                logger.warning("News search rate limited for query='%s': %s", query, e)
+                return {
+                    "error": "News search is temporarily rate limited. Please try again in a minute.",
+                    "error_type": "rate_limited",
+                }
+            delay = DDGS_RETRY_DELAYS[min(attempt, len(DDGS_RETRY_DELAYS) - 1)]
+            await asyncio.sleep(delay)
+        except DuckDuckGoSearchException as e:
+            logger.exception("News search failed for query='%s'", query)
+            return {"error": f"Error searching news: {str(e)}"}
+
     try:
-        k = max(1, min(k, MAX_NEWS_TO_FETCH))
-        results: list[NewsResult] = []
-        ddgs_results = await asyncio.to_thread(_fetch_news_sync, query, k, timelimit, region)
+        if ddgs_results is None:
+            return {"error": "Error searching news: No results returned."}
 
         for item in ddgs_results:
             title = item.get("title") or "Untitled"

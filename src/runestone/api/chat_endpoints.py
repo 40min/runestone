@@ -11,7 +11,6 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, Upl
 
 from runestone.agent.schemas import (
     ChatHistoryResponse,
-    ChatMessage,
     ChatRequest,
     ChatResponse,
     ImageChatResponse,
@@ -44,13 +43,13 @@ async def send_message(
         logger.info(f"User {current_user.email} sent message: {request.message[:50]}...")
 
         # Generate response using the chat service which handles persistence
-        response_message = await chat_service.process_message(
+        response_message, sources = await chat_service.process_message(
             current_user.id, request.message, tts_expected=request.tts_expected, speed=request.speed
         )
 
         logger.info(f"Generated response for user {current_user.email}")
 
-        return ChatResponse(message=response_message)
+        return ChatResponse(message=response_message, sources=sources)
 
     except Exception as e:
         logger.error(f"Error generating chat response: {e}", exc_info=True)
@@ -68,9 +67,7 @@ async def get_history(
     Get the chat history for the current user.
     """
     try:
-        history = chat_service.get_history(current_user.id)
-        # Convert models to schemas
-        messages = [ChatMessage(id=m.id, role=m.role, content=m.content, created_at=m.created_at) for m in history]
+        messages = chat_service.get_history(current_user.id)
         return ChatHistoryResponse(messages=messages)
     except Exception as e:
         logger.error(f"Error fetching chat history: {e}", exc_info=True)

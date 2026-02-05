@@ -2,6 +2,7 @@
 Repository for chat message database operations.
 """
 
+import json
 from datetime import datetime, timedelta, timezone
 from typing import List
 
@@ -23,7 +24,7 @@ class ChatRepository:
         """
         self.db = db
 
-    def add_message(self, user_id: int, role: str, content: str) -> ChatMessage:
+    def add_message(self, user_id: int, role: str, content: str, sources: list[dict] | None = None) -> ChatMessage:
         """
         Add a new chat message to the database.
 
@@ -35,7 +36,12 @@ class ChatRepository:
         Returns:
             The created ChatMessage object
         """
-        message = ChatMessage(user_id=user_id, role=role, content=content)
+        message = ChatMessage(
+            user_id=user_id,
+            role=role,
+            content=content,
+            sources=json.dumps(sources) if sources else None,
+        )
         self.db.add(message)
         self.db.commit()
         self.db.refresh(message)

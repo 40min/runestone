@@ -20,6 +20,20 @@ Object.defineProperty(window, "alert", {
   value: vi.fn(),
 });
 
+// Silence JSDOM media element not-implemented errors
+Object.defineProperty(HTMLMediaElement.prototype, "play", {
+  writable: true,
+  value: vi.fn(() => Promise.resolve()),
+});
+Object.defineProperty(HTMLMediaElement.prototype, "pause", {
+  writable: true,
+  value: vi.fn(),
+});
+Object.defineProperty(HTMLMediaElement.prototype, "load", {
+  writable: true,
+  value: vi.fn(),
+});
+
 // Mock BroadcastChannel
 class MockBroadcastChannel {
   name: string;

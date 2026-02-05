@@ -72,6 +72,7 @@ async def test_search_news_with_dates_formats_results(monkeypatch):
 
     output = await agent_tools.search_news_with_dates.ainvoke({"query": "ekonomi", "k": 2, "timelimit": "w"})
 
+    assert output["tool"] == "search_news_with_dates"
     assert output["query"] == "ekonomi"
     assert output["timelimit"] == "w"
     assert output["region"] == "se-sv"
@@ -105,6 +106,7 @@ async def test_search_news_with_dates_swedish_only_filters(monkeypatch):
 
     output = await agent_tools.search_news_with_dates.ainvoke({"query": "nyheter", "swedish_only": True})
 
+    assert output["tool"] == "search_news_with_dates"
     assert len(output["results"]) == 1
     assert output["results"][0]["title"] == "Svenska nyheter"
 
@@ -126,6 +128,7 @@ async def test_search_news_with_dates_no_results_after_filter(monkeypatch):
 
     output = await agent_tools.search_news_with_dates.ainvoke({"query": "marknad", "swedish_only": True})
 
+    assert output["tool"] == "search_news_with_dates"
     assert output["results"] == []
 
 
@@ -140,4 +143,28 @@ async def test_search_news_with_dates_clamps_k(monkeypatch):
 
     output = await agent_tools.search_news_with_dates.ainvoke({"query": "ekonomi", "k": 999})
 
+    assert output["tool"] == "search_news_with_dates"
     assert output["results"] == []
+
+
+@pytest.mark.anyio
+async def test_search_news_with_dates_rate_limited(monkeypatch):
+    from duckduckgo_search.exceptions import RatelimitException
+
+    call_count = {"count": 0}
+
+    def _raise_rate_limit(*_args, **_kwargs):
+        call_count["count"] += 1
+        raise RatelimitException("rate limited")
+
+    monkeypatch.setattr(agent_tools, "_fetch_news_sync", _raise_rate_limit)
+
+    async def _noop_sleep(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(agent_tools.asyncio, "sleep", _noop_sleep)
+
+    output = await agent_tools.search_news_with_dates.ainvoke({"query": "nyheter"})
+
+    assert output["error_type"] == "rate_limited"
+    assert call_count["count"] == agent_tools.DDGS_MAX_RETRIES + 1
