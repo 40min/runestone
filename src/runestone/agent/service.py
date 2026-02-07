@@ -18,14 +18,11 @@ from pydantic import SecretStr
 
 from runestone.agent.prompts import load_persona
 from runestone.agent.schemas import ChatMessage
-from runestone.agent.tools import (
-    AgentContext,
-    prioritize_words_for_learning,
-    read_memory,
-    read_url,
-    search_news_with_dates,
-    update_memory,
-)
+from runestone.agent.tools.context import AgentContext
+from runestone.agent.tools.memory import read_memory, update_memory
+from runestone.agent.tools.news import search_news_with_dates
+from runestone.agent.tools.read_url import read_url
+from runestone.agent.tools.vocabulary import prioritize_words_for_learning
 from runestone.config import Settings
 from runestone.db.models import User
 from runestone.services.user_service import UserService

@@ -1,6 +1,6 @@
 import pytest
 
-import runestone.agent.tools as tools
+from runestone.agent.tools import read_url as tools
 
 
 def test_normalize_url_prepends_https():

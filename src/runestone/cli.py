@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from runestone.agent.tools import read_url
+from runestone.agent.tools.read_url import read_url
 from runestone.api.schemas import VocabularyItemCreate
 from runestone.config import Settings
 from runestone.core.analyzer import ContentAnalyzer
