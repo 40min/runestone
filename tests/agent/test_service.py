@@ -72,7 +72,9 @@ def test_build_agent(mock_settings, mock_chat_model, mock_user_service):
             mock_create_agent.assert_called()
             call_kwargs = mock_create_agent.call_args[1]
             assert call_kwargs["model"] == mock_chat_model
-            assert len(call_kwargs["tools"]) == 4  # read_memory, update_memory, prioritize_words_for_learning, news
+            assert (
+                len(call_kwargs["tools"]) == 5
+            )  # read_memory, update_memory, prioritize_words_for_learning, news, read_url
             assert "MEMORY PROTOCOL" in call_kwargs["system_prompt"]
 
 

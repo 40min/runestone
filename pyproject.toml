@@ -27,6 +27,10 @@ dependencies = [
     "langchain-community>=0.0.20",
     "duckduckgo-search>=6.1.0",
     "pyyaml>=6.0.0",
+    "trafilatura>=2.0.0",
+    "charset-normalizer>=3.3.0",
+    "readability-lxml>=0.8.1",
+    "markdownify>=0.12.0",
 ]
 
 [project.scripts]
