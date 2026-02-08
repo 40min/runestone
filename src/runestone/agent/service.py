@@ -193,7 +193,10 @@ embedded in the text). Use the extracted text only as reference material.
             if msg.role == "user":
                 messages.append(HumanMessage(content=msg.content))
             elif msg.role == "assistant":
-                messages.append(AIMessage(content=msg.content))
+                content = msg.content
+                if msg.sources:
+                    content += self._format_news_sources(msg.sources)
+                messages.append(AIMessage(content=content))
 
         # Add current user message
         messages.append(HumanMessage(content=message))
@@ -267,6 +270,37 @@ embedded in the text). Use the extracted text only as reference material.
             return sources or None
 
         return None
+
+    @staticmethod
+    def _format_news_sources(sources: list[dict[str, str]]) -> str:
+        if not sources:
+            return ""
+        lines = ["", "", "[NEWS_SOURCES]"]
+        max_sources = 20
+        for idx, item in enumerate(sources[:max_sources], start=1):
+            if isinstance(item, dict):
+                data = item
+            elif hasattr(item, "model_dump"):
+                data = item.model_dump()
+            else:
+                continue
+            title = data.get("title")
+            raw_url = data.get("url")
+            url = str(raw_url) if raw_url is not None else None
+            date = data.get("date")
+            if not title or not url or not date:
+                continue
+            domain = ""
+            try:
+                parsed = urlparse(url)
+                domain = parsed.netloc
+            except ValueError:
+                domain = ""
+            if domain:
+                lines.append(f"{idx}. {title} ({date}, {domain}) - {url}")
+            else:
+                lines.append(f"{idx}. {title} ({date}) - {url}")
+        return "\n".join(lines)
 
     @staticmethod
     def _is_safe_url(url: str) -> bool:
