@@ -307,7 +307,23 @@ embedded in the text). Use the extracted text only as reference material.
         try:
             parsed = urlparse(url)
         except ValueError:
+            logger.info("Rejected source URL (parse error): %s", url)
+            return False
+        if parsed.username or parsed.password:
+            logger.info("Rejected source URL (credentials not allowed): %s", url)
+            return False
+        try:
+            port = parsed.port
+        except ValueError:
+            logger.info("Rejected source URL (invalid port): %s", url)
             return False
         if parsed.scheme not in {"http", "https"}:
+            logger.info("Rejected source URL (scheme not allowed): %s", url)
             return False
-        return bool(parsed.netloc)
+        if port is not None and port not in {80, 443}:
+            logger.info("Rejected source URL (port not allowed): %s", url)
+            return False
+        if not parsed.netloc:
+            logger.info("Rejected source URL (missing netloc): %s", url)
+            return False
+        return True

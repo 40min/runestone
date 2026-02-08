@@ -108,7 +108,10 @@ async def _validate_fetch_url(url: str) -> tuple[bool, str]:
         return False, "Credentials in URL are not allowed."
     if not parsed.hostname:
         return False, "URL must include a hostname."
-    port = parsed.port
+    try:
+        port = parsed.port
+    except ValueError:
+        return False, "Invalid URL."
     if port is not None and port not in ALLOWED_PORTS:
         return False, f"Only ports {sorted(ALLOWED_PORTS)} are allowed."
     effective_port = port or (443 if parsed.scheme == "https" else 80)
@@ -233,11 +236,7 @@ def _simplify_markdown(md: str) -> str:
     return "\n".join(out_lines).strip()
 
 
-def _decode_bytes(content_bytes: bytes, content_type: str) -> str:
-    if content_type in {"text/plain", "text/markdown"}:
-        detection = from_bytes(content_bytes).best()
-        return str(detection) if detection else content_bytes.decode("utf-8", errors="replace")
-
+def _decode_bytes(content_bytes: bytes) -> str:
     detection = from_bytes(content_bytes).best()
     return str(detection) if detection else content_bytes.decode("utf-8", errors="replace")
 
@@ -269,7 +268,7 @@ async def read_url(url: str) -> str:
     body_md = ""
 
     if content_type in {"text/plain", "text/markdown"}:
-        body_md = _decode_bytes(content_bytes, content_type)
+        body_md = _decode_bytes(content_bytes)
     else:
         decoded_text: str | None = None
         try:
@@ -287,22 +286,20 @@ async def read_url(url: str) -> str:
 
         if not body_md or len(body_md.strip()) < 200:
             try:
-                if decoded_text is None:
-                    decoded_text = _decode_bytes(content_bytes, content_type)
+                decoded_text = _decode_bytes(content_bytes)
                 doc = Document(decoded_text)
                 summary_html = doc.summary()
                 body_md = markdownify(summary_html, heading_style="ATX", strip=["script", "style"])
                 title = _collapse_whitespace(doc.short_title() or "")
             except Exception as e:
                 logger.warning("read_url readability/markdownify failed for url=%s: %s", final_url, e)
-                if decoded_text is None:
-                    decoded_text = _decode_bytes(content_bytes, content_type)
-                body_md = decoded_text
+                if decoded_text is not None:
+                    body_md = decoded_text
 
         if not title:
             try:
                 if decoded_text is None:
-                    decoded_text = _decode_bytes(content_bytes, content_type)
+                    decoded_text = _decode_bytes(content_bytes)
                 doc = lxml_html.fromstring(decoded_text)
                 title_el = doc.find(".//title")
                 if title_el is not None:
