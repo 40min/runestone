@@ -81,7 +81,14 @@ class ChatService:
         # Convert models to schemas for the agent service
         # Note: context_models includes the message we just saved at the end
         history = [
-            ChatMessageSchema(id=m.id, role=m.role, content=m.content, created_at=m.created_at) for m in context_models
+            ChatMessageSchema(
+                id=m.id,
+                role=m.role,
+                content=m.content,
+                sources=m.sources,
+                created_at=m.created_at,
+            )
+            for m in context_models
         ]
 
         # 4. Get user and build memory context

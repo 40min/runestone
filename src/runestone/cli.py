@@ -4,6 +4,7 @@ Command-line interface for Runestone.
 This module provides the main CLI commands and handles user interaction.
 """
 
+import asyncio
 import csv
 import shutil
 import sys
@@ -16,6 +17,7 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from runestone.agent.tools.read_url import read_url
 from runestone.api.schemas import VocabularyItemCreate
 from runestone.config import Settings
 from runestone.core.analyzer import ContentAnalyzer
@@ -229,6 +231,22 @@ def process(
             console.print_exception()
         else:
             console.print(f"[red]Unexpected error:[/red] {e}")
+        sys.exit(1)
+
+
+@cli.command("read-url")
+@click.argument("url")
+def read_url_cli(url: str):
+    """
+    Fetch a URL and print simplified Markdown content.
+
+    URL: The web page to fetch and extract.
+    """
+    try:
+        markdown = asyncio.run(read_url.ainvoke({"url": url}))
+        console.print(markdown)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
         sys.exit(1)
 
 

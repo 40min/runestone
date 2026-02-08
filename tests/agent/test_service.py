@@ -72,7 +72,9 @@ def test_build_agent(mock_settings, mock_chat_model, mock_user_service):
             mock_create_agent.assert_called()
             call_kwargs = mock_create_agent.call_args[1]
             assert call_kwargs["model"] == mock_chat_model
-            assert len(call_kwargs["tools"]) == 4  # read_memory, update_memory, prioritize_words_for_learning, news
+            assert (
+                len(call_kwargs["tools"]) == 5
+            )  # read_memory, update_memory, prioritize_words_for_learning, news, read_url
             assert "MEMORY PROTOCOL" in call_kwargs["system_prompt"]
 
 
@@ -113,7 +115,14 @@ async def test_generate_response_orchestration(agent_service, mock_user_service,
 async def test_generate_response_with_history(agent_service, mock_user_service, mock_user, mock_vocabulary_service):
     """Test generate_response with conversation history."""
     message = "Current msg"
-    history = [ChatMessage(role="user", content="Old user msg"), ChatMessage(role="assistant", content="Old bot msg")]
+    history = [
+        ChatMessage(role="user", content="Old user msg"),
+        ChatMessage(
+            role="assistant",
+            content="Old bot msg",
+            sources=[{"title": "Nyhet", "url": "https://example.com", "date": "2026-02-05"}],
+        ),
+    ]
 
     agent_service.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
 
@@ -124,7 +133,8 @@ async def test_generate_response_with_history(agent_service, mock_user_service, 
     # History (2) + Current (1) = 3
     assert len(messages) == 3
     assert messages[0].content == "Old user msg"
-    assert messages[1].content == "Old bot msg"
+    assert "[NEWS_SOURCES]" in messages[1].content
+    assert "Old bot msg" in messages[1].content
     assert messages[2].content == "Current msg"
 
 
@@ -162,6 +172,27 @@ def test_openai_provider_configuration(mock_settings, mock_user_service):
             # The implementation uses api_key parameter, not openai_api_key
             assert call_kwargs["api_key"] is not None
     assert call_kwargs.get("base_url") is None  # No custom base for OpenAI
+
+
+def test_format_news_sources():
+    """Test that news sources are formatted with cap and domain metadata."""
+    sources = []
+    for idx in range(1, 25):
+        sources.append(
+            {
+                "title": f"Title {idx}",
+                "url": f"https://example.com/article-{idx}",
+                "date": "2026-02-05",
+            }
+        )
+
+    formatted = AgentService._format_news_sources(sources)
+    assert formatted.count("\n") >= 1
+    assert "[NEWS_SOURCES]" in formatted
+    assert "example.com" in formatted
+    assert "Title 1" in formatted
+    assert "Title 20" in formatted
+    assert "Title 21" not in formatted
 
 
 @pytest.mark.anyio
