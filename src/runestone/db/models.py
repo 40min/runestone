@@ -24,12 +24,32 @@ class User(Base):
     timezone = Column(String, default="UTC", nullable=False)
     pages_recognised_count = Column(Integer, default=0, nullable=False)
     mother_tongue = Column(String, nullable=True)  # User's preferred language
-    # Agent memory fields (stored as JSON strings)
+    # Agent memory fields (stored as JSON strings) - DEPRECATED, use memory_items table
     personal_info = Column(Text, nullable=True)  # Student identity, preferences, goals
     areas_to_improve = Column(Text, nullable=True)  # Recurring struggles and error patterns
     knowledge_strengths = Column(Text, nullable=True)  # Mastered skills and concepts
+    memory_migrated = Column(Boolean, server_default="0", nullable=False)  # Migration flag
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class MemoryItem(Base):
+    """Memory item table model for normalized agent memory storage."""
+
+    __tablename__ = "memory_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(50), nullable=False)
+    key: Mapped[str] = mapped_column(String(100), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    status_changed_at = Column(DateTime(timezone=True), nullable=True)
+    metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (UniqueConstraint("user_id", "category", "key", name="uq_user_category_key"),)
 
 
 class Vocabulary(Base):

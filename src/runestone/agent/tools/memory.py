@@ -1,101 +1,180 @@
-"""Memory-related agent tools."""
+"""
+Agent tools for memory management.
 
-import json
-import logging
-from typing import Literal
+This module provides tools for the agent to read and manage user memory.
+"""
+
+from typing import Annotated, Literal, Optional
 
 from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 
 from runestone.agent.tools.context import AgentContext
-from runestone.services.user_service import UserService
-from runestone.utils.merge import deep_merge
 
-logger = logging.getLogger(__name__)
+
+class MemoryItemInput(BaseModel):
+    """Input for creating/updating a memory item."""
+
+    category: Literal["personal_info", "area_to_improve", "knowledge_strength"] = Field(
+        ..., description="Category of the memory item"
+    )
+    key: str = Field(..., description="Unique key for the memory item within the category")
+    content: str = Field(..., description="Content/description of the memory item")
+    status: Optional[str] = Field(
+        None,
+        description="Optional status. If not provided, defaults based on category. "
+        "Valid values: personal_info (active, outdated), "
+        "area_to_improve (struggling, improving, mastered), "
+        "knowledge_strength (active, archived)",
+    )
+
+
+class MemoryStatusUpdate(BaseModel):
+    """Input for updating memory item status."""
+
+    item_id: int = Field(..., description="ID of the memory item to update")
+    new_status: str = Field(..., description="New status value")
+
+
+class MemoryPromoteInput(BaseModel):
+    """Input for promoting an item to knowledge_strength."""
+
+    item_id: int = Field(..., description="ID of the mastered area_to_improve item to promote")
 
 
 @tool
 async def read_memory(
     runtime: ToolRuntime[AgentContext],
+    category: Annotated[
+        Optional[Literal["personal_info", "area_to_improve", "knowledge_strength"]],
+        Field(description="Optional category filter"),
+    ] = None,
+    status: Annotated[Optional[str], Field(description="Optional status filter")] = None,
 ) -> str:
     """
-    Read the entire student memory profile.
+    Read the agent's memory about the user.
 
+    Returns structured memory items with IDs, categories, keys, content, and status.
     Use this tool when you need context about the student to personalize your
     teaching or when asked about what you know about the student.
 
+    Args:
+        runtime: Tool runtime context
+        category: Optional filter by category (personal_info, area_to_improve, knowledge_strength)
+        status: Optional filter by status
+
     Returns:
-    A JSON string containing all memory categories:
-        - personal_info: goals, preferences, name, background
-        - areas_to_improve: struggling concepts, recurring mistakes
-        - knowledge_strengths: mastered topics, successful applications
+        Formatted string with memory items including IDs for reference
     """
-    user_context = runtime.context.user
-    user_service = runtime.context.user_service
+    user = runtime.context.user
+    service = runtime.context.memory_item_service
 
-    logger.info(f"Reading memory for user {user_context.id}")
+    items = service.list_memory_items(user_id=user.id, category=category, status=status, limit=200, offset=0)
 
-    # Fetch fresh user data from DB to ensure we don't use stale data
-    # if memory was updated in the same conversation turn.
-    user = user_service.get_user_by_id(user_context.id)
-    if not user:
-        return "Error: User not found."
+    if not items:
+        return "No memory items found."
 
-    memory = {
-        "personal_info": json.loads(user.personal_info) if user.personal_info else {},
-        "areas_to_improve": json.loads(user.areas_to_improve) if user.areas_to_improve else {},
-        "knowledge_strengths": json.loads(user.knowledge_strengths) if user.knowledge_strengths else {},
-    }
+    # Group items by category
+    grouped = {}
+    for item in items:
+        if item.category not in grouped:
+            grouped[item.category] = []
+        grouped[item.category].append(item)
 
-    return json.dumps(memory, indent=2)
+    # Format output
+    output_lines = ["=== Agent Memory ===\n"]
+    for cat, cat_items in grouped.items():
+        output_lines.append(f"\n## {cat.replace('_', ' ').title()}")
+        for item in cat_items:
+            output_lines.append(f"  [ID:{item.id}] {item.key}: {item.content} (status: {item.status})")
+
+    return "\n".join(output_lines)
 
 
 @tool
-async def update_memory(
-    category: Literal["personal_info", "areas_to_improve", "knowledge_strengths"],
-    operation: Literal["merge", "replace"],
-    data: dict,
+async def upsert_memory_item(
     runtime: ToolRuntime[AgentContext],
+    item: Annotated[MemoryItemInput, Field(description="Memory item to create or update")],
 ) -> str:
     """
-    Update the student's memory profile with new information.
+    Create or update a memory item about the user.
 
-    Use this tool to store long-term information about the student:
-    - personal_info: goals, preferences, name, background
-    - areas_to_improve: struggling concepts, recurring mistakes
-    - knowledge_strengths: mastered topics, successful applications
+    Use this when you learn new information or need to update existing knowledge.
+    If an item with the same category and key exists, it will be updated.
 
     Args:
-        category: Which memory category to update
-        operation: 'merge' to add/update keys, 'replace' to overwrite entirely
-        data: JSON data to store (use descriptive keys like 'grammar_struggles')
-        runtime: Tool runtime context containing user and user_service
+        runtime: Tool runtime context
+        item: Memory item data (category, key, content, optional status)
+
+    Returns:
+        Confirmation message with item ID
+    """
+    user = runtime.context.user
+    service = runtime.context.memory_item_service
+
+    result = service.upsert_memory_item(
+        user_id=user.id,
+        category=item.category,
+        key=item.key,
+        content=item.content,
+        status=item.status,
+    )
+
+    return f"Memory item saved: [ID:{result.id}] {result.key} in {result.category} (status: {result.status})"
+
+
+@tool
+async def update_memory_status(
+    runtime: ToolRuntime[AgentContext],
+    update: Annotated[MemoryStatusUpdate, Field(description="Status update data")],
+) -> str:
+    """
+    Update the status of a memory item.
+
+    Use this to track progress on areas to improve or mark information as outdated.
+
+    Valid status transitions:
+    - personal_info: active, outdated
+    - area_to_improve: struggling, improving, mastered
+    - knowledge_strength: active, archived
+
+    Args:
+        runtime: Tool runtime context
+        update: Status update data (item_id, new_status)
 
     Returns:
         Confirmation message
     """
     user = runtime.context.user
-    user_service: UserService = runtime.context.user_service
+    service = runtime.context.memory_item_service
 
-    logger.info(f"Updating memory for user {user.id}: {category}")
+    result = service.update_item_status(update.item_id, update.new_status, user.id)
 
-    async with runtime.context.db_lock:
-        try:
-            final_data = data
-            if operation == "merge":
-                # Get current data to merge with
-                current_json = getattr(user, category)
-                current_dict = json.loads(current_json) if current_json else {}
-                final_data = deep_merge(current_dict, data)
+    return f"Status updated: [ID:{result.id}] {result.key} is now '{result.status}'"
 
-            # Update memory via service
-            user_service.update_user_memory(user, category, final_data)
-            return f"Successfully updated {category}."
-        except Exception as e:
-            logger.error(f"Error updating memory for user {user.id}: {e}")
-            # Ensure session is rolled back on error to avoid PendingRollbackError
-            try:
-                user_service.user_repo.db.rollback()
-            except Exception:
-                pass
-            return f"Error updating memory: {str(e)}"
+
+@tool
+async def promote_to_strength(
+    runtime: ToolRuntime[AgentContext],
+    promote: Annotated[MemoryPromoteInput, Field(description="Item to promote")],
+) -> str:
+    """
+    Promote a mastered area_to_improve item to knowledge_strength.
+
+    Use this when a user has fully mastered a concept that was previously a struggle.
+    The item will be moved from area_to_improve to knowledge_strength.
+
+    Args:
+        runtime: Tool runtime context
+        promote: Promotion data (item_id of mastered item)
+
+    Returns:
+        Confirmation message
+    """
+    user = runtime.context.user
+    service = runtime.context.memory_item_service
+
+    result = service.promote_to_strength(promote.item_id, user.id)
+
+    return f"Promoted to knowledge_strength: [ID:{result.id}] {result.key}"

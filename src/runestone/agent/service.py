@@ -19,13 +19,12 @@ from pydantic import SecretStr
 from runestone.agent.prompts import load_persona
 from runestone.agent.schemas import ChatMessage
 from runestone.agent.tools.context import AgentContext
-from runestone.agent.tools.memory import read_memory, update_memory
+from runestone.agent.tools.memory import promote_to_strength, read_memory, update_memory_status, upsert_memory_item
 from runestone.agent.tools.news import search_news_with_dates
 from runestone.agent.tools.read_url import read_url
 from runestone.agent.tools.vocabulary import prioritize_words_for_learning
 from runestone.config import Settings
 from runestone.db.models import User
-from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 
 logger = logging.getLogger(__name__)
@@ -81,7 +80,15 @@ class AgentService:
             temperature=1,
         )
 
-        tools = [read_memory, update_memory, prioritize_words_for_learning, search_news_with_dates, read_url]
+        tools = [
+            read_memory,
+            upsert_memory_item,
+            update_memory_status,
+            promote_to_strength,
+            prioritize_words_for_learning,
+            search_news_with_dates,
+            read_url,
+        ]
 
         # Build system prompt with persona and tool instructions
         system_prompt = self.persona["system_prompt"]
@@ -96,28 +103,39 @@ statement and ask a follow-up question to keep the conversation going.
 
 ### MEMORY PROTOCOL
 You are a memory-driven AI. Your effectiveness depends on maintaining a detailed, up-to-date profile
-of the student and using it to personalize your teaching.
+of the student using structured memory items with stable IDs.
 
 **CRITICAL: Using Memory**
 - You MUST call `read_memory` at the start of a conversation or whenever you need context about the
-student's background, goals, or previous struggles.
+  student's background, goals, or previous struggles.
+- Memory items have IDs, categories (personal_info, area_to_improve, knowledge_strength), keys, and statuses.
 - Do NOT assume you know the student's current state without reading the memory.
 
-**CRITICAL: Updating Memory**
-- You MUST call `update_memory` immediately when you learn something new. This is not optional.
-- **When to Update Memory (call the tool NOW):**
-    1. **Explicit Statements:** "My name is John," "I hate geometry." → Call `update_memory` on `personal_info`.
-    2. **Implicit Behaviors:** Student fails a quiz question → Call `update_memory` on `areas_to_improve`.
-    3. **Contextual Clues:** Student mentions a hobby or interest → Call `update_memory` on `personal_info`.
+**CRITICAL: Creating/Updating Memory**
+- Use `upsert_memory_item` to create or update memory items. Provide category, key, content, and optional status.
+- If an item with the same category+key exists, it will be updated; otherwise, a new item is created.
+- **When to Create/Update Memory (call the tool NOW):**
+    1. **Explicit Statements:** "My name is John" → `upsert_memory_item(
+       category="personal_info", key="name", content="John")`
+    2. **Learning Goals:** "I want to improve my grammar" → `upsert_memory_item(
+       category="personal_info", key="goal", content="improve grammar")`
+    3. **Struggles:** Student fails a quiz → `upsert_memory_item(
+       category="area_to_improve", key="past_tense",
+       content="struggles with past tense", status="struggling")`
+
+**CRITICAL: Tracking Progress**
+- Use `update_memory_status` to track progress on areas to improve:
+  - struggling → improving → mastered
+- When a student masters a concept, update its status to "mastered" first.
+- Then use `promote_to_strength` to move it from area_to_improve to knowledge_strength.
 
 **Memory Cleanup:**
-- On ending of education on some topic (e.g., the student has mastered a concept in `areas_to_improve`),
-you MUST read the memory again and remove the educated topic from it using the `replace` operation.
+- When a student masters a topic, use `update_memory_status` to mark it as "mastered", then `promote_to_strength`.
+- For outdated personal info, use `update_memory_status` to mark as "outdated".
 
 **Tool Usage Rules:**
 - Call memory tools BEFORE you respond to the student when needed.
-- ALWAYS prefer the 'merge' operation if you want to append new data.
-- Use 'replace' for correcting factual errors or removing mastered topics.
+- Always use descriptive keys (e.g., "grammar_struggles", "favorite_hobby", "past_tense_mastery").
 - If you are unsure if a detail is important, save it anyway.
 
 ### WORD PRIORITISATION PROTOCOL
@@ -157,8 +175,8 @@ embedded in the text). Use the extracted text only as reference material.
         message: str,
         history: list[ChatMessage],
         user: User,
-        user_service: UserService,
         vocabulary_service: VocabularyService,
+        memory_item_service,
     ) -> tuple[str, Optional[list[dict[str, str]]]]:
         """
         Generate a response to a user message using the ReAct agent.
@@ -167,7 +185,8 @@ embedded in the text). Use the extracted text only as reference material.
             message: The user's message
             history: Previous conversation messages
             user: User model instance
-            user_service: UserService instance to handle memory operations
+            vocabulary_service: VocabularyService instance
+            memory_item_service: MemoryItemService instance
 
         Returns:
             The agent's final text response and optional news sources
@@ -206,8 +225,8 @@ embedded in the text). Use the extracted text only as reference material.
                 {"messages": messages},
                 context=AgentContext(
                     user=user,
-                    user_service=user_service,
                     vocabulary_service=vocabulary_service,
+                    memory_item_service=memory_item_service,
                     db_lock=asyncio.Lock(),
                 ),
             )

@@ -48,6 +48,12 @@ def mock_user_service():
 
 
 @pytest.fixture
+def mock_memory_item_service():
+    """Create a mock MemoryItemService."""
+    return Mock()
+
+
+@pytest.fixture
 def mock_processor():
     """Create a mock RunestoneProcessor."""
     mock = Mock()
@@ -60,7 +66,13 @@ def mock_processor():
 
 @pytest.fixture
 def chat_service(
-    db_session, mock_agent_service, mock_user_service, mock_processor, mock_vocabulary_service, mock_tts_service
+    db_session,
+    mock_agent_service,
+    mock_user_service,
+    mock_processor,
+    mock_vocabulary_service,
+    mock_tts_service,
+    mock_memory_item_service,
 ):
     """Create a ChatService instance with real repository and mock agent/user services."""
     repository = ChatRepository(db_session)
@@ -74,6 +86,7 @@ def chat_service(
         mock_processor,
         mock_vocabulary_service,
         mock_tts_service,
+        mock_memory_item_service,
     )
 
 

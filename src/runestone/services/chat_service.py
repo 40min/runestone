@@ -30,6 +30,7 @@ class ChatService:
         processor: RunestoneProcessor,
         vocabulary_service: VocabularyService,
         tts_service: TTSService,
+        memory_item_service,
     ):
         """
         Initialize the chat service.
@@ -49,6 +50,7 @@ class ChatService:
         self.processor = processor
         self.vocabulary_service = vocabulary_service
         self.tts_service = tts_service
+        self.memory_item_service = memory_item_service
 
     async def process_message(
         self,
@@ -102,8 +104,8 @@ class ChatService:
             message=message_text,
             history=history[:-1],  # Exclude current message (it's passed separately)
             user=user,
-            user_service=self.user_service,
             vocabulary_service=self.vocabulary_service,
+            memory_item_service=self.memory_item_service,
         )
 
         # 6. Save assistant message
@@ -175,8 +177,8 @@ Instructions:
             message=translation_prompt,
             history=history,
             user=user,
-            user_service=self.user_service,
             vocabulary_service=self.vocabulary_service,
+            memory_item_service=self.memory_item_service,
         )
 
         # 7. Save assistant message (no user message saved for image uploads)

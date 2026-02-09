@@ -19,10 +19,12 @@ from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.chat_repository import ChatRepository
 from runestone.db.database import get_db
+from runestone.db.memory_item_repository import MemoryItemRepository
 from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.services.chat_service import ChatService
 from runestone.services.grammar_service import GrammarService
+from runestone.services.memory_item_service import MemoryItemService
 from runestone.services.tts_service import TTSService
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
@@ -78,6 +80,19 @@ def get_chat_repository(db: Annotated[Session, Depends(get_db)]) -> ChatReposito
     return ChatRepository(db)
 
 
+def get_memory_item_repository(db: Annotated[Session, Depends(get_db)]) -> MemoryItemRepository:
+    """
+    Dependency injection for memory item repository.
+
+    Args:
+        db: Database session from FastAPI dependency injection
+
+    Returns:
+        MemoryItemRepository: Repository instance with database session
+    """
+    return MemoryItemRepository(db)
+
+
 def get_user_service(
     user_repo: Annotated[UserRepository, Depends(get_user_repository)],
     vocab_repo: Annotated[VocabularyRepository, Depends(get_vocabulary_repository)],
@@ -93,6 +108,21 @@ def get_user_service(
         UserService: Service instance with repository dependencies
     """
     return UserService(user_repo, vocab_repo)
+
+
+def get_memory_item_service(
+    repo: Annotated[MemoryItemRepository, Depends(get_memory_item_repository)],
+) -> MemoryItemService:
+    """
+    Dependency injection for memory item service.
+
+    Args:
+        repo: MemoryItemRepository from dependency injection
+
+    Returns:
+        MemoryItemService: Service instance with repository dependency
+    """
+    return MemoryItemService(repo)
 
 
 def get_llm_client(request: Request) -> BaseLLMClient:
@@ -244,6 +274,7 @@ def get_chat_service(
     processor: Annotated[RunestoneProcessor, Depends(get_runestone_processor)],
     vocabulary_service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
     tts_service: Annotated[TTSService, Depends(get_tts_service)],
+    memory_item_service: Annotated[MemoryItemService, Depends(get_memory_item_service)],
 ) -> ChatService:
     """
     Get chat service instance.
@@ -260,7 +291,9 @@ def get_chat_service(
     Returns:
         ChatService: Service instance for chat operations
     """
-    return ChatService(settings, repo, user_service, agent_service, processor, vocabulary_service, tts_service)
+    return ChatService(
+        settings, repo, user_service, agent_service, processor, vocabulary_service, tts_service, memory_item_service
+    )
 
 
 def get_voice_service(

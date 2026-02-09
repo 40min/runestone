@@ -51,6 +51,11 @@ def mock_user_service():
 
 
 @pytest.fixture
+def mock_memory_item_service():
+    return MagicMock()
+
+
+@pytest.fixture
 def mock_vocabulary_service():
     return MagicMock()
 
@@ -72,14 +77,18 @@ def test_build_agent(mock_settings, mock_chat_model, mock_user_service):
             mock_create_agent.assert_called()
             call_kwargs = mock_create_agent.call_args[1]
             assert call_kwargs["model"] == mock_chat_model
-            assert (
-                len(call_kwargs["tools"]) == 5
-            )  # read_memory, update_memory, prioritize_words_for_learning, news, read_url
+            # Verify tools were passed to create_agent
+            tools = mock_create_agent.call_args[1]["tools"]
+            # read_memory, upsert_memory_item, update_memory_status, promote_to_strength,
+            # prioritize_words_for_learning, search_news_with_dates, read_url
+            assert len(tools) == 7
             assert "MEMORY PROTOCOL" in call_kwargs["system_prompt"]
 
 
 @pytest.mark.anyio
-async def test_generate_response_orchestration(agent_service, mock_user_service, mock_user, mock_vocabulary_service):
+async def test_generate_response_orchestration(
+    agent_service, mock_user, mock_vocabulary_service, mock_memory_item_service
+):
     """Test generate_response orchestration logic."""
     message = "Hello"
     history = []
@@ -89,7 +98,7 @@ async def test_generate_response_orchestration(agent_service, mock_user_service,
     }
 
     response, sources = await agent_service.generate_response(
-        message, history, mock_user, mock_user_service, mock_vocabulary_service
+        message, history, mock_user, mock_vocabulary_service, mock_memory_item_service
     )
 
     assert response == "Hi there!"
@@ -100,8 +109,8 @@ async def test_generate_response_orchestration(agent_service, mock_user_service,
     call_kwargs = agent_service.agent.ainvoke.call_args[1]
     context = call_kwargs.get("context")
     assert context.user == mock_user
-    assert context.user_service == mock_user_service
     assert context.vocabulary_service == mock_vocabulary_service
+    assert context.memory_item_service == mock_memory_item_service
 
     # Verify inputs to invoke
     invoke_args = agent_service.agent.ainvoke.call_args[0][0]
@@ -112,7 +121,9 @@ async def test_generate_response_orchestration(agent_service, mock_user_service,
 
 
 @pytest.mark.anyio
-async def test_generate_response_with_history(agent_service, mock_user_service, mock_user, mock_vocabulary_service):
+async def test_generate_response_with_history(
+    agent_service, mock_user, mock_vocabulary_service, mock_memory_item_service
+):
     """Test generate_response with conversation history."""
     message = "Current msg"
     history = [
@@ -126,7 +137,9 @@ async def test_generate_response_with_history(agent_service, mock_user_service, 
 
     agent_service.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
 
-    await agent_service.generate_response(message, history, mock_user, mock_user_service, mock_vocabulary_service)
+    await agent_service.generate_response(
+        message, history, mock_user, mock_vocabulary_service, mock_memory_item_service
+    )
 
     invoke_args = agent_service.agent.ainvoke.call_args[0][0]
     messages = invoke_args["messages"]
@@ -140,14 +153,14 @@ async def test_generate_response_with_history(agent_service, mock_user_service, 
 
 @pytest.mark.anyio
 async def test_generate_response_with_mother_tongue(
-    agent_service, mock_user_service, mock_user, mock_vocabulary_service
+    agent_service, mock_user, mock_vocabulary_service, mock_memory_item_service
 ):
     """Test generate_response injects mother tongue context."""
     mock_user.mother_tongue = "Spanish"
 
     agent_service.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
 
-    await agent_service.generate_response("msg", [], mock_user, mock_user_service, mock_vocabulary_service)
+    await agent_service.generate_response("msg", [], mock_user, mock_vocabulary_service, mock_memory_item_service)
 
     invoke_args = agent_service.agent.ainvoke.call_args[0][0]
     messages = invoke_args["messages"]
@@ -196,7 +209,9 @@ def test_format_news_sources():
 
 
 @pytest.mark.anyio
-async def test_generate_response_extracts_sources(agent_service, mock_user_service, mock_user, mock_vocabulary_service):
+async def test_generate_response_extracts_sources(
+    agent_service, mock_user, mock_vocabulary_service, mock_memory_item_service
+):
     """Test that news tool output is converted into sources."""
     agent_service.agent.ainvoke.return_value = {
         "messages": [
@@ -212,7 +227,7 @@ async def test_generate_response_extracts_sources(agent_service, mock_user_servi
     }
 
     response, sources = await agent_service.generate_response(
-        "Nyheter", [], mock_user, mock_user_service, mock_vocabulary_service
+        "Nyheter", [], mock_user, mock_vocabulary_service, mock_memory_item_service
     )
 
     assert response == "Svar med källor"
@@ -221,7 +236,7 @@ async def test_generate_response_extracts_sources(agent_service, mock_user_servi
 
 @pytest.mark.anyio
 async def test_generate_response_filters_unsafe_urls(
-    agent_service, mock_user_service, mock_user, mock_vocabulary_service
+    agent_service, mock_user, mock_vocabulary_service, mock_memory_item_service
 ):
     """Test that unsafe URLs are excluded from sources."""
     agent_service.agent.ainvoke.return_value = {
@@ -240,7 +255,7 @@ async def test_generate_response_filters_unsafe_urls(
     }
 
     _response, sources = await agent_service.generate_response(
-        "Nyheter", [], mock_user, mock_user_service, mock_vocabulary_service
+        "Nyheter", [], mock_user, mock_vocabulary_service, mock_memory_item_service
     )
 
     assert sources == [{"title": "Safe", "url": "https://example.com", "date": "2026-02-05"}]
