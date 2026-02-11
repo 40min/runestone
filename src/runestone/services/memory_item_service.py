@@ -5,7 +5,7 @@ This module contains service classes that handle business logic
 for memory item-related operations.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from runestone.api.memory_item_schemas import (
@@ -34,6 +34,9 @@ class MemoryItemService:
     def __init__(self, memory_item_repository: MemoryItemRepository):
         """Initialize service with memory item repository."""
         self.repo = memory_item_repository
+
+    def _utc_now(self) -> datetime:
+        return datetime.now(timezone.utc)
 
     def _validate_status(self, category: MemoryCategory, status: str) -> None:
         """
@@ -115,8 +118,8 @@ class MemoryItemService:
             old_status = existing_item.status
             existing_item.status = status
             if old_status != status:
-                existing_item.status_changed_at = datetime.utcnow()
-            existing_item.updated_at = datetime.utcnow()
+                existing_item.status_changed_at = self._utc_now()
+            existing_item.updated_at = self._utc_now()
             updated_item = self.repo.update(existing_item)
             return MemoryItemResponse.model_validate(updated_item)
         else:
@@ -127,7 +130,7 @@ class MemoryItemService:
                 key=key,
                 content=content,
                 status=status,
-                status_changed_at=datetime.utcnow(),
+                status_changed_at=self._utc_now(),
             )
             created_item = self.repo.create(new_item)
             return MemoryItemResponse.model_validate(created_item)
@@ -166,8 +169,8 @@ class MemoryItemService:
         old_status = item.status
         item.status = new_status
         if old_status != new_status:
-            item.status_changed_at = datetime.utcnow()
-        item.updated_at = datetime.utcnow()
+            item.status_changed_at = self._utc_now()
+        item.updated_at = self._utc_now()
 
         updated_item = self.repo.update(item)
         return MemoryItemResponse.model_validate(updated_item)
@@ -212,8 +215,8 @@ class MemoryItemService:
                 old_status = existing_strength.status
                 existing_strength.status = KnowledgeStrengthStatus.ACTIVE.value
                 if old_status != existing_strength.status:
-                    existing_strength.status_changed_at = datetime.utcnow()
-                existing_strength.updated_at = datetime.utcnow()
+                    existing_strength.status_changed_at = self._utc_now()
+                existing_strength.updated_at = self._utc_now()
                 self.repo.db.delete(item)
                 self.repo.db.flush()
                 self.repo.db.refresh(existing_strength)
@@ -225,7 +228,7 @@ class MemoryItemService:
                     key=item.key,
                     content=item.content,
                     status=KnowledgeStrengthStatus.ACTIVE.value,
-                    status_changed_at=datetime.utcnow(),
+                    status_changed_at=self._utc_now(),
                 )
                 self.repo.db.add(new_item)
                 self.repo.db.delete(item)
