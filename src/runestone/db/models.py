@@ -7,6 +7,7 @@ This module defines the database table models using SQLAlchemy ORM.
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
+from sqlalchemy.sql.expression import false
 
 from .database import Base
 
@@ -28,7 +29,7 @@ class User(Base):
     personal_info = Column(Text, nullable=True)  # Student identity, preferences, goals
     areas_to_improve = Column(Text, nullable=True)  # Recurring struggles and error patterns
     knowledge_strengths = Column(Text, nullable=True)  # Mastered skills and concepts
-    memory_migrated = Column(Boolean, server_default="0", nullable=False)  # Migration flag
+    memory_migrated = Column(Boolean, server_default=false(), nullable=False)  # Migration flag
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

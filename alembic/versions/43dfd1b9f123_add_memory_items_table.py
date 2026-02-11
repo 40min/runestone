@@ -54,7 +54,7 @@ def upgrade() -> None:
     )
 
     # Add memory_migrated flag to users table
-    op.add_column("users", sa.Column("memory_migrated", sa.Boolean(), server_default=sa.text("0"), nullable=False))
+    op.add_column("users", sa.Column("memory_migrated", sa.Boolean(), server_default=sa.false(), nullable=False))
 
 
 def downgrade() -> None:
