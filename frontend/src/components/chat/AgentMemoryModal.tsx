@@ -75,7 +75,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({ open, onClose }) =>
     category: "personal_info",
     key: "",
     content: "",
-    status: "",
+    status: undefined,
   });
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
