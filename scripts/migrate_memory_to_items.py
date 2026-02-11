@@ -52,7 +52,7 @@ def migrate_user_memory(db, user, memory_repo):
                     if new_cat == "area_to_improve":
                         status = "struggling"
                     elif new_cat == "knowledge_strength":
-                        status = "mastered"
+                        status = "active"
 
                     item = MemoryItem(user_id=user.id, category=new_cat, key=key, content=str(content), status=status)
                     db.add(item)

@@ -26,7 +26,11 @@ import EditIcon from "@mui/icons-material/Edit";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import PsychologyIcon from "@mui/icons-material/Psychology";
 import { CustomButton, TabNavigation } from "../ui";
-import useMemoryItems, { type MemoryItem, type MemoryCategory, type MemoryItemCreate } from "../../hooks/useMemoryItems";
+import useMemoryItems, {
+  type MemoryItem,
+  type MemoryCategory,
+  type MemoryItemCreate,
+} from "../../hooks/useMemoryItems";
 
 interface AgentMemoryModalProps {
   open: boolean;
@@ -39,7 +43,20 @@ const CATEGORIES: { id: MemoryCategory; label: string }[] = [
   { id: "knowledge_strength", label: "Knowledge Strengths" },
 ];
 
-const STATUS_OPTIONS: Record<string, { label: string; color: "default" | "primary" | "secondary" | "error" | "info" | "success" | "warning" }> = {
+const STATUS_OPTIONS: Record<
+  string,
+  {
+    label: string;
+    color:
+      | "default"
+      | "primary"
+      | "secondary"
+      | "error"
+      | "info"
+      | "success"
+      | "warning";
+  }
+> = {
   // Common/Personal Info
   active: { label: "Active", color: "info" },
   outdated: { label: "Outdated", color: "default" },
@@ -64,10 +81,23 @@ const textFieldStyles = {
   },
 };
 
-const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({ open, onClose }) => {
+const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
+  open,
+  onClose,
+}) => {
   const [activeTab, setActiveTab] = useState<MemoryCategory>("personal_info");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const { items, loading, error, hasMore, fetchItems, createItem, promoteItem, deleteItem, clearCategory } = useMemoryItems();
+  const {
+    items,
+    loading,
+    error,
+    hasMore,
+    fetchItems,
+    createItem,
+    promoteItem,
+    deleteItem,
+    clearCategory,
+  } = useMemoryItems();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MemoryItem | null>(null);
@@ -82,16 +112,25 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({ open, onClose }) =>
 
   useEffect(() => {
     if (open) {
-      fetchItems(activeTab, statusFilter === "all" ? undefined : statusFilter, true);
+      fetchItems(
+        activeTab,
+        statusFilter === "all" ? undefined : statusFilter,
+        true,
+      );
     }
   }, [open, activeTab, statusFilter, fetchItems]);
 
   const handleScroll = useCallback(() => {
     if (!scrollContainerRef.current || loading || !hasMore) return;
 
-    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+    const { scrollTop, scrollHeight, clientHeight } =
+      scrollContainerRef.current;
     if (scrollHeight - scrollTop <= clientHeight + 100) {
-      fetchItems(activeTab, statusFilter === "all" ? undefined : statusFilter, false);
+      fetchItems(
+        activeTab,
+        statusFilter === "all" ? undefined : statusFilter,
+        false,
+      );
     }
   }, [loading, hasMore, fetchItems, activeTab, statusFilter]);
 
@@ -130,14 +169,12 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({ open, onClose }) =>
     }
   };
 
-  /*
-  const handleUpdateStatus = async (id: number, newStatus: string) => {
-    await updateStatus(id, newStatus);
-  };
-  */
-
   const handlePromote = async (id: number) => {
-    await promoteItem(id, activeTab, statusFilter === "all" ? undefined : statusFilter);
+    await promoteItem(
+      id,
+      activeTab,
+      statusFilter === "all" ? undefined : statusFilter,
+    );
   };
 
   const handleDelete = async (id: number) => {
@@ -147,7 +184,11 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({ open, onClose }) =>
   };
 
   const handleClearCategory = async () => {
-    if (window.confirm(`Are you sure you want to clear all items in ${activeTab.replace("_", " ")}?`)) {
+    if (
+      window.confirm(
+        `Are you sure you want to clear all items in ${activeTab.replace("_", " ")}?`,
+      )
+    ) {
       await clearCategory(activeTab);
     }
   };
@@ -168,12 +209,25 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({ open, onClose }) =>
           },
         }}
       >
-        <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pb: 1 }}>
+        <DialogTitle
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            pb: 1,
+          }}
+        >
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <PsychologyIcon sx={{ color: "var(--primary-color)", fontSize: "2rem" }} />
+            <PsychologyIcon
+              sx={{ color: "var(--primary-color)", fontSize: "2rem" }}
+            />
             <Box>
-              <Typography variant="h6" fontWeight="bold">Student Memory</Typography>
-              <Typography variant="caption" sx={{ color: "#9ca3af" }}>What the agent knows about you</Typography>
+              <Typography variant="h6" fontWeight="bold">
+                Student Memory
+              </Typography>
+              <Typography variant="caption" sx={{ color: "#9ca3af" }}>
+                What the agent knows about you
+              </Typography>
             </Box>
           </Box>
           <IconButton onClick={onClose} sx={{ color: "#9ca3af" }}>
@@ -182,12 +236,34 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({ open, onClose }) =>
         </DialogTitle>
 
         <Box sx={{ borderBottom: 1, borderColor: "#374151" }}>
-          <TabNavigation tabs={CATEGORIES} activeTab={activeTab} onTabChange={handleTabChange} />
+          <TabNavigation
+            tabs={CATEGORIES}
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+          />
         </Box>
 
-        <DialogContent sx={{ p: 0, height: "60vh", display: "flex", flexDirection: "column" }}>
-          <Box sx={{ p: 2, display: "flex", gap: 2, alignItems: "center", borderBottom: "1px solid #1f2937" }}>
-            <FormControl size="small" sx={{ minWidth: 150, ...textFieldStyles }}>
+        <DialogContent
+          sx={{
+            p: 0,
+            height: "60vh",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <Box
+            sx={{
+              p: 2,
+              display: "flex",
+              gap: 2,
+              alignItems: "center",
+              borderBottom: "1px solid #1f2937",
+            }}
+          >
+            <FormControl
+              size="small"
+              sx={{ minWidth: 150, ...textFieldStyles }}
+            >
               <InputLabel id="status-filter-label">Status</InputLabel>
               <Select
                 labelId="status-filter-label"
@@ -197,21 +273,30 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({ open, onClose }) =>
               >
                 <MenuItem value="all">All statuses</MenuItem>
                 {Object.entries(STATUS_OPTIONS).map(([val, info]) => (
-                  <MenuItem key={val} value={val}>{info.label}</MenuItem>
+                  <MenuItem key={val} value={val}>
+                    {info.label}
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
 
             <Box sx={{ flexGrow: 1 }} />
 
-            <CustomButton variant="secondary" onClick={() => handleOpenForm()} startIcon={<AddIcon />}>
+            <CustomButton
+              variant="secondary"
+              onClick={() => handleOpenForm()}
+              startIcon={<AddIcon />}
+            >
               Add Item
             </CustomButton>
             <CustomButton
               variant="secondary"
               onClick={handleClearCategory}
               disabled={items.length === 0}
-              sx={{ color: "#ef4444", "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" } }}
+              sx={{
+                color: "#ef4444",
+                "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" },
+              }}
             >
               Clear Category
             </CustomButton>
@@ -220,22 +305,46 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({ open, onClose }) =>
           <Box
             ref={scrollContainerRef}
             onScroll={handleScroll}
-            sx={{ flexGrow: 1, overflowY: "auto", p: 2, display: "flex", flexDirection: "column", gap: 2 }}
+            sx={{
+              flexGrow: 1,
+              overflowY: "auto",
+              p: 2,
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
+            }}
           >
             {error && (
-              <Box sx={{ p: 2, bgcolor: "rgba(239, 68, 68, 0.1)", border: "1px solid #ef4444", borderRadius: 1 }}>
+              <Box
+                sx={{
+                  p: 2,
+                  bgcolor: "rgba(239, 68, 68, 0.1)",
+                  border: "1px solid #ef4444",
+                  borderRadius: 1,
+                }}
+              >
                 <Typography color="error">{error}</Typography>
               </Box>
             )}
 
             {items.length === 0 && !loading && (
               <Box sx={{ py: 8, textAlign: "center", color: "#6b7280" }}>
-                <Typography variant="body1">No memory items found in this category.</Typography>
-                <Typography variant="body2">The agent will add information here as you chat.</Typography>
+                <Typography variant="body1">
+                  No memory items found in this category.
+                </Typography>
+                <Typography variant="body2">
+                  The agent will add information here as you chat.
+                </Typography>
               </Box>
             )}
 
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                gap: 2,
+              }}
+            >
               {items.map((item) => (
                 <Card
                   key={item.id}
@@ -243,22 +352,41 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({ open, onClose }) =>
                     bgcolor: "#1f2937",
                     color: "white",
                     border: "1px solid #374151",
-                    "&:hover": { borderColor: "#4b5563" }
+                    "&:hover": { borderColor: "#4b5563" },
                   }}
                 >
                   <CardContent sx={{ pb: 1 }}>
-                    <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
-                      <Typography variant="subtitle2" fontWeight="bold" sx={{ color: "var(--primary-color)" }}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        mb: 1,
+                      }}
+                    >
+                      <Typography
+                        variant="subtitle2"
+                        fontWeight="bold"
+                        sx={{ color: "var(--primary-color)" }}
+                      >
                         {item.key}
                       </Typography>
                       <Chip
-                        label={STATUS_OPTIONS[item.status]?.label || item.status}
+                        label={
+                          STATUS_OPTIONS[item.status]?.label || item.status
+                        }
                         size="small"
                         color={STATUS_OPTIONS[item.status]?.color || "default"}
-                        sx={{ height: 20, fontSize: "0.7rem", fontWeight: "bold" }}
+                        sx={{
+                          height: 20,
+                          fontSize: "0.7rem",
+                          fontWeight: "bold",
+                        }}
                       />
                     </Box>
-                    <Typography variant="body2" sx={{ mb: 2, whiteSpace: "pre-wrap" }}>
+                    <Typography
+                      variant="body2"
+                      sx={{ mb: 2, whiteSpace: "pre-wrap" }}
+                    >
                       {item.content}
                     </Typography>
                     <Typography variant="caption" sx={{ color: "#6b7280" }}>
@@ -266,17 +394,30 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({ open, onClose }) =>
                     </Typography>
                   </CardContent>
                   <CardActions sx={{ justifyContent: "flex-end", pt: 0 }}>
-                    {item.category === "area_to_improve" && item.status === "mastered" && (
-                      <Tooltip title="Promote to Strength">
-                        <IconButton size="small" onClick={() => handlePromote(item.id)} sx={{ color: "var(--primary-color)" }}>
-                          <TrendingUpIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                    <IconButton size="small" onClick={() => handleOpenForm(item)} sx={{ color: "#9ca3af" }}>
+                    {item.category === "area_to_improve" &&
+                      item.status === "mastered" && (
+                        <Tooltip title="Promote to Strength">
+                          <IconButton
+                            size="small"
+                            onClick={() => handlePromote(item.id)}
+                            sx={{ color: "var(--primary-color)" }}
+                          >
+                            <TrendingUpIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    <IconButton
+                      size="small"
+                      onClick={() => handleOpenForm(item)}
+                      sx={{ color: "#9ca3af" }}
+                    >
                       <EditIcon fontSize="small" />
                     </IconButton>
-                    <IconButton size="small" onClick={() => handleDelete(item.id)} sx={{ color: "#ef4444" }}>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleDelete(item.id)}
+                      sx={{ color: "#ef4444" }}
+                    >
                       <DeleteIcon fontSize="small" />
                     </IconButton>
                   </CardActions>
@@ -303,11 +444,21 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({ open, onClose }) =>
             color: "white",
             border: "1px solid #374151",
             borderRadius: "0.5rem",
-          }
+          },
         }}
       >
-        <DialogTitle>{editingItem ? "Edit Memory Item" : "Add Memory Item"}</DialogTitle>
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 3, pt: 2, minWidth: 400 }}>
+        <DialogTitle>
+          {editingItem ? "Edit Memory Item" : "Add Memory Item"}
+        </DialogTitle>
+        <DialogContent
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 3,
+            pt: 2,
+            minWidth: 400,
+          }}
+        >
           <TextField
             label="Key"
             value={formData.key}
@@ -320,7 +471,9 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({ open, onClose }) =>
           <TextField
             label="Content"
             value={formData.content}
-            onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, content: e.target.value })
+            }
             fullWidth
             required
             multiline
@@ -343,13 +496,20 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({ open, onClose }) =>
             >
               <MenuItem value="">Default</MenuItem>
               {Object.entries(STATUS_OPTIONS).map(([val, info]) => (
-                <MenuItem key={val} value={val}>{info.label}</MenuItem>
+                <MenuItem key={val} value={val}>
+                  {info.label}
+                </MenuItem>
               ))}
             </Select>
           </FormControl>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
-          <CustomButton variant="secondary" onClick={() => setIsFormOpen(false)}>Cancel</CustomButton>
+          <CustomButton
+            variant="secondary"
+            onClick={() => setIsFormOpen(false)}
+          >
+            Cancel
+          </CustomButton>
           <CustomButton
             variant="save"
             onClick={handleSaveItem}

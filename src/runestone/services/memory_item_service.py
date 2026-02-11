@@ -202,20 +202,38 @@ class MemoryItemService:
 
         # Create + delete in a single transaction to avoid partial state.
         with self.repo.db.begin():
-            new_item = MemoryItem(
-                user_id=user_id,
-                category=MemoryCategory.KNOWLEDGE_STRENGTH.value,
-                key=item.key,
-                content=item.content,
-                status=KnowledgeStrengthStatus.ACTIVE.value,
-                status_changed_at=datetime.utcnow(),
+            existing_strength = self.repo.get_by_user_category_key(
+                user_id,
+                MemoryCategory.KNOWLEDGE_STRENGTH.value,
+                item.key,
             )
-            self.repo.db.add(new_item)
-            self.repo.db.delete(item)
-            self.repo.db.flush()
-            self.repo.db.refresh(new_item)
+            if existing_strength:
+                existing_strength.content = item.content
+                old_status = existing_strength.status
+                existing_strength.status = KnowledgeStrengthStatus.ACTIVE.value
+                if old_status != existing_strength.status:
+                    existing_strength.status_changed_at = datetime.utcnow()
+                existing_strength.updated_at = datetime.utcnow()
+                self.repo.db.delete(item)
+                self.repo.db.flush()
+                self.repo.db.refresh(existing_strength)
+                promoted_item = existing_strength
+            else:
+                new_item = MemoryItem(
+                    user_id=user_id,
+                    category=MemoryCategory.KNOWLEDGE_STRENGTH.value,
+                    key=item.key,
+                    content=item.content,
+                    status=KnowledgeStrengthStatus.ACTIVE.value,
+                    status_changed_at=datetime.utcnow(),
+                )
+                self.repo.db.add(new_item)
+                self.repo.db.delete(item)
+                self.repo.db.flush()
+                self.repo.db.refresh(new_item)
+                promoted_item = new_item
 
-        return MemoryItemResponse.model_validate(new_item)
+        return MemoryItemResponse.model_validate(promoted_item)
 
     def delete_item(self, item_id: int, user_id: int) -> None:
         """
