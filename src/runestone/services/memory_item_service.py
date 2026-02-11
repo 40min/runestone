@@ -9,11 +9,12 @@ from datetime import datetime
 from typing import Optional
 
 from runestone.api.memory_item_schemas import (
+    DEFAULT_STATUS_BY_CATEGORY,
+    VALID_STATUSES_BY_CATEGORY,
     AreaToImproveStatus,
     KnowledgeStrengthStatus,
     MemoryCategory,
     MemoryItemResponse,
-    PersonalInfoStatus,
 )
 from runestone.core.exceptions import UserNotFoundError
 from runestone.core.logging_config import get_logger
@@ -26,25 +27,15 @@ logger = get_logger(__name__)
 class MemoryItemService:
     """Service for memory item-related business logic."""
 
-    # Default statuses for each category
-    DEFAULT_STATUS = {
-        MemoryCategory.PERSONAL_INFO: PersonalInfoStatus.ACTIVE.value,
-        MemoryCategory.AREA_TO_IMPROVE: AreaToImproveStatus.STRUGGLING.value,
-        MemoryCategory.KNOWLEDGE_STRENGTH: KnowledgeStrengthStatus.ACTIVE.value,
-    }
-
-    # Valid status transitions per category
-    VALID_STATUSES = {
-        MemoryCategory.PERSONAL_INFO: {s.value for s in PersonalInfoStatus},
-        MemoryCategory.AREA_TO_IMPROVE: {s.value for s in AreaToImproveStatus},
-        MemoryCategory.KNOWLEDGE_STRENGTH: {s.value for s in KnowledgeStrengthStatus},
-    }
+    # Re-exported for local use; the canonical definitions live in memory_item_schemas.
+    DEFAULT_STATUS = DEFAULT_STATUS_BY_CATEGORY
+    VALID_STATUSES = VALID_STATUSES_BY_CATEGORY
 
     def __init__(self, memory_item_repository: MemoryItemRepository):
         """Initialize service with memory item repository."""
         self.repo = memory_item_repository
 
-    def _validate_status(self, category: str, status: str) -> None:
+    def _validate_status(self, category: MemoryCategory, status: str) -> None:
         """
         Validate that status is valid for the given category.
 
@@ -57,12 +48,12 @@ class MemoryItemService:
         """
         valid_statuses = self.VALID_STATUSES.get(category)
         if not valid_statuses or status not in valid_statuses:
-            raise ValueError(f"Invalid status '{status}' for category '{category}'")
+            raise ValueError(f"Invalid status '{status}' for category '{category.value}'")
 
     def list_memory_items(
         self,
         user_id: int,
-        category: Optional[str] = None,
+        category: Optional[MemoryCategory] = None,
         status: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
@@ -80,13 +71,14 @@ class MemoryItemService:
         Returns:
             List of MemoryItemResponse objects
         """
-        items = self.repo.list_items(user_id, category, status, limit, offset)
+        category_value = category.value if category is not None else None
+        items = self.repo.list_items(user_id, category_value, status, limit, offset)
         return [MemoryItemResponse.model_validate(item) for item in items]
 
     def upsert_memory_item(
         self,
         user_id: int,
-        category: str,
+        category: MemoryCategory,
         key: str,
         content: str,
         status: Optional[str] = None,
@@ -109,13 +101,13 @@ class MemoryItemService:
         """
         # Use default status if not provided
         if not status:
-            status = self.DEFAULT_STATUS.get(category, "active")
+            status = self.DEFAULT_STATUS[category]
 
         # Validate status
         self._validate_status(category, status)
 
         # Check if item exists
-        existing_item = self.repo.get_by_user_category_key(user_id, category, key)
+        existing_item = self.repo.get_by_user_category_key(user_id, category.value, key)
 
         if existing_item:
             # Update existing item
@@ -131,7 +123,7 @@ class MemoryItemService:
             # Create new item
             new_item = MemoryItem(
                 user_id=user_id,
-                category=category,
+                category=category.value,
                 key=key,
                 content=content,
                 status=status,
@@ -164,7 +156,11 @@ class MemoryItemService:
             raise ValueError("You don't have permission to update this item")
 
         # Validate new status
-        self._validate_status(item.category, new_status)
+        try:
+            category = MemoryCategory(item.category)
+        except Exception as e:
+            raise ValueError(f"Invalid category '{item.category}' on memory item {item.id}") from e
+        self._validate_status(category, new_status)
 
         # Update status
         old_status = item.status
@@ -241,7 +237,7 @@ class MemoryItemService:
 
         self.repo.delete(item_id)
 
-    def clear_category(self, user_id: int, category: str) -> int:
+    def clear_category(self, user_id: int, category: MemoryCategory) -> int:
         """
         Clear all items in a category for a user.
 
@@ -252,4 +248,4 @@ class MemoryItemService:
         Returns:
             Number of items deleted
         """
-        return self.repo.delete_by_category(user_id, category)
+        return self.repo.delete_by_category(user_id, category.value)

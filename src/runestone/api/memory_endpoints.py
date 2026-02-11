@@ -8,7 +8,12 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from runestone.api.memory_item_schemas import MemoryItemCreate, MemoryItemResponse, MemoryItemStatusUpdate
+from runestone.api.memory_item_schemas import (
+    MemoryCategory,
+    MemoryItemCreate,
+    MemoryItemResponse,
+    MemoryItemStatusUpdate,
+)
 from runestone.auth.dependencies import get_current_user
 from runestone.core.exceptions import UserNotFoundError
 from runestone.core.logging_config import get_logger
@@ -31,7 +36,7 @@ logger = get_logger(__name__)
 async def list_memory_items(
     current_user: Annotated[User, Depends(get_current_user)],
     service: Annotated[MemoryItemService, Depends(get_memory_item_service)],
-    category: Optional[str] = Query(None, description="Filter by category"),
+    category: Optional[MemoryCategory] = Query(None, description="Filter by category"),
     status: Optional[str] = Query(None, description="Filter by status"),
     limit: int = Query(100, ge=1, le=200, description="Number of items to return"),
     offset: int = Query(0, ge=0, description="Number of items to skip"),
@@ -70,7 +75,7 @@ async def create_memory_item(
     try:
         return service.upsert_memory_item(
             user_id=current_user.id,
-            category=item_data.category.value,
+            category=item_data.category,
             key=item_data.key,
             content=item_data.content,
             status=item_data.status,
@@ -180,14 +185,14 @@ async def delete_memory_item(
 async def clear_memory_category(
     current_user: Annotated[User, Depends(get_current_user)],
     service: Annotated[MemoryItemService, Depends(get_memory_item_service)],
-    category: str = Query(..., description="Category to clear"),
+    category: MemoryCategory = Query(..., description="Category to clear"),
 ) -> dict:
     """
     Clear all items in a category.
     """
     try:
         count = service.clear_category(current_user.id, category)
-        return {"deleted_count": count, "category": category}
+        return {"deleted_count": count, "category": category.value}
     except Exception as e:
         logger.error(f"Failed to clear category {category} for user {current_user.id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to clear category")

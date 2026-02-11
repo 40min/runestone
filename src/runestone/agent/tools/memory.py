@@ -4,30 +4,14 @@ Agent tools for memory management.
 This module provides tools for the agent to read and manage user memory.
 """
 
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Optional
 
 from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from runestone.agent.tools.context import AgentContext
-
-
-class MemoryItemInput(BaseModel):
-    """Input for creating/updating a memory item."""
-
-    category: Literal["personal_info", "area_to_improve", "knowledge_strength"] = Field(
-        ..., description="Category of the memory item"
-    )
-    key: str = Field(..., description="Unique key for the memory item within the category")
-    content: str = Field(..., description="Content/description of the memory item")
-    status: Optional[str] = Field(
-        None,
-        description="Optional status. If not provided, defaults based on category. "
-        "Valid values: personal_info (active, outdated), "
-        "area_to_improve (struggling, improving, mastered), "
-        "knowledge_strength (active, archived)",
-    )
+from runestone.api.memory_item_schemas import MemoryCategory, MemoryItemCreate
 
 
 class MemoryStatusUpdate(BaseModel):
@@ -47,7 +31,7 @@ class MemoryPromoteInput(BaseModel):
 async def read_memory(
     runtime: ToolRuntime[AgentContext],
     category: Annotated[
-        Optional[Literal["personal_info", "area_to_improve", "knowledge_strength"]],
+        Optional[MemoryCategory],
         Field(description="Optional category filter"),
     ] = None,
     status: Annotated[Optional[str], Field(description="Optional status filter")] = None,
@@ -95,7 +79,7 @@ async def read_memory(
 @tool
 async def upsert_memory_item(
     runtime: ToolRuntime[AgentContext],
-    item: Annotated[MemoryItemInput, Field(description="Memory item to create or update")],
+    item: Annotated[MemoryItemCreate, Field(description="Memory item to create or update")],
 ) -> str:
     """
     Create or update a memory item about the user.
