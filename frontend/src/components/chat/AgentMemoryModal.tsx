@@ -115,7 +115,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({ open, onClose }) =>
         category: activeTab,
         key: "",
         content: "",
-        status: "",
+        status: undefined,
       });
     }
     setIsFormOpen(true);
@@ -332,10 +332,16 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({ open, onClose }) =>
             <InputLabel id="form-status-label">Status</InputLabel>
             <Select
               labelId="form-status-label"
-              value={formData.status}
+              value={formData.status ?? ""}
               label="Status"
-              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  status: e.target.value ? String(e.target.value) : undefined,
+                })
+              }
             >
+              <MenuItem value="">Default</MenuItem>
               {Object.entries(STATUS_OPTIONS).map(([val, info]) => (
                 <MenuItem key={val} value={val}>{info.label}</MenuItem>
               ))}
