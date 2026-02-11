@@ -16,7 +16,7 @@ from runestone.api.memory_item_schemas import (
     MemoryCategory,
     MemoryItemResponse,
 )
-from runestone.core.exceptions import UserNotFoundError
+from runestone.core.exceptions import PermissionDeniedError, UserNotFoundError
 from runestone.core.logging_config import get_logger
 from runestone.db.memory_item_repository import MemoryItemRepository
 from runestone.db.models import MemoryItem
@@ -153,7 +153,7 @@ class MemoryItemService:
             raise UserNotFoundError(f"Memory item with id {item_id} not found")
 
         if item.user_id != user_id:
-            raise ValueError("You don't have permission to update this item")
+            raise PermissionDeniedError("You don't have permission to update this item")
 
         # Validate new status
         try:
@@ -192,7 +192,7 @@ class MemoryItemService:
             raise UserNotFoundError(f"Memory item with id {item_id} not found")
 
         if item.user_id != user_id:
-            raise ValueError("You don't have permission to promote this item")
+            raise PermissionDeniedError("You don't have permission to promote this item")
 
         if item.category != MemoryCategory.AREA_TO_IMPROVE.value:
             raise ValueError("Only area_to_improve items can be promoted")
@@ -252,7 +252,7 @@ class MemoryItemService:
             raise UserNotFoundError(f"Memory item with id {item_id} not found")
 
         if item.user_id != user_id:
-            raise ValueError("You don't have permission to delete this item")
+            raise PermissionDeniedError("You don't have permission to delete this item")
 
         self.repo.delete(item_id)
 

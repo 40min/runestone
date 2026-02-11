@@ -15,7 +15,7 @@ from runestone.api.memory_item_schemas import (
     MemoryItemStatusUpdate,
 )
 from runestone.auth.dependencies import get_current_user
-from runestone.core.exceptions import UserNotFoundError
+from runestone.core.exceptions import PermissionDeniedError, UserNotFoundError
 from runestone.core.logging_config import get_logger
 from runestone.db.models import User
 from runestone.dependencies import get_memory_item_service
@@ -94,6 +94,7 @@ async def create_memory_item(
         200: {"description": "Status updated successfully"},
         400: {"description": "Invalid status"},
         401: {"description": "Not authenticated"},
+        403: {"description": "Not authorized"},
         404: {"description": "Item not found"},
     },
 )
@@ -110,6 +111,8 @@ async def update_memory_item_status(
         return service.update_item_status(item_id, status_data.status, current_user.id)
     except UserNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except PermissionDeniedError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -124,6 +127,7 @@ async def update_memory_item_status(
         200: {"description": "Item promoted successfully"},
         400: {"description": "Cannot promote this item"},
         401: {"description": "Not authenticated"},
+        403: {"description": "Not authorized"},
         404: {"description": "Item not found"},
     },
 )
@@ -139,6 +143,8 @@ async def promote_memory_item(
         return service.promote_to_strength(item_id, current_user.id)
     except UserNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except PermissionDeniedError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -151,6 +157,7 @@ async def promote_memory_item(
     responses={
         204: {"description": "Item deleted successfully"},
         401: {"description": "Not authenticated"},
+        403: {"description": "Not authorized"},
         404: {"description": "Item not found"},
     },
     status_code=204,
@@ -167,6 +174,8 @@ async def delete_memory_item(
         service.delete_item(item_id, current_user.id)
     except UserNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except PermissionDeniedError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
