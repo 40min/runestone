@@ -113,6 +113,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
   });
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const displayedCountLabel = `Displayed ${items.length} item${items.length === 1 ? "" : "s"}`;
 
   const getItemTitle = (item: MemoryItem): string => {
     if (!item.metadata_json) return item.key;
@@ -305,6 +306,10 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                 ))}
               </Select>
             </FormControl>
+
+            <Typography variant="caption" sx={{ color: "#9ca3af", whiteSpace: "nowrap" }}>
+              {displayedCountLabel}
+            </Typography>
 
             <Box sx={{ flexGrow: 1 }} />
 

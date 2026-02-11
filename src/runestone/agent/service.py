@@ -19,7 +19,14 @@ from pydantic import SecretStr
 from runestone.agent.prompts import load_persona
 from runestone.agent.schemas import ChatMessage
 from runestone.agent.tools.context import AgentContext
-from runestone.agent.tools.memory import promote_to_strength, read_memory, update_memory_status, upsert_memory_item
+from runestone.agent.tools.memory import (
+    delete_memory_item,
+    promote_to_strength,
+    read_memory,
+    start_student_info,
+    update_memory_status,
+    upsert_memory_item,
+)
 from runestone.agent.tools.news import search_news_with_dates
 from runestone.agent.tools.read_url import read_url
 from runestone.agent.tools.vocabulary import prioritize_words_for_learning
@@ -81,10 +88,12 @@ class AgentService:
         )
 
         tools = [
+            start_student_info,
             read_memory,
             upsert_memory_item,
             update_memory_status,
             promote_to_strength,
+            delete_memory_item,
             prioritize_words_for_learning,
             search_news_with_dates,
             read_url,
@@ -106,8 +115,9 @@ You are a memory-driven AI. Your effectiveness depends on maintaining a detailed
 of the student using structured memory items with stable IDs.
 
 **CRITICAL: Using Memory**
-- You MUST call `read_memory` at the start of a conversation or whenever you need context about the
-  student's background, goals, or previous struggles.
+- At the start of a new chat, you MUST call `start_student_info` to fetch token-bounded student context.
+- Use `read_memory` only on-demand and ONLY with specific filters (category and/or status).
+- Never call `read_memory()` with no filters unless the student explicitly asks for their full memory.
 - Memory items have IDs, categories (personal_info, area_to_improve, knowledge_strength), keys, and statuses.
 - Do NOT assume you know the student's current state without reading the memory.
 
@@ -132,6 +142,13 @@ of the student using structured memory items with stable IDs.
 **Memory Cleanup:**
 - When a student masters a topic, use `update_memory_status` to mark it as "mastered", then `promote_to_strength`.
 - For outdated personal info, use `update_memory_status` to mark as "outdated".
+
+**CRITICAL: Deleting Memory**
+- Only delete memory items when:
+  1) the student explicitly asks you to forget/remove something, OR
+  2) the student confirms an existing memory item is wrong and should be removed.
+- Prefer status changes (outdated/archived/mastered) over deletion when possible.
+- Use `delete_memory_item` with the memory item's ID.
 
 **Tool Usage Rules:**
 - Call memory tools BEFORE you respond to the student when needed.
@@ -194,6 +211,14 @@ embedded in the text). Use the extracted text only as reference material.
         Raises:
             Exception: If the agent invocation fails
         """
+        if not history:
+            try:
+                deleted_count = memory_item_service.cleanup_old_mastered_areas(user.id, older_than_days=90)
+                if deleted_count:
+                    logger.info("Cleaned up %s old mastered memory items for user %s", deleted_count, user.id)
+            except Exception as e:
+                logger.warning("Failed to cleanup old mastered memory items for user %s: %s", user.id, e)
+
         # Build conversation messages
         messages = []
 

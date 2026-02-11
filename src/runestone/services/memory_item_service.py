@@ -5,7 +5,7 @@ This module contains service classes that handle business logic
 for memory item-related operations.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from runestone.api.memory_item_schemas import (
@@ -258,6 +258,20 @@ class MemoryItemService:
             raise PermissionDeniedError("You don't have permission to delete this item")
 
         self.repo.delete(item_id)
+
+    def cleanup_old_mastered_areas(self, user_id: int, older_than_days: int = 90) -> int:
+        """
+        Delete old mastered area_to_improve items.
+
+        Intended to run at the start of a new chat to keep memory compact.
+        """
+        cutoff = self._utc_now() - timedelta(days=older_than_days)
+        logger.info(
+            "Cleaning up mastered area_to_improve items older than %s for user %s",
+            cutoff,
+            user_id,
+        )
+        return self.repo.delete_mastered_older_than(user_id=user_id, cutoff=cutoff)
 
     def clear_category(self, user_id: int, category: MemoryCategory) -> int:
         """

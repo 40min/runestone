@@ -5,6 +5,7 @@ This module provides tools for the agent to read and manage user memory.
 """
 
 import json
+import logging
 from typing import Annotated, Optional
 
 from langchain.tools import ToolRuntime
@@ -12,7 +13,9 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from runestone.agent.tools.context import AgentContext
-from runestone.api.memory_item_schemas import MemoryCategory, MemoryItemCreate
+from runestone.api.memory_item_schemas import MemoryCategory, MemoryItemCreate, MemoryItemResponse
+
+logger = logging.getLogger(__name__)
 
 
 class MemoryStatusUpdate(BaseModel):
@@ -28,38 +31,13 @@ class MemoryPromoteInput(BaseModel):
     item_id: int = Field(..., description="ID of the mastered area_to_improve item to promote")
 
 
-@tool
-async def read_memory(
-    runtime: ToolRuntime[AgentContext],
-    category: Annotated[
-        Optional[MemoryCategory],
-        Field(description="Optional category filter"),
-    ] = None,
-    status: Annotated[Optional[str], Field(description="Optional status filter")] = None,
-) -> str:
-    """
-    Read the agent's memory about the user.
+class MemoryDeleteInput(BaseModel):
+    """Input for deleting a memory item."""
 
-    Returns structured memory items with IDs, categories, keys, content, and status.
-    Use this tool when you need context about the student to personalize your
-    teaching or when asked about what you know about the student.
+    item_id: int = Field(..., description="ID of the memory item to delete")
 
-    Args:
-        runtime: Tool runtime context
-        category: Optional filter by category (personal_info, area_to_improve, knowledge_strength)
-        status: Optional filter by status
 
-    Returns:
-        Formatted string with memory items including IDs for reference
-    """
-    user = runtime.context.user
-    service = runtime.context.memory_item_service
-
-    items = service.list_memory_items(user_id=user.id, category=category, status=status, limit=200, offset=0)
-
-    if not items:
-        return "No memory items found."
-
+def _serialize_memory_items(items: list[MemoryItemResponse]) -> str:
     # NOTE: Memory item fields are user-controlled and must be treated as untrusted data.
     # We return structured JSON wrapped in clear delimiters so the model can consume it as data,
     # not as instructions.
@@ -90,6 +68,104 @@ async def read_memory(
     )
 
 
+async def _delete_memory_item_impl(runtime: ToolRuntime[AgentContext], item_id: int) -> str:
+    logger.info("Agent tool call: delete_memory_item (item_id=%s)", item_id)
+    user = runtime.context.user
+    service = runtime.context.memory_item_service
+    service.delete_item(item_id, user.id)
+    return f"Deleted memory item: [ID:{item_id}]"
+
+
+async def _start_student_info_impl(runtime: ToolRuntime[AgentContext]) -> str:
+    logger.info("Agent tool call: start_student_info")
+    user = runtime.context.user
+    service = runtime.context.memory_item_service
+
+    items: list[MemoryItemResponse] = []
+    items.extend(
+        service.list_memory_items(
+            user_id=user.id,
+            category=MemoryCategory.PERSONAL_INFO,
+            status="active",
+            limit=50,
+            offset=0,
+        )
+    )
+    items.extend(
+        service.list_memory_items(
+            user_id=user.id,
+            category=MemoryCategory.AREA_TO_IMPROVE,
+            status="struggling",
+            limit=75,
+            offset=0,
+        )
+    )
+    items.extend(
+        service.list_memory_items(
+            user_id=user.id,
+            category=MemoryCategory.AREA_TO_IMPROVE,
+            status="improving",
+            limit=75,
+            offset=0,
+        )
+    )
+
+    if not items:
+        return "No memory items found."
+
+    return _serialize_memory_items(items)
+
+
+@tool
+async def read_memory(
+    runtime: ToolRuntime[AgentContext],
+    category: Annotated[
+        Optional[MemoryCategory],
+        Field(description="Optional category filter"),
+    ] = None,
+    status: Annotated[Optional[str], Field(description="Optional status filter")] = None,
+) -> str:
+    """
+    Read the agent's memory about the user.
+
+    Returns structured memory items with IDs, categories, keys, content, and status.
+    Use this tool when you need context about the student to personalize your
+    teaching or when asked about what you know about the student.
+
+    Args:
+        runtime: Tool runtime context
+        category: Optional filter by category (personal_info, area_to_improve, knowledge_strength)
+        status: Optional filter by status
+
+    Returns:
+        Formatted string with memory items including IDs for reference
+    """
+    logger.info("Agent tool call: read_memory (category=%s, status=%s)", category, status)
+    user = runtime.context.user
+    service = runtime.context.memory_item_service
+
+    items = service.list_memory_items(user_id=user.id, category=category, status=status, limit=200, offset=0)
+
+    if not items:
+        return "No memory items found."
+
+    return _serialize_memory_items(items)
+
+
+@tool
+async def start_student_info(runtime: ToolRuntime[AgentContext]) -> str:
+    """
+    Read a token-bounded subset of memory for the start of a new chat.
+
+    Returns structured memory items for:
+    - personal_info (active)
+    - area_to_improve (struggling + improving)
+
+    Prefer this tool at the start of a new chat to reduce prompt bloat.
+    """
+    return await _start_student_info_impl(runtime)
+
+
 @tool
 async def upsert_memory_item(
     runtime: ToolRuntime[AgentContext],
@@ -108,6 +184,12 @@ async def upsert_memory_item(
     Returns:
         Confirmation message with item ID
     """
+    logger.info(
+        "Agent tool call: upsert_memory_item (category=%s, key=%s, status=%s)",
+        item.category,
+        item.key,
+        item.status,
+    )
     user = runtime.context.user
     service = runtime.context.memory_item_service
 
@@ -144,6 +226,7 @@ async def update_memory_status(
     Returns:
         Confirmation message
     """
+    logger.info("Agent tool call: update_memory_status (item_id=%s, new_status=%s)", update.item_id, update.new_status)
     user = runtime.context.user
     service = runtime.context.memory_item_service
 
@@ -170,9 +253,24 @@ async def promote_to_strength(
     Returns:
         Confirmation message
     """
+    logger.info("Agent tool call: promote_to_strength (item_id=%s)", promote.item_id)
     user = runtime.context.user
     service = runtime.context.memory_item_service
 
     result = service.promote_to_strength(promote.item_id, user.id)
 
     return f"Promoted to knowledge_strength: [ID:{result.id}] {result.key}"
+
+
+@tool
+async def delete_memory_item(
+    runtime: ToolRuntime[AgentContext],
+    delete: Annotated[MemoryDeleteInput, Field(description="Memory item to delete")],
+) -> str:
+    """
+    Delete a memory item.
+
+    Use only when the student explicitly asks you to forget something, or when the
+    student confirms an existing memory item is wrong and should be removed.
+    """
+    return await _delete_memory_item_impl(runtime, delete.item_id)

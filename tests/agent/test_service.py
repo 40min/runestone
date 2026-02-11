@@ -63,6 +63,7 @@ def mock_vocabulary_service():
 @pytest.fixture
 def mock_user():
     user = MagicMock()
+    user.id = 1
     user.mother_tongue = None
     return user
 
@@ -81,7 +82,7 @@ def test_build_agent(mock_settings, mock_chat_model, mock_user_service):
             tools = mock_create_agent.call_args[1]["tools"]
             # read_memory, upsert_memory_item, update_memory_status, promote_to_strength,
             # prioritize_words_for_learning, search_news_with_dates, read_url
-            assert len(tools) == 7
+            assert len(tools) == 9
             assert "MEMORY PROTOCOL" in call_kwargs["system_prompt"]
 
 
@@ -104,6 +105,7 @@ async def test_generate_response_orchestration(
     assert response == "Hi there!"
     assert sources is None
     agent_service.agent.ainvoke.assert_called_once()
+    mock_memory_item_service.cleanup_old_mastered_areas.assert_called_once_with(mock_user.id, older_than_days=90)
 
     # Verify context injection (via AgentContext)
     call_kwargs = agent_service.agent.ainvoke.call_args[1]
@@ -140,6 +142,7 @@ async def test_generate_response_with_history(
     await agent_service.generate_response(
         message, history, mock_user, mock_vocabulary_service, mock_memory_item_service
     )
+    mock_memory_item_service.cleanup_old_mastered_areas.assert_not_called()
 
     invoke_args = agent_service.agent.ainvoke.call_args[0][0]
     messages = invoke_args["messages"]

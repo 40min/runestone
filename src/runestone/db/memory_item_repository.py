@@ -5,6 +5,7 @@ This module contains repository classes that encapsulate database
 logic for memory item entities.
 """
 
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import and_, func
@@ -162,6 +163,35 @@ class MemoryItemRepository:
             self.db.query(MemoryItem)
             .filter(and_(MemoryItem.user_id == user_id, MemoryItem.category == category))
             .delete()
+        )
+        self.db.commit()
+        return count
+
+    def delete_mastered_older_than(self, user_id: int, cutoff: datetime) -> int:
+        """
+        Delete mastered area_to_improve items older than the cutoff.
+
+        Uses coalesce(status_changed_at, updated_at) as the timestamp to compare.
+
+        Args:
+            user_id: User ID
+            cutoff: Cutoff datetime (UTC)
+
+        Returns:
+            Number of items deleted
+        """
+        timestamp = func.coalesce(MemoryItem.status_changed_at, MemoryItem.updated_at)
+        count = (
+            self.db.query(MemoryItem)
+            .filter(
+                and_(
+                    MemoryItem.user_id == user_id,
+                    MemoryItem.category == "area_to_improve",
+                    MemoryItem.status == "mastered",
+                    timestamp < cutoff,
+                )
+            )
+            .delete(synchronize_session=False)
         )
         self.db.commit()
         return count

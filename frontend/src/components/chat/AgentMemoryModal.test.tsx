@@ -29,6 +29,7 @@ describe('AgentMemoryModal', () => {
     render(<AgentMemoryModal open={true} onClose={() => {}} />);
 
     expect(screen.getByText('Student Memory')).toBeInTheDocument();
+    expect(screen.getByText('Displayed 0 items')).toBeInTheDocument();
     expect(screen.getByText('Personal Info')).toBeInTheDocument();
     expect(screen.getByText('Areas to Improve')).toBeInTheDocument();
     expect(screen.getByText('Knowledge Strengths')).toBeInTheDocument();
@@ -77,9 +78,10 @@ describe('AgentMemoryModal', () => {
 
     render(<AgentMemoryModal open={true} onClose={() => {}} />);
 
-    expect(screen.getByText('test-key')).toBeInTheDocument();
+    expect(screen.getAllByText('test-key').length).toBeGreaterThan(0);
     expect(screen.getByText('test-content')).toBeInTheDocument();
     expect(screen.getByText('Active')).toBeInTheDocument();
+    expect(screen.getByText('Displayed 1 item')).toBeInTheDocument();
   });
 
   it('shows inline clear confirmation and calls clearCategory on confirm', async () => {
