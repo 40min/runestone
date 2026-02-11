@@ -49,7 +49,7 @@ class MemoryItem(Base):
     status_changed_at = Column(DateTime(timezone=True), nullable=True)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    __table_args__ = (UniqueConstraint("user_id", "category", "key", name="uq_user_category_key"),)
+    __table_args__ = (UniqueConstraint("user_id", "category", "key", name="uq_memory_items_user_category_key"),)
 
 
 class Vocabulary(Base):
