@@ -137,7 +137,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({ open, onClose }) =>
   */
 
   const handlePromote = async (id: number) => {
-    await promoteItem(id);
+    await promoteItem(id, activeTab, statusFilter === "all" ? undefined : statusFilter);
   };
 
   const handleDelete = async (id: number) => {

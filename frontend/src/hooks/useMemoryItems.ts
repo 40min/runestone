@@ -31,7 +31,7 @@ interface UseMemoryItemsReturn {
   fetchItems: (category?: MemoryCategory, status?: string, reset?: boolean) => Promise<void>;
   createItem: (data: MemoryItemCreate) => Promise<MemoryItem>;
   updateStatus: (id: number, status: string) => Promise<MemoryItem>;
-  promoteItem: (id: number) => Promise<MemoryItem>;
+  promoteItem: (id: number, category: MemoryCategory, status?: string) => Promise<MemoryItem>;
   deleteItem: (id: number) => Promise<void>;
   clearCategory: (category: MemoryCategory) => Promise<void>;
 }
@@ -115,19 +115,16 @@ const useMemoryItems = (): UseMemoryItemsReturn => {
   );
 
   const promoteItem = useCallback(
-    async (id: number) => {
+    async (id: number, category: MemoryCategory, status?: string) => {
       try {
         const promotedItem = await post<MemoryItem>(`/api/memory/${id}/promote`, {});
-        // Since it changes category from area_to_improve to knowledge_strength,
-        // it might disappear from the current filtered view or appear twice if not filtered.
-        // For simplicity, we just update the list.
-        setItems((prev) => prev.map((item) => (item.id === id ? promotedItem : item)));
+        await fetchItems(category, status, true);
         return promotedItem;
       } catch (err) {
         throw err instanceof Error ? err : new Error("Failed to promote item");
       }
     },
-    [post]
+    [post, fetchItems]
   );
 
   const deleteItem = useCallback(
