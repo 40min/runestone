@@ -200,21 +200,22 @@ class MemoryItemService:
         if item.status != AreaToImproveStatus.MASTERED.value:
             raise ValueError("Only mastered items can be promoted to knowledge_strength")
 
-        # Create new knowledge_strength item
-        new_item = MemoryItem(
-            user_id=user_id,
-            category=MemoryCategory.KNOWLEDGE_STRENGTH.value,
-            key=item.key,
-            content=item.content,
-            status=KnowledgeStrengthStatus.ACTIVE.value,
-            status_changed_at=datetime.utcnow(),
-        )
-        created_item = self.repo.create(new_item)
+        # Create + delete in a single transaction to avoid partial state.
+        with self.repo.db.begin():
+            new_item = MemoryItem(
+                user_id=user_id,
+                category=MemoryCategory.KNOWLEDGE_STRENGTH.value,
+                key=item.key,
+                content=item.content,
+                status=KnowledgeStrengthStatus.ACTIVE.value,
+                status_changed_at=datetime.utcnow(),
+            )
+            self.repo.db.add(new_item)
+            self.repo.db.delete(item)
+            self.repo.db.flush()
+            self.repo.db.refresh(new_item)
 
-        # Delete the old area_to_improve item
-        self.repo.delete(item_id)
-
-        return MemoryItemResponse.model_validate(created_item)
+        return MemoryItemResponse.model_validate(new_item)
 
     def delete_item(self, item_id: int, user_id: int) -> None:
         """
