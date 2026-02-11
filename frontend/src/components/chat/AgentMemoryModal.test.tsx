@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import AgentMemoryModal from './AgentMemoryModal';
 import * as useMemoryItemsModule from '../../hooks/useMemoryItems';
@@ -15,8 +15,8 @@ const mockUseMemoryItems = {
   createItem: vi.fn(),
   updateStatus: vi.fn(),
   promoteItem: vi.fn(),
-  deleteItem: vi.fn(),
-  clearCategory: vi.fn(),
+  deleteItem: vi.fn().mockResolvedValue(undefined),
+  clearCategory: vi.fn().mockResolvedValue(undefined),
 };
 
 describe('AgentMemoryModal', () => {
@@ -82,8 +82,7 @@ describe('AgentMemoryModal', () => {
     expect(screen.getByText('Active')).toBeInTheDocument();
   });
 
-  it('calls clearCategory when "Clear Category" is clicked and confirmed', () => {
-    window.confirm = vi.fn(() => true);
+  it('shows inline clear confirmation and calls clearCategory on confirm', async () => {
     (useMemoryItemsModule.default as Mock).mockReturnValue({
       ...mockUseMemoryItems,
       items: [{ id: 1 }], // Ensure button is enabled
@@ -91,10 +90,80 @@ describe('AgentMemoryModal', () => {
 
     render(<AgentMemoryModal open={true} onClose={() => {}} />);
 
-    const clearButton = screen.getByText('Clear Category');
-    fireEvent.click(clearButton);
+    fireEvent.click(screen.getByText('Clear Category'));
+    expect(screen.getByText('Confirm Clear')).toBeInTheDocument();
+    expect(screen.getByText('Cancel')).toBeInTheDocument();
 
-    expect(window.confirm).toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.click(screen.getByText('Confirm Clear'));
+    });
     expect(mockUseMemoryItems.clearCategory).toHaveBeenCalledWith('personal_info');
+  });
+
+  it('cancels inline clear confirmation', () => {
+    (useMemoryItemsModule.default as Mock).mockReturnValue({
+      ...mockUseMemoryItems,
+      items: [{ id: 1 }],
+    });
+
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+
+    fireEvent.click(screen.getByText('Clear Category'));
+    fireEvent.click(screen.getByText('Cancel'));
+
+    expect(screen.getByText('Clear Category')).toBeInTheDocument();
+    expect(screen.queryByText('Confirm Clear')).not.toBeInTheDocument();
+  });
+
+  it('shows inline delete confirmation and cancels', () => {
+    const mockItems = [
+      {
+        id: 1,
+        key: 'test-key',
+        content: 'test-content',
+        category: 'personal_info',
+        status: 'active',
+        updated_at: new Date().toISOString(),
+      }
+    ];
+    (useMemoryItemsModule.default as Mock).mockReturnValue({
+      ...mockUseMemoryItems,
+      items: mockItems,
+    });
+
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+
+    fireEvent.click(screen.getByLabelText('Delete item'));
+    expect(screen.getByLabelText('Confirm delete')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cancel delete')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Cancel delete'));
+    expect(screen.getByLabelText('Delete item')).toBeInTheDocument();
+  });
+
+  it('confirms delete and calls deleteItem', async () => {
+    const mockItems = [
+      {
+        id: 1,
+        key: 'test-key',
+        content: 'test-content',
+        category: 'personal_info',
+        status: 'active',
+        updated_at: new Date().toISOString(),
+      }
+    ];
+    (useMemoryItemsModule.default as Mock).mockReturnValue({
+      ...mockUseMemoryItems,
+      items: mockItems,
+    });
+
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+
+    fireEvent.click(screen.getByLabelText('Delete item'));
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Confirm delete'));
+    });
+
+    expect(mockUseMemoryItems.deleteItem).toHaveBeenCalledWith(1);
   });
 });

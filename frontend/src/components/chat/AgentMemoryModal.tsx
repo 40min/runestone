@@ -23,6 +23,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import CheckIcon from "@mui/icons-material/Check";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import PsychologyIcon from "@mui/icons-material/Psychology";
 import { CustomButton, TabNavigation } from "../ui";
@@ -101,6 +102,8 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MemoryItem | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
   const [formData, setFormData] = useState<MemoryItemCreate>({
     category: "personal_info",
     key: "",
@@ -120,6 +123,13 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
     }
   }, [open, activeTab, statusFilter, fetchItems]);
 
+  useEffect(() => {
+    if (!open) {
+      setConfirmDeleteId(null);
+      setConfirmClear(false);
+    }
+  }, [open]);
+
   const handleScroll = useCallback(() => {
     if (!scrollContainerRef.current || loading || !hasMore) return;
 
@@ -137,6 +147,8 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId as MemoryCategory);
     setStatusFilter("all");
+    setConfirmDeleteId(null);
+    setConfirmClear(false);
   };
 
   const handleOpenForm = (item?: MemoryItem) => {
@@ -178,19 +190,11 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
   };
 
   const handleDelete = async (id: number) => {
-    if (window.confirm("Are you sure you want to delete this memory item?")) {
-      await deleteItem(id);
-    }
+    setConfirmDeleteId(id);
   };
 
   const handleClearCategory = async () => {
-    if (
-      window.confirm(
-        `Are you sure you want to clear all items in ${activeTab.replace("_", " ")}?`,
-      )
-    ) {
-      await clearCategory(activeTab);
-    }
+    setConfirmClear(true);
   };
 
   return (
@@ -289,17 +293,42 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
             >
               Add Item
             </CustomButton>
-            <CustomButton
-              variant="secondary"
-              onClick={handleClearCategory}
-              disabled={items.length === 0}
-              sx={{
-                color: "#ef4444",
-                "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" },
-              }}
-            >
-              Clear Category
-            </CustomButton>
+            {confirmClear ? (
+              <>
+                <CustomButton
+                  variant="secondary"
+                  onClick={async () => {
+                    await clearCategory(activeTab);
+                    setConfirmClear(false);
+                  }}
+                  disabled={items.length === 0}
+                  sx={{
+                    color: "#ef4444",
+                    "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" },
+                  }}
+                >
+                  Confirm Clear
+                </CustomButton>
+                <CustomButton
+                  variant="secondary"
+                  onClick={() => setConfirmClear(false)}
+                >
+                  Cancel
+                </CustomButton>
+              </>
+            ) : (
+              <CustomButton
+                variant="secondary"
+                onClick={handleClearCategory}
+                disabled={items.length === 0}
+                sx={{
+                  color: "#ef4444",
+                  "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" },
+                }}
+              >
+                Clear Category
+              </CustomButton>
+            )}
           </Box>
 
           <Box
@@ -413,13 +442,38 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                     >
                       <EditIcon fontSize="small" />
                     </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleDelete(item.id)}
-                      sx={{ color: "#ef4444" }}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    {confirmDeleteId === item.id ? (
+                      <>
+                        <IconButton
+                          size="small"
+                          onClick={async () => {
+                            await deleteItem(item.id);
+                            setConfirmDeleteId(null);
+                          }}
+                          aria-label="Confirm delete"
+                          sx={{ color: "#ef4444" }}
+                        >
+                          <CheckIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => setConfirmDeleteId(null)}
+                          aria-label="Cancel delete"
+                          sx={{ color: "#9ca3af" }}
+                        >
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
+                      </>
+                    ) : (
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDelete(item.id)}
+                        aria-label="Delete item"
+                        sx={{ color: "#ef4444" }}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    )}
                   </CardActions>
                 </Card>
               ))}
