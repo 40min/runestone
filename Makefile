@@ -11,6 +11,7 @@
 .PHONY: db-init db-migrate db-upgrade db-downgrade db-current db-history
 .PHONY: init-state docker-up docker-down docker-build restart-recall rebuild-restart-recall rebuild-restart-all rebuild-container
 .PHONY: check-readiness
+.PHONY: migrate-memory
 
 # =============================================================================
 # HELP AND INFO
@@ -84,6 +85,7 @@ help:
 	@echo "Utilities:"
 	@echo "  clean            - Clean temporary files and caches"
 	@echo "  info             - Show environment information"
+	@echo "  migrate-memory   - Migrate legacy user memory to memory_items (use ARGS=...)"
 
 # Show environment information
 info:
@@ -95,6 +97,20 @@ info:
 	@echo "NPM version: $(shell npm --version 2>/dev/null || echo 'NPM not found')"
 	@echo "Current directory: $(shell pwd)"
 	@echo "Virtual environment: $(shell echo $$VIRTUAL_ENV || echo 'None active')"
+
+# =============================================================================
+# ONE-OFF SCRIPTS
+# =============================================================================
+
+migrate-memory:
+	@if [ -z "$(ARGS)" ]; then \
+		echo "Usage: make migrate-memory ARGS='--dry-run --user-id 123'"; \
+		echo "Common:"; \
+		echo "  make migrate-memory ARGS='--dry-run --limit-users 5'"; \
+		echo "  make migrate-memory ARGS='--user-id 123'"; \
+		exit 2; \
+	fi
+	@uv run python scripts/migrate_memory_to_items.py $(ARGS)
 
 # =============================================================================
 # SETUP AND INSTALLATION

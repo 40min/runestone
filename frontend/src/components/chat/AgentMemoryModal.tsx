@@ -26,6 +26,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import CheckIcon from "@mui/icons-material/Check";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import PsychologyIcon from "@mui/icons-material/Psychology";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { CustomButton, TabNavigation } from "../ui";
 import useMemoryItems, {
   type MemoryItem,
@@ -112,6 +113,27 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
   });
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const getItemTitle = (item: MemoryItem): string => {
+    if (!item.metadata_json) return item.key;
+    try {
+      const meta = JSON.parse(item.metadata_json) as { title?: unknown };
+      if (typeof meta?.title === "string" && meta.title.trim()) {
+        return meta.title.trim();
+      }
+    } catch {
+      // ignore invalid metadata_json
+    }
+    return item.key;
+  };
+
+  const copyKeyToClipboard = async (key: string) => {
+    try {
+      await navigator.clipboard.writeText(key);
+    } catch (err) {
+      console.error("Failed to copy key", err);
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -392,13 +414,48 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                         mb: 1,
                       }}
                     >
-                      <Typography
-                        variant="subtitle2"
-                        fontWeight="bold"
-                        sx={{ color: "var(--primary-color)" }}
-                      >
-                        {item.key}
-                      </Typography>
+                      <Box sx={{ minWidth: 0, pr: 1 }}>
+                        <Typography
+                          variant="subtitle2"
+                          fontWeight="bold"
+                          sx={{ color: "var(--primary-color)" }}
+                        >
+                          {getItemTitle(item)}
+                        </Typography>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 0.5,
+                            minWidth: 0,
+                          }}
+                        >
+                          <Tooltip title={item.key}>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color: "#9ca3af",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                minWidth: 0,
+                              }}
+                            >
+                              {item.key}
+                            </Typography>
+                          </Tooltip>
+                          <Tooltip title="Copy key">
+                            <IconButton
+                              size="small"
+                              onClick={() => copyKeyToClipboard(item.key)}
+                              sx={{ color: "#9ca3af" }}
+                              aria-label="Copy memory item key"
+                            >
+                              <ContentCopyIcon fontSize="inherit" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </Box>
                       <Chip
                         label={
                           STATUS_OPTIONS[item.status]?.label || item.status
