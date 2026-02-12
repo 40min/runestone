@@ -1,11 +1,12 @@
-import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, IconButton, Tooltip } from '@mui/material';
 import { NewChatButton } from '../ui';
+import PsychologyIcon from '@mui/icons-material/Psychology';
 
 interface ChatHeaderProps {
   title: string;
   subtitle: string;
   onNewChat: () => void;
+  onOpenMemory: () => void;
   isLoading: boolean;
   hasMessages: boolean;
 }
@@ -14,6 +15,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   title,
   subtitle,
   onNewChat,
+  onOpenMemory,
   isLoading,
   hasMessages,
 }) => {
@@ -49,11 +51,25 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           {subtitle}
         </Typography>
       </Box>
-      <NewChatButton
-        onClick={onNewChat}
-        isLoading={isLoading}
-        hasMessages={hasMessages}
-      />
+      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+        <Tooltip title="Student Memory">
+          <IconButton
+            onClick={onOpenMemory}
+            sx={{
+              color: 'var(--primary-color)',
+              bgcolor: 'rgba(59, 130, 246, 0.1)',
+              '&:hover': { bgcolor: 'rgba(59, 130, 246, 0.2)' }
+            }}
+          >
+            <PsychologyIcon />
+          </IconButton>
+        </Tooltip>
+        <NewChatButton
+          onClick={onNewChat}
+          isLoading={isLoading}
+          hasMessages={hasMessages}
+        />
+      </Box>
     </Box>
   );
 };

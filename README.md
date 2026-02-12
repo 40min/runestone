@@ -17,6 +17,7 @@ A command-line tool and web application for analyzing Swedish textbook pages usi
 - **⚙️ Configurable**: Easy provider switching via environment variables or CLI options
 - **🌐 Web API**: REST API for programmatic access to image processing functionality
 - **🖥️ Web Interface**: Responsive web application for easy image upload and results viewing
+- **🧠 Agent Memory**: Structured, user-managed memory items with API + UI support
 - **🤖 Rune Recall**: Telegram bot for daily vocabulary recall and command processing
 
 ## 🚀 Quick Start
@@ -120,6 +121,12 @@ The API will be available at `http://localhost:8010` with the following endpoint
 - `POST /api/process`: Upload an image and get analysis results
 - `POST /api/vocabulary`: Save vocabulary items to the database
 - `GET /api/vocabulary`: Retrieve all saved vocabulary items
+- `GET /api/memory`: List memory items (filters + pagination)
+- `POST /api/memory`: Create or update a memory item (upsert)
+- `PUT /api/memory/{item_id}/status`: Update item status
+- `POST /api/memory/{item_id}/promote`: Promote mastered items to knowledge strengths
+- `DELETE /api/memory/{item_id}`: Delete a memory item
+- `DELETE /api/memory?category=...`: Clear a memory category
 - `GET /api/health`: Health check endpoint
 
 API documentation is available at `http://localhost:8010/docs`.
@@ -143,6 +150,7 @@ The web interface will be available at `http://localhost:5173` with the followin
 - **⚙️ Provider Selection**: Choose between OpenAI GPT-4o or Google Gemini
 - **📊 Real-time Results**: View formatted analysis results with grammar explanations and vocabulary
 - **🔄 Processing Status**: Visual feedback during image processing
+- **🧠 Agent Memory Modal**: View, add, edit, and delete memory items by category
 - **📱 Responsive Design**: Works on desktop and mobile devices
 
 **Quick Start:**
@@ -150,6 +158,17 @@ The web interface will be available at `http://localhost:5173` with the followin
 2. Open `http://localhost:5173` in your browser
 3. Upload a Swedish textbook page image
 4. View the structured analysis results
+
+### Agent Memory Migration
+
+Legacy user memory stored on the `users` table can be migrated to `memory_items`:
+
+```bash
+make migrate-memory ARGS="--dry-run --limit-users 5"
+make migrate-memory ARGS="--user-id 123"
+```
+
+The migration is idempotent and uses the `memory_migrated` flag on `users` to avoid duplicate work.
 
 ### Rune Recall Feature
 
@@ -268,6 +287,7 @@ make run-backend       # Start FastAPI backend server
 make run-frontend      # Start frontend development server
 make run-dev           # Start both backend and frontend concurrently
 make run-recall        # Start the Rune Recall Telegram Bot Worker
+make migrate-memory    # Migrate legacy user memory to memory_items (use ARGS=...)
 
 # Development Workflows
 make dev-test          # Quick development test (install-dev + lint-check + test)
@@ -362,11 +382,13 @@ src/runestone/
 │   ├── __init__.py
 │   ├── database.py     # SQLAlchemy engine and session management
 │   ├── models.py       # Database table models
-│   └── repository.py   # Data access layer for vocabulary operations
+│   ├── memory_item_repository.py # Memory item data access
+│   └── vocabulary_repository.py  # Vocabulary data access
 ├── api/                # REST API layer
 │   ├── __init__.py
 │   ├── main.py         # FastAPI application setup
-│   ├── endpoints.py    # API endpoints
+│   ├── endpoints.py    # OCR + analysis endpoints
+│   ├── memory_endpoints.py # Memory item endpoints
 │   └── schemas.py      # Pydantic models for API
 ├── core/
 │   ├── processor.py    # Main workflow orchestration

@@ -16,6 +16,7 @@ import {
 } from './ui';
 import { ImageSidebar } from './chat/ImageSidebar';
 import { ChatHeader } from './chat/ChatHeader';
+import AgentMemoryModal from './chat/AgentMemoryModal';
 import { useChat } from '../hooks/useChat';
 import { useChatImageUpload } from '../hooks/useChatImageUpload';
 import { useVoiceRecording } from '../hooks/useVoiceRecording';
@@ -35,6 +36,7 @@ const ChatView: React.FC = () => {
   const { messages, isLoading, isFetchingHistory, error, sendMessage, startNewChat, refreshHistory } = useChat();
   const { uploadedImages, uploadImage, isUploading, error: uploadError, clearImages } = useChatImageUpload();
   const [snackbarError, setSnackbarError] = useState<string | null>(null);
+  const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
 
   // Voice recording with improve option
   const [improveTranscription, setImproveTranscription] = useState(() => {
@@ -211,6 +213,7 @@ const ChatView: React.FC = () => {
         title="Chat with Your Swedish Teacher"
         subtitle="Ask questions about Swedish vocabulary, grammar, or practice conversation"
         onNewChat={handleNewChat}
+        onOpenMemory={() => setIsMemoryModalOpen(true)}
         isLoading={isAnyProcessing}
         hasMessages={messages.length > 0}
       />
@@ -404,6 +407,11 @@ const ChatView: React.FC = () => {
         message={snackbarError || ''}
         severity="error"
         onClose={() => setSnackbarError(null)}
+      />
+
+      <AgentMemoryModal
+        open={isMemoryModalOpen}
+        onClose={() => setIsMemoryModalOpen(false)}
       />
     </Box>
   );

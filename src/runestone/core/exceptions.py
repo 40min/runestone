@@ -92,3 +92,9 @@ class UserNotFoundError(ValueError):
     """Raised when a user is not found."""
 
     pass
+
+
+class PermissionDeniedError(ValueError):
+    """Raised when a user lacks permission to perform an action."""
+
+    pass

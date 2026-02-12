@@ -17,6 +17,7 @@ from runestone.api.auth_endpoints import router as auth_router
 from runestone.api.chat_endpoints import router as chat_router
 from runestone.api.endpoints import grammar_router
 from runestone.api.endpoints import router as api_router
+from runestone.api.memory_endpoints import router as memory_router
 from runestone.api.user_endpoints import router as user_router
 from runestone.config import settings
 from runestone.core.clients.factory import create_llm_client
@@ -111,6 +112,13 @@ def create_application() -> FastAPI:
         audio_ws_router,
         prefix="/api",
         tags=["audio"],
+    )
+
+    # Include memory router
+    app.include_router(
+        memory_router,
+        prefix="/api",
+        tags=["memory"],
     )
 
     return app
