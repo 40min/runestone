@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useApi } from "../utils/api";
 
 export type MemoryCategory = "personal_info" | "area_to_improve" | "knowledge_strength";
@@ -41,7 +41,7 @@ const useMemoryItems = (): UseMemoryItemsReturn => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
-  const [offset, setOffset] = useState(0);
+  const offsetRef = useRef(0);
   const { get, post, put, delete: apiDelete } = useApi();
 
   const LIMIT = 100;
@@ -51,7 +51,7 @@ const useMemoryItems = (): UseMemoryItemsReturn => {
       setLoading(true);
       setError(null);
 
-      const currentOffset = reset ? 0 : offset;
+      const currentOffset = reset ? 0 : offsetRef.current;
 
       try {
         const params = new URLSearchParams();
@@ -64,10 +64,10 @@ const useMemoryItems = (): UseMemoryItemsReturn => {
 
         if (reset) {
           setItems(data);
-          setOffset(data.length);
+          offsetRef.current = data.length;
         } else {
           setItems((prev) => [...prev, ...data]);
-          setOffset((prev) => prev + data.length);
+          offsetRef.current += data.length;
         }
 
         setHasMore(data.length === LIMIT);
@@ -77,7 +77,7 @@ const useMemoryItems = (): UseMemoryItemsReturn => {
         setLoading(false);
       }
     },
-    [get, offset]
+    [get]
   );
 
   const createItem = useCallback(

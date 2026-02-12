@@ -55,6 +55,8 @@ Use patches when testing individual functions or methods that have external depe
 - File system operations
 - Complex business logic with multiple dependencies
 
+**Memory item services:** `MemoryItemService` tests intentionally use the real repository + DB session to validate status rules, permissions, and transactional behavior. Prefer `db_with_test_user` and avoid mocking the repository layer for these cases.
+
 #### API/Integration Tests → Use specialized fixtures
 Use fixtures when testing complete workflows or API endpoints:
 - Full request/response cycles

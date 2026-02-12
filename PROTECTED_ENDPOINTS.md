@@ -23,6 +23,14 @@ All endpoints below require `Authorization: Bearer <jwt_token>` header:
 - `DELETE /api/vocabulary/{item_id}` - Delete vocabulary item
 - `POST /api/vocabulary/improve` - AI-powered vocabulary improvement ✨ **FIXED**
 
+### Memory Management Endpoints
+- `GET /api/memory` - List memory items (filters + pagination)
+- `POST /api/memory` - Create or update a memory item (upsert)
+- `PUT /api/memory/{item_id}/status` - Update item status
+- `POST /api/memory/{item_id}/promote` - Promote mastered items to knowledge strengths
+- `DELETE /api/memory/{item_id}` - Delete a memory item
+- `DELETE /api/memory?category=...` - Clear a memory category
+
 ## Public Endpoints (No Authentication Required)
 
 ### Health & Grammar
@@ -48,6 +56,8 @@ All endpoints below require `Authorization: Bearer <jwt_token>` header:
 - `frontend/src/hooks/useVocabulary.ts` - Vocabulary operations (uses auth API client)
 - `frontend/src/hooks/useImageProcessing.ts` - Image processing (uses auth API client)
 - `frontend/src/components/AddEditVocabularyModal.tsx` - Vocabulary improvement (uses auth API client)
+- `frontend/src/hooks/useMemoryItems.ts` - Memory operations (uses auth API client)
+- `frontend/src/components/chat/AgentMemoryModal.tsx` - Memory UI (uses auth API client)
 
 ## Issues Fixed
 

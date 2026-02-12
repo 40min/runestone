@@ -204,7 +204,10 @@ class MemoryItemService:
             raise ValueError("Only mastered items can be promoted to knowledge_strength")
 
         # Create + delete in a single transaction to avoid partial state.
-        with self.repo.db.begin():
+        # If we're already in a transaction (e.g., higher-level service or test),
+        # use a nested transaction to avoid InvalidRequestError.
+        transaction = self.repo.db.begin_nested() if self.repo.db.in_transaction() else self.repo.db.begin()
+        with transaction:
             existing_strength = self.repo.get_by_user_category_key(
                 user_id,
                 MemoryCategory.KNOWLEDGE_STRENGTH.value,
