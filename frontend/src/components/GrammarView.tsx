@@ -140,7 +140,7 @@ const GrammarView: React.FC = () => {
 
   const getShareLink = () => {
     if (typeof window === "undefined" || !selectedFilename) return null;
-    const url = new URL(window.location.href);
+    const url = new URL(window.location.pathname, window.location.origin);
     url.searchParams.set("view", "grammar");
     url.searchParams.set("cheatsheet", paramFromFilepath(selectedFilename));
     return url.toString();
