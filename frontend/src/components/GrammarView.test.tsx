@@ -11,6 +11,8 @@ vi.mock("../hooks/useGrammar", () => ({
 describe("GrammarView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // GrammarView now syncs selection into the URL; reset between tests to avoid cross-test leakage.
+    window.history.replaceState({}, "", "/");
   });
 
   it("should render loading state initially", () => {
@@ -277,7 +279,9 @@ describe("GrammarView", () => {
 
     // Then click the cheatsheet
     await waitFor(() => {
-      const cheatsheet = screen.getByText("Adjectiv Komparation");
+      const cheatsheet = screen.getByRole("button", {
+        name: "Adjectiv Komparation",
+      });
       fireEvent.click(cheatsheet);
     });
 

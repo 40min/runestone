@@ -27,11 +27,19 @@ const VIEW_NAMES: Record<ViewType, string> = {
 };
 
 const STORAGE_KEY = "runestone_current_view";
+const VALID_VIEWS: ViewType[] = ["analyzer", "vocabulary", "grammar", "chat", "profile"];
 
 function getInitialView(): ViewType {
   if (typeof window === "undefined") return "analyzer";
+
+  const params = new URLSearchParams(window.location.search);
+  const viewFromUrl = params.get("view");
+  if (viewFromUrl && VALID_VIEWS.includes(viewFromUrl as ViewType)) {
+    return viewFromUrl as ViewType;
+  }
+
   const stored = localStorage.getItem(STORAGE_KEY);
-  return stored && ["analyzer", "vocabulary", "grammar", "chat", "profile"].includes(stored)
+  return stored && VALID_VIEWS.includes(stored as ViewType)
     ? (stored as ViewType)
     : "analyzer";
 }
@@ -71,6 +79,17 @@ function App() {
   // Persist view changes to localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, currentView);
+  }, [currentView]);
+
+  // Sync view to URL for shareable deep-links (e.g. ?view=grammar&cheatsheet=verbs/imperativ.md)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", currentView);
+    if (currentView !== "grammar") {
+      url.searchParams.delete("cheatsheet");
+    }
+    window.history.replaceState({}, "", url);
   }, [currentView]);
 
   // Update title based on current view

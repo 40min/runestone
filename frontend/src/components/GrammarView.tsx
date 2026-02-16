@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Box,
   Typography,
@@ -9,9 +9,37 @@ import {
   Collapse,
 } from "@mui/material";
 import { ExpandMore, ExpandLess } from "@mui/icons-material";
-import { ContentCard, LoadingSpinner, ErrorAlert, SectionTitle } from "./ui";
+import { ContentCard, LoadingSpinner, ErrorAlert, SectionTitle, CustomButton, Snackbar } from "./ui";
 import MarkdownDisplay from "./ui/MarkdownDisplay";
 import useGrammar from "../hooks/useGrammar";
+
+function getCheatsheetFromUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const cheatsheet = params.get("cheatsheet");
+  return cheatsheet ? cheatsheet : null;
+}
+
+function filepathFromParam(value: string): string {
+  return value.endsWith(".md") ? value : `${value}.md`;
+}
+
+function paramFromFilepath(filepath: string): string {
+  return filepath.endsWith(".md") ? filepath.slice(0, -3) : filepath;
+}
+
+function setCheatsheetInUrl(filename: string | null, mode: "push" | "replace") {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  url.searchParams.set("view", "grammar");
+  if (filename) {
+    url.searchParams.set("cheatsheet", paramFromFilepath(filename));
+  } else {
+    url.searchParams.delete("cheatsheet");
+  }
+  const fn = mode === "push" ? window.history.pushState : window.history.replaceState;
+  fn.call(window.history, {}, "", url);
+}
 
 const GrammarView: React.FC = () => {
   const {
@@ -25,11 +53,40 @@ const GrammarView: React.FC = () => {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set()
   );
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: "success" | "error" | "warning" | "info";
+  }>({ open: false, message: "", severity: "info" });
+  const didInitFromUrlRef = useRef(false);
 
-  const handleCheatsheetClick = async (filename: string) => {
+  const handleCheatsheetClick = async (filename: string, options?: { pushUrl?: boolean }) => {
     setSelectedFilename(filename);
+    if (options?.pushUrl !== false) {
+      setCheatsheetInUrl(filename, "push");
+    }
     await fetchCheatsheetContent(filename);
   };
+
+  useEffect(() => {
+    if (didInitFromUrlRef.current) return;
+    didInitFromUrlRef.current = true;
+
+    const initial = getCheatsheetFromUrl();
+    if (!initial) return;
+
+    const filepath = filepathFromParam(initial);
+    setSelectedFilename(filepath);
+    setCheatsheetInUrl(filepath, "replace");
+    void fetchCheatsheetContent(filepath);
+  }, [fetchCheatsheetContent]);
+
+  useEffect(() => {
+    if (!selectedFilename || cheatsheets.length === 0) return;
+    const match = cheatsheets.find((cs) => cs.filename === selectedFilename);
+    if (!match || match.category === "General") return;
+    setExpandedCategories((prev) => (prev.has(match.category) ? prev : new Set([...prev, match.category])));
+  }, [cheatsheets, selectedFilename]);
 
   // Group cheatsheets by category
   const { generalCheatsheets, categorizedCheatsheets } = cheatsheets.reduce<{
@@ -60,6 +117,37 @@ const GrammarView: React.FC = () => {
       }
       return newSet;
     });
+  };
+
+  const getShareLink = () => {
+    if (typeof window === "undefined" || !selectedFilename) return null;
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "grammar");
+    url.searchParams.set("cheatsheet", paramFromFilepath(selectedFilename));
+    return url.toString();
+  };
+
+  const handleCopyLink = async () => {
+    const link = getShareLink();
+    if (!link) return;
+
+    try {
+      if (!navigator.clipboard) {
+        const textArea = document.createElement("textarea");
+        textArea.value = link;
+        document.body.appendChild(textArea);
+        textArea.select();
+        const successful = document.execCommand("copy");
+        document.body.removeChild(textArea);
+        if (!successful) throw new Error("Fallback copy failed");
+      } else {
+        await navigator.clipboard.writeText(link);
+      }
+      setSnackbar({ open: true, message: "Link copied to clipboard.", severity: "success" });
+    } catch (err) {
+      console.error("Failed to copy link: ", err);
+      setSnackbar({ open: true, message: "Failed to copy link. Please try again.", severity: "error" });
+    }
   };
 
   return (
@@ -191,6 +279,20 @@ const GrammarView: React.FC = () => {
           <ContentCard>
             {selectedFilename ? (
               <>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, mb: 2 }}>
+                  <Typography sx={{ color: "#9ca3af", fontSize: "0.875rem" }}>
+                    {paramFromFilepath(selectedFilename)}
+                  </Typography>
+                  <CustomButton
+                    variant="secondary"
+                    size="small"
+                    onClick={() => {
+                      void handleCopyLink();
+                    }}
+                  >
+                    Copy link
+                  </CustomButton>
+                </Box>
                 {loading ? (
                   <LoadingSpinner />
                 ) : selectedCheatsheet ? (
@@ -213,6 +315,14 @@ const GrammarView: React.FC = () => {
           </ContentCard>
         </Box>
       </Box>
+
+      <Snackbar
+        open={snackbar.open}
+        message={snackbar.message}
+        severity={snackbar.severity}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        autoHideDuration={3000}
+      />
     </Box>
   );
 };
