@@ -45,7 +45,7 @@ When the owner = subject → **DELETE** hans/hennes/deras → **REPLACE** with s
 | **3rd singular** | han | **hans** → | **sin/sitt/sina** 🔄 |
 | | hon | **hennes** → | **sin/sitt/sina** 🔄 |
 | | den/det | **dess** → | **sin/sitt/sina** 🔄 |
-| **plural** | vi | **vär/vårt/våra** → | - |
+| **plural** | vi | **vår/vårt/våra** → | - |
 |  | ni | **er/ert/era** → | - |
 |  | de | **deras** → | **sin/sitt/sina** 🔄 |
 

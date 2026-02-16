@@ -59,6 +59,7 @@ const GrammarView: React.FC = () => {
     severity: "success" | "error" | "warning" | "info";
   }>({ open: false, message: "", severity: "info" });
   const didInitFromUrlRef = useRef(false);
+  const initialCheatsheetParamRef = useRef<string | null>(getCheatsheetFromUrl());
 
   const handleCheatsheetClick = async (filename: string, options?: { pushUrl?: boolean }) => {
     setSelectedFilename(filename);
@@ -70,16 +71,34 @@ const GrammarView: React.FC = () => {
 
   useEffect(() => {
     if (didInitFromUrlRef.current) return;
-    didInitFromUrlRef.current = true;
 
-    const initial = getCheatsheetFromUrl();
-    if (!initial) return;
+    const initial = initialCheatsheetParamRef.current;
+    if (!initial) {
+      didInitFromUrlRef.current = true;
+      return;
+    }
+
+    if (cheatsheets.length === 0) return;
 
     const filepath = filepathFromParam(initial);
+    const isValid = cheatsheets.some((cs) => cs.filename === filepath);
+    if (!isValid) {
+      didInitFromUrlRef.current = true;
+      setCheatsheetInUrl(null, "replace");
+      setSelectedFilename(null);
+      setSnackbar({
+        open: true,
+        message: "Unknown cheatsheet link.",
+        severity: "error",
+      });
+      return;
+    }
+
+    didInitFromUrlRef.current = true;
     setSelectedFilename(filepath);
     setCheatsheetInUrl(filepath, "replace");
     void fetchCheatsheetContent(filepath);
-  }, [fetchCheatsheetContent]);
+  }, [cheatsheets, fetchCheatsheetContent]);
 
   useEffect(() => {
     if (!selectedFilename || cheatsheets.length === 0) return;
