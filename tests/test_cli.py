@@ -301,3 +301,20 @@ class TestCLI:
             assert result.exit_code == 0
             mock_service.load_vocab_from_csv.assert_called_once()
             assert "Added 2 new vocabulary items" in result.output
+
+    @patch("runestone.cli.GrammarIndex")
+    def test_rag_search_command(self, mock_index_class):
+        """Test RAG search command."""
+        mock_index = Mock()
+        mock_doc = Mock()
+        mock_doc.metadata = {"url": "http://test.url", "annotation": "Test annotation"}
+        mock_index.search.return_value = [mock_doc]
+        mock_index_class.return_value = mock_index
+
+        result = self.runner.invoke(cli, ["rag", "search", "test query"])
+
+        assert result.exit_code == 0
+        assert "Search results for: test query" in result.output
+        assert "Test annotation" in result.output
+        assert "http://test.url" in result.output
+        mock_index.search.assert_called_once_with("test query", top_k=5)

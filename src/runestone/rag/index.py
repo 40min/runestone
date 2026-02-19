@@ -111,31 +111,3 @@ class GrammarIndex:
             FileNotFoundError: If cheatsheet doesn't exist
         """
         return read_cheatsheet_content(self.cheatsheets_dir, cheatsheet_path)
-
-
-if __name__ == "__main__":
-    import sys
-
-    if len(sys.argv) < 2:
-        print("Usage: python -m runestone.rag.index <query>")
-        sys.exit(1)
-
-    query = " ".join(sys.argv[1:])
-
-    # Initialize index
-    from runestone.config import settings
-
-    index = GrammarIndex(settings.cheatsheets_dir, settings.app_base_url)
-
-    # Search
-    results = index.search(query, top_k=5)
-
-    print(f"\n🔍 Search results for: '{query}'\n")
-    if not results:
-        print("No results found.")
-    else:
-        for i, doc in enumerate(results, 1):
-            url = doc.metadata.get("url", "N/A")
-            annotation = doc.metadata.get("annotation", "N/A")
-            print(f"{i}. {annotation}")
-            print(f"   URL: {url}\n")

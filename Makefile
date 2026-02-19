@@ -307,7 +307,7 @@ test-grammar-search:
 		exit 1; \
 	fi
 	@echo "🔍 Testing grammar RAG search for: $(QUERY)"
-	@uv run python -m runestone.rag.index "$(QUERY)"
+	@uv run runestone rag search "$(QUERY)"
 
 # =============================================================================
 # DEVELOPMENT WORKFLOWS
