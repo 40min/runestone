@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from runestone.rag.loader import load_grammar_documents, read_cheatsheet_content
+from runestone.rag.loader import load_grammar_documents
 
 
 @pytest.fixture
@@ -28,11 +28,6 @@ def mock_grammar_data(tmp_path):
     index_file = tmp_path / "index.json"
     with open(index_file, "w", encoding="utf-8") as f:
         json.dump(index_data, f)
-
-    # Create dummy cheatsheet files
-    verbs_dir = tmp_path / "verbs"
-    verbs_dir.mkdir()
-    (verbs_dir / "presens.md").write_text("# Verb Presens\nContent here.", encoding="utf-8")
 
     return tmp_path
 
@@ -58,25 +53,3 @@ def test_load_grammar_documents_not_found():
     """Test error when index.json is missing."""
     with pytest.raises(FileNotFoundError):
         load_grammar_documents("/non/existent/path/index.json")
-
-
-def test_read_cheatsheet_content(mock_grammar_data):
-    """Test reading cheatsheet markdown content."""
-    content = read_cheatsheet_content(str(mock_grammar_data), "verbs/presens")
-    assert "# Verb Presens" in content
-    assert "Content here." in content
-
-
-def test_read_cheatsheet_content_traversal(mock_grammar_data):
-    """Test protection against path traversal."""
-    with pytest.raises(ValueError, match="path traversal detected"):
-        read_cheatsheet_content(str(mock_grammar_data), "../config.py")
-
-    with pytest.raises(ValueError, match="path traversal detected"):
-        read_cheatsheet_content(str(mock_grammar_data), "/etc/passwd")
-
-
-def test_read_cheatsheet_content_not_found(mock_grammar_data):
-    """Test error when cheatsheet file is missing."""
-    with pytest.raises(FileNotFoundError):
-        read_cheatsheet_content(str(mock_grammar_data), "nonexistent/page")

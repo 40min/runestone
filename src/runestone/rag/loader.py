@@ -1,5 +1,5 @@
 """
-Grammar document loading and cheatsheet content reading.
+Grammar document loading for RAG indexing.
 """
 
 import json
@@ -65,36 +65,3 @@ def load_grammar_documents(index_path: str) -> tuple[list[Document], list[Docume
 
     logger.info("Loaded %d keyword docs and %d vector docs from %s", len(keyword_docs), len(vector_docs), index_path)
     return keyword_docs, vector_docs
-
-
-def read_cheatsheet_content(cheatsheets_dir: str, cheatsheet_path: str) -> str:
-    """
-    Read markdown content of a specific grammar cheatsheet.
-
-    Args:
-        cheatsheets_dir: Base directory containing cheatsheets
-        cheatsheet_path: Relative path to cheatsheet (e.g., "adjectives/adjectiv-komparation")
-
-    Returns:
-        Markdown content of the cheatsheet
-
-    Raises:
-        ValueError: If path contains traversal attempts
-        FileNotFoundError: If cheatsheet file doesn't exist
-    """
-    # Prevent path traversal
-    if ".." in cheatsheet_path or cheatsheet_path.startswith("/"):
-        raise ValueError(f"Invalid cheatsheet path (path traversal detected): {cheatsheet_path}")
-
-    base_dir = Path(cheatsheets_dir).resolve()
-    cheatsheet_file = (base_dir / f"{cheatsheet_path}.md").resolve()
-
-    # Ensure resolved path is within base directory
-    if not str(cheatsheet_file).startswith(str(base_dir)):
-        raise ValueError(f"Invalid cheatsheet path (outside base directory): {cheatsheet_path}")
-
-    if not cheatsheet_file.exists():
-        raise FileNotFoundError(f"Cheatsheet not found: {cheatsheet_path}")
-
-    with open(cheatsheet_file, encoding="utf-8") as f:
-        return f.read()

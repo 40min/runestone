@@ -80,14 +80,3 @@ def test_grammar_index_search_empty(mock_grammar_files, mock_embeddings):
     index = GrammarIndex(str(mock_grammar_files), "http://test-host")
     results = index.search("  ")
     assert results == []
-
-
-def test_grammar_index_read_page(mock_grammar_files, mock_embeddings):
-    """Test reading a page via index."""
-    cheatsheet_file = mock_grammar_files / "verbs" / "test.md"
-    cheatsheet_file.parent.mkdir()
-    cheatsheet_file.write_text("Hello grammar", encoding="utf-8")
-
-    index = GrammarIndex(str(mock_grammar_files), "http://test-host")
-    content = index.read_page("verbs/test")
-    assert content == "Hello grammar"

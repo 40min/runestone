@@ -50,7 +50,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     app.state.grammar_service = GrammarService(settings.cheatsheets_dir)
     app.state.grammar_index = GrammarIndex(settings.cheatsheets_dir, settings.app_base_url)
-    init_grammar_index(app.state.grammar_index)
+    init_grammar_index(app.state.grammar_index, app.state.grammar_service)
     app.state.agent_service = AgentService(settings)
     app.state.tts_service = TTSService(settings)
     yield

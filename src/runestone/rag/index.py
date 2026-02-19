@@ -11,7 +11,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
 
-from runestone.rag.loader import load_grammar_documents, read_cheatsheet_content
+from runestone.rag.loader import load_grammar_documents
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class GrammarIndex:
         self.cheatsheets_dir = cheatsheets_dir
         self.app_base_url = app_base_url.rstrip("/")
 
-        index_path = str(Path(cheatsheets_dir) / "index.json")
+        index_path = str(Path(self.cheatsheets_dir) / "index.json")
         logger.info("Loading grammar documents from %s", index_path)
 
         keyword_docs, vector_docs = load_grammar_documents(index_path)
@@ -95,19 +95,3 @@ class GrammarIndex:
 
         logger.info("Search query='%s' returned %d results", query, len(unique_results))
         return unique_results
-
-    def read_page(self, cheatsheet_path: str) -> str:
-        """
-        Read the markdown content of a specific cheatsheet.
-
-        Args:
-            cheatsheet_path: Relative path to cheatsheet (e.g., "adjectives/adjectiv-komparation")
-
-        Returns:
-            Markdown content
-
-        Raises:
-            ValueError: If path is invalid
-            FileNotFoundError: If cheatsheet doesn't exist
-        """
-        return read_cheatsheet_content(self.cheatsheets_dir, cheatsheet_path)
