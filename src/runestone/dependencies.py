@@ -22,6 +22,7 @@ from runestone.db.database import get_db
 from runestone.db.memory_item_repository import MemoryItemRepository
 from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
+from runestone.rag.index import GrammarIndex
 from runestone.services.chat_service import ChatService
 from runestone.services.grammar_service import GrammarService
 from runestone.services.memory_item_service import MemoryItemService
@@ -264,6 +265,19 @@ def get_tts_service(request: Request) -> TTSService:
         TTSService: Cached singleton service instance for TTS operations
     """
     return request.app.state.tts_service
+
+
+def get_grammar_index(request: Request) -> GrammarIndex:
+    """
+    Get grammar search index singleton instance.
+
+    Args:
+        request: FastAPI request object
+
+    Returns:
+        GrammarIndex: Cached singleton instance for grammar search operations
+    """
+    return request.app.state.grammar_index
 
 
 def get_chat_service(

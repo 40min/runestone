@@ -6,7 +6,7 @@
 .PHONY: lint lint-check backend-lint frontend-lint
 .PHONY: test test-coverage backend-test frontend-test
 .PHONY: run run-backend run-frontend run-dev run-recall load-vocab
-.PHONY: test-prompts-ocr test-prompts-analysis test-prompts-search test-prompts-vocabulary
+.PHONY: test-prompts-ocr test-prompts-analysis test-prompts-search test-prompts-vocabulary test-grammar-search
 .PHONY: dev-test dev-full ci-lint ci-test
 .PHONY: db-init db-migrate db-upgrade db-downgrade db-current db-history
 .PHONY: init-state docker-up docker-down docker-build restart-recall rebuild-restart-recall rebuild-restart-all rebuild-container
@@ -55,6 +55,7 @@ help:
 	@echo "  test-prompts-analysis     - Test analysis prompt (requires TEXT='sample text')"
 	@echo "  test-prompts-search       - Test search prompt (requires TOPICS='topic1 topic2 ...')"
 	@echo "  test-prompts-vocabulary   - Test vocabulary improvement prompt (requires WORD='word', optional: MODE=example_only|extra_info_only|all_fields)"
+	@echo "  test-grammar-search       - Test grammar RAG search (requires QUERY='search query')"
 	@echo ""
 	@echo "Development Workflows:"
 	@echo "  dev-test         - Quick development test (install-dev + lint-check + test)"
@@ -298,6 +299,15 @@ test-prompts-vocabulary:
 	fi
 	@echo "🧪 Testing vocabulary improvement prompt for word: $(WORD)"
 	@uv run runestone test-prompts vocabulary "$(WORD)" $(if $(MODE),--mode $(MODE))
+
+# Test grammar RAG search
+test-grammar-search:
+	@if [ -z "$(QUERY)" ]; then \
+		echo "❌ Error: QUERY is required. Usage: make test-grammar-search QUERY='adjective comparison'"; \
+		exit 1; \
+	fi
+	@echo "🔍 Testing grammar RAG search for: $(QUERY)"
+	@uv run python -m runestone.rag.index "$(QUERY)"
 
 # =============================================================================
 # DEVELOPMENT WORKFLOWS

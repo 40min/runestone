@@ -81,8 +81,9 @@ def test_build_agent(mock_settings, mock_chat_model, mock_user_service):
             # Verify tools were passed to create_agent
             tools = mock_create_agent.call_args[1]["tools"]
             # read_memory, upsert_memory_item, update_memory_status, promote_to_strength,
-            # prioritize_words_for_learning, search_news_with_dates, read_url
-            assert len(tools) == 9
+            # delete_memory_item, start_student_info, prioritize_words_for_learning,
+            # search_news_with_dates, search_grammar, read_grammar_page, read_url
+            assert len(tools) == 11
             assert "MEMORY PROTOCOL" in call_kwargs["system_prompt"]
 
 
@@ -190,8 +191,8 @@ def test_openai_provider_configuration(mock_settings, mock_user_service):
     assert call_kwargs.get("base_url") is None  # No custom base for OpenAI
 
 
-def test_format_news_sources():
-    """Test that news sources are formatted with cap and domain metadata."""
+def test_format_sources():
+    """Test that sources are formatted with cap and domain metadata."""
     sources = []
     for idx in range(1, 25):
         sources.append(
@@ -202,7 +203,7 @@ def test_format_news_sources():
             }
         )
 
-    formatted = AgentService._format_news_sources(sources)
+    formatted = AgentService._format_sources(sources)
     assert formatted.count("\n") >= 1
     assert "[NEWS_SOURCES]" in formatted
     assert "example.com" in formatted

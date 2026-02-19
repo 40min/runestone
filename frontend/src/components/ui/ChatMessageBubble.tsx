@@ -106,15 +106,17 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
                       </Typography>
                     );
                   })()}
-                  <Typography
-                    sx={(theme) => ({
-                      color: theme.palette.grey[300],
-                      fontSize: '0.7rem',
-                      mt: 0.25,
-                    })}
-                  >
-                    {formatDate(source.date)}
-                  </Typography>
+                  {source.date && (
+                    <Typography
+                      sx={(theme) => ({
+                        color: theme.palette.grey[300],
+                        fontSize: '0.75rem',
+                        mt: 0.25,
+                      })}
+                    >
+                      {formatDate(source.date)}
+                    </Typography>
+                  )}
                 </Box>
               ))}
             </Box>

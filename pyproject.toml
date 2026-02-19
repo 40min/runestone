@@ -25,12 +25,16 @@ dependencies = [
     "langchain>=0.1.0",
     "langchain-openai>=0.0.5",
     "langchain-community>=0.0.20",
+    "langchain-huggingface>=0.0.3",
     "duckduckgo-search>=6.1.0",
     "pyyaml>=6.0.0",
     "trafilatura>=2.0.0",
     "charset-normalizer>=3.3.0",
     "readability-lxml>=0.8.1",
     "markdownify>=0.12.0",
+    "rank-bm25>=0.2.2",
+    "faiss-cpu>=1.7.0",
+    "sentence-transformers>=3.0.0",
 ]
 
 [project.scripts]

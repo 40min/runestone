@@ -18,6 +18,7 @@ A command-line tool and web application for analyzing Swedish textbook pages usi
 - **🌐 Web API**: REST API for programmatic access to image processing functionality
 - **🖥️ Web Interface**: Responsive web application for easy image upload and results viewing
 - **🧠 Agent Memory**: Structured, user-managed memory items with API + UI support
+- **📚 Grammar RAG**: Hybrid search (BM25 + Vector) over Swedish grammar cheatsheets
 - **🤖 Rune Recall**: Telegram bot for daily vocabulary recall and command processing
 
 ## 🚀 Quick Start
@@ -128,6 +129,8 @@ The API will be available at `http://localhost:8010` with the following endpoint
 - `DELETE /api/memory/{item_id}`: Delete a memory item
 - `DELETE /api/memory?category=...`: Clear a memory category
 - `GET /api/health`: Health check endpoint
+- `GET /api/grammar/search`: Search grammar cheatsheets (RAG)
+- `GET /api/grammar/page/{path}`: Read a specific grammar cheatsheet
 
 API documentation is available at `http://localhost:8010/docs`.
 
@@ -288,6 +291,7 @@ make run-frontend      # Start frontend development server
 make run-dev           # Start both backend and frontend concurrently
 make run-recall        # Start the Rune Recall Telegram Bot Worker
 make migrate-memory    # Migrate legacy user memory to memory_items (use ARGS=...)
+make test-grammar-search QUERY="comparison" # Test grammar RAG search
 
 # Development Workflows
 make dev-test          # Quick development test (install-dev + lint-check + test)
