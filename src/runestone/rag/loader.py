@@ -48,12 +48,13 @@ def load_grammar_documents(index_path: str) -> tuple[list[Document], list[Docume
         url = entry.get("url", "")
         tags = entry.get("tags", [])
         annotation = entry.get("annotation", "")
+        path = entry.get("path", "")
 
         if not url or not annotation:
             logger.warning("Skipping entry with missing url or annotation: %s", entry)
             continue
 
-        metadata = {"url": url, "annotation": annotation, "tags": tags}
+        metadata = {"url": url, "annotation": annotation, "tags": tags, "path": path}
 
         # Keyword document: tags as content
         keyword_content = " ".join(tags) if tags else ""

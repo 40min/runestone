@@ -24,13 +24,14 @@ def mock_grammar_tools():
 
 
 def test_search_grammar_tool(mock_grammar_tools):
-    """Test search_grammar tool formatting and path extraction."""
+    """Test search_grammar tool formatting using metadata path."""
     mock_index, _ = mock_grammar_tools
     mock_doc = Document(
         page_content="Adjective comparison",
         metadata={
             "url": "http://localhost:5173/?view=grammar&cheatsheet=adjectives/komparation",
             "annotation": "Adjective comparison rules",
+            "path": "adjectives/komparation.md",
         },
     )
     mock_index.search.return_value = [mock_doc]
@@ -41,7 +42,7 @@ def test_search_grammar_tool(mock_grammar_tools):
     assert result["tool"] == "search_grammar"
     assert len(result["results"]) == 1
     assert result["results"][0]["title"] == "Adjective comparison rules"
-    assert result["results"][0]["path"] == "adjectives/komparation"
+    assert result["results"][0]["path"] == "adjectives/komparation.md"
     assert result["results"][0]["url"] == "http://localhost:5173/?view=grammar&cheatsheet=adjectives/komparation"
 
 

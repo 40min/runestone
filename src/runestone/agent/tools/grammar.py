@@ -77,16 +77,7 @@ def search_grammar(query: str, top_k: int = 5) -> str:
         for doc in results:
             url = doc.metadata.get("url", "")
             annotation = doc.metadata.get("annotation", "")
-
-            # Extract cheatsheet path from URL for read_grammar_page
-            # URL format: {HOST}/?view=grammar&cheatsheet=adjectives%2Fadjectiv-komparation
-            cheatsheet_path = ""
-            if "cheatsheet=" in url:
-                import urllib.parse
-
-                params = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
-                if "cheatsheet" in params:
-                    cheatsheet_path = urllib.parse.unquote(params["cheatsheet"][0])
+            cheatsheet_path = doc.metadata.get("path", "")
 
             formatted_results.append({"title": annotation, "url": url, "path": cheatsheet_path})
 

@@ -1,162 +1,410 @@
 [
   {
     "url": "{HOST}/?view=grammar&cheatsheet=adjectives%2Fadjectiv-komparation",
-    "tags": ["adjectives", "comparison", "komparation", "comparative", "superlative", "swedish grammar"],
-    "annotation": "A guide to Swedish adjective comparison, covering basic, semi-special, and special forms with rules and examples."
+    "tags": [
+      "adjectives",
+      "comparison",
+      "komparation",
+      "comparative",
+      "superlative",
+      "swedish grammar"
+    ],
+    "annotation": "A guide to Swedish adjective comparison, covering basic, semi-special, and special forms with rules and examples.",
+    "path": "adjectives/adjectiv-komparation.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=adjectives%2Fswedish_adjectives_cheatsheet",
-    "tags": ["adjectives", "en-words", "ett-words", "plural", "agreement", "swedish grammar"],
-    "annotation": "Comprehensive guide to Swedish adjective forms and agreement with en-words, ett-words, and plural nouns, including common exceptions."
+    "tags": [
+      "adjectives",
+      "en-words",
+      "ett-words",
+      "plural",
+      "agreement",
+      "swedish grammar"
+    ],
+    "annotation": "Comprehensive guide to Swedish adjective forms and agreement with en-words, ett-words, and plural nouns, including common exceptions.",
+    "path": "adjectives/swedish_adjectives_cheatsheet.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=adjectives%2Futrop-med-adj",
-    "tags": ["adjectives", "exclamations", "utrop", "vilken", "vad", "swedish grammar"],
-    "annotation": "Explains how to use 'vilken' and 'vad' for exclamations with adjectives in Swedish."
+    "tags": [
+      "adjectives",
+      "exclamations",
+      "utrop",
+      "vilken",
+      "vad",
+      "swedish grammar"
+    ],
+    "annotation": "Explains how to use 'vilken' and 'vad' for exclamations with adjectives in Swedish.",
+    "path": "adjectives/utrop-med-adj.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=adverbs%2FNU_DA_adverb",
-    "tags": ["adverbs", "time", "nu-adverb", "då-adverb", "tenses", "swedish grammar"],
-    "annotation": "Rules for using time adverbs (NU and DÅ) with present perfect and preterite tenses in Swedish."
+    "tags": [
+      "adverbs",
+      "time",
+      "nu-adverb",
+      "då-adverb",
+      "tenses",
+      "swedish grammar"
+    ],
+    "annotation": "Rules for using time adverbs (NU and DÅ) with present perfect and preterite tenses in Swedish.",
+    "path": "adverbs/NU_DA_adverb.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=adverbs%2Fposition_dest_from",
-    "tags": ["adverbs", "location", "position", "destination", "direction", "swedish grammar"],
-    "annotation": "Covers the three forms of Swedish location adverbs: position, destination, and 'from position'."
+    "tags": [
+      "adverbs",
+      "location",
+      "position",
+      "destination",
+      "direction",
+      "swedish grammar"
+    ],
+    "annotation": "Covers the three forms of Swedish location adverbs: position, destination, and 'from position'.",
+    "path": "adverbs/position_dest_from.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=nouns%2Fbestamd_obest_plural",
-    "tags": ["nouns", "plural", "definite", "indefinite", "en-words", "ett-words", "swedish grammar"],
-    "annotation": "Detailed breakdown of Swedish noun forms: singular and plural, definite and indefinite, including irregular nouns."
+    "tags": [
+      "nouns",
+      "plural",
+      "definite",
+      "indefinite",
+      "en-words",
+      "ett-words",
+      "swedish grammar"
+    ],
+    "annotation": "Detailed breakdown of Swedish noun forms: singular and plural, definite and indefinite, including irregular nouns.",
+    "path": "nouns/bestamd_obest_plural.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=nouns%2Fbestamd_obest_rules",
-    "tags": ["nouns", "definiteness", "articles", "rules", "swedish grammar"],
-    "annotation": "The five golden rules for using definite and indefinite forms of nouns in Swedish."
+    "tags": [
+      "nouns",
+      "definiteness",
+      "articles",
+      "rules",
+      "swedish grammar"
+    ],
+    "annotation": "The five golden rules for using definite and indefinite forms of nouns in Swedish.",
+    "path": "nouns/bestamd_obest_rules.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=prepositions%2Fkortsvar",
-    "tags": ["prepositions", "short answers", "kortsvar", "det", "swedish grammar"],
-    "annotation": "Guide to forming short answers (kortsvar) in Swedish using 'det' and appropriate verbs."
+    "tags": [
+      "prepositions",
+      "short answers",
+      "kortsvar",
+      "det",
+      "swedish grammar"
+    ],
+    "annotation": "Guide to forming short answers (kortsvar) in Swedish using 'det' and appropriate verbs.",
+    "path": "prepositions/kortsvar.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=prepositions%2Fprepositioner_pa_i",
-    "tags": ["prepositions", "i", "på", "locations", "places", "swedish grammar"],
-    "annotation": "Rules and examples for when to use the prepositions 'i' and 'på' for different types of locations in Swedish."
+    "tags": [
+      "prepositions",
+      "i",
+      "på",
+      "locations",
+      "places",
+      "swedish grammar"
+    ],
+    "annotation": "Rules and examples for when to use the prepositions 'i' and 'på' for different types of locations in Swedish.",
+    "path": "prepositions/prepositioner_pa_i.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=prepositions%2Ftime_and_days",
-    "tags": ["prepositions", "time", "clock", "days", "seasons", "swedish grammar"],
-    "annotation": "Comprehensive guide to Swedish time expressions, prepositions for time, and telling the clock."
+    "tags": [
+      "prepositions",
+      "time",
+      "clock",
+      "days",
+      "seasons",
+      "swedish grammar"
+    ],
+    "annotation": "Comprehensive guide to Swedish time expressions, prepositions for time, and telling the clock.",
+    "path": "prepositions/time_and_days.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=prepositions%2Futtryck_for_frekvens",
-    "tags": ["prepositions", "frequency", "om", "i", "per", "swedish grammar"],
-    "annotation": "Explains Swedish frequency expressions using 'om', 'i', and 'per', and how to say 'every X days'."
+    "tags": [
+      "prepositions",
+      "frequency",
+      "om",
+      "i",
+      "per",
+      "swedish grammar"
+    ],
+    "annotation": "Explains Swedish frequency expressions using 'om', 'i', and 'per', and how to say 'every X days'.",
+    "path": "prepositions/uttryck_for_frekvens.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=pronouns%2Freflexiva-posessiva-pronomen",
-    "tags": ["pronouns", "possessive", "reflexive", "sin", "sitt", "sina", "swedish grammar"],
-    "annotation": "Explains the use of reflexive possessive pronouns (sin, sitt, sina) versus regular possessive pronouns in Swedish."
+    "tags": [
+      "pronouns",
+      "possessive",
+      "reflexive",
+      "sin",
+      "sitt",
+      "sina",
+      "swedish grammar"
+    ],
+    "annotation": "Explains the use of reflexive possessive pronouns (sin, sitt, sina) versus regular possessive pronouns in Swedish.",
+    "path": "pronouns/reflexiva-posessiva-pronomen.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=pronouns%2Fsjalvstandiga-pronomen",
-    "tags": ["pronouns", "standalone", "people", "things", "någon", "ingen", "allt", "swedish grammar"],
-    "annotation": "Guide to Swedish standalone pronouns for people and things, such as 'någon', 'ingen', 'allt', and 'alla'."
+    "tags": [
+      "pronouns",
+      "standalone",
+      "people",
+      "things",
+      "någon",
+      "ingen",
+      "allt",
+      "swedish grammar"
+    ],
+    "annotation": "Guide to Swedish standalone pronouns for people and things, such as 'någon', 'ingen', 'allt', and 'alla'.",
+    "path": "pronouns/sjalvstandiga-pronomen.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=tenses%2Fperfect_vs_preterium",
-    "tags": ["tenses", "present perfect", "preterite", "har", "hade", "swedish grammar"],
-    "annotation": "Comparison between Swedish present perfect and preterite tenses, with rules on when to use each."
+    "tags": [
+      "tenses",
+      "present perfect",
+      "preterite",
+      "har",
+      "hade",
+      "swedish grammar"
+    ],
+    "annotation": "Comparison between Swedish present perfect and preterite tenses, with rules on when to use each.",
+    "path": "tenses/perfect_vs_preterium.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=tenses%2Fpresens-perfect",
-    "tags": ["tenses", "present perfect", "supinum", "verb groups", "swedish grammar"],
-    "annotation": "Basic formation of the Swedish present perfect tense using 'har' and the supinum form."
+    "tags": [
+      "tenses",
+      "present perfect",
+      "supinum",
+      "verb groups",
+      "swedish grammar"
+    ],
+    "annotation": "Basic formation of the Swedish present perfect tense using 'har' and the supinum form.",
+    "path": "tenses/presens-perfect.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=tenses%2Fpreterium",
-    "tags": ["tenses", "preterite", "past tense", "verb groups", "irregular verbs", "swedish grammar"],
-    "annotation": "Guide to forming the Swedish preterite (past tense) for regular and irregular verb groups."
+    "tags": [
+      "tenses",
+      "preterite",
+      "past tense",
+      "verb groups",
+      "irregular verbs",
+      "swedish grammar"
+    ],
+    "annotation": "Guide to forming the Swedish preterite (past tense) for regular and irregular verb groups.",
+    "path": "tenses/preterium.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=tenses%2Fsupinum",
-    "tags": ["tenses", "supinum", "present perfect", "verb groups", "swedish grammar"],
-    "annotation": "Focuses on the supinum form of Swedish verbs used to form the present perfect tense."
+    "tags": [
+      "tenses",
+      "supinum",
+      "present perfect",
+      "verb groups",
+      "swedish grammar"
+    ],
+    "annotation": "Focuses on the supinum form of Swedish verbs used to form the present perfect tense.",
+    "path": "tenses/supinum.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=tenses%2Fsvenska_presens_och_tidsadverb",
-    "tags": ["tenses", "present tense", "future", "time adverbs", "prepositions", "swedish grammar"],
-    "annotation": "Using the Swedish present tense for the future and rules for time adverbs and prepositions."
+    "tags": [
+      "tenses",
+      "present tense",
+      "future",
+      "time adverbs",
+      "prepositions",
+      "swedish grammar"
+    ],
+    "annotation": "Using the Swedish present tense for the future and rules for time adverbs and prepositions.",
+    "path": "tenses/svenska_presens_och_tidsadverb.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=tiny-bits%2Farticles_usage",
-    "tags": ["articles", "definite", "indefinite", "rules", "swedish grammar"],
-    "annotation": "Detailed guide on when to use definite and indefinite articles in Swedish, including fixed expressions."
+    "tags": [
+      "articles",
+      "definite",
+      "indefinite",
+      "rules",
+      "swedish grammar"
+    ],
+    "annotation": "Detailed guide on when to use definite and indefinite articles in Swedish, including fixed expressions.",
+    "path": "tiny-bits/articles_usage.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=tiny-bits%2Fkomparation",
-    "tags": ["comparison", "komparation", "adjectives", "adverbs", "swedish grammar"],
-    "annotation": "Quick reference for Swedish comparison forms of common adjectives and adverbs like 'många', 'få', and 'lite'."
+    "tags": [
+      "comparison",
+      "komparation",
+      "adjectives",
+      "adverbs",
+      "swedish grammar"
+    ],
+    "annotation": "Quick reference for Swedish comparison forms of common adjectives and adverbs like 'många', 'få', and 'lite'.",
+    "path": "tiny-bits/komparation.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=tiny-bits%2Fobjectspronomen",
-    "tags": ["pronouns", "object pronouns", "swedish grammar"],
-    "annotation": "Table of Swedish subject and object pronouns with English translations."
+    "tags": [
+      "pronouns",
+      "object pronouns",
+      "swedish grammar"
+    ],
+    "annotation": "Table of Swedish subject and object pronouns with English translations.",
+    "path": "tiny-bits/objectspronomen.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=tiny-bits%2Focksa_heller",
-    "tags": ["adverbs", "agreement", "också", "heller", "negation", "swedish grammar"],
-    "annotation": "Rules for positive and negative agreement in Swedish using 'också' and 'inte heller'."
+    "tags": [
+      "adverbs",
+      "agreement",
+      "också",
+      "heller",
+      "negation",
+      "swedish grammar"
+    ],
+    "annotation": "Rules for positive and negative agreement in Swedish using 'också' and 'inte heller'.",
+    "path": "tiny-bits/ocksa_heller.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=tiny-bits%2Fpossessiva_pronomonen",
-    "tags": ["pronouns", "possessive pronouns", "en-words", "ett-words", "plural", "swedish grammar"],
-    "annotation": "Table of Swedish possessive pronouns for all persons and noun genders."
+    "tags": [
+      "pronouns",
+      "possessive pronouns",
+      "en-words",
+      "ett-words",
+      "plural",
+      "swedish grammar"
+    ],
+    "annotation": "Table of Swedish possessive pronouns for all persons and noun genders.",
+    "path": "tiny-bits/possessiva_pronomonen.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=tiny-bits%2Fpronunciation",
-    "tags": ["pronunciation", "consonants", "vowels", "hard vowels", "soft vowels", "swedish grammar"],
-    "annotation": "Guide to Swedish pronunciation of 'g', 'k', and 'sk' before hard and soft vowels."
+    "tags": [
+      "pronunciation",
+      "consonants",
+      "vowels",
+      "hard vowels",
+      "soft vowels",
+      "swedish grammar"
+    ],
+    "annotation": "Guide to Swedish pronunciation of 'g', 'k', and 'sk' before hard and soft vowels.",
+    "path": "tiny-bits/pronunciation.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=tiny-bits%2Fswedish-seasons-prepositions-cheatsheet",
-    "tags": ["seasons", "prepositions", "time expressions", "swedish grammar"],
-    "annotation": "Rules for using prepositions with Swedish seasons for habitual, past, and upcoming time."
+    "tags": [
+      "seasons",
+      "prepositions",
+      "time expressions",
+      "swedish grammar"
+    ],
+    "annotation": "Rules for using prepositions with Swedish seasons for habitual, past, and upcoming time.",
+    "path": "tiny-bits/swedish-seasons-prepositions-cheatsheet.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=verbs%2Fatt_cheat_sheet",
-    "tags": ["verbs", "att", "infinitive", "modal verbs", "swedish grammar"],
-    "annotation": "Explains when to use the infinitive marker 'att' in Swedish and when to omit it (especially with modal verbs)."
+    "tags": [
+      "verbs",
+      "att",
+      "infinitive",
+      "modal verbs",
+      "swedish grammar"
+    ],
+    "annotation": "Explains when to use the infinitive marker 'att' in Swedish and when to omit it (especially with modal verbs).",
+    "path": "verbs/att_cheat_sheet.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=verbs%2Fhjalpverb",
-    "tags": ["verbs", "auxiliary verbs", "hjälpverb", "modal verbs", "swedish grammar"],
-    "annotation": "Guide to common Swedish auxiliary verbs (hjälpverb) and their usage with the infinitive form."
+    "tags": [
+      "verbs",
+      "auxiliary verbs",
+      "hjälpverb",
+      "modal verbs",
+      "swedish grammar"
+    ],
+    "annotation": "Guide to common Swedish auxiliary verbs (hjälpverb) and their usage with the infinitive form.",
+    "path": "verbs/hjalpverb.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=verbs%2Fposition-verbs",
-    "tags": ["verbs", "position verbs", "sitter och", "står och", "ligger och", "swedish grammar"],
-    "annotation": "Explains the use of Swedish position verbs (sitter, står, ligger och) to describe ongoing actions."
+    "tags": [
+      "verbs",
+      "position verbs",
+      "sitter och",
+      "står och",
+      "ligger och",
+      "swedish grammar"
+    ],
+    "annotation": "Explains the use of Swedish position verbs (sitter, står, ligger och) to describe ongoing actions.",
+    "path": "verbs/position-verbs.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=verbs%2Fverb-forms",
-    "tags": ["verbs", "verb groups", "imperative", "infinitive", "present tense", "preterite", "supinum", "swedish grammar"],
-    "annotation": "Comprehensive overview of Swedish verb groups and their different forms (imperative, infinitive, present, past, supinum)."
+    "tags": [
+      "verbs",
+      "verb groups",
+      "imperative",
+      "infinitive",
+      "present tense",
+      "preterite",
+      "supinum",
+      "swedish grammar"
+    ],
+    "annotation": "Comprehensive overview of Swedish verb groups and their different forms (imperative, infinitive, present, past, supinum).",
+    "path": "verbs/verb-forms.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=word_order%2Fdirekt_indirekt_tal",
-    "tags": ["word order", "indirect speech", "att", "om", "subordinate clauses", "swedish grammar"],
-    "annotation": "Guide to forming indirect speech in Swedish, covering statements, questions, and word order rules."
+    "tags": [
+      "word order",
+      "indirect speech",
+      "att",
+      "om",
+      "subordinate clauses",
+      "swedish grammar"
+    ],
+    "annotation": "Guide to forming indirect speech in Swedish, covering statements, questions, and word order rules.",
+    "path": "word_order/direkt_indirekt_tal.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=word_order%2Frelative_clauses_som_dar",
-    "tags": ["word order", "relative clauses", "som", "där", "swedish grammar"],
-    "annotation": "Explains the use of 'som' and 'där' in Swedish relative clauses."
+    "tags": [
+      "word order",
+      "relative clauses",
+      "som",
+      "där",
+      "swedish grammar"
+    ],
+    "annotation": "Explains the use of 'som' and 'där' in Swedish relative clauses.",
+    "path": "word_order/relative_clauses_som_dar.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=word_order%2Fsubjunktjoner",
-    "tags": ["word order", "conjunctions", "subjunktjoner", "time", "contrast", "swedish grammar"],
-    "annotation": "Guide to Swedish subordinating conjunctions (subjunktjoner) for time, contrast, and purpose."
+    "tags": [
+      "word order",
+      "conjunctions",
+      "subjunktjoner",
+      "time",
+      "contrast",
+      "swedish grammar"
+    ],
+    "annotation": "Guide to Swedish subordinating conjunctions (subjunktjoner) for time, contrast, and purpose.",
+    "path": "word_order/subjunktjoner.md"
   }
 ]

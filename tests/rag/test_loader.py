@@ -17,11 +17,13 @@ def mock_grammar_data(tmp_path):
             "url": "http://localhost:5173/?view=grammar&cheatsheet=verbs/presens",
             "tags": ["verb", "presens"],
             "annotation": "How to conjugate verbs in present tense",
+            "path": "verbs/presens.md",
         },
         {
             "url": "http://localhost:5173/?view=grammar&cheatsheet=nouns/plurall",
             "tags": ["noun", "plural"],
             "annotation": "Noun plural endings",
+            "path": "nouns/plural.md",
         },
     ]
 
@@ -43,10 +45,12 @@ def test_load_grammar_documents(mock_grammar_data):
     # Check keyword doc (tags as content)
     assert keyword_docs[0].page_content == "verb presens"
     assert keyword_docs[0].metadata["url"] == "http://localhost:5173/?view=grammar&cheatsheet=verbs/presens"
+    assert keyword_docs[0].metadata["path"] == "verbs/presens.md"
 
     # Check vector doc (annotation as content)
     assert vector_docs[1].page_content == "Noun plural endings"
     assert vector_docs[1].metadata["tags"] == ["noun", "plural"]
+    assert vector_docs[1].metadata["path"] == "nouns/plural.md"
 
 
 def test_load_grammar_documents_not_found():
