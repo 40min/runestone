@@ -373,8 +373,7 @@ to read its contents before deciding.
                 lines.append(f"{idx}. {title} ({date}) - {url}")
         return "\n".join(lines)
 
-    @staticmethod
-    def _is_safe_url(url: str) -> bool:
+    def _is_safe_url(self, url: str) -> bool:
         try:
             parsed = urlparse(url)
         except ValueError:
@@ -391,7 +390,16 @@ to read its contents before deciding.
         if parsed.scheme not in {"http", "https"}:
             logger.info("Rejected source URL (scheme not allowed): %s", url)
             return False
-        if port is not None and port not in {80, 443}:
+
+        allowed_ports = {80, 443}
+        try:
+            app_parsed = urlparse(self.settings.app_base_url)
+            if app_parsed.port:
+                allowed_ports.add(app_parsed.port)
+        except (ValueError, AttributeError):
+            pass
+
+        if port is not None and port not in allowed_ports:
             logger.info("Rejected source URL (port not allowed): %s", url)
             return False
         if not parsed.netloc:

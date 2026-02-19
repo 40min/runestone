@@ -24,6 +24,7 @@ def mock_settings():
     settings.agent_persona = "default"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
+    settings.app_base_url = "http://localhost:5173"
     return settings
 
 
@@ -263,3 +264,24 @@ async def test_generate_response_filters_unsafe_urls(
     )
 
     assert sources == [{"title": "Safe", "url": "https://example.com", "date": "2026-02-05"}]
+
+
+def test_is_safe_url(agent_service):
+    """Test URL safety validation."""
+    # Standard ports
+    assert agent_service._is_safe_url("https://example.com") is True
+    assert agent_service._is_safe_url("http://example.com") is True
+
+    # Blocked schemes
+    assert agent_service._is_safe_url("javascript:alert(1)") is False
+    assert agent_service._is_safe_url("ftp://example.com") is False
+
+    # App port (5173 from mock_settings)
+    assert agent_service._is_safe_url("http://localhost:5173/?view=grammar") is True
+
+    # Other ports still blocked
+    assert agent_service._is_safe_url("http://localhost:8080") is False
+
+    # Invalid URLs
+    assert agent_service._is_safe_url("http://[invalid-ip]") is False
+    assert agent_service._is_safe_url("http://user:pass@example.com") is False
