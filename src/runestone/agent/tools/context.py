@@ -4,6 +4,8 @@ import asyncio
 from dataclasses import dataclass
 
 from runestone.db.models import User
+from runestone.rag.index import GrammarIndex
+from runestone.services.grammar_service import GrammarService
 from runestone.services.memory_item_service import MemoryItemService
 from runestone.services.vocabulary_service import VocabularyService
 
@@ -18,3 +20,5 @@ class AgentContext:
     memory_item_service: MemoryItemService
     # Lock to prevent concurrent database access from multiple tool calls
     db_lock: "asyncio.Lock"
+    grammar_index: GrammarIndex | None = None
+    grammar_service: GrammarService | None = None

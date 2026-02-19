@@ -33,6 +33,8 @@ from runestone.agent.tools.read_url import read_url
 from runestone.agent.tools.vocabulary import prioritize_words_for_learning
 from runestone.config import Settings
 from runestone.db.models import User
+from runestone.rag.index import GrammarIndex
+from runestone.services.grammar_service import GrammarService
 from runestone.services.vocabulary_service import VocabularyService
 
 logger = logging.getLogger(__name__)
@@ -43,7 +45,12 @@ class AgentService:
 
     MAX_HISTORY_MESSAGES = 20
 
-    def __init__(self, settings: Settings):
+    def __init__(
+        self,
+        settings: Settings,
+        grammar_index: GrammarIndex | None = None,
+        grammar_service: GrammarService | None = None,
+    ):
         """
         Initialize the agent service.
 
@@ -51,6 +58,8 @@ class AgentService:
             settings: Application settings containing chat configuration
         """
         self.settings = settings
+        self.grammar_index = grammar_index
+        self.grammar_service = grammar_service
         self.persona = load_persona(settings.agent_persona)
         self.agent = self.build_agent()
 
@@ -269,6 +278,8 @@ to read its contents before deciding.
                     vocabulary_service=vocabulary_service,
                     memory_item_service=memory_item_service,
                     db_lock=asyncio.Lock(),
+                    grammar_index=self.grammar_index,
+                    grammar_service=self.grammar_service,
                 ),
             )
 

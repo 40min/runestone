@@ -5,31 +5,13 @@ Grammar search and reading tools for the teacher agent.
 import json
 import logging
 
+from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from runestone.rag.index import GrammarIndex
-from runestone.services.grammar_service import GrammarService
+from runestone.agent.tools.context import AgentContext
 
 logger = logging.getLogger(__name__)
-
-# Module-level singleton reference
-_grammar_index: GrammarIndex | None = None
-_grammar_service: GrammarService | None = None
-
-
-def init_grammar_index(index: GrammarIndex | None, grammar_service: GrammarService | None = None) -> None:
-    """
-    Initialize the module-level grammar index singleton.
-
-    Args:
-        index: GrammarIndex instance created at app startup
-        grammar_service: GrammarService instance created at app startup
-    """
-    global _grammar_index, _grammar_service
-    _grammar_index = index
-    _grammar_service = grammar_service
-    logger.info("Grammar index initialized for agent tools")
 
 
 class SearchGrammarInput(BaseModel):
@@ -48,7 +30,11 @@ class ReadGrammarPageInput(BaseModel):
 
 
 @tool("search_grammar", args_schema=SearchGrammarInput)
-def search_grammar(query: str, top_k: int = 5) -> str:
+def search_grammar(
+    query: str,
+    runtime: ToolRuntime[AgentContext],
+    top_k: int = 5,
+) -> str:
     """
     Search for relevant Swedish grammar cheatsheet pages.
 
@@ -64,32 +50,39 @@ def search_grammar(query: str, top_k: int = 5) -> str:
         JSON string with search results in the format:
         {"tool": "search_grammar", "results": [{"title": "...", "url": "...", "path": "..."}]}
     """
-    if _grammar_index is None:
+    if runtime is None:
+        return json.dumps({"error": "Missing tool runtime context"})
+
+    grammar_index = runtime.context.grammar_index
+    if grammar_index is None:
         return json.dumps({"error": "Grammar index not initialized"})
 
     try:
-        results = _grammar_index.search(query, top_k=top_k)
-
+        results = grammar_index.search(query, top_k=top_k)
         if not results:
             return json.dumps({"tool": "search_grammar", "results": []})
 
         formatted_results = []
         for doc in results:
-            url = doc.metadata.get("url", "")
-            annotation = doc.metadata.get("annotation", "")
-            cheatsheet_path = doc.metadata.get("path", "")
-
-            formatted_results.append({"title": annotation, "url": url, "path": cheatsheet_path})
+            formatted_results.append(
+                {
+                    "title": doc.metadata.get("annotation", ""),
+                    "url": doc.metadata.get("url", ""),
+                    "path": doc.metadata.get("path", ""),
+                }
+            )
 
         return json.dumps({"tool": "search_grammar", "results": formatted_results})
-
     except Exception as e:
         logger.exception("Error searching grammar: %s", e)
         return json.dumps({"error": f"Grammar search failed: {str(e)}"})
 
 
 @tool("read_grammar_page", args_schema=ReadGrammarPageInput)
-def read_grammar_page(cheatsheet_path: str) -> str:
+def read_grammar_page(
+    cheatsheet_path: str,
+    runtime: ToolRuntime[AgentContext],
+) -> str:
     """
     Read the full content of a specific grammar cheatsheet page.
 
@@ -102,13 +95,16 @@ def read_grammar_page(cheatsheet_path: str) -> str:
     Returns:
         Markdown content of the cheatsheet or error message
     """
-    if _grammar_service is None:
-        return "Error: Grammar index not initialized"
+    if runtime is None:
+        return "Error: Missing tool runtime context"
+
+    grammar_service = runtime.context.grammar_service
+    if grammar_service is None:
+        return "Error: Grammar service not initialized"
 
     try:
         filepath = cheatsheet_path if cheatsheet_path.endswith(".md") else f"{cheatsheet_path}.md"
-        content = _grammar_service.get_cheatsheet_content(filepath)
-        return content
+        return grammar_service.get_cheatsheet_content(filepath)
     except FileNotFoundError:
         return f"Error: Grammar page not found: {cheatsheet_path}"
     except ValueError as e:

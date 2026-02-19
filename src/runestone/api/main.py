@@ -12,7 +12,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from runestone.agent.service import AgentService
-from runestone.agent.tools.grammar import init_grammar_index
 from runestone.api.audio_ws import router as audio_ws_router
 from runestone.api.auth_endpoints import router as auth_router
 from runestone.api.chat_endpoints import router as chat_router
@@ -50,8 +49,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     app.state.grammar_service = GrammarService(settings.cheatsheets_dir)
     app.state.grammar_index = GrammarIndex(settings.cheatsheets_dir, settings.app_base_url)
-    init_grammar_index(app.state.grammar_index, app.state.grammar_service)
-    app.state.agent_service = AgentService(settings)
+    app.state.agent_service = AgentService(
+        settings,
+        grammar_index=app.state.grammar_index,
+        grammar_service=app.state.grammar_service,
+    )
     app.state.tts_service = TTSService(settings)
     yield
     # Shutdown
