@@ -28,13 +28,15 @@ class GrammarIndex:
         Args:
             cheatsheets_dir: Directory containing cheatsheets and index.json
             app_base_url: Base URL to resolve {HOST} placeholders in URLs
-
-        Raises:
-            FileNotFoundError: If index.json doesn't exist
-            ValueError: If index.json is malformed
         """
         self.cheatsheets_dir = cheatsheets_dir
         self.app_base_url = app_base_url.rstrip("/")
+        self._initialized = False
+
+    def _initialize(self):
+        """Perform delayed loading of index to avoid app startup delay."""
+        if self._initialized:
+            return
 
         index_path = str(Path(self.cheatsheets_dir) / "index.json")
         logger.info("Loading grammar documents from %s", index_path)
@@ -61,6 +63,7 @@ class GrammarIndex:
             retrievers=[self.bm25_retriever, self.vector_retriever], weights=[0.5, 0.5]
         )
 
+        self._initialized = True
         logger.info("Grammar index initialized successfully")
 
     def search(self, query: str, top_k: int = 5) -> list[Document]:
@@ -76,6 +79,8 @@ class GrammarIndex:
         """
         if not query.strip():
             return []
+
+        self._initialize()
 
         results = self.ensemble_retriever.invoke(query)
 

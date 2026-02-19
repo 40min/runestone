@@ -47,6 +47,9 @@ def test_grammar_index_init(mock_grammar_files, mock_embeddings):
     """Test initialization of GrammarIndex."""
     index = GrammarIndex(str(mock_grammar_files), "http://test-host:5173")
 
+    # Initialize because it's lazy loaded
+    index._initialize()
+
     assert index.app_base_url == "http://test-host:5173"
     assert index.bm25_retriever is not None
     assert index.vector_store is not None
