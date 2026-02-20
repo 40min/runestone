@@ -23,6 +23,7 @@ from runestone.config import settings
 from runestone.core.clients.factory import create_llm_client
 from runestone.core.logging_config import setup_logging
 from runestone.db.database import setup_database
+from runestone.rag.index import GrammarIndex
 from runestone.services.grammar_service import GrammarService
 from runestone.services.tts_service import TTSService
 
@@ -47,7 +48,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         else app.state.llm_client
     )
     app.state.grammar_service = GrammarService(settings.cheatsheets_dir)
-    app.state.agent_service = AgentService(settings)
+    app.state.grammar_index = GrammarIndex(settings.cheatsheets_dir, settings.app_base_url)
+    app.state.agent_service = AgentService(
+        settings,
+        grammar_index=app.state.grammar_index,
+        grammar_service=app.state.grammar_service,
+    )
     app.state.tts_service = TTSService(settings)
     yield
     # Shutdown

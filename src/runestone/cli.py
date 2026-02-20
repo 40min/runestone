@@ -32,6 +32,7 @@ from runestone.core.prompt_builder.types import ImprovementMode
 from runestone.db.models import User
 from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
+from runestone.rag.index import GrammarIndex
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 
@@ -387,9 +388,9 @@ def analysis(text: str):
         sys.exit(1)
 
 
-@test_prompts.command()
+@test_prompts.command(name="search")
 @click.argument("topics", nargs=-1, required=True)
-def search(topics):
+def test_search_prompt(topics):
     """Test search prompt building with topics."""
     try:
         builder = PromptBuilder()
@@ -438,6 +439,35 @@ def vocabulary(word: str, mode: str):
         console.print(f"\n[green]Word:[/green] {word}")
         console.print(f"[green]Mode:[/green] {mode}")
         console.print(f"[green]Prompt length:[/green] {len(prompt)} characters")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+
+@cli.group()
+def rag():
+    """RAG (Retrieval Augmented Generation) related commands."""
+    pass
+
+
+@rag.command(name="search")
+@click.argument("query")
+@click.option("--top-k", default=5, help="Number of results to return")
+def rag_search(query: str, top_k: int):
+    """Search grammar index for relevant pages."""
+    try:
+        index = GrammarIndex(settings.cheatsheets_dir, settings.app_base_url)
+        results = index.search(query, top_k=top_k)
+
+        console.print(f"\n🔍 Search results for: [bold cyan]{query}[/bold cyan]\n")
+        if not results:
+            console.print("No results found.")
+        else:
+            for i, doc in enumerate(results, 1):
+                url = doc.metadata.get("url", "N/A")
+                annotation = doc.metadata.get("annotation", "N/A")
+                console.print(f"{i}. [bold]{annotation}[/bold]")
+                console.print(f"   URL: {url}\n")
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         sys.exit(1)

@@ -24,6 +24,7 @@ def mock_settings():
     settings.agent_persona = "default"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
+    settings.app_base_url = "http://localhost:5173"
     return settings
 
 
@@ -81,8 +82,9 @@ def test_build_agent(mock_settings, mock_chat_model, mock_user_service):
             # Verify tools were passed to create_agent
             tools = mock_create_agent.call_args[1]["tools"]
             # read_memory, upsert_memory_item, update_memory_status, promote_to_strength,
-            # prioritize_words_for_learning, search_news_with_dates, read_url
-            assert len(tools) == 9
+            # delete_memory_item, start_student_info, prioritize_words_for_learning,
+            # search_news_with_dates, search_grammar, read_grammar_page, read_url
+            assert len(tools) == 11
             assert "MEMORY PROTOCOL" in call_kwargs["system_prompt"]
 
 
@@ -190,8 +192,8 @@ def test_openai_provider_configuration(mock_settings, mock_user_service):
     assert call_kwargs.get("base_url") is None  # No custom base for OpenAI
 
 
-def test_format_news_sources():
-    """Test that news sources are formatted with cap and domain metadata."""
+def test_format_sources():
+    """Test that sources are formatted with cap and domain metadata."""
     sources = []
     for idx in range(1, 25):
         sources.append(
@@ -202,7 +204,7 @@ def test_format_news_sources():
             }
         )
 
-    formatted = AgentService._format_news_sources(sources)
+    formatted = AgentService._format_sources(sources)
     assert formatted.count("\n") >= 1
     assert "[NEWS_SOURCES]" in formatted
     assert "example.com" in formatted
@@ -262,3 +264,61 @@ async def test_generate_response_filters_unsafe_urls(
     )
 
     assert sources == [{"title": "Safe", "url": "https://example.com", "date": "2026-02-05"}]
+
+
+@pytest.mark.anyio
+async def test_generate_response_does_not_cap_grammar_sources(
+    agent_service, mock_user, mock_vocabulary_service, mock_memory_item_service
+):
+    """Test that grammar tool output is not capped by backend extraction."""
+    agent_service.agent.ainvoke.return_value = {
+        "messages": [
+            ToolMessage(
+                content=(
+                    '{"tool":"search_grammar","results":['
+                    '{"title":"Doc 1","url":"https://example.com/1"},'
+                    '{"title":"Doc 2","url":"https://example.com/2"},'
+                    '{"title":"Doc 3","url":"https://example.com/3"},'
+                    '{"title":"Doc 4","url":"https://example.com/4"},'
+                    '{"title":"Doc 5","url":"https://example.com/5"}'
+                    "]}"
+                ),
+                tool_call_id="tool-call-3",
+            ),
+            AIMessage(content="Svar med grammatik-källor"),
+        ]
+    }
+
+    response, sources = await agent_service.generate_response(
+        "Grammatik", [], mock_user, mock_vocabulary_service, mock_memory_item_service
+    )
+
+    assert response == "Svar med grammatik-källor"
+    assert sources == [
+        {"title": "Doc 1", "url": "https://example.com/1", "date": ""},
+        {"title": "Doc 2", "url": "https://example.com/2", "date": ""},
+        {"title": "Doc 3", "url": "https://example.com/3", "date": ""},
+        {"title": "Doc 4", "url": "https://example.com/4", "date": ""},
+        {"title": "Doc 5", "url": "https://example.com/5", "date": ""},
+    ]
+
+
+def test_is_safe_url(agent_service):
+    """Test URL safety validation."""
+    # Standard ports
+    assert agent_service._is_safe_url("https://example.com") is True
+    assert agent_service._is_safe_url("http://example.com") is True
+
+    # Blocked schemes
+    assert agent_service._is_safe_url("javascript:alert(1)") is False
+    assert agent_service._is_safe_url("ftp://example.com") is False
+
+    # App port (5173 from mock_settings)
+    assert agent_service._is_safe_url("http://localhost:5173/?view=grammar") is True
+
+    # Other ports still blocked
+    assert agent_service._is_safe_url("http://localhost:8080") is False
+
+    # Invalid URLs
+    assert agent_service._is_safe_url("http://[invalid-ip]") is False
+    assert agent_service._is_safe_url("http://user:pass@example.com") is False

@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     # Application Settings
     allowed_origins: str
     cheatsheets_dir: str = "cheatsheets"
+    app_base_url: str = "http://localhost:5173"
     # Telegram Configuration
     telegram_bot_token: str
     verbose: bool = False

@@ -20,6 +20,58 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
     }
     return null;
   };
+  const renderContentWithLinks = (text: string): React.ReactNode => {
+    if (!text) return text;
+
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    const nodes: React.ReactNode[] = [];
+
+    for (let index = 0; index < parts.length; index += 1) {
+      const part = parts[index];
+      const isUrl = index % 2 === 1;
+      if (!isUrl) {
+        nodes.push(part);
+        continue;
+      }
+
+      let url = part;
+      let trailing = '';
+      while (url.length > 0 && /[).,;:!?]/.test(url[url.length - 1])) {
+        trailing = url[url.length - 1] + trailing;
+        url = url.slice(0, -1);
+      }
+
+      const safeUrl = resolveSafeUrl(url);
+      if (safeUrl) {
+        nodes.push(
+          <Link
+            key={`link-${index}`}
+            href={safeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            underline="always"
+            sx={{
+              color: 'var(--primary-color)',
+              textDecorationColor: 'var(--primary-color)',
+              fontWeight: 500,
+              '&:hover': {
+                color: 'var(--primary-color)',
+              },
+            }}
+          >
+            {url}
+          </Link>
+        );
+      } else {
+        nodes.push(part);
+      }
+
+      if (trailing) nodes.push(trailing);
+    }
+
+    return nodes;
+  };
   const formatDate = (value: string) => {
     if (!value) return value;
     return value.replace(/\.\d+(?=Z|$)/, '');
@@ -53,7 +105,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
             wordBreak: 'break-word',
           }}
         >
-          {content}
+          {renderContentWithLinks(content)}
         </Typography>
         {hasSources && (
           <Box sx={{ mt: 1.5 }}>
@@ -85,12 +137,16 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
                         href={safeUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        underline="hover"
-                        sx={(theme) => ({
-                          color: theme.palette.common.white,
+                        underline="always"
+                        sx={{
+                          color: 'var(--primary-color)',
+                          textDecorationColor: 'var(--primary-color)',
                           fontSize: '0.9rem',
                           fontWeight: 500,
-                        })}
+                          '&:hover': {
+                            color: 'var(--primary-color)',
+                          },
+                        }}
                       >
                         {source.title}
                       </Link>
@@ -106,15 +162,17 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
                       </Typography>
                     );
                   })()}
-                  <Typography
-                    sx={(theme) => ({
-                      color: theme.palette.grey[300],
-                      fontSize: '0.7rem',
-                      mt: 0.25,
-                    })}
-                  >
-                    {formatDate(source.date)}
-                  </Typography>
+                  {source.date && (
+                    <Typography
+                      sx={(theme) => ({
+                        color: theme.palette.grey[300],
+                        fontSize: '0.75rem',
+                        mt: 0.25,
+                      })}
+                    >
+                      {formatDate(source.date)}
+                    </Typography>
+                  )}
                 </Box>
               ))}
             </Box>
