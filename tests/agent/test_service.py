@@ -266,6 +266,43 @@ async def test_generate_response_filters_unsafe_urls(
     assert sources == [{"title": "Safe", "url": "https://example.com", "date": "2026-02-05"}]
 
 
+@pytest.mark.anyio
+async def test_generate_response_does_not_cap_grammar_sources(
+    agent_service, mock_user, mock_vocabulary_service, mock_memory_item_service
+):
+    """Test that grammar tool output is not capped by backend extraction."""
+    agent_service.agent.ainvoke.return_value = {
+        "messages": [
+            ToolMessage(
+                content=(
+                    '{"tool":"search_grammar","results":['
+                    '{"title":"Doc 1","url":"https://example.com/1"},'
+                    '{"title":"Doc 2","url":"https://example.com/2"},'
+                    '{"title":"Doc 3","url":"https://example.com/3"},'
+                    '{"title":"Doc 4","url":"https://example.com/4"},'
+                    '{"title":"Doc 5","url":"https://example.com/5"}'
+                    "]}"
+                ),
+                tool_call_id="tool-call-3",
+            ),
+            AIMessage(content="Svar med grammatik-källor"),
+        ]
+    }
+
+    response, sources = await agent_service.generate_response(
+        "Grammatik", [], mock_user, mock_vocabulary_service, mock_memory_item_service
+    )
+
+    assert response == "Svar med grammatik-källor"
+    assert sources == [
+        {"title": "Doc 1", "url": "https://example.com/1", "date": ""},
+        {"title": "Doc 2", "url": "https://example.com/2", "date": ""},
+        {"title": "Doc 3", "url": "https://example.com/3", "date": ""},
+        {"title": "Doc 4", "url": "https://example.com/4", "date": ""},
+        {"title": "Doc 5", "url": "https://example.com/5", "date": ""},
+    ]
+
+
 def test_is_safe_url(agent_service):
     """Test URL safety validation."""
     # Standard ports

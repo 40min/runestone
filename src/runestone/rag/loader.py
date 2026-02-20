@@ -5,6 +5,7 @@ Grammar document loading for RAG indexing.
 import json
 import logging
 from pathlib import Path
+from urllib.parse import urlparse
 
 from langchain_core.documents import Document
 
@@ -48,11 +49,21 @@ def load_grammar_documents(index_path: str) -> tuple[list[Document], list[Docume
         url = entry.get("url", "")
         tags = entry.get("tags", [])
         annotation = entry.get("annotation", "")
-        path = entry.get("path", "")
+        path = entry.get("path") or ""
 
         if not url or not annotation:
             logger.warning("Skipping entry with missing url or annotation: %s", entry)
             continue
+
+        # fallback to path from url if not provided
+        if not path:
+            path = get_path_from_url(url)
+
+        if not path:
+            logger.warning("Skipping entry with missing path: %s", entry)
+            continue
+
+        path = path.lstrip("/")
 
         metadata = {"url": url, "annotation": annotation, "tags": tags, "path": path}
 
@@ -66,3 +77,17 @@ def load_grammar_documents(index_path: str) -> tuple[list[Document], list[Docume
 
     logger.info("Loaded %d keyword docs and %d vector docs from %s", len(keyword_docs), len(vector_docs), index_path)
     return keyword_docs, vector_docs
+
+
+def get_path_from_url(url: str) -> str:
+    """
+    Extract path from URL and append .md if missing.
+    """
+    try:
+        parsed_url = urlparse(url)
+        path = parsed_url.path.lstrip("/")
+        if not path.endswith(".md"):
+            path = f"{path}.md"
+        return path
+    except Exception:
+        return ""

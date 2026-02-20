@@ -18,7 +18,7 @@ class SearchGrammarInput(BaseModel):
     """Input for search_grammar tool."""
 
     query: str = Field(description="Search query for grammar topics (e.g., 'adjective comparison', 'past tense')")
-    top_k: int = Field(default=5, description="Maximum number of results to return", ge=1, le=10)
+    top_k: int = Field(default=3, description="Maximum number of results to return", ge=1, le=3)
 
 
 class ReadGrammarPageInput(BaseModel):
@@ -33,7 +33,7 @@ class ReadGrammarPageInput(BaseModel):
 def search_grammar(
     query: str,
     runtime: ToolRuntime[AgentContext],
-    top_k: int = 5,
+    top_k: int = 3,
 ) -> str:
     """
     Search for relevant Swedish grammar cheatsheet pages.
@@ -44,7 +44,7 @@ def search_grammar(
 
     Args:
         query: Search query describing the grammar topic
-        top_k: Maximum number of results to return (1-10)
+        top_k: Maximum number of results to return (1-3)
 
     Returns:
         JSON string with search results in the format:

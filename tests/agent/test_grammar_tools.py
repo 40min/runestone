@@ -50,7 +50,7 @@ def test_search_grammar_no_results(mock_grammar_tools):
     """Test search_grammar with no results."""
     runtime, mock_index, _ = mock_grammar_tools
     mock_index.search.return_value = []
-    result_json = grammar_tools.search_grammar.func(query="nonexistent", top_k=5, runtime=runtime)
+    result_json = grammar_tools.search_grammar.func(query="nonexistent", top_k=3, runtime=runtime)
     result = json.loads(result_json)
 
     assert result["tool"] == "search_grammar"

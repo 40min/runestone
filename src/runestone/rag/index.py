@@ -3,6 +3,7 @@ Grammar search index using hybrid BM25 + FAISS retrieval.
 """
 
 import logging
+import threading
 from pathlib import Path
 
 from langchain_classic.retrievers.ensemble import EnsembleRetriever
@@ -32,39 +33,44 @@ class GrammarIndex:
         self.cheatsheets_dir = cheatsheets_dir
         self.app_base_url = app_base_url.rstrip("/")
         self._initialized = False
+        self._init_lock = threading.Lock()
 
     def _initialize(self):
         """Perform delayed loading of index to avoid app startup delay."""
         if self._initialized:
             return
 
-        index_path = str(Path(self.cheatsheets_dir) / "index.json")
-        logger.info("Loading grammar documents from %s", index_path)
+        with self._init_lock:
+            if self._initialized:
+                return
 
-        keyword_docs, vector_docs = load_grammar_documents(index_path)
+            index_path = str(Path(self.cheatsheets_dir) / "index.json")
+            logger.info("Loading grammar documents from %s", index_path)
 
-        if not keyword_docs or not vector_docs:
-            raise ValueError(f"No valid documents found in {index_path}")
+            keyword_docs, vector_docs = load_grammar_documents(index_path)
 
-        # Build BM25 retriever from keyword docs (tags)
-        logger.info("Building BM25 retriever from %d keyword documents", len(keyword_docs))
-        self.bm25_retriever = BM25Retriever.from_documents(keyword_docs)
-        self.bm25_retriever.k = 10  # Retrieve more candidates for ensemble
+            if not keyword_docs or not vector_docs:
+                raise ValueError(f"No valid documents found in {index_path}")
 
-        # Build FAISS vector store from vector docs (annotations)
-        logger.info("Building FAISS index from %d vector documents (this may take a minute...)", len(vector_docs))
-        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-        self.vector_store = FAISS.from_documents(vector_docs, embeddings)
-        self.vector_retriever = self.vector_store.as_retriever(search_kwargs={"k": 10})
+            # Build BM25 retriever from keyword docs (tags)
+            logger.info("Building BM25 retriever from %d keyword documents", len(keyword_docs))
+            self.bm25_retriever = BM25Retriever.from_documents(keyword_docs)
+            self.bm25_retriever.k = 10  # Retrieve more candidates for ensemble
 
-        # Combine with EnsembleRetriever
-        logger.info("Creating ensemble retriever (BM25 + FAISS)")
-        self.ensemble_retriever = EnsembleRetriever(
-            retrievers=[self.bm25_retriever, self.vector_retriever], weights=[0.5, 0.5]
-        )
+            # Build FAISS vector store from vector docs (annotations)
+            logger.info("Building FAISS index from %d vector documents (this may take a minute...)", len(vector_docs))
+            embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+            self.vector_store = FAISS.from_documents(vector_docs, embeddings)
+            self.vector_retriever = self.vector_store.as_retriever(search_kwargs={"k": 10})
 
-        self._initialized = True
-        logger.info("Grammar index initialized successfully")
+            # Combine with EnsembleRetriever
+            logger.info("Creating ensemble retriever (BM25 + FAISS)")
+            self.ensemble_retriever = EnsembleRetriever(
+                retrievers=[self.bm25_retriever, self.vector_retriever], weights=[0.5, 0.5]
+            )
+
+            self._initialized = True
+            logger.info("Grammar index initialized successfully")
 
     def search(self, query: str, top_k: int = 5) -> list[Document]:
         """
@@ -86,7 +92,7 @@ class GrammarIndex:
 
         # Deduplicate by URL and limit to top_k
         seen_urls = set()
-        unique_results = []
+        unique_results: list[Document] = []
         for doc in results:
             url = doc.metadata.get("url", "")
             if url and url not in seen_urls:
