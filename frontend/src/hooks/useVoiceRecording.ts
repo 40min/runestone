@@ -59,7 +59,28 @@ export const useVoiceRecording = (improve: boolean = true): UseVoiceRecordingRet
     setRecordedDuration(0);
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (typeof window === 'undefined') {
+        setError('Microphone is only available in the browser');
+        return;
+      }
+
+      if (!window.isSecureContext) {
+        setError('Microphone access requires HTTPS (a secure context)');
+        return;
+      }
+
+      const mediaDevices = navigator.mediaDevices;
+      if (!mediaDevices || typeof mediaDevices.getUserMedia !== 'function') {
+        setError('Microphone API is unavailable in this browser/environment');
+        return;
+      }
+
+      if (typeof MediaRecorder === 'undefined') {
+        setError('Audio recording is not supported in this browser');
+        return;
+      }
+
+      const stream = await mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
       // Use WebM Opus for good compression and browser compatibility

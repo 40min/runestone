@@ -72,6 +72,14 @@ const ChatView: React.FC = () => {
 
   const { isPlaying: isAudioPlaying } = useAudioPlayback(voiceEnabled);
 
+  const canUseMicrophone =
+    typeof window !== 'undefined' &&
+    window.isSecureContext &&
+    typeof navigator !== 'undefined' &&
+    !!navigator.mediaDevices &&
+    typeof navigator.mediaDevices.getUserMedia === 'function' &&
+    typeof MediaRecorder !== 'undefined';
+
   const isAnyProcessing = isLoading || isUploading || isTranscribing || isFetchingHistory;
 
   const scrollToLastMessage = (behavior: ScrollBehavior, block: ScrollLogicalPosition) => {
@@ -202,7 +210,8 @@ const ChatView: React.FC = () => {
         display: 'flex',
         flexDirection: 'row',
         height: { xs: 'calc(100dvh - 140px)', md: 'calc(100vh - 200px)' },
-        maxWidth: '1100px',
+        width: '100%',
+        maxWidth: { xs: '100%', md: '100%' },
         margin: '0 auto',
         backgroundColor: '#1a102b',
         gap: 2,
@@ -303,14 +312,21 @@ const ChatView: React.FC = () => {
                   onError={handleImageError}
                   disabled={isAnyProcessing || isRecording}
                 />
-                <VoiceRecordButton
-                  isRecording={isRecording}
-                  isProcessing={isTranscribing}
-                  duration={recordedDuration}
-                  onStartRecording={handleStartRecording}
-                  onStopRecording={handleStopRecording}
-                  disabled={isAnyProcessing}
-                />
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <VoiceRecordButton
+                    isRecording={isRecording}
+                    isProcessing={isTranscribing}
+                    duration={recordedDuration}
+                    onStartRecording={handleStartRecording}
+                    onStopRecording={handleStopRecording}
+                    disabled={isAnyProcessing || !canUseMicrophone}
+                  />
+                  {!canUseMicrophone && (
+                    <Typography variant="caption" sx={{ color: '#9ca3af', fontSize: '0.65rem', lineHeight: 1 }}>
+                      HTTPS required
+                    </Typography>
+                  )}
+                </Box>
               </Box>
 
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>

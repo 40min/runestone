@@ -117,7 +117,9 @@ function App() {
       <div className="layout-container flex h-full grow flex-col">
         <Header currentView={currentView} onViewChange={setCurrentView} />
         <main className="flex flex-1 justify-center py-4 px-2 sm:py-12 sm:px-6 lg:px-8">
-          <div className="w-full max-w-7xl space-y-10">
+          <div
+            className={`w-full ${currentView === "chat" ? "max-w-screen-2xl" : "max-w-7xl"} space-y-10`}
+          >
             {currentView === "analyzer" ? (
               <>
                 <div className="text-center">

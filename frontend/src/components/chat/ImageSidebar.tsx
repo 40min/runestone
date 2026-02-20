@@ -30,12 +30,14 @@ export const ImageSidebar: React.FC<ImageSidebarProps> = ({ images }) => {
     <>
       <Box
         sx={{
-          width: { xs: '80px', md: '100px' },
+          // Keep thumbnails very small so they don't steal horizontal space on mobile.
+          width: { xs: '32px', sm: '40px', md: '48px' },
           display: 'flex',
           flexDirection: 'column',
-          gap: 1,
-          ml: 2,
+          gap: 0.75,
+          ml: { xs: 1, md: 2 },
           overflowY: 'auto',
+          flexShrink: 0,
         }}
       >
         {images.map((image) => (
@@ -45,10 +47,10 @@ export const ImageSidebar: React.FC<ImageSidebarProps> = ({ images }) => {
             sx={{
               width: '100%',
               aspectRatio: '1',
-              borderRadius: '8px',
+              borderRadius: '4px',
               overflow: 'hidden',
               cursor: 'pointer',
-              border: '2px solid #4d3c63',
+              border: '1px solid #4d3c63',
               transition: 'border-color 0.2s',
               '&:hover': {
                 borderColor: 'var(--primary-color)',
