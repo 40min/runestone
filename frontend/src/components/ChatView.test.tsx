@@ -651,4 +651,66 @@ describe('ChatView', () => {
       });
     });
   });
+
+  it('scrolls to the beginning of the last message on initial history load', async () => {
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/api/chat/history')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              messages: [
+                { id: 'm1', role: 'user', content: 'Hej' },
+                { id: 'm2', role: 'assistant', content: 'Hej! Hur mår du?' },
+              ],
+            }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Hej! Hur mår du?')).toBeInTheDocument();
+    });
+
+    expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith(
+      expect.objectContaining({ block: 'start' })
+    );
+  });
+
+  it('scrolls to the beginning of a newly arrived assistant message', async () => {
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    // Wait for initial history fetch
+    await waitFor(() => {
+      expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
+    });
+
+    (window.HTMLElement.prototype.scrollIntoView as ReturnType<typeof vi.fn>).mockClear();
+
+    const input = screen.getByPlaceholderText('Type your message...');
+    fireEvent.change(input, { target: { value: 'Test message' } });
+    fireEvent.click(getSendButton());
+
+    await waitFor(() => {
+      expect(screen.getByText('Response')).toBeInTheDocument();
+    });
+
+    expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith(
+      expect.objectContaining({ block: 'start' })
+    );
+  });
 });

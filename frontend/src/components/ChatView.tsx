@@ -30,6 +30,7 @@ const AUTOSEND_KEY = 'runestone_autosend';
 const ChatView: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastMessageRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef(0);
   const prevIsAnyProcessingRef = useRef(false);
@@ -73,6 +74,10 @@ const ChatView: React.FC = () => {
 
   const isAnyProcessing = isLoading || isUploading || isTranscribing || isFetchingHistory;
 
+  const scrollToLastMessage = (behavior: ScrollBehavior, block: ScrollLogicalPosition) => {
+    lastMessageRef.current?.scrollIntoView({ behavior, block, inline: 'nearest' });
+  };
+
   // Persist settings
   useEffect(() => {
     localStorage.setItem(IMPROVE_TRANSCRIPTION_KEY, String(improveTranscription));
@@ -103,6 +108,7 @@ const ChatView: React.FC = () => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
+    const isInitialLoad = messages.length > 0 && prevMessagesLengthRef.current === 0;
     const isNewMessage = messages.length > prevMessagesLengthRef.current;
     const isProcessingStarted = isAnyProcessing && !prevIsAnyProcessingRef.current;
     const isProcessingEnded = !isAnyProcessing && prevIsAnyProcessingRef.current;
@@ -111,29 +117,31 @@ const ChatView: React.FC = () => {
     // For assistant messages, always scroll to show the response
     const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 150;
 
-    if (isNewMessage) {
+    if (isInitialLoad) {
+      // Initial load of messages (e.g. switching back to Chat tab / history refresh)
+      scrollToLastMessage('auto', 'start');
+    } else if (isNewMessage) {
       const isUserMessage = messages[messages.length - 1].role === 'user';
       if (isUserMessage) {
         // For user messages, only scroll if user is already near bottom
         if (isAtBottom) {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+          scrollToLastMessage('smooth', 'end');
         }
       } else {
-        // For assistant messages, always scroll to show the response
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        // For assistant messages, always scroll to the beginning of the response
+        scrollToLastMessage('smooth', 'start');
       }
     } else if (isProcessingStarted) {
       // When processing starts, scroll to show loading indicator
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      if (isAtBottom) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end', inline: 'nearest' });
+      }
     } else if (isProcessingEnded && messages.length > 0) {
       // When processing ends and there's an assistant message, scroll to ensure it's visible
       const lastMessageIsAssistant = messages[messages.length - 1].role === 'assistant';
       if (lastMessageIsAssistant) {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        scrollToLastMessage('smooth', 'start');
       }
-    } else if (messages.length > 0 && prevMessagesLengthRef.current === 0) {
-      // Initial load of messages
-      messagesEndRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
     }
 
     prevMessagesLengthRef.current = messages.length;
@@ -223,13 +231,14 @@ const ChatView: React.FC = () => {
         {messages.length === 0 ? (
           <ChatEmptyState />
         ) : (
-          messages.map((msg) => (
-            <ChatMessageBubble
-              key={msg.id}
-              role={msg.role}
-              content={msg.content}
-              sources={msg.sources}
-            />
+          messages.map((msg, index) => (
+            <div key={msg.id} ref={index === messages.length - 1 ? lastMessageRef : undefined}>
+              <ChatMessageBubble
+                role={msg.role}
+                content={msg.content}
+                sources={msg.sources}
+              />
+            </div>
           ))
         )}
 
