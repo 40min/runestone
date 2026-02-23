@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     allowed_origins: str
     cheatsheets_dir: str = "cheatsheets"
     app_base_url: str = "http://localhost:5173"
+    # HuggingFace / sentence-transformers cache (must be writable in containers)
+    hf_cache_dir: str = "state/hf-cache"
     # Telegram Configuration
     telegram_bot_token: str
     verbose: bool = False

@@ -12,6 +12,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
 
+from runestone.config import settings
 from runestone.rag.loader import load_grammar_documents
 
 logger = logging.getLogger(__name__)
@@ -59,7 +60,11 @@ class GrammarIndex:
 
             # Build FAISS vector store from vector docs (annotations)
             logger.info("Building FAISS index from %d vector documents (this may take a minute...)", len(vector_docs))
-            embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+            Path(settings.hf_cache_dir).mkdir(parents=True, exist_ok=True)
+            embeddings = HuggingFaceEmbeddings(
+                model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+                cache_folder=settings.hf_cache_dir,
+            )
             self.vector_store = FAISS.from_documents(vector_docs, embeddings)
             self.vector_retriever = self.vector_store.as_retriever(search_kwargs={"k": 10})
 

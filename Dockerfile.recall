@@ -32,8 +32,16 @@ ENV PATH=/app/.local/bin:$PATH
 # Set work directory
 WORKDIR /app
 
-# Create non-root user
-RUN groupadd -r runestone && useradd -r -g runestone runestone
+# Create non-root user with a real home directory
+RUN groupadd -r runestone \
+    && useradd -r -g runestone -d /home/runestone -m runestone \
+    && chown -R runestone:runestone /home/runestone
+
+# Ensure HuggingFace caches go to a writable, persistent location.
+# Override `HF_CACHE_DIR` at deploy time if needed.
+ENV HF_CACHE_DIR=/app/state/hf-cache
+ENV HF_HOME=/app/state/hf-cache/huggingface
+ENV SENTENCE_TRANSFORMERS_HOME=/app/state/hf-cache/sentence-transformers
 
 # Copy Python dependencies from builder stage
 COPY --from=builder /tmp/.local /app/.local
