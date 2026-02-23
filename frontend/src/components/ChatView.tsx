@@ -209,7 +209,7 @@ const ChatView: React.FC = () => {
       sx={{
         display: 'flex',
         flexDirection: 'row',
-        height: { xs: 'calc(100dvh - 140px)', md: 'calc(100vh - 200px)' },
+        height: { xs: 'calc(100dvh - 58px)', md: 'calc(100vh - 74px)' },
         width: '100%',
         maxWidth: { xs: '100%', md: '100%' },
         margin: '0 auto',
@@ -266,7 +266,7 @@ const ChatView: React.FC = () => {
             display: 'flex',
             flexDirection: 'column',
             gap: 1.5,
-            pb: { xs: 1, md: 0 },
+            pb: { xs: 'calc(8px + env(safe-area-inset-bottom))', md: 0 },
           }}
         >
           <Box
