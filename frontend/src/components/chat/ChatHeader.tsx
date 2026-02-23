@@ -23,11 +23,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     <Box
       sx={{
         display: 'flex',
-        flexDirection: { xs: 'column', sm: 'row' },
+        flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: { xs: 'flex-start', sm: 'center' },
-        mb: { xs: 2, md: 2 },
-        gap: 2,
+        alignItems: 'center',
+        mb: { xs: 1, md: 2 },
+        gap: 1,
       }}
     >
       <Box>
@@ -44,8 +44,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         </Typography>
         <Typography
           sx={{
+            display: { xs: 'none', md: 'block' },
             color: '#9ca3af',
-            fontSize: { xs: '0.75rem', md: '0.875rem' },
+            fontSize: '0.875rem',
           }}
         >
           {subtitle}
