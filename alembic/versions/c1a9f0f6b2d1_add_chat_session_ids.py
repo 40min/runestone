@@ -27,7 +27,11 @@ def upgrade() -> None:
 
     with op.batch_alter_table("chat_messages", schema=None) as batch_op:
         batch_op.add_column(sa.Column("chat_id", sa.String(), nullable=True))
-        batch_op.create_index(batch_op.f("ix_chat_messages_chat_id"), ["chat_id"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_chat_messages_user_id_chat_id_id"),
+            ["user_id", "chat_id", "id"],
+            unique=False,
+        )
 
     connection = op.get_bind()
 
@@ -63,7 +67,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Downgrade schema."""
     with op.batch_alter_table("chat_messages", schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f("ix_chat_messages_chat_id"))
+        batch_op.drop_index(batch_op.f("ix_chat_messages_user_id_chat_id_id"))
         batch_op.drop_column("chat_id")
 
     with op.batch_alter_table("users", schema=None) as batch_op:

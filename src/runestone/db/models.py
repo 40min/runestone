@@ -6,7 +6,7 @@ This module defines the database table models using SQLAlchemy ORM.
 
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 from sqlalchemy.sql.expression import false
@@ -89,9 +89,11 @@ class ChatMessage(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     role: Mapped[str] = mapped_column(String, nullable=False)  # "user" or "assistant"
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    chat_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    chat_id: Mapped[str] = mapped_column(String, nullable=False)
     sources: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    __table_args__ = (Index("ix_chat_messages_user_id_chat_id_id", "user_id", "chat_id", "id"),)
 
 
 class ChatSummary(Base):
