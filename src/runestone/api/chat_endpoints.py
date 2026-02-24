@@ -72,7 +72,17 @@ async def get_history(
         chat_id = chat_service.get_or_create_current_chat_id(current_user.id)
         messages = chat_service.get_history(current_user.id, chat_id=chat_id, after_id=after_id, limit=limit)
         latest_id = chat_service.get_latest_id(current_user.id, chat_id)
-        return ChatHistoryResponse(chat_id=chat_id, latest_id=latest_id, messages=messages)
+        oldest_id = chat_service.get_oldest_id(current_user.id, chat_id)
+        last_returned_id = messages[-1].id if messages else after_id
+        has_more = latest_id > last_returned_id
+        history_truncated = after_id > 0 and oldest_id > 0 and oldest_id > (after_id + 1)
+        return ChatHistoryResponse(
+            chat_id=chat_id,
+            latest_id=latest_id,
+            has_more=has_more,
+            history_truncated=history_truncated,
+            messages=messages,
+        )
     except Exception as e:
         logger.error(f"Error fetching chat history: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch chat history.")

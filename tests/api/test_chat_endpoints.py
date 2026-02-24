@@ -43,6 +43,8 @@ def test_history_includes_sources(client_with_mock_agent_service, db_session):
     data = response.json()
     assert "chat_id" in data
     assert "latest_id" in data
+    assert "has_more" in data
+    assert "history_truncated" in data
     assistant_messages = [msg for msg in data["messages"] if msg["role"] == "assistant"]
     assert len(assistant_messages) == 1
     assert assistant_messages[0]["sources"] == [
@@ -72,6 +74,8 @@ def test_get_history_empty(client):
     data = response.json()
     assert "chat_id" in data
     assert data["latest_id"] == 0
+    assert data["has_more"] is False
+    assert data["history_truncated"] is False
     assert "messages" in data
     assert len(data["messages"]) == 0
 
@@ -110,6 +114,21 @@ def test_get_history_after_id_returns_only_new_messages(client_with_mock_agent_s
     assert len(data["messages"]) == 1
     assert data["messages"][0]["role"] == "assistant"
     assert data["latest_id"] >= data["messages"][0]["id"]
+
+
+def test_get_history_has_more_when_page_is_partial(client_with_mock_agent_service, db_session):
+    """Test has_more flag when response is limited."""
+    client, mock_agent_service = client_with_mock_agent_service
+    mock_agent_service.generate_response.return_value = ("Svar", None)
+
+    client.post("/api/chat/message", json={"message": "One"})
+    client.post("/api/chat/message", json={"message": "Two"})
+
+    response = client.get("/api/chat/history?after_id=0&limit=1")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["messages"]) == 1
+    assert data["has_more"] is True
 
 
 def test_clear_history_rotates_chat_id(client_with_mock_agent_service, db_session):

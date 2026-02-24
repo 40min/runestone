@@ -132,6 +132,17 @@ class ChatRepository:
         result = self.db.execute(stmt).scalar_one_or_none()
         return int(result or 0)
 
+    def get_oldest_id(self, user_id: int, chat_id: str) -> int:
+        """
+        Get the oldest message id for the given user/chat session.
+
+        Returns:
+            Oldest message id or 0 when chat is empty
+        """
+        stmt = select(func.min(ChatMessage.id)).where(ChatMessage.user_id == user_id, ChatMessage.chat_id == chat_id)
+        result = self.db.execute(stmt).scalar_one_or_none()
+        return int(result or 0)
+
     def truncate_history(self, user_id: int, retention_days: int, preserve_chat_id: str | None = None):
         """
         Delete messages older than the retention threshold.

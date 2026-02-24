@@ -63,6 +63,10 @@ class ChatHistoryResponse(BaseModel):
 
     chat_id: str = Field(..., description="Current active chat session ID")
     latest_id: int = Field(..., description="Latest message ID in active chat (0 if empty)")
+    has_more: bool = Field(False, description="Whether additional pages are available after this response")
+    history_truncated: bool = Field(
+        False, description="Whether older messages before this cursor were already truncated by retention"
+    )
     messages: list[ChatMessage] = Field(..., description="List of chat messages")
 
 

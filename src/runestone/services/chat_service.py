@@ -212,6 +212,12 @@ Instructions:
         """
         return self.repository.get_latest_id(user_id, chat_id)
 
+    def get_oldest_id(self, user_id: int, chat_id: str) -> int:
+        """
+        Get oldest message id in a chat session.
+        """
+        return self.repository.get_oldest_id(user_id, chat_id)
+
     def get_history(self, user_id: int, chat_id: str, after_id: int = 0, limit: int = 200) -> List[ChatMessageSchema]:
         """
         Get chat history for a user chat session, optionally incrementally.
