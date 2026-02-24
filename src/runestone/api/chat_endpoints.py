@@ -139,20 +139,39 @@ async def send_image(
         )
 
 
-@router.delete("/history", status_code=status.HTTP_204_NO_CONTENT)
-async def clear_history(
+@router.delete(
+    "/history",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Start a new chat session",
+    responses={
+        204: {
+            "description": (
+                "New chat session started. Previous messages are archived and retained according to retention policy."
+            )
+        },
+        500: {"description": "Failed to start new chat session"},
+    },
+)
+async def start_new_chat(
     chat_service: Annotated[ChatService, Depends(get_chat_service)],
     current_user: Annotated[User, Depends(get_current_user)],
 ):
     """
     Start a new chat session for the current user.
+
+    Note:
+        This endpoint rotates the active chat session ID and does not physically delete
+        previously persisted messages immediately. Old sessions remain archived until
+        retention cleanup removes them.
     """
     try:
         chat_service.start_new_chat(current_user.id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except Exception as e:
-        logger.error(f"Error clearing chat history: {e}", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to clear chat history.")
+        logger.error(f"Error starting new chat session: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to start new chat session."
+        )
 
 
 @router.post("/transcribe-voice", response_model=VoiceTranscriptionResponse)

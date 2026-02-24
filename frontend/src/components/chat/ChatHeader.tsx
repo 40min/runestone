@@ -65,11 +65,15 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             <PsychologyIcon />
           </IconButton>
         </Tooltip>
-        <NewChatButton
-          onClick={onNewChat}
-          isLoading={isLoading}
-          hasMessages={hasMessages}
-        />
+        <Tooltip title="Starts a new chat session. Previous chats are archived.">
+          <Box component="span">
+            <NewChatButton
+              onClick={onNewChat}
+              isLoading={isLoading}
+              hasMessages={hasMessages}
+            />
+          </Box>
+        </Tooltip>
       </Box>
     </Box>
   );
