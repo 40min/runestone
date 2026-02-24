@@ -7,7 +7,7 @@ This module provides API endpoints for chat interactions with the teacher agent.
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 
 from runestone.agent.schemas import (
     ChatHistoryResponse,
@@ -62,13 +62,17 @@ async def send_message(
 async def get_history(
     chat_service: Annotated[ChatService, Depends(get_chat_service)],
     current_user: Annotated[User, Depends(get_current_user)],
+    after_id: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=500),
 ) -> ChatHistoryResponse:
     """
-    Get the chat history for the current user.
+    Get active chat history for the current user.
     """
     try:
-        messages = chat_service.get_history(current_user.id)
-        return ChatHistoryResponse(messages=messages)
+        chat_id = chat_service.get_or_create_current_chat_id(current_user.id)
+        messages = chat_service.get_history(current_user.id, chat_id=chat_id, after_id=after_id, limit=limit)
+        latest_id = chat_service.get_latest_id(current_user.id, chat_id)
+        return ChatHistoryResponse(chat_id=chat_id, latest_id=latest_id, messages=messages)
     except Exception as e:
         logger.error(f"Error fetching chat history: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch chat history.")
@@ -138,10 +142,10 @@ async def clear_history(
     current_user: Annotated[User, Depends(get_current_user)],
 ):
     """
-    Clear the chat history for the current user.
+    Start a new chat session for the current user.
     """
     try:
-        chat_service.clear_history(current_user.id)
+        chat_service.start_new_chat(current_user.id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except Exception as e:
         logger.error(f"Error clearing chat history: {e}", exc_info=True)

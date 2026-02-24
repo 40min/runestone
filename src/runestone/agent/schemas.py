@@ -61,6 +61,8 @@ class ChatResponse(BaseModel):
 class ChatHistoryResponse(BaseModel):
     """Response containing conversation history."""
 
+    chat_id: str = Field(..., description="Current active chat session ID")
+    latest_id: int = Field(..., description="Latest message ID in active chat (0 if empty)")
     messages: list[ChatMessage] = Field(..., description="List of chat messages")
 
 

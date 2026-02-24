@@ -3,6 +3,7 @@ Tests for ChatService.
 """
 
 from unittest.mock import AsyncMock, Mock
+from uuid import uuid4
 
 import pytest
 
@@ -37,7 +38,10 @@ def mock_user_service():
     # Setup default mock behavior
     mock_user = Mock()
     mock_user.id = 1
+    mock_user.current_chat_id = str(uuid4())
     mock.get_user_by_id.return_value = mock_user
+    mock.get_or_create_current_chat_id.return_value = mock_user.current_chat_id
+    mock.rotate_current_chat_id.return_value = str(uuid4())
 
     mock_profile = Mock()
     mock_profile.personal_info = None
@@ -96,7 +100,9 @@ async def test_process_message_orchestration(chat_service, db_with_test_user, mo
     db, user = db_with_test_user
 
     # Configure mock user service to return the DB user
+    user.current_chat_id = str(uuid4())
     mock_user_service.get_user_by_id.return_value = user
+    mock_user_service.get_or_create_current_chat_id.return_value = user.current_chat_id
 
     response, sources = await chat_service.process_message(user.id, "Hej Björn")
 
@@ -104,7 +110,7 @@ async def test_process_message_orchestration(chat_service, db_with_test_user, mo
     assert sources is None
 
     # Verify persistence
-    history = chat_service.get_history(user.id)
+    history = chat_service.get_history(user.id, user.current_chat_id)
     assert len(history) == 2
     assert history[0].role == "user"
     assert history[0].content == "Hej Björn"
@@ -124,7 +130,9 @@ async def test_process_message_orchestration(chat_service, db_with_test_user, mo
 async def test_process_message_with_history(chat_service, db_with_test_user, mock_agent_service, mock_user_service):
     """Test process_message when there is existing history."""
     db, user = db_with_test_user
+    user.current_chat_id = str(uuid4())
     mock_user_service.get_user_by_id.return_value = user
+    mock_user_service.get_or_create_current_chat_id.return_value = user.current_chat_id
 
     # Add some history
     await chat_service.process_message(user.id, "Message 1")
@@ -150,7 +158,9 @@ async def test_process_image_message_success(
 ):
     """Test successful image processing."""
     db, user = db_with_test_user
+    user.current_chat_id = str(uuid4())
     mock_user_service.get_user_by_id.return_value = user
+    mock_user_service.get_or_create_current_chat_id.return_value = user.current_chat_id
 
     # Configure processor mock for this test
     ocr_result = Mock()
@@ -171,7 +181,7 @@ async def test_process_image_message_success(
     assert "Hej. Hur mår du?" in kwargs["message"]
 
     # Verify history persistence (only assistant message for images)
-    history = chat_service.get_history(user.id)
+    history = chat_service.get_history(user.id, user.current_chat_id)
     assert len(history) == 1
     assert history[0].role == "assistant"
     assert history[0].content == "Björn's reply"
@@ -201,7 +211,9 @@ async def test_process_image_message_uses_mother_tongue(
 
     # Set user's mother tongue
     user.mother_tongue = "Spanish"
+    user.current_chat_id = str(uuid4())
     mock_user_service.get_user_by_id.return_value = user
+    mock_user_service.get_or_create_current_chat_id.return_value = user.current_chat_id
 
     # Configure processor mock
     ocr_result = Mock()
@@ -224,17 +236,20 @@ async def test_process_image_message_uses_mother_tongue(
 def test_clear_history(chat_service, db_with_test_user):
     """Test clearing history via service."""
     db, user = db_with_test_user
-    chat_service.repository.add_message(user.id, "user", "Test")
-
+    chat_id = str(uuid4())
+    chat_service.repository.add_message(user.id, chat_id, "user", "Test")
+    chat_service.user_service.rotate_current_chat_id.return_value = str(uuid4())
     chat_service.clear_history(user.id)
-    assert len(chat_service.get_history(user.id)) == 0
+    chat_service.user_service.rotate_current_chat_id.assert_called_once_with(user.id)
 
 
 @pytest.mark.anyio
 async def test_process_message_persists_sources(chat_service, db_with_test_user, mock_agent_service, mock_user_service):
     """Test that sources are stored and returned in history."""
     db, user = db_with_test_user
+    user.current_chat_id = str(uuid4())
     mock_user_service.get_user_by_id.return_value = user
+    mock_user_service.get_or_create_current_chat_id.return_value = user.current_chat_id
     mock_agent_service.generate_response.return_value = (
         "Svar med källor",
         [{"title": "Nyhet", "url": "https://example.com", "date": "2026-02-05"}],
@@ -242,7 +257,7 @@ async def test_process_message_persists_sources(chat_service, db_with_test_user,
 
     await chat_service.process_message(user.id, "Nyheter tack")
 
-    history = chat_service.get_history(user.id)
+    history = chat_service.get_history(user.id, user.current_chat_id)
     assistant_messages = [msg for msg in history if msg.role == "assistant"]
     assert len(assistant_messages) == 1
     assert [source.model_dump(mode="json") for source in assistant_messages[0].sources] == [

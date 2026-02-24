@@ -41,6 +41,8 @@ def test_history_includes_sources(client_with_mock_agent_service, db_session):
     response = client.get("/api/chat/history")
     assert response.status_code == 200
     data = response.json()
+    assert "chat_id" in data
+    assert "latest_id" in data
     assistant_messages = [msg for msg in data["messages"] if msg["role"] == "assistant"]
     assert len(assistant_messages) == 1
     assert assistant_messages[0]["sources"] == [
@@ -68,6 +70,8 @@ def test_get_history_empty(client):
     response = client.get("/api/chat/history")
     assert response.status_code == 200
     data = response.json()
+    assert "chat_id" in data
+    assert data["latest_id"] == 0
     assert "messages" in data
     assert len(data["messages"]) == 0
 
@@ -83,7 +87,47 @@ def test_clear_history(client):
 
     # Verify history is empty
     response = client.get("/api/chat/history")
-    assert response.json()["messages"] == []
+    data = response.json()
+    assert data["messages"] == []
+    assert data["latest_id"] == 0
+
+
+def test_get_history_after_id_returns_only_new_messages(client_with_mock_agent_service, db_session):
+    """Test delta history with after_id query parameter."""
+    client, mock_agent_service = client_with_mock_agent_service
+    mock_agent_service.generate_response.return_value = ("Svar", None)
+
+    client.post("/api/chat/message", json={"message": "One"})
+    client.post("/api/chat/message", json={"message": "Two"})
+
+    full_history = client.get("/api/chat/history").json()
+    assert len(full_history["messages"]) == 4
+    second_user_message_id = full_history["messages"][2]["id"]
+
+    response = client.get(f"/api/chat/history?after_id={second_user_message_id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["messages"]) == 1
+    assert data["messages"][0]["role"] == "assistant"
+    assert data["latest_id"] >= data["messages"][0]["id"]
+
+
+def test_clear_history_rotates_chat_id(client_with_mock_agent_service, db_session):
+    """Test that clearing history rotates chat session ID."""
+    client, mock_agent_service = client_with_mock_agent_service
+    mock_agent_service.generate_response.return_value = ("Svar", None)
+
+    client.post("/api/chat/message", json={"message": "Hello"})
+    before_clear = client.get("/api/chat/history").json()
+    old_chat_id = before_clear["chat_id"]
+
+    clear_response = client.delete("/api/chat/history")
+    assert clear_response.status_code == 204
+
+    after_clear = client.get("/api/chat/history").json()
+    assert after_clear["chat_id"] != old_chat_id
+    assert after_clear["latest_id"] == 0
+    assert after_clear["messages"] == []
 
 
 def test_send_message_requires_authentication(client):
