@@ -12,9 +12,17 @@ vi.mock('../config', () => ({
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch as unknown as typeof fetch;
 
-const buildHistoryPayload = (messages: unknown[] = [], chatId: string = 'chat-1', latestId: number = 0) => ({
+const buildHistoryPayload = (
+  messages: unknown[] = [],
+  chatId: string = 'chat-1',
+  latestId: number = 0,
+  hasMore: boolean = false,
+  historyTruncated: boolean = false
+) => ({
   chat_id: chatId,
   latest_id: latestId,
+  has_more: hasMore,
+  history_truncated: historyTruncated,
   messages,
 });
 
@@ -581,5 +589,49 @@ describe('useChat', () => {
       .filter((historyUrl) => historyUrl.includes('/api/chat/history'));
     expect(historyUrls.some((historyUrl) => historyUrl.includes('after_id=2'))).toBe(true);
     expect(historyUrls.some((historyUrl) => historyUrl.includes('after_id=5'))).toBe(false);
+  });
+
+  it('should auto-drain additional pages when has_more is true', async () => {
+    let historyCallCount = 0;
+    mockFetch.mockImplementation((url, options) => {
+      if (options?.method === 'GET' || !options?.method) {
+        historyCallCount++;
+        if (historyCallCount === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve(
+                buildHistoryPayload([{ id: 1, role: 'assistant', content: 'Page1' }], 'chat-1', 3, true)
+              ),
+          });
+        }
+        if (historyCallCount === 2) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve(
+                buildHistoryPayload([{ id: 2, role: 'assistant', content: 'Page2' }], 'chat-1', 3, true)
+              ),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve(
+              buildHistoryPayload([{ id: 3, role: 'assistant', content: 'Page3' }], 'chat-1', 3, false)
+            ),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'ok' }),
+      });
+    });
+
+    const { result } = renderHook(() => useChat());
+    await waitFor(() => expect(result.current.messages).toHaveLength(3));
+    expect(result.current.isSyncingHistory).toBe(false);
+    expect(result.current.messages.map((message) => message.content)).toEqual(['Page1', 'Page2', 'Page3']);
   });
 });

@@ -34,7 +34,17 @@ const ChatView: React.FC = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef(0);
   const prevIsAnyProcessingRef = useRef(false);
-  const { messages, isLoading, isFetchingHistory, error, sendMessage, startNewChat, refreshHistory } = useChat();
+  const {
+    messages,
+    isLoading,
+    isFetchingHistory,
+    isSyncingHistory,
+    historySyncNotice,
+    error,
+    sendMessage,
+    startNewChat,
+    refreshHistory,
+  } = useChat();
   const { uploadedImages, uploadImage, isUploading, error: uploadError, clearImages } = useChatImageUpload();
   const [snackbarError, setSnackbarError] = useState<string | null>(null);
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
@@ -254,8 +264,24 @@ const ChatView: React.FC = () => {
         {isLoading && <ChatLoadingIndicator message="Teacher is thinking..." />}
         {isUploading && <ChatLoadingIndicator message="Analyzing image..." />}
         {isTranscribing && <ChatLoadingIndicator message="Transcribing voice..." />}
+        {isSyncingHistory && <ChatLoadingIndicator message="Syncing older messages..." />}
 
         {error && <ErrorAlert message={error} />}
+        {historySyncNotice && (
+          <Box
+            sx={{
+              border: '1px solid rgba(245, 158, 11, 0.5)',
+              backgroundColor: 'rgba(245, 158, 11, 0.1)',
+              borderRadius: 1,
+              p: 1.25,
+              mt: 1,
+            }}
+          >
+            <Typography variant="body2" sx={{ color: '#fbbf24' }}>
+              {historySyncNotice}
+            </Typography>
+          </Box>
+        )}
 
         <div ref={messagesEndRef} />
       </ChatContainer>

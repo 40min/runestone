@@ -19,6 +19,8 @@ interface ServerChatMessage {
 interface ChatHistoryResponse {
   chat_id: string;
   latest_id: number;
+  has_more: boolean;
+  history_truncated: boolean;
   messages: ServerChatMessage[];
 }
 
@@ -34,6 +36,8 @@ interface UseChatReturn {
   messages: ChatMessage[];
   isLoading: boolean;
   isFetchingHistory: boolean;
+  isSyncingHistory: boolean;
+  historySyncNotice: string | null;
   error: string | null;
   sendMessage: (message: string, ttsExpected?: boolean, speed?: number) => Promise<void>;
   startNewChat: () => Promise<void>;
@@ -49,6 +53,8 @@ export const useChat = (): UseChatReturn => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
+  const [isSyncingHistory, setIsSyncingHistory] = useState(false);
+  const [historySyncNotice, setHistorySyncNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { get, post, delete: apiDelete } = useApi();
   const { token } = useAuth();
@@ -121,30 +127,61 @@ export const useChat = (): UseChatReturn => {
     fetchInProgressRef.current = true;
     setIsFetchingHistory(true);
     try {
-      const endpoint = `/api/chat/history?after_id=${lastMessageIdRef.current}&limit=${HISTORY_LIMIT}`;
-      const data = await get<ChatHistoryResponse>(endpoint);
-      const serverMessages = (data.messages ?? []).map(mapServerMessage);
-      const chatChanged = currentChatIdRef.current !== data.chat_id;
+      let page = 0;
+      let keepFetching = true;
+      let syncingOlderPages = false;
 
-      if (chatChanged) {
-        currentChatIdRef.current = data.chat_id;
+      while (keepFetching && page < 20) {
+        const endpoint = `/api/chat/history?after_id=${lastMessageIdRef.current}&limit=${HISTORY_LIMIT}`;
+        const data = await get<ChatHistoryResponse>(endpoint);
+        const serverMessages = (data.messages ?? []).map(mapServerMessage);
         const maxIncomingId = getMaxServerId(serverMessages);
-        lastMessageIdRef.current = maxIncomingId ?? 0;
-        setMessages(serverMessages);
-      } else {
-        setMessages(prev => mergeServerMessages(prev, serverMessages));
-        const maxIncomingId = getMaxServerId(serverMessages);
-        if (typeof maxIncomingId === 'number' && maxIncomingId > lastMessageIdRef.current) {
-          lastMessageIdRef.current = maxIncomingId;
+        const chatChanged = currentChatIdRef.current !== data.chat_id;
+
+        if (chatChanged) {
+          currentChatIdRef.current = data.chat_id;
+          lastMessageIdRef.current = maxIncomingId ?? 0;
+          setMessages(serverMessages);
+          setHistorySyncNotice(data.history_truncated ? 'Some older messages are no longer available.' : null);
+        } else {
+          setMessages(prev => mergeServerMessages(prev, serverMessages));
+          if (typeof maxIncomingId === 'number' && maxIncomingId > lastMessageIdRef.current) {
+            lastMessageIdRef.current = maxIncomingId;
+          }
+          if (data.history_truncated) {
+            setHistorySyncNotice('Some older messages are no longer available.');
+          }
         }
+
+        const canAdvanceCursor = typeof maxIncomingId === 'number' && maxIncomingId > 0;
+        keepFetching = data.has_more && canAdvanceCursor;
+
+        if (data.has_more && !canAdvanceCursor) {
+          keepFetching = false;
+          setHistorySyncNotice('More messages exist on server. Please refresh again.');
+        }
+
+        if (keepFetching) {
+          syncingOlderPages = true;
+          setIsSyncingHistory(true);
+        }
+
+        page += 1;
+      }
+
+      if (!syncingOlderPages) {
+        setIsSyncingHistory(false);
       }
     } catch (err) {
       console.error('Failed to fetch chat history:', err);
       setError('Failed to load chat history. Starting fresh.');
       setMessages([]);
+      setHistorySyncNotice(null);
+      setIsSyncingHistory(false);
       currentChatIdRef.current = null;
       lastMessageIdRef.current = 0;
     } finally {
+      setIsSyncingHistory(false);
       setIsFetchingHistory(false);
       fetchInProgressRef.current = false;
     }
@@ -261,6 +298,7 @@ export const useChat = (): UseChatReturn => {
     try {
       await apiDelete('/api/chat/history');
       setMessages([]);
+      setHistorySyncNotice(null);
       currentChatIdRef.current = null;
       lastMessageIdRef.current = 0;
       broadcastChange();
@@ -280,6 +318,8 @@ export const useChat = (): UseChatReturn => {
     messages,
     isLoading,
     isFetchingHistory,
+    isSyncingHistory,
+    historySyncNotice,
     error,
     sendMessage,
     startNewChat,
