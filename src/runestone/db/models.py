@@ -4,7 +4,9 @@ SQLAlchemy models for the database.
 This module defines the database table models using SQLAlchemy ORM.
 """
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from uuid import uuid4
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 from sqlalchemy.sql.expression import false
@@ -25,6 +27,7 @@ class User(Base):
     timezone = Column(String, default="UTC", nullable=False)
     pages_recognised_count = Column(Integer, default=0, nullable=False)
     mother_tongue = Column(String, nullable=True)  # User's preferred language
+    current_chat_id = Column(String, nullable=False, default=lambda: str(uuid4()))
     # Agent memory fields (stored as JSON strings) - DEPRECATED, use memory_items table
     personal_info = Column(Text, nullable=True)  # Student identity, preferences, goals
     areas_to_improve = Column(Text, nullable=True)  # Recurring struggles and error patterns
@@ -86,8 +89,11 @@ class ChatMessage(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     role: Mapped[str] = mapped_column(String, nullable=False)  # "user" or "assistant"
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    chat_id: Mapped[str] = mapped_column(String, nullable=False)
     sources: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    __table_args__ = (Index("ix_chat_messages_user_id_chat_id_id", "user_id", "chat_id", "id"),)
 
 
 class ChatSummary(Base):

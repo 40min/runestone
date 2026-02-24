@@ -7,7 +7,7 @@ This module provides API endpoints for chat interactions with the teacher agent.
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 
 from runestone.agent.schemas import (
     ChatHistoryResponse,
@@ -62,13 +62,20 @@ async def send_message(
 async def get_history(
     chat_service: Annotated[ChatService, Depends(get_chat_service)],
     current_user: Annotated[User, Depends(get_current_user)],
+    after_id: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=500),
+    client_chat_id: str | None = Query(None),
 ) -> ChatHistoryResponse:
     """
-    Get the chat history for the current user.
+    Get active chat history for the current user.
     """
     try:
-        messages = chat_service.get_history(current_user.id)
-        return ChatHistoryResponse(messages=messages)
+        return chat_service.get_history_response(
+            current_user.id,
+            after_id=after_id,
+            limit=limit,
+            client_chat_id=client_chat_id,
+        )
     except Exception as e:
         logger.error(f"Error fetching chat history: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch chat history.")
@@ -132,20 +139,39 @@ async def send_image(
         )
 
 
-@router.delete("/history", status_code=status.HTTP_204_NO_CONTENT)
-async def clear_history(
+@router.delete(
+    "/history",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Start a new chat session",
+    responses={
+        204: {
+            "description": (
+                "New chat session started. Previous messages are archived and retained according to retention policy."
+            )
+        },
+        500: {"description": "Failed to start new chat session"},
+    },
+)
+async def start_new_chat(
     chat_service: Annotated[ChatService, Depends(get_chat_service)],
     current_user: Annotated[User, Depends(get_current_user)],
 ):
     """
-    Clear the chat history for the current user.
+    Start a new chat session for the current user.
+
+    Note:
+        This endpoint rotates the active chat session ID and does not physically delete
+        previously persisted messages immediately. Old sessions remain archived until
+        retention cleanup removes them.
     """
     try:
-        chat_service.clear_history(current_user.id)
+        chat_service.start_new_chat(current_user.id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except Exception as e:
-        logger.error(f"Error clearing chat history: {e}", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to clear chat history.")
+        logger.error(f"Error starting new chat session: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to start new chat session."
+        )
 
 
 @router.post("/transcribe-voice", response_model=VoiceTranscriptionResponse)

@@ -12,6 +12,21 @@ vi.mock('../config', () => ({
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch as unknown as typeof fetch;
 
+const buildHistoryPayload = (
+  messages: unknown[] = [],
+  chatId: string = 'chat-1',
+  latestId: number = 0,
+  hasMore: boolean = false,
+  historyTruncated: boolean = false
+) => ({
+  chat_id: chatId,
+  latest_id: latestId,
+  chat_mismatch: false,
+  has_more: hasMore,
+  history_truncated: historyTruncated,
+  messages,
+});
+
 // Mock AuthContext
 vi.mock('../context/AuthContext', () => {
   const mockLogout = vi.fn();
@@ -33,7 +48,7 @@ const setupDefaultMocks = () => {
     if (options?.method === 'GET' || !options?.method) {
       return Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ messages: [] }),
+        json: () => Promise.resolve(buildHistoryPayload([], 'chat-1', 0)),
       });
     }
     return Promise.resolve({
@@ -66,7 +81,7 @@ describe('useChat', () => {
       if (url.includes('/api/chat/history')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ messages: [] }),
+          json: () => Promise.resolve(buildHistoryPayload([], 'chat-1', 0)),
         });
       }
       return Promise.resolve({
@@ -129,7 +144,7 @@ describe('useChat', () => {
       if (url.includes('/api/chat/history')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ messages: [] }),
+          json: () => Promise.resolve(buildHistoryPayload([], 'chat-1', 0)),
         });
       }
       callCount++;
@@ -188,7 +203,7 @@ describe('useChat', () => {
       if (url.includes('/api/chat/history')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ messages: [] }),
+          json: () => Promise.resolve(buildHistoryPayload([], 'chat-1', 0)),
         });
       }
       return Promise.resolve({
@@ -222,7 +237,7 @@ describe('useChat', () => {
       if (url.includes('/api/chat/history')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ messages: [] }),
+          json: () => Promise.resolve(buildHistoryPayload([], 'chat-1', 0)),
         });
       }
       return Promise.reject(new Error('Network error'));
@@ -251,7 +266,7 @@ describe('useChat', () => {
       if (url.includes('/api/chat/history')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ messages: [] }),
+          json: () => Promise.resolve(buildHistoryPayload([], 'chat-1', 0)),
         });
       }
       return Promise.resolve({
@@ -315,7 +330,7 @@ describe('useChat', () => {
       if (url.includes('/api/chat/history')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ messages: [] }),
+          json: () => Promise.resolve(buildHistoryPayload([], 'chat-1', 0)),
         });
       }
       return Promise.resolve({
@@ -357,7 +372,7 @@ describe('useChat', () => {
       if (url.includes('/api/chat/history')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ messages: [] }),
+          json: () => Promise.resolve(buildHistoryPayload([], 'chat-1', 0)),
         });
       }
       return messagePromise;
@@ -400,7 +415,7 @@ describe('useChat', () => {
       if (url.includes('/api/chat/history')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ messages: [] }),
+          json: () => Promise.resolve(buildHistoryPayload([], 'chat-1', 0)),
         });
       }
       callCount++;
@@ -441,5 +456,183 @@ describe('useChat', () => {
     await waitFor(() => {
       expect(result.current.error).toBeNull();
     });
+  });
+
+  it('should poll history with after_id and append delta messages', async () => {
+    let historyCallCount = 0;
+    mockFetch.mockImplementation((url, options) => {
+      if (options?.method === 'GET' || !options?.method) {
+        historyCallCount++;
+        if (historyCallCount === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve(buildHistoryPayload([{ id: 2, role: 'assistant', content: 'Initial message' }], 'chat-1', 2)),
+          });
+        }
+
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve(
+              buildHistoryPayload([{ id: 3, role: 'assistant', content: 'New from other device' }], 'chat-1', 3)
+            ),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'ok' }),
+      });
+    });
+
+    const { result } = renderHook(() => useChat());
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.refreshHistory();
+    });
+
+    await waitFor(() => {
+      expect(result.current.messages).toHaveLength(2);
+      expect(result.current.messages[1].content).toBe('New from other device');
+    });
+
+    const historyUrls = mockFetch.mock.calls
+      .map((call) => String(call[0]))
+      .filter((url) => url.includes('/api/chat/history'));
+    expect(historyUrls.some((url) => url.includes('after_id=2'))).toBe(true);
+  });
+
+  it('should clear local messages when chat_id changes', async () => {
+    mockFetch.mockImplementation((url, options) => {
+      if (options?.method === 'GET' || !options?.method) {
+        if (String(url).includes('after_id=0')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve(
+                buildHistoryPayload([{ id: 1, role: 'assistant', content: 'Old chat message' }], 'chat-1', 1)
+              ),
+          });
+        }
+
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(buildHistoryPayload([], 'chat-2', 0)),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'ok' }),
+      });
+    });
+
+    const { result } = renderHook(() => useChat());
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.refreshHistory();
+    });
+
+    await waitFor(() => {
+      expect(result.current.messages).toEqual([]);
+    });
+  });
+
+  it('should advance after_id to last received message id, not latest_id', async () => {
+    let historyCallCount = 0;
+    mockFetch.mockImplementation((url, options) => {
+      if (options?.method === 'GET' || !options?.method) {
+        historyCallCount++;
+        if (historyCallCount === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve(
+                buildHistoryPayload(
+                  [
+                    { id: 1, role: 'assistant', content: 'M1' },
+                    { id: 2, role: 'assistant', content: 'M2' },
+                  ],
+                  'chat-1',
+                  5
+                )
+              ),
+          });
+        }
+
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve(
+              buildHistoryPayload([{ id: 3, role: 'assistant', content: 'M3' }], 'chat-1', 5)
+            ),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'ok' }),
+      });
+    });
+
+    const { result } = renderHook(() => useChat());
+    await waitFor(() => expect(result.current.messages).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.refreshHistory();
+    });
+
+    const historyUrls = mockFetch.mock.calls
+      .map((call) => String(call[0]))
+      .filter((historyUrl) => historyUrl.includes('/api/chat/history'));
+    expect(historyUrls.some((historyUrl) => historyUrl.includes('after_id=2'))).toBe(true);
+    expect(historyUrls.some((historyUrl) => historyUrl.includes('after_id=5'))).toBe(false);
+  });
+
+  it('should auto-drain additional pages when has_more is true', async () => {
+    let historyCallCount = 0;
+    mockFetch.mockImplementation((url, options) => {
+      if (options?.method === 'GET' || !options?.method) {
+        historyCallCount++;
+        if (historyCallCount === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve(
+                buildHistoryPayload([{ id: 1, role: 'assistant', content: 'Page1' }], 'chat-1', 3, true)
+              ),
+          });
+        }
+        if (historyCallCount === 2) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve(
+                buildHistoryPayload([{ id: 2, role: 'assistant', content: 'Page2' }], 'chat-1', 3, true)
+              ),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve(
+              buildHistoryPayload([{ id: 3, role: 'assistant', content: 'Page3' }], 'chat-1', 3, false)
+            ),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'ok' }),
+      });
+    });
+
+    const { result } = renderHook(() => useChat());
+    await waitFor(() => expect(result.current.messages).toHaveLength(3));
+    expect(result.current.isSyncingHistory).toBe(false);
+    expect(result.current.messages.map((message) => message.content)).toEqual(['Page1', 'Page2', 'Page3']);
   });
 });

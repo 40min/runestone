@@ -7,6 +7,7 @@ for user-related operations.
 
 import json
 from typing import Optional
+from uuid import uuid4
 
 from sqlalchemy.exc import IntegrityError
 
@@ -179,3 +180,42 @@ class UserService:
             ValueError: If field name is invalid
         """
         self.user_repo.update_user_memory(user.id, field, data)
+
+    def get_or_create_current_chat_id(self, user_id: int) -> str:
+        """
+        Get the current chat id for user, creating one if missing.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Current chat ID
+        """
+        user = self.user_repo.get_by_id(user_id)
+        if not user:
+            raise UserNotFoundError(f"User with id {user_id} not found")
+
+        if user.current_chat_id:
+            return user.current_chat_id
+
+        user.current_chat_id = str(uuid4())
+        self.user_repo.update(user)
+        return user.current_chat_id
+
+    def rotate_current_chat_id(self, user_id: int) -> str:
+        """
+        Generate and persist a new current chat id for the user.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Newly generated chat ID
+        """
+        user = self.user_repo.get_by_id(user_id)
+        if not user:
+            raise UserNotFoundError(f"User with id {user_id} not found")
+
+        user.current_chat_id = str(uuid4())
+        self.user_repo.update(user)
+        return user.current_chat_id

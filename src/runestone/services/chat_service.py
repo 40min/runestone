@@ -5,6 +5,7 @@ Service for managing chat interactions and history.
 import logging
 from typing import List
 
+from runestone.agent.schemas import ChatHistoryResponse
 from runestone.agent.schemas import ChatMessage as ChatMessageSchema
 from runestone.agent.service import AgentService
 from runestone.config import Settings
@@ -71,14 +72,15 @@ class ChatService:
         Returns:
             The assistant's response text and optional news sources
         """
-        # 1. Save user message
-        self.repository.add_message(user_id, "user", message_text)
+        # 1. Resolve current chat session and save user message
+        chat_id = self.get_or_create_current_chat_id(user_id)
+        self.repository.add_message(user_id, chat_id, "user", message_text)
 
         # 2. Truncate old messages
-        self.repository.truncate_history(user_id, self.settings.chat_history_retention_days)
+        self.repository.truncate_history(user_id, self.settings.chat_history_retention_days, preserve_chat_id=chat_id)
 
         # 3. Fetch context for agent
-        context_models = self.repository.get_context_for_agent(user_id)
+        context_models = self.repository.get_context_for_agent(user_id, chat_id)
 
         # Convert models to schemas for the agent service
         # Note: context_models includes the message we just saved at the end
@@ -109,7 +111,7 @@ class ChatService:
         )
 
         # 6. Save assistant message
-        self.repository.add_message(user_id, "assistant", assistant_text, sources=sources)
+        self.repository.add_message(user_id, chat_id, "assistant", assistant_text, sources=sources)
 
         # 7. Push TTS audio if client expects it (non-blocking)
         if tts_expected:
@@ -142,11 +144,12 @@ class ChatService:
         logger.info(f"OCR extracted {len(ocr_result.transcribed_text)} characters")
         ocr_text = ocr_result.transcribed_text
 
-        # 2. Truncate old messages
-        self.repository.truncate_history(user_id, self.settings.chat_history_retention_days)
+        # 2. Resolve current chat session and truncate old messages
+        chat_id = self.get_or_create_current_chat_id(user_id)
+        self.repository.truncate_history(user_id, self.settings.chat_history_retention_days, preserve_chat_id=chat_id)
 
         # 3. Fetch context for agent
-        context_models = self.repository.get_context_for_agent(user_id)
+        context_models = self.repository.get_context_for_agent(user_id, chat_id)
 
         # Convert models to schemas for the agent service
         history = [
@@ -182,28 +185,100 @@ Instructions:
         )
 
         # 7. Save assistant message (no user message saved for image uploads)
-        self.repository.add_message(user_id, "assistant", assistant_text)
+        self.repository.add_message(user_id, chat_id, "assistant", assistant_text)
 
         return assistant_text
 
-    def get_history(self, user_id: int) -> List[ChatMessageSchema]:
+    def get_or_create_current_chat_id(self, user_id: int) -> str:
         """
-        Get the full chat history for a user, ready for API responses.
+        Get user current chat id and create one if absent.
+        """
+        return self.user_service.get_or_create_current_chat_id(user_id)
+
+    def start_new_chat(self, user_id: int) -> str:
+        """
+        Rotate the current chat id for the user.
+        """
+        return self.user_service.rotate_current_chat_id(user_id)
+
+    def clear_history(self, user_id: int) -> str:
+        """
+        Backward-compatible alias for starting a new chat session.
+        """
+        return self.start_new_chat(user_id)
+
+    def get_latest_id(self, user_id: int, chat_id: str) -> int:
+        """
+        Get latest message id in a chat session.
+        """
+        return self.repository.get_latest_id(user_id, chat_id)
+
+    def get_oldest_id(self, user_id: int, chat_id: str) -> int:
+        """
+        Get oldest message id in a chat session.
+        """
+        return self.repository.get_oldest_id(user_id, chat_id)
+
+    def get_history(self, user_id: int, chat_id: str, after_id: int = 0, limit: int = 200) -> List[ChatMessageSchema]:
+        """
+        Get chat history for a user chat session, optionally incrementally.
 
         Args:
             user_id: ID of the user
+            chat_id: Active chat session ID
+            after_id: Return only messages with id greater than this value
+            limit: Maximum number of messages to return
 
         Returns:
             List of ChatMessage schemas with sources deserialized
         """
-        history = self.repository.get_raw_history(user_id)
+        history = self.repository.get_history_after_id(user_id, chat_id, after_id=after_id, limit=limit)
         return [ChatMessageSchema.model_validate(message) for message in history]
 
-    def clear_history(self, user_id: int):
+    def get_history_response(
+        self,
+        user_id: int,
+        after_id: int = 0,
+        limit: int = 200,
+        client_chat_id: str | None = None,
+    ) -> ChatHistoryResponse:
         """
-        Clear all chat history for a user.
+        Build a complete history response for API consumers.
+
+        This method centralizes chat-history business rules:
+        - Resolve and validate the active chat session
+        - Detect client/server chat mismatch and reset stale cursors
+        - Provide pagination metadata (`has_more`)
+        - Provide retention-gap hint (`history_truncated`) when confidence is high
 
         Args:
             user_id: ID of the user
+            after_id: Client cursor (server message id)
+            limit: Page size
+            client_chat_id: Optional client-side active chat id
+
+        Returns:
+            Fully populated ChatHistoryResponse
         """
-        self.repository.clear_all_history(user_id)
+        chat_id = self.get_or_create_current_chat_id(user_id)
+        chat_mismatch = bool(client_chat_id and client_chat_id != chat_id)
+        effective_after_id = 0 if chat_mismatch else after_id
+
+        messages = self.get_history(user_id, chat_id=chat_id, after_id=effective_after_id, limit=limit)
+        latest_id = self.get_latest_id(user_id, chat_id)
+        oldest_id = self.get_oldest_id(user_id, chat_id)
+
+        last_returned_id = messages[-1].id if messages else effective_after_id
+        has_more = latest_id > last_returned_id
+        history_truncated = (
+            not chat_mismatch and effective_after_id > 0 and oldest_id > 0 and oldest_id > (effective_after_id + 1)
+        )
+
+        return ChatHistoryResponse(
+            chat_id=chat_id,
+            chat_mismatch=chat_mismatch,
+            latest_id=latest_id,
+            has_more=has_more,
+            history_truncated=history_truncated,
+            messages=messages,
+        )
