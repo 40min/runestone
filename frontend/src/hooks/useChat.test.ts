@@ -531,4 +531,55 @@ describe('useChat', () => {
       expect(result.current.messages).toEqual([]);
     });
   });
+
+  it('should advance after_id to last received message id, not latest_id', async () => {
+    let historyCallCount = 0;
+    mockFetch.mockImplementation((url, options) => {
+      if (options?.method === 'GET' || !options?.method) {
+        historyCallCount++;
+        if (historyCallCount === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve(
+                buildHistoryPayload(
+                  [
+                    { id: 1, role: 'assistant', content: 'M1' },
+                    { id: 2, role: 'assistant', content: 'M2' },
+                  ],
+                  'chat-1',
+                  5
+                )
+              ),
+          });
+        }
+
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve(
+              buildHistoryPayload([{ id: 3, role: 'assistant', content: 'M3' }], 'chat-1', 5)
+            ),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'ok' }),
+      });
+    });
+
+    const { result } = renderHook(() => useChat());
+    await waitFor(() => expect(result.current.messages).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.refreshHistory();
+    });
+
+    const historyUrls = mockFetch.mock.calls
+      .map((call) => String(call[0]))
+      .filter((historyUrl) => historyUrl.includes('/api/chat/history'));
+    expect(historyUrls.some((historyUrl) => historyUrl.includes('after_id=2'))).toBe(true);
+    expect(historyUrls.some((historyUrl) => historyUrl.includes('after_id=5'))).toBe(false);
+  });
 });

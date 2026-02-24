@@ -80,6 +80,10 @@ export const useChat = (): UseChatReturn => {
     );
 
     for (const incomingMessage of incoming) {
+      if (typeof incomingMessage.serverId === 'number' && knownServerIds.has(incomingMessage.serverId)) {
+        continue;
+      }
+
       const optimisticIndex = next.findIndex(
         (message) =>
           typeof message.serverId !== 'number' &&
@@ -88,20 +92,27 @@ export const useChat = (): UseChatReturn => {
       );
 
       if (optimisticIndex >= 0) {
-        next.splice(optimisticIndex, 1);
-      }
-
-      if (typeof incomingMessage.serverId === 'number' && knownServerIds.has(incomingMessage.serverId)) {
-        continue;
+        next[optimisticIndex] = incomingMessage;
+      } else {
+        next.push(incomingMessage);
       }
 
       if (typeof incomingMessage.serverId === 'number') {
         knownServerIds.add(incomingMessage.serverId);
       }
-      next.push(incomingMessage);
     }
 
     return next;
+  }, []);
+
+  const getMaxServerId = useCallback((incoming: ChatMessage[]): number | null => {
+    let maxServerId: number | null = null;
+    for (const message of incoming) {
+      if (typeof message.serverId === 'number') {
+        maxServerId = maxServerId === null ? message.serverId : Math.max(maxServerId, message.serverId);
+      }
+    }
+    return maxServerId;
   }, []);
 
   const fetchHistory = useCallback(async (force: boolean = false) => {
@@ -117,12 +128,14 @@ export const useChat = (): UseChatReturn => {
 
       if (chatChanged) {
         currentChatIdRef.current = data.chat_id;
-        lastMessageIdRef.current = data.latest_id;
+        const maxIncomingId = getMaxServerId(serverMessages);
+        lastMessageIdRef.current = maxIncomingId ?? 0;
         setMessages(serverMessages);
       } else {
         setMessages(prev => mergeServerMessages(prev, serverMessages));
-        if (data.latest_id !== lastMessageIdRef.current) {
-          lastMessageIdRef.current = data.latest_id;
+        const maxIncomingId = getMaxServerId(serverMessages);
+        if (typeof maxIncomingId === 'number' && maxIncomingId > lastMessageIdRef.current) {
+          lastMessageIdRef.current = maxIncomingId;
         }
       }
     } catch (err) {
@@ -135,7 +148,7 @@ export const useChat = (): UseChatReturn => {
       setIsFetchingHistory(false);
       fetchInProgressRef.current = false;
     }
-  }, [get, isLoading, mapServerMessage, mergeServerMessages, token]);
+  }, [get, getMaxServerId, isLoading, mapServerMessage, mergeServerMessages, token]);
 
   // Initial fetch
   useEffect(() => {
