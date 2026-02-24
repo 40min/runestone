@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         else app.state.llm_client
     )
     app.state.grammar_service = GrammarService(settings.cheatsheets_dir)
-    app.state.grammar_index = GrammarIndex(settings.cheatsheets_dir, settings.app_base_url)
+    app.state.grammar_index = GrammarIndex(settings.cheatsheets_dir, settings.frontend_url)
     app.state.agent_service = AgentService(
         settings,
         grammar_index=app.state.grammar_index,

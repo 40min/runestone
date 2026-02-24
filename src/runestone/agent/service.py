@@ -63,10 +63,22 @@ class AgentService:
         self.persona = load_persona(settings.agent_persona)
         self.agent = self.build_agent()
 
+        self._init_allowed_ports()
+
         logger.info(
             f"Initialized AgentService with provider={settings.chat_provider}, "
             f"model={settings.chat_model}, persona={settings.agent_persona}"
         )
+
+    def _init_allowed_ports(self):
+        self.allowed_ports = {80, 443}
+        try:
+            for origin in self.settings.allowed_origins.split(","):
+                app_parsed = urlparse(origin.strip())
+                if app_parsed.port:
+                    self.allowed_ports.add(app_parsed.port)
+        except (ValueError, AttributeError):
+            pass
 
     def build_agent(self):
         """
@@ -399,15 +411,7 @@ to read its contents before deciding.
             logger.info("Rejected source URL (scheme not allowed): %s", url)
             return False
 
-        allowed_ports = {80, 443}
-        try:
-            app_parsed = urlparse(self.settings.app_base_url)
-            if app_parsed.port:
-                allowed_ports.add(app_parsed.port)
-        except (ValueError, AttributeError):
-            pass
-
-        if port is not None and port not in allowed_ports:
+        if port is not None and port not in self.allowed_ports:
             logger.info("Rejected source URL (port not allowed): %s", url)
             return False
         if not parsed.netloc:

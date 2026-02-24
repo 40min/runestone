@@ -50,7 +50,7 @@ def test_grammar_index_init(mock_grammar_files, mock_embeddings):
     # Initialize because it's lazy loaded
     index._initialize()
 
-    assert index.app_base_url == "http://test-host:5173"
+    assert index.frontend_url == "http://test-host:5173"
     assert index.bm25_retriever is not None
     assert index.vector_store is not None
     assert index.ensemble_retriever is not None

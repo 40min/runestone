@@ -456,7 +456,7 @@ def rag():
 def rag_search(query: str, top_k: int):
     """Search grammar index for relevant pages."""
     try:
-        index = GrammarIndex(settings.cheatsheets_dir, settings.app_base_url)
+        index = GrammarIndex(settings.cheatsheets_dir, settings.frontend_url)
         results = index.search(query, top_k=top_k)
 
         console.print(f"\n🔍 Search results for: [bold cyan]{query}[/bold cyan]\n")

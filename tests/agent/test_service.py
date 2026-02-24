@@ -24,7 +24,7 @@ def mock_settings():
     settings.agent_persona = "default"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
-    settings.app_base_url = "http://localhost:5173"
+    settings.allowed_origins = "http://localhost:5173"
     return settings
 
 

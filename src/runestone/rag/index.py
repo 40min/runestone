@@ -23,16 +23,16 @@ class GrammarIndex:
     Hybrid search index for grammar cheatsheets using BM25 (keywords) + FAISS (vectors).
     """
 
-    def __init__(self, cheatsheets_dir: str, app_base_url: str):
+    def __init__(self, cheatsheets_dir: str, frontend_url: str):
         """
         Initialize grammar search index.
 
         Args:
             cheatsheets_dir: Directory containing cheatsheets and index.json
-            app_base_url: Base URL to resolve {HOST} placeholders in URLs
+            frontend_url: Base URL to resolve {HOST} placeholders in URLs
         """
         self.cheatsheets_dir = cheatsheets_dir
-        self.app_base_url = app_base_url.rstrip("/")
+        self.frontend_url = frontend_url.rstrip("/")
         self._initialized = False
         self._init_lock = threading.Lock()
 
@@ -102,7 +102,7 @@ class GrammarIndex:
             url = doc.metadata.get("url", "")
             if url and url not in seen_urls:
                 # Resolve {HOST} placeholder
-                resolved_url = url.replace("{HOST}", self.app_base_url)
+                resolved_url = url.replace("{HOST}", self.frontend_url)
                 doc.metadata["url"] = resolved_url
                 unique_results.append(doc)
                 seen_urls.add(url)
