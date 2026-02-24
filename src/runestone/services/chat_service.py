@@ -5,6 +5,7 @@ Service for managing chat interactions and history.
 import logging
 from typing import List
 
+from runestone.agent.schemas import ChatHistoryResponse
 from runestone.agent.schemas import ChatMessage as ChatMessageSchema
 from runestone.agent.service import AgentService
 from runestone.config import Settings
@@ -233,3 +234,51 @@ Instructions:
         """
         history = self.repository.get_history_after_id(user_id, chat_id, after_id=after_id, limit=limit)
         return [ChatMessageSchema.model_validate(message) for message in history]
+
+    def get_history_response(
+        self,
+        user_id: int,
+        after_id: int = 0,
+        limit: int = 200,
+        client_chat_id: str | None = None,
+    ) -> ChatHistoryResponse:
+        """
+        Build a complete history response for API consumers.
+
+        This method centralizes chat-history business rules:
+        - Resolve and validate the active chat session
+        - Detect client/server chat mismatch and reset stale cursors
+        - Provide pagination metadata (`has_more`)
+        - Provide retention-gap hint (`history_truncated`) when confidence is high
+
+        Args:
+            user_id: ID of the user
+            after_id: Client cursor (server message id)
+            limit: Page size
+            client_chat_id: Optional client-side active chat id
+
+        Returns:
+            Fully populated ChatHistoryResponse
+        """
+        chat_id = self.get_or_create_current_chat_id(user_id)
+        chat_mismatch = bool(client_chat_id and client_chat_id != chat_id)
+        effective_after_id = 0 if chat_mismatch else after_id
+
+        messages = self.get_history(user_id, chat_id=chat_id, after_id=effective_after_id, limit=limit)
+        latest_id = self.get_latest_id(user_id, chat_id)
+        oldest_id = self.get_oldest_id(user_id, chat_id)
+
+        last_returned_id = messages[-1].id if messages else effective_after_id
+        has_more = latest_id > last_returned_id
+        history_truncated = (
+            not chat_mismatch and effective_after_id > 0 and oldest_id > 0 and oldest_id > (effective_after_id + 1)
+        )
+
+        return ChatHistoryResponse(
+            chat_id=chat_id,
+            chat_mismatch=chat_mismatch,
+            latest_id=latest_id,
+            has_more=has_more,
+            history_truncated=history_truncated,
+            messages=messages,
+        )

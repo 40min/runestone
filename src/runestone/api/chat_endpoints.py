@@ -64,24 +64,17 @@ async def get_history(
     current_user: Annotated[User, Depends(get_current_user)],
     after_id: int = Query(0, ge=0),
     limit: int = Query(200, ge=1, le=500),
+    client_chat_id: str | None = Query(None),
 ) -> ChatHistoryResponse:
     """
     Get active chat history for the current user.
     """
     try:
-        chat_id = chat_service.get_or_create_current_chat_id(current_user.id)
-        messages = chat_service.get_history(current_user.id, chat_id=chat_id, after_id=after_id, limit=limit)
-        latest_id = chat_service.get_latest_id(current_user.id, chat_id)
-        oldest_id = chat_service.get_oldest_id(current_user.id, chat_id)
-        last_returned_id = messages[-1].id if messages else after_id
-        has_more = latest_id > last_returned_id
-        history_truncated = after_id > 0 and oldest_id > 0 and oldest_id > (after_id + 1)
-        return ChatHistoryResponse(
-            chat_id=chat_id,
-            latest_id=latest_id,
-            has_more=has_more,
-            history_truncated=history_truncated,
-            messages=messages,
+        return chat_service.get_history_response(
+            current_user.id,
+            after_id=after_id,
+            limit=limit,
+            client_chat_id=client_chat_id,
         )
     except Exception as e:
         logger.error(f"Error fetching chat history: {e}", exc_info=True)

@@ -42,6 +42,8 @@ def test_history_includes_sources(client_with_mock_agent_service, db_session):
     assert response.status_code == 200
     data = response.json()
     assert "chat_id" in data
+    assert "chat_mismatch" in data
+    assert data["chat_mismatch"] is False
     assert "latest_id" in data
     assert "has_more" in data
     assert "history_truncated" in data
@@ -73,6 +75,7 @@ def test_get_history_empty(client):
     assert response.status_code == 200
     data = response.json()
     assert "chat_id" in data
+    assert data["chat_mismatch"] is False
     assert data["latest_id"] == 0
     assert data["has_more"] is False
     assert data["history_truncated"] is False
@@ -129,6 +132,23 @@ def test_get_history_has_more_when_page_is_partial(client_with_mock_agent_servic
     data = response.json()
     assert len(data["messages"]) == 1
     assert data["has_more"] is True
+
+
+def test_get_history_reports_chat_mismatch(client_with_mock_agent_service, db_session):
+    """Test mismatch signal when client provides stale chat id."""
+    client, mock_agent_service = client_with_mock_agent_service
+    mock_agent_service.generate_response.return_value = ("Svar", None)
+
+    client.post("/api/chat/message", json={"message": "Hello"})
+    before_clear = client.get("/api/chat/history").json()
+    old_chat_id = before_clear["chat_id"]
+
+    client.delete("/api/chat/history")
+    response = client.get(f"/api/chat/history?after_id=123&client_chat_id={old_chat_id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["chat_mismatch"] is True
+    assert data["history_truncated"] is False
 
 
 def test_clear_history_rotates_chat_id(client_with_mock_agent_service, db_session):

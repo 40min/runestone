@@ -18,6 +18,7 @@ interface ServerChatMessage {
 
 interface ChatHistoryResponse {
   chat_id: string;
+  chat_mismatch: boolean;
   latest_id: number;
   has_more: boolean;
   history_truncated: boolean;
@@ -132,11 +133,14 @@ export const useChat = (): UseChatReturn => {
       let syncingOlderPages = false;
 
       while (keepFetching && page < 20) {
-        const endpoint = `/api/chat/history?after_id=${lastMessageIdRef.current}&limit=${HISTORY_LIMIT}`;
+        const clientChatQuery = currentChatIdRef.current
+          ? `&client_chat_id=${encodeURIComponent(currentChatIdRef.current)}`
+          : '';
+        const endpoint = `/api/chat/history?after_id=${lastMessageIdRef.current}&limit=${HISTORY_LIMIT}${clientChatQuery}`;
         const data = await get<ChatHistoryResponse>(endpoint);
         const serverMessages = (data.messages ?? []).map(mapServerMessage);
         const maxIncomingId = getMaxServerId(serverMessages);
-        const chatChanged = currentChatIdRef.current !== data.chat_id;
+        const chatChanged = data.chat_mismatch || currentChatIdRef.current !== data.chat_id;
 
         if (chatChanged) {
           currentChatIdRef.current = data.chat_id;

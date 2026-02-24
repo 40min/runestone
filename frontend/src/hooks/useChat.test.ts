@@ -21,6 +21,7 @@ const buildHistoryPayload = (
 ) => ({
   chat_id: chatId,
   latest_id: latestId,
+  chat_mismatch: false,
   has_more: hasMore,
   history_truncated: historyTruncated,
   messages,

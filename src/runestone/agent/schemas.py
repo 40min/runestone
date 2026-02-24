@@ -62,6 +62,7 @@ class ChatHistoryResponse(BaseModel):
     """Response containing conversation history."""
 
     chat_id: str = Field(..., description="Current active chat session ID")
+    chat_mismatch: bool = Field(False, description="Whether client-provided chat id mismatched current server chat id")
     latest_id: int = Field(..., description="Latest message ID in active chat (0 if empty)")
     has_more: bool = Field(False, description="Whether additional pages are available after this response")
     history_truncated: bool = Field(
