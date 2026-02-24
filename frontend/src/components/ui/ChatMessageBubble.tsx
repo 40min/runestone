@@ -1,18 +1,26 @@
-import React from 'react';
-import { Box, Link, Typography } from '@mui/material';
+import React, { useState } from "react";
+import { Box, Link, Typography } from "@mui/material";
 
 interface ChatMessageBubbleProps {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   sources?: { title: string; url: string; date: string }[] | null;
 }
 
-export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, content, sources }) => {
-  const hasSources = role === 'assistant' && sources && sources.length > 0;
+export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
+  role,
+  content,
+  sources,
+}) => {
+  const maxCollapsedChars = 200;
+  const isLongMessage = content.length > maxCollapsedChars;
+  const [isExpanded, setIsExpanded] = useState(false);
+  const isCollapsed = isLongMessage && !isExpanded;
+  const hasSources = role === "assistant" && sources && sources.length > 0;
   const resolveSafeUrl = (url: string) => {
     try {
       const parsed = new URL(url);
-      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
         return parsed.toString();
       }
     } catch {
@@ -36,7 +44,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
       }
 
       let url = part;
-      let trailing = '';
+      let trailing = "";
       while (url.length > 0 && /[).,;:!?]/.test(url[url.length - 1])) {
         trailing = url[url.length - 1] + trailing;
         url = url.slice(0, -1);
@@ -52,16 +60,16 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
             rel="noopener noreferrer"
             underline="always"
             sx={{
-              color: 'var(--primary-color)',
-              textDecorationColor: 'var(--primary-color)',
+              color: "var(--primary-color)",
+              textDecorationColor: "var(--primary-color)",
               fontWeight: 500,
-              '&:hover': {
-                color: 'var(--primary-color)',
+              "&:hover": {
+                color: "var(--primary-color)",
               },
             }}
           >
             {url}
-          </Link>
+          </Link>,
         );
       } else {
         nodes.push(part);
@@ -74,45 +82,73 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
   };
   const formatDate = (value: string) => {
     if (!value) return value;
-    return value.replace(/\.\d+(?=Z|$)/, '');
+    return value.replace(/\.\d+(?=Z|$)/, "");
+  };
+  const displayedContent = isCollapsed
+    ? content.slice(0, maxCollapsedChars)
+    : content;
+  const handleToggle = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!isLongMessage) return;
+    if ((event.target as HTMLElement).closest("a")) return;
+    setIsExpanded((prev) => !prev);
   };
 
   return (
     <Box
       sx={{
-        display: 'flex',
-        justifyContent: role === 'user' ? 'flex-end' : 'flex-start',
+        display: "flex",
+        justifyContent: role === "user" ? "flex-end" : "flex-start",
         mb: 2,
       }}
     >
       <Box
         sx={{
-          maxWidth: { xs: '100%', sm: '98%', md: '92%' },
-          padding: '12px 16px',
-          borderRadius: '12px',
+          maxWidth: { xs: "100%", sm: "98%", md: "92%" },
+          padding: "12px 16px",
+          borderRadius: "12px",
           backgroundColor:
-            role === 'user' ? 'rgba(147, 51, 234, 0.2)' : 'rgba(58, 45, 74, 0.6)',
+            role === "user"
+              ? "rgba(147, 51, 234, 0.2)"
+              : "rgba(58, 45, 74, 0.6)",
           border:
-            role === 'user'
-              ? '1px solid rgba(147, 51, 234, 0.3)'
-              : '1px solid rgba(147, 51, 234, 0.1)',
+            role === "user"
+              ? "1px solid rgba(147, 51, 234, 0.3)"
+              : "1px solid rgba(147, 51, 234, 0.1)",
         }}
       >
         <Typography
+          component="div"
+          onClick={handleToggle}
           sx={{
-            color: 'white',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
+            color: "white",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            cursor: isLongMessage ? "pointer" : "default",
           }}
         >
-          {renderContentWithLinks(content)}
+          {renderContentWithLinks(displayedContent)}
+          {isCollapsed && (
+            <>
+              <Box
+                component="span"
+                sx={{
+                  color: "var(--primary-color)",
+                  fontWeight: 800,
+                  letterSpacing: "0.12em",
+                  ml: 0.5,
+                }}
+              >
+                ...
+              </Box>
+            </>
+          )}
         </Typography>
         {hasSources && (
           <Box sx={{ mt: 1.5 }}>
             <Typography
               sx={(theme) => ({
                 color: theme.palette.primary.light,
-                fontSize: '0.75rem',
+                fontSize: "0.75rem",
                 mb: 0.5,
               })}
             >
@@ -121,10 +157,10 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
             <Box
               component="ul"
               sx={{
-                listStyle: 'none',
+                listStyle: "none",
                 p: 0,
                 m: 0,
-                display: 'grid',
+                display: "grid",
                 gap: 0.75,
               }}
             >
@@ -139,12 +175,12 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
                         rel="noopener noreferrer"
                         underline="always"
                         sx={{
-                          color: 'var(--primary-color)',
-                          textDecorationColor: 'var(--primary-color)',
-                          fontSize: '0.9rem',
+                          color: "var(--primary-color)",
+                          textDecorationColor: "var(--primary-color)",
+                          fontSize: "0.9rem",
                           fontWeight: 500,
-                          '&:hover': {
-                            color: 'var(--primary-color)',
+                          "&:hover": {
+                            color: "var(--primary-color)",
                           },
                         }}
                       >
@@ -154,7 +190,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
                       <Typography
                         sx={(theme) => ({
                           color: theme.palette.common.white,
-                          fontSize: '0.9rem',
+                          fontSize: "0.9rem",
                           fontWeight: 500,
                         })}
                       >
@@ -166,7 +202,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ role, cont
                     <Typography
                       sx={(theme) => ({
                         color: theme.palette.grey[300],
-                        fontSize: '0.75rem',
+                        fontSize: "0.75rem",
                         mt: 0.25,
                       })}
                     >
