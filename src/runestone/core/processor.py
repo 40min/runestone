@@ -19,7 +19,7 @@ from runestone.core.formatter import ResultFormatter
 from runestone.core.logging_config import get_logger
 from runestone.core.ocr import OCRProcessor
 from runestone.db.models import User
-from runestone.schemas.analysis import ContentAnalysis, SearchNeeded
+from runestone.schemas.analysis import ContentAnalysis
 from runestone.schemas.ocr import OCRResult
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
@@ -186,44 +186,6 @@ class RunestoneProcessor:
             # Log error but don't fail the entire analysis
             self.logger.warning(f"[RunestoneProcessor] Failed to mark known vocabulary: {str(e)}")
 
-    def run_resource_search(self, core_topics: list[str], search_needed: SearchNeeded) -> str:
-        """
-        Find extra learning resources based on analysis.
-
-        Args:
-            core_topics: Main topics covered in the content
-            search_needed: Search requirements including whether to search and query suggestions
-
-        Returns:
-            Extra learning information as string
-
-        Raises:
-            RunestoneError: If resource search fails
-        """
-        try:
-            self.logger.debug("[RunestoneProcessor] Searching for learning resources...")
-
-            start_time = time.time()
-            extra_info = self.content_analyzer.find_extra_learning_info(core_topics, search_needed)
-            duration = time.time() - start_time
-
-            if extra_info:
-                self.logger.debug(f"[RunestoneProcessor] Resource search completed in {duration:.2f} seconds")
-            else:
-                self.logger.warning(
-                    f"[RunestoneProcessor] Resource search completed in {duration:.2f} seconds, no results found"
-                )
-
-            return extra_info
-
-        except Exception as e:
-            self.logger.error(f"[RunestoneProcessor] Resource search failed: {str(e)}")
-
-            if isinstance(e, RunestoneError):
-                raise
-            else:
-                raise RunestoneError(f"Resource search failed: {str(e)}")
-
     def display_results_console(self, results: Dict[str, Any]) -> None:
         """
         Display processing results to console using Rich formatting. # noqa: E501
@@ -289,14 +251,10 @@ class RunestoneProcessor:
             # Step 2: Content analysis
             analysis = self.run_analysis(extracted_text, user)
 
-            # Step 3: Resource search
-            extra_info = self.run_resource_search(analysis.core_topics, analysis.search_needed)
-
             # Combine results
             results = {
                 "ocr_result": ocr_result,
                 "analysis": analysis,
-                "extra_info": extra_info,
             }
 
             self.logger.debug("[RunestoneProcessor] Image processing completed successfully")

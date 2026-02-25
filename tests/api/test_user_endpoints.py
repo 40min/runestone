@@ -6,7 +6,7 @@ and related functionality.
 """
 
 from runestone.db.vocabulary_repository import VocabularyRepository
-from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
+from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, VocabularyItem
 
 
 class TestUserProfileEndpoints:
@@ -258,10 +258,6 @@ class TestPageRecognitionCounter:
                 VocabularyItem(swedish="hej", english="hello", example_phrase=None, known=False),
             ],
             core_topics=["questions"],
-            search_needed=SearchNeeded(
-                should_search=False,
-                query_suggestions=[],
-            ),
         )
         mock_processor_instance.run_analysis.return_value = mock_analysis_result
 

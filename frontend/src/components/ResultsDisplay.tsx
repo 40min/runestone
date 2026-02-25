@@ -33,35 +33,10 @@ const enrichVocabularyItems = (
   }));
 };
 
-// Utility function to convert URLs in text to HTML links
-const convertUrlsToLinks = (text: string): (string | React.ReactElement)[] => {
-  if (!text) return [text];
-
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const parts = text.split(urlRegex);
-
-  return parts.map((part, index) => {
-    if (part.match(urlRegex)) {
-      return (
-        <a
-          key={index}
-          href={part}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: "var(--primary-color)", textDecoration: "underline" }}
-        >
-          {part}
-        </a>
-      );
-    }
-    return part;
-  });
-};
 
 interface ResultsDisplayProps {
   ocrResult: OCRResult | null;
   analysisResult: ContentAnalysis | null;
-  resourcesResult: string | null;
   error: string | null;
   saveVocabulary: (
     vocabulary: EnrichedVocabularyItem[], // Use EnrichedVocabularyItem
@@ -75,18 +50,16 @@ interface ResultsDisplayProps {
 const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   ocrResult,
   analysisResult,
-  resourcesResult,
   error,
   saveVocabulary,
   onVocabularyUpdated,
-  processingStep, // Destructure new prop
-  isProcessing, // Destructure new prop
+  processingStep,
+  isProcessing,
 }) => {
   const availableTabs = [
     ocrResult && "ocr",
     analysisResult && "grammar",
     analysisResult && "vocabulary",
-    resourcesResult && "extra_info",
   ].filter(Boolean) as string[];
   const [activeTab, setActiveTab] = useState(availableTabs[0] || "ocr");
   const [snackbar, setSnackbar] = useState<{
@@ -132,7 +105,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     [enrichedVocabulary, hideKnown]
   );
 
-  if (!ocrResult && !analysisResult && !resourcesResult && !isProcessing) {
+  if (!ocrResult && !analysisResult && !isProcessing) {
     if (error) {
       return (
         <Box sx={{ maxWidth: "64rem", mx: "auto", mt: 8 }}>
@@ -307,7 +280,6 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     ocrResult && { id: "ocr", label: "OCR Text" },
     analysisResult && { id: "grammar", label: "Grammar" },
     analysisResult && { id: "vocabulary", label: "Vocabulary" },
-    resourcesResult && { id: "extra_info", label: "Extra info" },
   ].filter(Boolean) as { id: string; label: string }[];
 
   return (
@@ -537,23 +509,6 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
           </Box>
         )}
 
-        {activeTab === "extra_info" && (
-          <Box>
-            <SectionTitle>Extra info</SectionTitle>
-            {resourcesResult ? (
-              <ContentCard>
-                <Typography sx={{ color: "white", whiteSpace: "pre-wrap" }}>
-                  {convertUrlsToLinks(resourcesResult)}
-                </Typography>
-              </ContentCard>
-            ) : (
-              <Typography sx={{ color: "#d1d5db" }}>
-                Additional learning materials and resources will be displayed
-                here.
-              </Typography>
-            )}
-          </Box>
-        )}
       </Box>
       <Snackbar
         open={snackbar.open}

@@ -16,10 +16,6 @@ from runestone.api.schemas import (
     ErrorResponse,
     GrammarFocus,
     HealthResponse,
-    ResourceRequest,
-    ResourceRequestData,
-    ResourceResponse,
-    SearchNeeded,
     Vocabulary,
     VocabularyItem,
     VocabularyItemCreate,
@@ -91,16 +87,6 @@ class TestVocabularyItem:
         assert item.example_phrase is None
 
 
-class TestSearchNeeded:
-    """Test cases for SearchNeeded schema."""
-
-    def test_valid_search_needed(self):
-        """Test creating a valid SearchNeeded."""
-        search = SearchNeeded(should_search=True, query_suggestions=["Swedish grammar", "Question formation"])
-        assert search.should_search is True
-        assert len(search.query_suggestions) == 2
-
-
 class TestContentAnalysis:
     """Test cases for ContentAnalysis schema."""
 
@@ -113,7 +99,6 @@ class TestContentAnalysis:
                 VocabularyItem(swedish="heter", english="called"),
             ],
             core_topics=["questions", "introductions"],
-            search_needed=SearchNeeded(should_search=True, query_suggestions=["Swedish questions"]),
         )
         assert analysis.grammar_focus.topic == "Questions"
         assert len(analysis.vocabulary) == 2
@@ -133,30 +118,6 @@ class TestAnalysisRequest:
         # Should allow empty string as it's valid input
         request = AnalysisRequest(text="")
         assert request.text == ""
-
-
-class TestResourceRequest:
-    """Test cases for ResourceRequest schema."""
-
-    def test_valid_resource_request(self):
-        """Test creating a valid ResourceRequest."""
-        request_data = ResourceRequestData(
-            core_topics=["questions"],
-            grammar_focus=GrammarFocus(topic="Questions", explanation="Question formation", has_explicit_rules=False),
-            vocabulary=[VocabularyItem(swedish="vad", english="what")],
-            search_needed=SearchNeeded(should_search=True, query_suggestions=["Swedish questions"]),
-        )
-        request = ResourceRequest(analysis=request_data)
-        assert request.analysis.core_topics == ["questions"]
-
-
-class TestResourceResponse:
-    """Test cases for ResourceResponse schema."""
-
-    def test_valid_resource_response(self):
-        """Test creating a valid ResourceResponse."""
-        response = ResourceResponse(extra_info="Additional learning resources")
-        assert response.extra_info == "Additional learning resources"
 
 
 class TestErrorResponse:
@@ -238,11 +199,6 @@ class TestSchemaValidation:
         """Test schema with missing required fields."""
         with pytest.raises(ValidationError):
             OCRResult()  # Missing required fields (transcribed_text and recognition_statistics)
-
-    def test_invalid_search_needed(self):
-        """Test SearchNeeded with invalid query_suggestions type."""
-        with pytest.raises(ValidationError):
-            SearchNeeded(should_search=True, query_suggestions="invalid")  # Should be list
 
 
 class TestCheatsheetSchemas:

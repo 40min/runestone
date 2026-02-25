@@ -12,7 +12,6 @@ class PromptType(str, Enum):
 
     OCR = "ocr"
     ANALYSIS = "analysis"
-    SEARCH = "search"
     VOCABULARY_IMPROVE = "vocabulary_improve"
     VOCABULARY_BATCH_IMPROVE = "vocabulary_batch_improve"
 

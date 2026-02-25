@@ -118,7 +118,7 @@ def mock_processor():
     """Create a standardized mock RunestoneProcessor."""
     from unittest.mock import Mock
 
-    from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded
+    from runestone.schemas.analysis import ContentAnalysis, GrammarFocus
     from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 
     mock = Mock()
@@ -134,7 +134,6 @@ def mock_processor():
         ),
         vocabulary=[],
         core_topics=[],
-        search_needed=SearchNeeded(should_search=False, query_suggestions=[]),
     )
     return mock
 

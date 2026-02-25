@@ -21,17 +21,9 @@ class VocabularyItem(BaseModel):
     known: bool = Field(default=False, description="Whether the word is already in user's vocabulary database")
 
 
-class SearchNeeded(BaseModel):
-    """Search requirement information."""
-
-    should_search: bool = Field(description="Whether additional resource search is needed")
-    query_suggestions: List[str] = Field(default_factory=list, description="Suggested search queries")
-
-
 class ContentAnalysis(BaseModel):
     """Complete content analysis response."""
 
     grammar_focus: GrammarFocus = Field(description="Grammar focus information")
     vocabulary: List[VocabularyItem] = Field(default_factory=list, description="Vocabulary items found")
     core_topics: List[str] = Field(default_factory=list, description="Main topics covered")
-    search_needed: SearchNeeded = Field(description="Search requirements")

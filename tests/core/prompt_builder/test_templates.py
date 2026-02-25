@@ -156,13 +156,6 @@ class TestTemplateRegistry:
         assert "extracted_text" in analysis_template.parameters
         assert "vocabulary" in analysis_template.content.lower()
 
-    def test_search_template_exists(self):
-        """Test search template exists and has correct structure."""
-        search_template = TEMPLATE_REGISTRY[PromptType.SEARCH]
-        assert search_template.name == "Resource Search"
-        assert "core_topics" in search_template.parameters
-        assert "query_suggestions" in search_template.parameters
-
     def test_vocabulary_improve_template_exists(self):
         """Test vocabulary improvement template exists and has correct structure."""
         vocab_template = TEMPLATE_REGISTRY[PromptType.VOCABULARY_IMPROVE]
@@ -227,7 +220,6 @@ class TestTemplateContent:
         assert "grammar_focus" in content
         assert "vocabulary" in content
         assert "core_topics" in content
-        assert "search_needed" in content
 
     def test_vocabulary_template_supports_modes(self):
         """Test vocabulary template supports different improvement modes."""
@@ -239,10 +231,3 @@ class TestTemplateContent:
         assert "{example_phrase_json}" in content
         assert "{extra_info_json}" in content
         assert "{content_type}" in content
-
-    def test_search_template_has_topic_placeholders(self):
-        """Test search template has topic and query placeholders."""
-        search_template = TEMPLATE_REGISTRY[PromptType.SEARCH]
-        content = search_template.content
-        assert "{core_topics}" in content
-        assert "{query_suggestions}" in content

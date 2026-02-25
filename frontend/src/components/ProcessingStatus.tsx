@@ -15,8 +15,6 @@ const ProcessingStatus: React.FC<ProcessingStatusProps> = ({ isProcessing, proce
         return 'Extracting text from image...';
       case 'ANALYZING':
         return 'Analyzing grammar and vocabulary...';
-      case 'RESOURCES':
-        return 'Finding additional resources...';
       default:
         return 'Processing...';
     }

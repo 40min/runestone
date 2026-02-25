@@ -46,11 +46,8 @@ const mockAnalysisResult = {
     },
   ],
   core_topics: [],
-  search_needed: { should_search: false, query_suggestions: [] },
 };
 
-const mockResourcesResult =
-  "Additional learning tips here. Check out https://example.com for more resources.";
 
 describe("ResultsDisplay", () => {
   it("renders error state when error is provided and no results", () => {
@@ -59,7 +56,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={null}
         analysisResult={null}
-        resourcesResult={null}
         error={error}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -77,7 +73,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={null}
-        resourcesResult={null}
         error={error}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -98,7 +93,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -114,7 +108,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -143,7 +136,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -173,7 +165,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -202,63 +193,13 @@ describe("ResultsDisplay", () => {
     });
   });
 
-  it("switches to extra info tab when clicked", () => {
-    render(
-      <ResultsDisplay
-        ocrResult={mockOcrResult}
-        analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
-        error={null}
-        saveVocabulary={vi.fn()}
-        processingStep="IDLE"
-        isProcessing={false}
-      />
-    );
 
-    const extraInfoTab = screen.getByText("Extra info");
-    fireEvent.click(extraInfoTab);
-
-    expect(
-      screen.getByRole("heading", { name: "Extra info" })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Additional learning tips here. Check out/)
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "https://example.com" })
-    ).toBeInTheDocument();
-    expect(screen.getByText(/for more resources/)).toBeInTheDocument();
-  });
-
-  it("does not show extra info tab when resourcesResult is not provided", () => {
-    const resultWithoutExtraInfo = {
-      ocr_result: mockOcrResult,
-      analysis: mockAnalysisResult,
-      extra_info: null,
-    };
-
-    render(
-      <ResultsDisplay
-        ocrResult={resultWithoutExtraInfo.ocr_result}
-        analysisResult={resultWithoutExtraInfo.analysis}
-        resourcesResult={resultWithoutExtraInfo.extra_info}
-        error={null}
-        saveVocabulary={vi.fn()}
-        processingStep="IDLE"
-        isProcessing={false}
-      />
-    );
-
-    // Extra info tab should not exist when resourcesResult is null/undefined
-    expect(screen.queryByText("Extra info")).not.toBeInTheDocument();
-  });
 
   it("does not render when neither result nor error is provided", () => {
     render(
       <ResultsDisplay
         ocrResult={null}
         analysisResult={null}
-        resourcesResult={null}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -274,7 +215,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -285,49 +225,6 @@ describe("ResultsDisplay", () => {
     expect(screen.getByText("OCR Text")).toBeInTheDocument();
     expect(screen.getByText("Grammar")).toBeInTheDocument();
     expect(screen.getByText("Vocabulary")).toBeInTheDocument();
-    expect(screen.getByText("Extra info")).toBeInTheDocument();
-  });
-
-  it("converts URLs to clickable links in extra info", () => {
-    const resultWithUrl = {
-      ocr_result: mockOcrResult,
-      analysis: mockAnalysisResult,
-      extra_info:
-        "Check out this resource: https://example.com/learn-swedish and also https://swedishpod101.com",
-    };
-
-    render(
-      <ResultsDisplay
-        ocrResult={resultWithUrl.ocr_result}
-        analysisResult={resultWithUrl.analysis}
-        resourcesResult={resultWithUrl.extra_info}
-        error={null}
-        saveVocabulary={vi.fn()}
-        processingStep="IDLE"
-        isProcessing={false}
-      />
-    );
-
-    const extraInfoTab = screen.getByText("Extra info");
-    fireEvent.click(extraInfoTab);
-
-    // Check that the link elements are present
-    const link1 = screen.getByRole("link", {
-      name: "https://example.com/learn-swedish",
-    });
-    const link2 = screen.getByRole("link", {
-      name: "https://swedishpod101.com",
-    });
-
-    expect(link1).toBeInTheDocument();
-    expect(link1).toHaveAttribute("href", "https://example.com/learn-swedish");
-    expect(link1).toHaveAttribute("target", "_blank");
-    expect(link1).toHaveAttribute("rel", "noopener noreferrer");
-
-    expect(link2).toBeInTheDocument();
-    expect(link2).toHaveAttribute("href", "https://swedishpod101.com");
-    expect(link2).toHaveAttribute("target", "_blank");
-    expect(link2).toHaveAttribute("rel", "noopener noreferrer");
   });
 
   // New tests for checkbox functionality
@@ -336,7 +233,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -366,7 +262,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -396,7 +291,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -447,7 +341,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -481,7 +374,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -517,7 +409,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -559,7 +450,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -606,7 +496,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -648,7 +537,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -689,7 +577,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -727,7 +614,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -764,7 +650,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -801,7 +686,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={null}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -821,7 +705,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -863,7 +746,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -905,7 +787,6 @@ describe("ResultsDisplay", () => {
       <ResultsDisplay
         ocrResult={mockOcrResult}
         analysisResult={mockAnalysisResult}
-        resourcesResult={mockResourcesResult}
         error={null}
         saveVocabulary={vi.fn()}
         processingStep="IDLE"
@@ -948,14 +829,12 @@ describe("ResultsDisplay", () => {
         grammar_focus: mockAnalysisResult.grammar_focus,
         vocabulary: mockVocabulary,
         core_topics: [],
-        search_needed: { should_search: false, query_suggestions: [] },
       };
 
       render(
         <ResultsDisplay
           ocrResult={null}
           analysisResult={analysisResult}
-          resourcesResult={null}
           error={null}
           saveVocabulary={vi.fn()}
           processingStep="IDLE"
@@ -985,14 +864,12 @@ describe("ResultsDisplay", () => {
         grammar_focus: mockAnalysisResult.grammar_focus,
         vocabulary: mockVocabulary,
         core_topics: [],
-        search_needed: { should_search: false, query_suggestions: [] },
       };
 
       render(
         <ResultsDisplay
           ocrResult={null}
           analysisResult={analysisResult}
-          resourcesResult={null}
           error={null}
           saveVocabulary={vi.fn()}
           processingStep="IDLE"
@@ -1021,14 +898,12 @@ describe("ResultsDisplay", () => {
         grammar_focus: mockAnalysisResult.grammar_focus,
         vocabulary: mockVocabulary,
         core_topics: [],
-        search_needed: { should_search: false, query_suggestions: [] },
       };
 
       render(
         <ResultsDisplay
           ocrResult={null}
           analysisResult={analysisResult}
-          resourcesResult={null}
           error={null}
           saveVocabulary={vi.fn()}
           processingStep="IDLE"
@@ -1079,14 +954,12 @@ describe("ResultsDisplay", () => {
         grammar_focus: mockAnalysisResult.grammar_focus,
         vocabulary: mockVocabulary,
         core_topics: [],
-        search_needed: { should_search: false, query_suggestions: [] },
       };
 
       render(
         <ResultsDisplay
           ocrResult={null}
           analysisResult={analysisResult}
-          resourcesResult={null}
           error={null}
           saveVocabulary={saveVocabularyMock}
           onVocabularyUpdated={onVocabularyUpdatedMock}
@@ -1131,7 +1004,6 @@ describe("ResultsDisplay", () => {
         <ResultsDisplay
           ocrResult={mockOcrResult}
           analysisResult={null}
-          resourcesResult={null}
           error={null}
           saveVocabulary={vi.fn()}
           processingStep="IDLE"
@@ -1152,7 +1024,6 @@ describe("ResultsDisplay", () => {
         <ResultsDisplay
           ocrResult={mockOcrResult}
           analysisResult={null}
-          resourcesResult={null}
           error={null}
           saveVocabulary={vi.fn()}
           processingStep="IDLE"
@@ -1163,7 +1034,6 @@ describe("ResultsDisplay", () => {
       // Should not show Grammar or Vocabulary tabs when analysis hasn't been performed
       expect(screen.queryByText("Grammar")).not.toBeInTheDocument();
       expect(screen.queryByText("Vocabulary")).not.toBeInTheDocument();
-      expect(screen.queryByText("Extra info")).not.toBeInTheDocument();
     });
 
     it("shows all tabs including analysis when recognizeOnly is true but analysisResult is present", () => {
@@ -1171,7 +1041,6 @@ describe("ResultsDisplay", () => {
         <ResultsDisplay
           ocrResult={mockOcrResult}
           analysisResult={mockAnalysisResult}
-          resourcesResult={mockResourcesResult}
           error={null}
           saveVocabulary={vi.fn()}
           processingStep="IDLE"
@@ -1183,7 +1052,6 @@ describe("ResultsDisplay", () => {
       expect(screen.getByText("OCR Text")).toBeInTheDocument();
       expect(screen.getByText("Grammar")).toBeInTheDocument();
       expect(screen.getByText("Vocabulary")).toBeInTheDocument();
-      expect(screen.getByText("Extra info")).toBeInTheDocument();
     });
 
     it("handles recognizeOnly prop correctly when false", () => {
@@ -1191,7 +1059,6 @@ describe("ResultsDisplay", () => {
         <ResultsDisplay
           ocrResult={mockOcrResult}
           analysisResult={mockAnalysisResult}
-          resourcesResult={mockResourcesResult}
           error={null}
           saveVocabulary={vi.fn()}
           processingStep="IDLE"
@@ -1203,7 +1070,6 @@ describe("ResultsDisplay", () => {
       expect(screen.getByText("OCR Text")).toBeInTheDocument();
       expect(screen.getByText("Grammar")).toBeInTheDocument();
       expect(screen.getByText("Vocabulary")).toBeInTheDocument();
-      expect(screen.getByText("Extra info")).toBeInTheDocument();
     });
 
     it("displays processing status when isProcessing is true during recognize-only mode", () => {
@@ -1211,7 +1077,6 @@ describe("ResultsDisplay", () => {
         <ResultsDisplay
           ocrResult={null}
           analysisResult={null}
-          resourcesResult={null}
           error={null}
           saveVocabulary={vi.fn()}
           processingStep="OCR"

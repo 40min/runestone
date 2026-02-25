@@ -11,7 +11,7 @@ from runestone.config import Settings
 from runestone.core.analyzer import ContentAnalyzer
 from runestone.core.console import setup_console
 from runestone.core.exceptions import ContentAnalysisError
-from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
+from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, VocabularyItem
 
 
 class TestContentAnalyzer:
@@ -47,10 +47,6 @@ class TestContentAnalyzer:
                 VocabularyItem(swedish="jag heter", english="my name is"),
             ],
             core_topics=["greetings", "introductions"],
-            search_needed=SearchNeeded(
-                should_search=True,
-                query_suggestions=["Swedish greetings", "Swedish introductions"],
-            ),
         )
 
         # Mock client response
@@ -67,7 +63,6 @@ class TestContentAnalyzer:
         assert isinstance(result.grammar_focus, GrammarFocus)
         assert isinstance(result.vocabulary, list)
         assert isinstance(result.core_topics, list)
-        assert isinstance(result.search_needed, SearchNeeded)
 
         # Verify specific content
         assert result.grammar_focus.topic == "Swedish greetings"
@@ -100,7 +95,6 @@ class TestContentAnalyzer:
         assert isinstance(result.grammar_focus, GrammarFocus)
         assert isinstance(result.vocabulary, list)
         assert isinstance(result.core_topics, list)
-        assert isinstance(result.search_needed, SearchNeeded)
         # Fallback provides minimal valid structure
         assert result.grammar_focus.topic == "Swedish language practice"
         assert isinstance(result.vocabulary, list)
@@ -135,7 +129,6 @@ class TestContentAnalyzer:
         assert result.grammar_focus.topic == "Swedish greetings"
         # Missing fields should be filled with defaults
         assert result.grammar_focus.explanation != ""
-        assert isinstance(result.search_needed, SearchNeeded)
 
     def test_analyze_content_no_response(self):
         """Test handling of empty response."""
@@ -150,58 +143,6 @@ class TestContentAnalyzer:
             analyzer.analyze_content(self.sample_text)
 
         assert "No analysis returned" in str(exc_info.value)
-
-    def test_find_extra_learning_info_no_search_needed(self):
-        """Test resource finding when search is not needed."""
-        core_topics = []
-        search_needed = SearchNeeded(should_search=False, query_suggestions=[])
-
-        mock_client = Mock()
-        analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
-        resources = analyzer.find_extra_learning_info(core_topics, search_needed)
-
-        assert resources == ""
-
-    def test_find_extra_learning_info_with_search(self):
-        """Test resource finding with search queries."""
-        core_topics = ["greetings"]
-        search_needed = SearchNeeded(should_search=True, query_suggestions=["Swedish greetings"])
-
-        # Mock search response with educational material
-        mock_search_response = (
-            "Here is educational material about Swedish greetings and introductions. Swedish greetings include "
-            "'Hej' (Hi), 'God morgon' (Good morning), and 'Tack' (Thank you). Use 'Jag heter' (My name is) "
-            "followed by your name."
-        )
-
-        mock_client = Mock()
-        mock_client.search_resources.return_value = mock_search_response
-
-        analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
-        resources = analyzer.find_extra_learning_info(core_topics, search_needed)
-
-        # Should return a string with educational material
-        assert isinstance(resources, str)
-        assert len(resources) > 0
-        assert "Swedish greetings" in resources or "introductions" in resources
-
-    def test_find_extra_learning_info_fallback(self):
-        """Test fallback behavior when search fails."""
-        core_topics = ["greetings"]
-        search_needed = SearchNeeded(should_search=True, query_suggestions=["Swedish greetings"])
-
-        # Mock search response with empty text (simulating failure)
-        mock_search_response = ""
-
-        mock_client = Mock()
-        mock_client.search_resources.return_value = mock_search_response
-
-        analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
-        resources = analyzer.find_extra_learning_info(core_topics, search_needed)
-
-        # Should return error message when LLM fails
-        assert isinstance(resources, str)
-        assert "No extra learning info available" in resources
 
     def test_fallback_analysis_structure(self):
         """Test structure of fallback analysis via parser."""
