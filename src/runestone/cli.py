@@ -388,34 +388,6 @@ def analysis(text: str):
         sys.exit(1)
 
 
-@test_prompts.command(name="search")
-@click.argument("topics", nargs=-1, required=True)
-def test_search_prompt(topics):
-    """Test search prompt building with topics."""
-    try:
-        builder = PromptBuilder()
-
-        # Split topics into core topics and query suggestions
-        # Use first half as core topics, second half as queries
-        topics_list = list(topics)
-        mid = (len(topics_list) + 1) // 2
-        core_topics = topics_list[:mid]
-        query_suggestions = topics_list[mid:]
-
-        prompt = builder.build_search_prompt(core_topics=core_topics, query_suggestions=query_suggestions)
-
-        console.print("[bold cyan]Search Prompt:[/bold cyan]")
-        console.print("=" * 80)
-        console.print(prompt)
-        console.print("=" * 80)
-        console.print(f"\n[green]Core topics:[/green] {core_topics}")
-        console.print(f"[green]Query suggestions:[/green] {query_suggestions}")
-        console.print(f"[green]Prompt length:[/green] {len(prompt)} characters")
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
-        sys.exit(1)
-
-
 @test_prompts.command()
 @click.argument("word")
 @click.option(
