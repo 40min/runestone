@@ -225,7 +225,6 @@ class TestRunestoneIntegration:
         mock_results = {
             "ocr_result": mock_ocr_result,
             "analysis": mock_analysis,
-            "extra_info": "",
         }
 
         mock_ocr_processor = Mock(spec=OCRProcessor)
@@ -246,7 +245,6 @@ class TestRunestoneIntegration:
         mock_formatter_instance.format_console_output.assert_called_once_with(
             ocr_result=mock_results["ocr_result"],
             analysis=mock_results["analysis"],
-            extra_info=mock_results["extra_info"],
         )
 
     @patch("runestone.core.processor.ResultFormatter")
@@ -269,7 +267,6 @@ class TestRunestoneIntegration:
         mock_results = {
             "ocr_result": mock_ocr_result,
             "analysis": mock_analysis,
-            "extra_info": "",
         }
 
         mock_ocr_processor = Mock(spec=OCRProcessor)
@@ -291,7 +288,6 @@ class TestRunestoneIntegration:
         mock_formatter_instance.format_markdown_output.assert_called_once_with(
             ocr_result=mock_results["ocr_result"],
             analysis=mock_results["analysis"],
-            resources=mock_results["extra_info"],
         )
 
     @patch("runestone.core.processor.ResultFormatter")
@@ -300,7 +296,6 @@ class TestRunestoneIntegration:
         mock_results = {
             "ocr_result": {"text": "test"},
             "analysis": {"grammar_focus": {}},
-            "extra_info": "",
         }
 
         mock_ocr_processor = Mock(spec=OCRProcessor)
@@ -326,6 +321,5 @@ class TestRunestoneIntegration:
         mock_formatter_instance.format_markdown_output.assert_called_once_with(
             ocr_result=mock_results["ocr_result"],
             analysis=mock_results["analysis"],
-            resources=mock_results["extra_info"],
         )
         output_path.write_text.assert_called_once_with("# Markdown Output", encoding="utf-8")

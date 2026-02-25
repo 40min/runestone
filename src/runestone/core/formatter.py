@@ -31,7 +31,6 @@ class ResultFormatter:
         self,
         ocr_result: OCRResult,
         analysis: ContentAnalysis,
-        extra_info: str,
     ) -> None:
         """
         Format and display results to console using Rich.
@@ -39,7 +38,6 @@ class ResultFormatter:
         Args:
             ocr_result: OCR processing results
             analysis: Content analysis results
-            extra_info: Extra learning info
         """
         # Header
         self.console.print()
@@ -55,9 +53,6 @@ class ResultFormatter:
 
         # Word bank section
         self._format_vocabulary(analysis)
-
-        # Extra resources section
-        self._format_resources(extra_info)
 
         # Footer
         self.console.print()
@@ -134,27 +129,10 @@ class ResultFormatter:
         self.console.print(panel)
         self.console.print()
 
-    def _format_resources(self, resources: str) -> None:
-        """Format the resources section."""
-        if not resources:
-            content = "[italic]No additional resources found[/italic]"
-        else:
-            content = resources
-
-        panel = Panel(
-            content,
-            title="🔗 Extra Resources",
-            title_align="left",
-            border_style="magenta",
-            box=box.ROUNDED,
-        )
-        self.console.print(panel)
-
     def format_markdown_output(
         self,
         ocr_result: OCRResult,
         analysis: ContentAnalysis,
-        resources: str,
     ) -> str:
         """
         Format results as markdown text.
@@ -217,11 +195,5 @@ class ResultFormatter:
         # Resources
         md_lines.append("## 🔗 Extra Resources")
         md_lines.append("")
-
-        if not resources:
-            md_lines.append("*No additional resources found*")
-        else:
-            md_lines.append(resources)
-            md_lines.append("")
 
         return "\n".join(md_lines)

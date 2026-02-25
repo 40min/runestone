@@ -197,7 +197,6 @@ class RunestoneProcessor:
             self.formatter.format_console_output(
                 ocr_result=results["ocr_result"],
                 analysis=results["analysis"],
-                extra_info=results["extra_info"],
             )
         except Exception as e:
             raise RunestoneError(f"Failed to display results: {str(e)}")
@@ -213,7 +212,6 @@ class RunestoneProcessor:
             markdown_output = self.formatter.format_markdown_output(
                 ocr_result=results["ocr_result"],
                 analysis=results["analysis"],
-                resources=results["extra_info"],
             )
             print(markdown_output)
         except Exception as e:
@@ -228,7 +226,7 @@ class RunestoneProcessor:
             user: User object for analysis and statistics
 
         Returns:
-            Complete processing results dictionary with ocr_result, analysis, and extra_info
+            Complete processing results dictionary with ocr_result and  analysis
 
         Raises:
             RunestoneError: If processing fails at any step
@@ -281,7 +279,6 @@ class RunestoneProcessor:
             markdown_output = self.formatter.format_markdown_output(
                 ocr_result=results["ocr_result"],
                 analysis=results["analysis"],
-                resources=results["extra_info"],
             )
 
             output_path.write_text(markdown_output, encoding="utf-8")
