@@ -6,7 +6,7 @@
 .PHONY: lint lint-check backend-lint frontend-lint
 .PHONY: test test-coverage backend-test frontend-test
 .PHONY: run run-backend run-frontend run-dev run-recall load-vocab
-.PHONY: test-prompts-ocr test-prompts-analysis test-prompts-search test-prompts-vocabulary test-grammar-search
+.PHONY: test-prompts-ocr test-prompts-analysis test-prompts-vocabulary test-grammar-search
 .PHONY: dev-test dev-full ci-lint ci-test
 .PHONY: db-init db-migrate db-upgrade db-downgrade db-current db-history
 .PHONY: init-state docker-up docker-down docker-build restart-recall rebuild-restart-recall rebuild-restart-all rebuild-container
@@ -53,7 +53,6 @@ help:
 	@echo "Test Prompts:"
 	@echo "  test-prompts-ocr          - Test and display OCR prompt"
 	@echo "  test-prompts-analysis     - Test analysis prompt (requires TEXT='sample text')"
-	@echo "  test-prompts-search       - Test search prompt (requires TOPICS='topic1 topic2 ...')"
 	@echo "  test-prompts-vocabulary   - Test vocabulary improvement prompt (requires WORD='word', optional: MODE=example_only|extra_info_only|all_fields)"
 	@echo "  test-grammar-search       - Test grammar RAG search (requires QUERY='search query')"
 	@echo ""
@@ -281,15 +280,6 @@ test-prompts-analysis:
 	fi
 	@echo "🧪 Testing analysis prompt with text: $(TEXT)"
 	@uv run runestone test-prompts analysis "$(TEXT)"
-
-# Test search prompt building
-test-prompts-search:
-	@if [ -z "$(TOPICS)" ]; then \
-		echo "❌ Error: TOPICS is required. Usage: make test-prompts-search TOPICS='topic1 topic2 ...'"; \
-		exit 1; \
-	fi
-	@echo "🧪 Testing search prompt with topics: $(TOPICS)"
-	@uv run runestone test-prompts search $(TOPICS)
 
 # Test vocabulary improvement prompt building
 test-prompts-vocabulary:

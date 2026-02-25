@@ -14,7 +14,7 @@ from runestone.core.console import setup_console
 from runestone.core.exceptions import RunestoneError
 from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
-from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
+from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, VocabularyItem
 from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
@@ -97,14 +97,7 @@ class TestRunestoneIntegration:
                 VocabularyItem(swedish="vad", english="what", example_phrase=None),
             ],
             core_topics=["questions", "greetings"],
-            search_needed=SearchNeeded(
-                should_search=True,
-                query_suggestions=["Swedish questions"],
-            ),
         )
-
-        # Mock resources
-        mock_resources = "Additional learning resources about Swedish questions"
 
         # Configure mocks
         mock_ocr_processor = Mock(spec=OCRProcessor)
@@ -112,7 +105,6 @@ class TestRunestoneIntegration:
 
         mock_content_analyzer = Mock(spec=ContentAnalyzer)
         mock_content_analyzer.analyze_content.return_value = mock_analysis
-        mock_content_analyzer.find_extra_learning_info.return_value = mock_resources
 
         mock_formatter_instance = Mock()
         mock_formatter.return_value = mock_formatter_instance
@@ -135,19 +127,14 @@ class TestRunestoneIntegration:
         image_bytes = b"fake image data"
         ocr_result = processor.run_ocr(image_bytes)
         analysis_result = processor.run_analysis(ocr_result.transcribed_text, user=mock_user)
-        resources_result = processor.run_resource_search(analysis_result.core_topics, analysis_result.search_needed)
 
         # Verify workflow execution
         mock_ocr_processor.extract_text.assert_called_once()
         mock_content_analyzer.analyze_content.assert_called_once_with("Hej, vad heter du?")
-        mock_content_analyzer.find_extra_learning_info.assert_called_once_with(
-            mock_analysis.core_topics, mock_analysis.search_needed
-        )
 
         # Verify result structure
         assert ocr_result == mock_ocr_result
         assert analysis_result == mock_analysis
-        assert resources_result == mock_resources
 
     @patch("PIL.Image.open")
     def test_process_image_ocr_failure(self, mock_image_open):
@@ -234,12 +221,10 @@ class TestRunestoneIntegration:
             grammar_focus=GrammarFocus(has_explicit_rules=False, topic="", explanation="", rules=None),
             vocabulary=[],
             core_topics=[],
-            search_needed=SearchNeeded(should_search=False, query_suggestions=[]),
         )
         mock_results = {
             "ocr_result": mock_ocr_result,
             "analysis": mock_analysis,
-            "extra_info": "",
         }
 
         mock_ocr_processor = Mock(spec=OCRProcessor)
@@ -260,7 +245,6 @@ class TestRunestoneIntegration:
         mock_formatter_instance.format_console_output.assert_called_once_with(
             ocr_result=mock_results["ocr_result"],
             analysis=mock_results["analysis"],
-            extra_info=mock_results["extra_info"],
         )
 
     @patch("runestone.core.processor.ResultFormatter")
@@ -279,12 +263,10 @@ class TestRunestoneIntegration:
             grammar_focus=GrammarFocus(has_explicit_rules=False, topic="", explanation="", rules=None),
             vocabulary=[],
             core_topics=[],
-            search_needed=SearchNeeded(should_search=False, query_suggestions=[]),
         )
         mock_results = {
             "ocr_result": mock_ocr_result,
             "analysis": mock_analysis,
-            "extra_info": "",
         }
 
         mock_ocr_processor = Mock(spec=OCRProcessor)
@@ -306,7 +288,6 @@ class TestRunestoneIntegration:
         mock_formatter_instance.format_markdown_output.assert_called_once_with(
             ocr_result=mock_results["ocr_result"],
             analysis=mock_results["analysis"],
-            resources=mock_results["extra_info"],
         )
 
     @patch("runestone.core.processor.ResultFormatter")
@@ -315,7 +296,6 @@ class TestRunestoneIntegration:
         mock_results = {
             "ocr_result": {"text": "test"},
             "analysis": {"grammar_focus": {}},
-            "extra_info": "",
         }
 
         mock_ocr_processor = Mock(spec=OCRProcessor)
@@ -341,6 +321,5 @@ class TestRunestoneIntegration:
         mock_formatter_instance.format_markdown_output.assert_called_once_with(
             ocr_result=mock_results["ocr_result"],
             analysis=mock_results["analysis"],
-            resources=mock_results["extra_info"],
         )
         output_path.write_text.assert_called_once_with("# Markdown Output", encoding="utf-8")

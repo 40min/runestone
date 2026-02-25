@@ -14,7 +14,7 @@ from runestone.core.logging_config import get_logger
 from runestone.core.prompt_builder.builder import PromptBuilder
 from runestone.core.prompt_builder.exceptions import ResponseParseError
 from runestone.core.prompt_builder.parsers import ResponseParser
-from runestone.schemas.analysis import ContentAnalysis, SearchNeeded
+from runestone.schemas.analysis import ContentAnalysis
 
 
 class ContentAnalyzer:
@@ -84,54 +84,3 @@ class ContentAnalyzer:
             raise
         except Exception as e:
             raise ContentAnalysisError(f"Content analysis failed: {str(e)}")
-
-    def find_extra_learning_info(self, core_topics: list[str], search_needed: SearchNeeded) -> str:
-        """
-        Find extra learning information using web search and compile educational material.
-
-        Args:
-            core_topics: Main topics covered in the content
-            search_needed: Search requirements including whether to search and query suggestions
-
-        Returns:
-            Compiled educational material from web search as a string
-        """
-        if not search_needed.should_search:
-            return ""
-
-        try:
-            # Get search queries and core topics from parameters
-            search_queries = search_needed.query_suggestions
-            core_topics = core_topics
-
-            if not search_queries and not core_topics:
-                self.logger.warning("[ContentAnalyzer] No search queries or topics generated")
-                return ""
-
-            self.logger.debug(
-                f"[ContentAnalyzer] Searching for educational material on "
-                f"topics: {core_topics} and queries: {search_queries}"
-            )
-
-            # Build search prompt using PromptBuilder
-            search_prompt = self.builder.build_search_prompt(
-                core_topics=core_topics[:3], query_suggestions=search_queries[:4]
-            )
-
-            try:
-                response_text = self.client.search_resources(search_prompt)
-
-                if response_text:
-                    # Parse search response (returns as plain text)
-                    return self.parser.parse_search_response(response_text)
-
-                # Fallback with simple message if no response
-                return "No extra learning info available at this time."
-
-            except Exception as e:
-                self.logger.warning(f"[ContentAnalyzer] Search failed: {e}")
-                return f"Search failed: {str(e)}"
-
-        except Exception as e:
-            self.logger.error(f"[ContentAnalyzer] Resource search failed: {e}")
-            return f"Resource search failed: {str(e)}"

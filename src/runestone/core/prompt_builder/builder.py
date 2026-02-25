@@ -75,32 +75,6 @@ class PromptBuilder:
         template = self._templates[PromptType.ANALYSIS]
         return template.render(extracted_text=text)
 
-    def build_search_prompt(self, core_topics: List[str], query_suggestions: List[str]) -> str:
-        """
-        Build web search prompt for finding learning resources.
-
-        Args:
-            core_topics: List of main topics to search for
-            query_suggestions: List of specific search queries
-
-        Returns:
-            Complete search prompt string
-
-        Example:
-            >>> builder = PromptBuilder()
-            >>> prompt = builder.build_search_prompt(
-            ...     core_topics=["Swedish verbs", "Present tense"],
-            ...     query_suggestions=["Swedish present tense conjugation"]
-            ... )
-        """
-        template = self._templates[PromptType.SEARCH]
-
-        # Format topics and queries with quotes
-        formatted_topics = ", ".join(f'"{topic}"' for topic in core_topics[:3])
-        formatted_queries = ", ".join(f'"{query}"' for query in query_suggestions[:4])
-
-        return template.render(core_topics=formatted_topics, query_suggestions=formatted_queries)
-
     def build_vocabulary_prompt(self, word_phrase: str, mode: ImprovementMode = ImprovementMode.EXAMPLE_ONLY) -> str:
         """
         Build vocabulary improvement prompt based on mode.

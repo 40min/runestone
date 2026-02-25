@@ -16,8 +16,6 @@ from runestone.api.schemas import (
     ContentAnalysis,
     ErrorResponse,
     OCRResult,
-    ResourceRequest,
-    ResourceResponse,
     Vocabulary,
     VocabularyImproveRequest,
     VocabularyImproveResponse,
@@ -166,58 +164,6 @@ async def analyze_content(
         raise HTTPException(
             status_code=500,
             detail=f"Unexpected error: {type(e).__name__}: {str(e)}",
-        )
-
-
-@router.post(
-    "/resources",
-    response_model=ResourceResponse,
-    responses={
-        200: {"description": "Resource search successful"},
-        400: {"model": ErrorResponse, "description": "Bad request"},
-        422: {"model": ErrorResponse, "description": "Validation error"},
-        500: {"model": ErrorResponse, "description": "Resource search error"},
-    },
-)
-async def find_resources(
-    request: ResourceRequest,
-    processor: Annotated[RunestoneProcessor, Depends(get_runestone_processor)],
-    current_user: Annotated[User, Depends(get_current_user)],
-) -> ResourceResponse:
-    """
-    Find additional learning resources based on content analysis.
-
-    This endpoint accepts analysis results and returns supplementary learning information.
-
-    Args:
-        request: Resource request with analysis data
-        processor: Runestone processor
-
-    Returns:
-        ResourceResponse: Additional learning resources
-
-    Raises:
-        HTTPException: For various error conditions
-    """
-    try:
-        # Run resource search with the simplified parameters
-        extra_info = processor.run_resource_search(
-            core_topics=request.analysis.core_topics,
-            search_needed=request.analysis.search_needed,
-        )
-
-        # Return response
-        return ResourceResponse(extra_info=extra_info)
-
-    except RunestoneError as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Resource search failed: {str(e)}",
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Unexpected error: {str(e)}",
         )
 
 

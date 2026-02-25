@@ -33,13 +33,9 @@ export interface ContentAnalysis {
   grammar_focus: GrammarFocus;
   vocabulary: VocabularyItem[];
   core_topics: string[];
-  search_needed: {
-    should_search: boolean;
-    query_suggestions: string[];
-  };
 }
 
-export type ProcessingStep = "IDLE" | "OCR" | "ANALYZING" | "RESOURCES" | "DONE"; // Export ProcessingStep type
+export type ProcessingStep = "IDLE" | "OCR" | "ANALYZING" | "DONE";
 
 interface UseImageProcessingReturn {
   processImage: (file: File, recognizeOnly: boolean) => Promise<void>;
@@ -49,7 +45,6 @@ interface UseImageProcessingReturn {
   onVocabularyUpdated: (updatedVocabulary: EnrichedVocabularyItem[]) => void;
   ocrResult: OCRResult | null;
   analysisResult: ContentAnalysis | null;
-  resourcesResult: string | null;
   processingStep: ProcessingStep;
   error: string | null;
   isProcessing: boolean;
@@ -63,7 +58,6 @@ const useImageProcessing = (): UseImageProcessingReturn => {
   const [analysisResult, setAnalysisResult] = useState<ContentAnalysis | null>(
     null
   );
-  const [resourcesResult, setResourcesResult] = useState<string | null>(null);
   const [processingStep, setProcessingStep] = useState<ProcessingStep>("IDLE");
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -75,7 +69,6 @@ const useImageProcessing = (): UseImageProcessingReturn => {
   const reset = () => {
     setOcrResult(null);
     setAnalysisResult(null);
-    setResourcesResult(null);
     setProcessingStep("IDLE");
     setError(null);
     setIsProcessing(false);
@@ -145,7 +138,6 @@ const useImageProcessing = (): UseImageProcessingReturn => {
     setIsProcessing(true);
     setError(null);
     setAnalysisResult(null);
-    setResourcesResult(null);
     setProcessingStep("IDLE");
     setProgress(0);
 
@@ -154,22 +146,7 @@ const useImageProcessing = (): UseImageProcessingReturn => {
       setProgress(60);
       const analysisData: ContentAnalysis = await post<ContentAnalysis>('/api/analyze', { text });
       setAnalysisResult(analysisData);
-      setProgress(80);
-
-      if (analysisData.search_needed.should_search) {
-        setProcessingStep("RESOURCES");
-        setProgress(90);
-        const resourcesData = await post<{ extra_info: string }>('/api/resources', {
-          analysis: {
-            core_topics: analysisData.core_topics,
-            search_needed: analysisData.search_needed,
-          },
-        });
-        setResourcesResult(resourcesData.extra_info);
-        setProgress(100);
-      } else {
-        setProgress(100);
-      }
+      setProgress(100);
       setProcessingStep("DONE");
     } catch (err) {
       const errorMessage =
@@ -185,7 +162,6 @@ const useImageProcessing = (): UseImageProcessingReturn => {
   const processImage = async (file: File, recognizeOnly: boolean) => {
     setError(null);
     setAnalysisResult(null);
-    setResourcesResult(null);
     setProcessingStep("IDLE");
     setProgress(0);
 
@@ -237,7 +213,6 @@ const useImageProcessing = (): UseImageProcessingReturn => {
     onVocabularyUpdated,
     ocrResult,
     analysisResult,
-    resourcesResult,
     processingStep,
     error,
     isProcessing,

@@ -204,11 +204,7 @@ Please provide your analysis in the following JSON format:
     ],
     "core_topics": [
         "list of main topics covered on this page"
-    ],
-    "search_needed": {{
-        "should_search": boolean,
-        "query_suggestions": ["list of search queries for finding additional resources"]
-    }}
+    ]
 }}
 
 INSTRUCTIONS:
@@ -262,54 +258,10 @@ INSTRUCTIONS:
    - Identify 2-4 main learning topics from this page
    - Use clear, descriptive terms
 
-4. For search_needed:
-    - Set should_search = true if the provided page lacks grammar explanations and only contains
-      exercises, examples, or incomplete information.
-    - If should_search = true, generate a list of specific and targeted search queries that would help
-      find reliable grammar explanations for the identified topic(s).
-    - Queries should be concise, precise, and focus on the exact grammar concept(s) missing from
-      the resource.
-    - If explanations are already sufficient, set should_search = false and do not generate queries.
-
 Return ONLY valid JSON, no additional text or formatting.
 """,
         parameters=["extracted_text"],
         metadata={"output_format": "json"},
-    ),
-    PromptType.SEARCH: PromptTemplate(
-        name="Resource Search",
-        version="1.0.0",
-        content="""
-You have web search capabilities. Search the web for educational material related to Swedish language learning.
-
-Core topics: {core_topics}
-Additional suggestions: {query_suggestions}
-
-Instructions:
-- Search the web for relevant, high-quality educational resources.
-- Summarize findings into a single structured text, grouped by topic.
-- For each topic, give 2–5 concise bullet points with the most useful rules, explanations, or examples.
-- Explain topics as a tutor, using clear and simple language.
-- Keep the text readable and compact (avoid long sections or repeated titles).
-- Prioritize reliable sources such as:
-  - https://swedish-for-all.se/sfi-steg-learning-steps/
-  - https://sites.google.com/view/swedish-med-papegojan/
-  - http://svenskgrammatik.net/Content.aspx
-  - https://www.worddive.com/en/grammar/swedish-grammar/
-
-
-Return only the structured educational text.
-
-Format:
-- Format the summary in plain text, not Markdown.
-- Use emojis for section headers and bullets (e.g., 📌, ❓, 📖, 💡).
-- Keep explanations concise and structured with short lines.
-- Do not use symbols like **bold**, # headers, or markdown tables.
-- Provide links to the sources you used, if applicable.
-- Provide funny examples for grammar rules.
-""",
-        parameters=["core_topics", "query_suggestions"],
-        metadata={"requires_web_search": True},
     ),
     PromptType.VOCABULARY_IMPROVE: PromptTemplate(
         name="Vocabulary Improvement",

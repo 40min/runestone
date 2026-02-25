@@ -13,7 +13,7 @@ from typing import Any, Optional
 from pydantic import BaseModel, field_validator
 
 from runestone.core.prompt_builder.types import ImprovementMode
-from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
+from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, VocabularyItem
 from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 
 # Define the public API contract
@@ -21,15 +21,11 @@ __all__ = [
     # Unified schemas (re-exported)
     "ContentAnalysis",
     "GrammarFocus",
-    "SearchNeeded",
     "VocabularyItem",
     "OCRResult",
     "RecognitionStatistics",
     # API-specific request/response models
     "AnalysisRequest",
-    "ResourceRequest",
-    "ResourceRequestData",
-    "ResourceResponse",
     "ErrorResponse",
     "HealthResponse",
     "VocabularyItemCreate",
@@ -49,25 +45,6 @@ class AnalysisRequest(BaseModel):
     """Schema for analysis request payload."""
 
     text: str
-
-
-class ResourceRequestData(BaseModel):
-    """Simplified schema for resource search request data - only required fields."""
-
-    core_topics: list[str] = []
-    search_needed: SearchNeeded
-
-
-class ResourceRequest(BaseModel):
-    """Schema for resource search request payload."""
-
-    analysis: ResourceRequestData
-
-
-class ResourceResponse(BaseModel):
-    """Schema for resource search response."""
-
-    extra_info: str
 
 
 class ErrorResponse(BaseModel):

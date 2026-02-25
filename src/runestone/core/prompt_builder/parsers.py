@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 
 from runestone.core.prompt_builder.exceptions import ResponseParseError
 from runestone.core.prompt_builder.types import ImprovementMode
-from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
+from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, VocabularyItem
 from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 from runestone.schemas.vocabulary import VocabularyResponse
 
@@ -365,8 +365,6 @@ class ResponseParser:
         rules = None
         vocabulary = []
         core_topics = []
-        should_search = True
-        query_suggestions = []
 
         # Try to find JSON-like structure even if malformed
         if response.startswith("{") and response.endswith("}"):
@@ -422,21 +420,7 @@ class ResponseParser:
             topics_str = topics_match.group(1)
             core_topics = re.findall(r'"([^"]*)"', topics_str)
 
-        # Try to extract search_needed
-        should_search_match = re.search(
-            r'(?:"should_search"|should_search)\s*:\s*(true|false)', response, re.IGNORECASE
-        )
-        if should_search_match:
-            should_search = should_search_match.group(1).lower() == "true"
-
-        queries_match = re.search(
-            r'(?:"query_suggestions"|query_suggestions)\s*:\s*\[(.*?)\]', response, re.DOTALL | re.IGNORECASE
-        )
-        if queries_match:
-            queries_str = queries_match.group(1)
-            query_suggestions = re.findall(r'"([^"]*)"', queries_str)
-
-        # Ensure all required fields have default values if missing
+        # If absolutely no meaningful data was extracted, raise error
         if not topic:
             topic = "Swedish language practice"
 
@@ -446,10 +430,6 @@ class ResponseParser:
         if not core_topics:
             core_topics = ["Swedish language learning"]
 
-        if not query_suggestions:
-            query_suggestions = ["Swedish grammar basics", "Swedish vocabulary practice"]
-
-        # If absolutely no meaningful data was extracted, raise error
         if (
             (not topic or topic == "Swedish language practice")
             and not vocabulary
@@ -470,10 +450,6 @@ class ResponseParser:
             ),
             vocabulary=vocabulary,
             core_topics=core_topics,
-            search_needed=SearchNeeded(
-                should_search=should_search,
-                query_suggestions=query_suggestions,
-            ),
         )
 
     def _fallback_vocabulary_parse(self, response_text: str, mode: ImprovementMode) -> VocabularyResponse:

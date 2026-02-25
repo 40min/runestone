@@ -45,17 +45,9 @@ describe('useImageProcessing', () => {
         { swedish: 'hej', english: 'hello' },
       ],
       core_topics: ['present tense', 'greetings'],
-      search_needed: {
-        should_search: true,
-        query_suggestions: ['Swedish present tense', 'Basic Swedish grammar']
-      },
     };
 
-    const mockResourcesResponse = {
-      extra_info: 'Additional learning resources here',
-    };
-
-    // Mock the three API calls
+    // Mock the two API calls
     mockFetch
       .mockResolvedValueOnce({
         ok: true,
@@ -64,10 +56,6 @@ describe('useImageProcessing', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockAnalysisResponse),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResourcesResponse),
       });
 
     const { result } = renderHook(() => useImageProcessing());
@@ -80,14 +68,13 @@ describe('useImageProcessing', () => {
     await waitFor(() => {
       expect(result.current.ocrResult).toEqual(mockOcrResponse);
       expect(result.current.analysisResult).toEqual(mockAnalysisResponse);
-      expect(result.current.resourcesResult).toBe(mockResourcesResponse.extra_info);
       expect(result.current.processingStep).toBe('DONE');
       expect(result.current.error).toBeNull();
       expect(result.current.isProcessing).toBe(false);
     });
 
-    // Verify the three API calls were made
-    expect(mockFetch).toHaveBeenCalledTimes(3);
+    // Verify the two API calls were made
+    expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(mockFetch).toHaveBeenNthCalledWith(1, 'http://localhost:8010/api/ocr', {
       method: 'POST',
       body: expect.any(FormData),
@@ -99,18 +86,6 @@ describe('useImageProcessing', () => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ text: 'Sample text' }),
-    });
-    expect(mockFetch).toHaveBeenNthCalledWith(3, 'http://localhost:8010/api/resources', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        analysis: {
-          core_topics: mockAnalysisResponse.core_topics,
-          search_needed: mockAnalysisResponse.search_needed
-        }
-      }),
     });
   });
 
@@ -133,7 +108,6 @@ describe('useImageProcessing', () => {
       expect(result.current.error).toBe('OCR failed');
       expect(result.current.ocrResult).toBeNull();
       expect(result.current.analysisResult).toBeNull();
-      expect(result.current.resourcesResult).toBeNull();
       expect(result.current.processingStep).toBe('IDLE');
       expect(result.current.isProcessing).toBe(false);
     });
@@ -153,7 +127,6 @@ describe('useImageProcessing', () => {
       expect(result.current.error).toBe('Network error');
       expect(result.current.ocrResult).toBeNull();
       expect(result.current.analysisResult).toBeNull();
-      expect(result.current.resourcesResult).toBeNull();
       expect(result.current.processingStep).toBe('IDLE');
       expect(result.current.isProcessing).toBe(false);
     });
@@ -175,12 +148,7 @@ describe('useImageProcessing', () => {
           grammar_focus: { topic: 'test', explanation: 'test', has_explicit_rules: false },
           vocabulary: [],
           core_topics: ['test topic'],
-          search_needed: { should_search: true, query_suggestions: ['test query'] }
         }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ extra_info: 'test' }),
       });
 
     await act(async () => {
@@ -197,7 +165,6 @@ describe('useImageProcessing', () => {
     await waitFor(() => {
       expect(result.current.ocrResult).toBeNull();
       expect(result.current.analysisResult).toBeNull();
-      expect(result.current.resourcesResult).toBeNull();
       expect(result.current.processingStep).toBe('IDLE');
       expect(result.current.error).toBeNull();
       expect(result.current.isProcessing).toBe(false);
@@ -211,9 +178,7 @@ describe('useImageProcessing', () => {
       grammar_focus: { topic: 'Present tense', explanation: 'Focus on present tense usage', has_explicit_rules: true },
       vocabulary: [{ swedish: 'hej', english: 'hello' }],
       core_topics: ['present tense', 'greetings'],
-      search_needed: { should_search: true, query_suggestions: ['Swedish present tense'] },
     };
-    const mockResourcesResponse = { extra_info: 'Additional resources' };
 
     mockFetch
       .mockResolvedValueOnce({
@@ -223,10 +188,6 @@ describe('useImageProcessing', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockAnalysisResponse),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResourcesResponse),
       });
 
     const { result } = renderHook(() => useImageProcessing());
@@ -247,7 +208,6 @@ describe('useImageProcessing', () => {
       grammar_focus: { topic: 'Present tense', explanation: 'Focus on present tense usage', has_explicit_rules: true },
       vocabulary: [{ swedish: 'hej', english: 'hello' }],
       core_topics: ['present tense', 'greetings'],
-      search_needed: { should_search: false, query_suggestions: [] },
     };
 
     mockFetch
@@ -301,7 +261,6 @@ describe('useImageProcessing', () => {
       expect(result.current.error).toBe('Invalid JSON');
       expect(result.current.ocrResult).toBeNull();
       expect(result.current.analysisResult).toBeNull();
-      expect(result.current.resourcesResult).toBeNull();
       expect(result.current.processingStep).toBe('IDLE');
       expect(result.current.isProcessing).toBe(false);
     });
@@ -326,7 +285,6 @@ describe('useImageProcessing', () => {
       expect(result.current.error).toBe('Unknown error');
       expect(result.current.ocrResult).toBeNull();
       expect(result.current.analysisResult).toBeNull();
-      expect(result.current.resourcesResult).toBeNull();
       expect(result.current.processingStep).toBe('IDLE');
       expect(result.current.isProcessing).toBe(false);
     });
@@ -338,9 +296,7 @@ describe('useImageProcessing', () => {
       grammar_focus: { topic: 'Present tense', explanation: 'Focus on present tense usage', has_explicit_rules: true },
       vocabulary: [{ swedish: 'hej', english: 'hello' }],
       core_topics: ['present tense', 'greetings'],
-      search_needed: { should_search: true, query_suggestions: ['Swedish present tense'] },
     };
-    const mockResourcesResponse = { extra_info: 'Additional resources' };
 
     mockFetch
       .mockResolvedValueOnce({
@@ -350,10 +306,6 @@ describe('useImageProcessing', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockAnalysisResponse),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResourcesResponse),
       });
 
     const { result } = renderHook(() => useImageProcessing());
@@ -367,57 +319,6 @@ describe('useImageProcessing', () => {
     // Check that processingStep was updated to DONE
     await waitFor(() => {
       expect(result.current.processingStep).toBe('DONE');
-    });
-  });
-
-  it('should skip resources step when should_search is false', async () => {
-    const mockOcrResponse = { text: 'Sample text', character_count: 11 };
-    const mockAnalysisResponse = {
-      grammar_focus: { topic: 'Present tense', explanation: 'Focus on present tense usage', has_explicit_rules: true },
-      vocabulary: [{ swedish: 'hej', english: 'hello' }],
-      core_topics: ['present tense', 'greetings'],
-      search_needed: { should_search: false, query_suggestions: [] },
-    };
-
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockOcrResponse),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockAnalysisResponse),
-      });
-
-    const { result } = renderHook(() => useImageProcessing());
-
-    const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
-    await act(async () => {
-      await result.current.processImage(file, false);
-    });
-
-    await waitFor(() => {
-      expect(result.current.ocrResult).toEqual(mockOcrResponse);
-      expect(result.current.analysisResult).toEqual(mockAnalysisResponse);
-      expect(result.current.resourcesResult).toBeNull();
-      expect(result.current.processingStep).toBe('DONE');
-      expect(result.current.error).toBeNull();
-      expect(result.current.isProcessing).toBe(false);
-    });
-
-    // Verify only OCR and analysis API calls were made (no resources call)
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-    expect(mockFetch).toHaveBeenNthCalledWith(1, 'http://localhost:8010/api/ocr', {
-      method: 'POST',
-      body: expect.any(FormData),
-      headers: {},
-    });
-    expect(mockFetch).toHaveBeenNthCalledWith(2, 'http://localhost:8010/api/analyze', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ text: 'Sample text' }),
     });
   });
 
@@ -472,12 +373,11 @@ describe('useImageProcessing', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
-  it('analyzeText should set analysisResult on success (no resources needed)', async () => {
+  it('analyzeText should set analysisResult on success', async () => {
     const mockAnalysisResponse = {
       grammar_focus: { topic: 'Verbs', explanation: 'Verb forms', has_explicit_rules: false },
       vocabulary: [],
       core_topics: ['verbs'],
-      search_needed: { should_search: false, query_suggestions: [] },
     };
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -492,7 +392,6 @@ describe('useImageProcessing', () => {
     });
 
     expect(result.current.analysisResult).toEqual(mockAnalysisResponse);
-    expect(result.current.resourcesResult).toBeNull();
     expect(result.current.processingStep).toBe('DONE');
     expect(result.current.error).toBeNull();
     expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -501,41 +400,6 @@ describe('useImageProcessing', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: textToAnalyze }),
     });
-  });
-
-  it('analyzeText should set analysisResult and resourcesResult on success (resources needed)', async () => {
-    const mockAnalysisResponse = {
-      grammar_focus: { topic: 'Nouns', explanation: 'Noun declension', has_explicit_rules: true },
-      vocabulary: [],
-      core_topics: ['nouns'],
-      search_needed: { should_search: true, query_suggestions: ['Swedish nouns'] },
-    };
-    const mockResourcesResponse = { extra_info: 'Noun resources' };
-
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockAnalysisResponse),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResourcesResponse),
-      });
-
-    const { result } = renderHook(() => useImageProcessing());
-    const textToAnalyze = 'Many nouns.';
-
-    await act(async () => {
-      await result.current.analyzeText(textToAnalyze);
-    });
-
-    expect(result.current.analysisResult).toEqual(mockAnalysisResponse);
-    expect(result.current.resourcesResult).toBe(mockResourcesResponse.extra_info);
-    expect(result.current.processingStep).toBe('DONE');
-    expect(result.current.error).toBeNull();
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-    expect(mockFetch).toHaveBeenNthCalledWith(1, 'http://localhost:8010/api/analyze', expect.any(Object));
-    expect(mockFetch).toHaveBeenNthCalledWith(2, 'http://localhost:8010/api/resources', expect.any(Object));
   });
 
   it('analyzeText should set error on API failure', async () => {
@@ -554,7 +418,6 @@ describe('useImageProcessing', () => {
     });
 
     expect(result.current.analysisResult).toBeNull();
-    expect(result.current.resourcesResult).toBeNull();
     expect(result.current.error).toBe('Request failed');
     expect(result.current.processingStep).toBe('IDLE');
     expect(mockFetch).toHaveBeenCalledTimes(1);

@@ -2,7 +2,7 @@
 Tests for API endpoints.
 
 This module tests all the API endpoints defined in endpoints.py,
-including OCR, analysis, resources, and vocabulary endpoints.
+including OCR, analysis, and vocabulary endpoints.
 """
 
 import io
@@ -113,7 +113,7 @@ class TestAnalysisEndpoints:
         """Test successful content analysis."""
         client, mock_processor_instance = client_with_mock_processor
 
-        from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, SearchNeeded, VocabularyItem
+        from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, VocabularyItem
 
         mock_analysis_result = ContentAnalysis(
             grammar_focus=GrammarFocus(
@@ -124,10 +124,6 @@ class TestAnalysisEndpoints:
                 VocabularyItem(swedish="vad", english="what", example_phrase=None, known=True),
             ],
             core_topics=["questions", "greetings"],
-            search_needed=SearchNeeded(
-                should_search=True,
-                query_suggestions=["Swedish question formation"],
-            ),
         )
         mock_processor_instance.run_analysis.return_value = mock_analysis_result
 
@@ -167,45 +163,6 @@ class TestAnalysisEndpoints:
         assert response.status_code == 500
         data = response.json()
         assert "No text provided for analysis" in data["detail"]
-
-
-class TestResourceEndpoints:
-    """Test cases for resource search endpoints."""
-
-    def test_resources_success(self, client_with_mock_processor):
-        """Test successful resource search."""
-        client, mock_processor_instance = client_with_mock_processor
-
-        mock_extra_info = "Additional learning resources about Swedish questions"
-        mock_processor_instance.run_resource_search.return_value = mock_extra_info
-
-        # Test request payload with minimal required data
-        payload = {
-            "analysis": {
-                "core_topics": ["questions", "greetings"],
-                "search_needed": {
-                    "should_search": True,
-                    "query_suggestions": ["Swedish question formation", "Basic Swedish grammar"],
-                },
-            }
-        }
-
-        response = client.post("/api/resources", json=payload)
-
-        assert response.status_code == 200
-        data = response.json()
-
-        # Verify response
-        assert data["extra_info"] == mock_extra_info
-
-        # Verify processor was called with core_topics and search_needed
-        call_args = mock_processor_instance.run_resource_search.call_args
-        assert call_args.kwargs["core_topics"] == ["questions", "greetings"]
-        assert call_args.kwargs["search_needed"].should_search is True
-        assert call_args.kwargs["search_needed"].query_suggestions == [
-            "Swedish question formation",
-            "Basic Swedish grammar",
-        ]
 
 
 class TestVocabularyEndpoints:
