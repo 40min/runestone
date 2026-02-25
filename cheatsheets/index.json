@@ -433,5 +433,17 @@
     ],
     "annotation": "Explains the 'att' trio of Swedish subjunctions: genom att (how), utan att (without), and för att (purpose).",
     "path": "word_order/subjunktjoner_att_trio.md"
+  },
+  {
+    "url": "{HOST}/?view=grammar&cheatsheet=word_order%2Frelativa_bisatser_med_satsadverbial",
+    "tags": [
+      "word order",
+      "relative clauses",
+      "som",
+      "sentence adverbials",
+      "satsadverbial"
+    ],
+    "annotation": "Guide to Swedish relative clauses with sentence adverbials (satsadverbial), explaining the placement of 'inte', 'aldrig', etc.",
+    "path": "word_order/relativa_bisatser_med_satsadverbial.md"
   }
 ]
