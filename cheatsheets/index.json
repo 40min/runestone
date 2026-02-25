@@ -420,5 +420,18 @@
     ],
     "annotation": "Guide to Swedish subordinating conjunctions (subjunktjoner) for time, contrast, and purpose.",
     "path": "word_order/subjunktjoner.md"
+  },
+  {
+    "url": "{HOST}/?view=grammar&cheatsheet=word_order%2Fsubjunktjoner_att_trio",
+    "tags": [
+      "word order",
+      "subjunktjoner",
+      "att",
+      "genom att",
+      "utan att",
+      "för att"
+    ],
+    "annotation": "Explains the 'att' trio of Swedish subjunctions: genom att (how), utan att (without), and för att (purpose).",
+    "path": "word_order/subjunktjoner_att_trio.md"
   }
 ]
