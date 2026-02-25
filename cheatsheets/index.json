@@ -185,6 +185,19 @@
     "path": "pronouns/sjalvstandiga-pronomen.md"
   },
   {
+    "url": "{HOST}/?view=grammar&cheatsheet=tenses%2Ffuturum",
+    "tags": [
+      "tenses",
+      "future",
+      "futurum",
+      "ska",
+      "kommer att",
+      "swedish grammar"
+    ],
+    "annotation": "A guide to the three ways of expressing the future in Swedish: ska + infinitiv, present tense, and kommer att + infinitiv.",
+    "path": "tenses/futurum.md"
+  },
+  {
     "url": "{HOST}/?view=grammar&cheatsheet=tenses%2Fperfect_vs_preterium",
     "tags": [
       "tenses",
