@@ -1,13 +1,9 @@
-"""
-Repository for chat message database operations.
-"""
-
 import json
 from datetime import datetime, timedelta, timezone
 from typing import List
 
 from sqlalchemy import delete, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from runestone.db.models import ChatMessage
 
@@ -15,7 +11,7 @@ from runestone.db.models import ChatMessage
 class ChatRepository:
     """Repository for managing chat messages in the database."""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         """
         Initialize the repository.
 
@@ -24,7 +20,7 @@ class ChatRepository:
         """
         self.db = db
 
-    def add_message(
+    async def add_message(
         self,
         user_id: int,
         chat_id: str,
@@ -52,11 +48,11 @@ class ChatRepository:
             sources=json.dumps(sources) if sources else None,
         )
         self.db.add(message)
-        self.db.commit()
-        self.db.refresh(message)
+        await self.db.commit()
+        await self.db.refresh(message)
         return message
 
-    def get_raw_history(self, user_id: int, chat_id: str) -> List[ChatMessage]:
+    async def get_raw_history(self, user_id: int, chat_id: str) -> List[ChatMessage]:
         """
         Fetch all chat messages for a user, ordered by creation time.
 
@@ -71,9 +67,10 @@ class ChatRepository:
             .where(ChatMessage.user_id == user_id, ChatMessage.chat_id == chat_id)
             .order_by(ChatMessage.created_at.asc())
         )
-        return list(self.db.execute(stmt).scalars().all())
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
 
-    def get_context_for_agent(self, user_id: int, chat_id: str, limit: int = 20) -> List[ChatMessage]:
+    async def get_context_for_agent(self, user_id: int, chat_id: str, limit: int = 20) -> List[ChatMessage]:
         """
         Fetch the most recent chat messages for the agent context.
 
@@ -90,11 +87,12 @@ class ChatRepository:
             .order_by(ChatMessage.created_at.desc())
             .limit(limit)
         )
-        messages = list(self.db.execute(stmt).scalars().all())
+        result = await self.db.execute(stmt)
+        messages = list(result.scalars().all())
         # Return in chronological order
         return sorted(messages, key=lambda x: x.created_at)
 
-    def get_history_after_id(
+    async def get_history_after_id(
         self, user_id: int, chat_id: str, after_id: int = 0, limit: int = 200
     ) -> List[ChatMessage]:
         """
@@ -119,9 +117,10 @@ class ChatRepository:
             .order_by(ChatMessage.id.asc())
             .limit(limit)
         )
-        return list(self.db.execute(stmt).scalars().all())
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
 
-    def get_latest_id(self, user_id: int, chat_id: str) -> int:
+    async def get_latest_id(self, user_id: int, chat_id: str) -> int:
         """
         Get the latest message id for the given user/chat session.
 
@@ -129,10 +128,11 @@ class ChatRepository:
             Latest message id or 0 when chat is empty
         """
         stmt = select(func.max(ChatMessage.id)).where(ChatMessage.user_id == user_id, ChatMessage.chat_id == chat_id)
-        result = self.db.execute(stmt).scalar_one_or_none()
-        return int(result or 0)
+        result = await self.db.execute(stmt)
+        res = result.scalar_one_or_none()
+        return int(res or 0)
 
-    def get_oldest_id(self, user_id: int, chat_id: str) -> int:
+    async def get_oldest_id(self, user_id: int, chat_id: str) -> int:
         """
         Get the oldest message id for the given user/chat session.
 
@@ -140,10 +140,11 @@ class ChatRepository:
             Oldest message id or 0 when chat is empty
         """
         stmt = select(func.min(ChatMessage.id)).where(ChatMessage.user_id == user_id, ChatMessage.chat_id == chat_id)
-        result = self.db.execute(stmt).scalar_one_or_none()
-        return int(result or 0)
+        result = await self.db.execute(stmt)
+        res = result.scalar_one_or_none()
+        return int(res or 0)
 
-    def truncate_history(self, user_id: int, retention_days: int, preserve_chat_id: str | None = None):
+    async def truncate_history(self, user_id: int, retention_days: int, preserve_chat_id: str | None = None):
         """
         Delete messages older than the retention threshold.
 
@@ -156,10 +157,10 @@ class ChatRepository:
         stmt = delete(ChatMessage).where(ChatMessage.user_id == user_id, ChatMessage.created_at < threshold)
         if preserve_chat_id:
             stmt = stmt.where(ChatMessage.chat_id != preserve_chat_id)
-        self.db.execute(stmt)
-        self.db.commit()
+        await self.db.execute(stmt)
+        await self.db.commit()
 
-    def clear_all_history(self, user_id: int):
+    async def clear_all_history(self, user_id: int):
         """
         Delete all chat messages for a user.
 
@@ -167,5 +168,5 @@ class ChatRepository:
             user_id: ID of the user
         """
         stmt = delete(ChatMessage).where(ChatMessage.user_id == user_id)
-        self.db.execute(stmt)
-        self.db.commit()
+        await self.db.execute(stmt)
+        await self.db.commit()

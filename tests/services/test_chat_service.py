@@ -28,7 +28,9 @@ def mock_vocabulary_service():
 @pytest.fixture
 def mock_tts_service():
     """Create a mock TTSService."""
-    return Mock()
+    mock = Mock()
+    mock.push_audio_to_client = AsyncMock()
+    return mock
 
 
 @pytest.fixture
@@ -39,15 +41,15 @@ def mock_user_service():
     mock_user = Mock()
     mock_user.id = 1
     mock_user.current_chat_id = str(uuid4())
-    mock.get_user_by_id.return_value = mock_user
-    mock.get_or_create_current_chat_id.return_value = mock_user.current_chat_id
-    mock.rotate_current_chat_id.return_value = str(uuid4())
+    mock.get_user_by_id = AsyncMock(return_value=mock_user)
+    mock.get_or_create_current_chat_id = AsyncMock(return_value=mock_user.current_chat_id)
+    mock.rotate_current_chat_id = AsyncMock(return_value=str(uuid4()))
 
     mock_profile = Mock()
     mock_profile.personal_info = None
     mock_profile.areas_to_improve = None
     mock_profile.knowledge_strengths = None
-    mock.get_user_profile.return_value = mock_profile
+    mock.get_user_profile = AsyncMock(return_value=mock_profile)
     return mock
 
 
@@ -110,7 +112,7 @@ async def test_process_message_orchestration(chat_service, db_with_test_user, mo
     assert sources is None
 
     # Verify persistence
-    history = chat_service.get_history(user.id, user.current_chat_id)
+    history = await chat_service.get_history(user.id, user.current_chat_id)
     assert len(history) == 2
     assert history[0].role == "user"
     assert history[0].content == "Hej Björn"
@@ -181,7 +183,7 @@ async def test_process_image_message_success(
     assert "Hej. Hur mår du?" in kwargs["message"]
 
     # Verify history persistence (only assistant message for images)
-    history = chat_service.get_history(user.id, user.current_chat_id)
+    history = await chat_service.get_history(user.id, user.current_chat_id)
     assert len(history) == 1
     assert history[0].role == "assistant"
     assert history[0].content == "Björn's reply"
@@ -233,14 +235,15 @@ async def test_process_image_message_uses_mother_tongue(
     assert "Hej världen" in prompt
 
 
-def test_clear_history(chat_service, db_with_test_user):
+@pytest.mark.anyio
+async def test_clear_history(chat_service, db_with_test_user):
     """Test clearing history via service."""
     db, user = db_with_test_user
     chat_id = str(uuid4())
-    chat_service.repository.add_message(user.id, chat_id, "user", "Test")
-    chat_service.user_service.rotate_current_chat_id.return_value = str(uuid4())
-    chat_service.clear_history(user.id)
-    chat_service.user_service.rotate_current_chat_id.assert_called_once_with(user.id)
+    await chat_service.repository.add_message(user.id, chat_id, "user", "Test")
+    chat_service.user_service.rotate_current_chat_id = AsyncMock(return_value=str(uuid4()))
+    await chat_service.clear_history(user.id)
+    chat_service.user_service.rotate_current_chat_id.assert_awaited_once_with(user.id)
 
 
 @pytest.mark.anyio
@@ -257,7 +260,7 @@ async def test_process_message_persists_sources(chat_service, db_with_test_user,
 
     await chat_service.process_message(user.id, "Nyheter tack")
 
-    history = chat_service.get_history(user.id, user.current_chat_id)
+    history = await chat_service.get_history(user.id, user.current_chat_id)
     assistant_messages = [msg for msg in history if msg.role == "assistant"]
     assert len(assistant_messages) == 1
     assert [source.model_dump(mode="json") for source in assistant_messages[0].sources] == [

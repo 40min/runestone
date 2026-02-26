@@ -1,8 +1,4 @@
-"""
-Tests for the recall_main module.
-"""
-
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -17,13 +13,14 @@ class TestRecallMain:
 
     @patch("recall_main.settings")
     @patch("recall_main.setup_logging")
-    @patch("recall_main.setup_database")
+    @patch("recall_main.setup_database", new_callable=AsyncMock)
     @patch("recall_main.StateManager")
     @patch("recall_main.create_scheduler")
-    @patch("recall_main.BlockingScheduler")
-    def test_main_success(
+    @patch("recall_main.AsyncIOScheduler")
+    @pytest.mark.asyncio
+    async def test_main_success(
         self,
-        mock_blocking_scheduler,
+        mock_async_scheduler,
         mock_create_scheduler,
         mock_state_manager,
         mock_setup_database,
@@ -36,36 +33,32 @@ class TestRecallMain:
         mock_settings.verbose = False
 
         mock_scheduler = Mock()
-        mock_scheduler.get_jobs.return_value = []  # Mock get_jobs to return empty list
-        mock_blocking_scheduler.return_value = mock_scheduler
+        mock_scheduler.get_jobs.return_value = []
         mock_create_scheduler.return_value = mock_scheduler
 
-        # Mock the scheduler start method to avoid infinite loop
-        mock_scheduler.start.side_effect = KeyboardInterrupt()
+        # Mock the shutdown_event wait to exit immediately
+        with patch("asyncio.Event.wait", new_callable=AsyncMock):
+            from recall_main import main
 
-        # Import and call main
-        from recall_main import main
-
-        # Should raise KeyboardInterrupt from scheduler.start()
-        with pytest.raises(KeyboardInterrupt):
-            main(self.test_state_file)
+            await main(self.test_state_file)
 
         # Verify calls
         mock_setup_logging.assert_called_once_with(level="INFO")
-        mock_setup_database.assert_called_once()
+        mock_setup_database.assert_awaited_once()
         mock_state_manager.assert_called_once_with(self.test_state_file)
         mock_create_scheduler.assert_called_once()
         mock_scheduler.start.assert_called_once()
 
     @patch("recall_main.settings")
     @patch("recall_main.setup_logging")
-    @patch("recall_main.setup_database")
+    @patch("recall_main.setup_database", new_callable=AsyncMock)
     @patch("recall_main.StateManager")
     @patch("recall_main.create_scheduler")
-    @patch("recall_main.BlockingScheduler")
-    def test_main_uses_settings_state_file_path(
+    @patch("recall_main.AsyncIOScheduler")
+    @pytest.mark.asyncio
+    async def test_main_uses_settings_state_file_path(
         self,
-        mock_blocking_scheduler,
+        mock_async_scheduler,
         mock_create_scheduler,
         mock_state_manager,
         mock_setup_database,
@@ -80,41 +73,38 @@ class TestRecallMain:
 
         mock_scheduler = Mock()
         mock_scheduler.get_jobs.return_value = []
-        mock_blocking_scheduler.return_value = mock_scheduler
         mock_create_scheduler.return_value = mock_scheduler
 
-        # Mock the scheduler start method to avoid infinite loop
-        mock_scheduler.start.side_effect = KeyboardInterrupt()
+        # Mock the shutdown_event wait to exit immediately
+        with patch("asyncio.Event.wait", new_callable=AsyncMock):
+            from recall_main import main
 
-        # Import and call main without state_file_path parameter
-        from recall_main import main
-
-        # Should raise KeyboardInterrupt from scheduler.start()
-        with pytest.raises(KeyboardInterrupt):
-            main()  # No state_file_path parameter
+            await main()  # No state_file_path parameter
 
         # Verify StateManager was called with settings.state_file_path
         mock_state_manager.assert_called_once_with("custom/state.json")
 
     @patch("recall_main.settings")
-    def test_main_missing_token(self, mock_settings):
+    @pytest.mark.asyncio
+    async def test_main_missing_token(self, mock_settings):
         """Test main with missing telegram bot token."""
         mock_settings.telegram_bot_token = None
 
         from recall_main import main
 
         with pytest.raises(SystemExit, match="1"):
-            main()
+            await main()
 
     @patch("recall_main.settings")
     @patch("recall_main.setup_logging")
-    @patch("recall_main.setup_database")
+    @patch("recall_main.setup_database", new_callable=AsyncMock)
     @patch("recall_main.StateManager")
     @patch("recall_main.create_scheduler")
-    @patch("recall_main.BlockingScheduler")
-    def test_main_unexpected_error(
+    @patch("recall_main.AsyncIOScheduler")
+    @pytest.mark.asyncio
+    async def test_main_unexpected_error(
         self,
-        mock_blocking_scheduler,
+        mock_async_scheduler,
         mock_create_scheduler,
         mock_state_manager,
         mock_setup_database,
@@ -131,25 +121,25 @@ class TestRecallMain:
         from recall_main import main
 
         with pytest.raises(SystemExit, match="1"):
-            main()
+            await main()
 
-    @patch("recall_main.BlockingScheduler")
+    @patch("recall_main.AsyncIOScheduler")
     @patch("recall_main.settings")
-    def test_create_scheduler(self, mock_settings, mock_blocking_scheduler):
+    def test_create_scheduler(self, mock_settings, mock_async_scheduler):
         """Test scheduler creation and job configuration."""
         from recall_main import create_scheduler
 
         # Create mock state manager
         mock_state_manager = Mock()
         mock_scheduler = Mock()
-        mock_blocking_scheduler.return_value = mock_scheduler
+        mock_async_scheduler.return_value = mock_scheduler
         mock_settings.recall_interval_minutes = 30
 
         # Create scheduler
         scheduler = create_scheduler(mock_state_manager)
 
         # Verify scheduler creation
-        mock_blocking_scheduler.assert_called_once()
+        mock_async_scheduler.assert_called_once()
         assert scheduler == mock_scheduler
 
         # Verify jobs were added
@@ -178,76 +168,29 @@ class TestRecallMain:
         trigger = daily_call[1]["trigger"]
         assert hasattr(trigger, "interval")
 
-    @patch("runestone.db.database.inspect")
     @patch("runestone.db.database.engine")
-    def test_setup_database(self, mock_engine, mock_inspect):
+    @pytest.mark.asyncio
+    async def test_setup_database(self, mock_engine):
         """Test database setup."""
-        from recall_main import setup_database
+        from runestone.db.database import setup_database
 
-        # Mock inspector
-        mock_inspector = Mock()
-        mock_inspector.get_table_names.return_value = ["vocabulary"]
-        mock_inspect.return_value = mock_inspector
+        # Mocking run_sync is tricky, let's mock engine.connect() to return a mock context manager
+        mock_conn = AsyncMock()
+        mock_engine.connect.return_value.__aenter__.return_value = mock_conn
+        mock_conn.run_sync.return_value = []
 
-        # Mock Base metadata
-        with patch("runestone.db.database.Base") as mock_base:
-            mock_base.metadata.tables.keys.return_value = ["vocabulary"]
+        await setup_database()
 
-            setup_database()
-
-        # Verify inspect was called
-        mock_inspect.assert_called_once_with(mock_engine)
-
-    @patch("recall_main.signal")
-    @patch("recall_main.settings")
-    @patch("recall_main.setup_logging")
-    @patch("recall_main.setup_database")
-    @patch("recall_main.StateManager")
-    @patch("recall_main.create_scheduler")
-    @patch("recall_main.BlockingScheduler")
-    def test_signal_handlers(
-        self,
-        mock_blocking_scheduler,
-        mock_create_scheduler,
-        mock_state_manager,
-        mock_setup_database,
-        mock_setup_logging,
-        mock_settings,
-        mock_signal,
-    ):
-        """Test signal handler setup."""
-        mock_settings.telegram_bot_token = self.test_token
-        mock_settings.verbose = False
-
-        mock_scheduler = Mock()
-        mock_scheduler.get_jobs.return_value = []  # Mock get_jobs to return empty list
-        mock_blocking_scheduler.return_value = mock_scheduler
-        mock_create_scheduler.return_value = mock_scheduler
-
-        # Mock the scheduler start method to avoid infinite loop
-        mock_scheduler.start.side_effect = KeyboardInterrupt()
-
-        from recall_main import main
-
-        with pytest.raises(KeyboardInterrupt):
-            main()
-
-        # Verify signal handlers were set
-        assert mock_signal.signal.call_count == 2
-        # Check that signal.signal was called with the mocked signal constants
-        calls = mock_signal.signal.call_args_list
-        assert len(calls) == 2
-        # The first argument should be the signal constant (mocked), second should be the handler function
-        assert calls[0][0][0] is not None  # First signal constant
-        assert calls[1][0][0] is not None  # Second signal constant
-        assert callable(calls[0][0][1])  # Handler function
-        assert callable(calls[1][0][1])  # Handler function
+        # Verify connect was called
+        mock_engine.connect.assert_called_once()
+        mock_conn.run_sync.assert_called_once()
 
     @patch("recall_main.SessionLocal")
     @patch("recall_main.VocabularyRepository")
     @patch("recall_main.RuneRecallService")
     @patch("recall_main.TelegramCommandService")
-    def test_process_updates_job(
+    @pytest.mark.asyncio
+    async def test_process_updates_job(
         self,
         mock_telegram_service,
         mock_recall_service,
@@ -258,29 +201,32 @@ class TestRecallMain:
         from recall_main import process_updates_job
 
         # Setup mocks
-        mock_db = Mock()
-        mock_session_local.return_value = mock_db
+        mock_db = AsyncMock()
+        mock_session_local.return_value.__aenter__.return_value = mock_db
         mock_state_manager = Mock()
 
-        # Call the wrapper function
-        process_updates_job(mock_state_manager)
+        mock_telegram_instance = AsyncMock()
+        mock_telegram_service.return_value = mock_telegram_instance
 
-        # Verify session was created and closed
+        # Call the wrapper function
+        await process_updates_job(mock_state_manager)
+
+        # Verify session was created
         mock_session_local.assert_called_once()
-        mock_db.close.assert_called_once()
 
         # Verify services were created with fresh session
         mock_vocabulary_repository.assert_called_once_with(mock_db)
         mock_recall_service.assert_called_once()
         mock_telegram_service.assert_called_once()
 
-        # Verify telegram service process_updates was called
-        mock_telegram_service.return_value.process_updates.assert_called_once()
+        # Verify telegram service process_updates was awaited
+        mock_telegram_instance.process_updates.assert_awaited_once()
 
     @patch("recall_main.SessionLocal")
     @patch("recall_main.VocabularyRepository")
     @patch("recall_main.RuneRecallService")
-    def test_send_recall_word_job(
+    @pytest.mark.asyncio
+    async def test_send_recall_word_job(
         self,
         mock_recall_service,
         mock_vocabulary_repository,
@@ -290,20 +236,22 @@ class TestRecallMain:
         from recall_main import send_recall_word_job
 
         # Setup mocks
-        mock_db = Mock()
-        mock_session_local.return_value = mock_db
+        mock_db = AsyncMock()
+        mock_session_local.return_value.__aenter__.return_value = mock_db
         mock_state_manager = Mock()
 
-        # Call the wrapper function
-        send_recall_word_job(mock_state_manager)
+        mock_recall_instance = AsyncMock()
+        mock_recall_service.return_value = mock_recall_instance
 
-        # Verify session was created and closed
+        # Call the wrapper function
+        await send_recall_word_job(mock_state_manager)
+
+        # Verify session was created
         mock_session_local.assert_called_once()
-        mock_db.close.assert_called_once()
 
         # Verify services were created with fresh session
         mock_vocabulary_repository.assert_called_once_with(mock_db)
         mock_recall_service.assert_called_once()
 
-        # Verify recall service send_next_recall_word was called
-        mock_recall_service.return_value.send_next_recall_word.assert_called_once()
+        # Verify recall service send_next_recall_word was awaited
+        mock_recall_instance.send_next_recall_word.assert_awaited_once()

@@ -143,7 +143,7 @@ async def analyze_content(
 
     try:
         # Run content analysis
-        analysis_result = processor.run_analysis(request.text, current_user)
+        analysis_result = await processor.run_analysis(request.text, current_user)
 
         # ContentAnalysis object - return directly (unified schema)
         vocab_count = len(analysis_result.vocabulary)
@@ -198,7 +198,7 @@ async def save_vocabulary(
         HTTPException: For database errors
     """
     try:
-        return service.save_vocabulary(request.items, current_user.id, request.enrich)
+        return await service.save_vocabulary(request.items, current_user.id, request.enrich)
 
     except Exception as e:
         raise HTTPException(
@@ -239,7 +239,7 @@ async def save_vocabulary_item(
         HTTPException: For database errors
     """
     try:
-        return service.save_vocabulary_item(request, current_user.id)
+        return await service.save_vocabulary_item(request, current_user.id)
 
     except VocabularyItemExists as e:
         raise HTTPException(
@@ -295,7 +295,7 @@ async def get_vocabulary(
                 detail="Limit must be between 1 and 100",
             )
 
-        return service.get_vocabulary(current_user.id, limit, search_query, precise)
+        return await service.get_vocabulary(current_user.id, limit, search_query, precise)
 
     except HTTPException:
         raise
@@ -340,7 +340,7 @@ async def update_vocabulary(
         HTTPException: For not found or database errors
     """
     try:
-        return service.update_vocabulary_item(item_id, request, current_user.id)
+        return await service.update_vocabulary_item(item_id, request, current_user.id)
 
     except VocabularyItemExists as e:
         raise HTTPException(
@@ -390,7 +390,7 @@ async def delete_vocabulary(
         HTTPException: For not found or database errors
     """
     try:
-        deleted = service.delete_vocabulary_item(item_id, current_user.id)
+        deleted = await service.delete_vocabulary_item(item_id, current_user.id)
 
         if not deleted:
             raise ValueError(f"Vocabulary item with id {item_id} not found")
@@ -441,7 +441,7 @@ async def improve_vocabulary(
         HTTPException: For LLM errors
     """
     try:
-        return service.improve_item(request)
+        return await service.improve_item(request)
 
     except Exception:
         logger.exception("Failed to improve vocabulary")

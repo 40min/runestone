@@ -8,10 +8,9 @@ for database operations in the Runestone application.
 import logging
 import os
 
-from sqlalchemy import create_engine, event, inspect
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base
 
 from alembic import command
 from alembic.config import Config
@@ -19,53 +18,32 @@ from runestone.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Configure engine with SQLite-specific settings for concurrent access
-connect_args = {}
-poolclass = None
-
-if "sqlite" in settings.database_url:
-    connect_args = {
-        "check_same_thread": False,
-        "timeout": 30,  # Wait up to 30 seconds for locks
-    }
-    # Use StaticPool to maintain a single connection for thread safety
-    poolclass = StaticPool
-
-# Create SQLAlchemy engine
-engine = create_engine(
+# Create SQLAlchemy async engine with connection pooling
+# Built-in pool for asyncpg
+engine = create_async_engine(
     settings.database_url,
-    connect_args=connect_args,
-    poolclass=poolclass,
+    pool_size=10,
+    max_overflow=5,
+    pool_pre_ping=True,
+    pool_recycle=3600,
 )
 
-
-# Enable WAL mode for SQLite
-@event.listens_for(engine, "connect")
-def set_sqlite_pragma(dbapi_conn, connection_record):
-    """Set SQLite pragmas for concurrent access."""
-    if "sqlite" in settings.database_url:
-        cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA busy_timeout=30000")  # 30 seconds in milliseconds
-        cursor.execute("PRAGMA synchronous=NORMAL")  # Better performance with WAL
-        cursor.close()
-        logger.debug("SQLite WAL mode and concurrent access settings enabled")
-
-
-# Create SessionLocal class
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Create async_sessionmaker
+SessionLocal = async_sessionmaker(
+    autocommit=False, autoflush=False, bind=engine, class_=AsyncSession, expire_on_commit=False
+)
 
 # Create Base class
 Base = declarative_base()
 
 
-def get_db():
+async def get_db():
     """Dependency to get database session."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    async with SessionLocal() as db:
+        try:
+            yield db
+        finally:
+            await db.close()
 
 
 def run_migrations() -> None:
@@ -77,7 +55,11 @@ def run_migrations() -> None:
         if not os.path.exists(alembic_ini_path):
             logger.warning(f"Alembic configuration not found at {alembic_ini_path}")
             logger.info("Falling back to creating tables with Base.metadata.create_all()")
-            Base.metadata.create_all(bind=engine)
+            # metadata.create_all is blocking and requires a sync engine
+            sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
+            sync_engine = create_engine(sync_url)
+            Base.metadata.create_all(bind=sync_engine)
+            sync_engine.dispose()
             return
 
         # Create Alembic config
@@ -93,27 +75,25 @@ def run_migrations() -> None:
         raise
 
 
-def setup_database() -> None:
-    """Check if database and tables exist, raise exception if not."""
+async def setup_database() -> None:
+    """Check if required tables exist, raise exception if not."""
+    from sqlalchemy import inspect
 
-    # For SQLite, check if database file exists
-    if "sqlite" in str(engine.url):
-        db_path = engine.url.database
-        if db_path and not os.path.exists(db_path):
-            logger.error(f"Database file '{db_path}' does not exist")
-            raise FileNotFoundError(f"Database file '{db_path}' does not exist")
+    def check_tables(connection):
+        inspector = inspect(connection)
+        existing_tables = inspector.get_table_names()
+        expected_tables = Base.metadata.tables.keys()
+        return [table for table in expected_tables if table not in existing_tables]
 
-    # Check if required tables exist
-    inspector = inspect(engine)
-    existing_tables = inspector.get_table_names()
+    try:
+        async with engine.connect() as conn:
+            missing_tables = await conn.run_sync(check_tables)
 
-    # Get expected table names from Base metadata
-    expected_tables = Base.metadata.tables.keys()
+            if missing_tables:
+                logger.error(f"Missing database tables: {', '.join(missing_tables)}")
+                raise ValueError(f"Missing database tables: {', '.join(missing_tables)}")
 
-    missing_tables = [table for table in expected_tables if table not in existing_tables]
-
-    if missing_tables:
-        logger.error(f"Missing database tables: {', '.join(missing_tables)}")
-        raise ValueError(f"Missing database tables: {', '.join(missing_tables)}")
-
-    logger.info("Database and tables verified successfully.")
+        logger.info("Database and tables verified successfully.")
+    except Exception as e:
+        logger.error(f"Database setup check failed: {e}")
+        raise

@@ -9,13 +9,25 @@ import uuid
 from unittest.mock import Mock
 
 import pytest
-from fastapi.testclient import TestClient
 
 from runestone.api.main import app
 from runestone.auth.dependencies import get_current_user
-from runestone.auth.security import hash_password
 from runestone.db.models import User
 from runestone.dependencies import get_llm_client
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.fixture(scope="function")
+async def client(client_with_overrides):
+    """
+    Default test client with database access and mock services.
+    """
+    async for client_obj, _ in client_with_overrides():
+        yield client_obj
 
 
 @pytest.fixture(scope="function")
@@ -28,57 +40,23 @@ def mock_llm_client():
 
 
 @pytest.fixture(scope="function")
-def client(client_with_overrides, db_with_test_user):
-    """
-    Create a test client with in-memory database and mocked LLM client for testing.
-
-    This fixture is a simple consumer of the client_with_overrides factory
-    with default parameters (empty overrides dict).
-
-    The database session is accessible via client.db for direct database operations.
-    The test user is accessible via client.user for user-related operations.
-    """
-    db, test_user = db_with_test_user
-
-    # Create a vocabulary repository and service that use the same database session
-    from unittest.mock import Mock
-
-    from runestone.db.vocabulary_repository import VocabularyRepository
-    from runestone.services.vocabulary_service import VocabularyService
-
-    # Mock settings to avoid dependency injection issues
-    mock_settings = Mock()
-    mock_settings.vocabulary_enrichment_enabled = True
-
-    # Create the repository and service with the test database session
-    vocab_repo = VocabularyRepository(db)
-    vocab_service = VocabularyService(vocab_repo, mock_settings, Mock())
-
-    client_gen = client_with_overrides(vocabulary_service=vocab_service)
-    client, mocks = next(client_gen)
-
-    # Attach database session and user as attributes
-    client.db = db
-    client.user = test_user
-
-    yield client
-
-    # Cleanup is handled by the client_with_overrides fixture
-
-
-@pytest.fixture(scope="function")
-def client_no_db() -> TestClient:
+async def client_no_db():
     """Create a test client without database setup for mocked tests."""
     from fastapi import HTTPException, status
+    from httpx import ASGITransport, AsyncClient
 
-    from runestone.dependencies import get_user_service, get_vocabulary_service
+    from runestone.dependencies import get_chat_service, get_user_service, get_vocabulary_service
 
     # Mock services to avoid database calls for unauthorized tests
+    mock_chat_service = Mock()
     mock_user_service = Mock()
     mock_vocab_service = Mock()
 
     def override_get_current_user():
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authenticated")
+
+    def override_get_chat_service():
+        return mock_chat_service
 
     def override_get_user_service():
         return mock_user_service
@@ -88,12 +66,14 @@ def client_no_db() -> TestClient:
 
     # Apply overrides for authentication
     app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_chat_service] = override_get_chat_service
     app.dependency_overrides[get_user_service] = override_get_user_service
     app.dependency_overrides[get_vocabulary_service] = override_get_vocabulary_service
 
-    client = TestClient(app)
-
-    yield client
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # Some tests reach into the underlying FastAPI app to tweak dependency overrides.
+        client.app = app
+        yield client
 
     # Cleanup
     app.dependency_overrides.clear()
@@ -103,29 +83,13 @@ def client_no_db() -> TestClient:
 def client_with_overrides(mock_llm_client, db_with_test_user):
     """
     Factory fixture for creating test clients with customizable dependency overrides.
-
-    This eliminates duplication by providing a single, flexible client creation
-    function that can be customized for different test scenarios.
-
-    Args:
-        mock_llm_client: Mocked LLM client from conftest
-        db_with_test_user: Database session with test user from root conftest
-
-    Returns:
-        function: Factory function that accepts override parameters
-
-    Example:
-        def test_example(client_with_overrides, mock_vocabulary_service):
-            client, mocks = client_with_overrides(
-                vocabulary_service=mock_vocabulary_service
-            )
-            response = client.post("/api/vocabulary/improve", json=data)
-            assert response.status_code == 200
     """
+    from httpx import ASGITransport, AsyncClient
+
     from runestone.db.database import get_db
     from runestone.dependencies import get_grammar_service, get_vocabulary_service
 
-    def _create_client(
+    async def _create_client(
         vocabulary_service=None,
         grammar_service=None,
         processor=None,
@@ -137,13 +101,8 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
     ):
         db, test_user = db_with_test_user
 
-        def override_get_db():
-            """
-            Override database dependency to ensure consistent session use.
-
-            This is critical for test data visibility across all API operations
-            within a single test function.
-            """
+        async def override_get_db():
+            """Override database dependency to ensure consistent session use."""
             yield db
 
         def override_get_llm_client():
@@ -164,7 +123,7 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
         if grammar_service:
             overrides[get_grammar_service] = lambda: grammar_service
 
-        # Always mock RunestoneProcessor to avoid deep dependency chain issues (e.g. app.state.ocr_llm_client)
+        # Always mock RunestoneProcessor
         from unittest.mock import Mock
 
         from runestone.dependencies import get_runestone_processor
@@ -173,48 +132,58 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
         overrides[get_runestone_processor] = lambda: processor_instance
 
         if agent_service:
-            from runestone.dependencies import get_agent_service
+            agent_service_instance = agent_service
+        else:
+            agent_service_instance = Mock()
 
-            overrides[get_agent_service] = lambda: agent_service
-
-        # Always mock TTSService to avoid OpenAI client initialization issues
+        # Always mock TTSService
         from runestone.dependencies import get_tts_service
 
         tts_service_instance = tts_service or Mock()
         overrides[get_tts_service] = lambda: tts_service_instance
 
+        # Always provide AgentService via dependency + app.state so callers that
+        # access request.app.state.* directly don't explode.
+        from runestone.dependencies import get_agent_service
+
+        overrides[get_agent_service] = lambda: agent_service_instance
+
         # Also inject into app.state to avoid attribute errors
+        app.state.agent_service = agent_service_instance
         app.state.tts_service = tts_service_instance
 
         for dep, override in overrides.items():
             app.dependency_overrides[dep] = override
 
-        client = TestClient(app)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            # Some tests reach into the underlying FastAPI app to tweak dependency overrides.
+            client.app = app
+            client.db = db
+            client.user = current_user or test_user
 
-        # Add helper method to ensure database state
-        def sync_db():
-            """Sync database to ensure all pending changes are committed and visible."""
-            try:
-                if hasattr(db, "is_active") and db.is_active:
-                    db.commit()
-                    db.flush()
-            except Exception:
-                pass
+            # Add helper method to ensure database state
+            async def sync_db():
+                """Sync database to ensure all pending changes are committed and visible."""
+                try:
+                    if hasattr(db, "is_active") and db.is_active:
+                        await db.commit()
+                except Exception:
+                    pass
 
-        client.sync_db = sync_db
+            client.sync_db = sync_db
 
-        # Return client and mocks for easy access
-        mocks = {
-            "vocabulary_service": vocabulary_service,
-            "grammar_service": grammar_service,
-            "processor": processor,
-            "llm_client": llm_client or mock_llm_client,
-            "current_user": current_user or test_user,
-            "agent_service": agent_service,
-            "tts_service": tts_service_instance,
-        }
+            # Return client and mocks for easy access
+            mocks = {
+                "vocabulary_service": vocabulary_service,
+                "grammar_service": grammar_service,
+                "processor": processor,
+                "llm_client": llm_client or mock_llm_client,
+                "current_user": current_user or test_user,
+                "agent_service": agent_service_instance,
+                "tts_service": tts_service_instance,
+            }
 
-        yield client, mocks
+            yield client, mocks
 
         # Cleanup
         app.dependency_overrides.clear()
@@ -223,23 +192,12 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
 
 
 @pytest.fixture(scope="function")
-def client_with_mock_processor(client_with_overrides, mock_processor):
+async def client_with_mock_processor(client_with_overrides, mock_processor):
     """
     Create a test client with mocked RunestoneProcessor using the client_with_overrides factory.
-
-    Returns:
-        tuple: (TestClient, Mock) - The test client and mock processor instance
-
-    Example:
-        def test_resource_endpoint(client_with_mock_processor):
-            client, mock_processor = client_with_mock_processor
-            mock_processor.run_resource_search.return_value = "custom response"
-            response = client.post("/api/resources", json=data)
-            assert response.status_code == 200
     """
-    client_gen = client_with_overrides(processor=mock_processor)
-    client, mocks = next(client_gen)
-    return client, mocks["processor"]
+    async for client_obj, mocks in client_with_overrides(processor=mock_processor):
+        yield client_obj, mocks["processor"]
 
 
 # ==============================================================================
@@ -248,56 +206,30 @@ def client_with_mock_processor(client_with_overrides, mock_processor):
 
 
 @pytest.fixture(scope="function")
-def client_with_mock_vocabulary_service(client_with_overrides, mock_vocabulary_service):
+async def client_with_mock_vocabulary_service(client_with_overrides, mock_vocabulary_service):
     """
     Create a test client with mocked vocabulary service.
-
-    Returns:
-        tuple: (TestClient, Mock) - The test client and mock vocabulary service
-
-    Example:
-        def test_improve_endpoint(client_with_mock_vocabulary_service):
-            client, mock_service = client_with_mock_vocabulary_service
-            mock_service.improve_item.return_value = custom_response
-            response = client.post("/api/vocabulary/improve", json=data)
-            assert response.status_code == 200
     """
-    client_gen = client_with_overrides(vocabulary_service=mock_vocabulary_service)
-    client, mocks = next(client_gen)
-    return client, mock_vocabulary_service
+    async for client_obj, mocks in client_with_overrides(vocabulary_service=mock_vocabulary_service):
+        yield client_obj, mock_vocabulary_service
 
 
 @pytest.fixture(scope="function")
-def client_with_mock_grammar_service(client_with_overrides, mock_grammar_service):
+async def client_with_mock_grammar_service(client_with_overrides, mock_grammar_service):
     """
     Create a test client with mocked grammar service.
-
-    Returns:
-        tuple: (TestClient, Mock) - The test client and mock grammar service
-
-    Example:
-        def test_grammar_endpoint(client_with_mock_grammar_service):
-            client, mock_service = client_with_mock_grammar_service
-            mock_service.list_cheatsheets.return_value = [...]
-            response = client.get("/api/grammar/cheatsheets")
-            assert response.status_code == 200
     """
-    client_gen = client_with_overrides(grammar_service=mock_grammar_service)
-    client, mocks = next(client_gen)
-    return client, mock_grammar_service
+    async for client_obj, mocks in client_with_overrides(grammar_service=mock_grammar_service):
+        yield client_obj, mock_grammar_service
 
 
 @pytest.fixture(scope="function")
-def client_with_mock_agent_service(client_with_overrides, mock_agent_service):
+async def client_with_mock_agent_service(client_with_overrides, mock_agent_service):
     """
     Create a test client with mocked agent service.
-
-    Returns:
-        tuple: (TestClient, Mock) - The test client and mock agent service
     """
-    client_gen = client_with_overrides(agent_service=mock_agent_service)
-    client, mocks = next(client_gen)
-    return client, mock_agent_service
+    async for client_obj, mocks in client_with_overrides(agent_service=mock_agent_service):
+        yield client_obj, mock_agent_service
 
 
 # ==============================================================================
@@ -308,16 +240,18 @@ def client_with_mock_agent_service(client_with_overrides, mock_agent_service):
 @pytest.fixture
 def mock_vocabulary_service():
     """Create a standardized mock VocabularyService."""
-    from unittest.mock import Mock
+    from unittest.mock import AsyncMock, Mock
 
     from runestone.api.schemas import VocabularyImproveResponse
 
     mock = Mock()
-    mock.improve_item.return_value = VocabularyImproveResponse(
-        translation="mock translation", example_phrase="mock example", extra_info="mock info"
+    mock.improve_item = AsyncMock(
+        return_value=VocabularyImproveResponse(
+            translation="mock translation", example_phrase="mock example", extra_info="mock info"
+        )
     )
-    mock.save_vocabulary.return_value = {"message": "Vocabulary saved successfully"}
-    mock.get_vocabulary.return_value = []
+    mock.save_vocabulary = AsyncMock(return_value={"message": "Vocabulary saved successfully"})
+    mock.get_vocabulary = AsyncMock(return_value=[])
     return mock
 
 
@@ -351,37 +285,23 @@ def mock_agent_service():
 def user_factory(db_session_factory):
     """
     Factory fixture for creating User instances in tests.
-
-    Provides a convenient way to create test users with customizable attributes.
-    Uses a unique email to avoid conflicts between tests.
-
-    Args:
-        db_session_factory: Database session factory from root conftest
-
-    Returns:
-        function: Factory function that accepts User attributes as keyword arguments
-
-    Example:
-        def test_user_email_duplicate(client, user_factory):
-            user_factory(email="existing@example.com")
-            # ... rest of test
     """
+    from runestone.auth.security import hash_password
 
-    def _create_user(**kwargs):
-        db = db_session_factory()
-        user_data = {
-            "email": f"user-{uuid.uuid4()}@example.com",
-            "hashed_password": hash_password("password123"),
-            "name": "Factory User",
-            "surname": "Testsson",
-            "timezone": "UTC",
-            **kwargs,
-        }
-        user = User(**user_data)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-        db.close()
-        return user
+    async def _create_user(**kwargs):
+        async with db_session_factory() as db:
+            user_data = {
+                "email": f"user-{uuid.uuid4()}@example.com",
+                "hashed_password": hash_password("password123"),
+                "name": "Factory User",
+                "surname": "Testsson",
+                "timezone": "UTC",
+                **kwargs,
+            }
+            user = User(**user_data)
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+            return user
 
     return _create_user

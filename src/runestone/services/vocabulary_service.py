@@ -36,13 +36,13 @@ class VocabularyService:
         self.builder = PromptBuilder()
         self.parser = ResponseParser()
 
-    def save_vocabulary(self, items: List[VocabularyItemCreate], user_id: int, enrich: bool = True) -> dict:
+    async def save_vocabulary(self, items: List[VocabularyItemCreate], user_id: int, enrich: bool = True) -> dict:
         """Save vocabulary items, handling business logic."""
         # Get unique word_phrases from the batch
         batch_word_phrases = [item.word_phrase for item in items]
 
         # Get existing word_phrases for the user from this batch
-        existing_word_phrases = self.repo.get_existing_word_phrases_for_batch(batch_word_phrases, user_id)
+        existing_word_phrases = await self.repo.get_existing_word_phrases_for_batch(batch_word_phrases, user_id)
 
         # Filter items: remove duplicates within batch and existing in DB
         seen_in_batch = set()
@@ -55,23 +55,23 @@ class VocabularyService:
 
         # Enrich filtered items if requested (CHANGED: now uses batch method)
         if enrich and filtered_items:
-            filtered_items = self._enrich_vocabulary_items(filtered_items)
+            filtered_items = await self._enrich_vocabulary_items(filtered_items)
 
         # Batch insert the filtered (and potentially enriched) items
         if filtered_items:
-            self.repo.batch_insert_vocabulary_items(filtered_items, user_id)
+            await self.repo.batch_insert_vocabulary_items(filtered_items, user_id)
 
         return {"message": "Vocabulary saved successfully"}
 
-    def save_vocabulary_item(self, item: VocabularyItemCreate, user_id: int) -> VocabularySchema:
+    async def save_vocabulary_item(self, item: VocabularyItemCreate, user_id: int) -> VocabularySchema:
         """Save a single vocabulary item, handling business logic."""
         # Check if the word_phrase already exists for the user
-        existing = self.repo.get_existing_word_phrases_for_batch([item.word_phrase], user_id)
+        existing = await self.repo.get_existing_word_phrases_for_batch([item.word_phrase], user_id)
         if existing:
             raise VocabularyItemExists(f"Vocabulary item with word_phrase '{item.word_phrase}' already exists")
 
         # Insert the new item
-        vocab = self.repo.insert_vocabulary_item(item, user_id)
+        vocab = await self.repo.insert_vocabulary_item(item, user_id)
         return VocabularySchema(
             id=vocab.id,
             user_id=vocab.user_id,
@@ -86,11 +86,11 @@ class VocabularyService:
             updated_at=vocab.updated_at.isoformat() if vocab.updated_at else None,
         )
 
-    def get_vocabulary(
+    async def get_vocabulary(
         self, user_id: int, limit: int, search_query: str | None = None, precise: bool = False
     ) -> List[VocabularySchema]:
         """Retrieve vocabulary items, optionally filtered by search query, converting to Pydantic models."""
-        vocabularies = self.repo.get_vocabulary(user_id, limit, search_query, precise)
+        vocabularies = await self.repo.get_vocabulary(user_id, limit, search_query, precise)
         result = []
         for vocab in vocabularies:
             result.append(
@@ -111,14 +111,14 @@ class VocabularyService:
             )
         return result
 
-    def update_vocabulary_item(self, item_id: int, update: VocabularyUpdate, user_id: int) -> VocabularySchema:
+    async def update_vocabulary_item(self, item_id: int, update: VocabularyUpdate, user_id: int) -> VocabularySchema:
         """Update a vocabulary item and return the updated record."""
-        vocab = self.repo.get_vocabulary_item(item_id, user_id)
+        vocab = await self.repo.get_vocabulary_item(item_id, user_id)
         updates = update.model_dump(exclude_unset=True)
 
         # Check for duplicate word_phrase if it's being updated
         if "word_phrase" in updates and updates["word_phrase"] != vocab.word_phrase:
-            existing = self.repo.get_existing_word_phrases_for_batch([updates["word_phrase"]], user_id)
+            existing = await self.repo.get_existing_word_phrases_for_batch([updates["word_phrase"]], user_id)
             if existing:
                 raise VocabularyItemExists(
                     f"Vocabulary item with word_phrase '{updates['word_phrase']}' already exists"
@@ -128,7 +128,7 @@ class VocabularyService:
         for key, value in updates.items():
             if key in allowed_fields and value is not None:
                 setattr(vocab, key, value)
-        updated_vocab = self.repo.update_vocabulary_item(vocab)
+        updated_vocab = await self.repo.update_vocabulary_item(vocab)
         return VocabularySchema(
             id=updated_vocab.id,
             user_id=updated_vocab.user_id,
@@ -144,13 +144,19 @@ class VocabularyService:
             updated_at=updated_vocab.updated_at.isoformat() if updated_vocab.updated_at else None,
         )
 
-    def load_vocab_from_csv(self, items: List[VocabularyItemCreate], skip_existence_check: bool, user_id: int) -> dict:
+    async def load_vocab_from_csv(
+        self, items: List[VocabularyItemCreate], skip_existence_check: bool, user_id: int
+    ) -> dict:
         """Load vocabulary items from CSV data, handling parsing, filtering, and insertion logic."""
         original_count = len(items)
 
         if skip_existence_check:
-            # Upsert all items (update if exists, insert if not) - no filtering
-            self.repo.upsert_vocabulary_items(items, user_id)
+            # Upsert all items (update if exists, insert if not) - no filtering.
+            # Postgres can't handle duplicate conflict targets within a single
+            # multi-row INSERT .. ON CONFLICT statement, so do per-item upserts
+            # to preserve "last wins" semantics for CSV imports.
+            for item in items:
+                await self.repo.upsert_vocabulary_items([item], user_id)
             added_count = len(items)
             skipped_count = 0  # No skipping in upsert mode
         else:
@@ -165,26 +171,26 @@ class VocabularyService:
 
             # Get existing word_phrases before insertion
             batch_word_phrases = [item.word_phrase for item in items]
-            existing_word_phrases = self.repo.get_existing_word_phrases_for_batch(batch_word_phrases, user_id)
+            existing_word_phrases = await self.repo.get_existing_word_phrases_for_batch(batch_word_phrases, user_id)
 
             # Filter items: remove existing in DB
             final_items = [item for item in items if item.word_phrase not in existing_word_phrases]
 
             # Batch insert the filtered items
             if final_items:
-                self.repo.batch_insert_vocabulary_items(final_items, user_id)
+                await self.repo.batch_insert_vocabulary_items(final_items, user_id)
 
             added_count = len(final_items)
             skipped_count = original_count - added_count
 
         return {"original_count": original_count, "added_count": added_count, "skipped_count": skipped_count}
 
-    def improve_item(self, request: VocabularyImproveRequest) -> VocabularyImproveResponse:
+    async def improve_item(self, request: VocabularyImproveRequest) -> VocabularyImproveResponse:
         """Improve a vocabulary item using LLM to generate translation, example phrase, and extra info."""
         # Build improvement prompt using PromptBuilder
         prompt = self.builder.build_vocabulary_prompt(word_phrase=request.word_phrase, mode=request.mode)
 
-        # Get improvement from LLM
+        # Get improvement from LLM (sync call)
         response_text = self.llm_client.improve_vocabulary_item(prompt)
 
         # Parse response using ResponseParser (includes automatic fallback)
@@ -201,7 +207,7 @@ class VocabularyService:
             # Return empty response as fallback
             return VocabularyImproveResponse(translation=None, example_phrase="", extra_info=None)
 
-    def _enrich_vocabulary_items(self, items: List[VocabularyItemCreate]) -> List[VocabularyItemCreate]:
+    async def _enrich_vocabulary_items(self, items: List[VocabularyItemCreate]) -> List[VocabularyItemCreate]:
         """
         Enrich vocabulary items with extra_info using LLM batch processing.
 
@@ -234,7 +240,7 @@ class VocabularyService:
                 # Build batch prompt
                 prompt = self.builder.build_vocabulary_batch_prompt(word_phrases)
 
-                # Get batch improvements from LLM
+                # Get batch improvements from LLM (sync call)
                 response_text = self.llm_client.improve_vocabulary_batch(prompt)
 
                 # Parse batch response
@@ -288,22 +294,22 @@ class VocabularyService:
 
         return enriched_items
 
-    def get_existing_word_phrases(self, word_phrases: List[str], user_id: int) -> List[str]:
+    async def get_existing_word_phrases(self, word_phrases: List[str], user_id: int) -> List[str]:
         """Get existing word phrases from the repository."""
-        return list(self.repo.get_existing_word_phrases_for_batch(word_phrases, user_id))
+        return list(await self.repo.get_existing_word_phrases_for_batch(word_phrases, user_id))
 
-    def upsert_priority_word(self, word_phrase: str, translation: str, example_phrase: str, user_id: int) -> None:
+    async def upsert_priority_word(self, word_phrase: str, translation: str, example_phrase: str, user_id: int) -> None:
         """Upsert a word with priority_learn=True. Restores deleted words."""
-        existing = self.repo.get_vocabulary_item_by_word_phrase(word_phrase, user_id)
+        existing = await self.repo.get_vocabulary_item_by_word_phrase(word_phrase, user_id)
         if existing:
             if not existing.in_learn:
                 existing.in_learn = True
                 self.logger.info(f"Restored deleted word: {word_phrase}")
             existing.priority_learn = True
-            self.repo.update_vocabulary_item(existing)
+            await self.repo.update_vocabulary_item(existing)
             self.logger.info(f"Set priority for existing word: {word_phrase}")
         else:
-            self.repo.insert_vocabulary_item(
+            await self.repo.insert_vocabulary_item(
                 VocabularyItemCreate(
                     word_phrase=word_phrase,
                     translation=translation,
@@ -314,6 +320,6 @@ class VocabularyService:
             )
             self.logger.info(f"Created new priority word: {word_phrase}")
 
-    def delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
+    async def delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
         """Completely delete a vocabulary item from the database."""
-        return self.repo.hard_delete_vocabulary_item(item_id, user_id)
+        return await self.repo.hard_delete_vocabulary_item(item_id, user_id)

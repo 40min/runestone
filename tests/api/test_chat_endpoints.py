@@ -6,7 +6,7 @@ request validation, and response handling.
 """
 
 
-def test_send_message_success(client_with_mock_agent_service, db_session):
+async def test_send_message_success(client_with_mock_agent_service, db_session):
     """Test successful message sending."""
     client, mock_agent_service = client_with_mock_agent_service
     mock_agent_service.generate_response.return_value = (
@@ -15,7 +15,7 @@ def test_send_message_success(client_with_mock_agent_service, db_session):
     )
 
     # Send a chat message - history is now managed by the backend
-    chat_response = client.post(
+    chat_response = await client.post(
         "/api/chat/message",
         json={"message": "Hej! Hur mår du?"},
     )
@@ -28,7 +28,7 @@ def test_send_message_success(client_with_mock_agent_service, db_session):
     mock_agent_service.generate_response.assert_called_once()
 
 
-def test_history_includes_sources(client_with_mock_agent_service, db_session):
+async def test_history_includes_sources(client_with_mock_agent_service, db_session):
     """Test that chat history returns sources for assistant messages."""
     client, mock_agent_service = client_with_mock_agent_service
     mock_agent_service.generate_response.return_value = (
@@ -36,9 +36,9 @@ def test_history_includes_sources(client_with_mock_agent_service, db_session):
         [{"title": "Nyhet", "url": "https://example.com/news", "date": "2026-02-05"}],
     )
 
-    client.post("/api/chat/message", json={"message": "Hej!"})
+    await client.post("/api/chat/message", json={"message": "Hej!"})
 
-    response = client.get("/api/chat/history")
+    response = await client.get("/api/chat/history")
     assert response.status_code == 200
     data = response.json()
     assert "chat_id" in data
@@ -54,13 +54,13 @@ def test_history_includes_sources(client_with_mock_agent_service, db_session):
     ]
 
 
-def test_send_message_service_error(client_with_mock_agent_service, db_session):
+async def test_send_message_service_error(client_with_mock_agent_service, db_session):
     """Test error handling when agent service fails."""
     client, mock_agent_service = client_with_mock_agent_service
     mock_agent_service.generate_response.side_effect = Exception("LLM API Error")
 
     # Send message
-    chat_response = client.post(
+    chat_response = await client.post(
         "/api/chat/message",
         json={"message": "Hello"},
     )
@@ -69,9 +69,9 @@ def test_send_message_service_error(client_with_mock_agent_service, db_session):
     assert "Failed to generate response" in chat_response.json()["detail"]
 
 
-def test_get_history_empty(client):
+async def test_get_history_empty(client):
     """Test fetching empty chat history."""
-    response = client.get("/api/chat/history")
+    response = await client.get("/api/chat/history")
     assert response.status_code == 200
     data = response.json()
     assert "chat_id" in data
@@ -83,35 +83,36 @@ def test_get_history_empty(client):
     assert len(data["messages"]) == 0
 
 
-def test_clear_history(client):
+async def test_clear_history(client):
     """Test clearing chat history."""
     # First send a message to create some history (mocked)
-    client.post("/api/chat/message", json={"message": "Hello"})
+    await client.post("/api/chat/message", json={"message": "Hello"})
 
     # Clear history
-    response = client.delete("/api/chat/history")
+    response = await client.delete("/api/chat/history")
     assert response.status_code == 204
 
     # Verify history is empty
-    response = client.get("/api/chat/history")
+    response = await client.get("/api/chat/history")
     data = response.json()
     assert data["messages"] == []
     assert data["latest_id"] == 0
 
 
-def test_get_history_after_id_returns_only_new_messages(client_with_mock_agent_service, db_session):
+async def test_get_history_after_id_returns_only_new_messages(client_with_mock_agent_service, db_session):
     """Test delta history with after_id query parameter."""
     client, mock_agent_service = client_with_mock_agent_service
     mock_agent_service.generate_response.return_value = ("Svar", None)
 
-    client.post("/api/chat/message", json={"message": "One"})
-    client.post("/api/chat/message", json={"message": "Two"})
+    await client.post("/api/chat/message", json={"message": "One"})
+    await client.post("/api/chat/message", json={"message": "Two"})
 
-    full_history = client.get("/api/chat/history").json()
+    full_history_response = await client.get("/api/chat/history")
+    full_history = full_history_response.json()
     assert len(full_history["messages"]) == 4
     second_user_message_id = full_history["messages"][2]["id"]
 
-    response = client.get(f"/api/chat/history?after_id={second_user_message_id}")
+    response = await client.get(f"/api/chat/history?after_id={second_user_message_id}")
     assert response.status_code == 200
     data = response.json()
     assert len(data["messages"]) == 1
@@ -119,57 +120,60 @@ def test_get_history_after_id_returns_only_new_messages(client_with_mock_agent_s
     assert data["latest_id"] >= data["messages"][0]["id"]
 
 
-def test_get_history_has_more_when_page_is_partial(client_with_mock_agent_service, db_session):
+async def test_get_history_has_more_when_page_is_partial(client_with_mock_agent_service, db_session):
     """Test has_more flag when response is limited."""
     client, mock_agent_service = client_with_mock_agent_service
     mock_agent_service.generate_response.return_value = ("Svar", None)
 
-    client.post("/api/chat/message", json={"message": "One"})
-    client.post("/api/chat/message", json={"message": "Two"})
+    await client.post("/api/chat/message", json={"message": "One"})
+    await client.post("/api/chat/message", json={"message": "Two"})
 
-    response = client.get("/api/chat/history?after_id=0&limit=1")
+    response = await client.get("/api/chat/history?after_id=0&limit=1")
     assert response.status_code == 200
     data = response.json()
     assert len(data["messages"]) == 1
     assert data["has_more"] is True
 
 
-def test_get_history_reports_chat_mismatch(client_with_mock_agent_service, db_session):
+async def test_get_history_reports_chat_mismatch(client_with_mock_agent_service, db_session):
     """Test mismatch signal when client provides stale chat id."""
     client, mock_agent_service = client_with_mock_agent_service
     mock_agent_service.generate_response.return_value = ("Svar", None)
 
-    client.post("/api/chat/message", json={"message": "Hello"})
-    before_clear = client.get("/api/chat/history").json()
+    await client.post("/api/chat/message", json={"message": "Hello"})
+    before_clear_response = await client.get("/api/chat/history")
+    before_clear = before_clear_response.json()
     old_chat_id = before_clear["chat_id"]
 
-    client.delete("/api/chat/history")
-    response = client.get(f"/api/chat/history?after_id=123&client_chat_id={old_chat_id}")
+    await client.delete("/api/chat/history")
+    response = await client.get(f"/api/chat/history?after_id=123&client_chat_id={old_chat_id}")
     assert response.status_code == 200
     data = response.json()
     assert data["chat_mismatch"] is True
     assert data["history_truncated"] is False
 
 
-def test_clear_history_rotates_chat_id(client_with_mock_agent_service, db_session):
+async def test_clear_history_rotates_chat_id(client_with_mock_agent_service, db_session):
     """Test that clearing history rotates chat session ID."""
     client, mock_agent_service = client_with_mock_agent_service
     mock_agent_service.generate_response.return_value = ("Svar", None)
 
-    client.post("/api/chat/message", json={"message": "Hello"})
-    before_clear = client.get("/api/chat/history").json()
+    await client.post("/api/chat/message", json={"message": "Hello"})
+    before_clear_response = await client.get("/api/chat/history")
+    before_clear = before_clear_response.json()
     old_chat_id = before_clear["chat_id"]
 
-    clear_response = client.delete("/api/chat/history")
+    clear_response = await client.delete("/api/chat/history")
     assert clear_response.status_code == 204
 
-    after_clear = client.get("/api/chat/history").json()
+    after_clear_response = await client.get("/api/chat/history")
+    after_clear = after_clear_response.json()
     assert after_clear["chat_id"] != old_chat_id
     assert after_clear["latest_id"] == 0
     assert after_clear["messages"] == []
 
 
-def test_send_message_requires_authentication(client):
+async def test_send_message_requires_authentication(client):
     """Test that chat endpoint requires authentication."""
     # The 'client' fixture in conftest.py overrides get_current_user by default.
     # To test authentication, we need to remove that override.
@@ -178,32 +182,31 @@ def test_send_message_requires_authentication(client):
     if get_current_user in client.app.dependency_overrides:
         del client.app.dependency_overrides[get_current_user]
 
-    response = client.post("/api/chat/message", json={"message": "Hello"})
+    response = await client.post("/api/chat/message", json={"message": "Hello"})
     assert response.status_code in (401, 403)
 
 
-def test_send_message_empty_message(client):
+async def test_send_message_empty_message(client):
     """Test that empty messages are rejected."""
-    chat_response = client.post(
+    chat_response = await client.post(
         "/api/chat/message",
         json={"message": ""},
     )
     assert chat_response.status_code == 422
 
 
-def test_send_message_invalid_payload(client):
+async def test_send_message_invalid_payload(client):
     """Test that invalid payloads are rejected."""
-    chat_response = client.post(
+    chat_response = await client.post(
         "/api/chat/message",
         json={"invalid": "field"},
     )
     assert chat_response.status_code == 422
 
 
-def test_send_image_success(client_with_mock_agent_service, db_session, monkeypatch):
+async def test_send_image_success(client_with_mock_agent_service, db_session, monkeypatch):
     """Test successful image upload with OCR and translation."""
     import io
-    from unittest.mock import Mock
 
     client, mock_agent_service = client_with_mock_agent_service
     mock_agent_service.generate_response.return_value = (
@@ -212,6 +215,8 @@ def test_send_image_success(client_with_mock_agent_service, db_session, monkeypa
     )
 
     # Mock the processor dependency
+    from unittest.mock import Mock
+
     mock_processor = Mock()
     # Create a proper OCRResult-like object
     mock_ocr_result = Mock()
@@ -230,7 +235,7 @@ def test_send_image_success(client_with_mock_agent_service, db_session, monkeypa
     image_data = io.BytesIO(b"fake image content")
     files = {"file": ("test.jpg", image_data, "image/jpeg")}
 
-    response = client.post("/api/chat/image", files=files)
+    response = await client.post("/api/chat/image", files=files)
 
     assert response.status_code == 200
     data = response.json()
@@ -242,7 +247,7 @@ def test_send_image_success(client_with_mock_agent_service, db_session, monkeypa
     mock_agent_service.generate_response.assert_called_once()
 
 
-def test_send_image_ocr_failure(client, monkeypatch):
+async def test_send_image_ocr_failure(client, monkeypatch):
     """Test image upload when OCR returns empty text."""
     import io
     from unittest.mock import Mock
@@ -266,13 +271,13 @@ def test_send_image_ocr_failure(client, monkeypatch):
     image_data = io.BytesIO(b"fake image content")
     files = {"file": ("test.jpg", image_data, "image/jpeg")}
 
-    response = client.post("/api/chat/image", files=files)
+    response = await client.post("/api/chat/image", files=files)
 
     assert response.status_code == 400
     assert "Could not recognize text from image" in response.json()["detail"]
 
 
-def test_send_image_invalid_file_type(client):
+async def test_send_image_invalid_file_type(client):
     """Test image upload with invalid file type."""
     import io
 
@@ -280,13 +285,13 @@ def test_send_image_invalid_file_type(client):
     file_data = io.BytesIO(b"not an image")
     files = {"file": ("test.txt", file_data, "text/plain")}
 
-    response = client.post("/api/chat/image", files=files)
+    response = await client.post("/api/chat/image", files=files)
 
     assert response.status_code == 400
     assert "Invalid file type" in response.json()["detail"]
 
 
-def test_send_image_requires_authentication(client):
+async def test_send_image_requires_authentication(client):
     """Test that image endpoint requires authentication."""
     import io
 
@@ -298,11 +303,11 @@ def test_send_image_requires_authentication(client):
     image_data = io.BytesIO(b"fake image content")
     files = {"file": ("test.jpg", image_data, "image/jpeg")}
 
-    response = client.post("/api/chat/image", files=files)
+    response = await client.post("/api/chat/image", files=files)
     assert response.status_code in (401, 403)
 
 
-def test_send_image_file_too_large(client_with_mock_agent_service):
+async def test_send_image_file_too_large(client_with_mock_agent_service):
     """Test that files larger than configured limit are rejected."""
     import io
 
@@ -315,23 +320,23 @@ def test_send_image_file_too_large(client_with_mock_agent_service):
     large_image_data = io.BytesIO(b"x" * large_file_size)
     files = {"file": ("large.jpg", large_image_data, "image/jpeg")}
 
-    response = client.post("/api/chat/image", files=files)
+    response = await client.post("/api/chat/image", files=files)
 
     assert response.status_code == 400
     assert f"File too large. Maximum size is {settings.chat_image_max_size_mb}MB." in response.json()["detail"]
 
 
-def test_send_image_missing_file(client_with_mock_agent_service):
+async def test_send_image_missing_file(client_with_mock_agent_service):
     """Test that request without file parameter is rejected."""
     client, _ = client_with_mock_agent_service
 
     # Send request without files parameter
-    response = client.post("/api/chat/image")
+    response = await client.post("/api/chat/image")
 
     assert response.status_code == 422  # Validation error
 
 
-def test_send_image_whitespace_only_ocr(client_with_mock_agent_service, monkeypatch):
+async def test_send_image_whitespace_only_ocr(client_with_mock_agent_service, monkeypatch):
     """Test image upload when OCR returns only whitespace."""
     import io
     from unittest.mock import Mock
@@ -357,7 +362,7 @@ def test_send_image_whitespace_only_ocr(client_with_mock_agent_service, monkeypa
     image_data = io.BytesIO(b"fake image content")
     files = {"file": ("test.jpg", image_data, "image/jpeg")}
 
-    response = client.post("/api/chat/image", files=files)
+    response = await client.post("/api/chat/image", files=files)
 
     assert response.status_code == 400
     assert "Could not recognize text from image" in response.json()["detail"]

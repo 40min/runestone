@@ -9,12 +9,13 @@ This application runs scheduled tasks for the Telegram bot:
 Uses APScheduler for task scheduling and proper configuration management.
 """
 
+import asyncio
 import logging
 import signal
 import sys
 from typing import Optional
 
-from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from runestone.config import settings
@@ -26,32 +27,32 @@ from runestone.services.telegram_command_service import TelegramCommandService
 from runestone.state.state_manager import StateManager
 
 
-def process_updates_job(state_manager: StateManager) -> None:
+async def process_updates_job(state_manager: StateManager) -> None:
     """Wrapper function for processing Telegram updates with fresh session."""
-    db = SessionLocal()
-    try:
-        vocabulary_repository = VocabularyRepository(db)
-        recall_service = RuneRecallService(vocabulary_repository, state_manager, settings)
-        telegram_service = TelegramCommandService(state_manager, recall_service)
-        telegram_service.process_updates()
-    finally:
-        db.close()
+    async with SessionLocal() as db:
+        try:
+            vocabulary_repository = VocabularyRepository(db)
+            recall_service = RuneRecallService(vocabulary_repository, state_manager, settings)
+            telegram_service = TelegramCommandService(state_manager, recall_service)
+            await telegram_service.process_updates()
+        except Exception as e:
+            logging.getLogger(__name__).error(f"Error in process_updates_job: {e}")
 
 
-def send_recall_word_job(state_manager: StateManager) -> None:
+async def send_recall_word_job(state_manager: StateManager) -> None:
     """Wrapper function for sending recall words with fresh session."""
-    db = SessionLocal()
-    try:
-        vocabulary_repository = VocabularyRepository(db)
-        recall_service = RuneRecallService(vocabulary_repository, state_manager, settings)
-        recall_service.send_next_recall_word()
-    finally:
-        db.close()
+    async with SessionLocal() as db:
+        try:
+            vocabulary_repository = VocabularyRepository(db)
+            recall_service = RuneRecallService(vocabulary_repository, state_manager, settings)
+            await recall_service.send_next_recall_word()
+        except Exception as e:
+            logging.getLogger(__name__).error(f"Error in send_recall_word_job: {e}")
 
 
-def create_scheduler(state_manager: StateManager) -> BlockingScheduler:
+def create_scheduler(state_manager: StateManager) -> AsyncIOScheduler:
     """Create and configure the APScheduler instance."""
-    scheduler = BlockingScheduler()
+    scheduler = AsyncIOScheduler()
 
     # Poll for Telegram commands every 5 seconds
     scheduler.add_job(
@@ -78,7 +79,7 @@ def create_scheduler(state_manager: StateManager) -> BlockingScheduler:
     return scheduler
 
 
-def main(state_file_path: Optional[str] = None) -> None:
+async def main(state_file_path: Optional[str] = None) -> None:
     """Main entry point for the recall worker application."""
     # Setup logging
     log_level = "DEBUG" if settings.verbose else "INFO"
@@ -94,7 +95,7 @@ def main(state_file_path: Optional[str] = None) -> None:
 
         # Setup database
         logger.info("Setting up database...")
-        setup_database()
+        await setup_database()
 
         # Initialize state manager (no long-lived database session needed)
         state_manager = StateManager(state_file_path or settings.state_file_path)
@@ -102,12 +103,13 @@ def main(state_file_path: Optional[str] = None) -> None:
         # Create and configure scheduler with wrapper functions
         scheduler = create_scheduler(state_manager)
 
+        # Signal event for graceful shutdown
+        shutdown_event = asyncio.Event()
+
         # Setup signal handlers for graceful shutdown
         def shutdown_handler(signum, frame):
-            logger.info(f"Received signal {signum}, shutting down scheduler...")
-            scheduler.shutdown(wait=True)
-            logger.info("Scheduler shutdown complete")
-            sys.exit(0)
+            logger.info(f"Received signal {signum}, shutting down...")
+            shutdown_event.set()
 
         signal.signal(signal.SIGINT, shutdown_handler)
         signal.signal(signal.SIGTERM, shutdown_handler)
@@ -119,10 +121,20 @@ def main(state_file_path: Optional[str] = None) -> None:
         logger.info("Starting scheduler...")
         scheduler.start()
 
+        # Wait until shutdown signal is received
+        await shutdown_event.wait()
+
+        logger.info("Shutting down scheduler...")
+        scheduler.shutdown(wait=True)
+        logger.info("Scheduler shutdown complete")
+
     except Exception as e:
         logger.error(f"Failed to start worker: {e}")
         sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
