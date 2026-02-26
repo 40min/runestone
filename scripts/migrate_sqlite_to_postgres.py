@@ -1,5 +1,6 @@
 import os
 import sqlite3
+from argparse import ArgumentParser
 
 import psycopg2
 from dotenv import load_dotenv
@@ -16,27 +17,50 @@ IF_POSTGRES_URL = POSTGRES_URL.replace("postgresql+asyncpg://", "postgresql://")
 TABLES = [
     "users",
     "vocabulary",
-    "chat_sessions",
     "chat_messages",
+    "chat_summaries",
     "memory_items",
 ]
 
 
-def migrate():
-    if not os.path.exists(SQLITE_DB):
-        print(f"❌ SQLite database not found at {SQLITE_DB}")
+def parse_args():
+    parser = ArgumentParser(description="Migrate data from SQLite to PostgreSQL.")
+    parser.add_argument("--sqlite-path", default=SQLITE_DB, help="Path to SQLite DB file")
+    parser.add_argument("--postgres-url", default=IF_POSTGRES_URL, help="PostgreSQL connection URL")
+    return parser.parse_args()
+
+
+def _convert_to_bool(value):
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "t", "yes", "y", "on"}:
+            return True
+        if normalized in {"0", "false", "f", "no", "n", "off"}:
+            return False
+    return value
+
+
+def migrate(sqlite_db: str, postgres_url: str):
+    if not os.path.exists(sqlite_db):
+        print(f"❌ SQLite database not found at {sqlite_db}")
         return
 
-    print(f"🚀 Starting migration from {SQLITE_DB} to Postgres...")
+    print(f"🚀 Starting migration from {sqlite_db} to Postgres...")
 
     try:
         # Connect to SQLite
-        sqlite_conn = sqlite3.connect(SQLITE_DB)
+        sqlite_conn = sqlite3.connect(sqlite_db)
         sqlite_conn.row_factory = sqlite3.Row
         sqlite_cursor = sqlite_conn.cursor()
 
         # Connect to Postgres
-        pg_conn = psycopg2.connect(IF_POSTGRES_URL)
+        pg_conn = psycopg2.connect(postgres_url)
         pg_cursor = pg_conn.cursor()
 
         for table in TABLES:
@@ -52,16 +76,33 @@ def migrate():
 
             # Get column names
             columns = rows[0].keys()
+            col_names = list(columns)
 
-            # Prepare insert query
-            # Postgres doesn't like "(CURRENT_TIMESTAMP)" as a string value if it was meant to be a default,
-            # but here we are inserting actual values.
             column_names = ", ".join(columns)
-            placeholder = ", ".join(["%s"] * len(columns))
-            insert_query = f"INSERT INTO {table} ({column_names}) VALUES ({placeholder}) ON CONFLICT DO NOTHING"
+
+            # Detect Postgres boolean columns and coerce SQLite values (often stored as 0/1).
+            pg_cursor.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = %s
+                  AND data_type = 'boolean'
+                """,
+                (table,),
+            )
+            bool_cols = {r[0] for r in pg_cursor.fetchall()}
 
             # Convert rows to list of tuples
-            data = [tuple(row) for row in rows]
+            data = []
+            for row in rows:
+                converted = []
+                for col in col_names:
+                    value = row[col]
+                    if col in bool_cols:
+                        value = _convert_to_bool(value)
+                    converted.append(value)
+                data.append(tuple(converted))
 
             # Execute batch insert
             execute_values(pg_cursor, f"INSERT INTO {table} ({column_names}) VALUES %s ON CONFLICT DO NOTHING", data)
@@ -83,4 +124,5 @@ def migrate():
 
 
 if __name__ == "__main__":
-    migrate()
+    args = parse_args()
+    migrate(sqlite_db=args.sqlite_path, postgres_url=args.postgres_url)
