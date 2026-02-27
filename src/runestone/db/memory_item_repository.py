@@ -1,15 +1,8 @@
-"""
-Memory item repository for database operations.
-
-This module contains repository classes that encapsulate database
-logic for memory item entities.
-"""
-
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import and_, func
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, delete, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from runestone.db.models import MemoryItem
 
@@ -17,18 +10,19 @@ from runestone.db.models import MemoryItem
 class MemoryItemRepository:
     """Repository for memory item-related database operations."""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         """Initialize repository with database session."""
         self.db = db
 
-    def get_by_id(self, item_id: int) -> Optional[MemoryItem]:
+    async def get_by_id(self, item_id: int) -> Optional[MemoryItem]:
         """Get memory item by ID."""
-        return self.db.query(MemoryItem).filter(MemoryItem.id == item_id).first()
+        stmt = select(MemoryItem).filter(MemoryItem.id == item_id)
+        result = await self.db.execute(stmt)
+        return result.scalars().first()
 
-    def get_by_user_category_key(self, user_id: int, category: str, key: str) -> Optional[MemoryItem]:
+    async def get_by_user_category_key(self, user_id: int, category: str, key: str) -> Optional[MemoryItem]:
         """
         Get memory item by user_id, category, and key.
-
         Args:
             user_id: User ID
             category: Memory category
@@ -37,19 +31,18 @@ class MemoryItemRepository:
         Returns:
             MemoryItem or None if not found
         """
-        return (
-            self.db.query(MemoryItem)
-            .filter(
-                and_(
-                    MemoryItem.user_id == user_id,
-                    MemoryItem.category == category,
-                    MemoryItem.key == key,
-                )
-            )
-            .first()
-        )
 
-    def list_items(
+        stmt = select(MemoryItem).filter(
+            and_(
+                MemoryItem.user_id == user_id,
+                MemoryItem.category == category,
+                MemoryItem.key == key,
+            )
+        )
+        result = await self.db.execute(stmt)
+        return result.scalars().first()
+
+    async def list_items(
         self,
         user_id: int,
         category: Optional[str] = None,
@@ -70,17 +63,19 @@ class MemoryItemRepository:
         Returns:
             List of MemoryItem objects
         """
-        query = self.db.query(MemoryItem).filter(MemoryItem.user_id == user_id)
+        stmt = select(MemoryItem).filter(MemoryItem.user_id == user_id)
 
         if category:
-            query = query.filter(MemoryItem.category == category)
+            stmt = stmt.filter(MemoryItem.category == category)
 
         if status:
-            query = query.filter(MemoryItem.status == status)
+            stmt = stmt.filter(MemoryItem.status == status)
 
-        return query.order_by(MemoryItem.updated_at.desc()).limit(limit).offset(offset).all()
+        stmt = stmt.order_by(MemoryItem.updated_at.desc()).limit(limit).offset(offset)
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
 
-    def count_items(
+    async def count_items(
         self,
         user_id: int,
         category: Optional[str] = None,
@@ -97,17 +92,18 @@ class MemoryItemRepository:
         Returns:
             Count of matching items
         """
-        query = self.db.query(func.count(MemoryItem.id)).filter(MemoryItem.user_id == user_id)
+        stmt = select(func.count(MemoryItem.id)).filter(MemoryItem.user_id == user_id)
 
         if category:
-            query = query.filter(MemoryItem.category == category)
+            stmt = stmt.filter(MemoryItem.category == category)
 
         if status:
-            query = query.filter(MemoryItem.status == status)
+            stmt = stmt.filter(MemoryItem.status == status)
 
-        return query.scalar()
+        result = await self.db.execute(stmt)
+        return result.scalar() or 0
 
-    def create(self, item: MemoryItem) -> MemoryItem:
+    async def create(self, item: MemoryItem) -> MemoryItem:
         """
         Create a new memory item.
 
@@ -118,11 +114,11 @@ class MemoryItemRepository:
             Created MemoryItem
         """
         self.db.add(item)
-        self.db.commit()
-        self.db.refresh(item)
+        await self.db.commit()
+        await self.db.refresh(item)
         return item
 
-    def update(self, item: MemoryItem) -> MemoryItem:
+    async def update(self, item: MemoryItem) -> MemoryItem:
         """
         Update an existing memory item.
 
@@ -132,26 +128,25 @@ class MemoryItemRepository:
         Returns:
             Updated MemoryItem
         """
-        self.db.commit()
-        self.db.refresh(item)
+        await self.db.commit()
+        await self.db.refresh(item)
         return item
 
-    def delete(self, item_id: int) -> None:
+    async def delete(self, item_id: int) -> None:
         """
         Delete a memory item by ID.
 
         Args:
             item_id: ID of the item to delete
         """
-        item = self.get_by_id(item_id)
+        item = await self.get_by_id(item_id)
         if item:
-            self.db.delete(item)
-            self.db.commit()
+            await self.db.delete(item)
+            await self.db.commit()
 
-    def delete_by_category(self, user_id: int, category: str) -> int:
+    async def delete_by_category(self, user_id: int, category: str) -> int:
         """
         Delete all memory items in a category for a user.
-
         Args:
             user_id: User ID
             category: Category to clear
@@ -159,15 +154,12 @@ class MemoryItemRepository:
         Returns:
             Number of items deleted
         """
-        count = (
-            self.db.query(MemoryItem)
-            .filter(and_(MemoryItem.user_id == user_id, MemoryItem.category == category))
-            .delete()
-        )
-        self.db.commit()
-        return count
+        stmt = delete(MemoryItem).filter(and_(MemoryItem.user_id == user_id, MemoryItem.category == category))
+        result = await self.db.execute(stmt)
+        await self.db.commit()
+        return result.rowcount
 
-    def delete_mastered_older_than(self, user_id: int, cutoff: datetime) -> int:
+    async def delete_mastered_older_than(self, user_id: int, cutoff: datetime) -> int:
         """
         Delete mastered area_to_improve items older than the cutoff.
 
@@ -181,17 +173,14 @@ class MemoryItemRepository:
             Number of items deleted
         """
         timestamp = func.coalesce(MemoryItem.status_changed_at, MemoryItem.updated_at)
-        count = (
-            self.db.query(MemoryItem)
-            .filter(
-                and_(
-                    MemoryItem.user_id == user_id,
-                    MemoryItem.category == "area_to_improve",
-                    MemoryItem.status == "mastered",
-                    timestamp < cutoff,
-                )
+        stmt = delete(MemoryItem).filter(
+            and_(
+                MemoryItem.user_id == user_id,
+                MemoryItem.category == "area_to_improve",
+                MemoryItem.status == "mastered",
+                timestamp < cutoff,
             )
-            .delete(synchronize_session=False)
         )
-        self.db.commit()
-        return count
+        result = await self.db.execute(stmt)
+        await self.db.commit()
+        return result.rowcount

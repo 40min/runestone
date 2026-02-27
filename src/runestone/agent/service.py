@@ -250,7 +250,7 @@ to read its contents before deciding.
         """
         if not history:
             try:
-                deleted_count = memory_item_service.cleanup_old_mastered_areas(user.id, older_than_days=90)
+                deleted_count = await memory_item_service.cleanup_old_mastered_areas(user.id, older_than_days=90)
                 if deleted_count:
                     logger.info("Cleaned up %s old mastered memory items for user %s", deleted_count, user.id)
             except Exception as e:

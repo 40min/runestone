@@ -47,7 +47,7 @@ async def list_memory_items(
     Supports infinite scroll with limit/offset pagination.
     """
     try:
-        return service.list_memory_items(current_user.id, category, status, limit, offset)
+        return await service.list_memory_items(current_user.id, category, status, limit, offset)
     except Exception as e:
         logger.error(f"Failed to list memory items for user {current_user.id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve memory items")
@@ -73,7 +73,7 @@ async def create_memory_item(
     Uses upsert logic based on (user_id, category, key) uniqueness.
     """
     try:
-        return service.upsert_memory_item(
+        return await service.upsert_memory_item(
             user_id=current_user.id,
             category=item_data.category,
             key=item_data.key,
@@ -108,7 +108,7 @@ async def update_memory_item_status(
     Update the status of a memory item.
     """
     try:
-        return service.update_item_status(item_id, status_data.status, current_user.id)
+        return await service.update_item_status(item_id, status_data.status, current_user.id)
     except UserNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except PermissionDeniedError as e:
@@ -140,7 +140,7 @@ async def promote_memory_item(
     Promote a mastered area_to_improve item to knowledge_strength.
     """
     try:
-        return service.promote_to_strength(item_id, current_user.id)
+        return await service.promote_to_strength(item_id, current_user.id)
     except UserNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except PermissionDeniedError as e:
@@ -171,7 +171,7 @@ async def delete_memory_item(
     Delete a memory item.
     """
     try:
-        service.delete_item(item_id, current_user.id)
+        await service.delete_item(item_id, current_user.id)
     except UserNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except PermissionDeniedError as e:
@@ -200,7 +200,7 @@ async def clear_memory_category(
     Clear all items in a category.
     """
     try:
-        count = service.clear_category(current_user.id, category)
+        count = await service.clear_category(current_user.id, category)
         return {"deleted_count": count, "category": category.value}
     except Exception as e:
         logger.error(f"Failed to clear category {category} for user {current_user.id}: {e}")

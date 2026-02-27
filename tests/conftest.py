@@ -11,10 +11,9 @@ import os
 os.environ["ENV_FILE"] = ".env.test"
 
 import pytest  # noqa: E402
-from sqlalchemy import create_engine  # noqa: E402
-from sqlalchemy.orm import sessionmaker  # noqa: E402
-from sqlalchemy.pool import StaticPool  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine  # noqa: E402
 
+from runestone.config import settings  # noqa: E402
 from runestone.db.database import Base  # noqa: E402
 from runestone.db.models import User  # noqa: E402
 from runestone.db.user_repository import UserRepository  # noqa: E402
@@ -27,78 +26,67 @@ def anyio_backend():
 
 
 @pytest.fixture(scope="function")
-def db_engine():
+async def db_engine():
     """
-    Create a fresh test database engine for each test (complete isolation).
-
-    Uses in-memory SQLite to ensure:
-    - No data pollution between tests
-    - Safe parallel test execution
-    - Easy debugging (each test starts clean)
-
-    Performance: In-memory databases are fast enough that per-test
-    creation has minimal impact (~1-5ms overhead per test).
+    Create a fresh test database engine for each test.
     """
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    Base.metadata.create_all(bind=engine)
+    engine = create_async_engine(
+        settings.database_url,
+        pool_pre_ping=True,
+    )
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     yield engine
-    Base.metadata.drop_all(bind=engine)
-    engine.dispose()
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
 
 
 @pytest.fixture(scope="function")
 def db_session_factory(db_engine):
     """Create a session factory for the test database."""
-    return sessionmaker(autocommit=False, autoflush=False, bind=db_engine)
+    return async_sessionmaker(
+        autocommit=False, autoflush=False, bind=db_engine, class_=AsyncSession, expire_on_commit=False
+    )
 
 
 @pytest.fixture(scope="function")
-def db_with_test_user(db_session_factory):
+async def db_with_test_user(db_session_factory):
     """
     Create a database session with a pre-created test user.
 
     Each test gets a fresh database with a unique test user.
-    No cleanup needed as the entire database is disposed after the test.
-
-    Returns:
-        tuple: (Session, User) - Database session and test user
     """
     import uuid
 
-    db = db_session_factory()
-    unique_email = f"test-{uuid.uuid4()}@example.com"
-    test_user = User(
-        name="Test User",
-        surname="Testsson",
-        email=unique_email,
-        hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYQmP7XzL6",
-    )
-    db.add(test_user)
-    db.commit()
-    db.refresh(test_user)
+    async with db_session_factory() as db:
+        unique_email = f"test-{uuid.uuid4()}@example.com"
+        test_user = User(
+            name="Test User",
+            surname="Testsson",
+            email=unique_email,
+            hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYQmP7XzL6",
+            timezone="UTC",
+            pages_recognised_count=0,
+        )
+        db.add(test_user)
+        await db.commit()
+        await db.refresh(test_user)
 
-    try:
         yield db, test_user
-    finally:
-        db.close()
 
 
 @pytest.fixture(scope="function")
-def db_session(db_engine):
+async def db_session(db_session_factory):
     """
     Create a fresh database session for each test.
-
-    Each test gets a completely isolated database session with no
-    data from previous tests. This ensures test independence and
-    makes debugging easier.
     """
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db_engine)
-    db = SessionLocal()
-    try:
+    async with db_session_factory() as db:
         yield db
-    finally:
-        db.rollback()
-        db.close()
+        await db.rollback()
 
 
 @pytest.fixture
@@ -116,7 +104,7 @@ def vocabulary_repository(db_session):
 @pytest.fixture
 def mock_processor():
     """Create a standardized mock RunestoneProcessor."""
-    from unittest.mock import Mock
+    from unittest.mock import AsyncMock, Mock
 
     from runestone.schemas.analysis import ContentAnalysis, GrammarFocus
     from runestone.schemas.ocr import OCRResult, RecognitionStatistics
@@ -135,6 +123,7 @@ def mock_processor():
         vocabulary=[],
         core_topics=[],
     )
+    mock.run_analysis = AsyncMock(return_value=mock.run_analysis.return_value)
     return mock
 
 

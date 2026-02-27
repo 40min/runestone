@@ -53,7 +53,7 @@ class MemoryItemService:
         if not valid_statuses or status not in valid_statuses:
             raise ValueError(f"Invalid status '{status}' for category '{category.value}'")
 
-    def list_memory_items(
+    async def list_memory_items(
         self,
         user_id: int,
         category: Optional[MemoryCategory] = None,
@@ -75,10 +75,10 @@ class MemoryItemService:
             List of MemoryItemResponse objects
         """
         category_value = category.value if category is not None else None
-        items = self.repo.list_items(user_id, category_value, status, limit, offset)
+        items = await self.repo.list_items(user_id, category_value, status, limit, offset)
         return [MemoryItemResponse.model_validate(item) for item in items]
 
-    def upsert_memory_item(
+    async def upsert_memory_item(
         self,
         user_id: int,
         category: MemoryCategory,
@@ -110,7 +110,7 @@ class MemoryItemService:
         self._validate_status(category, status)
 
         # Check if item exists
-        existing_item = self.repo.get_by_user_category_key(user_id, category.value, key)
+        existing_item = await self.repo.get_by_user_category_key(user_id, category.value, key)
 
         if existing_item:
             # Update existing item
@@ -120,7 +120,7 @@ class MemoryItemService:
             if old_status != status:
                 existing_item.status_changed_at = self._utc_now()
             existing_item.updated_at = self._utc_now()
-            updated_item = self.repo.update(existing_item)
+            updated_item = await self.repo.update(existing_item)
             return MemoryItemResponse.model_validate(updated_item)
         else:
             # Create new item
@@ -132,10 +132,10 @@ class MemoryItemService:
                 status=status,
                 status_changed_at=self._utc_now(),
             )
-            created_item = self.repo.create(new_item)
+            created_item = await self.repo.create(new_item)
             return MemoryItemResponse.model_validate(created_item)
 
-    def update_item_status(self, item_id: int, new_status: str, user_id: int) -> MemoryItemResponse:
+    async def update_item_status(self, item_id: int, new_status: str, user_id: int) -> MemoryItemResponse:
         """
         Update the status of a memory item.
 
@@ -151,7 +151,7 @@ class MemoryItemService:
             UserNotFoundError: If item not found
             ValueError: If user doesn't own item or status is invalid
         """
-        item = self.repo.get_by_id(item_id)
+        item = await self.repo.get_by_id(item_id)
         if not item:
             raise UserNotFoundError(f"Memory item with id {item_id} not found")
 
@@ -172,10 +172,10 @@ class MemoryItemService:
             item.status_changed_at = self._utc_now()
         item.updated_at = self._utc_now()
 
-        updated_item = self.repo.update(item)
+        updated_item = await self.repo.update(item)
         return MemoryItemResponse.model_validate(updated_item)
 
-    def promote_to_strength(self, item_id: int, user_id: int) -> MemoryItemResponse:
+    async def promote_to_strength(self, item_id: int, user_id: int) -> MemoryItemResponse:
         """
         Promote a mastered area_to_improve item to knowledge_strength.
 
@@ -190,7 +190,7 @@ class MemoryItemService:
             UserNotFoundError: If item not found
             ValueError: If item is not mastered or not in area_to_improve
         """
-        item = self.repo.get_by_id(item_id)
+        item = await self.repo.get_by_id(item_id)
         if not item:
             raise UserNotFoundError(f"Memory item with id {item_id} not found")
 
@@ -204,11 +204,8 @@ class MemoryItemService:
             raise ValueError("Only mastered items can be promoted to knowledge_strength")
 
         # Create + delete in a single transaction to avoid partial state.
-        # If we're already in a transaction (e.g., higher-level service or test),
-        # use a nested transaction to avoid InvalidRequestError.
-        transaction = self.repo.db.begin_nested() if self.repo.db.in_transaction() else self.repo.db.begin()
-        with transaction:
-            existing_strength = self.repo.get_by_user_category_key(
+        async with self.repo.db.begin_nested():
+            existing_strength = await self.repo.get_by_user_category_key(
                 user_id,
                 MemoryCategory.KNOWLEDGE_STRENGTH.value,
                 item.key,
@@ -220,9 +217,9 @@ class MemoryItemService:
                 if old_status != existing_strength.status:
                     existing_strength.status_changed_at = self._utc_now()
                 existing_strength.updated_at = self._utc_now()
-                self.repo.db.delete(item)
-                self.repo.db.flush()
-                self.repo.db.refresh(existing_strength)
+                await self.repo.db.delete(item)
+                await self.repo.db.flush()
+                await self.repo.db.refresh(existing_strength)
                 promoted_item = existing_strength
             else:
                 new_item = MemoryItem(
@@ -234,14 +231,14 @@ class MemoryItemService:
                     status_changed_at=self._utc_now(),
                 )
                 self.repo.db.add(new_item)
-                self.repo.db.delete(item)
-                self.repo.db.flush()
-                self.repo.db.refresh(new_item)
+                await self.repo.db.delete(item)
+                await self.repo.db.flush()
+                await self.repo.db.refresh(new_item)
                 promoted_item = new_item
 
         return MemoryItemResponse.model_validate(promoted_item)
 
-    def delete_item(self, item_id: int, user_id: int) -> None:
+    async def delete_item(self, item_id: int, user_id: int) -> None:
         """
         Delete a memory item.
 
@@ -253,16 +250,16 @@ class MemoryItemService:
             UserNotFoundError: If item not found
             ValueError: If user doesn't own item
         """
-        item = self.repo.get_by_id(item_id)
+        item = await self.repo.get_by_id(item_id)
         if not item:
             raise UserNotFoundError(f"Memory item with id {item_id} not found")
 
         if item.user_id != user_id:
             raise PermissionDeniedError("You don't have permission to delete this item")
 
-        self.repo.delete(item_id)
+        await self.repo.delete(item_id)
 
-    def cleanup_old_mastered_areas(self, user_id: int, older_than_days: int = 90) -> int:
+    async def cleanup_old_mastered_areas(self, user_id: int, older_than_days: int = 90) -> int:
         """
         Delete old mastered area_to_improve items.
 
@@ -274,9 +271,9 @@ class MemoryItemService:
             cutoff,
             user_id,
         )
-        return self.repo.delete_mastered_older_than(user_id=user_id, cutoff=cutoff)
+        return await self.repo.delete_mastered_older_than(user_id=user_id, cutoff=cutoff)
 
-    def clear_category(self, user_id: int, category: MemoryCategory) -> int:
+    async def clear_category(self, user_id: int, category: MemoryCategory) -> int:
         """
         Clear all items in a category for a user.
 
@@ -287,4 +284,4 @@ class MemoryItemService:
         Returns:
             Number of items deleted
         """
-        return self.repo.delete_by_category(user_id, category.value)
+        return await self.repo.delete_by_category(user_id, category.value)

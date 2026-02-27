@@ -68,54 +68,6 @@ def _serialize_memory_items(items: list[MemoryItemResponse]) -> str:
     )
 
 
-async def _delete_memory_item_impl(runtime: ToolRuntime[AgentContext], item_id: int) -> str:
-    logger.info("Agent tool call: delete_memory_item (item_id=%s)", item_id)
-    user = runtime.context.user
-    service = runtime.context.memory_item_service
-    service.delete_item(item_id, user.id)
-    return f"Deleted memory item: [ID:{item_id}]"
-
-
-async def _start_student_info_impl(runtime: ToolRuntime[AgentContext]) -> str:
-    logger.info("Agent tool call: start_student_info")
-    user = runtime.context.user
-    service = runtime.context.memory_item_service
-
-    items: list[MemoryItemResponse] = []
-    items.extend(
-        service.list_memory_items(
-            user_id=user.id,
-            category=MemoryCategory.PERSONAL_INFO,
-            status="active",
-            limit=50,
-            offset=0,
-        )
-    )
-    items.extend(
-        service.list_memory_items(
-            user_id=user.id,
-            category=MemoryCategory.AREA_TO_IMPROVE,
-            status="struggling",
-            limit=75,
-            offset=0,
-        )
-    )
-    items.extend(
-        service.list_memory_items(
-            user_id=user.id,
-            category=MemoryCategory.AREA_TO_IMPROVE,
-            status="improving",
-            limit=75,
-            offset=0,
-        )
-    )
-
-    if not items:
-        return "No memory items found."
-
-    return _serialize_memory_items(items)
-
-
 @tool
 async def read_memory(
     runtime: ToolRuntime[AgentContext],
@@ -144,7 +96,7 @@ async def read_memory(
     user = runtime.context.user
     service = runtime.context.memory_item_service
 
-    items = service.list_memory_items(user_id=user.id, category=category, status=status, limit=200, offset=0)
+    items = await service.list_memory_items(user_id=user.id, category=category, status=status, limit=200, offset=0)
 
     if not items:
         return "No memory items found."
@@ -163,7 +115,43 @@ async def start_student_info(runtime: ToolRuntime[AgentContext]) -> str:
 
     Prefer this tool at the start of a new chat to reduce prompt bloat.
     """
-    return await _start_student_info_impl(runtime)
+    logger.info("Agent tool call: start_student_info")
+    user = runtime.context.user
+    service = runtime.context.memory_item_service
+
+    items: list[MemoryItemResponse] = []
+    items.extend(
+        await service.list_memory_items(
+            user_id=user.id,
+            category=MemoryCategory.PERSONAL_INFO,
+            status="active",
+            limit=50,
+            offset=0,
+        )
+    )
+    items.extend(
+        await service.list_memory_items(
+            user_id=user.id,
+            category=MemoryCategory.AREA_TO_IMPROVE,
+            status="struggling",
+            limit=75,
+            offset=0,
+        )
+    )
+    items.extend(
+        await service.list_memory_items(
+            user_id=user.id,
+            category=MemoryCategory.AREA_TO_IMPROVE,
+            status="improving",
+            limit=75,
+            offset=0,
+        )
+    )
+
+    if not items:
+        return "No memory items found."
+
+    return _serialize_memory_items(items)
 
 
 @tool
@@ -193,7 +181,7 @@ async def upsert_memory_item(
     user = runtime.context.user
     service = runtime.context.memory_item_service
 
-    result = service.upsert_memory_item(
+    result = await service.upsert_memory_item(
         user_id=user.id,
         category=item.category,
         key=item.key,
@@ -230,7 +218,7 @@ async def update_memory_status(
     user = runtime.context.user
     service = runtime.context.memory_item_service
 
-    result = service.update_item_status(update.item_id, update.new_status, user.id)
+    result = await service.update_item_status(update.item_id, update.new_status, user.id)
 
     return f"Status updated: [ID:{result.id}] {result.key} is now '{result.status}'"
 
@@ -257,7 +245,7 @@ async def promote_to_strength(
     user = runtime.context.user
     service = runtime.context.memory_item_service
 
-    result = service.promote_to_strength(promote.item_id, user.id)
+    result = await service.promote_to_strength(promote.item_id, user.id)
 
     return f"Promoted to knowledge_strength: [ID:{result.id}] {result.key}"
 
@@ -273,4 +261,9 @@ async def delete_memory_item(
     Use only when the student explicitly asks you to forget something, or when the
     student confirms an existing memory item is wrong and should be removed.
     """
-    return await _delete_memory_item_impl(runtime, delete.item_id)
+    logger.info("Agent tool call: delete_memory_item (item_id=%s)", delete.item_id)
+    user = runtime.context.user
+    service = runtime.context.memory_item_service
+
+    await service.delete_item(delete.item_id, user.id)
+    return f"Deleted memory item: [ID:{delete.item_id}]"
