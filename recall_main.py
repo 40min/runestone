@@ -35,7 +35,7 @@ async def process_updates_job(state_manager: StateManager) -> None:
             recall_service = RuneRecallService(vocabulary_repository, state_manager, settings)
             telegram_service = TelegramCommandService(state_manager, recall_service)
             await telegram_service.process_updates()
-        except Exception as e:
+        except Exception:
             logging.getLogger(__name__).exception("Error in process_updates_job")
 
 
@@ -46,8 +46,8 @@ async def send_recall_word_job(state_manager: StateManager) -> None:
             vocabulary_repository = VocabularyRepository(db)
             recall_service = RuneRecallService(vocabulary_repository, state_manager, settings)
             await recall_service.send_next_recall_word()
-        except Exception as e:
-            logging.getLogger(__name__).error(f"Error in send_recall_word_job: {e}")
+        except Exception:
+            logging.getLogger(__name__).exception("Error in send_recall_word_job")
 
 
 def create_scheduler(state_manager: StateManager) -> AsyncIOScheduler:

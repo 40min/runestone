@@ -8,7 +8,7 @@ for database operations in the Runestone application.
 import logging
 import os
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
@@ -18,15 +18,23 @@ from runestone.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Create SQLAlchemy async engine with connection pooling
-# Built-in pool for asyncpg
-engine = create_async_engine(
-    settings.database_url,
-    pool_size=10,
-    max_overflow=5,
-    pool_pre_ping=True,
-    pool_recycle=3600,
-)
+
+db_url_params = {}
+settings_url = make_url(settings.database_url)
+# QueuePool kwargs are valid for PostgreSQL (asyncpg, psycopg) drivers
+if settings_url.get_dialect().name == "postgresql":
+    # Create SQLAlchemy async engine with connection pooling
+    # Built-in pool for asyncpg
+    db_url_params = {
+        "pool_size": 10,
+        "max_overflow": 5,
+        "pool_pre_ping": True,
+        "pool_recycle": 3600,
+    }
+
+logger.error("DB connection params: %s", db_url_params)
+
+engine = create_async_engine(settings.database_url, **db_url_params)
 
 # Create async_sessionmaker
 SessionLocal = async_sessionmaker(
@@ -76,7 +84,7 @@ def run_migrations() -> None:
 
 
 async def setup_database() -> None:
-    """Check if required tables exist, raise exception if not."""
+    """Check if required tables exist, create them if missing."""
     from sqlalchemy import inspect
 
     def check_tables(connection):
@@ -90,8 +98,19 @@ async def setup_database() -> None:
             missing_tables = await conn.run_sync(check_tables)
 
             if missing_tables:
-                logger.error(f"Missing database tables: {', '.join(missing_tables)}")
-                raise ValueError(f"Missing database tables: {', '.join(missing_tables)}")
+                logger.warning(
+                    f"Missing database tables: {', '.join(missing_tables)}. Running migrations to create tables..."
+                )
+                # Import here to avoid circular imports
+                from runestone.db.database import run_migrations
+
+                run_migrations()
+
+                # Verify tables were created
+                missing_tables_after = await conn.run_sync(check_tables)
+                if missing_tables_after:
+                    logger.error(f"Missing database tables after migrations: {', '.join(missing_tables_after)}")
+                    raise ValueError(f"Missing database tables after migrations: {', '.join(missing_tables_after)}")
 
         logger.info("Database and tables verified successfully.")
     except Exception as e:

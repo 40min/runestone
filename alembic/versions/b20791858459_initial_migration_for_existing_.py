@@ -31,21 +31,26 @@ def upgrade() -> None:
         op.create_table(
             "vocabulary",
             sa.Column("id", sa.Integer(), nullable=False),
-            sa.Column("user_id", sa.Integer(), nullable=True),
+            sa.Column("user_id", sa.Integer(), nullable=False, server_default=None),
             sa.Column("word_phrase", sa.Text(), nullable=False),
             sa.Column("translation", sa.Text(), nullable=False),
             sa.Column("example_phrase", sa.Text(), nullable=True),
-            sa.Column("in_learn", sa.Boolean(), nullable=True, server_default=sa.true()),
+            sa.Column("extra_info", sa.Text(), nullable=True, server_default=None),
+            sa.Column("in_learn", sa.Boolean(), nullable=False, server_default=sa.true()),
+            sa.Column("priority_learn", sa.Boolean(), nullable=False, server_default=sa.false()),
             sa.Column("last_learned", sa.DateTime(timezone=True), nullable=True),
             sa.Column(
-                "created_at", sa.DateTime(timezone=True), nullable=True, server_default=sa.text("(CURRENT_TIMESTAMP)")
+                "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("(CURRENT_TIMESTAMP)")
             ),
             sa.Column(
-                "updated_at", sa.DateTime(timezone=True), nullable=True, server_default=sa.text("(CURRENT_TIMESTAMP)")
+                "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("(CURRENT_TIMESTAMP)")
             ),
             sa.Column("learned_times", sa.Integer(), nullable=False, server_default="0"),
             sa.PrimaryKeyConstraint("id"),
+            sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
+            sa.UniqueConstraint("user_id", "word_phrase", name="uq_user_word_phrase"),
         )
+        op.create_index("ix_vocabulary_word_phrase", "vocabulary", ["word_phrase"])
         return
 
     columns = {col["name"] for col in inspector.get_columns("vocabulary")}

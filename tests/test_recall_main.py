@@ -168,10 +168,32 @@ class TestRecallMain:
         trigger = daily_call[1]["trigger"]
         assert hasattr(trigger, "interval")
 
+    @patch("runestone.db.database.run_migrations")
+    @patch("runestone.db.database.engine")
+    @pytest.mark.asyncio
+    async def test_setup_database_missing_tables(self, mock_engine, mock_run_migrations):
+        """Test database setup when tables are missing - should run migrations."""
+        from runestone.db.database import setup_database
+
+        # Mocking run_sync to return missing tables first, then empty after migrations
+        mock_conn = AsyncMock()
+        mock_engine.connect.return_value.__aenter__.return_value = mock_conn
+        # Use a side effect to return missing tables on first call, empty on second call
+        mock_conn.run_sync.side_effect = [["users", "vocabulary"], []]
+
+        await setup_database()
+
+        # Verify run_migrations was called
+        mock_run_migrations.assert_called_once()
+        # Verify connect was called
+        mock_engine.connect.assert_called_once()
+        # Verify run_sync was called twice (initial check + verification after migrations)
+        assert mock_conn.run_sync.call_count == 2
+
     @patch("runestone.db.database.engine")
     @pytest.mark.asyncio
     async def test_setup_database(self, mock_engine):
-        """Test database setup."""
+        """Test database setup when all tables exist."""
         from runestone.db.database import setup_database
 
         # Mocking run_sync is tricky, let's mock engine.connect() to return a mock context manager

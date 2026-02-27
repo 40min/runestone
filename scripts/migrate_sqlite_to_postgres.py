@@ -12,7 +12,9 @@ load_dotenv()
 SQLITE_DB = os.getenv("SQLITE_DB_PATH", "state/runestone.db")
 POSTGRES_URL = os.getenv("DATABASE_URL", "postgresql://runestone:runestone@localhost:5432/runestone")
 # Convert asyncpg URL to psycopg2 URL if needed
-PSYCOPG2_DATABASE_URL = POSTGRES_URL.replace("postgresql+asyncpg://", "postgresql://")
+PSYCOPG2_DATABASE_URL = POSTGRES_URL.replace("postgresql+asyncpg://", "postgresql://").replace(
+    "postgresql+psycopg2://", "postgresql://"
+)
 
 TABLES = [
     "users",
