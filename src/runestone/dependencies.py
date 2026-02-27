@@ -9,7 +9,7 @@ consistent object creation and configuration.
 from typing import Annotated
 
 from fastapi import Depends, Request
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from runestone.agent.service import AgentService
 from runestone.config import Settings, settings
@@ -42,7 +42,7 @@ def get_settings() -> Settings:
     return settings
 
 
-def get_user_repository(db: Annotated[Session, Depends(get_db)]) -> UserRepository:
+def get_user_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> UserRepository:
     """
     Dependency injection for user repository.
 
@@ -55,7 +55,7 @@ def get_user_repository(db: Annotated[Session, Depends(get_db)]) -> UserReposito
     return UserRepository(db)
 
 
-def get_vocabulary_repository(db: Annotated[Session, Depends(get_db)]) -> VocabularyRepository:
+def get_vocabulary_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> VocabularyRepository:
     """
     Dependency injection for vocabulary repository.
 
@@ -68,7 +68,7 @@ def get_vocabulary_repository(db: Annotated[Session, Depends(get_db)]) -> Vocabu
     return VocabularyRepository(db)
 
 
-def get_chat_repository(db: Annotated[Session, Depends(get_db)]) -> ChatRepository:
+def get_chat_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> ChatRepository:
     """
     Dependency injection for chat repository.
 
@@ -81,7 +81,7 @@ def get_chat_repository(db: Annotated[Session, Depends(get_db)]) -> ChatReposito
     return ChatRepository(db)
 
 
-def get_memory_item_repository(db: Annotated[Session, Depends(get_db)]) -> MemoryItemRepository:
+def get_memory_item_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> MemoryItemRepository:
     """
     Dependency injection for memory item repository.
 

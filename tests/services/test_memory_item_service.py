@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import select
 
 from runestone.api.memory_item_schemas import (
     AreaToImproveStatus,
@@ -14,7 +15,7 @@ from runestone.db.models import MemoryItem
 from runestone.services.memory_item_service import MemoryItemService
 
 
-def test_cleanup_old_mastered_areas(db_with_test_user, monkeypatch):
+async def test_cleanup_old_mastered_areas(db_with_test_user, monkeypatch):
     db, user = db_with_test_user
     repo = MemoryItemRepository(db)
     service = MemoryItemService(repo)
@@ -79,16 +80,17 @@ def test_cleanup_old_mastered_areas(db_with_test_user, monkeypatch):
             ),
         ]
     )
-    db.commit()
+    await db.commit()
 
-    deleted = service.cleanup_old_mastered_areas(user.id, older_than_days=90)
+    deleted = await service.cleanup_old_mastered_areas(user.id, older_than_days=90)
     assert deleted == 2
 
-    remaining_keys = {item.key for item in db.query(MemoryItem).filter(MemoryItem.user_id == user.id).all()}
+    remaining = (await db.execute(select(MemoryItem).where(MemoryItem.user_id == user.id))).scalars().all()
+    remaining_keys = {item.key for item in remaining}
     assert remaining_keys == {"recent_mastered", "old_struggling", "strength_old"}
 
 
-def test_upsert_memory_item_creates_with_default_status(db_with_test_user, monkeypatch):
+async def test_upsert_memory_item_creates_with_default_status(db_with_test_user, monkeypatch):
     db, user = db_with_test_user
     repo = MemoryItemRepository(db)
     service = MemoryItemService(repo)
@@ -96,7 +98,7 @@ def test_upsert_memory_item_creates_with_default_status(db_with_test_user, monke
     fixed_now = datetime(2026, 2, 11, tzinfo=timezone.utc)
     monkeypatch.setattr(service, "_utc_now", lambda: fixed_now)
 
-    response = service.upsert_memory_item(
+    response = await service.upsert_memory_item(
         user_id=user.id,
         category=MemoryCategory.PERSONAL_INFO,
         key="learning_goal",
@@ -104,13 +106,13 @@ def test_upsert_memory_item_creates_with_default_status(db_with_test_user, monke
     )
 
     assert response.status == PersonalInfoStatus.ACTIVE.value
-    item = repo.get_by_user_category_key(user.id, MemoryCategory.PERSONAL_INFO.value, "learning_goal")
+    item = await repo.get_by_user_category_key(user.id, MemoryCategory.PERSONAL_INFO.value, "learning_goal")
     assert item is not None
     assert item.content == "Wants to practice Swedish daily"
     assert item.status_changed_at.replace(tzinfo=timezone.utc) == fixed_now
 
 
-def test_upsert_memory_item_updates_and_tracks_status_change(db_with_test_user, monkeypatch):
+async def test_upsert_memory_item_updates_and_tracks_status_change(db_with_test_user, monkeypatch):
     db, user = db_with_test_user
     repo = MemoryItemRepository(db)
     service = MemoryItemService(repo)
@@ -126,13 +128,13 @@ def test_upsert_memory_item_updates_and_tracks_status_change(db_with_test_user, 
         updated_at=old_time,
     )
     db.add(item)
-    db.commit()
-    db.refresh(item)
+    await db.commit()
+    await db.refresh(item)
 
     fixed_now = datetime(2026, 2, 11, tzinfo=timezone.utc)
     monkeypatch.setattr(service, "_utc_now", lambda: fixed_now)
 
-    response = service.upsert_memory_item(
+    response = await service.upsert_memory_item(
         user_id=user.id,
         category=MemoryCategory.PERSONAL_INFO,
         key="timezone",
@@ -141,13 +143,13 @@ def test_upsert_memory_item_updates_and_tracks_status_change(db_with_test_user, 
     )
 
     assert response.status == PersonalInfoStatus.OUTDATED.value
-    db.refresh(item)
+    await db.refresh(item)
     assert item.content == "CET"
     assert item.status_changed_at.replace(tzinfo=timezone.utc) == fixed_now
     assert item.updated_at.replace(tzinfo=timezone.utc) == fixed_now
 
 
-def test_update_item_status_validates_and_enforces_permissions(db_with_test_user):
+async def test_update_item_status_validates_and_enforces_permissions(db_with_test_user):
     db, user = db_with_test_user
     repo = MemoryItemRepository(db)
     service = MemoryItemService(repo)
@@ -160,17 +162,17 @@ def test_update_item_status_validates_and_enforces_permissions(db_with_test_user
         status=PersonalInfoStatus.ACTIVE.value,
     )
     db.add(item)
-    db.commit()
-    db.refresh(item)
+    await db.commit()
+    await db.refresh(item)
 
     with pytest.raises(PermissionDeniedError):
-        service.update_item_status(item.id, PersonalInfoStatus.OUTDATED.value, user_id=user.id + 1)
+        await service.update_item_status(item.id, PersonalInfoStatus.OUTDATED.value, user_id=user.id + 1)
 
     with pytest.raises(ValueError):
-        service.update_item_status(item.id, AreaToImproveStatus.MASTERED.value, user_id=user.id)
+        await service.update_item_status(item.id, AreaToImproveStatus.MASTERED.value, user_id=user.id)
 
 
-def test_update_item_status_updates_timestamp(db_with_test_user, monkeypatch):
+async def test_update_item_status_updates_timestamp(db_with_test_user, monkeypatch):
     db, user = db_with_test_user
     repo = MemoryItemRepository(db)
     service = MemoryItemService(repo)
@@ -186,20 +188,20 @@ def test_update_item_status_updates_timestamp(db_with_test_user, monkeypatch):
         updated_at=old_time,
     )
     db.add(item)
-    db.commit()
-    db.refresh(item)
+    await db.commit()
+    await db.refresh(item)
 
     fixed_now = datetime(2026, 2, 11, tzinfo=timezone.utc)
     monkeypatch.setattr(service, "_utc_now", lambda: fixed_now)
 
-    response = service.update_item_status(item.id, AreaToImproveStatus.IMPROVING.value, user_id=user.id)
+    response = await service.update_item_status(item.id, AreaToImproveStatus.IMPROVING.value, user_id=user.id)
     assert response.status == AreaToImproveStatus.IMPROVING.value
-    db.refresh(item)
+    await db.refresh(item)
     assert item.status_changed_at.replace(tzinfo=timezone.utc) == fixed_now
     assert item.updated_at.replace(tzinfo=timezone.utc) == fixed_now
 
 
-def test_promote_to_strength_creates_strength_and_deletes_old(db_with_test_user, monkeypatch):
+async def test_promote_to_strength_creates_strength_and_deletes_old(db_with_test_user, monkeypatch):
     db, user = db_with_test_user
     repo = MemoryItemRepository(db)
     service = MemoryItemService(repo)
@@ -216,20 +218,20 @@ def test_promote_to_strength_creates_strength_and_deletes_old(db_with_test_user,
         status_changed_at=fixed_now,
     )
     db.add(item)
-    db.commit()
-    db.refresh(item)
+    await db.commit()
+    await db.refresh(item)
 
-    response = service.promote_to_strength(item.id, user_id=user.id)
+    response = await service.promote_to_strength(item.id, user_id=user.id)
     assert response.category == MemoryCategory.KNOWLEDGE_STRENGTH.value
     assert response.status == KnowledgeStrengthStatus.ACTIVE.value
 
-    assert repo.get_by_id(item.id) is None
-    promoted = repo.get_by_user_category_key(user.id, MemoryCategory.KNOWLEDGE_STRENGTH.value, "verbs")
+    assert await repo.get_by_id(item.id) is None
+    promoted = await repo.get_by_user_category_key(user.id, MemoryCategory.KNOWLEDGE_STRENGTH.value, "verbs")
     assert promoted is not None
     assert promoted.content == "Verb conjugation"
 
 
-def test_delete_item_enforces_permissions(db_with_test_user):
+async def test_delete_item_enforces_permissions(db_with_test_user):
     db, user = db_with_test_user
     repo = MemoryItemRepository(db)
     service = MemoryItemService(repo)
@@ -242,17 +244,17 @@ def test_delete_item_enforces_permissions(db_with_test_user):
         status=PersonalInfoStatus.ACTIVE.value,
     )
     db.add(item)
-    db.commit()
-    db.refresh(item)
+    await db.commit()
+    await db.refresh(item)
 
     with pytest.raises(PermissionDeniedError):
-        service.delete_item(item.id, user_id=user.id + 1)
+        await service.delete_item(item.id, user_id=user.id + 1)
 
-    service.delete_item(item.id, user_id=user.id)
-    assert repo.get_by_id(item.id) is None
+    await service.delete_item(item.id, user_id=user.id)
+    assert await repo.get_by_id(item.id) is None
 
 
-def test_clear_category_removes_only_matching_items(db_with_test_user):
+async def test_clear_category_removes_only_matching_items(db_with_test_user):
     db, user = db_with_test_user
     repo = MemoryItemRepository(db)
     service = MemoryItemService(repo)
@@ -282,10 +284,10 @@ def test_clear_category_removes_only_matching_items(db_with_test_user):
             ),
         ]
     )
-    db.commit()
+    await db.commit()
 
-    deleted = service.clear_category(user.id, MemoryCategory.PERSONAL_INFO)
+    deleted = await service.clear_category(user.id, MemoryCategory.PERSONAL_INFO)
     assert deleted == 2
 
-    remaining = repo.list_items(user.id)
+    remaining = await repo.list_items(user.id)
     assert {item.category for item in remaining} == {MemoryCategory.KNOWLEDGE_STRENGTH.value}

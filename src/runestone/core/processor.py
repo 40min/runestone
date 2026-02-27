@@ -109,7 +109,7 @@ class RunestoneProcessor:
             else:
                 raise RunestoneError(f"OCR processing failed: {type(e).__name__}: {str(e)}")
 
-    def run_analysis(self, text: str, user: User) -> ContentAnalysis:
+    async def run_analysis(self, text: str, user: User) -> ContentAnalysis:
         """
         Analyze extracted text content and mark known vocabulary.
 
@@ -141,10 +141,10 @@ class RunestoneProcessor:
 
             # Mark known vocabulary if vocabulary_service is available
             if analysis.vocabulary:
-                self._mark_known_vocabulary(analysis, user.id)
+                await self._mark_known_vocabulary(analysis, user.id)
 
             # Increment pages recognised count for successful analysis
-            self.user_service.increment_pages_recognised_count(user)
+            await self.user_service.increment_pages_recognised_count(user)
 
             return analysis
 
@@ -156,7 +156,7 @@ class RunestoneProcessor:
             else:
                 raise RunestoneError(f"Content analysis failed: {str(e)}")
 
-    def _mark_known_vocabulary(self, analysis: ContentAnalysis, user_id: int) -> None:
+    async def _mark_known_vocabulary(self, analysis: ContentAnalysis, user_id: int) -> None:
         """
         Mark vocabulary items as known if they exist in the user's database.
 
@@ -169,7 +169,7 @@ class RunestoneProcessor:
             swedish_words = [item.swedish for item in analysis.vocabulary]
 
             # Get known words from database
-            known_words = self.vocabulary_service.get_existing_word_phrases(swedish_words, user_id)
+            known_words = await self.vocabulary_service.get_existing_word_phrases(swedish_words, user_id)
 
             # Mark vocabulary items as known
             known_count = 0
@@ -217,7 +217,7 @@ class RunestoneProcessor:
         except Exception as e:
             raise RunestoneError(f"Failed to generate markdown output: {str(e)}")
 
-    def process_image(self, image_path: Path, user: User) -> Dict[str, Any]:
+    async def process_image(self, image_path: Path, user: User) -> Dict[str, Any]:
         """
         Process an image file through the complete Runestone workflow.
 
@@ -247,7 +247,7 @@ class RunestoneProcessor:
                 raise RunestoneError("No text extracted from image")
 
             # Step 2: Content analysis
-            analysis = self.run_analysis(extracted_text, user)
+            analysis = await self.run_analysis(extracted_text, user)
 
             # Combine results
             results = {

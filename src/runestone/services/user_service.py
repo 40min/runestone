@@ -29,7 +29,7 @@ class UserService:
         self.vocab_repo = vocabulary_repository
         self.logger = get_logger(__name__)
 
-    def get_user_by_id(self, user_id: int) -> Optional[User]:
+    async def get_user_by_id(self, user_id: int) -> Optional[User]:
         """
         Get a user by their ID.
 
@@ -39,7 +39,7 @@ class UserService:
         Returns:
             User model or None if not found
         """
-        return self.user_repo.get_by_id(user_id)
+        return await self.user_repo.get_by_id(user_id)
 
     def _parse_memory_field(self, field_value: Optional[str]) -> Optional[dict]:
         """
@@ -68,12 +68,12 @@ class UserService:
             "knowledge_strengths": self._parse_memory_field(user.knowledge_strengths),
         }
 
-    def get_user_profile(self, user: User) -> UserProfileResponse:
+    async def get_user_profile(self, user: User) -> UserProfileResponse:
         """Get user profile with stats."""
         # Get vocabulary stats
-        words_in_learn_count = self.vocab_repo.get_words_in_learn_count(user.id)
-        words_skipped_count = self.vocab_repo.get_words_skipped_count(user.id)
-        overall_words_count = self.vocab_repo.get_overall_words_count(user.id)
+        words_in_learn_count = await self.vocab_repo.get_words_in_learn_count(user.id)
+        words_skipped_count = await self.vocab_repo.get_words_skipped_count(user.id)
+        overall_words_count = await self.vocab_repo.get_overall_words_count(user.id)
 
         # Parse JSON memory fields with error handling
         memory = self.get_user_memory(user)
@@ -96,7 +96,7 @@ class UserService:
             updated_at=user.updated_at.isoformat() if user.updated_at else None,
         )
 
-    def update_user_profile(self, user: User, update_data: UserProfileUpdate) -> UserProfileResponse:
+    async def update_user_profile(self, user: User, update_data: UserProfileUpdate) -> UserProfileResponse:
         """Update user profile."""
         # Validate password if provided
         if update_data.password is not None:
@@ -105,7 +105,7 @@ class UserService:
 
         # Check if email is being updated and validate uniqueness
         if update_data.email is not None and update_data.email != user.email:
-            existing_user = self.user_repo.get_by_email(update_data.email)
+            existing_user = await self.user_repo.get_by_email(update_data.email)
             if existing_user is not None and existing_user.id != user.id:
                 raise ValueError("Email address is already registered by another user")
 
@@ -123,31 +123,31 @@ class UserService:
 
         # Save changes using user repository
         try:
-            updated_user = self.user_repo.update(user)
+            updated_user = await self.user_repo.update(user)
         except IntegrityError as e:
             error_str = str(e)
             if "users_email_key" in error_str or "UNIQUE constraint failed: users.email" in error_str:
                 raise ValueError("Email address is already registered by another user") from e
             raise
 
-        return self.get_user_profile(updated_user)
+        return await self.get_user_profile(updated_user)
 
-    def increment_pages_recognised_count(self, user: User) -> None:
+    async def increment_pages_recognised_count(self, user: User) -> None:
         """Increment the pages recognised count for a user."""
-        self.user_repo.increment_pages_recognised_count(user.id)
+        await self.user_repo.increment_pages_recognised_count(user.id)
 
-    def reset_user_password(self, email: str, new_password: str = "test123test") -> User:
+    async def reset_user_password(self, email: str, new_password: str = "test123test") -> User:
         """Reset user password by email."""
-        user = self.user_repo.get_by_email(email)
+        user = await self.user_repo.get_by_email(email)
         if not user:
             raise UserNotFoundError(f"User with email '{email}' not found")
 
         user.hashed_password = hash_password(new_password)
-        self.user_repo.update(user)
+        await self.user_repo.update(user)
 
         return user
 
-    def clear_user_memory(self, user: User, category: Optional[str] = None) -> UserProfileResponse:
+    async def clear_user_memory(self, user: User, category: Optional[str] = None) -> UserProfileResponse:
         """
         Clear one or all memory fields for a user.
 
@@ -161,10 +161,10 @@ class UserService:
         Raises:
             ValueError: If category is invalid
         """
-        updated_user = self.user_repo.clear_user_memory(user.id, category)
-        return self.get_user_profile(updated_user)
+        updated_user = await self.user_repo.clear_user_memory(user.id, category)
+        return await self.get_user_profile(updated_user)
 
-    def update_user_memory(self, user: User, field: str, data: dict) -> None:
+    async def update_user_memory(self, user: User, field: str, data: dict) -> None:
         """
         Update a specific memory field for a user.
 
@@ -179,9 +179,9 @@ class UserService:
         Raises:
             ValueError: If field name is invalid
         """
-        self.user_repo.update_user_memory(user.id, field, data)
+        await self.user_repo.update_user_memory(user.id, field, data)
 
-    def get_or_create_current_chat_id(self, user_id: int) -> str:
+    async def get_or_create_current_chat_id(self, user_id: int) -> str:
         """
         Get the current chat id for user, creating one if missing.
 
@@ -191,7 +191,7 @@ class UserService:
         Returns:
             Current chat ID
         """
-        user = self.user_repo.get_by_id(user_id)
+        user = await self.user_repo.get_by_id(user_id)
         if not user:
             raise UserNotFoundError(f"User with id {user_id} not found")
 
@@ -199,10 +199,10 @@ class UserService:
             return user.current_chat_id
 
         user.current_chat_id = str(uuid4())
-        self.user_repo.update(user)
+        await self.user_repo.update(user)
         return user.current_chat_id
 
-    def rotate_current_chat_id(self, user_id: int) -> str:
+    async def rotate_current_chat_id(self, user_id: int) -> str:
         """
         Generate and persist a new current chat id for the user.
 
@@ -212,10 +212,10 @@ class UserService:
         Returns:
             Newly generated chat ID
         """
-        user = self.user_repo.get_by_id(user_id)
+        user = await self.user_repo.get_by_id(user_id)
         if not user:
             raise UserNotFoundError(f"User with id {user_id} not found")
 
         user.current_chat_id = str(uuid4())
-        self.user_repo.update(user)
+        await self.user_repo.update(user)
         return user.current_chat_id

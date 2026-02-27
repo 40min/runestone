@@ -1,11 +1,11 @@
 import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from runestone.agent.tools import memory as memory_tools
+from runestone.agent.tools.memory import start_student_info
 from runestone.api.memory_item_schemas import MemoryCategory, MemoryItemResponse
 
 
@@ -15,7 +15,7 @@ def _extract_json(output: str) -> dict:
 
 
 @pytest.mark.anyio
-async def test_start_student_info_impl_fetches_token_bounded_subset():
+async def test_start_student_info_fetches_token_bounded_subset():
     now = datetime(2026, 2, 11, tzinfo=timezone.utc)
     personal = MemoryItemResponse(
         id=1,
@@ -54,27 +54,47 @@ async def test_start_student_info_impl_fetches_token_bounded_subset():
         metadata_json=None,
     )
 
-    def _list_memory_items(*, user_id: int, category=None, status=None, limit=100, offset=0):
+    # Track call count to return different values for each call
+    call_count = [0]
+
+    async def _list_memory_items(*, user_id: int, category=None, status=None, limit=100, offset=0):
         assert user_id == 123
         assert offset == 0
-        if category == MemoryCategory.PERSONAL_INFO and status == "active":
+        call_num = call_count[0]
+        call_count[0] += 1
+
+        if call_num == 0:
+            # First call: personal_info, active
+            assert category == MemoryCategory.PERSONAL_INFO
+            assert status == "active"
             assert limit == 50
             return [personal]
-        if category == MemoryCategory.AREA_TO_IMPROVE and status == "struggling":
+        elif call_num == 1:
+            # Second call: area_to_improve, struggling
+            assert category == MemoryCategory.AREA_TO_IMPROVE
+            assert status == "struggling"
             assert limit == 75
             return [struggling]
-        if category == MemoryCategory.AREA_TO_IMPROVE and status == "improving":
+        elif call_num == 2:
+            # Third call: area_to_improve, improving
+            assert category == MemoryCategory.AREA_TO_IMPROVE
+            assert status == "improving"
             assert limit == 75
             return [improving]
         return []
 
-    memory_item_service = MagicMock()
-    memory_item_service.list_memory_items.side_effect = _list_memory_items
+    # Mock the provider to return our mocked service
+    mock_service = MagicMock()
+    mock_service.list_memory_items = AsyncMock(side_effect=_list_memory_items)
 
-    user = SimpleNamespace(id=123)
-    runtime = SimpleNamespace(context=SimpleNamespace(user=user, memory_item_service=memory_item_service))
+    with patch("runestone.agent.tools.memory.provide_memory_item_service") as mock_provider:
+        mock_provider.return_value.__aenter__ = AsyncMock(return_value=mock_service)
+        mock_provider.return_value.__aexit__ = AsyncMock()
 
-    output = await memory_tools._start_student_info_impl(runtime)
+        user = SimpleNamespace(id=123)
+        runtime = SimpleNamespace(context=SimpleNamespace(user=user))
+
+        output = await start_student_info.coroutine(runtime)
 
     payload = _extract_json(output)
     assert "memory" in payload
@@ -84,11 +104,18 @@ async def test_start_student_info_impl_fetches_token_bounded_subset():
 
 
 @pytest.mark.anyio
-async def test_start_student_info_impl_no_items():
-    memory_item_service = MagicMock()
-    memory_item_service.list_memory_items.return_value = []
-    user = SimpleNamespace(id=123)
-    runtime = SimpleNamespace(context=SimpleNamespace(user=user, memory_item_service=memory_item_service))
+async def test_start_student_info_no_items():
+    # Mock the provider to return our mocked service
+    mock_service = MagicMock()
+    mock_service.list_memory_items = AsyncMock(return_value=[])
 
-    output = await memory_tools._start_student_info_impl(runtime)
+    with patch("runestone.agent.tools.memory.provide_memory_item_service") as mock_provider:
+        mock_provider.return_value.__aenter__ = AsyncMock(return_value=mock_service)
+        mock_provider.return_value.__aexit__ = AsyncMock()
+
+        user = SimpleNamespace(id=123)
+        runtime = SimpleNamespace(context=SimpleNamespace(user=user))
+
+        output = await start_student_info.coroutine(runtime)
+
     assert output == "No memory items found."

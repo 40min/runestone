@@ -10,7 +10,10 @@ import pytest
 class TestUserService:
     """Test cases for UserService."""
 
-    def test_update_user_profile_email_validation_duplicate(self, user_service, mock_user_repo, mock_vocab_repo, user):
+    @pytest.mark.anyio
+    async def test_update_user_profile_email_validation_duplicate(
+        self, user_service, mock_user_repo, mock_vocab_repo, user
+    ):
         """Test email update validation fails when email is already taken."""
         # Mock get_by_email to return another user
         from datetime import datetime
@@ -36,12 +39,15 @@ class TestUserService:
 
         # Should raise ValueError
         with pytest.raises(ValueError, match="Email address is already registered by another user"):
-            user_service.update_user_profile(user, update_data)
+            await user_service.update_user_profile(user, update_data)
 
         # Verify get_by_email was called
         mock_user_repo.get_by_email.assert_called_once_with("existing@example.com")
 
-    def test_update_user_profile_email_validation_success(self, user_service, mock_user_repo, mock_vocab_repo, user):
+    @pytest.mark.anyio
+    async def test_update_user_profile_email_validation_success(
+        self, user_service, mock_user_repo, mock_vocab_repo, user
+    ):
         """Test successful email update when email is available."""
         # Mock get_by_email to return None (email available)
         mock_user_repo.get_by_email.return_value = None
@@ -51,7 +57,7 @@ class TestUserService:
 
         # Update to new email
         update_data = UserProfileUpdate(email="newemail@example.com")
-        result = user_service.update_user_profile(user, update_data)
+        result = await user_service.update_user_profile(user, update_data)
 
         # Should succeed
         assert result is not None
@@ -59,7 +65,8 @@ class TestUserService:
         # Verify get_by_email was called
         mock_user_repo.get_by_email.assert_called_once_with("newemail@example.com")
 
-    def test_update_user_profile_email_no_change(self, user_service, mock_user_repo, mock_vocab_repo, user):
+    @pytest.mark.anyio
+    async def test_update_user_profile_email_no_change(self, user_service, mock_user_repo, mock_vocab_repo, user):
         """Test email update when email is the same (no change)."""
         # Set user email
         user.email = "current@example.com"
@@ -71,13 +78,16 @@ class TestUserService:
 
         # Update with same email
         update_data = UserProfileUpdate(email="current@example.com")
-        result = user_service.update_user_profile(user, update_data)
+        result = await user_service.update_user_profile(user, update_data)
 
         # Should succeed without calling get_by_email
         assert result is not None
         mock_user_repo.get_by_email.assert_not_called()
 
-    def test_update_user_profile_email_other_user_owns_it(self, user_service, mock_user_repo, mock_vocab_repo, user):
+    @pytest.mark.anyio
+    async def test_update_user_profile_email_other_user_owns_it(
+        self, user_service, mock_user_repo, mock_vocab_repo, user
+    ):
         """Test email update validation fails when another user owns the email."""
         # Mock get_by_email to return a different user
         from datetime import datetime
@@ -103,9 +113,12 @@ class TestUserService:
 
         # Should raise ValueError
         with pytest.raises(ValueError, match="Email address is already registered by another user"):
-            user_service.update_user_profile(user, update_data)
+            await user_service.update_user_profile(user, update_data)
 
-    def test_update_user_profile_email_same_user_allowed(self, user_service, mock_user_repo, mock_vocab_repo, user):
+    @pytest.mark.anyio
+    async def test_update_user_profile_email_same_user_allowed(
+        self, user_service, mock_user_repo, mock_vocab_repo, user
+    ):
         """Test that updating to own email (from different case) is allowed."""
         # Set user email
         user.email = "Current@Example.com"
@@ -118,13 +131,16 @@ class TestUserService:
 
         # Update with different case of same email
         update_data = UserProfileUpdate(email="current@example.com")
-        result = user_service.update_user_profile(user, update_data)
+        result = await user_service.update_user_profile(user, update_data)
 
         # Should succeed (get_by_email was called but returned same user)
         assert result is not None
         mock_user_repo.get_by_email.assert_called_once_with("current@example.com")
 
-    def test_update_user_profile_email_toctou_race_condition(self, user_service, mock_user_repo, mock_vocab_repo, user):
+    @pytest.mark.anyio
+    async def test_update_user_profile_email_toctou_race_condition(
+        self, user_service, mock_user_repo, mock_vocab_repo, user
+    ):
         """Test TOCTOU race condition: IntegrityError is caught and converted to ValueError."""
         from sqlalchemy.exc import IntegrityError
 
@@ -150,12 +166,13 @@ class TestUserService:
 
         # Should raise ValueError with user-friendly message
         with pytest.raises(ValueError, match="Email address is already registered by another user"):
-            user_service.update_user_profile(user, update_data)
+            await user_service.update_user_profile(user, update_data)
 
         # Verify update was called
         mock_user_repo.update.assert_called_once()
 
-    def test_update_user_profile_email_toctou_sqlite_constraint(
+    @pytest.mark.anyio
+    async def test_update_user_profile_email_toctou_sqlite_constraint(
         self, user_service, mock_user_repo, mock_vocab_repo, user
     ):
         """Test TOCTOU race condition with SQLite-style UNIQUE constraint failed message."""
@@ -180,9 +197,10 @@ class TestUserService:
 
         # Should raise ValueError with user-friendly message
         with pytest.raises(ValueError, match="Email address is already registered by another user"):
-            user_service.update_user_profile(user, update_data)
+            await user_service.update_user_profile(user, update_data)
 
-    def test_update_user_profile_other_integrity_error_raised(
+    @pytest.mark.anyio
+    async def test_update_user_profile_other_integrity_error_raised(
         self, user_service, mock_user_repo, mock_vocab_repo, user
     ):
         """Test that non-email IntegrityError is re-raised."""
@@ -205,9 +223,10 @@ class TestUserService:
 
         # Should re-raise the IntegrityError
         with pytest.raises(IntegrityError):
-            user_service.update_user_profile(user, update_data)
+            await user_service.update_user_profile(user, update_data)
 
-    def test_update_user_profile_memory_fields(self, user_service, mock_user_repo, mock_vocab_repo, user):
+    @pytest.mark.anyio
+    async def test_update_user_profile_memory_fields(self, user_service, mock_user_repo, mock_vocab_repo, user):
         """Test updating memory fields with Pydantic validation."""
         import json
 
@@ -224,7 +243,7 @@ class TestUserService:
         assert isinstance(update_data.personal_info, str)
         assert json.loads(update_data.personal_info) == memory_data
 
-        user_service.update_user_profile(user, update_data)
+        await user_service.update_user_profile(user, update_data)
 
         # Verify user attribute was updated with JSON string
         assert user.personal_info == json.dumps(memory_data)
@@ -240,16 +259,18 @@ class TestUserService:
         with pytest.raises(ValidationError):
             UserProfileUpdate(personal_info=["list"])
 
-    def test_clear_user_memory(self, user_service, mock_user_repo, user):
+    @pytest.mark.anyio
+    async def test_clear_user_memory(self, user_service, mock_user_repo, user):
         """Test clearing user memory."""
         # Mock clear_user_memory repo method
         mock_user_repo.clear_user_memory.return_value = user
 
-        user_service.clear_user_memory(user, "personal_info")
+        await user_service.clear_user_memory(user, "personal_info")
 
         mock_user_repo.clear_user_memory.assert_called_once_with(user.id, "personal_info")
 
-    def test_update_user_profile_mother_tongue(self, user_service, mock_user_repo, mock_vocab_repo, user):
+    @pytest.mark.anyio
+    async def test_update_user_profile_mother_tongue(self, user_service, mock_user_repo, mock_vocab_repo, user):
         """Test updating mother tongue."""
         from runestone.api.schemas import UserProfileUpdate
 
@@ -258,7 +279,7 @@ class TestUserService:
 
         # Test updating mother tongue
         update_data = UserProfileUpdate(mother_tongue="Spanish")
-        user_service.update_user_profile(user, update_data)
+        await user_service.update_user_profile(user, update_data)
 
         # Verify user attribute was updated
         assert user.mother_tongue == "Spanish"

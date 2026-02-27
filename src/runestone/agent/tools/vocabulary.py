@@ -7,6 +7,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field, field_validator
 
 from runestone.agent.tools.context import AgentContext
+from runestone.agent.tools.service_providers import provide_vocabulary_service
 
 logger = logging.getLogger(__name__)
 
@@ -60,15 +61,15 @@ async def prioritize_words_for_learning(
         Confirmation message
     """
     user = runtime.context.user
-    vocab_service = runtime.context.vocabulary_service
 
     processed_count = 0
     errors = []
 
-    async with runtime.context.db_lock:
+    # Use fresh service with its own session for concurrency safety
+    async with provide_vocabulary_service() as vocab_service:
         for word_item in words:
             try:
-                vocab_service.upsert_priority_word(
+                await vocab_service.upsert_priority_word(
                     word_phrase=word_item.word_phrase,
                     translation=word_item.translation,
                     example_phrase=word_item.example_phrase,
@@ -79,11 +80,6 @@ async def prioritize_words_for_learning(
             except Exception as e:
                 logger.error(f"Failed to process {word_item.word_phrase}: {e}")
                 errors.append(f"{word_item.word_phrase}: {str(e)}")
-                # Rollback to keep session healthy
-                try:
-                    vocab_service.repo.db.rollback()
-                except Exception:
-                    pass
 
     if errors:
         error_msg = "; ".join(errors)

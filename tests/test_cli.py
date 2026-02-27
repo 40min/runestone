@@ -3,7 +3,7 @@ Tests for the CLI module.
 """
 
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from click.testing import CliRunner
 
@@ -47,7 +47,7 @@ class TestCLI:
             Path(self.test_image_path).touch()
 
             # Mock processor and results
-            mock_processor = Mock()
+            mock_processor = AsyncMock()
             mock_results = {
                 "ocr_result": {"text": "Test text", "character_count": 9},
                 "analysis": {"grammar_focus": {}, "vocabulary": []},
@@ -131,7 +131,7 @@ class TestCLI:
             Path(self.test_image_path).touch()
 
             # Mock processor that raises RunestoneError
-            mock_processor = Mock()
+            mock_processor = AsyncMock()
             mock_processor.process_image.side_effect = RunestoneError("Test error")
             mock_processor_class.return_value = mock_processor
 
@@ -147,7 +147,7 @@ class TestCLI:
             Path(self.test_image_path).touch()
 
             # Mock processor that raises unexpected error
-            mock_processor = Mock()
+            mock_processor = AsyncMock()
             mock_processor.process_image.side_effect = ValueError("Unexpected error")
             mock_processor_class.return_value = mock_processor
 
@@ -163,7 +163,7 @@ class TestCLI:
             Path(self.test_image_path).touch()
 
             # Mock processor that raises KeyboardInterrupt
-            mock_processor = Mock()
+            mock_processor = AsyncMock()
             mock_processor.process_image.side_effect = KeyboardInterrupt()
             mock_processor_class.return_value = mock_processor
 
@@ -179,7 +179,7 @@ class TestCLI:
             Path(self.test_image_path).touch()
 
             # Mock processor and results
-            mock_processor = Mock()
+            mock_processor = AsyncMock()
             mock_results = {
                 "ocr_result": {"text": "Test text", "character_count": 9},
                 "analysis": {"grammar_focus": {}, "vocabulary": []},
@@ -235,7 +235,7 @@ class TestCLI:
             Path(self.test_image_path).touch()
 
             # Mock processor and results
-            mock_processor = Mock()
+            mock_processor = AsyncMock()
             mock_results = {
                 "ocr_result": {"text": "Test text", "character_count": 9},
                 "analysis": {"grammar_focus": {}, "vocabulary": []},

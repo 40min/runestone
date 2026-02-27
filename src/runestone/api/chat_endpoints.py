@@ -70,7 +70,7 @@ async def get_history(
     Get active chat history for the current user.
     """
     try:
-        return chat_service.get_history_response(
+        return await chat_service.get_history_response(
             current_user.id,
             after_id=after_id,
             limit=limit,
@@ -165,7 +165,7 @@ async def start_new_chat(
         retention cleanup removes them.
     """
     try:
-        chat_service.start_new_chat(current_user.id)
+        await chat_service.start_new_chat(current_user.id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except Exception as e:
         logger.error(f"Error starting new chat session: {e}", exc_info=True)

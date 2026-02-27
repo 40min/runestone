@@ -1,7 +1,7 @@
 from runestone.api.schemas import ImprovementMode, VocabularyImproveRequest, VocabularyImproveResponse
 
 
-def test_improve_vocabulary_success(client_with_mock_vocabulary_service):
+async def test_improve_vocabulary_success(client_with_mock_vocabulary_service):
     """Test successful vocabulary improvement endpoint with ALL_FIELDS mode."""
     client, mock_service = client_with_mock_vocabulary_service
 
@@ -14,7 +14,7 @@ def test_improve_vocabulary_success(client_with_mock_vocabulary_service):
     # Test request
     request_data = {"word_phrase": "ett äpple", "mode": "all_fields"}
 
-    response = client.post("/api/vocabulary/improve", json=request_data)
+    response = await client.post("/api/vocabulary/improve", json=request_data)
 
     # Verify response
     assert response.status_code == 200
@@ -31,7 +31,7 @@ def test_improve_vocabulary_success(client_with_mock_vocabulary_service):
     assert call_args.mode == ImprovementMode.ALL_FIELDS
 
 
-def test_improve_vocabulary_example_only(client_with_mock_vocabulary_service):
+async def test_improve_vocabulary_example_only(client_with_mock_vocabulary_service):
     """Test vocabulary improvement endpoint with EXAMPLE_ONLY mode."""
     client, mock_service = client_with_mock_vocabulary_service
 
@@ -44,7 +44,7 @@ def test_improve_vocabulary_example_only(client_with_mock_vocabulary_service):
     # Test request
     request_data = {"word_phrase": "ett äpple", "mode": "example_only"}
 
-    response = client.post("/api/vocabulary/improve", json=request_data)
+    response = await client.post("/api/vocabulary/improve", json=request_data)
 
     # Verify response
     assert response.status_code == 200
@@ -61,7 +61,7 @@ def test_improve_vocabulary_example_only(client_with_mock_vocabulary_service):
     assert call_args.mode == ImprovementMode.EXAMPLE_ONLY
 
 
-def test_improve_vocabulary_extra_info_only(client_with_mock_vocabulary_service):
+async def test_improve_vocabulary_extra_info_only(client_with_mock_vocabulary_service):
     """Test vocabulary improvement endpoint with EXTRA_INFO_ONLY mode."""
     client, mock_service = client_with_mock_vocabulary_service
 
@@ -74,7 +74,7 @@ def test_improve_vocabulary_extra_info_only(client_with_mock_vocabulary_service)
     # Test request
     request_data = {"word_phrase": "ett äpple", "mode": "extra_info_only"}
 
-    response = client.post("/api/vocabulary/improve", json=request_data)
+    response = await client.post("/api/vocabulary/improve", json=request_data)
 
     # Verify response
     assert response.status_code == 200
@@ -91,7 +91,7 @@ def test_improve_vocabulary_extra_info_only(client_with_mock_vocabulary_service)
     assert call_args.mode == ImprovementMode.EXTRA_INFO_ONLY
 
 
-def test_improve_vocabulary_service_error(client_with_mock_vocabulary_service):
+async def test_improve_vocabulary_service_error(client_with_mock_vocabulary_service):
     """Test vocabulary improvement endpoint with service error."""
     client, mock_service = client_with_mock_vocabulary_service
 
@@ -101,7 +101,7 @@ def test_improve_vocabulary_service_error(client_with_mock_vocabulary_service):
     # Test request
     request_data = {"word_phrase": "ett äpple", "mode": "all_fields"}
 
-    response = client.post("/api/vocabulary/improve", json=request_data)
+    response = await client.post("/api/vocabulary/improve", json=request_data)
 
     # Verify error response
     assert response.status_code == 500
@@ -110,7 +110,7 @@ def test_improve_vocabulary_service_error(client_with_mock_vocabulary_service):
     assert response_data["detail"] == "An internal error occurred while improving vocabulary."
 
 
-def test_improve_vocabulary_invalid_request(client_with_mock_vocabulary_service):
+async def test_improve_vocabulary_invalid_request(client_with_mock_vocabulary_service):
     """Test vocabulary improvement endpoint with invalid request."""
     client, mock_service = client_with_mock_vocabulary_service
 
@@ -120,7 +120,7 @@ def test_improve_vocabulary_invalid_request(client_with_mock_vocabulary_service)
         # Missing word_phrase
     }
 
-    response = client.post("/api/vocabulary/improve", json=request_data)
+    response = await client.post("/api/vocabulary/improve", json=request_data)
 
     # Verify validation error
     assert response.status_code == 422
@@ -128,7 +128,7 @@ def test_improve_vocabulary_invalid_request(client_with_mock_vocabulary_service)
     assert "detail" in response_data
 
 
-def test_improve_vocabulary_empty_response(client_with_mock_vocabulary_service):
+async def test_improve_vocabulary_empty_response(client_with_mock_vocabulary_service):
     """Test vocabulary improvement endpoint with empty response."""
     client, mock_service = client_with_mock_vocabulary_service
 
@@ -139,7 +139,7 @@ def test_improve_vocabulary_empty_response(client_with_mock_vocabulary_service):
     # Test request
     request_data = {"word_phrase": "ett äpple", "mode": "all_fields"}
 
-    response = client.post("/api/vocabulary/improve", json=request_data)
+    response = await client.post("/api/vocabulary/improve", json=request_data)
 
     # Verify response
     assert response.status_code == 200
@@ -149,7 +149,7 @@ def test_improve_vocabulary_empty_response(client_with_mock_vocabulary_service):
     assert response_data["extra_info"] is None
 
 
-def test_improve_vocabulary_default_mode(client_with_mock_vocabulary_service):
+async def test_improve_vocabulary_default_mode(client_with_mock_vocabulary_service):
     """Test vocabulary improvement endpoint with default mode (EXAMPLE_ONLY)."""
     client, mock_service = client_with_mock_vocabulary_service
 
@@ -162,7 +162,7 @@ def test_improve_vocabulary_default_mode(client_with_mock_vocabulary_service):
     # Test request without mode (should default to EXAMPLE_ONLY)
     request_data = {"word_phrase": "ett äpple"}
 
-    response = client.post("/api/vocabulary/improve", json=request_data)
+    response = await client.post("/api/vocabulary/improve", json=request_data)
 
     # Verify response
     assert response.status_code == 200

@@ -5,21 +5,46 @@ This module contains tests for the vocabulary service.
 """
 
 from datetime import datetime, timezone
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
+from sqlalchemy import func, select
 
 from runestone.api.schemas import ImprovementMode
 from runestone.api.schemas import Vocabulary as VocabularySchema
 from runestone.api.schemas import VocabularyImproveRequest, VocabularyImproveResponse, VocabularyItemCreate
 from runestone.config import Settings
 from runestone.core.exceptions import VocabularyItemExists
+from runestone.db.models import User as UserModel
 from runestone.db.models import Vocabulary as VocabularyModel
 from runestone.services.vocabulary_service import VocabularyService
 
 
 class TestVocabularyService:
     """Test cases for VocabularyService."""
+
+    @pytest.fixture(autouse=True)
+    async def _seed_users(self, db_session):
+        """Postgres enforces FK constraints, so seed users referenced by tests."""
+        user1 = UserModel(
+            name="Test",
+            surname="User",
+            email="user1@example.com",
+            hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYQmP7XzL6",
+            timezone="UTC",
+            pages_recognised_count=0,
+        )
+        user2 = UserModel(
+            name="Test",
+            surname="User",
+            email="user2@example.com",
+            hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYQmP7XzL6",
+            timezone="UTC",
+            pages_recognised_count=0,
+        )
+        db_session.add_all([user1, user2])
+        await db_session.commit()
+        yield
 
     @pytest.fixture
     def service(self, vocabulary_repository):
@@ -33,7 +58,7 @@ class TestVocabularyService:
         )
         return VocabularyService(vocabulary_repository, mock_settings, mock_llm_client)
 
-    def test_save_vocabulary_new(self, service, db_session):
+    async def test_save_vocabulary_new(self, service, db_session):
         """Test saving new vocabulary items."""
         items = [
             VocabularyItemCreate(
@@ -42,16 +67,16 @@ class TestVocabularyService:
             VocabularyItemCreate(word_phrase="en banan", translation="a banana", example_phrase=None),
         ]
 
-        result = service.save_vocabulary(items, user_id=1, enrich=False)
-        db_session.commit()
+        result = await service.save_vocabulary(items, user_id=1, enrich=False)
+        await db_session.commit()
 
         assert result == {"message": "Vocabulary saved successfully"}
 
         # Verify items were added
-        vocabularies = db_session.query(VocabularyModel).all()
+        vocabularies = (await db_session.execute(select(VocabularyModel))).scalars().all()
         assert len(vocabularies) == 2
 
-        apple_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "ett äpple").first()
+        apple_vocab = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.word_phrase == "ett äpple"))
         assert apple_vocab.translation == "an apple"
         assert apple_vocab.example_phrase == "Jag äter ett äpple varje dag."
         assert apple_vocab.user_id == 1
@@ -59,7 +84,7 @@ class TestVocabularyService:
         assert apple_vocab.last_learned is None
         assert apple_vocab.learned_times == 0
 
-    def test_save_vocabulary_duplicate(self, service, db_session):
+    async def test_save_vocabulary_duplicate(self, service, db_session):
         """Test that duplicate word_phrases are not added."""
         items = [
             VocabularyItemCreate(
@@ -70,13 +95,13 @@ class TestVocabularyService:
             ),  # Same word_phrase
         ]
 
-        result = service.save_vocabulary(items, user_id=1)
-        db_session.commit()
+        result = await service.save_vocabulary(items, user_id=1)
+        await db_session.commit()
 
         assert result == {"message": "Vocabulary saved successfully"}
 
         # Should only have one entry
-        vocabularies = db_session.query(VocabularyModel).all()
+        vocabularies = (await db_session.execute(select(VocabularyModel))).scalars().all()
         assert len(vocabularies) == 1
 
         apple_vocab = vocabularies[0]
@@ -87,7 +112,7 @@ class TestVocabularyService:
         assert apple_vocab.last_learned is None
         assert apple_vocab.learned_times == 0
 
-    def test_get_vocabulary(self, service, db_session):
+    async def test_get_vocabulary(self, service, db_session):
         """Test retrieving vocabulary items filtered by user."""
         # Add some test data
         vocab1 = VocabularyModel(
@@ -111,10 +136,10 @@ class TestVocabularyService:
         )
 
         db_session.add_all([vocab1, vocab2, vocab3])
-        db_session.commit()
+        await db_session.commit()
 
         # Get all for user 1
-        result = service.get_vocabulary(user_id=1, limit=20)
+        result = await service.get_vocabulary(user_id=1, limit=20)
         assert len(result) == 2
         assert isinstance(result[0], VocabularySchema)
         # Since timestamps are the same, order by id desc (most recent insertion first)
@@ -122,11 +147,11 @@ class TestVocabularyService:
         assert result[1].word_phrase == "ett äpple"  # Lower id
 
         # Get all for user 2
-        result = service.get_vocabulary(user_id=2, limit=20)
+        result = await service.get_vocabulary(user_id=2, limit=20)
         assert len(result) == 1
         assert result[0].word_phrase == "ett päron"
 
-    def test_get_vocabulary_recent(self, service, db_session):
+    async def test_get_vocabulary_recent(self, service, db_session):
         """Test retrieving vocabulary items sorted by creation date (most recent first)."""
         # Add test data with specific creation dates
         vocab1 = VocabularyModel(
@@ -165,10 +190,10 @@ class TestVocabularyService:
         )
 
         db_session.add_all([vocab1, vocab2, vocab3, vocab4])
-        db_session.commit()
+        await db_session.commit()
 
         # Get recent for user 1 (should return 3 items, most recent first)
-        result = service.get_vocabulary(limit=20, user_id=1)
+        result = await service.get_vocabulary(limit=20, user_id=1)
         assert len(result) == 3
         assert isinstance(result[0], VocabularySchema)
         # Should be ordered by created_at descending
@@ -177,17 +202,17 @@ class TestVocabularyService:
         assert result[2].word_phrase == "ett äpple"  # Oldest
 
         # Test with limit
-        result_limited = service.get_vocabulary(limit=2, user_id=1)
+        result_limited = await service.get_vocabulary(limit=2, user_id=1)
         assert len(result_limited) == 2
         assert result_limited[0].word_phrase == "ett päron"
         assert result_limited[1].word_phrase == "en banan"
 
         # Get recent for user 2 (should return 1 item)
-        result_user2 = service.get_vocabulary(limit=20, user_id=2)
+        result_user2 = await service.get_vocabulary(limit=20, user_id=2)
         assert len(result_user2) == 1
         assert result_user2[0].word_phrase == "en kiwi"
 
-    def test_update_vocabulary_item(self, service, db_session):
+    async def test_update_vocabulary_item(self, service, db_session):
         """Test updating a vocabulary item."""
         from runestone.api.schemas import VocabularyUpdate
 
@@ -201,7 +226,7 @@ class TestVocabularyService:
             last_learned=None,
         )
         db_session.add(vocab)
-        db_session.commit()
+        await db_session.commit()
 
         # Update the item
         update_data = VocabularyUpdate(
@@ -209,7 +234,7 @@ class TestVocabularyService:
             translation="a red apple",
             in_learn=False,
         )
-        updated_vocab = service.update_vocabulary_item(vocab.id, update_data, user_id=1)
+        updated_vocab = await service.update_vocabulary_item(vocab.id, update_data, user_id=1)
 
         # Verify the update
         assert isinstance(updated_vocab, VocabularySchema)
@@ -220,7 +245,7 @@ class TestVocabularyService:
         assert updated_vocab.last_learned is None  # Unchanged
         assert updated_vocab.learned_times == 0  # Unchanged
 
-    def test_update_vocabulary_item_partial(self, service, db_session):
+    async def test_update_vocabulary_item_partial(self, service, db_session):
         """Test updating a vocabulary item with partial fields."""
         from runestone.api.schemas import VocabularyUpdate
 
@@ -234,18 +259,18 @@ class TestVocabularyService:
             last_learned=None,
         )
         db_session.add(vocab)
-        db_session.commit()
+        await db_session.commit()
 
         # Update only one field
         update_data = VocabularyUpdate(in_learn=False)
-        updated_vocab = service.update_vocabulary_item(vocab.id, update_data, user_id=1)
+        updated_vocab = await service.update_vocabulary_item(vocab.id, update_data, user_id=1)
 
         # Verify only in_learn changed
         assert updated_vocab.word_phrase == "ett äpple"
         assert updated_vocab.translation == "an apple"
         assert updated_vocab.in_learn is False
 
-    def test_update_vocabulary_item_duplicate_word_phrase(self, service, db_session):
+    async def test_update_vocabulary_item_duplicate_word_phrase(self, service, db_session):
         """Test that updating to a duplicate word_phrase raises an error."""
         from runestone.api.schemas import VocabularyUpdate
 
@@ -267,32 +292,32 @@ class TestVocabularyService:
             last_learned=None,
         )
         db_session.add_all([vocab1, vocab2])
-        db_session.commit()
+        await db_session.commit()
 
         # Try to update vocab1's word_phrase to match vocab2's word_phrase
         update_data = VocabularyUpdate(word_phrase="en banan")
 
         with pytest.raises(VocabularyItemExists, match="Vocabulary item with word_phrase 'en banan' already exists"):
-            service.update_vocabulary_item(vocab1.id, update_data, user_id=1)
+            await service.update_vocabulary_item(vocab1.id, update_data, user_id=1)
 
         # Verify vocab1 was not updated
-        db_vocab1 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab1.id).first()
+        db_vocab1 = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == vocab1.id))
         assert db_vocab1.word_phrase == "ett äpple"
         assert db_vocab1.translation == "an apple"
 
         # Verify vocab2 remains unchanged
-        db_vocab2 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab2.id).first()
+        db_vocab2 = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == vocab2.id))
         assert db_vocab2.word_phrase == "en banan"
         assert db_vocab2.translation == "a banana"
 
-    def test_save_vocabulary_item_new(self, service, db_session):
+    async def test_save_vocabulary_item_new(self, service, db_session):
         """Test saving a new single vocabulary item."""
         item = VocabularyItemCreate(
             word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple varje dag."
         )
 
-        result = service.save_vocabulary_item(item, user_id=1)
-        db_session.commit()
+        result = await service.save_vocabulary_item(item, user_id=1)
+        await db_session.commit()
 
         assert isinstance(result, VocabularySchema)
         assert result.word_phrase == "ett äpple"
@@ -304,11 +329,11 @@ class TestVocabularyService:
         assert result.learned_times == 0
 
         # Verify item was added to DB
-        vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "ett äpple").first()
+        vocab = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.word_phrase == "ett äpple"))
         assert vocab is not None
         assert vocab.translation == "an apple"
 
-    def test_save_vocabulary_item_duplicate(self, service, db_session):
+    async def test_save_vocabulary_item_duplicate(self, service, db_session):
         """Test that saving duplicate word_phrase raises an error."""
         # Pre-add an item
         existing_vocab = VocabularyModel(
@@ -319,7 +344,7 @@ class TestVocabularyService:
             in_learn=True,
         )
         db_session.add(existing_vocab)
-        db_session.commit()
+        await db_session.commit()
         existing_id = existing_vocab.id
 
         # Try to save same word_phrase
@@ -328,22 +353,26 @@ class TestVocabularyService:
         )
 
         with pytest.raises(VocabularyItemExists, match="Vocabulary item with word_phrase 'ett äpple' already exists"):
-            service.save_vocabulary_item(item, user_id=1)
+            await service.save_vocabulary_item(item, user_id=1)
 
         # Verify no new item was added and existing item remains unchanged
-        vocabularies = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "ett äpple").all()
+        vocabularies = (
+            (await db_session.execute(select(VocabularyModel).where(VocabularyModel.word_phrase == "ett äpple")))
+            .scalars()
+            .all()
+        )
         assert len(vocabularies) == 1
         existing_vocab = vocabularies[0]
         assert existing_vocab.id == existing_id
         assert existing_vocab.translation == "an apple"
         assert existing_vocab.example_phrase == "Jag äter ett äpple."
 
-    def test_save_vocabulary_item_without_example(self, service, db_session):
+    async def test_save_vocabulary_item_without_example(self, service, db_session):
         """Test saving a vocabulary item without example phrase."""
         item = VocabularyItemCreate(word_phrase="en banan", translation="a banana", example_phrase=None)
 
-        result = service.save_vocabulary_item(item, user_id=1)
-        db_session.commit()
+        result = await service.save_vocabulary_item(item, user_id=1)
+        await db_session.commit()
 
         assert isinstance(result, VocabularySchema)
         assert result.word_phrase == "en banan"
@@ -351,7 +380,7 @@ class TestVocabularyService:
         assert result.example_phrase is None
         assert result.learned_times == 0
 
-    def test_load_vocab_from_csv_skip_check(self, service, db_session):
+    async def test_load_vocab_from_csv_skip_check(self, service, db_session):
         """Test loading vocabulary from CSV with skip existence check (upsert)."""
         items = [
             VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple."),
@@ -361,8 +390,8 @@ class TestVocabularyService:
             ),  # Duplicate in batch - will upsert last
         ]
 
-        result = service.load_vocab_from_csv(items, skip_existence_check=True, user_id=1)
-        db_session.commit()
+        result = await service.load_vocab_from_csv(items, skip_existence_check=True, user_id=1)
+        await db_session.commit()
 
         assert result == {
             "original_count": 3,
@@ -371,17 +400,17 @@ class TestVocabularyService:
         }
 
         # Verify items in DB
-        vocabularies = db_session.query(VocabularyModel).all()
+        vocabularies = (await db_session.execute(select(VocabularyModel))).scalars().all()
         assert len(vocabularies) == 2  # ett äpple and en banan
 
-        apple_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "ett äpple").first()
+        apple_vocab = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.word_phrase == "ett äpple"))
         assert apple_vocab.translation == "an apple updated"  # Last upsert wins
         assert apple_vocab.example_phrase == "Ett äpple är rött."
 
-        banana_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "en banan").first()
+        banana_vocab = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.word_phrase == "en banan"))
         assert banana_vocab.translation == "a banana"
 
-    def test_load_vocab_from_csv_with_check(self, service, db_session):
+    async def test_load_vocab_from_csv_with_check(self, service, db_session):
         """Test loading vocabulary from CSV with existence check (add only new)."""
         # Pre-add one item
         existing_vocab = VocabularyModel(
@@ -392,7 +421,7 @@ class TestVocabularyService:
             in_learn=True,
         )
         db_session.add(existing_vocab)
-        db_session.commit()
+        await db_session.commit()
 
         items = [
             VocabularyItemCreate(
@@ -405,8 +434,8 @@ class TestVocabularyService:
             ),  # Duplicate in batch
         ]
 
-        result = service.load_vocab_from_csv(items, skip_existence_check=False, user_id=1)
-        db_session.commit()
+        result = await service.load_vocab_from_csv(items, skip_existence_check=False, user_id=1)
+        await db_session.commit()
 
         assert result == {
             "original_count": 4,
@@ -415,23 +444,23 @@ class TestVocabularyService:
         }
 
         # Verify items in DB
-        vocabularies = db_session.query(VocabularyModel).all()
+        vocabularies = (await db_session.execute(select(VocabularyModel))).scalars().all()
         assert len(vocabularies) == 3  # Original + 2 new
 
         # Existing äpple unchanged
-        apple_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "ett äpple").first()
+        apple_vocab = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.word_phrase == "ett äpple"))
         assert apple_vocab.translation == "an apple"
         assert apple_vocab.example_phrase == "Jag äter ett äpple."
 
         # New items added
-        banana_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "en banan").first()
+        banana_vocab = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.word_phrase == "en banan"))
         assert banana_vocab.translation == "a banana"
 
-        pear_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "ett päron").first()
+        pear_vocab = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.word_phrase == "ett päron"))
         assert pear_vocab.translation == "a pear"
         assert pear_vocab.example_phrase is None
 
-    def test_delete_vocabulary_item(self, service, db_session):
+    async def test_delete_vocabulary_item(self, service, db_session):
         """Test hard deleting a vocabulary item."""
         # Add test items
         vocab1 = VocabularyModel(
@@ -457,42 +486,42 @@ class TestVocabularyService:
         )
 
         db_session.add_all([vocab1, vocab2, vocab3])
-        db_session.commit()
+        await db_session.commit()
 
         # Verify initial count
-        initial_count = db_session.query(VocabularyModel).count()
+        initial_count = await db_session.scalar(select(func.count()).select_from(VocabularyModel))
         assert initial_count == 3
 
         # Test successful deletion
-        result = service.delete_vocabulary_item(vocab1.id, user_id=1)
+        result = await service.delete_vocabulary_item(vocab1.id, user_id=1)
         assert result is True
 
         # Verify item is completely removed from database
-        db_vocab = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab1.id).first()
+        db_vocab = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == vocab1.id))
         assert db_vocab is None
 
         # Verify other items still exist
-        remaining_count = db_session.query(VocabularyModel).count()
+        remaining_count = await db_session.scalar(select(func.count()).select_from(VocabularyModel))
         assert remaining_count == 2
 
         # Verify other user's item is unchanged
-        db_vocab_user2 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab3.id).first()
+        db_vocab_user2 = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == vocab3.id))
         assert db_vocab_user2 is not None
         assert db_vocab_user2.in_learn is True
 
         # Test deleting non-existent item
-        result = service.delete_vocabulary_item(999, user_id=1)
+        result = await service.delete_vocabulary_item(999, user_id=1)
         assert result is False
 
         # Test deleting with wrong user (should not delete)
-        result = service.delete_vocabulary_item(vocab3.id, user_id=1)
+        result = await service.delete_vocabulary_item(vocab3.id, user_id=1)
         assert result is False
 
         # Verify user 2's item still exists
-        db_vocab_user2 = db_session.query(VocabularyModel).filter(VocabularyModel.id == vocab3.id).first()
+        db_vocab_user2 = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == vocab3.id))
         assert db_vocab_user2 is not None
 
-    def test_improve_item_success(self, service):
+    async def test_improve_item_success(self, service):
         """Test successful vocabulary item improvement with ALL_FIELDS mode."""
         # Mock LLM client from the service fixture
         service.llm_client.improve_vocabulary_item.return_value = (
@@ -503,7 +532,7 @@ class TestVocabularyService:
         # Test request with ALL_FIELDS mode
         request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.ALL_FIELDS)
 
-        result = service.improve_item(request)
+        result = await service.improve_item(request)
 
         # Verify result
         assert isinstance(result, VocabularyImproveResponse)
@@ -516,7 +545,7 @@ class TestVocabularyService:
         prompt_arg = service.llm_client.improve_vocabulary_item.call_args[0][0]
         assert "ett äpple" in prompt_arg
 
-    def test_improve_item_without_translation(self, service):
+    async def test_improve_item_without_translation(self, service):
         """Test vocabulary improvement with EXAMPLE_ONLY mode."""
         # Mock LLM client from the service fixture
         service.llm_client.improve_vocabulary_item.return_value = '{"example_phrase": "Jag äter ett äpple varje dag."}'
@@ -524,7 +553,7 @@ class TestVocabularyService:
         # Test request with EXAMPLE_ONLY mode
         request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.EXAMPLE_ONLY)
 
-        result = service.improve_item(request)
+        result = await service.improve_item(request)
 
         # Verify result
         assert isinstance(result, VocabularyImproveResponse)
@@ -532,7 +561,7 @@ class TestVocabularyService:
         assert result.example_phrase == "Jag äter ett äpple varje dag."
         assert result.extra_info is None
 
-    def test_improve_item_malformed_response_handling(self, service):
+    async def test_improve_item_malformed_response_handling(self, service):
         """Test vocabulary improvement with malformed LLM response that gets parsed gracefully."""
 
         # Mock LLM client from the service fixture
@@ -543,7 +572,7 @@ class TestVocabularyService:
         # Test request with ALL_FIELDS mode
         request = VocabularyImproveRequest(word_phrase="tydliga", mode=ImprovementMode.ALL_FIELDS)
 
-        result = service.improve_item(request)
+        result = await service.improve_item(request)
 
         # Should handle malformed response gracefully and extract what it can
         assert isinstance(result, VocabularyImproveResponse)
@@ -554,7 +583,7 @@ class TestVocabularyService:
         # The parser should extract extra_info
         assert result.extra_info == "adjective"
 
-    def test_improve_item_with_extra_info(self, service):
+    async def test_improve_item_with_extra_info(self, service):
         """Test vocabulary improvement with ALL_FIELDS mode including extra_info."""
         # Mock LLM client from the service fixture
         service.llm_client.improve_vocabulary_item.return_value = (
@@ -565,7 +594,7 @@ class TestVocabularyService:
         # Test request with ALL_FIELDS mode
         request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.ALL_FIELDS)
 
-        result = service.improve_item(request)
+        result = await service.improve_item(request)
 
         # Verify result
         assert isinstance(result, VocabularyImproveResponse)
@@ -579,7 +608,7 @@ class TestVocabularyService:
         assert "ett äpple" in prompt_arg
         assert "extra_info" in prompt_arg
 
-    def test_improve_item_extra_info_only(self, service):
+    async def test_improve_item_extra_info_only(self, service):
         """Test vocabulary improvement with EXTRA_INFO_ONLY mode."""
         # Mock LLM client from the service fixture
         service.llm_client.improve_vocabulary_item.return_value = '{"extra_info": "en-word, noun, base form: äpple"}'
@@ -587,7 +616,7 @@ class TestVocabularyService:
         # Test request with EXTRA_INFO_ONLY mode
         request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.EXTRA_INFO_ONLY)
 
-        result = service.improve_item(request)
+        result = await service.improve_item(request)
 
         # Verify result
         assert isinstance(result, VocabularyImproveResponse)
@@ -595,7 +624,7 @@ class TestVocabularyService:
         assert result.example_phrase is None
         assert result.extra_info == "en-word, noun, base form: äpple"
 
-    def test_enrich_vocabulary_items_success(self, service):
+    async def test_enrich_vocabulary_items_success(self, service):
         """Test successful vocabulary items batch enrichment."""
         # Mock LLM client to return batch response
         service.llm_client.improve_vocabulary_batch.return_value = """
@@ -614,7 +643,7 @@ class TestVocabularyService:
         ]
 
         # Enrich the items
-        enriched_items = service._enrich_vocabulary_items(items)
+        enriched_items = await service._enrich_vocabulary_items(items)
 
         # Verify all enriched
         assert len(enriched_items) == 3
@@ -622,7 +651,7 @@ class TestVocabularyService:
         assert enriched_items[1].extra_info == "en-word, noun"
         assert enriched_items[2].extra_info == "verb, forms: vara, är, var, varit"
 
-    def test_enrich_vocabulary_items_llm_exception(self, service):
+    async def test_enrich_vocabulary_items_llm_exception(self, service):
         """Test vocabulary items enrichment when LLM raises exception."""
         # Mock LLM to raise exception
         service.llm_client.improve_vocabulary_batch.side_effect = Exception("LLM error")
@@ -632,12 +661,12 @@ class TestVocabularyService:
         ]
 
         # Should not raise, but return items without enrichment
-        enriched_items = service._enrich_vocabulary_items(items)
+        enriched_items = await service._enrich_vocabulary_items(items)
 
         assert len(enriched_items) == 1
         assert enriched_items[0].extra_info is None
 
-    def test_save_vocabulary_items_with_enrichment(self, service, db_session):
+    async def test_save_vocabulary_items_with_enrichment(self, service, db_session):
         """Test saving vocabulary items with enrichment enabled."""
         # Mock LLM client
         service.llm_client.improve_vocabulary_batch.return_value = '{"ett äpple": "en-word, noun"}'
@@ -647,31 +676,31 @@ class TestVocabularyService:
         ]
 
         # Save with enrichment
-        result = service.save_vocabulary(items, user_id=1, enrich=True)
-        db_session.commit()
+        result = await service.save_vocabulary(items, user_id=1, enrich=True)
+        await db_session.commit()
 
         # Verify item was enriched - result is a dict with message
         assert result == {"message": "Vocabulary saved successfully"}
 
         # Verify extra_info was saved to database
-        vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "ett äpple").first()
+        vocab = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.word_phrase == "ett äpple"))
         assert vocab is not None
         assert vocab.extra_info == "en-word, noun"
 
-    def test_save_vocabulary_items_without_enrichment(self, service, db_session):
+    async def test_save_vocabulary_items_without_enrichment(self, service, db_session):
         """Test saving vocabulary items with enrichment disabled."""
         items = [
             VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple.")
         ]
 
         # Save without enrichment
-        result = service.save_vocabulary(items, user_id=1, enrich=False)
+        result = await service.save_vocabulary(items, user_id=1, enrich=False)
 
         # Verify item was not enriched - result is a dict with message
         assert result == {"message": "Vocabulary saved successfully"}
         service.llm_client.improve_vocabulary_batch.assert_not_called()
 
-    def test_enrich_vocabulary_items_partial_failure(self, service):
+    async def test_enrich_vocabulary_items_partial_failure(self, service):
         """Test vocabulary items batch enrichment with partial failures."""
         # Mock LLM with some null values
         service.llm_client.improve_vocabulary_batch.return_value = """
@@ -688,7 +717,7 @@ class TestVocabularyService:
             VocabularyItemCreate(word_phrase="vara", translation="to be", example_phrase="Jag vill vara glad."),
         ]
 
-        enriched_items = service._enrich_vocabulary_items(items)
+        enriched_items = await service._enrich_vocabulary_items(items)
 
         # Verify: 2 enriched, 1 failed
         assert len(enriched_items) == 3
@@ -696,7 +725,7 @@ class TestVocabularyService:
         assert enriched_items[1].extra_info is None  # Failed
         assert enriched_items[2].extra_info == "verb, forms: vara, är, var, varit"
 
-    def test_enrich_vocabulary_items_large_batch(self, service):
+    async def test_enrich_vocabulary_items_large_batch(self, service):
         """Test vocabulary items enrichment with >100 items (multiple batches)."""
         # Create 150 items
         items = [
@@ -718,21 +747,21 @@ class TestVocabularyService:
 
         service.llm_client.improve_vocabulary_batch.side_effect = mock_batch_response
 
-        enriched_items = service._enrich_vocabulary_items(items)
+        enriched_items = await service._enrich_vocabulary_items(items)
 
         # Verify all 150 items enriched across 2 batches
         assert len(enriched_items) == 150
         assert all(item.extra_info for item in enriched_items)
         assert service.llm_client.improve_vocabulary_batch.call_count == 2
 
-    def test_enrich_vocabulary_items_empty_list(self, service):
+    async def test_enrich_vocabulary_items_empty_list(self, service):
         """Test vocabulary items enrichment with empty list."""
-        enriched_items = service._enrich_vocabulary_items([])
+        enriched_items = await service._enrich_vocabulary_items([])
 
         assert enriched_items == []
         service.llm_client.improve_vocabulary_batch.assert_not_called()
 
-    def test_save_vocabulary_with_batch_enrichment(self, service, db_session):
+    async def test_save_vocabulary_with_batch_enrichment(self, service, db_session):
         """Test save_vocabulary using batch enrichment."""
         # Mock batch enrichment
         service.llm_client.improve_vocabulary_batch.return_value = """
@@ -745,19 +774,19 @@ class TestVocabularyService:
             VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple.")
         ]
 
-        result = service.save_vocabulary(items, user_id=1, enrich=True)
-        db_session.commit()
+        result = await service.save_vocabulary(items, user_id=1, enrich=True)
+        await db_session.commit()
 
         # Verify result
         assert result == {"message": "Vocabulary saved successfully"}
 
         # Verify item saved with enrichment
-        vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "ett äpple").first()
+        vocab = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.word_phrase == "ett äpple"))
         assert vocab is not None
         assert vocab.extra_info == "en-word, noun, base form: äpple"
         service.llm_client.improve_vocabulary_item.assert_not_called()
 
-    def test_get_existing_word_phrases(self, service, db_session):
+    async def test_get_existing_word_phrases(self, service, db_session):
         """Test retrieving existing word phrases."""
         # Add some test data
         vocab1 = VocabularyModel(
@@ -783,23 +812,24 @@ class TestVocabularyService:
         )
 
         db_session.add_all([vocab1, vocab2, vocab3])
-        db_session.commit()
+        await db_session.commit()
 
         # Test for user 1
         word_phrases_to_check = ["ett äpple", "en banan", "en apelsin"]
-        existing = service.get_existing_word_phrases(word_phrases_to_check, user_id=1)
+        existing = await service.get_existing_word_phrases(word_phrases_to_check, user_id=1)
         assert sorted(existing) == sorted(["ett äpple", "en banan"])
 
         # Test for user 2
         word_phrases_to_check = ["ett päron", "en banan"]
-        existing = service.get_existing_word_phrases(word_phrases_to_check, user_id=2)
+        existing = await service.get_existing_word_phrases(word_phrases_to_check, user_id=2)
         assert existing == ["ett päron"]
 
         # Test with no existing phrases
         word_phrases_to_check = ["en apelsin", "en druva"]
-        existing = service.get_existing_word_phrases(word_phrases_to_check, user_id=1)
+        existing = await service.get_existing_word_phrases(word_phrases_to_check, user_id=1)
+        assert existing == []
 
-    def test_get_vocabulary_with_precise_flag(self, service, db_session):
+    async def test_get_vocabulary_with_precise_flag(self, service, db_session):
         """Test that service passes through precise flag correctly."""
         from unittest.mock import patch
 
@@ -819,82 +849,82 @@ class TestVocabularyService:
             last_learned=None,
         )
         db_session.add_all([vocab1, vocab2])
-        db_session.commit()
+        await db_session.commit()
 
         # Test with precise=False (partial search)
-        with patch.object(service.repo, "get_vocabulary") as mock_repo:
+        with patch.object(service.repo, "get_vocabulary", new_callable=AsyncMock) as mock_repo:
             mock_repo.return_value = [vocab1, vocab2]
-            result = service.get_vocabulary(user_id=1, limit=20, search_query="apple", precise=False)
+            result = await service.get_vocabulary(user_id=1, limit=20, search_query="apple", precise=False)
 
             # Verify repo called with precise=False
-            mock_repo.assert_called_once_with(1, 20, "apple", False)
+            mock_repo.assert_awaited_once_with(1, 20, "apple", False)
             assert len(result) == 2
 
         # Test with precise=True (exact search)
-        with patch.object(service.repo, "get_vocabulary") as mock_repo:
+        with patch.object(service.repo, "get_vocabulary", new_callable=AsyncMock) as mock_repo:
             mock_repo.return_value = [vocab1]
-            result = service.get_vocabulary(limit=20, search_query="apple", precise=True, user_id=1)
+            result = await service.get_vocabulary(limit=20, search_query="apple", precise=True, user_id=1)
 
             # Verify repo called with precise=True
-            mock_repo.assert_called_once_with(1, 20, "apple", True)
+            mock_repo.assert_awaited_once_with(1, 20, "apple", True)
             assert len(result) == 1
 
         # Test default precise=False when not specified
-        with patch.object(service.repo, "get_vocabulary") as mock_repo:
+        with patch.object(service.repo, "get_vocabulary", new_callable=AsyncMock) as mock_repo:
             mock_repo.return_value = [vocab1, vocab2]
-            result = service.get_vocabulary(limit=20, search_query="apple", user_id=1)
+            result = await service.get_vocabulary(limit=20, search_query="apple", user_id=1)
 
             # Verify repo called with precise=False (default)
-            mock_repo.assert_called_once_with(1, 20, "apple", False)
+            mock_repo.assert_awaited_once_with(1, 20, "apple", False)
             assert len(result) == 2
 
-    def test_upsert_priority_word_new(self, service, db_session):
+    async def test_upsert_priority_word_new(self, service, db_session):
         """Test upserting a new priority word."""
-        service.upsert_priority_word(
+        await service.upsert_priority_word(
             word_phrase="nytt ord", translation="new word", example_phrase="Ett nytt ord.", user_id=1
         )
-        db_session.commit()
+        await db_session.commit()
 
-        vocab = db_session.query(VocabularyModel).filter(VocabularyModel.word_phrase == "nytt ord").first()
+        vocab = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.word_phrase == "nytt ord"))
         assert vocab is not None
         assert vocab.priority_learn is True
         assert vocab.translation == "new word"
         assert vocab.in_learn is True
 
-    def test_upsert_priority_word_existing(self, service, db_session):
+    async def test_upsert_priority_word_existing(self, service, db_session):
         """Test upserting an existing word to prioritize it."""
         # Pre-add a regular word
         vocab = VocabularyModel(
             user_id=1, word_phrase="befintligt", translation="existing", priority_learn=False, in_learn=True
         )
         db_session.add(vocab)
-        db_session.commit()
+        await db_session.commit()
 
-        service.upsert_priority_word(
+        await service.upsert_priority_word(
             word_phrase="befintligt", translation="ignored", example_phrase="ignored", user_id=1
         )
-        db_session.commit()
+        await db_session.commit()
 
         # Refresh from DB
-        db_session.expire(vocab)
-        assert vocab.priority_learn is True
+        vocab_db = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == vocab.id))
+        assert vocab_db.priority_learn is True
         assert (
-            vocab.translation == "existing"
+            vocab_db.translation == "existing"
         )  # Upsert of existing word doesn't change translation in current implementation
 
-    def test_upsert_priority_word_restore(self, service, db_session):
+    async def test_upsert_priority_word_restore(self, service, db_session):
         """Test that upserting a priority word restores it if it was soft-deleted."""
         # Pre-add a soft-deleted word
         vocab = VocabularyModel(
             user_id=1, word_phrase="raderat", translation="deleted", priority_learn=False, in_learn=False
         )
         db_session.add(vocab)
-        db_session.commit()
+        await db_session.commit()
 
-        service.upsert_priority_word(word_phrase="raderat", translation="...", example_phrase="...", user_id=1)
-        db_session.commit()
+        await service.upsert_priority_word(word_phrase="raderat", translation="...", example_phrase="...", user_id=1)
+        await db_session.commit()
 
         # Refresh from DB
-        db_session.expire(vocab)
-        assert vocab.in_learn is True
-        assert vocab.priority_learn is True
+        vocab_db = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == vocab.id))
+        assert vocab_db.in_learn is True
+        assert vocab_db.priority_learn is True

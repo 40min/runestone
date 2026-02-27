@@ -14,7 +14,7 @@ from runestone.core.exceptions import RunestoneError
 class TestOCREndpoints:
     """Test cases for OCR-related endpoints."""
 
-    def test_ocr_success(self, client_with_mock_processor):
+    async def test_ocr_success(self, client_with_mock_processor):
         """Test successful OCR processing."""
         client, mock_processor_instance = client_with_mock_processor
         from runestone.schemas.ocr import OCRResult, RecognitionStatistics
@@ -34,7 +34,7 @@ class TestOCREndpoints:
         image_content = b"fake image data"
         files = {"file": ("test.jpg", io.BytesIO(image_content), "image/jpeg")}
 
-        response = client.post("/api/ocr", files=files)
+        response = await client.post("/api/ocr", files=files)
 
         assert response.status_code == 200
         data = response.json()
@@ -46,30 +46,30 @@ class TestOCREndpoints:
         # Verify processor was called with image bytes
         mock_processor_instance.run_ocr.assert_called_once_with(image_content)
 
-    def test_ocr_invalid_file_type(self, client):
+    async def test_ocr_invalid_file_type(self, client):
         """Test OCR with invalid file type."""
         # Create a mock text file
         files = {"file": ("test.txt", io.BytesIO(b"text content"), "text/plain")}
 
-        response = client.post("/api/ocr", files=files)
+        response = await client.post("/api/ocr", files=files)
 
         assert response.status_code == 400
         data = response.json()
         assert "Invalid file type" in data["detail"]
 
-    def test_ocr_file_too_large(self, client):
+    async def test_ocr_file_too_large(self, client):
         """Test OCR with file that's too large."""
         # Create a large file (11MB)
         large_content = b"x" * (11 * 1024 * 1024)
         files = {"file": ("large.jpg", io.BytesIO(large_content), "image/jpeg")}
 
-        response = client.post("/api/ocr", files=files)
+        response = await client.post("/api/ocr", files=files)
 
         assert response.status_code == 400
         data = response.json()
         assert "File too large" in data["detail"]
 
-    def test_ocr_processing_failure(self, client_with_mock_processor):
+    async def test_ocr_processing_failure(self, client_with_mock_processor):
         """Test handling of OCR failure."""
         client, mock_processor_instance = client_with_mock_processor
         mock_processor_instance.run_ocr.side_effect = RunestoneError("OCR failed")
@@ -78,13 +78,13 @@ class TestOCREndpoints:
         image_content = b"fake image data"
         files = {"file": ("test.jpg", io.BytesIO(image_content), "image/jpeg")}
 
-        response = client.post("/api/ocr", files=files)
+        response = await client.post("/api/ocr", files=files)
 
         assert response.status_code == 500
         data = response.json()
         assert "OCR failed" in data["detail"]
 
-    def test_ocr_unexpected_error(self, client_with_mock_processor):
+    async def test_ocr_unexpected_error(self, client_with_mock_processor):
         """Test handling of unexpected OCR errors."""
         client, mock_processor_instance = client_with_mock_processor
         mock_processor_instance.run_ocr.side_effect = Exception("Unexpected error")
@@ -93,15 +93,15 @@ class TestOCREndpoints:
         image_content = b"fake image data"
         files = {"file": ("test.jpg", io.BytesIO(image_content), "image/jpeg")}
 
-        response = client.post("/api/ocr", files=files)
+        response = await client.post("/api/ocr", files=files)
 
         assert response.status_code == 500
         data = response.json()
         assert "Unexpected error" in data["detail"]
 
-    def test_ocr_no_file(self, client):
+    async def test_ocr_no_file(self, client):
         """Test OCR without file upload."""
-        response = client.post("/api/ocr")
+        response = await client.post("/api/ocr")
 
         assert response.status_code == 422  # Validation error
 
@@ -109,7 +109,7 @@ class TestOCREndpoints:
 class TestAnalysisEndpoints:
     """Test cases for content analysis endpoints."""
 
-    def test_analyze_success(self, client_with_mock_processor):
+    async def test_analyze_success(self, client_with_mock_processor):
         """Test successful content analysis."""
         client, mock_processor_instance = client_with_mock_processor
 
@@ -125,12 +125,14 @@ class TestAnalysisEndpoints:
             ],
             core_topics=["questions", "greetings"],
         )
-        mock_processor_instance.run_analysis.return_value = mock_analysis_result
+        from unittest.mock import AsyncMock
+
+        mock_processor_instance.run_analysis = AsyncMock(return_value=mock_analysis_result)
 
         # Test request payload
         payload = {"text": "Hej, vad heter du?"}
 
-        response = client.post("/api/analyze", json=payload)
+        response = await client.post("/api/analyze", json=payload)
 
         assert response.status_code == 200
         data = response.json()
@@ -151,14 +153,14 @@ class TestAnalysisEndpoints:
         called_text, called_user = args
         assert called_text == "Hej, vad heter du?"
 
-    def test_analyze_empty_text(self, client_with_mock_processor):
+    async def test_analyze_empty_text(self, client_with_mock_processor):
         """Test analysis with empty text."""
         client, mock_processor_instance = client_with_mock_processor
         mock_processor_instance.run_analysis.side_effect = RunestoneError("No text provided for analysis")
 
         payload = {"text": ""}
 
-        response = client.post("/api/analyze", json=payload)
+        response = await client.post("/api/analyze", json=payload)
 
         assert response.status_code == 500
         data = response.json()
@@ -168,7 +170,7 @@ class TestAnalysisEndpoints:
 class TestVocabularyEndpoints:
     """Test cases for vocabulary endpoints."""
 
-    def test_save_vocabulary_success(self, client):
+    async def test_save_vocabulary_success(self, client):
         """Test successful vocabulary saving."""
         payload = {
             "items": [
@@ -181,13 +183,13 @@ class TestVocabularyEndpoints:
             ]
         }
 
-        response = client.post("/api/vocabulary", json=payload)
+        response = await client.post("/api/vocabulary", json=payload)
 
         assert response.status_code == 200
         data = response.json()
         assert data["message"] == "Vocabulary saved successfully"
 
-    def test_save_vocabulary_duplicate(self, client):
+    async def test_save_vocabulary_duplicate(self, client):
         """Test saving vocabulary with duplicates."""
         # First save
         payload = {
@@ -199,32 +201,32 @@ class TestVocabularyEndpoints:
                 }
             ]
         }
-        client.post("/api/vocabulary", json=payload)
+        await client.post("/api/vocabulary", json=payload)
 
         # Second save with same word_phrase
         payload2 = {
             "items": [{"word_phrase": "ett äpple", "translation": "an apple", "example_phrase": "Ett äpple är rött."}]
         }
-        response = client.post("/api/vocabulary", json=payload2)
+        response = await client.post("/api/vocabulary", json=payload2)
 
         assert response.status_code == 200
 
         # Check that only one entry exists
-        response = client.get("/api/vocabulary")
+        response = await client.get("/api/vocabulary")
         data = response.json()
         assert len(data) == 1
         assert data[0]["word_phrase"] == "ett äpple"
         assert data[0]["example_phrase"] == "Jag äter ett äpple varje dag."
 
-    def test_get_vocabulary_empty(self, client):
+    async def test_get_vocabulary_empty(self, client):
         """Test getting vocabulary when database is empty."""
-        response = client.get("/api/vocabulary")
+        response = await client.get("/api/vocabulary")
 
         assert response.status_code == 200
         data = response.json()
         assert data == []
 
-    def test_get_vocabulary_with_data(self, client):
+    async def test_get_vocabulary_with_data(self, client):
         """Test getting vocabulary with data."""
         # Save some data first
         payload = {
@@ -236,10 +238,10 @@ class TestVocabularyEndpoints:
                 }
             ]
         }
-        client.post("/api/vocabulary", json=payload)
+        await client.post("/api/vocabulary", json=payload)
 
         # Get the data
-        response = client.get("/api/vocabulary")
+        response = await client.get("/api/vocabulary")
 
         assert response.status_code == 200
         data = response.json()
@@ -256,7 +258,7 @@ class TestVocabularyEndpoints:
         assert "created_at" in vocab
         assert "updated_at" in vocab
 
-    def test_save_vocabulary_item_success(self, client):
+    async def test_save_vocabulary_item_success(self, client):
         """Test successful saving of a single vocabulary item."""
         payload = {
             "word_phrase": "ett äpple",
@@ -264,7 +266,7 @@ class TestVocabularyEndpoints:
             "example_phrase": "Jag äter ett äpple varje dag.",
         }
 
-        response = client.post("/api/vocabulary/item", json=payload)
+        response = await client.post("/api/vocabulary/item", json=payload)
 
         assert response.status_code == 200
         data = response.json()
@@ -278,7 +280,7 @@ class TestVocabularyEndpoints:
         assert "created_at" in data
         assert "updated_at" in data
 
-    def test_save_vocabulary_item_duplicate(self, client):
+    async def test_save_vocabulary_item_duplicate(self, client):
         """Test saving a duplicate vocabulary item raises an error."""
         # First save
         payload = {
@@ -286,7 +288,7 @@ class TestVocabularyEndpoints:
             "translation": "an apple",
             "example_phrase": "Jag äter ett äpple varje dag.",
         }
-        response1 = client.post("/api/vocabulary/item", json=payload)
+        response1 = await client.post("/api/vocabulary/item", json=payload)
         assert response1.status_code == 200
         data1 = response1.json()
         item_id = data1["id"]
@@ -297,14 +299,14 @@ class TestVocabularyEndpoints:
             "translation": "an apple",
             "example_phrase": "Ett äpple är rött.",
         }
-        response2 = client.post("/api/vocabulary/item", json=payload2)
+        response2 = await client.post("/api/vocabulary/item", json=payload2)
 
         assert response2.status_code == 400
         data2 = response2.json()
         assert "already exists" in data2["detail"]
 
         # Verify no new item was created and existing item remains unchanged
-        response3 = client.get("/api/vocabulary")
+        response3 = await client.get("/api/vocabulary")
         data3 = response3.json()
         assert len(data3) == 1
         existing_item = data3[0]
@@ -312,14 +314,14 @@ class TestVocabularyEndpoints:
         assert existing_item["word_phrase"] == "ett äpple"
         assert existing_item["example_phrase"] == "Jag äter ett äpple varje dag."
 
-    def test_save_vocabulary_item_without_example(self, client):
+    async def test_save_vocabulary_item_without_example(self, client):
         """Test saving a vocabulary item without example phrase."""
         payload = {
             "word_phrase": "en banan",
             "translation": "a banana",
         }
 
-        response = client.post("/api/vocabulary/item", json=payload)
+        response = await client.post("/api/vocabulary/item", json=payload)
 
         assert response.status_code == 200
         data = response.json()
@@ -327,7 +329,7 @@ class TestVocabularyEndpoints:
         assert data["translation"] == "a banana"
         assert data["example_phrase"] is None
 
-    def test_get_vocabulary_with_search(self, client):
+    async def test_get_vocabulary_with_search(self, client):
         """Test getting vocabulary with search query."""
         # Save some test data
         payload = {
@@ -349,17 +351,17 @@ class TestVocabularyEndpoints:
                 },
             ]
         }
-        client.post("/api/vocabulary", json=payload)
+        await client.post("/api/vocabulary", json=payload)
 
         # Search for "banan" - should find one match
-        response = client.get("/api/vocabulary?search_query=banan")
+        response = await client.get("/api/vocabulary?search_query=banan")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
         assert data[0]["word_phrase"] == "en banan"
 
         # Search for "ett" - should find two matches
-        response = client.get("/api/vocabulary?search_query=ett")
+        response = await client.get("/api/vocabulary?search_query=ett")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 2
@@ -368,27 +370,27 @@ class TestVocabularyEndpoints:
         assert data[1]["word_phrase"] == "ett äpple"
 
         # Search with wildcard "*" - "*ban*" should match "banan"
-        response = client.get("/api/vocabulary?search_query=*ban*")
+        response = await client.get("/api/vocabulary?search_query=*ban*")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
         assert data[0]["word_phrase"] == "en banan"
 
         # Search case-insensitive - "BANAN" should match "banan"
-        response = client.get("/api/vocabulary?search_query=BANAN")
+        response = await client.get("/api/vocabulary?search_query=BANAN")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
         assert data[0]["word_phrase"] == "en banan"
 
         # Search for non-existent term
-        response = client.get("/api/vocabulary?search_query=xyz")
+        response = await client.get("/api/vocabulary?search_query=xyz")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 0
 
         # Test with limit
-        response = client.get("/api/vocabulary?search_query=ett&limit=1")
+        response = await client.get("/api/vocabulary?search_query=ett&limit=1")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
@@ -399,7 +401,7 @@ class TestSettingsDependency:
     """Test cases for dependency injection."""
 
     @patch("runestone.dependencies.settings")
-    def test_settings_dependency_injection(self, mock_settings, client):
+    async def test_settings_dependency_injection(self, mock_settings, client):
         """Test that settings are properly injected."""
         mock_settings.llm_provider = "test_provider"
         mock_settings.verbose = True
@@ -411,7 +413,7 @@ class TestSettingsDependency:
         result = get_settings()
         assert result == mock_settings
 
-    def test_update_vocabulary_success(self, client):
+    async def test_update_vocabulary_success(self, client):
         """Test successful vocabulary update."""
         # First, save some vocabulary
         payload = {
@@ -423,10 +425,10 @@ class TestSettingsDependency:
                 }
             ]
         }
-        client.post("/api/vocabulary", json=payload)
+        await client.post("/api/vocabulary", json=payload)
 
         # Get the item to find its ID
-        response = client.get("/api/vocabulary")
+        response = await client.get("/api/vocabulary")
         data = response.json()
         item_id = data[0]["id"]
 
@@ -436,7 +438,7 @@ class TestSettingsDependency:
             "translation": "a red apple",
             "in_learn": False,
         }
-        response = client.put(f"/api/vocabulary/{item_id}", json=update_payload)
+        response = await client.put(f"/api/vocabulary/{item_id}", json=update_payload)
 
         assert response.status_code == 200
         updated_data = response.json()
@@ -445,7 +447,7 @@ class TestSettingsDependency:
         assert updated_data["example_phrase"] == "Jag äter ett äpple varje dag."  # Unchanged
         assert updated_data["in_learn"] is False
 
-    def test_update_vocabulary_partial(self, client):
+    async def test_update_vocabulary_partial(self, client):
         """Test updating vocabulary with partial fields."""
         # First, save some vocabulary
         payload = {
@@ -457,16 +459,16 @@ class TestSettingsDependency:
                 }
             ]
         }
-        client.post("/api/vocabulary", json=payload)
+        await client.post("/api/vocabulary", json=payload)
 
         # Get the item to find its ID
-        response = client.get("/api/vocabulary")
+        response = await client.get("/api/vocabulary")
         data = response.json()
         item_id = data[0]["id"]
 
         # Update only one field
         update_payload = {"in_learn": False}
-        response = client.put(f"/api/vocabulary/{item_id}", json=update_payload)
+        response = await client.put(f"/api/vocabulary/{item_id}", json=update_payload)
 
         assert response.status_code == 200
         updated_data = response.json()
@@ -474,16 +476,16 @@ class TestSettingsDependency:
         assert updated_data["translation"] == "an apple"  # Unchanged
         assert updated_data["in_learn"] is False
 
-    def test_update_vocabulary_not_found(self, client):
+    async def test_update_vocabulary_not_found(self, client):
         """Test updating a non-existent vocabulary item."""
         update_payload = {"word_phrase": "new phrase"}
-        response = client.put("/api/vocabulary/999", json=update_payload)
+        response = await client.put("/api/vocabulary/999", json=update_payload)
 
         assert response.status_code == 404
         data = response.json()
         assert "not found" in data["detail"]
 
-    def test_update_vocabulary_invalid_data(self, client):
+    async def test_update_vocabulary_invalid_data(self, client):
         """Test updating vocabulary with invalid data."""
         # First, save some vocabulary
         payload = {
@@ -494,21 +496,21 @@ class TestSettingsDependency:
                 }
             ]
         }
-        client.post("/api/vocabulary", json=payload)
+        await client.post("/api/vocabulary", json=payload)
 
         # Get the item to find its ID
-        response = client.get("/api/vocabulary")
+        response = await client.get("/api/vocabulary")
         data = response.json()
         item_id = data[0]["id"]
 
         # Try to update with invalid data (empty word_phrase)
         update_payload = {"word_phrase": ""}
-        response = client.put(f"/api/vocabulary/{item_id}", json=update_payload)
+        response = await client.put(f"/api/vocabulary/{item_id}", json=update_payload)
 
         # Should still succeed since word_phrase is optional in update
         assert response.status_code == 200
 
-    def test_delete_vocabulary_success(self, client):
+    async def test_delete_vocabulary_success(self, client):
         """Test successful vocabulary item deletion."""
         # First, save some vocabulary
         payload = {
@@ -520,37 +522,39 @@ class TestSettingsDependency:
                 }
             ]
         }
-        client.post("/api/vocabulary", json=payload)
+        await client.post("/api/vocabulary", json=payload)
 
         # Get the item to find its ID
-        response = client.get("/api/vocabulary")
+        response = await client.get("/api/vocabulary")
         data = response.json()
         item_id = data[0]["id"]
 
         # Delete the item
-        response = client.delete(f"/api/vocabulary/{item_id}")
+        response = await client.delete(f"/api/vocabulary/{item_id}")
 
         assert response.status_code == 200
         delete_data = response.json()
         assert delete_data["message"] == "Vocabulary item deleted successfully"
 
         # Verify item is completely removed
-        response = client.get("/api/vocabulary")
+        response = await client.get("/api/vocabulary")
         data = response.json()
         assert len(data) == 0
 
-    def test_delete_vocabulary_not_found(self, client):
+    async def test_delete_vocabulary_not_found(self, client):
         """Test deleting a non-existent vocabulary item."""
-        response = client.delete("/api/vocabulary/999")
+        response = await client.delete("/api/vocabulary/999")
 
         assert response.status_code == 404
         data = response.json()
         assert "not found" in data["detail"]
 
-    def test_save_vocabulary_with_enrichment_enabled(self, client_with_mock_vocabulary_service):
+    async def test_save_vocabulary_with_enrichment_enabled(self, client_with_mock_vocabulary_service):
         """Test saving vocabulary with enrichment enabled."""
         client, mock_vocabulary_service = client_with_mock_vocabulary_service
-        mock_vocabulary_service.save_vocabulary.return_value = {"message": "Vocabulary saved successfully"}
+        from unittest.mock import AsyncMock
+
+        mock_vocabulary_service.save_vocabulary = AsyncMock(return_value={"message": "Vocabulary saved successfully"})
 
         # Request with enrichment enabled
         request_data = {
@@ -564,7 +568,7 @@ class TestSettingsDependency:
             "enrich": True,
         }
 
-        response = client.post("/api/vocabulary", json=request_data)
+        response = await client.post("/api/vocabulary", json=request_data)
 
         # Verify response
         assert response.status_code == 200
@@ -582,10 +586,12 @@ class TestSettingsDependency:
         assert call_args.args[1] == 1  # Verify user_id parameter
         assert call_args.args[2] is True  # Verify enrich parameter
 
-    def test_save_vocabulary_with_enrichment_disabled(self, client_with_mock_vocabulary_service):
+    async def test_save_vocabulary_with_enrichment_disabled(self, client_with_mock_vocabulary_service):
         """Test saving vocabulary with enrichment disabled."""
         client, mock_vocabulary_service = client_with_mock_vocabulary_service
-        mock_vocabulary_service.save_vocabulary.return_value = {"message": "Vocabulary saved successfully"}
+        from unittest.mock import AsyncMock
+
+        mock_vocabulary_service.save_vocabulary = AsyncMock(return_value={"message": "Vocabulary saved successfully"})
 
         # Request with enrichment disabled
         request_data = {
@@ -599,7 +605,7 @@ class TestSettingsDependency:
             "enrich": False,
         }
 
-        response = client.post("/api/vocabulary", json=request_data)
+        response = await client.post("/api/vocabulary", json=request_data)
 
         # Verify response
         assert response.status_code == 200
@@ -617,10 +623,12 @@ class TestSettingsDependency:
         assert call_args.args[1] == 1  # Verify user_id parameter
         assert call_args.args[2] is False  # Verify enrich parameter
 
-    def test_save_vocabulary_enrichment_default_true(self, client_with_mock_vocabulary_service):
+    async def test_save_vocabulary_enrichment_default_true(self, client_with_mock_vocabulary_service):
         """Test that enrichment defaults to True when not specified."""
         client, mock_vocabulary_service = client_with_mock_vocabulary_service
-        mock_vocabulary_service.save_vocabulary.return_value = {"message": "Vocabulary saved successfully"}
+        from unittest.mock import AsyncMock
+
+        mock_vocabulary_service.save_vocabulary = AsyncMock(return_value={"message": "Vocabulary saved successfully"})
 
         # Request without enrich field
         request_data = {
@@ -633,7 +641,7 @@ class TestSettingsDependency:
             ]
         }
 
-        response = client.post("/api/vocabulary", json=request_data)
+        response = await client.post("/api/vocabulary", json=request_data)
 
         # Verify response
         assert response.status_code == 200
@@ -651,7 +659,7 @@ class TestSettingsDependency:
         assert call_args.args[1] == 1  # Verify user_id parameter
         assert call_args.args[2] is True  # Verify enrich parameter (default value)
 
-    def test_get_vocabulary_with_precise_search(self, client):
+    async def test_get_vocabulary_with_precise_search(self, client):
         """Test the precise search functionality via API."""
         # Save test data with case variations and partial matches
         payload = {
@@ -674,10 +682,10 @@ class TestSettingsDependency:
                 },
             ]
         }
-        client.post("/api/vocabulary", json=payload)
+        await client.post("/api/vocabulary", json=payload)
 
         # Test precise=False (default) - should match all containing "apple"
-        response = client.get("/api/vocabulary?search_query=apple&precise=false")
+        response = await client.get("/api/vocabulary?search_query=apple&precise=false")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 3  # apple, APPLE, pineapple
@@ -688,7 +696,7 @@ class TestSettingsDependency:
         assert "app" not in phrases  # No partial match
 
         # Test precise=True - should match only exact case-insensitive
-        response = client.get("/api/vocabulary?search_query=apple&precise=true")
+        response = await client.get("/api/vocabulary?search_query=apple&precise=true")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 2  # apple and APPLE
@@ -699,64 +707,64 @@ class TestSettingsDependency:
         assert "app" not in phrases
 
         # Test default precise behavior (should be False)
-        response = client.get("/api/vocabulary?search_query=apple")
+        response = await client.get("/api/vocabulary?search_query=apple")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 3  # Same as precise=false
 
         # Test precise search for non-existent term
-        response = client.get("/api/vocabulary?search_query=banana&precise=true")
+        response = await client.get("/api/vocabulary?search_query=banana&precise=true")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 0
 
         # Test precise search with case sensitivity difference
-        response = client.get("/api/vocabulary?search_query=PINEAPPLE&precise=true")
+        response = await client.get("/api/vocabulary?search_query=PINEAPPLE&precise=true")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
         assert data[0]["word_phrase"] == "pineapple"
 
-    def test_get_vocabulary_invalid_limit(self, client):
+    async def test_get_vocabulary_invalid_limit(self, client):
         """Test get_vocabulary with invalid limit values."""
         # Test limit too high
-        response = client.get("/api/vocabulary?limit=101")
+        response = await client.get("/api/vocabulary?limit=101")
         assert response.status_code == 400
         data = response.json()
         assert "Limit must be between 1 and 100" in data["detail"]
 
         # Test limit too low
-        response = client.get("/api/vocabulary?limit=0")
+        response = await client.get("/api/vocabulary?limit=0")
         assert response.status_code == 400
         data = response.json()
         assert "Limit must be between 1 and 100" in data["detail"]
 
         # Test negative limit
-        response = client.get("/api/vocabulary?limit=-1")
+        response = await client.get("/api/vocabulary?limit=-1")
         assert response.status_code == 400
         data = response.json()
         assert "Limit must be between 1 and 100" in data["detail"]
 
-    def test_get_vocabulary_limit_bounds(self, client):
+    async def test_get_vocabulary_limit_bounds(self, client):
         """Test get_vocabulary with valid limit bounds."""
         # Save multiple items
         payload = {"items": [{"word_phrase": f"word_{i}", "translation": f"trans_{i}"} for i in range(5)]}
-        client.post("/api/vocabulary", json=payload)
+        await client.post("/api/vocabulary", json=payload)
 
         # Test minimum valid limit
-        response = client.get("/api/vocabulary?limit=1")
+        response = await client.get("/api/vocabulary?limit=1")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
 
         # Test maximum valid limit
-        response = client.get("/api/vocabulary?limit=100")
+        response = await client.get("/api/vocabulary?limit=100")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 5  # All items
 
         # Test default limit (should be 100)
-        response = client.get("/api/vocabulary")
+        response = await client.get("/api/vocabulary")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 5

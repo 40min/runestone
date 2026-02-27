@@ -7,7 +7,8 @@ including the get_current_user dependency for securing endpoints.
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from runestone.auth.security import verify_token
 from runestone.db.database import get_db
@@ -16,7 +17,7 @@ from runestone.db.models import User
 security = HTTPBearer()
 
 
-def get_current_user(token: str = Depends(security), db: Session = Depends(get_db)) -> User:
+async def get_current_user(token: str = Depends(security), db: AsyncSession = Depends(get_db)) -> User:
     """
     FastAPI dependency to get the current authenticated user.
 
@@ -58,7 +59,10 @@ def get_current_user(token: str = Depends(security), db: Session = Depends(get_d
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = db.query(User).filter(User.id == user_id_int).first()
+    stmt = select(User).filter(User.id == user_id_int)
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

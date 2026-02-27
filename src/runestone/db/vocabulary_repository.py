@@ -1,16 +1,9 @@
-"""
-Repository classes for database operations.
-
-This module contains repository classes that encapsulate database
-logic for different entities.
-"""
-
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from sqlalchemy import func, or_
-from sqlalchemy.dialects.sqlite import insert
-from sqlalchemy.orm import Session
+from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.schemas import VocabularyItemCreate
 from ..utils.search import parse_search_query_with_wildcards
@@ -20,22 +13,22 @@ from .models import Vocabulary
 class VocabularyRepository:
     """Repository for vocabulary-related database operations."""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         """Initialize repository with database session."""
         self.db = db
 
-    def get_existing_word_phrases_for_batch(self, word_phrases: List[str], user_id: int) -> set[str]:
+    async def get_existing_word_phrases_for_batch(self, word_phrases: List[str], user_id: int) -> set[str]:
         """Get existing word_phrases for a user from the given batch."""
         if not word_phrases:
             return set()
-        result = (
-            self.db.query(Vocabulary.word_phrase)
-            .filter(Vocabulary.user_id == user_id, Vocabulary.word_phrase.in_(word_phrases))
-            .all()
-        )
-        return {row[0] for row in result}
 
-    def batch_insert_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int):
+        stmt = select(Vocabulary.word_phrase).filter(
+            Vocabulary.user_id == user_id, Vocabulary.word_phrase.in_(word_phrases)
+        )
+        result = await self.db.execute(stmt)
+        return {row[0] for row in result.all()}
+
+    async def batch_insert_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int):
         """Batch insert vocabulary items (assumes duplicates are already filtered)."""
         vocab_objects = [
             Vocabulary(
@@ -51,9 +44,9 @@ class VocabularyRepository:
             for item in items
         ]
         self.db.add_all(vocab_objects)
-        self.db.commit()
+        await self.db.commit()
 
-    def insert_vocabulary_item(self, item: VocabularyItemCreate, user_id: int) -> Vocabulary:
+    async def insert_vocabulary_item(self, item: VocabularyItemCreate, user_id: int) -> Vocabulary:
         """Insert a single vocabulary item."""
         vocab = Vocabulary(
             user_id=user_id,
@@ -66,11 +59,11 @@ class VocabularyRepository:
             last_learned=None,
         )
         self.db.add(vocab)
-        self.db.commit()
-        self.db.refresh(vocab)
+        await self.db.commit()
+        await self.db.refresh(vocab)
         return vocab
 
-    def upsert_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int):
+    async def upsert_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int):
         """Upsert vocabulary items: update if exists, insert if not."""
         if not items:
             return
@@ -94,19 +87,19 @@ class VocabularyRepository:
             set_={
                 "translation": stmt.excluded.translation,
                 "example_phrase": stmt.excluded.example_phrase,
-                "updated_at": datetime.now(),
+                "updated_at": func.now(),
             },
         )
-        self.db.execute(stmt)
-        self.db.commit()
+        await self.db.execute(stmt)
+        await self.db.commit()
 
-    def add_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int):
+    async def add_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int):
         """Add vocabulary items to the database, handling uniqueness (legacy method)."""
         # Get unique word_phrases from the batch
         batch_word_phrases = [item.word_phrase for item in items]
 
         # Get existing word_phrases for the user from this batch
-        existing_word_phrases = self.get_existing_word_phrases_for_batch(batch_word_phrases, user_id)
+        existing_word_phrases = await self.get_existing_word_phrases_for_batch(batch_word_phrases, user_id)
 
         # Filter items: remove duplicates within batch and existing in DB
         seen_in_batch = set()
@@ -119,27 +112,17 @@ class VocabularyRepository:
 
         # Batch insert the filtered items
         if filtered_items:
-            self.batch_insert_vocabulary_items(filtered_items, user_id)
+            await self.batch_insert_vocabulary_items(filtered_items, user_id)
 
-    def get_vocabulary(
+    async def get_vocabulary(
         self, user_id: int, limit: int, search_query: str | None = None, precise: bool = False
     ) -> List[Vocabulary]:
-        r"""Retrieve vocabulary items for a user, optionally filtered by search query with wildcard support.
-
-        The search performs a case-insensitive substring match by default. For example,
-        searching for "apple" will match "apples" and "pineapple".
-
-        Supports wildcards:
-        - '*' matches zero or more characters
-        - '?' matches exactly one character
-
-        Special SQL characters (%, _, \) in the search query are treated as literal characters.
-        """
-        query = self.db.query(Vocabulary).filter(Vocabulary.user_id == user_id)
+        r"""Retrieve vocabulary items for a user, optionally filtered by search query with wildcard support."""
+        stmt = select(Vocabulary).filter(Vocabulary.user_id == user_id)
 
         if search_query:
             if precise:
-                query = query.filter(func.lower(Vocabulary.word_phrase) == search_query.lower())
+                stmt = stmt.filter(func.lower(Vocabulary.word_phrase) == search_query.lower())
             else:
                 # Parse the search query, handling wildcards and escape sequences
                 search_pattern = parse_search_query_with_wildcards(search_query).lower()
@@ -149,43 +132,48 @@ class VocabularyRepository:
                     search_pattern = f"%{search_pattern}%"
 
                 # Use ilike with escape character for case-insensitive matching
-                query = query.filter(Vocabulary.word_phrase.ilike(search_pattern, escape="\\"))
+                stmt = stmt.filter(Vocabulary.word_phrase.ilike(search_pattern, escape="\\"))
 
-        return query.order_by(Vocabulary.created_at.desc(), Vocabulary.id.desc()).limit(limit).all()
+        stmt = stmt.order_by(Vocabulary.created_at.desc(), Vocabulary.id.desc()).limit(limit)
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
 
-    def get_vocabulary_item(self, item_id: int, user_id: int) -> Vocabulary:
+    async def get_vocabulary_item(self, item_id: int, user_id: int) -> Vocabulary:
         """Get a vocabulary item by ID and user_id."""
-        vocab = self.db.query(Vocabulary).filter(Vocabulary.id == item_id, Vocabulary.user_id == user_id).first()
+        stmt = select(Vocabulary).filter(Vocabulary.id == item_id, Vocabulary.user_id == user_id)
+        result = await self.db.execute(stmt)
+        vocab = result.scalars().first()
 
         if not vocab:
             raise ValueError(f"Vocabulary item with id {item_id} not found for user {user_id}")
 
         return vocab
 
-    def update_vocabulary_item(self, vocab: Vocabulary) -> Vocabulary:
-        """Commit and refresh a vocabulary item."""
-        self.db.commit()
-        self.db.refresh(vocab)
+    async def update_vocabulary_item(self, vocab: Vocabulary) -> Vocabulary:
+        """Update a vocabulary item using explicit UPDATE statement."""
+        # Use explicit UPDATE statement to ensure we update instead of insert
+        stmt = (
+            update(Vocabulary)
+            .where(Vocabulary.id == vocab.id)
+            .values(
+                word_phrase=vocab.word_phrase,
+                translation=vocab.translation,
+                example_phrase=vocab.example_phrase,
+                extra_info=vocab.extra_info,
+                in_learn=vocab.in_learn,
+                priority_learn=vocab.priority_learn,
+            )
+        )
+        await self.db.execute(stmt)
+        await self.db.commit()
+        # Refresh to get updated timestamps
+        await self.db.refresh(vocab)
         return vocab
 
-    def select_new_daily_words(
+    async def select_new_daily_words(
         self, user_id: int, cooldown_days: int = 7, limit: int = 100, excluded_word_ids: Optional[List[int]] = None
     ) -> List[Vocabulary]:
-        """
-        Select new daily words for a user, prioritizing words marked for priority learning.
-
-        Words with priority_learn=True are selected first, then regular words fill remaining slots.
-        All words must be in_learn=True and outside the cooldown period.
-
-        Args:
-            user_id: Database user ID
-            cooldown_days: Number of days to exclude recently learned words
-            limit: Maximum number of words to select
-            excluded_word_ids: Optional list of word IDs to exclude (e.g., already in selection)
-
-        Returns:
-            List of Vocabulary objects (priority words first, then regular words)
-        """
+        """Select new daily words for a user, prioritizing words marked for priority learning."""
         cutoff_date = datetime.now() - timedelta(days=cooldown_days)
 
         # Build base filter conditions
@@ -199,13 +187,14 @@ class VocabularyRepository:
             base_filter.append(~Vocabulary.id.in_(excluded_word_ids))
 
         # First: select priority words
-        prioritized = (
-            self.db.query(Vocabulary)
+        stmt_prioritized = (
+            select(Vocabulary)
             .filter(*base_filter, Vocabulary.priority_learn.is_(True))
             .order_by(func.random())
             .limit(limit)
-            .all()
         )
+        result_prioritized = await self.db.execute(stmt_prioritized)
+        prioritized = list(result_prioritized.scalars().all())
 
         # If we have enough priority words, return them
         if len(prioritized) >= limit:
@@ -220,87 +209,99 @@ class VocabularyRepository:
         if prioritized_ids:
             regular_filter.append(~Vocabulary.id.in_(prioritized_ids))
 
-        regular = self.db.query(Vocabulary).filter(*regular_filter).order_by(func.random()).limit(remaining).all()
+        stmt_regular = select(Vocabulary).filter(*regular_filter).order_by(func.random()).limit(remaining)
+        result_regular = await self.db.execute(stmt_regular)
+        regular = list(result_regular.scalars().all())
 
         return prioritized + regular
 
-    def get_vocabulary_item_for_recall(self, item_id: int, user_id: int) -> Vocabulary:
+    async def get_vocabulary_item_for_recall(self, item_id: int, user_id: int) -> Vocabulary:
         """Get a vocabulary item by ID and user_id, ensuring it's in learning."""
-        vocab = (
-            self.db.query(Vocabulary)
-            .filter(Vocabulary.id == item_id, Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True))
-            .first()
+        stmt = select(Vocabulary).filter(
+            Vocabulary.id == item_id, Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True)
         )
+        result = await self.db.execute(stmt)
+        vocab = result.scalars().first()
 
         if not vocab:
             raise ValueError(f"Vocabulary item with id {item_id} not found for user {user_id} or not in learning")
 
         return vocab
 
-    def get_vocabulary_items_by_ids(self, item_ids: List[int], user_id: int) -> List[Vocabulary]:
+    async def get_vocabulary_items_by_ids(self, item_ids: List[int], user_id: int) -> List[Vocabulary]:
         """Get vocabulary items by IDs and user_id, ensuring they're in learning."""
         if not item_ids:
             return []
-        return (
-            self.db.query(Vocabulary)
-            .filter(Vocabulary.id.in_(item_ids), Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True))
-            .all()
+        stmt = select(Vocabulary).filter(
+            Vocabulary.id.in_(item_ids), Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True)
         )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
 
-    def update_last_learned(self, vocab: Vocabulary) -> Vocabulary:
+    async def update_last_learned(self, vocab: Vocabulary) -> None:
         """Update the last_learned timestamp and increment learned_times for a vocabulary item."""
-        vocab.last_learned = datetime.now(timezone.utc)
-        vocab.learned_times = (vocab.learned_times or 0) + 1
-        return self.update_vocabulary_item(vocab)
+        stmt = (
+            update(Vocabulary)
+            .where(Vocabulary.id == vocab.id)
+            .values(
+                last_learned=datetime.now(timezone.utc),
+                learned_times=func.coalesce(Vocabulary.learned_times, 0) + 1,
+            )
+        )
+        await self.db.execute(stmt)
+        await self.db.commit()
 
-    def get_vocabulary_item_by_word_phrase(self, word_phrase: str, user_id: int) -> Optional[Vocabulary]:
+    async def get_vocabulary_item_by_word_phrase(self, word_phrase: str, user_id: int) -> Optional[Vocabulary]:
         """Get a vocabulary item by word_phrase and user_id."""
-        return (
-            self.db.query(Vocabulary)
-            .filter(Vocabulary.word_phrase == word_phrase, Vocabulary.user_id == user_id)
-            .first()
-        )
+        stmt = select(Vocabulary).filter(Vocabulary.word_phrase == word_phrase, Vocabulary.user_id == user_id)
+        result = await self.db.execute(stmt)
+        return result.scalars().first()
 
-    def delete_vocabulary_item_by_word_phrase(self, word_phrase: str, user_id: int) -> bool:
+    async def delete_vocabulary_item_by_word_phrase(self, word_phrase: str, user_id: int) -> bool:
         """Mark a vocabulary item as not in learning (soft delete) by word phrase."""
-        updated_rows = (
-            self.db.query(Vocabulary)
+        stmt = (
+            update(Vocabulary)
             .filter(Vocabulary.word_phrase == word_phrase, Vocabulary.user_id == user_id)
-            .update({"in_learn": False})
+            .values({"in_learn": False})
         )
-        self.db.commit()
-        return updated_rows > 0
+        result = await self.db.execute(stmt)
+        await self.db.commit()
+        return result.rowcount > 0
 
-    def delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
+    async def delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
         """Mark a vocabulary item as not in learning (soft delete)."""
-        updated_rows = (
-            self.db.query(Vocabulary)
+        stmt = (
+            update(Vocabulary)
             .filter(Vocabulary.id == item_id, Vocabulary.user_id == user_id)
-            .update({"in_learn": False})
+            .values({"in_learn": False})
         )
-        self.db.commit()
-        return updated_rows > 0
+        result = await self.db.execute(stmt)
+        await self.db.commit()
+        return result.rowcount > 0
 
-    def hard_delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
+    async def hard_delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
         """Completely delete a vocabulary item from the database."""
-        deleted_rows = (
-            self.db.query(Vocabulary).filter(Vocabulary.id == item_id, Vocabulary.user_id == user_id).delete()
-        )
-        self.db.commit()
-        return deleted_rows > 0
+        stmt = delete(Vocabulary).filter(Vocabulary.id == item_id, Vocabulary.user_id == user_id)
+        result = await self.db.execute(stmt)
+        await self.db.commit()
+        return result.rowcount > 0
 
-    def get_words_in_learn_count(self, user_id: int) -> int:
+    async def get_words_in_learn_count(self, user_id: int) -> int:
         """Get count of vocabulary items with in_learn=True AND last_learned IS NOT NULL for a user."""
-        return (
-            self.db.query(Vocabulary)
-            .filter(Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True), Vocabulary.last_learned.isnot(None))
-            .count()
+        stmt = select(func.count(Vocabulary.id)).filter(
+            Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True), Vocabulary.last_learned.isnot(None)
         )
+        result = await self.db.execute(stmt)
+        return result.scalar() or 0
 
-    def get_words_skipped_count(self, user_id: int) -> int:
+    async def get_words_skipped_count(self, user_id: int) -> int:
         """Get count of vocabulary items with in_learn=False for a user."""
-        return self.db.query(Vocabulary).filter(Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(False)).count()
+        stmt = select(func.count(Vocabulary.id)).filter(Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(False))
+        result = await self.db.execute(stmt)
+        return result.scalar() or 0
 
-    def get_overall_words_count(self, user_id: int) -> int:
+    async def get_overall_words_count(self, user_id: int) -> int:
         """Get total count of all vocabulary items for a user."""
-        return self.db.query(Vocabulary).filter(Vocabulary.user_id == user_id).count()
+        stmt = select(func.count(Vocabulary.id)).filter(Vocabulary.user_id == user_id)
+        result = await self.db.execute(stmt)
+        return result.scalar() or 0

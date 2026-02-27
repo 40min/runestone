@@ -5,7 +5,6 @@ This module contains the AgentService class that handles chat interactions
 using LangChain's ReAct agent pattern.
 """
 
-import asyncio
 import json
 import logging
 from typing import Any, Optional
@@ -250,7 +249,7 @@ to read its contents before deciding.
         """
         if not history:
             try:
-                deleted_count = memory_item_service.cleanup_old_mastered_areas(user.id, older_than_days=90)
+                deleted_count = await memory_item_service.cleanup_old_mastered_areas(user.id, older_than_days=90)
                 if deleted_count:
                     logger.info("Cleaned up %s old mastered memory items for user %s", deleted_count, user.id)
             except Exception as e:
@@ -287,9 +286,6 @@ to read its contents before deciding.
                 {"messages": messages},
                 context=AgentContext(
                     user=user,
-                    vocabulary_service=vocabulary_service,
-                    memory_item_service=memory_item_service,
-                    db_lock=asyncio.Lock(),
                     grammar_index=self.grammar_index,
                     grammar_service=self.grammar_service,
                 ),

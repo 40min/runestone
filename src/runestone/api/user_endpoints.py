@@ -37,7 +37,7 @@ async def get_user_profile(
     Returns user profile information including vocabulary statistics.
     """
     try:
-        return service.get_user_profile(current_user)
+        return await service.get_user_profile(current_user)
     except Exception as e:
         logger.error(f"Failed to get user profile for user {current_user.id}: {e}")
         raise HTTPException(
@@ -68,7 +68,7 @@ async def update_user_profile(
     Allows updating user information like name, surname, timezone, and password.
     """
     try:
-        return service.update_user_profile(current_user, update_data)
+        return await service.update_user_profile(current_user, update_data)
     except ValueError as e:
         raise HTTPException(
             status_code=400,
@@ -108,7 +108,7 @@ async def clear_user_memory(
         Updated user profile with cleared memory.
     """
     try:
-        return service.clear_user_memory(current_user, category)
+        return await service.clear_user_memory(current_user, category)
     except ValueError as e:
         raise HTTPException(
             status_code=400,

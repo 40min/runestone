@@ -73,17 +73,18 @@ class ChatService:
             The assistant's response text and optional news sources
         """
         # 1. Resolve current chat session and save user message
-        chat_id = self.get_or_create_current_chat_id(user_id)
-        self.repository.add_message(user_id, chat_id, "user", message_text)
+        chat_id = await self.get_or_create_current_chat_id(user_id)
+        await self.repository.add_message(user_id, chat_id, "user", message_text)
 
         # 2. Truncate old messages
-        self.repository.truncate_history(user_id, self.settings.chat_history_retention_days, preserve_chat_id=chat_id)
+        await self.repository.truncate_history(
+            user_id, self.settings.chat_history_retention_days, preserve_chat_id=chat_id
+        )
 
         # 3. Fetch context for agent
-        context_models = self.repository.get_context_for_agent(user_id, chat_id)
+        context_models = await self.repository.get_context_for_agent(user_id, chat_id)
 
         # Convert models to schemas for the agent service
-        # Note: context_models includes the message we just saved at the end
         history = [
             ChatMessageSchema(
                 id=m.id,
@@ -96,12 +97,11 @@ class ChatService:
         ]
 
         # 4. Get user and build memory context
-        user = self.user_service.get_user_by_id(user_id)
+        user = await self.user_service.get_user_by_id(user_id)
         if not user:
             raise ValueError(f"User {user_id} not found")
 
         # 5. Generate response using the ReAct agent
-        # The agent handles tool execution automatically
         assistant_text, sources = await self.agent_service.generate_response(
             message=message_text,
             history=history[:-1],  # Exclude current message (it's passed separately)
@@ -111,11 +111,10 @@ class ChatService:
         )
 
         # 6. Save assistant message
-        self.repository.add_message(user_id, chat_id, "assistant", assistant_text, sources=sources)
+        await self.repository.add_message(user_id, chat_id, "assistant", assistant_text, sources=sources)
 
         # 7. Push TTS audio if client expects it (non-blocking)
         if tts_expected:
-            # TTSService handles task management and cancellation internally
             await self.tts_service.push_audio_to_client(user_id, assistant_text, speed=speed)
 
         return assistant_text, sources
@@ -145,11 +144,13 @@ class ChatService:
         ocr_text = ocr_result.transcribed_text
 
         # 2. Resolve current chat session and truncate old messages
-        chat_id = self.get_or_create_current_chat_id(user_id)
-        self.repository.truncate_history(user_id, self.settings.chat_history_retention_days, preserve_chat_id=chat_id)
+        chat_id = await self.get_or_create_current_chat_id(user_id)
+        await self.repository.truncate_history(
+            user_id, self.settings.chat_history_retention_days, preserve_chat_id=chat_id
+        )
 
         # 3. Fetch context for agent
-        context_models = self.repository.get_context_for_agent(user_id, chat_id)
+        context_models = await self.repository.get_context_for_agent(user_id, chat_id)
 
         # Convert models to schemas for the agent service
         history = [
@@ -157,12 +158,11 @@ class ChatService:
         ]
 
         # 4. Get user and build memory context
-        user = self.user_service.get_user_by_id(user_id)
+        user = await self.user_service.get_user_by_id(user_id)
         if not user:
             raise ValueError(f"User {user_id} not found")
 
         # 5. Build translation prompt with OCR text
-        # Determine intro text based on user's mother tongue
         mother_tongue = user.mother_tongue or "English"
 
         translation_prompt = f"""User uploaded an image with Swedish text. Please translate it phrase-by-phrase.
@@ -184,42 +184,44 @@ Instructions:
             memory_item_service=self.memory_item_service,
         )
 
-        # 7. Save assistant message (no user message saved for image uploads)
-        self.repository.add_message(user_id, chat_id, "assistant", assistant_text)
+        # 7. Save assistant message
+        await self.repository.add_message(user_id, chat_id, "assistant", assistant_text)
 
         return assistant_text
 
-    def get_or_create_current_chat_id(self, user_id: int) -> str:
+    async def get_or_create_current_chat_id(self, user_id: int) -> str:
         """
         Get user current chat id and create one if absent.
         """
-        return self.user_service.get_or_create_current_chat_id(user_id)
+        return await self.user_service.get_or_create_current_chat_id(user_id)
 
-    def start_new_chat(self, user_id: int) -> str:
+    async def start_new_chat(self, user_id: int) -> str:
         """
         Rotate the current chat id for the user.
         """
-        return self.user_service.rotate_current_chat_id(user_id)
+        return await self.user_service.rotate_current_chat_id(user_id)
 
-    def clear_history(self, user_id: int) -> str:
+    async def clear_history(self, user_id: int) -> str:
         """
         Backward-compatible alias for starting a new chat session.
         """
-        return self.start_new_chat(user_id)
+        return await self.start_new_chat(user_id)
 
-    def get_latest_id(self, user_id: int, chat_id: str) -> int:
+    async def get_latest_id(self, user_id: int, chat_id: str) -> int:
         """
         Get latest message id in a chat session.
         """
-        return self.repository.get_latest_id(user_id, chat_id)
+        return await self.repository.get_latest_id(user_id, chat_id)
 
-    def get_oldest_id(self, user_id: int, chat_id: str) -> int:
+    async def get_oldest_id(self, user_id: int, chat_id: str) -> int:
         """
         Get oldest message id in a chat session.
         """
-        return self.repository.get_oldest_id(user_id, chat_id)
+        return await self.repository.get_oldest_id(user_id, chat_id)
 
-    def get_history(self, user_id: int, chat_id: str, after_id: int = 0, limit: int = 200) -> List[ChatMessageSchema]:
+    async def get_history(
+        self, user_id: int, chat_id: str, after_id: int = 0, limit: int = 200
+    ) -> List[ChatMessageSchema]:
         """
         Get chat history for a user chat session, optionally incrementally.
 
@@ -232,10 +234,10 @@ Instructions:
         Returns:
             List of ChatMessage schemas with sources deserialized
         """
-        history = self.repository.get_history_after_id(user_id, chat_id, after_id=after_id, limit=limit)
+        history = await self.repository.get_history_after_id(user_id, chat_id, after_id=after_id, limit=limit)
         return [ChatMessageSchema.model_validate(message) for message in history]
 
-    def get_history_response(
+    async def get_history_response(
         self,
         user_id: int,
         after_id: int = 0,
@@ -260,13 +262,13 @@ Instructions:
         Returns:
             Fully populated ChatHistoryResponse
         """
-        chat_id = self.get_or_create_current_chat_id(user_id)
+        chat_id = await self.get_or_create_current_chat_id(user_id)
         chat_mismatch = bool(client_chat_id and client_chat_id != chat_id)
         effective_after_id = 0 if chat_mismatch else after_id
 
-        messages = self.get_history(user_id, chat_id=chat_id, after_id=effective_after_id, limit=limit)
-        latest_id = self.get_latest_id(user_id, chat_id)
-        oldest_id = self.get_oldest_id(user_id, chat_id)
+        messages = await self.get_history(user_id, chat_id=chat_id, after_id=effective_after_id, limit=limit)
+        latest_id = await self.get_latest_id(user_id, chat_id)
+        oldest_id = await self.get_oldest_id(user_id, chat_id)
 
         last_returned_id = messages[-1].id if messages else effective_after_id
         has_more = latest_id > last_returned_id

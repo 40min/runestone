@@ -465,6 +465,61 @@ def test_improve_vocabulary(client_with_overrides, mock_vocabulary_service):
 2. **Use `vocabulary_model_factory`** to create test data
 3. **Use `vocabulary_repository`** for repository layer tests
 
+### For Agent Tool Tests
+
+Agent tools use LangChain's `@tool` decorator and require specific testing approaches depending on whether they use `ToolRuntime` for dependency injection.
+
+#### Tools without ToolRuntime (e.g., news tools)
+
+For tools that don't use `ToolRuntime`, you can use `.ainvoke()` directly:
+
+```python
+@pytest.mark.anyio
+async def test_search_news_with_dates_formats_results(monkeypatch):
+    # Mock external dependencies
+    monkeypatch.setattr(agent_news, "DDGS", FakeDDGSWithResults)
+
+    # Use .ainvoke() with a dictionary of arguments
+    output = await agent_news.search_news_with_dates.ainvoke({
+        "query": "ekonomi",
+        "k": 2,
+        "timelimit": "w"
+    })
+    assert output["tool"] == "search_news_with_dates"
+```
+
+#### Tools with ToolRuntime (e.g., memory tools)
+
+For tools that use `ToolRuntime` for dependency injection, you need to use `.coroutine()` with a manually constructed runtime object:
+
+```python
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
+@pytest.mark.anyio
+async def test_memory_tool_with_runtime():
+    # Create mock service with AsyncMock for async methods
+    memory_item_service = MagicMock()
+    memory_item_service.list_memory_items = AsyncMock(return_value=[])
+
+    # Construct runtime with context
+    user = SimpleNamespace(id=123)
+    runtime = SimpleNamespace(
+        context=SimpleNamespace(
+            user=user,
+            memory_item_service=memory_item_service
+        )
+    )
+
+    # Use .coroutine() and pass runtime directly
+    output = await start_student_info.coroutine(runtime)
+    assert output == "No memory items found."
+```
+
+**Why different approaches?**
+- Tools without `ToolRuntime`: Parameters can be serialized to JSON, so `.ainvoke()` works directly
+- Tools with `ToolRuntime`: The runtime contains complex objects (like database models) that can't be serialized to JSON, so we use `.coroutine()` with a manually constructed runtime
+
 Example: Service test
 ```python
 def test_select_daily_portion(rune_recall_service, test_vocabulary):
