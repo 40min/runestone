@@ -150,8 +150,23 @@ class VocabularyRepository:
         return vocab
 
     async def update_vocabulary_item(self, vocab: Vocabulary) -> Vocabulary:
-        """Commit and refresh a vocabulary item."""
+        """Update a vocabulary item using explicit UPDATE statement."""
+        # Use explicit UPDATE statement to ensure we update instead of insert
+        stmt = (
+            update(Vocabulary)
+            .where(Vocabulary.id == vocab.id)
+            .values(
+                word_phrase=vocab.word_phrase,
+                translation=vocab.translation,
+                example_phrase=vocab.example_phrase,
+                extra_info=vocab.extra_info,
+                in_learn=vocab.in_learn,
+                priority_learn=vocab.priority_learn,
+            )
+        )
+        await self.db.execute(stmt)
         await self.db.commit()
+        # Refresh to get updated timestamps
         await self.db.refresh(vocab)
         return vocab
 

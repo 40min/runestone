@@ -12,7 +12,7 @@ load_dotenv()
 SQLITE_DB = os.getenv("SQLITE_DB_PATH", "state/runestone.db")
 POSTGRES_URL = os.getenv("DATABASE_URL", "postgresql://runestone:runestone@localhost:5432/runestone")
 # Convert asyncpg URL to psycopg2 URL if needed
-IF_POSTGRES_URL = POSTGRES_URL.replace("postgresql+asyncpg://", "postgresql://")
+PSYCOPG2_DATABASE_URL = POSTGRES_URL.replace("postgresql+asyncpg://", "postgresql://")
 
 TABLES = [
     "users",
@@ -26,7 +26,7 @@ TABLES = [
 def parse_args():
     parser = ArgumentParser(description="Migrate data from SQLite to PostgreSQL.")
     parser.add_argument("--sqlite-path", default=SQLITE_DB, help="Path to SQLite DB file")
-    parser.add_argument("--postgres-url", default=IF_POSTGRES_URL, help="PostgreSQL connection URL")
+    parser.add_argument("--postgres-url", default=PSYCOPG2_DATABASE_URL, help="PostgreSQL connection URL")
     return parser.parse_args()
 
 

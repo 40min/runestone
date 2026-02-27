@@ -200,10 +200,11 @@ async def save_vocabulary(
     try:
         return await service.save_vocabulary(request.items, current_user.id, request.enrich)
 
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to save vocabulary items")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to save vocabulary: {str(e)}",
+            detail="An error occurred while saving vocabulary items. Please try again later.",
         )
 
 
@@ -246,10 +247,11 @@ async def save_vocabulary_item(
             status_code=400,
             detail=str(e),
         )
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to save single vocabulary item")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to save vocabulary item: {str(e)}",
+            detail="An error occurred while saving the vocabulary item. Please try again later.",
         )
 
 
@@ -299,10 +301,11 @@ async def get_vocabulary(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to retrieve vocabulary")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to retrieve vocabulary: {str(e)}",
+            detail="An error occurred while retrieving vocabulary. Please try again later.",
         )
 
 
@@ -342,20 +345,38 @@ async def update_vocabulary(
     try:
         return await service.update_vocabulary_item(item_id, request, current_user.id)
 
-    except VocabularyItemExists as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e),
-        )
     except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    except VocabularyItemExists:
         raise HTTPException(
-            status_code=404,
-            detail=str(e),
+            status_code=409,
+            detail=(
+                "A vocabulary item with this word already exists. "
+                "Please edit the existing word or use a different word."
+            ),
         )
-    except Exception as e:
+
+    except Exception as exc:
+        logger.exception(f"Failed to update vocabulary item {item_id}")
+        # Check for specific database integrity errors
+        error_str = str(exc).lower()
+        if "unique" in error_str or "duplicate" in error_str:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "A vocabulary item with this word already exists. "
+                    "Please edit the existing word or use a different word."
+                ),
+            )
+        if "foreign key" in error_str:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid data provided. Please check your input.",
+            )
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to update vocabulary: {str(e)}",
+            detail="An error occurred while saving the vocabulary item. Please try again.",
         )
 
 
@@ -402,10 +423,11 @@ async def delete_vocabulary(
             status_code=404,
             detail=str(e),
         )
-    except Exception as e:
+    except Exception:
+        logger.exception(f"Failed to delete vocabulary item {item_id}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to delete vocabulary item: {str(e)}",
+            detail="An error occurred while deleting the vocabulary item. Please try again later.",
         )
 
 
