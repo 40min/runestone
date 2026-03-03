@@ -6,7 +6,7 @@ interface, handling OCR and content analysis using OpenRouter's API.
 Uses async httpx for non-blocking HTTP calls.
 """
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, AuthenticationError
 
 from runestone.core.clients.openai_client import OpenAIClient
 from runestone.core.exceptions import APIKeyError
@@ -29,8 +29,10 @@ class OpenRouterClient(OpenAIClient):
                 },
                 timeout=120.0,
             )
+        except (AuthenticationError, APIKeyError) as e:
+            raise APIKeyError(f"OpenRouter authentication failed: {str(e)}")
         except Exception as e:
-            raise APIKeyError(f"Failed to configure OpenRouter API: {str(e)}")
+            raise APIKeyError(f"Failed to configure OpenRouter API ({type(e).__name__}): {str(e)}")
 
     @property
     def provider_name(self) -> str:

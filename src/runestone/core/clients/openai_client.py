@@ -9,7 +9,7 @@ Uses async httpx for non-blocking HTTP calls.
 import base64
 import io
 
-from openai import AsyncOpenAI
+from openai import APIConnectionError, APITimeoutError, AsyncOpenAI, AuthenticationError, OpenAIError, RateLimitError
 from PIL import Image
 
 from runestone.core.clients.base import BaseLLMClient
@@ -42,8 +42,10 @@ class OpenAIClient(BaseLLMClient):
                 timeout=120.0,
                 max_retries=3,
             )
+        except (AuthenticationError, APIKeyError) as e:
+            raise APIKeyError(f"OpenAI authentication failed: {str(e)}")
         except Exception as e:
-            raise APIKeyError(f"Failed to configure OpenAI client: {str(e)}")
+            raise APIKeyError(f"Failed to configure OpenAI client ({type(e).__name__}): {str(e)}")
 
     def _image_to_base64(self, image: Image.Image) -> str:
         """
@@ -129,9 +131,18 @@ class OpenAIClient(BaseLLMClient):
 
         except OCRError:
             raise
-        except Exception as e:
+        except (APITimeoutError, APIConnectionError) as e:
+            self.logger.error(f"{self.log_mark} OpenAI network/timeout error: {str(e)}")
+            raise OCRError(f"OCR processing timed out or network failed: {str(e)}")
+        except RateLimitError as e:
+            self.logger.error(f"{self.log_mark} OpenAI rate limit error: {str(e)}")
+            raise OCRError(f"OpenAI rate limit exceeded: {str(e)}")
+        except OpenAIError as e:
             self.logger.error(f"{self.log_mark} OpenAI API error: {str(e)}")
-            raise OCRError(f"OCR processing failed: {str(e)}")
+            raise OCRError(f"OpenAI API error during OCR: {str(e)}")
+        except Exception as e:
+            self.logger.error(f"{self.log_mark} Unexpected error during OCR: {type(e).__name__}: {str(e)}")
+            raise OCRError(f"OCR processing failed due to an unexpected error: {type(e).__name__}: {str(e)}")
 
     async def analyze_content(self, prompt: str) -> str:
         """
@@ -160,8 +171,12 @@ class OpenAIClient(BaseLLMClient):
 
             return content.strip()
 
+        except APITimeoutError as e:
+            raise LLMError(f"Content analysis timed out: {str(e)}")
+        except OpenAIError as e:
+            raise LLMError(f"OpenAI API error during content analysis: {str(e)}")
         except Exception as e:
-            raise LLMError(f"Content analysis failed: {str(e)}")
+            raise LLMError(f"Content analysis failed ({type(e).__name__}): {str(e)}")
 
     async def search_resources(self, prompt: str) -> str:
         """
@@ -192,8 +207,12 @@ class OpenAIClient(BaseLLMClient):
 
             return content.strip()
 
+        except APITimeoutError as e:
+            raise LLMError(f"Resource search timed out: {str(e)}")
+        except OpenAIError as e:
+            raise LLMError(f"OpenAI API error during resource search: {str(e)}")
         except Exception as e:
-            raise LLMError(f"Resource search failed: {str(e)}")
+            raise LLMError(f"Resource search failed ({type(e).__name__}): {str(e)}")
 
     async def _improve_vocabulary(
         self, prompt: str, no_response_msg: str, api_error_msg: str, general_error_msg: str
@@ -229,8 +248,12 @@ class OpenAIClient(BaseLLMClient):
 
         except LLMError:
             raise
-        except Exception as e:
+        except APITimeoutError as e:
+            raise LLMError(f"Vocabulary improvement timed out: {str(e)}")
+        except OpenAIError as e:
             raise LLMError(f"{api_error_msg}: {str(e)}")
+        except Exception as e:
+            raise LLMError(f"{general_error_msg} ({type(e).__name__}): {str(e)}")
 
     async def improve_vocabulary_item(self, prompt: str) -> str:
         """

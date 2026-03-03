@@ -56,7 +56,7 @@ class TestOpenRouterClient:
         with pytest.raises(APIKeyError) as exc_info:
             OpenRouterClient(api_key=self.api_key)
 
-        assert "Failed to configure OpenRouter API" in str(exc_info.value)
+        assert "Failed to configure OpenRouter API (Exception): Configuration failed" in str(exc_info.value)
 
     @patch("runestone.core.clients.openrouter_client.AsyncOpenAI")
     async def test_improve_vocabulary_item_success(self, mock_openai_class):
@@ -98,4 +98,4 @@ class TestOpenRouterClient:
         with pytest.raises(LLMError) as exc_info:
             await client.improve_vocabulary_item(self.prompt)
 
-        assert "openrouter API error during vocabulary improvement" in str(exc_info.value)
+        assert "Vocabulary improvement failed (Exception): OpenRouter API Error" in str(exc_info.value)

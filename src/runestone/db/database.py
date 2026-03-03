@@ -50,10 +50,7 @@ Base = declarative_base()
 async def get_db():
     """Dependency to get database session."""
     async with SessionLocal() as db:
-        try:
-            yield db
-        finally:
-            await db.close()
+        yield db
 
 
 @asynccontextmanager
@@ -70,10 +67,7 @@ async def provide_db_session() -> AsyncIterator[AsyncSession]:
             result = await repo.some_method()
     """
     async with SessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+        yield session
 
 
 def run_migrations() -> None:
