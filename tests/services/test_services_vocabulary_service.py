@@ -51,7 +51,7 @@ class TestVocabularyService:
         """Create a VocabularyService instance."""
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "openai"
-        mock_llm_client = Mock()
+        mock_llm_client = AsyncMock()
         # Set default mock response for LLM client to avoid TypeError
         mock_llm_client.improve_vocabulary_item.return_value = (
             '{"translation": "mock translation", "example_phrase": "mock example", "extra_info": "mock info"}'

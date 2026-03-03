@@ -13,6 +13,7 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from runestone.agent.tools.context import AgentContext
+from runestone.agent.tools.service_providers import provide_memory_item_service
 from runestone.api.memory_item_schemas import MemoryCategory, MemoryItemCreate, MemoryItemResponse
 
 logger = logging.getLogger(__name__)
@@ -94,9 +95,10 @@ async def read_memory(
     """
     logger.info("Agent tool call: read_memory (category=%s, status=%s)", category, status)
     user = runtime.context.user
-    service = runtime.context.memory_item_service
 
-    items = await service.list_memory_items(user_id=user.id, category=category, status=status, limit=200, offset=0)
+    # Use fresh service with its own session for concurrency safety
+    async with provide_memory_item_service() as service:
+        items = await service.list_memory_items(user_id=user.id, category=category, status=status, limit=200, offset=0)
 
     if not items:
         return "No memory items found."
@@ -117,36 +119,37 @@ async def start_student_info(runtime: ToolRuntime[AgentContext]) -> str:
     """
     logger.info("Agent tool call: start_student_info")
     user = runtime.context.user
-    service = runtime.context.memory_item_service
 
-    items: list[MemoryItemResponse] = []
-    items.extend(
-        await service.list_memory_items(
-            user_id=user.id,
-            category=MemoryCategory.PERSONAL_INFO,
-            status="active",
-            limit=50,
-            offset=0,
+    # Use fresh service with its own session for concurrency safety
+    async with provide_memory_item_service() as service:
+        items: list[MemoryItemResponse] = []
+        items.extend(
+            await service.list_memory_items(
+                user_id=user.id,
+                category=MemoryCategory.PERSONAL_INFO,
+                status="active",
+                limit=50,
+                offset=0,
+            )
         )
-    )
-    items.extend(
-        await service.list_memory_items(
-            user_id=user.id,
-            category=MemoryCategory.AREA_TO_IMPROVE,
-            status="struggling",
-            limit=75,
-            offset=0,
+        items.extend(
+            await service.list_memory_items(
+                user_id=user.id,
+                category=MemoryCategory.AREA_TO_IMPROVE,
+                status="struggling",
+                limit=75,
+                offset=0,
+            )
         )
-    )
-    items.extend(
-        await service.list_memory_items(
-            user_id=user.id,
-            category=MemoryCategory.AREA_TO_IMPROVE,
-            status="improving",
-            limit=75,
-            offset=0,
+        items.extend(
+            await service.list_memory_items(
+                user_id=user.id,
+                category=MemoryCategory.AREA_TO_IMPROVE,
+                status="improving",
+                limit=75,
+                offset=0,
+            )
         )
-    )
 
     if not items:
         return "No memory items found."
@@ -179,15 +182,16 @@ async def upsert_memory_item(
         item.status,
     )
     user = runtime.context.user
-    service = runtime.context.memory_item_service
 
-    result = await service.upsert_memory_item(
-        user_id=user.id,
-        category=item.category,
-        key=item.key,
-        content=item.content,
-        status=item.status,
-    )
+    # Use fresh service with its own session for concurrency safety
+    async with provide_memory_item_service() as service:
+        result = await service.upsert_memory_item(
+            user_id=user.id,
+            category=item.category,
+            key=item.key,
+            content=item.content,
+            status=item.status,
+        )
 
     return f"Memory item saved: [ID:{result.id}] {result.key} in {result.category} (status: {result.status})"
 
@@ -216,9 +220,10 @@ async def update_memory_status(
     """
     logger.info("Agent tool call: update_memory_status (item_id=%s, new_status=%s)", update.item_id, update.new_status)
     user = runtime.context.user
-    service = runtime.context.memory_item_service
 
-    result = await service.update_item_status(update.item_id, update.new_status, user.id)
+    # Use fresh service with its own session for concurrency safety
+    async with provide_memory_item_service() as service:
+        result = await service.update_item_status(update.item_id, update.new_status, user.id)
 
     return f"Status updated: [ID:{result.id}] {result.key} is now '{result.status}'"
 
@@ -243,9 +248,10 @@ async def promote_to_strength(
     """
     logger.info("Agent tool call: promote_to_strength (item_id=%s)", promote.item_id)
     user = runtime.context.user
-    service = runtime.context.memory_item_service
 
-    result = await service.promote_to_strength(promote.item_id, user.id)
+    # Use fresh service with its own session for concurrency safety
+    async with provide_memory_item_service() as service:
+        result = await service.promote_to_strength(promote.item_id, user.id)
 
     return f"Promoted to knowledge_strength: [ID:{result.id}] {result.key}"
 
@@ -263,7 +269,9 @@ async def delete_memory_item(
     """
     logger.info("Agent tool call: delete_memory_item (item_id=%s)", delete.item_id)
     user = runtime.context.user
-    service = runtime.context.memory_item_service
 
-    await service.delete_item(delete.item_id, user.id)
+    # Use fresh service with its own session for concurrency safety
+    async with provide_memory_item_service() as service:
+        await service.delete_item(delete.item_id, user.id)
+
     return f"Deleted memory item: [ID:{delete.item_id}]"

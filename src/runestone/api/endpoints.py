@@ -85,8 +85,8 @@ async def process_ocr(
         )
 
     try:
-        # Run OCR on image bytes
-        ocr_result = processor.run_ocr(content)
+        # Run OCR on image bytes (async call)
+        ocr_result = await processor.run_ocr(content)
 
         # OCRResult object - return directly (unified schema)
         stats = ocr_result.recognition_statistics
@@ -297,7 +297,8 @@ async def get_vocabulary(
                 detail="Limit must be between 1 and 100",
             )
 
-        return await service.get_vocabulary(current_user.id, limit, search_query, precise)
+        result = await service.get_vocabulary(current_user.id, limit, search_query, precise)
+        return result
 
     except HTTPException:
         raise
@@ -463,7 +464,8 @@ async def improve_vocabulary(
         HTTPException: For LLM errors
     """
     try:
-        return await service.improve_item(request)
+        result = await service.improve_item(request)
+        return result
 
     except Exception:
         logger.exception("Failed to improve vocabulary")

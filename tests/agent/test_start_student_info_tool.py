@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -83,13 +83,18 @@ async def test_start_student_info_fetches_token_bounded_subset():
             return [improving]
         return []
 
-    memory_item_service = MagicMock()
-    memory_item_service.list_memory_items = AsyncMock(side_effect=_list_memory_items)
+    # Mock the provider to return our mocked service
+    mock_service = MagicMock()
+    mock_service.list_memory_items = AsyncMock(side_effect=_list_memory_items)
 
-    user = SimpleNamespace(id=123)
-    runtime = SimpleNamespace(context=SimpleNamespace(user=user, memory_item_service=memory_item_service))
+    with patch("runestone.agent.tools.memory.provide_memory_item_service") as mock_provider:
+        mock_provider.return_value.__aenter__ = AsyncMock(return_value=mock_service)
+        mock_provider.return_value.__aexit__ = AsyncMock()
 
-    output = await start_student_info.coroutine(runtime)
+        user = SimpleNamespace(id=123)
+        runtime = SimpleNamespace(context=SimpleNamespace(user=user))
+
+        output = await start_student_info.coroutine(runtime)
 
     payload = _extract_json(output)
     assert "memory" in payload
@@ -100,10 +105,17 @@ async def test_start_student_info_fetches_token_bounded_subset():
 
 @pytest.mark.anyio
 async def test_start_student_info_no_items():
-    memory_item_service = MagicMock()
-    memory_item_service.list_memory_items = AsyncMock(return_value=[])
-    user = SimpleNamespace(id=123)
-    runtime = SimpleNamespace(context=SimpleNamespace(user=user, memory_item_service=memory_item_service))
+    # Mock the provider to return our mocked service
+    mock_service = MagicMock()
+    mock_service.list_memory_items = AsyncMock(return_value=[])
 
-    output = await start_student_info.coroutine(runtime)
+    with patch("runestone.agent.tools.memory.provide_memory_item_service") as mock_provider:
+        mock_provider.return_value.__aenter__ = AsyncMock(return_value=mock_service)
+        mock_provider.return_value.__aexit__ = AsyncMock()
+
+        user = SimpleNamespace(id=123)
+        runtime = SimpleNamespace(context=SimpleNamespace(user=user))
+
+        output = await start_student_info.coroutine(runtime)
+
     assert output == "No memory items found."

@@ -62,7 +62,7 @@ def mock_memory_item_service():
 @pytest.fixture
 def mock_processor():
     """Create a mock RunestoneProcessor."""
-    mock = Mock()
+    mock = AsyncMock()
     # Default behavior for successful OCR
     mock_ocr_result = Mock()
     mock_ocr_result.transcribed_text = "Hej världen"

@@ -7,6 +7,8 @@ for database operations in the Runestone application.
 
 import logging
 import os
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 from sqlalchemy import create_engine, make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -23,11 +25,11 @@ db_url_params = {}
 settings_url = make_url(settings.database_url)
 # QueuePool kwargs are valid for PostgreSQL (asyncpg, psycopg) drivers
 if settings_url.get_dialect().name == "postgresql":
-    # Create SQLAlchemy async engine with connection pooling
-    # Built-in pool for asyncpg
+    # Create SQLAlchemy async engine with connection pooling for parallel tool execution
+    # Increased pool_size and max_overflow to handle concurrent LangGraph tool calls
     db_url_params = {
-        "pool_size": 10,
-        "max_overflow": 5,
+        "pool_size": 20,
+        "max_overflow": 10,
         "pool_pre_ping": True,
         "pool_recycle": 3600,
     }
@@ -52,6 +54,26 @@ async def get_db():
             yield db
         finally:
             await db.close()
+
+
+@asynccontextmanager
+async def provide_db_session() -> AsyncIterator[AsyncSession]:
+    """
+    Context manager for creating a fresh database session.
+
+    This is intended for use in non-FastAPI contexts (e.g., LangGraph agent tools)
+    where each tool call needs its own isolated session for concurrent execution.
+
+    Usage:
+        async with provide_db_session() as session:
+            repo = SomeRepository(session)
+            result = await repo.some_method()
+    """
+    async with SessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
 
 
 def run_migrations() -> None:

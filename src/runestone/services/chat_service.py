@@ -133,8 +133,8 @@ class ChatService:
         Raises:
             RunestoneError: If OCR fails or returns empty text
         """
-        # 1. Run OCR on image content
-        ocr_result = self.processor.run_ocr(image_content)
+        # 1. Run OCR on image content (async)
+        ocr_result = await self.processor.run_ocr(image_content)
 
         if not ocr_result.transcribed_text or not ocr_result.transcribed_text.strip():
             logger.warning("OCR returned empty text")
