@@ -417,6 +417,13 @@ tests/
 └── test_integration.py # Integration tests
 ```
 
+### Tool DB access under concurrent LangGraph execution
+
+LangGraph tools may execute concurrently. To keep DB operations safe, use async context-manager DI providers for tools.
+
+- Rationale and pattern: [`TOOL_DB_DI_CONTEXT_MANAGERS.md`](TOOL_DB_DI_CONTEXT_MANAGERS.md:1)
+- Step-by-step plan: [`TOOL_DB_DI_IMPLEMENTATION_PLAN.md`](TOOL_DB_DI_IMPLEMENTATION_PLAN.md:1)
+
 ## 📋 Requirements
 
 - **Python**: 3.13+

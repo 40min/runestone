@@ -65,6 +65,20 @@
     "path": "adverbs/position_dest_from.md"
   },
   {
+    "url": "{HOST}/?view=grammar&cheatsheet=adverbs%2Ftidsadverb",
+    "tags": [
+      "adverbs",
+      "time",
+      "tidsadverb",
+      "sequence",
+      "först",
+      "sedan",
+      "då"
+    ],
+    "annotation": "Guide to Swedish time adverbs for ordering events in sequence (först, sedan, efter det) and referring back to a previously mentioned time (då).",
+    "path": "adverbs/tidsadverb.md"
+  },
+  {
     "url": "{HOST}/?view=grammar&cheatsheet=nouns%2Fbestamd_obest_plural",
     "tags": [
       "nouns",

@@ -45,7 +45,7 @@ class ContentAnalyzer:
         self.builder = PromptBuilder()
         self.parser = ResponseParser()
 
-    def analyze_content(self, extracted_text: str) -> ContentAnalysis:
+    async def analyze_content(self, extracted_text: str) -> ContentAnalysis:
         """
         Analyze Swedish textbook content to extract learning materials.
 
@@ -64,7 +64,7 @@ class ContentAnalyzer:
 
             self.logger.debug(f"[ContentAnalyzer] Analyzing content with {self.client.provider_name}...")
 
-            response_text = self.client.analyze_content(analysis_prompt)
+            response_text = await self.client.analyze_content(analysis_prompt)
 
             if not response_text:
                 raise ContentAnalysisError("No analysis returned from LLM")

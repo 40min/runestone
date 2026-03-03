@@ -155,7 +155,7 @@ class OCRProcessor:
             else:
                 return image
 
-    def extract_text(self, image: Image.Image) -> OCRResult:
+    async def extract_text(self, image: Image.Image) -> OCRResult:
         """
         Extract text from a Swedish textbook page image with enhanced preprocessing.
 
@@ -201,7 +201,7 @@ class OCRProcessor:
             self.logger.debug(f"[OCRProcessor] Prompt built, length: {len(ocr_prompt)} chars")
 
             # Use the client for OCR processing with preprocessed image
-            extracted_text = self.client.extract_text_from_image(preprocessed_image, ocr_prompt)
+            extracted_text = await self.client.extract_text_from_image(preprocessed_image, ocr_prompt)
 
             # Check if we got a valid response
             if not extracted_text:

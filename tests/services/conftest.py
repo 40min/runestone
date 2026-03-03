@@ -15,21 +15,28 @@ import pytest
 @pytest.fixture
 def mock_user_repo():
     """Create a mocked UserRepository."""
-    from unittest.mock import Mock
+    from unittest.mock import AsyncMock, Mock
 
-    return Mock()
+    mock = Mock()
+    mock.get_by_id = AsyncMock()
+    mock.get_by_email = AsyncMock()
+    mock.update = AsyncMock()
+    mock.increment_pages_recognised_count = AsyncMock()
+    mock.clear_user_memory = AsyncMock()
+    mock.update_user_memory = AsyncMock()
+    return mock
 
 
 @pytest.fixture
 def mock_vocab_repo():
     """Create a mocked VocabularyRepository."""
-    from unittest.mock import Mock
+    from unittest.mock import AsyncMock, Mock
 
     mock = Mock()
     # Set default return values for count methods used by get_user_profile
-    mock.get_words_in_learn_count.return_value = 0
-    mock.get_words_skipped_count.return_value = 0
-    mock.get_overall_words_count.return_value = 0
+    mock.get_words_in_learn_count = AsyncMock(return_value=0)
+    mock.get_words_skipped_count = AsyncMock(return_value=0)
+    mock.get_overall_words_count = AsyncMock(return_value=0)
     return mock
 
 

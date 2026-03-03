@@ -48,7 +48,7 @@ class RuneRecallService:
         self.recall_start_hour = settings.recall_start_hour
         self.recall_end_hour = settings.recall_end_hour
 
-    def send_next_recall_word(self) -> None:
+    async def send_next_recall_word(self) -> None:
         """
         Send the next vocabulary word in the daily portion to all active users.
 
@@ -67,14 +67,14 @@ class RuneRecallService:
 
         for username, user_data in active_users.items():
             try:
-                self._process_user_recall_word(username, user_data)
+                await self._process_user_recall_word(username, user_data)
             except Exception as e:
                 logger.error(f"Failed to process recall word for user {username}: {e}")
                 # Continue with other users even if one fails
 
         logger.info("Completed recall word sending process")
 
-    def _process_user_recall_word(self, username: str, user_data: UserData, max_attempts: int = 3) -> None:
+    async def _process_user_recall_word(self, username: str, user_data: UserData, max_attempts: int = 3) -> None:
         """
         Process and send the next word from the daily portion for a specific user.
 
@@ -88,7 +88,7 @@ class RuneRecallService:
             return
 
         # Ensure we have a daily selection
-        if not self._ensure_daily_selection(username, user_data):
+        if not await self._ensure_daily_selection(username, user_data):
             return
 
         # Try to send a word, handling missing words by removing them from selection
@@ -99,11 +99,11 @@ class RuneRecallService:
                 logger.warning(f"No more words to send for user {username}")
                 return
 
-            word = self._fetch_valid_word(word_id, user_data.db_user_id)
+            word = await self._fetch_valid_word(word_id, user_data.db_user_id)
 
             if word:
                 # Successfully fetched word, send it
-                self._send_and_update_word(username, user_data, word)
+                await self._send_and_update_word(username, user_data, word)
                 return
             else:
                 # Word not found or not in learning - remove from daily selection
@@ -115,16 +115,15 @@ class RuneRecallService:
                 # Continue loop to try next word
 
         logger.info(f"All words in daily selection were invalid for user {username}, getting new selection")
-        self.bump_words(username, user_data)
+        await self.bump_words(username, user_data)
 
         if max_attempts > 0:
-            # Retry with new selection, but limit attempts to prevent infinite recursion
             logger.info(f"Retrying with new selection for user {username} (attempts left: {max_attempts})")
-            self._process_user_recall_word(username, user_data, max_attempts=max_attempts - 1)
+            await self._process_user_recall_word(username, user_data, max_attempts=max_attempts - 1)
         else:
             logger.warning(f"Max retry attempts reached for user {username}, giving up")
 
-    def _ensure_daily_selection(self, username: str, user_data: UserData) -> bool:
+    async def _ensure_daily_selection(self, username: str, user_data: UserData) -> bool:
         """
         Ensure user has a daily selection, creating one if needed.
 
@@ -139,7 +138,7 @@ class RuneRecallService:
             return True
 
         logger.info(f"Selecting new daily portion for user {username}")
-        portion_words = self._select_daily_portion(user_data.db_user_id)
+        portion_words = await self._select_daily_portion(user_data.db_user_id)
         if not portion_words:
             logger.info(f"No words available for daily portion for user {username}")
             return False
@@ -170,7 +169,7 @@ class RuneRecallService:
 
         return user_data.daily_selection[user_data.next_word_index].id_
 
-    def _fetch_valid_word(self, word_id: int, db_user_id: int):
+    async def _fetch_valid_word(self, word_id: int, db_user_id: int):
         """
         Fetch a word from the database if it exists and is valid for recall.
 
@@ -182,12 +181,12 @@ class RuneRecallService:
             Word object if found and valid, None otherwise
         """
         try:
-            return self.vocabulary_repository.get_vocabulary_item_for_recall(word_id, db_user_id)
+            return await self.vocabulary_repository.get_vocabulary_item_for_recall(word_id, db_user_id)
         except ValueError:
             # Word not found or not in learning
             return None
 
-    def _send_and_update_word(self, username: str, user_data: UserData, word) -> None:
+    async def _send_and_update_word(self, username: str, user_data: UserData, word) -> None:
         """
         Send a word message and update state on success.
 
@@ -205,9 +204,9 @@ class RuneRecallService:
 
         # chat_id is guaranteed to be non-None due to check in _process_user_recall_word
         assert user_data.chat_id is not None
-        if self._send_word_message(user_data.chat_id, word_to_send):
+        if await self._send_word_message(user_data.chat_id, word_to_send):
             # Update learned_times for every attempt to show word to user
-            self.vocabulary_repository.update_last_learned(word)
+            await self.vocabulary_repository.update_last_learned(word)
             # Update the next word index
             user_data.next_word_index += 1
             self.state_manager.update_user(username, user_data)
@@ -237,7 +236,7 @@ class RuneRecallService:
 
         return len(user_data.daily_selection) < original_length
 
-    def _select_daily_portion(self, db_user_id: int) -> list[dict]:
+    async def _select_daily_portion(self, db_user_id: int) -> list[dict]:
         """
         Select a daily portion of words for recall based on user's vocabulary and cooldown.
 
@@ -248,7 +247,7 @@ class RuneRecallService:
             List of word dictionaries for the daily portion
         """
         # Repository method now handles cooldown filtering based on last_learned and returns full word objects
-        words = self.vocabulary_repository.select_new_daily_words(
+        words = await self.vocabulary_repository.select_new_daily_words(
             db_user_id, self.cooldown_days, limit=self.words_per_day
         )
 
@@ -262,7 +261,7 @@ class RuneRecallService:
             for word in words
         ]
 
-    def _send_word_message(self, chat_id: int, word: dict) -> bool:
+    async def _send_word_message(self, chat_id: int, word: dict) -> bool:
         """
         Send a vocabulary word message to a Telegram chat.
 
@@ -288,8 +287,8 @@ class RuneRecallService:
             message += f"\n\n💡 *Example:* {example_phrase}"
 
         try:
-            with httpx.Client(timeout=10.0) as client:
-                response = client.post(
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
                     f"{self.base_url}/sendMessage",
                     json={"chat_id": chat_id, "text": message, "parse_mode": "MarkdownV2"},
                 )
@@ -325,7 +324,7 @@ class RuneRecallService:
 
         return len(user_data.daily_selection) < original_length
 
-    def maintain_daily_selection(self, username: str, user_data: UserData) -> int:
+    async def maintain_daily_selection(self, username: str, user_data: UserData) -> int:
         """
         Ensure user has target number of words in daily selection.
         Adds replacement words as needed to reach words_per_day target.
@@ -342,7 +341,7 @@ class RuneRecallService:
 
         # Check if we need to add words
         if current_count >= target_count:
-            logger.debug(f"User {username} already has {current_count}/{target_count} words, " "no maintenance needed")
+            logger.debug(f"User {username} already has {current_count}/{target_count} words, no maintenance needed")
             return 0
 
         # Calculate how many words we need to add
@@ -355,7 +354,7 @@ class RuneRecallService:
         excluded_ids = [word.id_ for word in user_data.daily_selection]
 
         # Select replacement words (reusing existing method with exclusions)
-        new_words = self.vocabulary_repository.select_new_daily_words(
+        new_words = await self.vocabulary_repository.select_new_daily_words(
             user_id=user_data.db_user_id,
             cooldown_days=self.cooldown_days,
             limit=needed,
@@ -390,7 +389,7 @@ class RuneRecallService:
         """
         self.state_manager.update_user(username, user_data)
 
-    def remove_word_completely(self, username: str, word_phrase: str) -> None:
+    async def remove_word_completely(self, username: str, word_phrase: str) -> None:
         """
         Remove word from both database and daily_selection.
 
@@ -402,7 +401,9 @@ class RuneRecallService:
         if not user_data:
             raise VocabularyOperationError(f"User '{username}' not found")
 
-        matching_word = self.vocabulary_repository.get_vocabulary_item_by_word_phrase(word_phrase, user_data.db_user_id)
+        matching_word = await self.vocabulary_repository.get_vocabulary_item_by_word_phrase(
+            word_phrase, user_data.db_user_id
+        )
 
         if not matching_word:
             raise WordNotFoundError(word_phrase, username)
@@ -411,19 +412,21 @@ class RuneRecallService:
         matching_word.priority_learn = False
 
         # Remove from database
-        if not self.vocabulary_repository.delete_vocabulary_item_by_word_phrase(word_phrase, user_data.db_user_id):
+        if not await self.vocabulary_repository.delete_vocabulary_item_by_word_phrase(
+            word_phrase, user_data.db_user_id
+        ):
             raise VocabularyOperationError("Failed to remove word from database")
 
         # Remove from daily_selection and maintain count
         was_in_selection = self.remove_word_from_daily_selection(user_data, word_phrase)
         if was_in_selection:
-            self.maintain_daily_selection(username, user_data)
+            await self.maintain_daily_selection(username, user_data)
 
         self.update_user_daily_selection(username, user_data)
         logger.info(f"User {username} removed word '{word_phrase}'")
         # Returns nothing - success is implicit
 
-    def postpone_word(self, username: str, word_phrase: str) -> None:
+    async def postpone_word(self, username: str, word_phrase: str) -> None:
         """
         Remove word from daily_selection only (postpone learning).
 
@@ -439,17 +442,19 @@ class RuneRecallService:
             raise WordNotInSelectionError(word_phrase)
 
         # Reset priority flag when postponing
-        vocab_item = self.vocabulary_repository.get_vocabulary_item_by_word_phrase(word_phrase, user_data.db_user_id)
+        vocab_item = await self.vocabulary_repository.get_vocabulary_item_by_word_phrase(
+            word_phrase, user_data.db_user_id
+        )
         if vocab_item:
             vocab_item.priority_learn = False
-            self.vocabulary_repository.update_vocabulary_item(vocab_item)
+            await self.vocabulary_repository.update_vocabulary_item(vocab_item)
 
-        self.maintain_daily_selection(username, user_data)
+        await self.maintain_daily_selection(username, user_data)
         self.update_user_daily_selection(username, user_data)
         logger.info(f"User {username} postponed word '{word_phrase}'")
         # Returns nothing - success is implicit
 
-    def bump_words(self, username: str, user_data) -> None:
+    async def bump_words(self, username: str, user_data) -> None:
         """
         Replace current daily selection with a new portion of words.
 
@@ -461,7 +466,7 @@ class RuneRecallService:
         user_data.daily_selection = []
         user_data.next_word_index = 0
 
-        portion_words = self._select_daily_portion(user_data.db_user_id)
+        portion_words = await self._select_daily_portion(user_data.db_user_id)
 
         if portion_words:
             user_data.daily_selection = [

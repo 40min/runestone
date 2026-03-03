@@ -113,8 +113,8 @@ async def test_generate_response_orchestration(
     call_kwargs = agent_service.agent.ainvoke.call_args[1]
     context = call_kwargs.get("context")
     assert context.user == mock_user
-    assert context.vocabulary_service == mock_vocabulary_service
-    assert context.memory_item_service == mock_memory_item_service
+    # Note: vocabulary_service and memory_item_service are no longer in AgentContext
+    # Tools now use their own providers from agent.tools.db for concurrency safety
 
     # Verify inputs to invoke
     invoke_args = agent_service.agent.ainvoke.call_args[0][0]

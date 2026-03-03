@@ -1,7 +1,7 @@
 import json
 import os
 import tempfile
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -38,6 +38,9 @@ def state_manager(temp_state_file):
 @pytest.fixture
 def mock_rune_recall_service():
     service = MagicMock(spec=RuneRecallService)
+    service.remove_word_completely = AsyncMock()
+    service.postpone_word = AsyncMock()
+    service.bump_words = AsyncMock()
     return service
 
 
@@ -59,54 +62,54 @@ def telegram_service_with_deps(state_manager, mock_rune_recall_service):
 
 
 @patch("runestone.services.telegram_command_service.settings")
-def test_init_with_token(mock_settings, state_manager, mock_rune_recall_service):
+async def test_init_with_token(mock_settings, state_manager, mock_rune_recall_service):
     mock_settings.telegram_bot_token = "test_token"
     service = TelegramCommandService(state_manager, mock_rune_recall_service)
     assert service.bot_token == "test_token"
     assert service.base_url == "https://api.telegram.org/bottest_token"
 
 
-def test_init_without_token(state_manager, mock_rune_recall_service):
+async def test_init_without_token(state_manager, mock_rune_recall_service):
     with patch("runestone.services.telegram_command_service.settings") as mock_settings:
         mock_settings.telegram_bot_token = "config_token"
         service = TelegramCommandService(state_manager, mock_rune_recall_service)
         assert service.bot_token == "config_token"
 
 
-def test_init_no_token_raises_error(state_manager, mock_rune_recall_service):
+async def test_init_no_token_raises_error(state_manager, mock_rune_recall_service):
     with patch("runestone.services.telegram_command_service.settings") as mock_settings:
         mock_settings.telegram_bot_token = None
         with pytest.raises(ValueError, match="Telegram bot token is required"):
             TelegramCommandService(state_manager, mock_rune_recall_service)
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_send_message_success(mock_client_class, telegram_service):
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_send_message_success(mock_client_class, telegram_service):
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    result = telegram_service._send_message(123, "test message")
+    result = await telegram_service._send_message(123, "test message")
     assert result is True
     mock_client.post.assert_called_once_with(
         "https://api.telegram.org/bottest_token/sendMessage", json={"chat_id": 123, "text": "test message"}
     )
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_send_message_failure(mock_client_class, telegram_service):
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_send_message_failure(mock_client_class, telegram_service):
     mock_client = MagicMock()
-    mock_client.post.side_effect = httpx.RequestError("Network error")
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(side_effect=httpx.RequestError("Network error"))
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    result = telegram_service._send_message(123, "test message")
+    result = await telegram_service._send_message(123, "test message")
     assert result is False
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_process_updates_authorized_start(mock_client_class, telegram_service, state_manager):
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_authorized_start(mock_client_class, telegram_service, state_manager):
     mock_client = MagicMock()
 
     # Mock getUpdates response
@@ -127,16 +130,16 @@ def test_process_updates_authorized_start(mock_client_class, telegram_service, s
         ],
     }
     mock_get_response.raise_for_status.return_value = None
-    mock_client.get.return_value = mock_get_response
+    mock_client.get = AsyncMock(return_value=mock_get_response)
 
     # Mock sendMessage response
     mock_post_response = MagicMock()
     mock_post_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_post_response
+    mock_client.post = AsyncMock(return_value=mock_post_response)
 
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    telegram_service.process_updates()
+    await telegram_service.process_updates()
 
     # Check state updated
     user_data = state_manager.get_user("authorized_user")
@@ -153,8 +156,8 @@ def test_process_updates_authorized_start(mock_client_class, telegram_service, s
     )
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_process_updates_authorized_stop(mock_client_class, telegram_service, state_manager):
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_authorized_stop(mock_client_class, telegram_service, state_manager):
     # First activate user
     state_manager.update_user(
         "authorized_user", {"db_user_id": 1, "chat_id": 123, "is_active": True, "daily_selection": []}
@@ -180,16 +183,16 @@ def test_process_updates_authorized_stop(mock_client_class, telegram_service, st
         ],
     }
     mock_get_response.raise_for_status.return_value = None
-    mock_client.get.return_value = mock_get_response
+    mock_client.get = AsyncMock(return_value=mock_get_response)
 
     # Mock sendMessage response
     mock_post_response = MagicMock()
     mock_post_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_post_response
+    mock_client.post = AsyncMock(return_value=mock_post_response)
 
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    telegram_service.process_updates()
+    await telegram_service.process_updates()
 
     # Check state updated
     user_data = state_manager.get_user("authorized_user")
@@ -205,8 +208,8 @@ def test_process_updates_authorized_stop(mock_client_class, telegram_service, st
     )
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_process_updates_unauthorized(mock_client_class, telegram_service):
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_unauthorized(mock_client_class, telegram_service):
     mock_client = MagicMock()
 
     # Mock getUpdates response
@@ -227,16 +230,16 @@ def test_process_updates_unauthorized(mock_client_class, telegram_service):
         ],
     }
     mock_get_response.raise_for_status.return_value = None
-    mock_client.get.return_value = mock_get_response
+    mock_client.get = AsyncMock(return_value=mock_get_response)
 
     # Mock sendMessage response
     mock_post_response = MagicMock()
     mock_post_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_post_response
+    mock_client.post = AsyncMock(return_value=mock_post_response)
 
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    telegram_service.process_updates()
+    await telegram_service.process_updates()
 
     # Check rejection message sent
     mock_client.post.assert_called_once_with(
@@ -245,50 +248,50 @@ def test_process_updates_unauthorized(mock_client_class, telegram_service):
     )
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_process_updates_api_error(mock_client_class, telegram_service):
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_api_error(mock_client_class, telegram_service):
     mock_client = MagicMock()
-    mock_client.get.side_effect = httpx.RequestError("API error")
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.get = AsyncMock(side_effect=httpx.RequestError("API error"))
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    # Should not raise exception, just log
-    telegram_service.process_updates()
+    # Should not raise exception, just log(
+    await telegram_service.process_updates()
 
     mock_client.get.assert_called_once()
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_process_updates_invalid_response(mock_client_class, telegram_service):
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_invalid_response(mock_client_class, telegram_service):
     mock_client = MagicMock()
     mock_get_response = MagicMock()
     mock_get_response.json.return_value = {"ok": False, "error": "test error"}
     mock_get_response.raise_for_status.return_value = None
-    mock_client.get.return_value = mock_get_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.get = AsyncMock(return_value=mock_get_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    telegram_service.process_updates()
+    await telegram_service.process_updates()
 
     mock_client.get.assert_called_once()
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_process_updates_empty_updates(mock_client_class, telegram_service, state_manager):
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_empty_updates(mock_client_class, telegram_service, state_manager):
     mock_client = MagicMock()
     mock_get_response = MagicMock()
     mock_get_response.json.return_value = {"ok": True, "result": []}
     mock_get_response.raise_for_status.return_value = None
-    mock_client.get.return_value = mock_get_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.get = AsyncMock(return_value=mock_get_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     initial_offset = state_manager.get_update_offset()
-    telegram_service.process_updates()
+    await telegram_service.process_updates()
 
     # Offset should not change
     assert state_manager.get_update_offset() == initial_offset
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_process_updates_non_bot_command_ignored(mock_client_class, telegram_service, state_manager):
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_non_bot_command_ignored(mock_client_class, telegram_service, state_manager):
     mock_client = MagicMock()
 
     # Mock getUpdates response with a message that is not a bot command
@@ -309,16 +312,16 @@ def test_process_updates_non_bot_command_ignored(mock_client_class, telegram_ser
         ],
     }
     mock_get_response.raise_for_status.return_value = None
-    mock_client.get.return_value = mock_get_response
+    mock_client.get = AsyncMock(return_value=mock_get_response)
 
     # Mock sendMessage response (should not be called)
     mock_post_response = MagicMock()
     mock_post_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_post_response
+    mock_client.post = AsyncMock(return_value=mock_post_response)
 
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    telegram_service.process_updates()
+    await telegram_service.process_updates()
 
     # Check offset updated
     assert state_manager.get_update_offset() == 5
@@ -332,7 +335,7 @@ def test_process_updates_non_bot_command_ignored(mock_client_class, telegram_ser
 
 
 # Test the new text parsing function
-def test_parse_word_from_reply_text(telegram_service):
+async def test_parse_word_from_reply_text(telegram_service):
     # Test successful parsing
     reply_text = "🇸🇪 kontanter\n🇬🇧 cash\n\n💡 Example: - Tår ni kontanter?"
     result = telegram_service._parse_word_from_reply_text(reply_text)
@@ -354,7 +357,7 @@ def test_parse_word_from_reply_text(telegram_service):
     assert result == "hej"
 
 
-def test_escape_markdown_v2():
+async def test_escape_markdown_v2():
     """Test MarkdownV2 escaping function"""
     # Test special characters
     assert escape_markdown("word_with_underscore") == r"word\_with\_underscore"
@@ -380,8 +383,8 @@ def test_escape_markdown_v2():
     assert escape_markdown("word-with*special.chars!") == r"word\-with\*special\.chars\!"
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_handle_remove_command_success(
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_handle_remove_command_success(
     mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
 ):
     """Test successful /remove command"""
@@ -392,13 +395,13 @@ def test_handle_remove_command_success(
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     # Create mock message with reply
     message = {"reply_to_message": {"text": "🇸🇪 kontanter\n🇬🇧 cash\n\n💡 Example: - Tår ni kontanter?"}}
 
-    telegram_service_with_deps._handle_remove_command(message, "authorized_user", None, 123)
+    await telegram_service_with_deps._handle_remove_command(message, "authorized_user", None, 123)
 
     # Verify RuneRecallService method called
     mock_rune_recall_service.remove_word_completely.assert_called_once_with("authorized_user", "kontanter")
@@ -410,8 +413,8 @@ def test_handle_remove_command_success(
     assert "removed from vocabulary" in call_args["text"]
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_handle_remove_command_no_reply(mock_client_class, telegram_service_with_deps, state_manager):
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_handle_remove_command_no_reply(mock_client_class, telegram_service_with_deps, state_manager):
     """Test /remove command without reply message"""
     user_data = state_manager.get_user("authorized_user")
 
@@ -419,12 +422,12 @@ def test_handle_remove_command_no_reply(mock_client_class, telegram_service_with
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     message = {}  # No reply_to_message
 
-    telegram_service_with_deps._handle_remove_command(message, "authorized_user", user_data, 123)
+    await telegram_service_with_deps._handle_remove_command(message, "authorized_user", user_data, 123)
 
     # Should send instruction message
     mock_client.post.assert_called_once()
@@ -432,8 +435,8 @@ def test_handle_remove_command_no_reply(mock_client_class, telegram_service_with
     assert "reply to a word message" in call_args["text"]
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_handle_remove_command_word_not_found(
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_handle_remove_command_word_not_found(
     mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
 ):
     """Test /remove command when word is not found in database"""
@@ -444,12 +447,12 @@ def test_handle_remove_command_word_not_found(
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     message = {"reply_to_message": {"text": "🇸🇪 nonexistent\n🇬🇧 word"}}
 
-    telegram_service_with_deps._handle_remove_command(message, "authorized_user", None, 123)
+    await telegram_service_with_deps._handle_remove_command(message, "authorized_user", None, 123)
 
     # Should send not found message
     mock_client.post.assert_called_once()
@@ -457,8 +460,8 @@ def test_handle_remove_command_word_not_found(
     assert "not found" in call_args["text"]
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_handle_postpone_command_success(
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_handle_postpone_command_success(
     mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
 ):
     """Test successful /postpone command"""
@@ -469,13 +472,13 @@ def test_handle_postpone_command_success(
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     # Create mock message with reply
     message = {"reply_to_message": {"text": "🇸🇪 kontanter\n🇬🇧 cash\n\n💡 Example: - Tår ni kontanter?"}}
 
-    telegram_service_with_deps._handle_postpone_command(message, "authorized_user", None, 123)
+    await telegram_service_with_deps._handle_postpone_command(message, "authorized_user", None, 123)
 
     # Verify RuneRecallService method called
     mock_rune_recall_service.postpone_word.assert_called_once_with("authorized_user", "kontanter")
@@ -487,8 +490,8 @@ def test_handle_postpone_command_success(
     assert "postponed" in call_args["text"]
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_handle_postpone_command_not_in_selection(
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_handle_postpone_command_not_in_selection(
     mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
 ):
     """Test /postpone command when word is not in daily selection"""
@@ -499,12 +502,12 @@ def test_handle_postpone_command_not_in_selection(
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     message = {"reply_to_message": {"text": "🇸🇪 kontanter\n🇬🇧 cash"}}
 
-    telegram_service_with_deps._handle_postpone_command(message, "authorized_user", None, 123)
+    await telegram_service_with_deps._handle_postpone_command(message, "authorized_user", None, 123)
 
     # Should send not in selection message
     mock_client.post.assert_called_once()
@@ -512,8 +515,8 @@ def test_handle_postpone_command_not_in_selection(
     assert "not in today's selection" in call_args["text"]
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_process_updates_remove_command(
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_remove_command(
     mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
 ):
     """Test processing /remove command through main update handler"""
@@ -553,24 +556,24 @@ def test_process_updates_remove_command(
         ],
     }
     mock_get_response.raise_for_status.return_value = None
-    mock_client.get.return_value = mock_get_response
+    mock_client.get = AsyncMock(return_value=mock_get_response)
 
     # Mock sendMessage response
     mock_post_response = MagicMock()
     mock_post_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_post_response
+    mock_client.post = AsyncMock(return_value=mock_post_response)
 
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    telegram_service_with_deps.process_updates()
+    await telegram_service_with_deps.process_updates()
 
     # Verify the command was processed
     mock_client.post.assert_called_once()
     mock_rune_recall_service.remove_word_completely.assert_called_once_with("authorized_user", "kontanter")
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_process_updates_postpone_command(
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_postpone_command(
     mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
 ):
     """Test processing /postpone command through main update handler"""
@@ -608,16 +611,16 @@ def test_process_updates_postpone_command(
         ],
     }
     mock_get_response.raise_for_status.return_value = None
-    mock_client.get.return_value = mock_get_response
+    mock_client.get = AsyncMock(return_value=mock_get_response)
 
     # Mock sendMessage response
     mock_post_response = MagicMock()
     mock_post_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_post_response
+    mock_client.post = AsyncMock(return_value=mock_post_response)
 
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    telegram_service_with_deps.process_updates()
+    await telegram_service_with_deps.process_updates()
 
     # Verify the command was processed
     mock_client.post.assert_called_once()
@@ -626,8 +629,10 @@ def test_process_updates_postpone_command(
     assert "postponed" in call_args["text"]
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_process_updates_single_update_error_continues_processing(mock_client_class, telegram_service, state_manager):
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_single_update_error_continues_processing(
+    mock_client_class, telegram_service, state_manager
+):
     """Test that an error processing one update doesn't prevent processing other updates"""
     mock_client = MagicMock()
 
@@ -659,16 +664,16 @@ def test_process_updates_single_update_error_continues_processing(mock_client_cl
         ],
     }
     mock_get_response.raise_for_status.return_value = None
-    mock_client.get.return_value = mock_get_response
+    mock_client.get = AsyncMock(return_value=mock_get_response)
 
     # Mock sendMessage to fail on first call but succeed on second
     mock_post_response_fail = MagicMock()
     mock_post_response_fail.raise_for_status.side_effect = httpx.RequestError("Network error")
     mock_post_response_success = MagicMock()
     mock_post_response_success.raise_for_status.return_value = None
-    mock_client.post.side_effect = [mock_post_response_fail, mock_post_response_success]
+    mock_client.post = AsyncMock(side_effect=[mock_post_response_fail, mock_post_response_success])
 
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     # Mock state_manager.get_user to work for the first call but make update_user fail for first update
     original_update_user = state_manager.update_user
@@ -682,7 +687,7 @@ def test_process_updates_single_update_error_continues_processing(mock_client_cl
         return original_update_user(username, user_data)
 
     with patch.object(state_manager, "update_user", side_effect=mock_update_user):
-        telegram_service.process_updates()
+        await telegram_service.process_updates()
 
     # Check that offset was still updated despite first update failure
     assert state_manager.get_update_offset() == 3
@@ -691,18 +696,18 @@ def test_process_updates_single_update_error_continues_processing(mock_client_cl
     assert mock_client.post.call_count == 2
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_fetch_updates_state_manager_error(mock_client_class, telegram_service, state_manager):
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_fetch_updates_state_manager_error(mock_client_class, telegram_service, state_manager):
     """Test that _fetch_updates handles state manager errors gracefully"""
     # Mock state_manager.get_update_offset to raise an error
     with patch.object(state_manager, "get_update_offset", side_effect=Exception("State error")):
-        telegram_service.process_updates()
+        await telegram_service.process_updates()
 
     # Should not have made any HTTP requests
     mock_client_class.assert_not_called()
 
 
-def test_process_single_update_handles_malformed_update(telegram_service):
+async def test_process_single_update_handles_malformed_update(telegram_service):
     """Test that _process_single_update handles malformed updates gracefully"""
     malformed_updates = [
         {},  # Empty update
@@ -714,20 +719,20 @@ def test_process_single_update_handles_malformed_update(telegram_service):
 
     for update in malformed_updates:
         # Should not raise exception
-        telegram_service._process_single_update(update)
+        await telegram_service._process_single_update(update)
 
 
-def test_handle_authorized_user_command_unknown_command(telegram_service):
+async def test_handle_authorized_user_command_unknown_command(telegram_service):
     """Test that unknown commands are handled gracefully"""
     user_data = MagicMock()
     user_data.is_active = True
 
     # Should not raise exception for unknown command
-    telegram_service._handle_authorized_user_command("/unknown", {}, "test_user", user_data, 123)
+    await telegram_service._handle_authorized_user_command("/unknown", {}, "test_user", user_data, 123)
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_process_updates_offset_update_error(mock_client_class, telegram_service, state_manager):
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_offset_update_error(mock_client_class, telegram_service, state_manager):
     """Test that offset update errors are handled gracefully"""
     mock_client = MagicMock()
 
@@ -749,26 +754,28 @@ def test_process_updates_offset_update_error(mock_client_class, telegram_service
         ],
     }
     mock_get_response.raise_for_status.return_value = None
-    mock_client.get.return_value = mock_get_response
+    mock_client.get = AsyncMock(return_value=mock_get_response)
 
     # Mock sendMessage response
     mock_post_response = MagicMock()
     mock_post_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_post_response
+    mock_client.post = AsyncMock(return_value=mock_post_response)
 
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     # Mock state_manager.set_update_offset to raise an error
     with patch.object(state_manager, "set_update_offset", side_effect=Exception("Offset update error")):
-        # Should not raise exception, just log the error
-        telegram_service.process_updates()
+        # Should not raise exception, just log the error(
+        await telegram_service.process_updates()
 
     # Update should still have been processed successfully
     mock_client.post.assert_called_once()
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_process_updates_state_command_active_with_words(mock_client_class, telegram_service_with_deps, state_manager):
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_state_command_active_with_words(
+    mock_client_class, telegram_service_with_deps, state_manager
+):
     """Test processing /state command for active user with daily selection"""
     # Setup user state
     user_data = state_manager.get_user("authorized_user")
@@ -797,16 +804,16 @@ def test_process_updates_state_command_active_with_words(mock_client_class, tele
         ],
     }
     mock_get_response.raise_for_status.return_value = None
-    mock_client.get.return_value = mock_get_response
+    mock_client.get = AsyncMock(return_value=mock_get_response)
 
     # Mock sendMessage response
     mock_post_response = MagicMock()
     mock_post_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_post_response
+    mock_client.post = AsyncMock(return_value=mock_post_response)
 
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    telegram_service_with_deps.process_updates()
+    await telegram_service_with_deps.process_updates()
 
     # Verify the command was processed
     mock_client.post.assert_called_once()
@@ -816,8 +823,10 @@ def test_process_updates_state_command_active_with_words(mock_client_class, tele
     assert "parse_mode" not in call_args
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_process_updates_state_command_inactive_no_words(mock_client_class, telegram_service_with_deps, state_manager):
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_state_command_inactive_no_words(
+    mock_client_class, telegram_service_with_deps, state_manager
+):
     """Test processing /state command for inactive user with no daily selection"""
     # Setup user state
     user_data = state_manager.get_user("authorized_user")
@@ -846,16 +855,16 @@ def test_process_updates_state_command_inactive_no_words(mock_client_class, tele
         ],
     }
     mock_get_response.raise_for_status.return_value = None
-    mock_client.get.return_value = mock_get_response
+    mock_client.get = AsyncMock(return_value=mock_get_response)
 
     # Mock sendMessage response
     mock_post_response = MagicMock()
     mock_post_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_post_response
+    mock_client.post = AsyncMock(return_value=mock_post_response)
 
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    telegram_service_with_deps.process_updates()
+    await telegram_service_with_deps.process_updates()
 
     # Verify the command was processed
     mock_client.post.assert_called_once()
@@ -865,8 +874,10 @@ def test_process_updates_state_command_inactive_no_words(mock_client_class, tele
     assert "parse_mode" not in call_args
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_process_updates_state_command_with_special_chars(mock_client_class, telegram_service_with_deps, state_manager):
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_state_command_with_special_chars(
+    mock_client_class, telegram_service_with_deps, state_manager
+):
     """Test processing /state command with words containing special Markdown characters"""
     # Setup user state with words that have special characters
     user_data = state_manager.get_user("authorized_user")
@@ -898,16 +909,16 @@ def test_process_updates_state_command_with_special_chars(mock_client_class, tel
         ],
     }
     mock_get_response.raise_for_status.return_value = None
-    mock_client.get.return_value = mock_get_response
+    mock_client.get = AsyncMock(return_value=mock_get_response)
 
     # Mock sendMessage response
     mock_post_response = MagicMock()
     mock_post_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_post_response
+    mock_client.post = AsyncMock(return_value=mock_post_response)
 
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    telegram_service_with_deps.process_updates()
+    await telegram_service_with_deps.process_updates()
 
     # Verify the command was processed
     mock_client.post.assert_called_once()
@@ -924,8 +935,8 @@ def test_process_updates_state_command_with_special_chars(mock_client_class, tel
     assert "parse_mode" not in call_args
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_process_updates_bump_words_command_success(
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_bump_words_command_success(
     mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
 ):
     """Test processing /bump_words command through main update handler"""
@@ -959,16 +970,16 @@ def test_process_updates_bump_words_command_success(
         ],
     }
     mock_get_response.raise_for_status.return_value = None
-    mock_client.get.return_value = mock_get_response
+    mock_client.get = AsyncMock(return_value=mock_get_response)
 
     # Mock sendMessage response
     mock_post_response = MagicMock()
     mock_post_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_post_response
+    mock_client.post = AsyncMock(return_value=mock_post_response)
 
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    telegram_service_with_deps.process_updates()
+    await telegram_service_with_deps.process_updates()
 
     # Verify the command was processed
     mock_client.post.assert_called_once()
@@ -977,8 +988,8 @@ def test_process_updates_bump_words_command_success(
     assert "Daily selection updated! Selected 1 new words for today." in call_args["text"]
 
 
-@patch("runestone.services.telegram_command_service.httpx.Client")
-def test_process_updates_bump_words_command_no_words_available(
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_bump_words_command_no_words_available(
     mock_client_class, telegram_service_with_deps, state_manager, mock_rune_recall_service
 ):
     """Test processing /bump_words command when no words are available"""
@@ -1012,16 +1023,16 @@ def test_process_updates_bump_words_command_no_words_available(
         ],
     }
     mock_get_response.raise_for_status.return_value = None
-    mock_client.get.return_value = mock_get_response
+    mock_client.get = AsyncMock(return_value=mock_get_response)
 
     # Mock sendMessage response
     mock_post_response = MagicMock()
     mock_post_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_post_response
+    mock_client.post = AsyncMock(return_value=mock_post_response)
 
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
-    telegram_service_with_deps.process_updates()
+    await telegram_service_with_deps.process_updates()
 
     # Verify the command was processed
     mock_client.post.assert_called_once()

@@ -3,7 +3,7 @@ Tests for the content analysis module.
 """
 
 import json
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -32,7 +32,8 @@ class TestContentAnalyzer:
         assert analyzer.client == mock_client
         assert analyzer.verbose is True
 
-    def test_analyze_content_success(self):
+    @pytest.mark.anyio
+    async def test_analyze_content_success(self):
         """Test successful content analysis."""
         # Mock analysis result
         analysis_result = ContentAnalysis(
@@ -49,14 +50,14 @@ class TestContentAnalyzer:
             core_topics=["greetings", "introductions"],
         )
 
-        # Mock client response
+        # Mock client response - now async
         mock_response = analysis_result.model_dump_json()
 
-        mock_client = Mock()
+        mock_client = AsyncMock()
         mock_client.analyze_content.return_value = mock_response
 
         analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
-        result = analyzer.analyze_content(self.sample_text)
+        result = await analyzer.analyze_content(self.sample_text)
 
         # Verify result structure
         assert isinstance(result, ContentAnalysis)
@@ -79,16 +80,17 @@ class TestContentAnalyzer:
         assert self.sample_text in args[0]
         assert "JSON format" in args[0]
 
-    def test_analyze_content_invalid_json(self):
+    @pytest.mark.anyio
+    async def test_analyze_content_invalid_json(self):
         """Test handling of invalid JSON response."""
-        # Mock invalid JSON response
+        # Mock invalid JSON response - now async
         mock_response = "This is not valid JSON"
 
-        mock_client = Mock()
+        mock_client = AsyncMock()
         mock_client.analyze_content.return_value = mock_response
 
         analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
-        result = analyzer.analyze_content(self.sample_text)
+        result = await analyzer.analyze_content(self.sample_text)
 
         # Should get fallback analysis with default structure
         assert isinstance(result, ContentAnalysis)
@@ -99,9 +101,10 @@ class TestContentAnalyzer:
         assert result.grammar_focus.topic == "Swedish language practice"
         assert isinstance(result.vocabulary, list)
 
-    def test_analyze_content_missing_fields(self):
+    @pytest.mark.anyio
+    async def test_analyze_content_missing_fields(self):
         """Test handling of JSON with missing required fields."""
-        # Mock incomplete JSON response
+        # Mock incomplete JSON response - now async
         incomplete_result = {
             "grammar_focus": {
                 "has_explicit_rules": True,
@@ -113,13 +116,13 @@ class TestContentAnalyzer:
 
         mock_response = json.dumps(incomplete_result)
 
-        mock_client = Mock()
+        mock_client = AsyncMock()
         mock_client.analyze_content.return_value = mock_response
 
         analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
 
         # With the new parser, missing fields trigger fallback
-        result = analyzer.analyze_content(self.sample_text)
+        result = await analyzer.analyze_content(self.sample_text)
 
         # Should get fallback analysis that preserves extracted data and fills missing fields
         assert isinstance(result, ContentAnalysis)
@@ -130,17 +133,18 @@ class TestContentAnalyzer:
         # Missing fields should be filled with defaults
         assert result.grammar_focus.explanation != ""
 
-    def test_analyze_content_no_response(self):
+    @pytest.mark.anyio
+    async def test_analyze_content_no_response(self):
         """Test handling of empty response."""
         mock_response = None
 
-        mock_client = Mock()
+        mock_client = AsyncMock()
         mock_client.analyze_content.return_value = mock_response
 
         analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
 
         with pytest.raises(ContentAnalysisError) as exc_info:
-            analyzer.analyze_content(self.sample_text)
+            await analyzer.analyze_content(self.sample_text)
 
         assert "No analysis returned" in str(exc_info.value)
 

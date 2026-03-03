@@ -42,24 +42,24 @@ class TelegramCommandService:
 
         return None
 
-    def _send_message(self, chat_id: int, text: str, parse_mode: Optional[str] = None) -> bool:
+    async def _send_message(self, chat_id: int, text: str, parse_mode: Optional[str] = None) -> bool:
         """Send a message to a Telegram chat."""
         try:
             payload = {"chat_id": chat_id, "text": text}
             if parse_mode:
                 payload["parse_mode"] = parse_mode
-            with httpx.Client(timeout=10.0) as client:
-                response = client.post(f"{self.base_url}/sendMessage", json=payload)
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(f"{self.base_url}/sendMessage", json=payload)
                 response.raise_for_status()
                 return True
         except httpx.RequestError as e:
             logger.error(f"Failed to send message to chat {chat_id}: {e}")
             return False
 
-    def process_updates(self) -> None:
+    async def process_updates(self) -> None:
         """Poll for updates and process commands."""
         # Get the updates from Telegram API with isolated error handling
-        updates, max_update_id = self._fetch_updates()
+        updates, max_update_id = await self._fetch_updates()
         if not updates:
             return  # Error occurred during fetch or no updates, already logged
 
@@ -70,7 +70,7 @@ class TelegramCommandService:
                 if update_id:
                     max_update_id = max(max_update_id, update_id)
 
-                self._process_single_update(update)
+                await self._process_single_update(update)
             except Exception as e:
                 logger.error(f"Error processing single update {update.get('update_id', 'unknown')}: {e}")
                 # Continue processing other updates even if one fails
@@ -82,7 +82,7 @@ class TelegramCommandService:
             except Exception as e:
                 logger.error(f"Failed to update offset: {e}")
 
-    def _fetch_updates(self) -> tuple[list, int]:
+    async def _fetch_updates(self) -> tuple[list, int]:
         """
         Fetch updates from Telegram API with isolated error handling.
 
@@ -96,8 +96,8 @@ class TelegramCommandService:
             return [], 0
 
         try:
-            with httpx.Client(timeout=35.0) as client:
-                response = client.get(f"{self.base_url}/getUpdates", params={"offset": offset, "timeout": 30})
+            async with httpx.AsyncClient(timeout=35.0) as client:
+                response = await client.get(f"{self.base_url}/getUpdates", params={"offset": offset, "timeout": 30})
                 response.raise_for_status()
                 data = response.json()
         except httpx.RequestError as e:
@@ -114,7 +114,7 @@ class TelegramCommandService:
         updates = data.get("result", [])
         return updates, 0
 
-    def _process_single_update(self, update: dict) -> None:
+    async def _process_single_update(self, update: dict) -> None:
         """
         Process a single update with proper validation and error handling.
 
@@ -153,23 +153,25 @@ class TelegramCommandService:
         if user_data:
             # Authorized user - process commands
             try:
-                self._handle_authorized_user_command(text, message, username, user_data, chat_id)
+                await self._handle_authorized_user_command(text, message, username, user_data, chat_id)
             except Exception as e:
                 logger.error(f"Error processing command '{text}' for user {username}: {e}")
                 # Attempt to notify user of the error
                 try:
-                    self._send_message(chat_id, "Sorry, an error occurred while processing your command.")
+                    await self._send_message(chat_id, "Sorry, an error occurred while processing your command.")
                 except Exception as send_error:
                     logger.error(f"Failed to send error message to user {username}: {send_error}")
         else:
             # Unauthorized user
             logger.warning(f"Unauthorized user {username} tried to access the bot")
             try:
-                self._send_message(chat_id, "Sorry, you are not authorized to use this bot.")
+                await self._send_message(chat_id, "Sorry, you are not authorized to use this bot.")
             except Exception as e:
                 logger.error(f"Failed to send unauthorized message to {username}: {e}")
 
-    def _handle_authorized_user_command(self, text: str, message: dict, username: str, user_data, chat_id: int) -> None:
+    async def _handle_authorized_user_command(
+        self, text: str, message: dict, username: str, user_data, chat_id: int
+    ) -> None:
         """Handle commands from authorized users."""
         if text == "/start":
             was_inactive = not user_data.is_active
@@ -177,69 +179,64 @@ class TelegramCommandService:
             user_data.chat_id = chat_id
             self.state_manager.update_user(username, user_data)
             if was_inactive:
-                self._send_message(chat_id, "Bot started! You will receive daily vocabulary words.")
+                await self._send_message(chat_id, "Bot started! You will receive daily vocabulary words.")
                 logger.info(f"User {username} started the bot")
             else:
                 logger.info(f"User {username} sent /start but was already active")
         elif text == "/stop":
             user_data.is_active = False
             self.state_manager.update_user(username, user_data)
-            self._send_message(chat_id, "Bot stopped. You will no longer receive vocabulary words.")
+            await self._send_message(chat_id, "Bot stopped. You will no longer receive vocabulary words.")
             logger.info(f"User {username} stopped the bot")
         elif text == "/remove":
-            self._handle_remove_command(message, username, user_data, chat_id)
+            await self._handle_remove_command(message, username, user_data, chat_id)
         elif text == "/postpone":
-            self._handle_postpone_command(message, username, user_data, chat_id)
+            await self._handle_postpone_command(message, username, user_data, chat_id)
         elif text == "/state":
-            self._handle_state_command(username, user_data, chat_id)
+            await self._handle_state_command(username, user_data, chat_id)
         elif text == "/bump_words":
-            self._handle_bump_words_command(username, user_data, chat_id)
+            await self._handle_bump_words_command(username, user_data, chat_id)
         else:
-            # Unknown command, ignore or send help
             logger.debug(f"Unknown command '{text}' from user {username}")
 
-    def _handle_remove_command(self, message: dict, username: str, user_data, chat_id: int) -> None:
+    async def _handle_remove_command(self, message: dict, username: str, user_data, chat_id: int) -> None:
         """Handle the /remove command to completely remove a word from database and daily_selection."""
-
         reply_to_message = message.get("reply_to_message")
         if not reply_to_message:
-            self._send_message(chat_id, "Please reply to a word message to remove it.")
+            await self._send_message(chat_id, "Please reply to a word message to remove it.")
             return
 
         reply_text = reply_to_message.get("text", "")
         word_phrase = self._parse_word_from_reply_text(reply_text)
 
         if not word_phrase:
-            self._send_message(chat_id, "Could not find a word to remove in the replied message.")
+            await self._send_message(chat_id, "Could not find a word to remove in the replied message.")
             return
 
         try:
-            self.rune_recall_service.remove_word_completely(username, word_phrase)
-            # Success - format message here
-            self._send_message(chat_id, f"Word '{word_phrase}' removed from vocabulary.")
+            await self.rune_recall_service.remove_word_completely(username, word_phrase)
+            await self._send_message(chat_id, f"Word '{word_phrase}' removed from vocabulary.")
 
         except WordNotFoundError:
-            self._send_message(chat_id, f"Word '{word_phrase}' not found in your vocabulary.")
+            await self._send_message(chat_id, f"Word '{word_phrase}' not found in your vocabulary.")
         except VocabularyOperationError as e:
-            self._send_message(chat_id, f"Error: {e.message}")
+            await self._send_message(chat_id, f"Error: {e.message}")
             logger.error(f"Failed to remove word for {username}: {e.details}")
 
-    def _handle_bump_words_command(self, username: str, user_data, chat_id: int) -> None:
+    async def _handle_bump_words_command(self, username: str, user_data, chat_id: int) -> None:
         """Handle the /bump_words command to replace current daily selection with new words."""
-
         try:
-            self.rune_recall_service.bump_words(username, user_data)
-            # Success - format message here
+            await self.rune_recall_service.bump_words(username, user_data)
             count = len(user_data.daily_selection)
             if count > 0:
-                self._send_message(chat_id, f"Daily selection updated! Selected {count} new words for today.")
+                await self._send_message(chat_id, f"Daily selection updated! Selected {count} new words for today.")
             else:
-                self._send_message(chat_id, "Daily selection cleared. No new words available at this time.")
+                await self._send_message(chat_id, "Daily selection cleared. No new words available at this time.")
 
         except VocabularyOperationError as e:
-            self._send_message(chat_id, f"Error: {e.message}")
+            await self._send_message(chat_id, f"Error: {e.message}")
 
-    def _handle_state_command(self, username: str, user_data, chat_id: int) -> None:
+    async def _handle_state_command(self, username: str, user_data, chat_id: int) -> None:
         """Handle the /state command to show user's current state."""
         is_active_text = "✅ Yes" if user_data.is_active else "❌ No"
 
@@ -250,32 +247,31 @@ class TelegramCommandService:
 
         message = f"Current State\n\nIs Active: {is_active_text}\n\nDaily Selection:\n{words_list}"
 
-        self._send_message(chat_id, message)
+        await self._send_message(chat_id, message)
 
-    def _handle_postpone_command(self, message: dict, username: str, user_data, chat_id: int) -> None:
+    async def _handle_postpone_command(self, message: dict, username: str, user_data, chat_id: int) -> None:
         """Handle the /postpone command to remove a word from daily_selection only."""
         if not self.rune_recall_service:
-            self._send_message(chat_id, "Postpone command is not available - no vocabulary service configured.")
+            await self._send_message(chat_id, "Postpone command is not available - no vocabulary service configured.")
             return
 
         reply_to_message = message.get("reply_to_message")
         if not reply_to_message:
-            self._send_message(chat_id, "Please reply to a word message to postpone it.")
+            await self._send_message(chat_id, "Please reply to a word message to postpone it.")
             return
 
         reply_text = reply_to_message.get("text", "")
         word_phrase = self._parse_word_from_reply_text(reply_text)
 
         if not word_phrase:
-            self._send_message(chat_id, "Could not find a word to postpone in the replied message.")
+            await self._send_message(chat_id, "Could not find a word to postpone in the replied message.")
             return
 
         try:
-            self.rune_recall_service.postpone_word(username, word_phrase)
-            # Success - format message here
-            self._send_message(chat_id, f"Word '{word_phrase}' postponed (removed from today's selection).")
+            await self.rune_recall_service.postpone_word(username, word_phrase)
+            await self._send_message(chat_id, f"Word '{word_phrase}' postponed (removed from today's selection).")
 
         except WordNotInSelectionError:
-            self._send_message(chat_id, f"Word '{word_phrase}' was not in today's selection.")
+            await self._send_message(chat_id, f"Word '{word_phrase}' was not in today's selection.")
         except VocabularyOperationError as e:
-            self._send_message(chat_id, f"Error: {e.message}")
+            await self._send_message(chat_id, f"Error: {e.message}")

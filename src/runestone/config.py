@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     verbose: bool = False
 
     # Database Configuration
-    database_url: str = "sqlite:///./state/runestone.db"
+    database_url: str
 
     # State Management Configuration
     state_file_path: str = "state/state.json"

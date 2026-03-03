@@ -3,7 +3,7 @@ Tests for the processor module.
 """
 
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -28,7 +28,8 @@ class TestRunestoneProcessor:
 
     @patch("PIL.Image.open")
     @patch("runestone.core.processor.get_logger")
-    def test_stateless_workflow_timing_logs(self, mock_get_logger, mock_image_open):
+    @pytest.mark.anyio
+    async def test_stateless_workflow_timing_logs(self, mock_get_logger, mock_image_open):
         """Test that timing logs are generated for each step in stateless workflow."""
         # Mock PIL Image
         mock_image = Mock()
@@ -49,7 +50,7 @@ class TestRunestoneProcessor:
                 unable_to_recognize=0,
             ),
         )
-        mock_ocr_instance = Mock()
+        mock_ocr_instance = AsyncMock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
 
         # Mock analysis result
@@ -58,7 +59,7 @@ class TestRunestoneProcessor:
             grammar_focus=GrammarFocus(has_explicit_rules=False, topic="greetings", explanation="", rules=None),
             core_topics=["greetings"],
         )
-        mock_analyzer_instance = Mock()
+        mock_analyzer_instance = AsyncMock()
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
 
         # Mock time.time to simulate durations
@@ -78,14 +79,14 @@ class TestRunestoneProcessor:
                 settings=self.settings,
                 ocr_processor=mock_ocr_instance,
                 content_analyzer=mock_analyzer_instance,
-                vocabulary_service=Mock(spec=VocabularyService),
-                user_service=Mock(spec=UserService),
+                vocabulary_service=Mock(get_existing_word_phrases=AsyncMock(return_value=[])),
+                user_service=Mock(increment_pages_recognised_count=AsyncMock()),
                 verbose=True,
             )
 
-            # Test the stateless workflow
-            ocr_result = processor.run_ocr(b"fake image data")
-            analysis_result = processor.run_analysis(ocr_result.transcribed_text, user=mock_user)
+            # Test the stateless workflow - now async
+            ocr_result = await processor.run_ocr(b"fake image data")
+            analysis_result = await processor.run_analysis(ocr_result.transcribed_text, user=mock_user)
 
             # Verify results
             assert ocr_result == mock_ocr_result
@@ -105,7 +106,8 @@ class TestRunestoneProcessor:
 
     @patch("PIL.Image.open")
     @patch("runestone.core.processor.get_logger")
-    def test_stateless_workflow_no_verbose_no_timing_logs(self, mock_get_logger, mock_image_open):
+    @pytest.mark.anyio
+    async def test_stateless_workflow_no_verbose_no_timing_logs(self, mock_get_logger, mock_image_open):
         """Test that timing logs use logger.debug (actual output controlled by log level)."""
         # Mock PIL Image
         mock_image = Mock()
@@ -126,7 +128,7 @@ class TestRunestoneProcessor:
                 unable_to_recognize=0,
             ),
         )
-        mock_ocr_instance = Mock()
+        mock_ocr_instance = AsyncMock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
 
         # Mock analysis result
@@ -135,7 +137,7 @@ class TestRunestoneProcessor:
             grammar_focus=GrammarFocus(has_explicit_rules=False, topic="greetings", explanation="", rules=None),
             core_topics=["greetings"],
         )
-        mock_analyzer_instance = Mock()
+        mock_analyzer_instance = AsyncMock()
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
 
         # Create a mock user for testing
@@ -146,14 +148,14 @@ class TestRunestoneProcessor:
             settings=self.settings,
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
-            vocabulary_service=Mock(spec=VocabularyService),
-            user_service=Mock(spec=UserService),
+            vocabulary_service=Mock(get_existing_word_phrases=AsyncMock(return_value=[])),
+            user_service=Mock(increment_pages_recognised_count=AsyncMock()),
             verbose=False,
         )
 
-        # Test the stateless workflow
-        ocr_result = processor.run_ocr(b"fake image data")
-        analysis_result = processor.run_analysis(ocr_result.transcribed_text, user=mock_user)
+        # Test the stateless workflow - now async
+        ocr_result = await processor.run_ocr(b"fake image data")
+        analysis_result = await processor.run_analysis(ocr_result.transcribed_text, user=mock_user)
 
         # Verify results
         assert ocr_result == mock_ocr_result
@@ -167,7 +169,8 @@ class TestRunestoneProcessor:
 
     @patch("PIL.Image.open")
     @patch("runestone.core.processor.get_logger")
-    def test_stateless_workflow_exception_handling(self, mock_get_logger, mock_image_open):
+    @pytest.mark.anyio
+    async def test_stateless_workflow_exception_handling(self, mock_get_logger, mock_image_open):
         """Test exception handling in stateless workflow."""
         # Mock PIL Image
         mock_image = Mock()
@@ -178,12 +181,12 @@ class TestRunestoneProcessor:
         mock_logger = Mock()
         mock_get_logger.return_value = mock_logger
 
-        # Mock OCR to raise exception
-        mock_ocr_instance = Mock()
+        # Mock OCR to raise exception - now async
+        mock_ocr_instance = AsyncMock()
         mock_ocr_instance.extract_text.side_effect = Exception("OCR failed")
 
         # Mock analyzer (not directly used in this test, but needed for processor init)
-        mock_analyzer_instance = Mock()
+        mock_analyzer_instance = AsyncMock()
 
         processor = RunestoneProcessor(
             settings=self.settings,
@@ -195,7 +198,7 @@ class TestRunestoneProcessor:
         )
 
         with pytest.raises(RunestoneError) as exc_info:
-            processor.run_ocr(b"fake image data")
+            await processor.run_ocr(b"fake image data")
 
         assert "OCR processing failed" in str(exc_info.value)
 
@@ -203,7 +206,8 @@ class TestRunestoneProcessor:
         mock_logger.error.assert_called_once()
 
     @patch("PIL.Image.open")
-    def test_run_ocr_success(self, mock_image_open):
+    @pytest.mark.anyio
+    async def test_run_ocr_success(self, mock_image_open):
         """Test successful OCR processing."""
         # Mock PIL Image
         mock_image = Mock()
@@ -220,11 +224,11 @@ class TestRunestoneProcessor:
                 unable_to_recognize=0,
             ),
         )
-        mock_ocr_instance = Mock()
+        mock_ocr_instance = AsyncMock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
 
         # Mock analyzer (not directly used in this test, but needed for processor init)
-        mock_analyzer_instance = Mock()
+        mock_analyzer_instance = AsyncMock()
 
         processor = RunestoneProcessor(
             settings=self.settings,
@@ -234,12 +238,13 @@ class TestRunestoneProcessor:
             user_service=Mock(spec=UserService),
             verbose=False,
         )
-        result = processor.run_ocr(b"fake image data")
+        result = await processor.run_ocr(b"fake image data")
 
         assert result == mock_ocr_result
         mock_ocr_instance.extract_text.assert_called_once()
 
-    def test_run_analysis_success(self):
+    @pytest.mark.anyio
+    async def test_run_analysis_success(self):
         """Test successful content analysis."""
         # Mock analysis result as ContentAnalysis object
         mock_analysis = ContentAnalysis(
@@ -247,14 +252,17 @@ class TestRunestoneProcessor:
             grammar_focus=GrammarFocus(has_explicit_rules=False, topic="greetings", explanation="", rules=None),
             core_topics=["greetings"],
         )
-        mock_analyzer_instance = Mock()
+        mock_analyzer_instance = AsyncMock()
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
 
         # Mock OCR (not directly used in this test, but needed for processor init)
-        mock_ocr_instance = Mock()
+        mock_ocr_instance = AsyncMock()
 
         # Mock user service
         mock_user_service = Mock(spec=UserService)
+        mock_user_service.increment_pages_recognised_count = AsyncMock()
+        mock_vocab_service = Mock(spec=VocabularyService)
+        mock_vocab_service.get_existing_word_phrases = AsyncMock(return_value=[])
 
         # Create a mock user object
         mock_user = Mock()
@@ -264,20 +272,21 @@ class TestRunestoneProcessor:
             settings=self.settings,
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
-            vocabulary_service=Mock(spec=VocabularyService),
+            vocabulary_service=mock_vocab_service,
             user_service=mock_user_service,
             verbose=False,
         )
-        result = processor.run_analysis("Sample text", user=mock_user)
+        result = await processor.run_analysis("Sample text", user=mock_user)
 
         assert result == mock_analysis
         mock_analyzer_instance.analyze_content.assert_called_once_with("Sample text")
-        mock_user_service.increment_pages_recognised_count.assert_called_once_with(mock_user)
+        mock_user_service.increment_pages_recognised_count.assert_awaited_once_with(mock_user)
 
     @patch("PIL.Image.open")
     @patch("runestone.core.processor.get_logger")
     @patch("builtins.open")
-    def test_process_image_success(self, mock_open, mock_get_logger, mock_image_open):
+    @pytest.mark.anyio
+    async def test_process_image_success(self, mock_open, mock_get_logger, mock_image_open):
         """Test successful image processing through complete workflow."""
         # Mock file reading with context manager
         mock_file = Mock()
@@ -304,7 +313,7 @@ class TestRunestoneProcessor:
                 unable_to_recognize=0,
             ),
         )
-        mock_ocr_instance = Mock()
+        mock_ocr_instance = AsyncMock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
 
         # Mock analysis result
@@ -313,7 +322,7 @@ class TestRunestoneProcessor:
             grammar_focus=GrammarFocus(has_explicit_rules=False, topic="greetings", explanation="", rules=None),
             core_topics=["greetings"],
         )
-        mock_analyzer_instance = Mock()
+        mock_analyzer_instance = AsyncMock()
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
 
         # Create a mock user for testing
@@ -324,11 +333,11 @@ class TestRunestoneProcessor:
             settings=self.settings,
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
-            vocabulary_service=Mock(spec=VocabularyService),
-            user_service=Mock(spec=UserService),
+            vocabulary_service=Mock(get_existing_word_phrases=AsyncMock(return_value=[])),
+            user_service=Mock(increment_pages_recognised_count=AsyncMock()),
             verbose=True,
         )
-        result = processor.process_image(self.image_path, user=mock_user)
+        result = await processor.process_image(self.image_path, user=mock_user)
 
         # Verify results structure
         assert "ocr_result" in result
@@ -348,7 +357,8 @@ class TestRunestoneProcessor:
     @patch("PIL.Image.open")
     @patch("runestone.core.processor.get_logger")
     @patch("builtins.open")
-    def test_process_image_no_text_extracted(self, mock_open, mock_get_logger, mock_image_open):
+    @pytest.mark.anyio
+    async def test_process_image_no_text_extracted(self, mock_open, mock_get_logger, mock_image_open):
         """Test process_image when no text is extracted from image."""
         # Mock file reading with context manager
         mock_file = Mock()
@@ -375,11 +385,11 @@ class TestRunestoneProcessor:
                 unable_to_recognize=0,
             ),
         )
-        mock_ocr_instance = Mock()
+        mock_ocr_instance = AsyncMock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
 
         # Mock analyzer (not directly used in this test, but needed for processor init)
-        mock_analyzer_instance = Mock()
+        mock_analyzer_instance = AsyncMock()
 
         # Create a mock user for testing
         mock_user = Mock()
@@ -389,20 +399,21 @@ class TestRunestoneProcessor:
             settings=self.settings,
             ocr_processor=mock_ocr_instance,
             content_analyzer=mock_analyzer_instance,
-            vocabulary_service=Mock(spec=VocabularyService),
-            user_service=Mock(spec=UserService),
+            vocabulary_service=Mock(get_existing_word_phrases=AsyncMock(return_value=[])),
+            user_service=Mock(increment_pages_recognised_count=AsyncMock()),
             verbose=True,
         )
 
         with pytest.raises(RunestoneError) as exc_info:
-            processor.process_image(self.image_path, user=mock_user)
+            await processor.process_image(self.image_path, user=mock_user)
 
         assert "No text extracted from image" in str(exc_info.value)
 
     @patch("PIL.Image.open")
     @patch("runestone.core.processor.get_logger")
     @patch("builtins.open")
-    def test_process_image_ocr_failure(self, mock_open, mock_get_logger, mock_image_open):
+    @pytest.mark.anyio
+    async def test_process_image_ocr_failure(self, mock_open, mock_get_logger, mock_image_open):
         """Test process_image when OCR processing fails."""
         # Mock file reading with context manager
         mock_file = Mock()
@@ -419,12 +430,12 @@ class TestRunestoneProcessor:
         mock_logger = Mock()
         mock_get_logger.return_value = mock_logger
 
-        # Mock OCR to raise exception
-        mock_ocr_instance = Mock()
+        # Mock OCR to raise exception - now async
+        mock_ocr_instance = AsyncMock()
         mock_ocr_instance.extract_text.side_effect = Exception("OCR failed")
 
         # Mock analyzer (not directly used in this test, but needed for processor init)
-        mock_analyzer_instance = Mock()
+        mock_analyzer_instance = AsyncMock()
 
         # Create a mock user for testing
         mock_user = Mock()
@@ -440,7 +451,7 @@ class TestRunestoneProcessor:
         )
 
         with pytest.raises(RunestoneError) as exc_info:
-            processor.process_image(self.image_path, user=mock_user)
+            await processor.process_image(self.image_path, user=mock_user)
 
         assert "OCR processing failed" in str(exc_info.value)
         assert mock_logger.error.call_count == 2

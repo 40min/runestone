@@ -2,6 +2,7 @@
 Grammar search and reading tools for the teacher agent.
 """
 
+import asyncio
 import json
 import logging
 
@@ -30,7 +31,7 @@ class ReadGrammarPageInput(BaseModel):
 
 
 @tool("search_grammar", args_schema=SearchGrammarInput)
-def search_grammar(
+async def search_grammar(
     query: str,
     runtime: ToolRuntime[AgentContext],
     top_k: int = 3,
@@ -58,7 +59,8 @@ def search_grammar(
         return json.dumps({"error": "Grammar index not initialized"})
 
     try:
-        results = grammar_index.search(query, top_k=top_k)
+        # Run synchronous search in thread pool to avoid blocking
+        results = await asyncio.to_thread(grammar_index.search, query, top_k=top_k)
         if not results:
             return json.dumps({"tool": "search_grammar", "results": []})
 
@@ -79,7 +81,7 @@ def search_grammar(
 
 
 @tool("read_grammar_page", args_schema=ReadGrammarPageInput)
-def read_grammar_page(
+async def read_grammar_page(
     cheatsheet_path: str,
     runtime: ToolRuntime[AgentContext],
 ) -> str:
@@ -104,7 +106,8 @@ def read_grammar_page(
 
     try:
         filepath = cheatsheet_path if cheatsheet_path.endswith(".md") else f"{cheatsheet_path}.md"
-        return grammar_service.get_cheatsheet_content(filepath)
+        # Run synchronous file I/O in thread pool to avoid blocking
+        return await asyncio.to_thread(grammar_service.get_cheatsheet_content, filepath)
     except FileNotFoundError:
         return f"Error: Grammar page not found: {cheatsheet_path}"
     except ValueError as e:

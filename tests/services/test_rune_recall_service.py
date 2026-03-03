@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
+from sqlalchemy import select
 
 from runestone.core.exceptions import VocabularyOperationError, WordNotFoundError, WordNotInSelectionError
-from runestone.db.models import Vocabulary
+from runestone.db.models import User, Vocabulary
 from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.services.rune_recall_service import RuneRecallService
 from runestone.state.state_manager import StateManager
@@ -26,8 +27,30 @@ def vocabulary_repository(db_session):
 
 
 @pytest.fixture
-def test_vocabulary(db_session, vocabulary_model_factory):
+async def test_vocabulary(db_session, vocabulary_model_factory):
     """Create a test database with sample vocabulary data."""
+    db_session.add_all(
+        [
+            User(
+                id=1,
+                name="User",
+                surname="One",
+                email="user1@example.com",
+                hashed_password="hash",
+                timezone="UTC",
+            ),
+            User(
+                id=2,
+                name="User",
+                surname="Two",
+                email="user2@example.com",
+                hashed_password="hash",
+                timezone="UTC",
+            ),
+        ]
+    )
+    await db_session.flush()
+
     # Add sample vocabulary for user 1
     words = [
         vocabulary_model_factory(
@@ -64,7 +87,7 @@ def test_vocabulary(db_session, vocabulary_model_factory):
         ),
     ]
     db_session.add_all(words)
-    db_session.commit()
+    await db_session.commit()
 
     yield db_session
 
@@ -121,17 +144,18 @@ def test_init_uses_config_values(vocabulary_repository, state_manager, mock_sett
     assert service.cooldown_days == 14
 
 
-@patch("runestone.services.rune_recall_service.httpx.Client")
-def test_send_word_message_success(mock_client_class, rune_recall_service):
+@patch("runestone.services.rune_recall_service.httpx.AsyncClient")
+@pytest.mark.asyncio
+async def test_send_word_message_success(mock_client_class, rune_recall_service):
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     word = {"id": 1, "word_phrase": "hello", "translation": "hej", "example_phrase": "Hello, how are you?"}
 
-    result = rune_recall_service._send_word_message(123, word)
+    result = await rune_recall_service._send_word_message(123, word)
     assert result is True
 
     expected_message = "🇸🇪 **hello**\n🇬🇧 hej\n\n💡 *Example:* Hello, how are you?"
@@ -141,17 +165,18 @@ def test_send_word_message_success(mock_client_class, rune_recall_service):
     )
 
 
-@patch("runestone.services.rune_recall_service.httpx.Client")
-def test_send_word_message_without_example(mock_client_class, rune_recall_service):
+@patch("runestone.services.rune_recall_service.httpx.AsyncClient")
+@pytest.mark.asyncio
+async def test_send_word_message_without_example(mock_client_class, rune_recall_service):
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     word = {"id": 1, "word_phrase": "hello", "translation": "hej", "example_phrase": None}
 
-    result = rune_recall_service._send_word_message(123, word)
+    result = await rune_recall_service._send_word_message(123, word)
     assert result is True
 
     expected_message = "🇸🇪 **hello**\n🇬🇧 hej"
@@ -161,21 +186,23 @@ def test_send_word_message_without_example(mock_client_class, rune_recall_servic
     )
 
 
-@patch("runestone.services.rune_recall_service.httpx.Client")
-def test_send_word_message_failure(mock_client_class, rune_recall_service):
+@patch("runestone.services.rune_recall_service.httpx.AsyncClient")
+@pytest.mark.asyncio
+async def test_send_word_message_failure(mock_client_class, rune_recall_service):
     mock_client = MagicMock()
-    mock_client.post.side_effect = httpx.RequestError("Network error")
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(side_effect=httpx.RequestError("Network error"))
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     word = {"id": 1, "word_phrase": "hello", "translation": "hej", "example_phrase": None}
 
-    result = rune_recall_service._send_word_message(123, word)
+    result = await rune_recall_service._send_word_message(123, word)
     assert result is False
 
 
-def test_select_daily_portion(rune_recall_service, test_vocabulary):
+@pytest.mark.asyncio
+async def test_select_daily_portion(rune_recall_service, test_vocabulary):
     # Test selecting words for user 1
-    words = rune_recall_service._select_daily_portion(1)
+    words = await rune_recall_service._select_daily_portion(1)
 
     assert len(words) == 3  # Should select all 3 words for user 1
     selected_words = [w["word_phrase"] for w in words]
@@ -184,28 +211,34 @@ def test_select_daily_portion(rune_recall_service, test_vocabulary):
     assert "thank you" in selected_words
 
 
-def test_select_daily_portion_with_recent_history(rune_recall_service, test_vocabulary):
+@pytest.mark.asyncio
+async def test_select_daily_portion_with_recent_history(rune_recall_service, test_vocabulary):
     # Simulate that the first word was learned recently by setting last_learned
-    hello_word = test_vocabulary.query(Vocabulary).filter(Vocabulary.word_phrase == "hello").first()
+    hello_word = (
+        (await test_vocabulary.execute(select(Vocabulary).filter(Vocabulary.word_phrase == "hello"))).scalars().first()
+    )
     hello_word.last_learned = datetime.now() - timedelta(days=1)  # Learned yesterday
-    test_vocabulary.commit()
+    await test_vocabulary.commit()
 
-    words = rune_recall_service._select_daily_portion(1)
+    words = await rune_recall_service._select_daily_portion(1)
 
     assert len(words) == 2  # Should exclude the recently learned word
     word_phrases = [w["word_phrase"] for w in words]
     assert "hello" not in word_phrases  # Should not include recently learned word
 
 
-@patch("runestone.services.rune_recall_service.httpx.Client")
-def test_process_user_recall_word_new_portion(mock_client_class, rune_recall_service, test_vocabulary, state_manager):
+@patch("runestone.services.rune_recall_service.httpx.AsyncClient")
+@pytest.mark.asyncio
+async def test_process_user_recall_word_new_portion(
+    mock_client_class, rune_recall_service, test_vocabulary, state_manager
+):
 
     # Mock HTTP client for successful message sending
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     # Mock word selection to return 3 words
     mock_words = [
@@ -218,8 +251,13 @@ def test_process_user_recall_word_new_portion(mock_client_class, rune_recall_ser
     user_data = state_manager.get_user("active_user")
 
     # Process recall word for active user (no existing portion)
-    with patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_words):
-        rune_recall_service._process_user_recall_word("active_user", user_data)
+    with patch.object(
+        rune_recall_service,
+        "_select_daily_portion",
+        new_callable=AsyncMock,
+        return_value=mock_words,
+    ):
+        await rune_recall_service._process_user_recall_word("active_user", user_data)
 
     # Check that daily selection was created
     user_data = state_manager.get_user("active_user")
@@ -230,12 +268,15 @@ def test_process_user_recall_word_new_portion(mock_client_class, rune_recall_ser
     mock_client.post.assert_called_once()
 
 
-@patch("runestone.services.rune_recall_service.httpx.Client")
-def test_process_user_recall_word_all_sent(mock_client_class, rune_recall_service, test_vocabulary, state_manager):
+@patch("runestone.services.rune_recall_service.httpx.AsyncClient")
+@pytest.mark.asyncio
+async def test_process_user_recall_word_all_sent(
+    mock_client_class, rune_recall_service, test_vocabulary, state_manager
+):
 
     # Mock HTTP client
     mock_client = MagicMock()
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     # Set up selection with all words sent
     state_manager.update_user(
@@ -252,17 +293,18 @@ def test_process_user_recall_word_all_sent(mock_client_class, rune_recall_servic
     user_data = state_manager.get_user("active_user")
 
     # Process recall word
-    rune_recall_service._process_user_recall_word("active_user", user_data)
+    await rune_recall_service._process_user_recall_word("active_user", user_data)
 
     # Should send a message (resets to index 0 and sends next word)
     mock_client.post.assert_called_once()
 
 
-@patch("src.runestone.services.rune_recall_service.httpx.Client")
-def test_process_user_missing_data(mock_client_class, rune_recall_service, state_manager):
+@patch("src.runestone.services.rune_recall_service.httpx.AsyncClient")
+@pytest.mark.asyncio
+async def test_process_user_missing_data(mock_client_class, rune_recall_service, state_manager):
     # Mock HTTP client
     mock_client = MagicMock()
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     # Update existing user to have missing chat_id
     state_manager.update_user(
@@ -271,51 +313,66 @@ def test_process_user_missing_data(mock_client_class, rune_recall_service, state
 
     user_data = state_manager.get_user("active_user")
 
-    rune_recall_service._process_user_recall_word("active_user", user_data)
+    await rune_recall_service._process_user_recall_word("active_user", user_data)
 
     # Should not send any messages
     mock_client.post.assert_not_called()
 
 
-@patch("runestone.services.rune_recall_service.httpx.Client")
-def test_send_next_recall_word_multiple_users(mock_client_class, rune_recall_service, state_manager):
+@patch("runestone.services.rune_recall_service.httpx.AsyncClient")
+@pytest.mark.asyncio
+async def test_send_next_recall_word_multiple_users(mock_client_class, rune_recall_service, state_manager):
     # Mock HTTP client
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     # Mock the word selection to return empty (to avoid database dependency)
-    with patch.object(rune_recall_service, "_select_daily_portion", return_value=[]):
-        rune_recall_service.send_next_recall_word()
+    with patch.object(
+        rune_recall_service,
+        "_select_daily_portion",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
+        await rune_recall_service.send_next_recall_word()
 
     # Should not send any messages since no words selected
     mock_client.post.assert_not_called()
 
 
-@patch("runestone.services.rune_recall_service.httpx.Client")
-def test_send_next_recall_word_with_errors(mock_client_class, rune_recall_service, test_vocabulary, state_manager):
+@patch("runestone.services.rune_recall_service.httpx.AsyncClient")
+@pytest.mark.asyncio
+async def test_send_next_recall_word_with_errors(
+    mock_client_class, rune_recall_service, test_vocabulary, state_manager
+):
 
     # Mock HTTP client to fail
     mock_client = MagicMock()
-    mock_client.post.side_effect = httpx.RequestError("Network error")
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(side_effect=httpx.RequestError("Network error"))
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     # Mock word selection to return some words (using existing word ID from test_vocabulary)
     mock_words = [{"id": 1, "word_phrase": "hello", "translation": "hej", "example_phrase": "Hello, how are you?"}]
 
     user_data = state_manager.get_user("active_user")
 
-    with patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_words):
+    with patch.object(
+        rune_recall_service,
+        "_select_daily_portion",
+        new_callable=AsyncMock,
+        return_value=mock_words,
+    ):
         # Should not raise exception, just log errors
-        rune_recall_service._process_user_recall_word("active_user", user_data)
+        await rune_recall_service._process_user_recall_word("active_user", user_data)
 
     # Should have attempted to send message despite error
     mock_client.post.assert_called_once()
 
 
-def test_daily_selection_cleanup(rune_recall_service, test_vocabulary, state_manager):
+@pytest.mark.asyncio
+async def test_daily_selection_cleanup(rune_recall_service, test_vocabulary, state_manager):
     """Test that old daily selection entries are cleaned up."""
 
     # Add user with daily selection data
@@ -335,11 +392,15 @@ def test_daily_selection_cleanup(rune_recall_service, test_vocabulary, state_man
     user_data = state_manager.get_user("active_user")
 
     with (
-        patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_words),
+        patch.object(
+            rune_recall_service,
+            "_select_daily_portion",
+            new_callable=AsyncMock,
+            return_value=mock_words,
+        ),
         patch.object(rune_recall_service, "_send_word_message", return_value=True),
     ):
-
-        rune_recall_service._process_user_recall_word("active_user", user_data)
+        await rune_recall_service._process_user_recall_word("active_user", user_data)
 
     # Check that selection is not updated since it already exists
     user_data = state_manager.get_user("active_user")
@@ -350,26 +411,32 @@ def test_daily_selection_cleanup(rune_recall_service, test_vocabulary, state_man
 
 
 @patch("runestone.services.rune_recall_service.datetime")
-def test_send_next_recall_word_within_hours(mock_datetime, rune_recall_service):
+@pytest.mark.asyncio
+async def test_send_next_recall_word_within_hours(mock_datetime, rune_recall_service):
     """Test that recall words are sent when within recall hours."""
     # Mock current time to be 10 AM
     mock_datetime.now.return_value.hour = 10
 
-    with patch.object(rune_recall_service, "_process_user_recall_word") as mock_process:
-        rune_recall_service.send_next_recall_word()
+    with patch.object(rune_recall_service, "_process_user_recall_word", new_callable=AsyncMock) as mock_process:
+        await rune_recall_service.send_next_recall_word()
 
     # Should process users since we're within hours
-    mock_process.assert_called()
+    mock_process.assert_awaited()
 
 
-def test_send_next_recall_word_outside_hours(rune_recall_service):
+@pytest.mark.asyncio
+async def test_send_next_recall_word_outside_hours(rune_recall_service):
     """Test that recall words are not sent when outside recall hours."""
     with patch("runestone.services.rune_recall_service.datetime") as mock_datetime:
         # Mock current time to be 2 AM
         mock_datetime.now.return_value.hour = 2
 
-        with patch.object(rune_recall_service, "_process_user_recall_word") as mock_process:
-            rune_recall_service.send_next_recall_word()
+        with patch.object(
+            rune_recall_service,
+            "_process_user_recall_word",
+            new_callable=AsyncMock,
+        ) as mock_process:
+            await rune_recall_service.send_next_recall_word()
 
         # Should not process users since we're outside hours
         mock_process.assert_not_called()
@@ -397,7 +464,8 @@ def test_rune_recall_service_different_cooldown_periods(vocabulary_repository, m
     assert service_zero.cooldown_days == 0
 
 
-def test_select_daily_portion_different_cooldown_periods(test_vocabulary, mock_settings):
+@pytest.mark.asyncio
+async def test_select_daily_portion_different_cooldown_periods(test_vocabulary, mock_settings):
     """Test daily portion selection with different cooldown periods."""
     # Create VocabularyRepository and services with different cooldown periods
     vocabulary_repository = VocabularyRepository(test_vocabulary)
@@ -406,12 +474,14 @@ def test_select_daily_portion_different_cooldown_periods(test_vocabulary, mock_s
     service = RuneRecallService(vocabulary_repository, state_manager, mock_settings)
 
     # Set up test data: word learned 2 days ago
-    hello_word = test_vocabulary.query(Vocabulary).filter(Vocabulary.word_phrase == "hello").first()
+    hello_word = (
+        (await test_vocabulary.execute(select(Vocabulary).filter(Vocabulary.word_phrase == "hello"))).scalars().first()
+    )
     hello_word.last_learned = datetime.now() - timedelta(days=2)
-    test_vocabulary.commit()
+    await test_vocabulary.commit()
 
     # With 3-day cooldown, word should be excluded
-    words = service._select_daily_portion(1)
+    words = await service._select_daily_portion(1)
     word_phrases = [w["word_phrase"] for w in words]
     assert "hello" not in word_phrases
 
@@ -420,13 +490,14 @@ def test_select_daily_portion_different_cooldown_periods(test_vocabulary, mock_s
     service_short = RuneRecallService(vocabulary_repository, state_manager, mock_settings)
 
     # With 1-day cooldown, word should be included
-    words = service_short._select_daily_portion(1)
+    words = await service_short._select_daily_portion(1)
     word_phrases = [w["word_phrase"] for w in words]
     assert "hello" in word_phrases
 
 
-@patch("runestone.services.rune_recall_service.httpx.Client")
-def test_process_user_recall_word_updates_last_learned(
+@patch("runestone.services.rune_recall_service.httpx.AsyncClient")
+@pytest.mark.asyncio
+async def test_process_user_recall_word_updates_last_learned(
     mock_client_class, rune_recall_service, test_vocabulary, state_manager
 ):
     """Test that processing recall word updates last_learned timestamp."""
@@ -435,8 +506,8 @@ def test_process_user_recall_word_updates_last_learned(
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     # Mock word selection to return 3 words
     mock_words = [
@@ -446,17 +517,26 @@ def test_process_user_recall_word_updates_last_learned(
     ]
 
     # Get initial state of a word
-    hello_word = test_vocabulary.query(Vocabulary).filter(Vocabulary.word_phrase == "hello").first()
+    hello_word = (
+        (await test_vocabulary.execute(select(Vocabulary).filter(Vocabulary.word_phrase == "hello"))).scalars().first()
+    )
     initial_last_learned = hello_word.last_learned
     word_id = hello_word.id
 
     # Get user data and process recall word
     user_data = state_manager.get_user("active_user")
-    with patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_words):
-        rune_recall_service._process_user_recall_word("active_user", user_data)
+    with patch.object(
+        rune_recall_service,
+        "_select_daily_portion",
+        new_callable=AsyncMock,
+        return_value=mock_words,
+    ):
+        await rune_recall_service._process_user_recall_word("active_user", user_data)
 
     # Query the word again from database to see updated state
-    updated_word = test_vocabulary.query(Vocabulary).filter(Vocabulary.id == word_id).first()
+    updated_word = (
+        (await test_vocabulary.execute(select(Vocabulary).filter(Vocabulary.id == word_id))).scalars().first()
+    )
 
     # Verify last_learned was updated
     assert updated_word.last_learned is not None
@@ -468,24 +548,26 @@ def test_process_user_recall_word_updates_last_learned(
     mock_client.post.assert_called_once()
 
 
-def test_select_daily_portion_no_words_available(rune_recall_service, test_vocabulary):
+@pytest.mark.asyncio
+async def test_select_daily_portion_no_words_available(rune_recall_service, test_vocabulary):
     """Test daily portion selection when no words are available due to cooldown."""
 
     # Mark all words as recently learned
-    words = test_vocabulary.query(Vocabulary).filter(Vocabulary.user_id == 1).all()
+    words = (await test_vocabulary.execute(select(Vocabulary).filter(Vocabulary.user_id == 1))).scalars().all()
     recent_time = datetime.now() - timedelta(days=1)  # Learned yesterday
     for word in words:
         word.last_learned = recent_time
-    test_vocabulary.commit()
+    await test_vocabulary.commit()
 
     # Try to select daily portion
-    result = rune_recall_service._select_daily_portion(1)
+    result = await rune_recall_service._select_daily_portion(1)
 
     # Should return empty list since all words are on cooldown
     assert result == []
 
 
-def test_select_daily_portion_words_per_day_limit(test_vocabulary, mock_settings):
+@pytest.mark.asyncio
+async def test_select_daily_portion_words_per_day_limit(test_vocabulary, mock_settings):
     """Test that daily portion respects words_per_day limit."""
     # Create service with limit of 2 words per day
     vocabulary_repository = VocabularyRepository(test_vocabulary)
@@ -494,28 +576,31 @@ def test_select_daily_portion_words_per_day_limit(test_vocabulary, mock_settings
     service = RuneRecallService(vocabulary_repository, state_manager, mock_settings)
 
     # Ensure all words are available (not on cooldown)
-    words = test_vocabulary.query(Vocabulary).filter(Vocabulary.user_id == 1).all()
+    words = (await test_vocabulary.execute(select(Vocabulary).filter(Vocabulary.user_id == 1))).scalars().all()
     for word in words:
         word.last_learned = datetime.now() - timedelta(days=10)  # Old enough
-    test_vocabulary.commit()
+    await test_vocabulary.commit()
 
     # Select daily portion
-    result = service._select_daily_portion(1)
+    result = await service._select_daily_portion(1)
 
     # Should return only 2 words despite having 3 available
     assert len(result) == 2
 
 
-def test_select_daily_portion_in_learn_filtering(rune_recall_service, test_vocabulary):
+@pytest.mark.asyncio
+async def test_select_daily_portion_in_learn_filtering(rune_recall_service, test_vocabulary):
     """Test that daily portion only includes words marked as in_learn."""
 
     # Mark one word as not in learning
-    hello_word = test_vocabulary.query(Vocabulary).filter(Vocabulary.word_phrase == "hello").first()
+    hello_word = (
+        (await test_vocabulary.execute(select(Vocabulary).filter(Vocabulary.word_phrase == "hello"))).scalars().first()
+    )
     hello_word.in_learn = False
-    test_vocabulary.commit()
+    await test_vocabulary.commit()
 
     # Select daily portion
-    words = rune_recall_service._select_daily_portion(1)
+    words = await rune_recall_service._select_daily_portion(1)
 
     # Should exclude the word not in learning
     word_phrases = [w["word_phrase"] for w in words]
@@ -560,7 +645,8 @@ def test_remove_word_from_daily_selection(rune_recall_service, state_manager):
     assert user_data.next_word_index == 0  # Should reset
 
 
-def test_maintain_daily_selection_adds_words_when_below_target(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_maintain_daily_selection_adds_words_when_below_target(rune_recall_service, state_manager):
     """Test maintaining daily_selection when below target count."""
     user_data = state_manager.get_user("active_user")
     user_data.daily_selection = []
@@ -574,8 +660,13 @@ def test_maintain_daily_selection_adds_words_when_below_target(rune_recall_servi
         Vocabulary(id=5, word_phrase="gammal", translation="old", example_phrase="", in_learn=True, user_id=1),
     ]
 
-    with patch.object(rune_recall_service.vocabulary_repository, "select_new_daily_words", return_value=mock_words):
-        added_count = rune_recall_service.maintain_daily_selection("active_user", user_data)
+    with patch.object(
+        rune_recall_service.vocabulary_repository,
+        "select_new_daily_words",
+        new_callable=AsyncMock,
+        return_value=mock_words,
+    ):
+        added_count = await rune_recall_service.maintain_daily_selection("active_user", user_data)
 
     assert added_count == 2
     assert len(user_data.daily_selection) == 2
@@ -583,7 +674,8 @@ def test_maintain_daily_selection_adds_words_when_below_target(rune_recall_servi
     assert user_data.daily_selection[0].word_phrase == "ny"
 
 
-def test_maintain_daily_selection_not_needed_when_at_target(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_maintain_daily_selection_not_needed_when_at_target(rune_recall_service, state_manager):
     """Test that maintenance doesn't happen when selection is already at target."""
     from runestone.state.state_types import WordOfDay
 
@@ -598,7 +690,7 @@ def test_maintain_daily_selection_not_needed_when_at_target(rune_recall_service,
     ]
 
     with patch.object(rune_recall_service.vocabulary_repository, "select_new_daily_words") as mock_select:
-        added_count = rune_recall_service.maintain_daily_selection("active_user", user_data)
+        added_count = await rune_recall_service.maintain_daily_selection("active_user", user_data)
 
     # Should not call repository since we're at target
     mock_select.assert_not_called()
@@ -620,7 +712,8 @@ def test_update_user_daily_selection(rune_recall_service, state_manager):
     mock_update.assert_called_once_with("active_user", user_data)
 
 
-def test_remove_word_completely_success(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_remove_word_completely_success(rune_recall_service, state_manager):
     """Test successful complete word removal with automatic replacement."""
     from unittest.mock import MagicMock, patch
 
@@ -640,18 +733,27 @@ def test_remove_word_completely_success(rune_recall_service, state_manager):
 
     with (
         patch.object(
-            rune_recall_service.vocabulary_repository, "get_vocabulary_item_by_word_phrase", return_value=mock_word
+            rune_recall_service.vocabulary_repository,
+            "get_vocabulary_item_by_word_phrase",
+            new_callable=AsyncMock,
+            return_value=mock_word,
         ),
         patch.object(
-            rune_recall_service.vocabulary_repository, "delete_vocabulary_item_by_word_phrase", return_value=True
+            rune_recall_service.vocabulary_repository,
+            "delete_vocabulary_item_by_word_phrase",
+            new_callable=AsyncMock,
+            return_value=True,
         ),
         patch.object(
-            rune_recall_service.vocabulary_repository, "select_new_daily_words", return_value=[mock_replacement]
+            rune_recall_service.vocabulary_repository,
+            "select_new_daily_words",
+            new_callable=AsyncMock,
+            return_value=[mock_replacement],
         ),
     ):
 
         # Success case - no exception raised
-        rune_recall_service.remove_word_completely("active_user", "kontanter")
+        await rune_recall_service.remove_word_completely("active_user", "kontanter")
 
         # Verify priority flag was reset
         assert mock_word.priority_learn is False
@@ -667,7 +769,8 @@ def test_remove_word_completely_success(rune_recall_service, state_manager):
         rune_recall_service.vocabulary_repository.select_new_daily_words.assert_called_once()
 
 
-def test_remove_word_completely_word_not_found(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_remove_word_completely_word_not_found(rune_recall_service, state_manager):
     """Test complete word removal when word is not found."""
     from unittest.mock import patch
 
@@ -676,16 +779,20 @@ def test_remove_word_completely_word_not_found(rune_recall_service, state_manage
 
     # Mock vocabulary repository to return None (word not found)
     with patch.object(
-        rune_recall_service.vocabulary_repository, "get_vocabulary_item_by_word_phrase", return_value=None
+        rune_recall_service.vocabulary_repository,
+        "get_vocabulary_item_by_word_phrase",
+        new_callable=AsyncMock,
+        return_value=None,
     ):
         with pytest.raises(WordNotFoundError) as exc_info:
-            rune_recall_service.remove_word_completely("active_user", "nonexistent")
+            await rune_recall_service.remove_word_completely("active_user", "nonexistent")
 
         assert "nonexistent" in str(exc_info.value)
         assert "not found" in str(exc_info.value)
 
 
-def test_remove_word_completely_db_failure(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_remove_word_completely_db_failure(rune_recall_service, state_manager):
     """Test complete word removal when database deletion fails."""
     from unittest.mock import MagicMock, patch
 
@@ -697,29 +804,37 @@ def test_remove_word_completely_db_failure(rune_recall_service, state_manager):
 
     with (
         patch.object(
-            rune_recall_service.vocabulary_repository, "get_vocabulary_item_by_word_phrase", return_value=mock_word
+            rune_recall_service.vocabulary_repository,
+            "get_vocabulary_item_by_word_phrase",
+            new_callable=AsyncMock,
+            return_value=mock_word,
         ),
         patch.object(
-            rune_recall_service.vocabulary_repository, "delete_vocabulary_item_by_word_phrase", return_value=False
+            rune_recall_service.vocabulary_repository,
+            "delete_vocabulary_item_by_word_phrase",
+            new_callable=AsyncMock,
+            return_value=False,
         ),
     ):
 
         with pytest.raises(VocabularyOperationError) as exc_info:
-            rune_recall_service.remove_word_completely("active_user", "kontanter")
+            await rune_recall_service.remove_word_completely("active_user", "kontanter")
 
         assert "Failed to remove word" in str(exc_info.value)
 
 
-def test_remove_word_completely_user_not_found(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_remove_word_completely_user_not_found(rune_recall_service, state_manager):
     """Test complete word removal when user is not found."""
     with pytest.raises(VocabularyOperationError) as exc_info:
-        rune_recall_service.remove_word_completely("nonexistent_user", "kontanter")
+        await rune_recall_service.remove_word_completely("nonexistent_user", "kontanter")
 
     assert "nonexistent_user" in str(exc_info.value)
     assert "not found" in str(exc_info.value)
 
 
-def test_postpone_word_success(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_postpone_word_success(rune_recall_service, state_manager):
     """Test successful word postponement with automatic replacement."""
     from unittest.mock import patch
 
@@ -737,25 +852,36 @@ def test_postpone_word_success(rune_recall_service, state_manager):
 
     with (
         patch.object(
-            rune_recall_service.vocabulary_repository, "select_new_daily_words", return_value=[mock_replacement]
+            rune_recall_service.vocabulary_repository,
+            "select_new_daily_words",
+            new_callable=AsyncMock,
+            return_value=[mock_replacement],
         ),
         patch.object(
-            rune_recall_service.vocabulary_repository, "get_vocabulary_item_by_word_phrase", return_value=MagicMock()
+            rune_recall_service.vocabulary_repository,
+            "get_vocabulary_item_by_word_phrase",
+            new_callable=AsyncMock,
+            return_value=MagicMock(),
         ) as mock_get,
-        patch.object(rune_recall_service.vocabulary_repository, "update_vocabulary_item") as mock_update,
+        patch.object(
+            rune_recall_service.vocabulary_repository,
+            "update_vocabulary_item",
+            new_callable=AsyncMock,
+        ) as mock_update,
     ):
         mock_vocab = mock_get.return_value
         mock_vocab.priority_learn = True
 
         # Success case - no exception raised
-        rune_recall_service.postpone_word("active_user", "kontanter")
+        await rune_recall_service.postpone_word("active_user", "kontanter")
 
         # Verify priority flag was reset
         assert mock_vocab.priority_learn is False
         mock_update.assert_called_once_with(mock_vocab)
 
 
-def test_postpone_word_not_in_selection(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_postpone_word_not_in_selection(rune_recall_service, state_manager):
     """Test postponing word that's not in daily selection."""
     from runestone.state.state_types import WordOfDay
 
@@ -763,29 +889,31 @@ def test_postpone_word_not_in_selection(rune_recall_service, state_manager):
     user_data.daily_selection = [WordOfDay(id_=1, word_phrase="hej")]
 
     with pytest.raises(WordNotInSelectionError) as exc_info:
-        rune_recall_service.postpone_word("active_user", "kontanter")
+        await rune_recall_service.postpone_word("active_user", "kontanter")
 
     assert "kontanter" in str(exc_info.value)
     assert "not in today's selection" in str(exc_info.value)
 
 
-def test_postpone_word_user_not_found(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_postpone_word_user_not_found(rune_recall_service, state_manager):
     """Test postponing word when user is not found."""
     with pytest.raises(VocabularyOperationError) as exc_info:
-        rune_recall_service.postpone_word("nonexistent_user", "kontanter")
+        await rune_recall_service.postpone_word("nonexistent_user", "kontanter")
 
     assert "nonexistent_user" in str(exc_info.value)
     assert "not found" in str(exc_info.value)
 
 
-@patch("runestone.services.rune_recall_service.httpx.Client")
-def test_send_word_message_with_special_characters(mock_client_class, rune_recall_service):
+@patch("runestone.services.rune_recall_service.httpx.AsyncClient")
+@pytest.mark.asyncio
+async def test_send_word_message_with_special_characters(mock_client_class, rune_recall_service):
     """Test that special Markdown characters in translation and example are properly escaped."""
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     # Word with special characters that need escaping
     word = {
@@ -795,7 +923,7 @@ def test_send_word_message_with_special_characters(mock_client_class, rune_recal
         "example_phrase": "vindruvor _ kr/kilo",
     }
 
-    result = rune_recall_service._send_word_message(123, word)
+    result = await rune_recall_service._send_word_message(123, word)
     assert result is True
 
     # Check that the message contains escaped characters
@@ -808,14 +936,15 @@ def test_send_word_message_with_special_characters(mock_client_class, rune_recal
     )
 
 
-@patch("runestone.services.rune_recall_service.httpx.Client")
-def test_send_word_message_with_special_characters_in_word_phrase(mock_client_class, rune_recall_service):
+@patch("runestone.services.rune_recall_service.httpx.AsyncClient")
+@pytest.mark.asyncio
+async def test_send_word_message_with_special_characters_in_word_phrase(mock_client_class, rune_recall_service):
     """Test that special Markdown characters in word_phrase are properly escaped."""
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     # Word with special characters in word_phrase that need escaping
     word = {
@@ -825,7 +954,7 @@ def test_send_word_message_with_special_characters_in_word_phrase(mock_client_cl
         "example_phrase": None,
     }
 
-    result = rune_recall_service._send_word_message(123, word)
+    result = await rune_recall_service._send_word_message(123, word)
     assert result is True
 
     # Check that the word_phrase is properly escaped
@@ -836,14 +965,15 @@ def test_send_word_message_with_special_characters_in_word_phrase(mock_client_cl
     )
 
 
-@patch("runestone.services.rune_recall_service.httpx.Client")
-def test_send_word_message_escapes_all_markdown_chars(mock_client_class, rune_recall_service):
+@patch("runestone.services.rune_recall_service.httpx.AsyncClient")
+@pytest.mark.asyncio
+async def test_send_word_message_escapes_all_markdown_chars(mock_client_class, rune_recall_service):
     """Test that all Markdown special characters are properly escaped."""
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     # Word with various special characters
     word = {
@@ -855,7 +985,7 @@ def test_send_word_message_escapes_all_markdown_chars(mock_client_class, rune_re
         "example_phrase": "~strikethrough~ =underline= (parentheses) [brackets]",
     }
 
-    result = rune_recall_service._send_word_message(123, word)
+    result = await rune_recall_service._send_word_message(123, word)
     assert result is True
 
     # Check that all special characters are escaped
@@ -923,7 +1053,8 @@ def test_escape_markdown_empty_and_normal_text():
     assert escape_markdown(simple_text) == simple_text
 
 
-def test_bump_words_success(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_bump_words_success(rune_recall_service, state_manager):
     """Test successful bump_words operation."""
 
     # Setup user data with existing daily selection
@@ -938,9 +1069,14 @@ def test_bump_words_success(rune_recall_service, state_manager):
         {"id": 3, "word_phrase": "new_word2"},
     ]
 
-    with patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_portion):
+    with patch.object(
+        rune_recall_service,
+        "_select_daily_portion",
+        new_callable=AsyncMock,
+        return_value=mock_portion,
+    ):
         # Success case - no exception raised
-        rune_recall_service.bump_words("active_user", user_data)
+        await rune_recall_service.bump_words("active_user", user_data)
 
     # Verify daily selection was replaced
     assert len(user_data.daily_selection) == 2
@@ -953,7 +1089,8 @@ def test_bump_words_success(rune_recall_service, state_manager):
     assert len(updated_user_data.daily_selection) == 2
 
 
-def test_bump_words_no_words_available(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_bump_words_no_words_available(rune_recall_service, state_manager):
     """Test bump_words when no new words are available."""
 
     # Setup user data with existing daily selection
@@ -962,9 +1099,14 @@ def test_bump_words_no_words_available(rune_recall_service, state_manager):
     user_data.db_user_id = 1
 
     # Mock empty portion selection
-    with patch.object(rune_recall_service, "_select_daily_portion", return_value=[]):
+    with patch.object(
+        rune_recall_service,
+        "_select_daily_portion",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
         # Success case - no exception raised
-        rune_recall_service.bump_words("active_user", user_data)
+        await rune_recall_service.bump_words("active_user", user_data)
 
     # Verify daily selection was cleared
     assert len(user_data.daily_selection) == 0
@@ -975,7 +1117,8 @@ def test_bump_words_no_words_available(rune_recall_service, state_manager):
     assert len(updated_user_data.daily_selection) == 0
 
 
-def test_bump_words_error_handling(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_bump_words_error_handling(rune_recall_service, state_manager):
     """Test bump_words error handling."""
     from runestone.state.state_types import WordOfDay
 
@@ -985,15 +1128,21 @@ def test_bump_words_error_handling(rune_recall_service, state_manager):
     user_data.db_user_id = 1
 
     # Mock _select_daily_portion to raise an exception
-    with patch.object(rune_recall_service, "_select_daily_portion", side_effect=Exception("Database error")):
+    with patch.object(
+        rune_recall_service,
+        "_select_daily_portion",
+        new_callable=AsyncMock,
+        side_effect=Exception("Database error"),
+    ):
         with pytest.raises(Exception) as exc_info:
-            rune_recall_service.bump_words("active_user", user_data)
+            await rune_recall_service.bump_words("active_user", user_data)
 
     assert "Database error" in str(exc_info.value)
 
 
-@patch("runestone.services.rune_recall_service.httpx.Client")
-def test_process_user_recall_word_removes_missing_word_and_retries(
+@patch("runestone.services.rune_recall_service.httpx.AsyncClient")
+@pytest.mark.asyncio
+async def test_process_user_recall_word_removes_missing_word_and_retries(
     mock_client_class, rune_recall_service, state_manager, test_vocabulary
 ):
     """Test that missing words are removed from daily_selection and the next word is tried."""
@@ -1002,8 +1151,8 @@ def test_process_user_recall_word_removes_missing_word_and_retries(
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     # Setup user with daily selection containing 3 words
     user_data = state_manager.get_user("active_user")
@@ -1015,7 +1164,7 @@ def test_process_user_recall_word_removes_missing_word_and_retries(
     user_data.next_word_index = 0
     user_data.chat_id = 123
 
-    rune_recall_service._process_user_recall_word("active_user", user_data)
+    await rune_recall_service._process_user_recall_word("active_user", user_data)
 
     # Verify the missing word was removed from daily_selection
     updated_user = state_manager.get_user("active_user")
@@ -1026,8 +1175,9 @@ def test_process_user_recall_word_removes_missing_word_and_retries(
     assert "goodbye" in word_phrases
 
 
-@patch("runestone.services.rune_recall_service.httpx.Client")
-def test_process_user_recall_word_all_words_invalid_bumps_and_retries(
+@patch("runestone.services.rune_recall_service.httpx.AsyncClient")
+@pytest.mark.asyncio
+async def test_process_user_recall_word_all_words_invalid_bumps_and_retries(
     mock_client_class, rune_recall_service, state_manager, test_vocabulary
 ):
     """Test that when all words are invalid, bump_words is called and method retries with new selection."""
@@ -1036,8 +1186,8 @@ def test_process_user_recall_word_all_words_invalid_bumps_and_retries(
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     # Setup user with all invalid words
     user_data = state_manager.get_user("active_user")
@@ -1052,8 +1202,13 @@ def test_process_user_recall_word_all_words_invalid_bumps_and_retries(
     # Mock new words selection - return a valid word from test_vocabulary
     mock_new_words = [{"id": 1, "word_phrase": "hello"}]
 
-    with patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_new_words):
-        rune_recall_service._process_user_recall_word("active_user", user_data)
+    with patch.object(
+        rune_recall_service,
+        "_select_daily_portion",
+        new_callable=AsyncMock,
+        return_value=mock_new_words,
+    ):
+        await rune_recall_service._process_user_recall_word("active_user", user_data)
 
     # Verify bump_words was called by checking selection was replaced
     updated_user = state_manager.get_user("active_user")
@@ -1064,30 +1219,42 @@ def test_process_user_recall_word_all_words_invalid_bumps_and_retries(
     mock_client.post.assert_called_once()
 
 
-def test_ensure_daily_selection_creates_new_selection(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_ensure_daily_selection_creates_new_selection(rune_recall_service, state_manager):
     """Test _ensure_daily_selection creates a new selection when needed."""
 
     user_data = state_manager.get_user("active_user")
     user_data.daily_selection = []
 
     mock_words = [{"id": 1, "word_phrase": "test"}]
-    with patch.object(rune_recall_service, "_select_daily_portion", return_value=mock_words):
-        result = rune_recall_service._ensure_daily_selection("active_user", user_data)
+    with patch.object(
+        rune_recall_service,
+        "_select_daily_portion",
+        new_callable=AsyncMock,
+        return_value=mock_words,
+    ):
+        result = await rune_recall_service._ensure_daily_selection("active_user", user_data)
 
     assert result is True
     assert len(user_data.daily_selection) == 1
     assert user_data.next_word_index == 0
 
 
-def test_ensure_daily_selection_returns_false_when_no_words(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_ensure_daily_selection_returns_false_when_no_words(rune_recall_service, state_manager):
     """Test _ensure_daily_selection returns False when no words available."""
     from unittest.mock import patch
 
     user_data = state_manager.get_user("active_user")
     user_data.daily_selection = []
 
-    with patch.object(rune_recall_service, "_select_daily_portion", return_value=[]):
-        result = rune_recall_service._ensure_daily_selection("active_user", user_data)
+    with patch.object(
+        rune_recall_service,
+        "_select_daily_portion",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
+        result = await rune_recall_service._ensure_daily_selection("active_user", user_data)
 
     assert result is False
 
@@ -1148,14 +1315,15 @@ def test_remove_word_by_id_adjusts_index(rune_recall_service, state_manager):
     assert user_data.next_word_index == 0
 
 
-@patch("runestone.services.rune_recall_service.httpx.Client")
-def test_send_word_message_with_user_example(mock_client_class, rune_recall_service):
+@patch("runestone.services.rune_recall_service.httpx.AsyncClient")
+@pytest.mark.asyncio
+async def test_send_word_message_with_user_example(mock_client_class, rune_recall_service):
     """Test the exact failing example from user: favorit with translation (-en, -er, -erna) favorite."""
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
-    mock_client.post.return_value = mock_response
-    mock_client_class.return_value.__enter__.return_value = mock_client
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
 
     # The exact failing example from user
     word = {
@@ -1165,7 +1333,7 @@ def test_send_word_message_with_user_example(mock_client_class, rune_recall_serv
         "example_phrase": None,
     }
 
-    result = rune_recall_service._send_word_message(123, word)
+    result = await rune_recall_service._send_word_message(123, word)
     assert result is True
 
     # Check what the message looks like
@@ -1179,7 +1347,8 @@ def test_send_word_message_with_user_example(mock_client_class, rune_recall_serv
 # Tests for new word replacement functionality
 
 
-def test_maintain_daily_selection_with_partial_selection(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_maintain_daily_selection_with_partial_selection(rune_recall_service, state_manager):
     """Test maintaining daily selection when partially filled."""
     from runestone.db.models import Vocabulary
     from runestone.state.state_types import WordOfDay
@@ -1200,9 +1369,12 @@ def test_maintain_daily_selection_with_partial_selection(rune_recall_service, st
     ]
 
     with patch.object(
-        rune_recall_service.vocabulary_repository, "select_new_daily_words", return_value=mock_replacements
+        rune_recall_service.vocabulary_repository,
+        "select_new_daily_words",
+        new_callable=AsyncMock,
+        return_value=mock_replacements,
     ) as mock_select:
-        added_count = rune_recall_service.maintain_daily_selection("active_user", user_data)
+        added_count = await rune_recall_service.maintain_daily_selection("active_user", user_data)
 
     assert added_count == 3
     assert len(user_data.daily_selection) == 5
@@ -1211,7 +1383,8 @@ def test_maintain_daily_selection_with_partial_selection(rune_recall_service, st
     assert call_args.kwargs["excluded_word_ids"] == [1, 2]
 
 
-def test_maintain_daily_selection_no_replacements_available(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_maintain_daily_selection_no_replacements_available(rune_recall_service, state_manager):
     """Test maintaining daily selection when no replacement words are available."""
     from runestone.state.state_types import WordOfDay
 
@@ -1220,14 +1393,20 @@ def test_maintain_daily_selection_no_replacements_available(rune_recall_service,
     user_data.db_user_id = 1
 
     # Mock no replacement words available
-    with patch.object(rune_recall_service.vocabulary_repository, "select_new_daily_words", return_value=[]):
-        added_count = rune_recall_service.maintain_daily_selection("active_user", user_data)
+    with patch.object(
+        rune_recall_service.vocabulary_repository,
+        "select_new_daily_words",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
+        added_count = await rune_recall_service.maintain_daily_selection("active_user", user_data)
 
     assert added_count == 0
     assert len(user_data.daily_selection) == 1  # Still has the original word
 
 
-def test_remove_word_completely_no_replacement_available(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_remove_word_completely_no_replacement_available(rune_recall_service, state_manager):
     """Test word removal when no replacement words are available."""
     from unittest.mock import MagicMock, patch
 
@@ -1241,18 +1420,30 @@ def test_remove_word_completely_no_replacement_available(rune_recall_service, st
 
     with (
         patch.object(
-            rune_recall_service.vocabulary_repository, "get_vocabulary_item_by_word_phrase", return_value=mock_word
+            rune_recall_service.vocabulary_repository,
+            "get_vocabulary_item_by_word_phrase",
+            new_callable=AsyncMock,
+            return_value=mock_word,
         ),
         patch.object(
-            rune_recall_service.vocabulary_repository, "delete_vocabulary_item_by_word_phrase", return_value=True
+            rune_recall_service.vocabulary_repository,
+            "delete_vocabulary_item_by_word_phrase",
+            new_callable=AsyncMock,
+            return_value=True,
         ),
-        patch.object(rune_recall_service.vocabulary_repository, "select_new_daily_words", return_value=[]),
+        patch.object(
+            rune_recall_service.vocabulary_repository,
+            "select_new_daily_words",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
     ):
         # Success case - no exception raised
-        rune_recall_service.remove_word_completely("active_user", "kontanter")
+        await rune_recall_service.remove_word_completely("active_user", "kontanter")
 
 
-def test_postpone_word_no_replacement_available(rune_recall_service, state_manager):
+@pytest.mark.asyncio
+async def test_postpone_word_no_replacement_available(rune_recall_service, state_manager):
     """Test word postponement when no replacement words are available."""
     from unittest.mock import patch
 
@@ -1262,12 +1453,18 @@ def test_postpone_word_no_replacement_available(rune_recall_service, state_manag
     user_data.daily_selection = [WordOfDay(id_=1, word_phrase="kontanter"), WordOfDay(id_=2, word_phrase="hej")]
     user_data.db_user_id = 1
 
-    with patch.object(rune_recall_service.vocabulary_repository, "select_new_daily_words", return_value=[]):
+    with patch.object(
+        rune_recall_service.vocabulary_repository,
+        "select_new_daily_words",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
         # Success case - no exception raised
-        rune_recall_service.postpone_word("active_user", "kontanter")
+        await rune_recall_service.postpone_word("active_user", "kontanter")
 
 
-def test_maintain_daily_selection_excludes_existing_words(rune_recall_service, state_manager, test_vocabulary):
+@pytest.mark.asyncio
+async def test_maintain_daily_selection_excludes_existing_words(rune_recall_service, state_manager, test_vocabulary):
     """Test that maintain_daily_selection excludes words already in selection."""
     from runestone.state.state_types import WordOfDay
 
@@ -1278,13 +1475,13 @@ def test_maintain_daily_selection_excludes_existing_words(rune_recall_service, s
     user_data.db_user_id = 1
 
     # Ensure all words are available
-    words = test_vocabulary.query(Vocabulary).filter(Vocabulary.user_id == 1).all()
+    words = (await test_vocabulary.execute(select(Vocabulary).filter(Vocabulary.user_id == 1))).scalars().all()
     for word in words:
         word.last_learned = datetime.now() - timedelta(days=10)
-    test_vocabulary.commit()
+    await test_vocabulary.commit()
 
     # Call maintain to add more words
-    added_count = rune_recall_service.maintain_daily_selection("active_user", user_data)
+    added_count = await rune_recall_service.maintain_daily_selection("active_user", user_data)
 
     # Should add words, but not include the one already in selection
     assert added_count > 0

@@ -5,6 +5,7 @@ This module provides API endpoints for chat interactions with the teacher agent.
 """
 
 import logging
+import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
@@ -70,7 +71,7 @@ async def get_history(
     Get active chat history for the current user.
     """
     try:
-        return chat_service.get_history_response(
+        return await chat_service.get_history_response(
             current_user.id,
             after_id=after_id,
             limit=limit,
@@ -113,12 +114,14 @@ async def send_image(
         )
 
     try:
-        logger.info(f"User {current_user.email} uploaded image for OCR translation")
+        start_time = time.time()
+        logger.info(f"[IMAGE_UPLOAD] User {current_user.email} uploaded image ({file_size} bytes), starting OCR")
 
         # Process OCR text through agent for translation
         response_message = await chat_service.process_image_message(current_user.id, content)
 
-        logger.info(f"Generated translation response for user {current_user.email}")
+        elapsed = time.time() - start_time
+        logger.info(f"[IMAGE_UPLOAD] Image processing completed for user {current_user.email} in {elapsed:.3f}s")
 
         return ImageChatResponse(message=response_message)
 
@@ -165,7 +168,7 @@ async def start_new_chat(
         retention cleanup removes them.
     """
     try:
-        chat_service.start_new_chat(current_user.id)
+        await chat_service.start_new_chat(current_user.id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except Exception as e:
         logger.error(f"Error starting new chat session: {e}", exc_info=True)

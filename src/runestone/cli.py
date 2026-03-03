@@ -213,7 +213,7 @@ def process(
 
         # Process the image
         # for tool we'll use default user_id=1
-        result = processor.process_image(image_path, user=mock_user)
+        result = asyncio.run(processor.process_image(image_path, user=mock_user))
 
         # Output results
         if output_format == "console":

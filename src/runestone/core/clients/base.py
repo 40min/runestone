@@ -28,7 +28,7 @@ class BaseLLMClient(ABC):
         self.verbose = verbose
 
     @abstractmethod
-    def extract_text_from_image(self, image: Image.Image, prompt: str) -> str:
+    async def extract_text_from_image(self, image: Image.Image, prompt: str) -> str:
         """
         Extract text from an image using OCR capabilities.
 
@@ -45,7 +45,7 @@ class BaseLLMClient(ABC):
         pass
 
     @abstractmethod
-    def analyze_content(self, prompt: str) -> str:
+    async def analyze_content(self, prompt: str) -> str:
         """
         Analyze content using the LLM.
 
@@ -61,7 +61,7 @@ class BaseLLMClient(ABC):
         pass
 
     @abstractmethod
-    def search_resources(self, prompt: str) -> str:
+    async def search_resources(self, prompt: str) -> str:
         """
         Search for learning resources using the LLM.
 
@@ -77,7 +77,7 @@ class BaseLLMClient(ABC):
         pass
 
     @abstractmethod
-    def improve_vocabulary_item(self, prompt: str) -> str:
+    async def improve_vocabulary_item(self, prompt: str) -> str:
         """
         Improve a vocabulary item using the LLM.
 
@@ -93,7 +93,7 @@ class BaseLLMClient(ABC):
         pass
 
     @abstractmethod
-    def improve_vocabulary_batch(self, prompt: str) -> str:
+    async def improve_vocabulary_batch(self, prompt: str) -> str:
         """
         Improve multiple vocabulary items in a single batch request.
 

@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     setup_logging(verbose=settings.verbose)
     # Verify database setup
-    setup_database()
+    await setup_database()
 
     # Initialize expensive services once
     app.state.llm_client = create_llm_client(settings=settings)
