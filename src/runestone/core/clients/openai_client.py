@@ -3,12 +3,13 @@ OpenAI LLM client implementation.
 
 This module provides an OpenAI-specific implementation of the BaseLLMClient
 interface, handling OCR and content analysis using OpenAI's GPT-4o API.
+Uses async httpx for non-blocking HTTP calls.
 """
 
 import base64
 import io
 
-from openai import APIError, OpenAI
+from openai import AsyncOpenAI
 from PIL import Image
 
 from runestone.core.clients.base import BaseLLMClient
@@ -29,18 +30,20 @@ class OpenAIClient(BaseLLMClient):
         """
         super().__init__(api_key, verbose)
         self._model_name = model_name
+        self._base_url = "https://api.openai.com/v1"
         self._configure_client()
 
     def _configure_client(self) -> None:
-        """Configure OpenAI API client."""
+        """Configure OpenAI async client."""
         try:
-            self.client = OpenAI(api_key=self.api_key)
-
-            # Test the client with a simple request to ensure it's properly configured
-            # We'll do this lazily in the first actual request to avoid unnecessary costs
-
+            self._client = AsyncOpenAI(
+                api_key=self.api_key,
+                base_url=getattr(self, "_base_url", None),
+                timeout=120.0,
+                max_retries=3,
+            )
         except Exception as e:
-            raise APIKeyError(f"Failed to configure OpenAI API: {str(e)}")
+            raise APIKeyError(f"Failed to configure OpenAI client: {str(e)}")
 
     def _image_to_base64(self, image: Image.Image) -> str:
         """
@@ -60,7 +63,7 @@ class OpenAIClient(BaseLLMClient):
         buffer.seek(0)
         return base64.b64encode(buffer.read()).decode("utf-8")
 
-    def extract_text_from_image(self, image: Image.Image, prompt: str) -> str:
+    async def extract_text_from_image(self, image: Image.Image, prompt: str) -> str:
         """
         Extract text from an image using OpenAI Vision API.
 
@@ -78,11 +81,11 @@ class OpenAIClient(BaseLLMClient):
             self.logger.debug(f"{self.log_mark} Starting OCR processing with model: {self._model_name}")
 
             # Convert image to base64
-            self.logger.debug(f"{self.log_mark} Converting image to base64...")
             image_b64 = self._image_to_base64(image)
 
             self.logger.debug(f"{self.log_mark} Sending request to OpenAI API...")
-            response = self.client.chat.completions.create(
+
+            response = await self._client.chat.completions.create(
                 model=self._model_name,
                 messages=[
                     {
@@ -103,15 +106,12 @@ class OpenAIClient(BaseLLMClient):
                 temperature=0.1,
             )
 
-            self.logger.debug(f"{self.log_mark} Received response from OpenAI API")
-            self.logger.debug(f"{self.log_mark} Response has {len(response.choices)} choice(s)")
-
-            if not response.choices or not response.choices[0].message.content:
+            extracted_text = response.choices[0].message.content
+            if not extracted_text:
                 self.logger.error(f"{self.log_mark} No text returned from OpenAI API response")
                 raise OCRError("No text returned from OpenAI API")
 
-            extracted_text = response.choices[0].message.content.strip()
-
+            extracted_text = extracted_text.strip()
             self.logger.debug(f"{self.log_mark} Extracted text length: {len(extracted_text)} characters")
 
             # Check for error response
@@ -129,17 +129,11 @@ class OpenAIClient(BaseLLMClient):
 
         except OCRError:
             raise
-        except APIError as e:
-            self.logger.error(f"{self.log_mark} API Error: {type(e).__name__}")
-            self.logger.error(f"{self.log_mark} Error message: {str(e)}")
-            raise OCRError(f"OpenAI API error: {str(e)}")
         except Exception as e:
-            self.logger.error(f"{self.log_mark} Unexpected error type: {type(e).__name__}")
-            self.logger.error(f"{self.log_mark} Error message: {str(e)}")
-            self.logger.exception(f"{self.log_mark} Full exception traceback:")
-            raise OCRError(f"OCR processing failed: {type(e).__name__}: {str(e)}")
+            self.logger.error(f"{self.log_mark} OpenAI API error: {str(e)}")
+            raise OCRError(f"OCR processing failed: {str(e)}")
 
-    def analyze_content(self, prompt: str) -> str:
+    async def analyze_content(self, prompt: str) -> str:
         """
         Analyze content using OpenAI.
 
@@ -153,24 +147,25 @@ class OpenAIClient(BaseLLMClient):
             LLMError: If content analysis fails
         """
         try:
-            response = self.client.chat.completions.create(
+            response = await self._client.chat.completions.create(
                 model=self._model_name,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=10000,
                 temperature=0.1,
             )
 
-            if not response.choices or not response.choices[0].message.content:
+            content = response.choices[0].message.content
+            if not content:
                 raise LLMError("No analysis returned from OpenAI")
 
-            return response.choices[0].message.content.strip()
+            return content.strip()
 
         except Exception as e:
             raise LLMError(f"Content analysis failed: {str(e)}")
 
-    def search_resources(self, prompt: str) -> str:
+    async def search_resources(self, prompt: str) -> str:
         """
-        Search for learning resources using OpenAI with web search capabilities.
+        Search for learning resources using OpenAI.
 
         Args:
             prompt: Search prompt
@@ -184,22 +179,25 @@ class OpenAIClient(BaseLLMClient):
         try:
             self.logger.debug(f"{self.log_mark} Searching for educational resources...")
 
-            response = self.client.chat.completions.create(
+            response = await self._client.chat.completions.create(
                 model=self._model_name,
                 messages=[{"role": "user", "content": prompt}],
                 max_completion_tokens=10000,
                 temperature=0.3,
             )
 
-            if not response.choices or not response.choices[0].message.content:
+            content = response.choices[0].message.content
+            if not content:
                 raise LLMError("No search results returned from OpenAI")
 
-            return response.choices[0].message.content.strip()
+            return content.strip()
 
         except Exception as e:
             raise LLMError(f"Resource search failed: {str(e)}")
 
-    def _improve_vocabulary(self, prompt: str, no_response_msg: str, api_error_msg: str, general_error_msg: str) -> str:
+    async def _improve_vocabulary(
+        self, prompt: str, no_response_msg: str, api_error_msg: str, general_error_msg: str
+    ) -> str:
         """
         Private helper method for vocabulary improvement operations.
 
@@ -216,24 +214,25 @@ class OpenAIClient(BaseLLMClient):
             LLMError: If the operation fails
         """
         try:
-            response = self.client.chat.completions.create(
+            response = await self._client.chat.completions.create(
                 model=self._model_name,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=10000,
                 temperature=0.1,
             )
 
-            if not response.choices or not response.choices[0].message.content:
+            content = response.choices[0].message.content
+            if not content:
                 raise LLMError(no_response_msg)
 
-            return response.choices[0].message.content.strip()
+            return content.strip()
 
-        except APIError as e:
-            raise LLMError(f"{api_error_msg}: {str(e)}")
+        except LLMError:
+            raise
         except Exception as e:
-            raise LLMError(f"{general_error_msg}: {str(e)}")
+            raise LLMError(f"{api_error_msg}: {str(e)}")
 
-    def improve_vocabulary_item(self, prompt: str) -> str:
+    async def improve_vocabulary_item(self, prompt: str) -> str:
         """
         Improve a vocabulary item using OpenAI.
 
@@ -246,14 +245,14 @@ class OpenAIClient(BaseLLMClient):
         Raises:
             LLMError: If vocabulary improvement fails
         """
-        return self._improve_vocabulary(
+        return await self._improve_vocabulary(
             prompt,
             f"No vocabulary improvement returned from {self.provider_name}",
             f"{self.provider_name} API error during vocabulary improvement",
             "Vocabulary improvement failed",
         )
 
-    def improve_vocabulary_batch(self, prompt: str) -> str:
+    async def improve_vocabulary_batch(self, prompt: str) -> str:
         """
         Improve multiple vocabulary items using OpenAI in batch.
 
@@ -266,12 +265,16 @@ class OpenAIClient(BaseLLMClient):
         Raises:
             LLMError: If batch improvement fails
         """
-        return self._improve_vocabulary(
+        return await self._improve_vocabulary(
             prompt,
             f"No vocabulary batch improvement returned from {self.provider_name}",
             f"{self.provider_name} API error during vocabulary batch improvement",
             "Vocabulary batch improvement failed",
         )
+
+    async def close(self) -> None:
+        """Close the HTTP client."""
+        await self._client.aclose()
 
     @property
     def provider_name(self) -> str:

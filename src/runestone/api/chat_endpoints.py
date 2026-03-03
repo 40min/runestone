@@ -5,6 +5,7 @@ This module provides API endpoints for chat interactions with the teacher agent.
 """
 
 import logging
+import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
@@ -113,12 +114,14 @@ async def send_image(
         )
 
     try:
-        logger.info(f"User {current_user.email} uploaded image for OCR translation")
+        start_time = time.time()
+        logger.info(f"[IMAGE_UPLOAD] User {current_user.email} uploaded image ({file_size} bytes), starting OCR")
 
         # Process OCR text through agent for translation
         response_message = await chat_service.process_image_message(current_user.id, content)
 
-        logger.info(f"Generated translation response for user {current_user.email}")
+        elapsed = time.time() - start_time
+        logger.info(f"[IMAGE_UPLOAD] Image processing completed for user {current_user.email} in {elapsed:.3f}s")
 
         return ImageChatResponse(message=response_message)
 

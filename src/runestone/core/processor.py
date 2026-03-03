@@ -70,7 +70,7 @@ class RunestoneProcessor:
         except Exception as e:
             raise RunestoneError(f"Failed to initialize processor: {str(e)}")
 
-    def run_ocr(self, image_bytes: bytes) -> OCRResult:
+    async def run_ocr(self, image_bytes: bytes) -> OCRResult:
         """
         Run OCR on image bytes.
 
@@ -92,7 +92,7 @@ class RunestoneProcessor:
             self.logger.debug(f"[RunestoneProcessor] Image loaded: mode={image.mode}, size={image.size}")
 
             start_time = time.time()
-            ocr_result = self.ocr_processor.extract_text(image)
+            ocr_result = await self.ocr_processor.extract_text(image)
             duration = time.time() - start_time
 
             char_count = ocr_result.recognition_statistics.total_elements
@@ -130,7 +130,7 @@ class RunestoneProcessor:
             self.logger.debug("[RunestoneProcessor] Analyzing content...")
 
             start_time = time.time()
-            analysis = self.content_analyzer.analyze_content(text)
+            analysis = await self.content_analyzer.analyze_content(text)
             duration = time.time() - start_time
 
             vocab_count = len(analysis.vocabulary)
@@ -239,7 +239,7 @@ class RunestoneProcessor:
                 image_bytes = f.read()
 
             # Step 1: OCR processing
-            ocr_result = self.run_ocr(image_bytes)
+            ocr_result = await self.run_ocr(image_bytes)
 
             # Extract text for analysis
             extracted_text = ocr_result.transcribed_text

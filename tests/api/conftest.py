@@ -33,9 +33,15 @@ async def client(client_with_overrides):
 @pytest.fixture(scope="function")
 def mock_llm_client():
     """Create a mock LLM client that doesn't make external API calls."""
+    from unittest.mock import AsyncMock, Mock
+
     mock_client = Mock()
     # Mock the improve_vocabulary_item method to return a sample response
-    mock_client.improve_vocabulary_item.return_value = "Mock extra info for vocabulary enrichment"
+    mock_client.improve_vocabulary_item = AsyncMock(return_value="Mock extra info for vocabulary enrichment")
+    mock_client.improve_vocabulary_batch = AsyncMock(return_value='{"word": "mock info"}')
+    mock_client.analyze_content = AsyncMock(return_value="Mock analysis result")
+    mock_client.extract_text_from_image = AsyncMock(return_value="Mock extracted text")
+    mock_client.search_resources = AsyncMock(return_value="Mock search results")
     return mock_client
 
 

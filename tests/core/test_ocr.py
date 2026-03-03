@@ -3,7 +3,7 @@ Tests for the OCR processing module.
 """
 
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -96,16 +96,17 @@ class TestOCRProcessor:
 
         assert "Image file not found" in str(exc_info.value)
 
-    def test_extract_text_success(self):
+    @pytest.mark.anyio
+    async def test_extract_text_success(self):
         """Test successful text extraction."""
         # Mock image
         mock_image = Mock()
         mock_image.mode = "RGB"
         mock_image.size = (800, 600)
 
-        # Mock Gemini JSON response
-        mock_response = Mock()
-        mock_response.text = """{
+        # Mock client response - now async
+        mock_client = AsyncMock()
+        mock_client.extract_text_from_image.return_value = """{
             "transcribed_text": "Svenska text från läroboken",
             "recognition_statistics": {
                 "total_elements": 50,
@@ -115,11 +116,8 @@ class TestOCRProcessor:
             }
         }"""
 
-        mock_client = Mock()
-        mock_client.extract_text_from_image.return_value = mock_response.text
-
         processor = OCRProcessor(settings=self.settings, client=mock_client)
-        result = processor.extract_text(mock_image)
+        result = await processor.extract_text(mock_image)
 
         # Verify result structure - now returns OCRResult object
         assert isinstance(result, OCRResult)
@@ -133,37 +131,36 @@ class TestOCRProcessor:
         assert len(args) == 2  # preprocessed_image and ocr_prompt
         assert "accurately transcribe all readable text" in args[1]
 
-    def test_extract_text_error_response(self):
+    @pytest.mark.anyio
+    async def test_extract_text_error_response(self):
         """Test handling of OCR error response."""
         # Mock image
         mock_image = Mock()
         mock_image.mode = "RGB"
         mock_image.size = (800, 600)
 
-        # Mock Gemini error response
-        mock_response = Mock()
-        mock_response.text = """{"error": "Could not recognize text on the page."}"""
-
-        mock_client = Mock()
-        mock_client.extract_text_from_image.return_value = mock_response.text
+        # Mock client error response - now async
+        mock_client = AsyncMock()
+        mock_client.extract_text_from_image.return_value = """{"error": "Could not recognize text on the page."}"""
 
         processor = OCRProcessor(settings=self.settings, client=mock_client)
 
         with pytest.raises(OCRError) as exc_info:
-            processor.extract_text(mock_image)
+            await processor.extract_text(mock_image)
 
         assert "Could not recognize text on the page." in str(exc_info.value)
 
-    def test_extract_text_too_short(self):
+    @pytest.mark.anyio
+    async def test_extract_text_too_short(self):
         """Test handling of text that is too short."""
         # Mock image
         mock_image = Mock()
         mock_image.mode = "RGB"
         mock_image.size = (800, 600)
 
-        # Mock Gemini JSON response with very short text
-        mock_response = Mock()
-        mock_response.text = """{
+        # Mock client response with very short text - now async
+        mock_client = AsyncMock()
+        mock_client.extract_text_from_image.return_value = """{
             "transcribed_text": "Hi",
             "recognition_statistics": {
                 "total_elements": 1,
@@ -173,34 +170,29 @@ class TestOCRProcessor:
             }
         }"""
 
-        mock_client = Mock()
-        mock_client.extract_text_from_image.return_value = mock_response.text
-
         processor = OCRProcessor(settings=self.settings, client=mock_client)
 
         with pytest.raises(OCRError) as exc_info:
-            processor.extract_text(mock_image)
+            await processor.extract_text(mock_image)
 
         assert "too short" in str(exc_info.value)
 
-    def test_extract_text_no_response(self):
+    @pytest.mark.anyio
+    async def test_extract_text_no_response(self):
         """Test handling of empty response."""
         # Mock image
         mock_image = Mock()
         mock_image.mode = "RGB"
         mock_image.size = (800, 600)
 
-        # Mock empty Gemini response
-        mock_response = Mock()
-        mock_response.text = None
-
-        mock_client = Mock()
-        mock_client.extract_text_from_image.return_value = mock_response.text
+        # Mock empty client response - now async
+        mock_client = AsyncMock()
+        mock_client.extract_text_from_image.return_value = None
 
         processor = OCRProcessor(settings=self.settings, client=mock_client)
 
         with pytest.raises(OCRError) as exc_info:
-            processor.extract_text(mock_image)
+            await processor.extract_text(mock_image)
 
         assert "No text returned" in str(exc_info.value)
 
@@ -311,16 +303,17 @@ class TestOCRProcessor:
         assert isinstance(result, OCRResult)
         assert result.transcribed_text == "Content."
 
-    def test_extract_text_with_stats_parsing(self):
+    @pytest.mark.anyio
+    async def test_extract_text_with_stats_parsing(self):
         """Test that extract_text properly parses and removes statistics."""
         # Mock image
         mock_image = Mock()
         mock_image.mode = "RGB"
         mock_image.size = (800, 600)
 
-        # Mock JSON response with stats
-        mock_response = Mock()
-        mock_response.text = """{
+        # Mock client response with stats - now async
+        mock_client = AsyncMock()
+        mock_client.extract_text_from_image.return_value = """{
             "transcribed_text": "Extracted Swedish text content.",
             "recognition_statistics": {
                 "total_elements": 100,
@@ -330,27 +323,25 @@ class TestOCRProcessor:
             }
         }"""
 
-        mock_client = Mock()
-        mock_client.extract_text_from_image.return_value = mock_response.text
-
         processor = OCRProcessor(settings=self.settings, client=mock_client)
-        result = processor.extract_text(mock_image)
+        result = await processor.extract_text(mock_image)
 
         # Verify result is OCRResult object with text
         assert isinstance(result, OCRResult)
         assert result.transcribed_text == "Extracted Swedish text content."
         assert result.recognition_statistics.successfully_transcribed == 95
 
-    def test_extract_text_with_low_recognition_raises_error(self):
+    @pytest.mark.anyio
+    async def test_extract_text_with_low_recognition_raises_error(self):
         """Test that extract_text raises OCRError for low recognition percentage."""
         # Mock image
         mock_image = Mock()
         mock_image.mode = "RGB"
         mock_image.size = (800, 600)
 
-        # Mock JSON response with poor stats
-        mock_response = Mock()
-        mock_response.text = """{
+        # Mock client response with poor stats - now async
+        mock_client = AsyncMock()
+        mock_client.extract_text_from_image.return_value = """{
             "transcribed_text": "Some text.",
             "recognition_statistics": {
                 "total_elements": 100,
@@ -360,12 +351,9 @@ class TestOCRProcessor:
             }
         }"""
 
-        mock_client = Mock()
-        mock_client.extract_text_from_image.return_value = mock_response.text
-
         processor = OCRProcessor(settings=self.settings, client=mock_client)
 
         with pytest.raises(OCRError) as exc_info:
-            processor.extract_text(mock_image)
+            await processor.extract_text(mock_image)
 
         assert "OCR recognition percentage below 90%: 80.0% (80/100)" in str(exc_info.value)

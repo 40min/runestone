@@ -50,7 +50,7 @@ class TestRunestoneProcessor:
                 unable_to_recognize=0,
             ),
         )
-        mock_ocr_instance = Mock()
+        mock_ocr_instance = AsyncMock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
 
         # Mock analysis result
@@ -59,7 +59,7 @@ class TestRunestoneProcessor:
             grammar_focus=GrammarFocus(has_explicit_rules=False, topic="greetings", explanation="", rules=None),
             core_topics=["greetings"],
         )
-        mock_analyzer_instance = Mock()
+        mock_analyzer_instance = AsyncMock()
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
 
         # Mock time.time to simulate durations
@@ -84,8 +84,8 @@ class TestRunestoneProcessor:
                 verbose=True,
             )
 
-            # Test the stateless workflow
-            ocr_result = processor.run_ocr(b"fake image data")
+            # Test the stateless workflow - now async
+            ocr_result = await processor.run_ocr(b"fake image data")
             analysis_result = await processor.run_analysis(ocr_result.transcribed_text, user=mock_user)
 
             # Verify results
@@ -128,7 +128,7 @@ class TestRunestoneProcessor:
                 unable_to_recognize=0,
             ),
         )
-        mock_ocr_instance = Mock()
+        mock_ocr_instance = AsyncMock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
 
         # Mock analysis result
@@ -137,7 +137,7 @@ class TestRunestoneProcessor:
             grammar_focus=GrammarFocus(has_explicit_rules=False, topic="greetings", explanation="", rules=None),
             core_topics=["greetings"],
         )
-        mock_analyzer_instance = Mock()
+        mock_analyzer_instance = AsyncMock()
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
 
         # Create a mock user for testing
@@ -153,8 +153,8 @@ class TestRunestoneProcessor:
             verbose=False,
         )
 
-        # Test the stateless workflow
-        ocr_result = processor.run_ocr(b"fake image data")
+        # Test the stateless workflow - now async
+        ocr_result = await processor.run_ocr(b"fake image data")
         analysis_result = await processor.run_analysis(ocr_result.transcribed_text, user=mock_user)
 
         # Verify results
@@ -169,7 +169,8 @@ class TestRunestoneProcessor:
 
     @patch("PIL.Image.open")
     @patch("runestone.core.processor.get_logger")
-    def test_stateless_workflow_exception_handling(self, mock_get_logger, mock_image_open):
+    @pytest.mark.anyio
+    async def test_stateless_workflow_exception_handling(self, mock_get_logger, mock_image_open):
         """Test exception handling in stateless workflow."""
         # Mock PIL Image
         mock_image = Mock()
@@ -180,12 +181,12 @@ class TestRunestoneProcessor:
         mock_logger = Mock()
         mock_get_logger.return_value = mock_logger
 
-        # Mock OCR to raise exception
-        mock_ocr_instance = Mock()
+        # Mock OCR to raise exception - now async
+        mock_ocr_instance = AsyncMock()
         mock_ocr_instance.extract_text.side_effect = Exception("OCR failed")
 
         # Mock analyzer (not directly used in this test, but needed for processor init)
-        mock_analyzer_instance = Mock()
+        mock_analyzer_instance = AsyncMock()
 
         processor = RunestoneProcessor(
             settings=self.settings,
@@ -197,7 +198,7 @@ class TestRunestoneProcessor:
         )
 
         with pytest.raises(RunestoneError) as exc_info:
-            processor.run_ocr(b"fake image data")
+            await processor.run_ocr(b"fake image data")
 
         assert "OCR processing failed" in str(exc_info.value)
 
@@ -205,7 +206,8 @@ class TestRunestoneProcessor:
         mock_logger.error.assert_called_once()
 
     @patch("PIL.Image.open")
-    def test_run_ocr_success(self, mock_image_open):
+    @pytest.mark.anyio
+    async def test_run_ocr_success(self, mock_image_open):
         """Test successful OCR processing."""
         # Mock PIL Image
         mock_image = Mock()
@@ -222,11 +224,11 @@ class TestRunestoneProcessor:
                 unable_to_recognize=0,
             ),
         )
-        mock_ocr_instance = Mock()
+        mock_ocr_instance = AsyncMock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
 
         # Mock analyzer (not directly used in this test, but needed for processor init)
-        mock_analyzer_instance = Mock()
+        mock_analyzer_instance = AsyncMock()
 
         processor = RunestoneProcessor(
             settings=self.settings,
@@ -236,7 +238,7 @@ class TestRunestoneProcessor:
             user_service=Mock(spec=UserService),
             verbose=False,
         )
-        result = processor.run_ocr(b"fake image data")
+        result = await processor.run_ocr(b"fake image data")
 
         assert result == mock_ocr_result
         mock_ocr_instance.extract_text.assert_called_once()
@@ -250,11 +252,11 @@ class TestRunestoneProcessor:
             grammar_focus=GrammarFocus(has_explicit_rules=False, topic="greetings", explanation="", rules=None),
             core_topics=["greetings"],
         )
-        mock_analyzer_instance = Mock()
+        mock_analyzer_instance = AsyncMock()
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
 
         # Mock OCR (not directly used in this test, but needed for processor init)
-        mock_ocr_instance = Mock()
+        mock_ocr_instance = AsyncMock()
 
         # Mock user service
         mock_user_service = Mock(spec=UserService)
@@ -311,7 +313,7 @@ class TestRunestoneProcessor:
                 unable_to_recognize=0,
             ),
         )
-        mock_ocr_instance = Mock()
+        mock_ocr_instance = AsyncMock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
 
         # Mock analysis result
@@ -320,7 +322,7 @@ class TestRunestoneProcessor:
             grammar_focus=GrammarFocus(has_explicit_rules=False, topic="greetings", explanation="", rules=None),
             core_topics=["greetings"],
         )
-        mock_analyzer_instance = Mock()
+        mock_analyzer_instance = AsyncMock()
         mock_analyzer_instance.analyze_content.return_value = mock_analysis
 
         # Create a mock user for testing
@@ -383,11 +385,11 @@ class TestRunestoneProcessor:
                 unable_to_recognize=0,
             ),
         )
-        mock_ocr_instance = Mock()
+        mock_ocr_instance = AsyncMock()
         mock_ocr_instance.extract_text.return_value = mock_ocr_result
 
         # Mock analyzer (not directly used in this test, but needed for processor init)
-        mock_analyzer_instance = Mock()
+        mock_analyzer_instance = AsyncMock()
 
         # Create a mock user for testing
         mock_user = Mock()
@@ -428,12 +430,12 @@ class TestRunestoneProcessor:
         mock_logger = Mock()
         mock_get_logger.return_value = mock_logger
 
-        # Mock OCR to raise exception
-        mock_ocr_instance = Mock()
+        # Mock OCR to raise exception - now async
+        mock_ocr_instance = AsyncMock()
         mock_ocr_instance.extract_text.side_effect = Exception("OCR failed")
 
         # Mock analyzer (not directly used in this test, but needed for processor init)
-        mock_analyzer_instance = Mock()
+        mock_analyzer_instance = AsyncMock()
 
         # Create a mock user for testing
         mock_user = Mock()

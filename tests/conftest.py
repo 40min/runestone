@@ -110,20 +110,26 @@ def mock_processor():
     from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 
     mock = Mock()
-    mock.run_ocr.return_value = OCRResult(
+    # Create the OCR result
+    ocr_result = OCRResult(
         transcribed_text="mock text",
         recognition_statistics=RecognitionStatistics(
             total_elements=10, successfully_transcribed=10, unclear_uncertain=0, unable_to_recognize=0
         ),
     )
-    mock.run_analysis.return_value = ContentAnalysis(
+    # Set up async mock for run_ocr
+    mock.run_ocr = AsyncMock(return_value=ocr_result)
+
+    # Create the analysis result
+    analysis_result = ContentAnalysis(
         grammar_focus=GrammarFocus(
             has_explicit_rules=False, topic="mock topic", explanation="mock explanation", rules=None
         ),
         vocabulary=[],
         core_topics=[],
     )
-    mock.run_analysis = AsyncMock(return_value=mock.run_analysis.return_value)
+    # Set up async mock for run_analysis
+    mock.run_analysis = AsyncMock(return_value=analysis_result)
     return mock
 
 

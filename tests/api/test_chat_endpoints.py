@@ -215,9 +215,9 @@ async def test_send_image_success(client_with_mock_agent_service, db_session, mo
     )
 
     # Mock the processor dependency
-    from unittest.mock import Mock
+    from unittest.mock import AsyncMock, Mock
 
-    mock_processor = Mock()
+    mock_processor = AsyncMock()
     # Create a proper OCRResult-like object
     mock_ocr_result = Mock()
     mock_ocr_result.transcribed_text = "Hej. Hur mår du?"
@@ -250,10 +250,10 @@ async def test_send_image_success(client_with_mock_agent_service, db_session, mo
 async def test_send_image_ocr_failure(client, monkeypatch):
     """Test image upload when OCR returns empty text."""
     import io
-    from unittest.mock import Mock
+    from unittest.mock import AsyncMock, Mock
 
     # Mock the processor dependency
-    mock_processor = Mock()
+    mock_processor = AsyncMock()
     # Create a proper OCRResult-like object with empty text
     mock_ocr_result = Mock()
     mock_ocr_result.transcribed_text = ""
@@ -339,12 +339,12 @@ async def test_send_image_missing_file(client_with_mock_agent_service):
 async def test_send_image_whitespace_only_ocr(client_with_mock_agent_service, monkeypatch):
     """Test image upload when OCR returns only whitespace."""
     import io
-    from unittest.mock import Mock
+    from unittest.mock import AsyncMock, Mock
 
     client, _ = client_with_mock_agent_service
 
     # Mock the processor dependency
-    mock_processor = Mock()
+    mock_processor = AsyncMock()
     # Create OCR result with whitespace-only text
     mock_ocr_result = Mock()
     mock_ocr_result.transcribed_text = "   \n\t  \n  "

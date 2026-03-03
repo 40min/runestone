@@ -190,8 +190,8 @@ class VocabularyService:
         # Build improvement prompt using PromptBuilder
         prompt = self.builder.build_vocabulary_prompt(word_phrase=request.word_phrase, mode=request.mode)
 
-        # Get improvement from LLM (sync call)
-        response_text = self.llm_client.improve_vocabulary_item(prompt)
+        # Get improvement from LLM (async call)
+        response_text = await self.llm_client.improve_vocabulary_item(prompt)
 
         # Parse response using ResponseParser (includes automatic fallback)
         try:
@@ -240,8 +240,8 @@ class VocabularyService:
                 # Build batch prompt
                 prompt = self.builder.build_vocabulary_batch_prompt(word_phrases)
 
-                # Get batch improvements from LLM (sync call)
-                response_text = self.llm_client.improve_vocabulary_batch(prompt)
+                # Get batch improvements from LLM (async call)
+                response_text = await self.llm_client.improve_vocabulary_batch(prompt)
 
                 # Parse batch response
                 enrichments = self.parser.parse_vocabulary_batch_response(response_text)
