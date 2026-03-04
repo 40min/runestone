@@ -24,6 +24,7 @@ from runestone.agent.tools.memory import (
     promote_to_strength,
     read_memory,
     start_student_info,
+    update_memory_priority,
     update_memory_status,
     upsert_memory_item,
 )
@@ -113,6 +114,7 @@ class AgentService:
             read_memory,
             upsert_memory_item,
             update_memory_status,
+            update_memory_priority,
             promote_to_strength,
             delete_memory_item,
             prioritize_words_for_learning,
@@ -161,6 +163,17 @@ of the student using structured memory items with stable IDs.
   - struggling → improving → mastered
 - When a student masters a concept, update its status to "mastered" first.
 - Then use `promote_to_strength` to move it from area_to_improve to knowledge_strength.
+
+**CRITICAL: Priority for Areas to Improve**
+- Each `area_to_improve` item can have a `priority` (0=highest urgency, 9=lowest).
+- Items are returned ordered by priority (lowest number first) so the most urgent topics appear first.
+- Use `update_memory_priority` to set or adjust priority:
+  - **Raise urgency (lower number):** when the student repeatedly makes errors on a topic,
+    or the topic is foundational for current learning goals.
+  - **Lower urgency (higher number) or unset (null):** when the student shows clear improvement
+    or the topic becomes less relevant.
+- When first recording a struggle, you may set a sensible priority (e.g. 3-5) to reflect its relative importance.
+- Use `upsert_memory_item` with a `priority` field when creating a new area_to_improve item with an initial priority.
 
 **Memory Cleanup:**
 - When a student masters a topic, use `update_memory_status` to mark it as "mastered", then `promote_to_strength`.

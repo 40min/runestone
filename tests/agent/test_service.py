@@ -81,10 +81,11 @@ def test_build_agent(mock_settings, mock_chat_model, mock_user_service):
             assert call_kwargs["model"] == mock_chat_model
             # Verify tools were passed to create_agent
             tools = mock_create_agent.call_args[1]["tools"]
-            # read_memory, upsert_memory_item, update_memory_status, promote_to_strength,
-            # delete_memory_item, start_student_info, prioritize_words_for_learning,
-            # search_news_with_dates, search_grammar, read_grammar_page, read_url
-            assert len(tools) == 11
+            # read_memory, upsert_memory_item, update_memory_status, update_memory_priority,
+            # promote_to_strength, delete_memory_item, start_student_info,
+            # prioritize_words_for_learning, search_news_with_dates,
+            # search_grammar, read_grammar_page, read_url
+            assert len(tools) == 12
             assert "MEMORY PROTOCOL" in call_kwargs["system_prompt"]
 
 

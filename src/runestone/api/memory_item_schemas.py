@@ -61,6 +61,7 @@ class MemoryItemCreate(BaseModel):
     key: str = Field(..., min_length=1, max_length=100, description="Unique key within category")
     content: str = Field(..., min_length=1, description="Content/description of the memory item")
     status: Optional[str] = Field(None, description="Status (defaults based on category)")
+    priority: Optional[int] = Field(None, ge=0, le=9, description="Priority 0-9 (0=highest). Only for area_to_improve.")
 
     @field_validator("status", mode="before")
     @classmethod
@@ -71,13 +72,15 @@ class MemoryItemCreate(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def _validate_status_for_category(self) -> "MemoryItemCreate":
-        if self.status is None:
-            return self
+    def _validate_for_category(self) -> "MemoryItemCreate":
+        if self.status is not None:
+            valid_statuses = VALID_STATUSES_BY_CATEGORY.get(self.category)
+            if not valid_statuses or self.status not in valid_statuses:
+                raise ValueError(f"Invalid status '{self.status}' for category '{self.category.value}'")
 
-        valid_statuses = VALID_STATUSES_BY_CATEGORY.get(self.category)
-        if not valid_statuses or self.status not in valid_statuses:
-            raise ValueError(f"Invalid status '{self.status}' for category '{self.category.value}'")
+        if self.priority is not None and self.category != MemoryCategory.AREA_TO_IMPROVE:
+            raise ValueError("priority is only applicable to category 'area_to_improve'")
+
         return self
 
 
@@ -85,6 +88,12 @@ class MemoryItemStatusUpdate(BaseModel):
     """Schema for updating memory item status."""
 
     status: str = Field(..., description="New status value")
+
+
+class MemoryItemPriorityUpdate(BaseModel):
+    """Schema for updating memory item priority."""
+
+    priority: Optional[int] = Field(..., ge=0, le=9, description="Priority 0-9 (0=highest), or null to unset")
 
 
 class MemoryItemResponse(BaseModel):
@@ -96,10 +105,11 @@ class MemoryItemResponse(BaseModel):
     key: str
     content: str
     status: str
+    priority: Optional[int] = None
     created_at: datetime
     updated_at: datetime
-    status_changed_at: Optional[datetime]
-    metadata_json: Optional[str]
+    status_changed_at: Optional[datetime] = None
+    metadata_json: Optional[str] = None
 
     class Config:
         from_attributes = True

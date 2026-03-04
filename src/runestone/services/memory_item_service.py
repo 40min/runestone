@@ -85,6 +85,7 @@ class MemoryItemService:
         key: str,
         content: str,
         status: Optional[str] = None,
+        priority: Optional[int] = None,
     ) -> MemoryItemResponse:
         """
         Create or update a memory item.
@@ -112,6 +113,13 @@ class MemoryItemService:
         # Check if item exists
         existing_item = await self.repo.get_by_user_category_key(user_id, category.value, key)
 
+        # Validate priority
+        if priority is not None:
+            if category != MemoryCategory.AREA_TO_IMPROVE:
+                raise ValueError("priority is only applicable to category 'area_to_improve'")
+            if not (0 <= priority <= 9):
+                raise ValueError(f"priority must be between 0 and 9, got {priority}")
+
         if existing_item:
             # Update existing item
             existing_item.content = content
@@ -119,6 +127,8 @@ class MemoryItemService:
             existing_item.status = status
             if old_status != status:
                 existing_item.status_changed_at = self._utc_now()
+            if priority is not None:
+                existing_item.priority = priority
             existing_item.updated_at = self._utc_now()
             updated_item = await self.repo.update(existing_item)
             return MemoryItemResponse.model_validate(updated_item)
@@ -130,6 +140,7 @@ class MemoryItemService:
                 key=key,
                 content=content,
                 status=status,
+                priority=priority,
                 status_changed_at=self._utc_now(),
             )
             created_item = await self.repo.create(new_item)
@@ -172,6 +183,41 @@ class MemoryItemService:
             item.status_changed_at = self._utc_now()
         item.updated_at = self._utc_now()
 
+        updated_item = await self.repo.update(item)
+        return MemoryItemResponse.model_validate(updated_item)
+
+    async def update_item_priority(self, item_id: int, priority: Optional[int], user_id: int) -> MemoryItemResponse:
+        """
+        Set or clear the priority of an area_to_improve memory item.
+
+        Args:
+            item_id: Item ID
+            priority: New priority (0-9) or None to unset
+            user_id: User ID (for authorization)
+
+        Returns:
+            Updated MemoryItemResponse
+
+        Raises:
+            UserNotFoundError: If item not found
+            PermissionDeniedError: If user doesn't own item
+            ValueError: If category is not area_to_improve or priority out of range
+        """
+        item = await self.repo.get_by_id(item_id)
+        if not item:
+            raise UserNotFoundError(f"Memory item with id {item_id} not found")
+
+        if item.user_id != user_id:
+            raise PermissionDeniedError("You don't have permission to update this item")
+
+        if item.category != MemoryCategory.AREA_TO_IMPROVE.value:
+            raise ValueError("priority is only applicable to category 'area_to_improve'")
+
+        if priority is not None and not (0 <= priority <= 9):
+            raise ValueError(f"priority must be between 0 and 9, got {priority}")
+
+        item.priority = priority
+        item.updated_at = self._utc_now()
         updated_item = await self.repo.update(item)
         return MemoryItemResponse.model_validate(updated_item)
 

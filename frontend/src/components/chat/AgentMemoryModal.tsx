@@ -70,6 +70,20 @@ const STATUS_OPTIONS: Record<
   archived: { label: "Archived", color: "default" },
 };
 
+const PRIORITY_OPTIONS = [
+  { value: "", label: "— unset" },
+  { value: "0", label: "P0 (highest)" },
+  { value: "1", label: "P1" },
+  { value: "2", label: "P2" },
+  { value: "3", label: "P3" },
+  { value: "4", label: "P4" },
+  { value: "5", label: "P5" },
+  { value: "6", label: "P6" },
+  { value: "7", label: "P7" },
+  { value: "8", label: "P8" },
+  { value: "9", label: "P9 (lowest)" },
+];
+
 const textFieldStyles = {
   "& .MuiOutlinedInput-root": {
     color: "white",
@@ -96,6 +110,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
     hasMore,
     fetchItems,
     createItem,
+    updatePriority,
     promoteItem,
     deleteItem,
     clearCategory,
@@ -105,11 +120,13 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
   const [editingItem, setEditingItem] = useState<MemoryItem | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [editingPriorityId, setEditingPriorityId] = useState<number | null>(null);
   const [formData, setFormData] = useState<MemoryItemCreate>({
     category: "personal_info",
     key: "",
     content: "",
     status: undefined,
+    priority: null,
   });
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -150,6 +167,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
     if (!open) {
       setConfirmDeleteId(null);
       setConfirmClear(false);
+      setEditingPriorityId(null);
     }
   }, [open]);
 
@@ -172,6 +190,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
     setStatusFilter("all");
     setConfirmDeleteId(null);
     setConfirmClear(false);
+    setEditingPriorityId(null);
   };
 
   const handleOpenForm = (item?: MemoryItem) => {
@@ -182,6 +201,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
         key: item.key,
         content: item.content,
         status: item.status,
+        priority: item.priority,
       });
     } else {
       setEditingItem(null);
@@ -190,6 +210,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
         key: "",
         content: "",
         status: undefined,
+        priority: null,
       });
     }
     setIsFormOpen(true);
@@ -218,6 +239,12 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
 
   const handleClearCategory = async () => {
     setConfirmClear(true);
+  };
+
+  const handlePriorityChange = async (id: number, value: string) => {
+    const priority = value === "" ? null : Number(value);
+    setEditingPriorityId(null);
+    await updatePriority(id, priority);
   };
 
   return (
@@ -461,18 +488,76 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                           </Tooltip>
                         </Box>
                       </Box>
-                      <Chip
-                        label={
-                          STATUS_OPTIONS[item.status]?.label || item.status
-                        }
-                        size="small"
-                        color={STATUS_OPTIONS[item.status]?.color || "default"}
-                        sx={{
-                          height: 20,
-                          fontSize: "0.7rem",
-                          fontWeight: "bold",
-                        }}
-                      />
+                      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, flexShrink: 0 }}>
+                        {/* Priority badge — area_to_improve only */}
+                        {item.category === "area_to_improve" && (
+                          editingPriorityId === item.id ? (
+                            <Select
+                              value={item.priority !== null && item.priority !== undefined ? String(item.priority) : ""}
+                              size="small"
+                              autoFocus
+                              onChange={(e) => handlePriorityChange(item.id, e.target.value)}
+                              onClose={() => setEditingPriorityId(null)}
+                              aria-label="Priority selector"
+                              sx={{
+                                color: "white",
+                                fontSize: "0.7rem",
+                                height: 24,
+                                ".MuiOutlinedInput-notchedOutline": { borderColor: "#6b7280" },
+                                ".MuiSvgIcon-root": { color: "white" },
+                              }}
+                            >
+                              {PRIORITY_OPTIONS.map((opt) => (
+                                <MenuItem key={opt.value} value={opt.value} sx={{ fontSize: "0.75rem" }}>
+                                  {opt.label}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          ) : (
+                            <Tooltip title="Click to set priority">
+                              <Chip
+                                label={item.priority !== null && item.priority !== undefined ? `P${item.priority}` : "P–"}
+                                size="small"
+                                onClick={() => setEditingPriorityId(item.id)}
+                                aria-label="Priority badge"
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.67rem",
+                                  fontWeight: "bold",
+                                  cursor: "pointer",
+                                  bgcolor: item.priority !== null && item.priority !== undefined
+                                    ? item.priority <= 2
+                                      ? "rgba(239,68,68,0.2)"
+                                      : item.priority <= 5
+                                        ? "rgba(245,158,11,0.2)"
+                                        : "rgba(107,114,128,0.2)"
+                                    : "rgba(55,65,81,0.4)",
+                                  color: item.priority !== null && item.priority !== undefined
+                                    ? item.priority <= 2
+                                      ? "#ef4444"
+                                      : item.priority <= 5
+                                        ? "#f59e0b"
+                                        : "#9ca3af"
+                                    : "#6b7280",
+                                  "&:hover": { opacity: 0.8 },
+                                }}
+                              />
+                            </Tooltip>
+                          )
+                        )}
+                        <Chip
+                          label={
+                            STATUS_OPTIONS[item.status]?.label || item.status
+                          }
+                          size="small"
+                          color={STATUS_OPTIONS[item.status]?.color || "default"}
+                          sx={{
+                            height: 20,
+                            fontSize: "0.7rem",
+                            fontWeight: "bold",
+                          }}
+                        />
+                      </Box>
                     </Box>
                     <Typography
                       variant="body2"
@@ -618,6 +703,29 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
               ))}
             </Select>
           </FormControl>
+          {/* Priority — only for area_to_improve */}
+          {formData.category === "area_to_improve" && (
+            <FormControl fullWidth sx={textFieldStyles}>
+              <InputLabel id="form-priority-label">Priority</InputLabel>
+              <Select
+                labelId="form-priority-label"
+                value={formData.priority !== null && formData.priority !== undefined ? String(formData.priority) : ""}
+                label="Priority"
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    priority: e.target.value === "" ? null : Number(e.target.value),
+                  })
+                }
+              >
+                {PRIORITY_OPTIONS.map((opt) => (
+                  <MenuItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
           <CustomButton
