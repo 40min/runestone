@@ -1,7 +1,7 @@
 import React from 'react';
 import { LoadingSpinner } from './ui';
 
-import { ProcessingStep } from '../hooks/useImageProcessing';
+import type { ProcessingStep } from '../hooks/useImageProcessing';
 
 interface ProcessingStatusProps {
   isProcessing: boolean;
