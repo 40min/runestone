@@ -516,7 +516,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                           ) : (
                             <Tooltip title="Click to set priority">
                               <Chip
-                                label={item.priority !== null && item.priority !== undefined ? `P${item.priority}` : "P–"}
+                                label={item.priority != null ? `P${item.priority}` : "P–"}
                                 size="small"
                                 onClick={() => setEditingPriorityId(item.id)}
                                 aria-label="Priority badge"
