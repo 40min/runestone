@@ -35,6 +35,8 @@ LABEL org.opencontainers.image.source="https://github.com/40min/runestone"
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
     PATH="/app/.venv/bin:$PATH" \
     HF_CACHE_DIR=/app/state/hf-cache \
     HF_HOME=/app/state/hf-cache/huggingface \
