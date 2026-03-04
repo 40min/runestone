@@ -57,7 +57,6 @@ function App() {
     onVocabularyUpdated,
     ocrResult,
     analysisResult,
-    resourcesResult,
     processingStep,
     error,
     isProcessing,
@@ -74,7 +73,7 @@ function App() {
   };
 
   const isAnalyzeButtonDisabled =
-    processingStep === "ANALYZING" || processingStep === "RESOURCES";
+    processingStep === "ANALYZING";
 
   // Persist view changes to localStorage
   useEffect(() => {
@@ -160,13 +159,11 @@ function App() {
 
                 {(ocrResult ||
                   analysisResult ||
-                  resourcesResult ||
                   error ||
                   isProcessing) && (
                   <ResultsDisplay
                     ocrResult={ocrResult}
                     analysisResult={analysisResult}
-                    resourcesResult={resourcesResult}
                     error={error}
                     saveVocabulary={saveVocabulary}
                     onVocabularyUpdated={onVocabularyUpdated}

@@ -1,9 +1,11 @@
 import React from 'react';
 import { LoadingSpinner } from './ui';
 
+import { ProcessingStep } from '../hooks/useImageProcessing';
+
 interface ProcessingStatusProps {
   isProcessing: boolean;
-  processingStep: 'IDLE' | 'OCR' | 'ANALYZING' | 'RESOURCES' | 'DONE';
+  processingStep: ProcessingStep;
 }
 
 const ProcessingStatus: React.FC<ProcessingStatusProps> = ({ isProcessing, processingStep }) => {

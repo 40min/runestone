@@ -46,7 +46,6 @@ vi.mock('./hooks/useImageProcessing', () => ({
     analyzeText: mockAnalyzeText,
     ocrResult: null,
     analysisResult: null,
-    resourcesResult: null,
     processingStep: 'IDLE',
     error: null,
     isProcessing: false,
