@@ -493,7 +493,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                         {item.category === "area_to_improve" && (
                           editingPriorityId === item.id ? (
                             <Select
-                              value={item.priority !== null && item.priority !== undefined ? String(item.priority) : ""}
+                              value={String(item.priority ?? "")}
                               size="small"
                               autoFocus
                               onChange={(e) => handlePriorityChange(item.id, e.target.value)}
