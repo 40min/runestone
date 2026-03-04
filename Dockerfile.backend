@@ -1,18 +1,28 @@
 # Build stage
-FROM python:3.13-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.13-slim AS builder
 
-# Labels
-LABEL maintainer="runestone-team"
-LABEL version="1.0.0"
-LABEL description="Runestone Swedish textbook analysis service - Backend"
-LABEL org.opencontainers.image.source="https://github.com/your-org/runestone"
+# Set compiler environment
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=0
 
 WORKDIR /app
-RUN apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*
-ENV PYTHONUSERBASE=/tmp/.local
-COPY pyproject.toml README.md ./
-COPY src/ ./src/
-RUN pip install --user -e .
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies using uv
+# We generate a requirements file with the CPU-only torch index
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv export --frozen --no-dev --no-editable --index-url https://download.pytorch.org/whl/cpu > requirements.txt \
+    && uv venv /app/.venv \
+    && uv pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cpu
+
 # Production stage
 FROM python:3.13-slim
 
@@ -23,39 +33,32 @@ LABEL description="Runestone Swedish textbook analysis service - Backend"
 LABEL org.opencontainers.image.source="https://github.com/your-org/runestone"
 
 # Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUSERBASE=/app/.local
-ENV PATH=/app/.local/bin:$PATH
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/app/.venv/bin:$PATH" \
+    HF_CACHE_DIR=/app/state/hf-cache \
+    HF_HOME=/app/state/hf-cache/huggingface \
+    SENTENCE_TRANSFORMERS_HOME=/app/state/hf-cache/sentence-transformers
 
 # Set work directory
 WORKDIR /app
 
-# Create non-root user with a real home directory
+# Create non-root user and state directory
 RUN groupadd -r runestone \
     && useradd -r -g runestone -d /home/runestone -m runestone \
-    && chown -R runestone:runestone /home/runestone
+    && mkdir -p /app/state/hf-cache \
+    && chown -R runestone:runestone /app /home/runestone
 
-# Ensure HuggingFace caches go to a writable, persistent location.
-# Override `HF_CACHE_DIR` at deploy time if needed.
-ENV HF_CACHE_DIR=/app/state/hf-cache
-ENV HF_HOME=/app/state/hf-cache/huggingface
-ENV SENTENCE_TRANSFORMERS_HOME=/app/state/hf-cache/sentence-transformers
+# Copy virtual environment from builder
+COPY --from=builder --chown=runestone:runestone /app/.venv /app/.venv
 
-# Copy Python dependencies from builder stage
-COPY --from=builder /tmp/.local /app/.local
-
-# Copy source code, resources, scripts, cheatsheets, and alembic configuration
-# Including cheatsheets for grammar reference and scripts for maintenance
-COPY src/ ./src/
-COPY res/ ./res/
-COPY scripts/ ./scripts/
-COPY cheatsheets/ ./cheatsheets/
-COPY alembic/ ./alembic/
-COPY alembic.ini ./
-
-# Change ownership to non-root user
-RUN chown -R runestone:runestone /app
+# Copy application code and resources
+COPY --chown=runestone:runestone src/ ./src/
+COPY --chown=runestone:runestone res/ ./res/
+COPY --chown=runestone:runestone scripts/ ./scripts/
+COPY --chown=runestone:runestone cheatsheets/ ./cheatsheets/
+COPY --chown=runestone:runestone alembic/ ./alembic/
+COPY --chown=runestone:runestone alembic.ini pyproject.toml README.md ./
 
 # Switch to non-root user
 USER runestone
