@@ -42,6 +42,7 @@ ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH="/app/src" \
     HF_CACHE_DIR=/app/state/hf-cache \
     HF_HOME=/app/state/hf-cache/huggingface \
     SENTENCE_TRANSFORMERS_HOME=/app/state/hf-cache/sentence-transformers
