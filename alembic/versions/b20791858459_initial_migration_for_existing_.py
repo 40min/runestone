@@ -46,7 +46,6 @@ def upgrade() -> None:
             sa.Column("example_phrase", sa.Text(), nullable=True),
             sa.Column("extra_info", sa.Text(), nullable=True, server_default=None),
             sa.Column("in_learn", sa.Boolean(), nullable=False, server_default=sa.true()),
-            sa.Column("priority_learn", sa.Boolean(), nullable=False, server_default=sa.false()),
             sa.Column("last_learned", sa.DateTime(timezone=True), nullable=True),
             sa.Column(
                 "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("(CURRENT_TIMESTAMP)")
