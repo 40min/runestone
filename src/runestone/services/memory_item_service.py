@@ -30,6 +30,7 @@ class MemoryItemService:
     # Re-exported for local use; the canonical definitions live in memory_item_schemas.
     DEFAULT_STATUS = DEFAULT_STATUS_BY_CATEGORY
     VALID_STATUSES = VALID_STATUSES_BY_CATEGORY
+    DEFAULT_AREA_TO_IMPROVE_PRIORITY = 9
 
     def __init__(self, memory_item_repository: MemoryItemRepository):
         """Initialize service with memory item repository."""
@@ -114,11 +115,11 @@ class MemoryItemService:
         existing_item = await self.repo.get_by_user_category_key(user_id, category.value, key)
 
         # Validate priority
-        if priority is not None:
-            if category != MemoryCategory.AREA_TO_IMPROVE:
-                raise ValueError("priority is only applicable to category 'area_to_improve'")
-            if not (0 <= priority <= 9):
+        if category == MemoryCategory.AREA_TO_IMPROVE:
+            if priority is not None and not (0 <= priority <= 9):
                 raise ValueError(f"priority must be between 0 and 9, got {priority}")
+        elif priority is not None:
+            raise ValueError("priority is only applicable to category 'area_to_improve'")
 
         if existing_item:
             # Update existing item
@@ -134,13 +135,16 @@ class MemoryItemService:
             return MemoryItemResponse.model_validate(updated_item)
         else:
             # Create new item
+            create_priority = priority
+            if category == MemoryCategory.AREA_TO_IMPROVE and create_priority is None:
+                create_priority = self.DEFAULT_AREA_TO_IMPROVE_PRIORITY
             new_item = MemoryItem(
                 user_id=user_id,
                 category=category.value,
                 key=key,
                 content=content,
                 status=status,
-                priority=priority,
+                priority=create_priority,
                 status_changed_at=self._utc_now(),
             )
             created_item = await self.repo.create(new_item)
@@ -188,11 +192,11 @@ class MemoryItemService:
 
     async def update_item_priority(self, item_id: int, priority: Optional[int], user_id: int) -> MemoryItemResponse:
         """
-        Set or clear the priority of an area_to_improve memory item.
+        Set the priority of an area_to_improve memory item.
 
         Args:
             item_id: Item ID
-            priority: New priority (0-9) or None to unset
+            priority: New priority (0-9). None maps to 9 (lowest/default).
             user_id: User ID (for authorization)
 
         Returns:
@@ -213,7 +217,10 @@ class MemoryItemService:
         if item.category != MemoryCategory.AREA_TO_IMPROVE.value:
             raise ValueError("priority is only applicable to category 'area_to_improve'")
 
-        if priority is not None and not (0 <= priority <= 9):
+        if priority is None:
+            priority = self.DEFAULT_AREA_TO_IMPROVE_PRIORITY
+
+        if not (0 <= priority <= 9):
             raise ValueError(f"priority must be between 0 and 9, got {priority}")
 
         item.priority = priority

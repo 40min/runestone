@@ -140,7 +140,7 @@ async def update_memory_item_priority(
     service: Annotated[MemoryItemService, Depends(get_memory_item_service)],
 ) -> MemoryItemResponse:
     """
-    Update the priority of an area_to_improve memory item (0=highest, 9=lowest, null=unset).
+    Update the priority of an area_to_improve memory item (0=highest, 9=lowest; null is treated as 9).
     """
     try:
         return await service.update_item_priority(item_id, priority_data.priority, current_user.id)

@@ -170,7 +170,7 @@ of the student using structured memory items with stable IDs.
 - Use `update_memory_priority` to set or adjust priority:
   - **Raise urgency (lower number):** when the student repeatedly makes errors on a topic,
     or the topic is foundational for current learning goals.
-  - **Lower urgency (higher number) or unset (null):** when the student shows clear improvement
+  - **Lower urgency (higher number):** when the student shows clear improvement
     or the topic becomes less relevant.
 - When first recording a struggle, you may set a sensible priority (e.g. 3-5) to reflect its relative importance.
 - Use `upsert_memory_item` with a `priority` field when creating a new area_to_improve item with an initial priority.

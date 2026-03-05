@@ -34,7 +34,7 @@ class MemoryPriorityUpdate(BaseModel):
         ...,
         ge=0,
         le=9,
-        description="Priority 0-9 (0=highest urgency) or null to unset",
+        description="Priority 0-9 (0=highest urgency). Null is treated as 9 (lowest/default).",
     )
 
 
@@ -255,17 +255,17 @@ async def update_memory_priority(
     update: Annotated[MemoryPriorityUpdate, Field(description="Priority update data")],
 ) -> str:
     """
-    Set or clear the priority of an area_to_improve memory item.
+    Set the priority of an area_to_improve memory item.
 
     Use this to indicate which topics need the most urgent attention:
     - Lower priority = more urgent (0 is the highest priority).
     - Raise priority (lower number) when the student repeatedly makes errors on a topic.
-    - Lower priority (higher number) or unset (null) when the student shows improvement.
+    - Lower priority (higher number) when the student shows improvement.
     - Items with priority set appear first in memory reads for area_to_improve.
 
     Args:
         runtime: Tool runtime context
-        update: Priority update data (item_id, priority 0-9 or null to unset)
+        update: Priority update data (item_id, priority 0-9, or null which maps to 9)
 
     Returns:
         Confirmation message
@@ -276,8 +276,7 @@ async def update_memory_priority(
     async with provide_memory_item_service() as service:
         result = await service.update_item_priority(update.item_id, update.priority, user.id)
 
-    priority_str = str(result.priority) if result.priority is not None else "unset"
-    return f"Priority updated: [ID:{result.id}] {result.key} priority is now {priority_str}"
+    return f"Priority updated: [ID:{result.id}] {result.key} priority is now {result.priority}"
 
 
 @tool

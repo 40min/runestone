@@ -71,7 +71,7 @@ const STATUS_OPTIONS: Record<
 };
 
 const PRIORITY_OPTIONS = [
-  { value: "", label: "— unset" },
+  { value: "", label: "P9 (default lowest)" },
   { value: "0", label: "P0 (highest)" },
   { value: "1", label: "P1" },
   { value: "2", label: "P2" },

@@ -61,7 +61,12 @@ class MemoryItemCreate(BaseModel):
     key: str = Field(..., min_length=1, max_length=100, description="Unique key within category")
     content: str = Field(..., min_length=1, description="Content/description of the memory item")
     status: Optional[str] = Field(None, description="Status (defaults based on category)")
-    priority: Optional[int] = Field(None, ge=0, le=9, description="Priority 0-9 (0=highest). Only for area_to_improve.")
+    priority: Optional[int] = Field(
+        None,
+        ge=0,
+        le=9,
+        description="Priority 0-9 (0=highest). For area_to_improve, null/missing defaults to 9 on create.",
+    )
 
     @field_validator("status", mode="before")
     @classmethod
@@ -93,7 +98,12 @@ class MemoryItemStatusUpdate(BaseModel):
 class MemoryItemPriorityUpdate(BaseModel):
     """Schema for updating memory item priority."""
 
-    priority: Optional[int] = Field(..., ge=0, le=9, description="Priority 0-9 (0=highest), or null to unset")
+    priority: Optional[int] = Field(
+        ...,
+        ge=0,
+        le=9,
+        description="Priority 0-9 (0=highest). Null is treated as 9 (lowest/default).",
+    )
 
 
 class MemoryItemResponse(BaseModel):

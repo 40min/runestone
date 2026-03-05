@@ -79,6 +79,20 @@ async def test_upsert_sets_priority_for_area_to_improve(db_with_test_user):
     assert result2.priority == 0
 
 
+async def test_upsert_defaults_priority_to_9_for_new_area_item(db_with_test_user):
+    db, user = db_with_test_user
+    service = _service(db)
+
+    result = await service.upsert_memory_item(
+        user_id=user.id,
+        category=MemoryCategory.AREA_TO_IMPROVE,
+        key="article_usage",
+        content="Misses definite article in set phrases",
+    )
+
+    assert result.priority == 9
+
+
 async def test_upsert_priority_rejected_for_other_categories(db_with_test_user):
     db, user = db_with_test_user
     service = _service(db)
@@ -133,7 +147,7 @@ async def test_update_item_priority_success(db_with_test_user, monkeypatch):
     assert item.updated_at.replace(tzinfo=timezone.utc) == fixed_now
 
 
-async def test_update_item_priority_unset(db_with_test_user):
+async def test_update_item_priority_null_maps_to_lowest(db_with_test_user):
     db, user = db_with_test_user
     item = _area_item(user.id, "grammar", priority=4)
     db.add(item)
@@ -143,7 +157,7 @@ async def test_update_item_priority_unset(db_with_test_user):
     service = _service(db)
     result = await service.update_item_priority(item.id, None, user.id)
 
-    assert result.priority is None
+    assert result.priority == 9
 
 
 async def test_update_item_priority_wrong_category(db_with_test_user):
