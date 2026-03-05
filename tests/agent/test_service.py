@@ -87,6 +87,9 @@ def test_build_agent(mock_settings, mock_chat_model, mock_user_service):
             # search_grammar, read_grammar_page, read_url
             assert len(tools) == 12
             assert "MEMORY PROTOCOL" in call_kwargs["system_prompt"]
+            assert "TOOL TRUTHFULNESS (MANDATORY)" in call_kwargs["system_prompt"]
+            assert "Never pretend persistence happened." in call_kwargs["system_prompt"]
+            assert "This includes normal conversation, not only mistakes." in call_kwargs["system_prompt"]
 
 
 @pytest.mark.anyio

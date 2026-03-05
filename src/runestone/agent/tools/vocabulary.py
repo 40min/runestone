@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class WordPrioritisationItem(BaseModel):
-    """Input for a single word to prioritize."""
+    """Input for a single word to save for future learning."""
 
     word_phrase: str = Field(..., description="The Swedish word or phrase")
     translation: str = Field(..., description="Translation of the word_phrase (concise)")
@@ -34,9 +34,9 @@ class WordPrioritisationItem(BaseModel):
 
 
 class WordPrioritisationInput(BaseModel):
-    """Input for prioritizing words for learning."""
+    """Input for saving useful words for future learning and priority recall."""
 
-    words: list[WordPrioritisationItem] = Field(..., description="List of words to prioritize")
+    words: list[WordPrioritisationItem] = Field(..., description="List of useful words to save and prioritize")
 
 
 @tool(args_schema=WordPrioritisationInput)
@@ -45,20 +45,21 @@ async def prioritize_words_for_learning(
     runtime: ToolRuntime[AgentContext],
 ) -> str:
     """
-    Mark words for priority learning. Use when student uses another language
-    to express a word or constantly makes errors writing a word.
+    Save useful/interesting words for future learning and mark them for priority recall.
+    Use during normal conversation whenever the student asks to save vocabulary
+    or when a word is clearly worth practicing later.
 
     For each word:
     - If deleted: restores it and marks for priority
-    - If exists: marks for priority
+    - If exists: marks for priority (or confirms already prioritized)
     - If new: creates it with priority flag
 
     Args:
-        words: List of words to prioritize for learning
+        words: List of words to save and prioritize for learning
         runtime: Tool runtime context
 
     Returns:
-        Confirmation message
+        Confirmation message with per-action summary
     """
     user = runtime.context.user
 

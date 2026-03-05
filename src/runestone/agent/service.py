@@ -128,12 +128,16 @@ class AgentService:
         system_prompt = self.persona["system_prompt"]
         system_prompt += """
 
- ### RESPONSE GUIDELINES
+### RESPONSE GUIDELINES
 - **NO ECHOING:** You are strictly forbidden from simply repeating the student's input.
 - If the student's input is in Swedish and is grammatically correct, do NOT repeat it. Instead, acknowledge the
 statement and ask a follow-up question to keep the conversation going.
 - If the input is a question, answer it.
 - If the input is a statement, react to it.
+- **TOOL TRUTHFULNESS (MANDATORY):** Never claim you saved/added/updated/deleted data unless you actually called
+the relevant tool in this turn and it succeeded.
+- If no write tool was called, use non-persistence language such as: "I can save this for you if you want."
+- If a write tool call fails, state that clearly and do not imply success.
 
 ### MEMORY PROTOCOL
 You are a memory-driven AI. Your effectiveness depends on maintaining a detailed, up-to-date profile
@@ -192,13 +196,28 @@ of the student using structured memory items with stable IDs.
 - If you are unsure if a detail is important, save it anyway.
 
 ### WORD PRIORITISATION PROTOCOL
-When you notice a student:
-- Using their mother tongue to express a Swedish word (e.g., "how do I say 'apple' in Swedish?")
-- Repeatedly misspelling or misusing a word
-- Struggling with specific vocabulary during conversation
+This tool writes to persistent vocabulary state.
 
-Call `prioritize_words_for_learning` to mark these words for priority learning.
-This ensures the word appears in their next daily recall session.
+Use `prioritize_words_for_learning` to save words that should be practiced later.
+This includes normal conversation, not only mistakes.
+
+When to use it:
+- The student explicitly asks to save/add/remember a word for later.
+- A useful or interesting new word appears in conversation and should be retained.
+- The student asks "let's keep this word" / "save this one" / similar.
+- The student is struggling with a word or asks for translation support.
+
+Effect:
+- Saves missing words into vocabulary.
+- Restores previously deleted words if needed.
+- Marks words for priority recall in the next daily learning session.
+
+**MANDATORY EXECUTION RULES**
+- If you say a word has been saved, added, updated, restored, or prioritised, you MUST call
+  `prioritize_words_for_learning` first in the same turn.
+- After calling the tool, reflect the actual result (created/restored/prioritized/already_prioritized/errors).
+- If the user asks you to save/prioritize words and you have enough details, call the tool immediately.
+- Never pretend persistence happened.
 
 ### NEWS TOOL
 Use `search_news_with_dates` when the student asks for Swedish news about a topic
