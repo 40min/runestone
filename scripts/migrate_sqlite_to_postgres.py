@@ -5,6 +5,7 @@ from argparse import ArgumentParser
 import psycopg2
 from dotenv import load_dotenv
 from psycopg2.extras import execute_values
+from psycopg2.sql import SQL, Identifier
 
 # Load environment variables
 load_dotenv()
@@ -23,6 +24,22 @@ TABLES = [
     "chat_summaries",
     "memory_items",
 ]
+
+
+def sync_id_sequence(pg_cursor, table: str):
+    """Sync table id sequence to avoid duplicate primary key inserts after explicit-id migration."""
+    # Resolve sequence bound to <table>.id (works for SERIAL/IDENTITY-backed columns).
+    pg_cursor.execute("SELECT pg_get_serial_sequence(%s, %s)", (f"public.{table}", "id"))
+    row = pg_cursor.fetchone()
+    seq_name = row[0] if row else None
+    if not seq_name:
+        return
+
+    # Set sequence so nextval() returns max(id)+1, or 1 for empty table.
+    pg_cursor.execute(SQL("SELECT COALESCE(MAX(id), 0) FROM {}").format(Identifier(table)))
+    max_id = pg_cursor.fetchone()[0] or 0
+    pg_cursor.execute("SELECT setval(%s, %s, %s)", (seq_name, max_id + 1, False))
+    print(f"   - Synced sequence {seq_name} to next id {max_id + 1}.")
 
 
 def parse_args():
@@ -109,6 +126,7 @@ def migrate(sqlite_db: str, postgres_url: str):
             # Execute batch insert
             execute_values(pg_cursor, f"INSERT INTO {table} ({column_names}) VALUES %s ON CONFLICT DO NOTHING", data)
             print(f"   - Successfully migrated {len(rows)} rows to {table}.")
+            sync_id_sequence(pg_cursor, table)
 
         # Commit changes
         pg_conn.commit()

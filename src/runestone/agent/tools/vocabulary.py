@@ -79,6 +79,9 @@ async def prioritize_words_for_learning(
                 processed_count += 1
             except Exception as e:
                 logger.error(f"Failed to process {word_item.word_phrase}: {e}")
+                # Keep processing remaining words with the same session.
+                # SQLAlchemy sessions require rollback after failed flush/commit.
+                await vocab_service.repo.db.rollback()
                 errors.append(f"{word_item.word_phrase}: {str(e)}")
 
     if errors:
