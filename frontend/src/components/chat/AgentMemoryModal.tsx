@@ -84,6 +84,19 @@ const PRIORITY_OPTIONS = [
   { value: "9", label: "P9 (lowest)" },
 ];
 
+const getPriorityChipStyles = (priority: number | null | undefined) => {
+  if (priority == null) {
+    return { bgcolor: "rgba(55,65,81,0.4)", color: "#6b7280" };
+  }
+  if (priority <= 2) {
+    return { bgcolor: "rgba(239,68,68,0.2)", color: "#ef4444" };
+  }
+  if (priority <= 5) {
+    return { bgcolor: "rgba(245,158,11,0.2)", color: "#f59e0b" };
+  }
+  return { bgcolor: "rgba(107,114,128,0.2)", color: "#9ca3af" };
+};
+
 const textFieldStyles = {
   "& .MuiOutlinedInput-root": {
     color: "white",
@@ -525,20 +538,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                                   fontSize: "0.67rem",
                                   fontWeight: "bold",
                                   cursor: "pointer",
-                                  bgcolor: item.priority !== null && item.priority !== undefined
-                                    ? item.priority <= 2
-                                      ? "rgba(239,68,68,0.2)"
-                                      : item.priority <= 5
-                                        ? "rgba(245,158,11,0.2)"
-                                        : "rgba(107,114,128,0.2)"
-                                    : "rgba(55,65,81,0.4)",
-                                  color: item.priority !== null && item.priority !== undefined
-                                    ? item.priority <= 2
-                                      ? "#ef4444"
-                                      : item.priority <= 5
-                                        ? "#f59e0b"
-                                        : "#9ca3af"
-                                    : "#6b7280",
+                                  ...getPriorityChipStyles(item.priority),
                                   "&:hover": { opacity: 0.8 },
                                 }}
                               />
