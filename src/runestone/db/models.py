@@ -6,7 +6,18 @@ This module defines the database table models using SQLAlchemy ORM.
 
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 from sqlalchemy.sql.expression import false
@@ -52,8 +63,12 @@ class MemoryItem(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     status_changed_at = Column(DateTime(timezone=True), nullable=True)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    priority: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    __table_args__ = (UniqueConstraint("user_id", "category", "key", name="uq_memory_items_user_category_key"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "category", "key", name="uq_memory_items_user_category_key"),
+        CheckConstraint("priority IS NULL OR (priority >= 0 AND priority <= 9)", name="ck_memory_items_priority_range"),
+    )
 
 
 class Vocabulary(Base):

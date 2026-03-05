@@ -71,7 +71,12 @@ class MemoryItemRepository:
         if status:
             stmt = stmt.filter(MemoryItem.status == status)
 
-        stmt = stmt.order_by(MemoryItem.updated_at.desc()).limit(limit).offset(offset)
+        if category == "area_to_improve":
+            stmt = stmt.order_by(MemoryItem.priority.asc().nulls_last(), MemoryItem.updated_at.desc())
+        else:
+            stmt = stmt.order_by(MemoryItem.updated_at.desc())
+
+        stmt = stmt.limit(limit).offset(offset)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 

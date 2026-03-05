@@ -30,6 +30,7 @@ class MemoryItemService:
     # Re-exported for local use; the canonical definitions live in memory_item_schemas.
     DEFAULT_STATUS = DEFAULT_STATUS_BY_CATEGORY
     VALID_STATUSES = VALID_STATUSES_BY_CATEGORY
+    DEFAULT_AREA_TO_IMPROVE_PRIORITY = 9
 
     def __init__(self, memory_item_repository: MemoryItemRepository):
         """Initialize service with memory item repository."""
@@ -85,6 +86,7 @@ class MemoryItemService:
         key: str,
         content: str,
         status: Optional[str] = None,
+        priority: Optional[int] = None,
     ) -> MemoryItemResponse:
         """
         Create or update a memory item.
@@ -112,6 +114,13 @@ class MemoryItemService:
         # Check if item exists
         existing_item = await self.repo.get_by_user_category_key(user_id, category.value, key)
 
+        # Validate priority
+        if category == MemoryCategory.AREA_TO_IMPROVE:
+            if priority is not None and not (0 <= priority <= 9):
+                raise ValueError(f"priority must be between 0 and 9, got {priority}")
+        elif priority is not None:
+            raise ValueError("priority is only applicable to category 'area_to_improve'")
+
         if existing_item:
             # Update existing item
             existing_item.content = content
@@ -119,17 +128,23 @@ class MemoryItemService:
             existing_item.status = status
             if old_status != status:
                 existing_item.status_changed_at = self._utc_now()
+            if priority is not None:
+                existing_item.priority = priority
             existing_item.updated_at = self._utc_now()
             updated_item = await self.repo.update(existing_item)
             return MemoryItemResponse.model_validate(updated_item)
         else:
             # Create new item
+            create_priority = priority
+            if category == MemoryCategory.AREA_TO_IMPROVE and create_priority is None:
+                create_priority = self.DEFAULT_AREA_TO_IMPROVE_PRIORITY
             new_item = MemoryItem(
                 user_id=user_id,
                 category=category.value,
                 key=key,
                 content=content,
                 status=status,
+                priority=create_priority,
                 status_changed_at=self._utc_now(),
             )
             created_item = await self.repo.create(new_item)
@@ -172,6 +187,44 @@ class MemoryItemService:
             item.status_changed_at = self._utc_now()
         item.updated_at = self._utc_now()
 
+        updated_item = await self.repo.update(item)
+        return MemoryItemResponse.model_validate(updated_item)
+
+    async def update_item_priority(self, item_id: int, priority: Optional[int], user_id: int) -> MemoryItemResponse:
+        """
+        Set the priority of an area_to_improve memory item.
+
+        Args:
+            item_id: Item ID
+            priority: New priority (0-9). None maps to 9 (lowest/default).
+            user_id: User ID (for authorization)
+
+        Returns:
+            Updated MemoryItemResponse
+
+        Raises:
+            UserNotFoundError: If item not found
+            PermissionDeniedError: If user doesn't own item
+            ValueError: If category is not area_to_improve or priority out of range
+        """
+        item = await self.repo.get_by_id(item_id)
+        if not item:
+            raise UserNotFoundError(f"Memory item with id {item_id} not found")
+
+        if item.user_id != user_id:
+            raise PermissionDeniedError("You don't have permission to update this item")
+
+        if item.category != MemoryCategory.AREA_TO_IMPROVE.value:
+            raise ValueError("priority is only applicable to category 'area_to_improve'")
+
+        if priority is None:
+            priority = self.DEFAULT_AREA_TO_IMPROVE_PRIORITY
+
+        if not (0 <= priority <= 9):
+            raise ValueError(f"priority must be between 0 and 9, got {priority}")
+
+        item.priority = priority
+        item.updated_at = self._utc_now()
         updated_item = await self.repo.update(item)
         return MemoryItemResponse.model_validate(updated_item)
 

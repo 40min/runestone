@@ -10,6 +10,7 @@ export interface MemoryItem {
   key: string;
   content: string;
   status: string;
+  priority: number | null;
   created_at: string;
   updated_at: string;
   status_changed_at: string | null;
@@ -21,6 +22,7 @@ export interface MemoryItemCreate {
   key: string;
   content: string;
   status?: string;
+  priority?: number | null;
 }
 
 interface UseMemoryItemsReturn {
@@ -31,6 +33,7 @@ interface UseMemoryItemsReturn {
   fetchItems: (category?: MemoryCategory, status?: string, reset?: boolean) => Promise<void>;
   createItem: (data: MemoryItemCreate) => Promise<MemoryItem>;
   updateStatus: (id: number, status: string) => Promise<MemoryItem>;
+  updatePriority: (id: number, priority: number | null) => Promise<MemoryItem>;
   promoteItem: (id: number, category: MemoryCategory, status?: string) => Promise<MemoryItem>;
   deleteItem: (id: number) => Promise<void>;
   clearCategory: (category: MemoryCategory) => Promise<void>;
@@ -114,6 +117,19 @@ const useMemoryItems = (): UseMemoryItemsReturn => {
     [put]
   );
 
+  const updatePriority = useCallback(
+    async (id: number, priority: number | null) => {
+      try {
+        const updatedItem = await put<MemoryItem>(`/api/memory/${id}/priority`, { priority });
+        setItems((prev) => prev.map((item) => (item.id === id ? updatedItem : item)));
+        return updatedItem;
+      } catch (err) {
+        throw err instanceof Error ? err : new Error("Failed to update priority");
+      }
+    },
+    [put]
+  );
+
   const promoteItem = useCallback(
     async (id: number, category: MemoryCategory, status?: string) => {
       try {
@@ -159,6 +175,7 @@ const useMemoryItems = (): UseMemoryItemsReturn => {
     fetchItems,
     createItem,
     updateStatus,
+    updatePriority,
     promoteItem,
     deleteItem,
     clearCategory,

@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from runestone.api.memory_item_schemas import (
     MemoryCategory,
     MemoryItemCreate,
+    MemoryItemPriorityUpdate,
     MemoryItemResponse,
     MemoryItemStatusUpdate,
 )
@@ -79,6 +80,7 @@ async def create_memory_item(
             key=item_data.key,
             content=item_data.content,
             status=item_data.status,
+            priority=item_data.priority,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -118,6 +120,39 @@ async def update_memory_item_status(
     except Exception as e:
         logger.error(f"Failed to update status for item {item_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to update status")
+
+
+@router.put(
+    "/memory/{item_id}/priority",
+    response_model=MemoryItemResponse,
+    responses={
+        200: {"description": "Priority updated successfully"},
+        400: {"description": "Invalid priority or wrong category"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Not authorized"},
+        404: {"description": "Item not found"},
+    },
+)
+async def update_memory_item_priority(
+    item_id: int,
+    priority_data: MemoryItemPriorityUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[MemoryItemService, Depends(get_memory_item_service)],
+) -> MemoryItemResponse:
+    """
+    Update the priority of an area_to_improve memory item (0=highest, 9=lowest; null is treated as 9).
+    """
+    try:
+        return await service.update_item_priority(item_id, priority_data.priority, current_user.id)
+    except UserNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionDeniedError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to update priority for item {item_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update priority")
 
 
 @router.post(

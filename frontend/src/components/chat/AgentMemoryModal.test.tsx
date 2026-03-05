@@ -6,6 +6,8 @@ import * as useMemoryItemsModule from '../../hooks/useMemoryItems';
 // Mock the hook
 vi.mock('../../hooks/useMemoryItems');
 
+const mockUpdatePriority = vi.fn().mockResolvedValue(undefined);
+
 const mockUseMemoryItems = {
   items: [],
   loading: false,
@@ -14,6 +16,7 @@ const mockUseMemoryItems = {
   fetchItems: vi.fn(),
   createItem: vi.fn(),
   updateStatus: vi.fn(),
+  updatePriority: mockUpdatePriority,
   promoteItem: vi.fn(),
   deleteItem: vi.fn().mockResolvedValue(undefined),
   clearCategory: vi.fn().mockResolvedValue(undefined),
@@ -68,6 +71,7 @@ describe('AgentMemoryModal', () => {
         content: 'test-content',
         category: 'personal_info',
         status: 'active',
+        priority: null,
         updated_at: new Date().toISOString(),
       }
     ];
@@ -83,6 +87,120 @@ describe('AgentMemoryModal', () => {
     expect(screen.getByText('Active')).toBeInTheDocument();
     expect(screen.getByText('Displayed 1 item')).toBeInTheDocument();
   });
+
+  // ---------------------------------------------------------------------------
+  // Priority badge tests
+  // ---------------------------------------------------------------------------
+
+  it('shows priority badge for area_to_improve item with priority set', () => {
+    const mockItems = [
+      {
+        id: 1,
+        key: 'verb-tense',
+        content: 'Struggles with verb tense',
+        category: 'area_to_improve',
+        status: 'struggling',
+        priority: 2,
+        updated_at: new Date().toISOString(),
+      }
+    ];
+    (useMemoryItemsModule.default as Mock).mockReturnValue({
+      ...mockUseMemoryItems,
+      items: mockItems,
+    });
+
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+    expect(screen.getByLabelText('Priority badge')).toBeInTheDocument();
+    expect(screen.getByLabelText('Priority badge')).toHaveTextContent('P2');
+  });
+
+  it('shows P– badge for area_to_improve item without priority', () => {
+    const mockItems = [
+      {
+        id: 1,
+        key: 'pronunciation',
+        content: 'Pronunciation issues',
+        category: 'area_to_improve',
+        status: 'struggling',
+        priority: null,
+        updated_at: new Date().toISOString(),
+      }
+    ];
+    (useMemoryItemsModule.default as Mock).mockReturnValue({
+      ...mockUseMemoryItems,
+      items: mockItems,
+    });
+
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+    expect(screen.getByLabelText('Priority badge')).toHaveTextContent('P–');
+  });
+
+  it('does not show priority badge for personal_info items', () => {
+    const mockItems = [
+      {
+        id: 1,
+        key: 'name',
+        content: 'Alice',
+        category: 'personal_info',
+        status: 'active',
+        priority: null,
+        updated_at: new Date().toISOString(),
+      }
+    ];
+    (useMemoryItemsModule.default as Mock).mockReturnValue({
+      ...mockUseMemoryItems,
+      items: mockItems,
+    });
+
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+    expect(screen.queryByLabelText('Priority badge')).not.toBeInTheDocument();
+  });
+
+  it('clicking priority badge shows inline priority selector', () => {
+    const mockItems = [
+      {
+        id: 1,
+        key: 'verb-tense',
+        content: 'Struggles with verb tense',
+        category: 'area_to_improve',
+        status: 'struggling',
+        priority: 2,
+        updated_at: new Date().toISOString(),
+      }
+    ];
+    (useMemoryItemsModule.default as Mock).mockReturnValue({
+      ...mockUseMemoryItems,
+      items: mockItems,
+    });
+
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+
+    fireEvent.click(screen.getByLabelText('Priority badge'));
+    expect(screen.getByLabelText('Priority selector')).toBeInTheDocument();
+  });
+
+  it('shows priority field in add form when category is area_to_improve', async () => {
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+
+    // Switch to area_to_improve tab
+    fireEvent.click(screen.getByText('Areas to Improve'));
+    fireEvent.click(screen.getByText('Add Item'));
+
+    expect(screen.getByLabelText(/Priority/i)).toBeInTheDocument();
+  });
+
+  it('does not show priority field in add form for personal_info', () => {
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+
+    // personal_info is the default tab
+    fireEvent.click(screen.getByText('Add Item'));
+
+    expect(screen.queryByLabelText(/Priority/i)).not.toBeInTheDocument();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Existing tests
+  // ---------------------------------------------------------------------------
 
   it('shows inline clear confirmation and calls clearCategory on confirm', async () => {
     (useMemoryItemsModule.default as Mock).mockReturnValue({
@@ -125,6 +243,7 @@ describe('AgentMemoryModal', () => {
         content: 'test-content',
         category: 'personal_info',
         status: 'active',
+        priority: null,
         updated_at: new Date().toISOString(),
       }
     ];
@@ -151,6 +270,7 @@ describe('AgentMemoryModal', () => {
         content: 'test-content',
         category: 'personal_info',
         status: 'active',
+        priority: null,
         updated_at: new Date().toISOString(),
       }
     ];
