@@ -44,6 +44,7 @@ services:
       - DATABASE_URL=${DATABASE_URL}
     volumes:
       - ./res:/app/res:ro
+      - ./state:/app/state
     depends_on:
       postgres:
         condition: service_healthy
@@ -81,6 +82,8 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - DATABASE_URL=${DATABASE_URL}
       - VERBOSE=${VERBOSE}
+    volumes:
+      - ./state:/app/state
     depends_on:
       postgres:
         condition: service_healthy
