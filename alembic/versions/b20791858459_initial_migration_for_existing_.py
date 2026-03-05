@@ -28,6 +28,15 @@ def upgrade() -> None:
     # Fresh database path (e.g. new Postgres): bootstrap the base vocabulary table.
     # Existing database path: keep original behavior and only add missing columns.
     if "vocabulary" not in existing_tables:
+        table_args = [
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("user_id", "word_phrase", name="uq_user_word_phrase"),
+        ]
+        # Fresh databases can reach this migration before the users table migration.
+        # Add the FK only when the users table already exists.
+        if "users" in existing_tables:
+            table_args.append(sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_vocabulary_user_id"))
+
         op.create_table(
             "vocabulary",
             sa.Column("id", sa.Integer(), nullable=False),
@@ -46,9 +55,7 @@ def upgrade() -> None:
                 "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("(CURRENT_TIMESTAMP)")
             ),
             sa.Column("learned_times", sa.Integer(), nullable=False, server_default="0"),
-            sa.PrimaryKeyConstraint("id"),
-            sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
-            sa.UniqueConstraint("user_id", "word_phrase", name="uq_user_word_phrase"),
+            *table_args,
         )
         op.create_index("ix_vocabulary_word_phrase", "vocabulary", ["word_phrase"])
         return

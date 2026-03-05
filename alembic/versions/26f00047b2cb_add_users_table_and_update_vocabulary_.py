@@ -76,9 +76,15 @@ def upgrade() -> None:
     # Update all vocabulary rows to have user_id = 1
     op.execute(sa.text("UPDATE vocabulary SET user_id = 1 WHERE user_id IS NULL OR user_id = 0"))
 
-    # Add foreign key constraint if it doesn't exist
-    existing_constraints = {const["name"] for const in inspector.get_foreign_keys("vocabulary")}
-    if "fk_vocabulary_user_id" not in existing_constraints:
+    # Add foreign key constraint if it doesn't exist (by structure, not only by name)
+    existing_fks = inspector.get_foreign_keys("vocabulary")
+    has_user_fk = any(
+        fk.get("referred_table") == "users"
+        and fk.get("constrained_columns") == ["user_id"]
+        and fk.get("referred_columns") == ["id"]
+        for fk in existing_fks
+    )
+    if not has_user_fk:
         with op.batch_alter_table("vocabulary", schema=None) as batch_op:
             batch_op.create_foreign_key("fk_vocabulary_user_id", "users", ["user_id"], ["id"])
 
