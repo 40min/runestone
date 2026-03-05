@@ -9,7 +9,7 @@
 .PHONY: test-prompts-ocr test-prompts-analysis test-prompts-vocabulary test-grammar-search
 .PHONY: dev-test dev-full ci-lint ci-test
 .PHONY: db-init db-migrate db-upgrade db-downgrade db-current db-history
-.PHONY: init-state docker-up docker-down docker-build restart-recall rebuild-restart-recall rebuild-restart-all rebuild-container
+.PHONY: init-state docker-up docker-down docker-build docker-reset-db restart-recall rebuild-restart-recall rebuild-restart-all rebuild-container
 .PHONY: check-readiness
 .PHONY: migrate-memory
 
@@ -77,6 +77,7 @@ help:
 	@echo "  docker-up        - Initialize state and start Docker services"
 	@echo "  docker-down      - Stop and remove Docker services"
 	@echo "  docker-build     - Build Docker images without cache"
+	@echo "  docker-reset-db  - Delete Postgres volume data and restart DB/backend/recall"
 	@echo "  restart-recall   - Restart the recall container"
 	@echo "  rebuild-restart-recall - Rebuild and restart the recall container"
 	@echo "  rebuild-restart-all - Rebuild and restart all containers"
@@ -420,6 +421,11 @@ docker-build:
 	@echo "🔨 Building Docker images..."
 	@docker compose build --no-cache
 	@echo "✅ Docker images built!"
+
+# Delete postgres data and restart DB/backend/recall from scratch
+docker-reset-db:
+	@echo "⚠️  This will permanently delete PostgreSQL data for this stack."
+	@./scripts/reset_postgres.sh --yes
 
 # Restart the recall container
 restart-recall:
