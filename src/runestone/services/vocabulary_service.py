@@ -298,18 +298,52 @@ class VocabularyService:
         """Get existing word phrases from the repository."""
         return list(await self.repo.get_existing_word_phrases_for_batch(word_phrases, user_id))
 
-    async def upsert_priority_word(self, word_phrase: str, translation: str, example_phrase: str, user_id: int) -> None:
-        """Upsert a word with priority_learn=True. Restores deleted words."""
+    async def upsert_priority_word(self, word_phrase: str, translation: str, example_phrase: str, user_id: int) -> dict:
+        """Upsert a word with priority_learn=True. Restores deleted words.
+
+        Returns:
+            dict: action metadata for observability and caller summaries.
+                action values: created, restored, prioritized, already_prioritized
+        """
         existing = await self.repo.get_vocabulary_item_by_word_phrase(word_phrase, user_id)
         if existing:
-            if not existing.in_learn:
+            was_in_learn = bool(existing.in_learn)
+            was_priority = bool(existing.priority_learn)
+            changed = False
+            action = "already_prioritized"
+
+            if not was_in_learn:
                 existing.in_learn = True
-                self.logger.info(f"Restored deleted word: {word_phrase}")
-            existing.priority_learn = True
-            await self.repo.update_vocabulary_item(existing)
-            self.logger.info(f"Set priority for existing word: {word_phrase}")
+                changed = True
+                action = "restored"
+                self.logger.info(f"Restored deleted word for priority learning: {word_phrase}")
+
+            if not was_priority:
+                existing.priority_learn = True
+                changed = True
+                if action != "restored":
+                    action = "prioritized"
+
+            if changed:
+                await self.repo.update_vocabulary_item(existing)
+            self.logger.info(
+                "Priority upsert existing word result: word='%s', user_id=%s, action=%s, "
+                "before(in_learn=%s,priority=%s), after(in_learn=%s,priority=%s)",
+                word_phrase,
+                user_id,
+                action,
+                was_in_learn,
+                was_priority,
+                existing.in_learn,
+                existing.priority_learn,
+            )
+            return {
+                "action": action,
+                "word_id": existing.id,
+                "changed": changed,
+            }
         else:
-            await self.repo.insert_vocabulary_item(
+            created = await self.repo.insert_vocabulary_item(
                 VocabularyItemCreate(
                     word_phrase=word_phrase,
                     translation=translation,
@@ -318,7 +352,17 @@ class VocabularyService:
                 ),
                 user_id,
             )
-            self.logger.info(f"Created new priority word: {word_phrase}")
+            self.logger.info(
+                "Priority upsert created new word: word='%s', user_id=%s, word_id=%s",
+                word_phrase,
+                user_id,
+                created.id,
+            )
+            return {
+                "action": "created",
+                "word_id": created.id,
+                "changed": True,
+            }
 
     async def delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
         """Completely delete a vocabulary item from the database."""

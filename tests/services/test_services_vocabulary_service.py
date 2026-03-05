@@ -928,3 +928,26 @@ class TestVocabularyService:
         vocab_db = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == vocab.id))
         assert vocab_db.in_learn is True
         assert vocab_db.priority_learn is True
+
+    async def test_upsert_priority_word_already_prioritized(self, service, db_session):
+        """Test upserting an already prioritized word returns explicit no-op action."""
+        vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="prioriterad",
+            translation="prioritized",
+            priority_learn=True,
+            in_learn=True,
+        )
+        db_session.add(vocab)
+        await db_session.commit()
+
+        result = await service.upsert_priority_word(
+            word_phrase="prioriterad",
+            translation="ignored",
+            example_phrase="ignored",
+            user_id=1,
+        )
+        await db_session.commit()
+
+        assert result["action"] == "already_prioritized"
+        assert result["changed"] is False

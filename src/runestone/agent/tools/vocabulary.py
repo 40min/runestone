@@ -64,28 +64,67 @@ async def prioritize_words_for_learning(
 
     processed_count = 0
     errors = []
+    action_counts = {
+        "created": 0,
+        "restored": 0,
+        "prioritized": 0,
+        "already_prioritized": 0,
+    }
+
+    if not words:
+        logger.warning("prioritize_words_for_learning called with empty words list for user_id=%s", user.id)
+        return "No words were provided for priority learning."
+
+    logger.info("Starting prioritize_words_for_learning for user_id=%s with %s words", user.id, len(words))
 
     # Use fresh service with its own session for concurrency safety
     async with provide_vocabulary_service() as vocab_service:
         for word_item in words:
             try:
-                await vocab_service.upsert_priority_word(
+                result = await vocab_service.upsert_priority_word(
                     word_phrase=word_item.word_phrase,
                     translation=word_item.translation,
                     example_phrase=word_item.example_phrase,
                     user_id=user.id,
                 )
-                logger.info(f"Processed priority word: {word_item.word_phrase}")
+                action = str(result.get("action", "prioritized"))
+                if action not in action_counts:
+                    action = "prioritized"
+                action_counts[action] += 1
+                logger.info(
+                    "Processed priority word: word='%s', user_id=%s, action=%s, word_id=%s, changed=%s",
+                    word_item.word_phrase,
+                    user.id,
+                    action,
+                    result.get("word_id"),
+                    result.get("changed"),
+                )
                 processed_count += 1
             except Exception as e:
-                logger.error(f"Failed to process {word_item.word_phrase}: {e}")
+                logger.exception(
+                    "Failed to process priority word: word='%s', user_id=%s",
+                    word_item.word_phrase,
+                    user.id,
+                )
                 # Keep processing remaining words with the same session.
                 # SQLAlchemy sessions require rollback after failed flush/commit.
                 await vocab_service.repo.db.rollback()
                 errors.append(f"{word_item.word_phrase}: {str(e)}")
 
+    summary = (
+        f"created={action_counts['created']}, restored={action_counts['restored']}, "
+        f"prioritized={action_counts['prioritized']}, already_prioritized={action_counts['already_prioritized']}"
+    )
+    logger.info(
+        "Finished prioritize_words_for_learning for user_id=%s: processed=%s, %s, errors=%s",
+        user.id,
+        processed_count,
+        summary,
+        len(errors),
+    )
+
     if errors:
         error_msg = "; ".join(errors)
-        return f"Processed {processed_count} word(s). Errors: {error_msg}"
+        return f"Processed {processed_count} word(s): {summary}. Errors: {error_msg}"
 
-    return f"Successfully processed {processed_count} word(s) for priority learning."
+    return f"Successfully processed {processed_count} word(s): {summary}."
