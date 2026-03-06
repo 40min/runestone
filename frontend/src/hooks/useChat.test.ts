@@ -261,6 +261,119 @@ describe('useChat', () => {
     });
   });
 
+  it('should show initial history error when first history fetch fails', async () => {
+    mockFetch.mockImplementation((url, options) => {
+      if (options?.method === 'GET' || !options?.method) {
+        return Promise.reject(new Error('Network error'));
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+
+    const { result } = renderHook(() => useChat());
+
+    await waitFor(() => {
+      expect(result.current.error).toBe('Failed to load chat history. Starting fresh.');
+    });
+
+    expect(result.current.messages).toEqual([]);
+  });
+
+  it('should preserve existing messages when a later history refresh fails', async () => {
+    let historyCallCount = 0;
+    mockFetch.mockImplementation((url, options) => {
+      if (options?.method === 'GET' || !options?.method) {
+        historyCallCount++;
+        if (historyCallCount === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve(
+                buildHistoryPayload([{ id: 2, role: 'assistant', content: 'Initial message' }], 'chat-1', 2)
+              ),
+          });
+        }
+
+        return Promise.reject(new Error('Network error'));
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+
+    const { result } = renderHook(() => useChat());
+
+    await waitFor(() => {
+      expect(result.current.messages).toHaveLength(1);
+    });
+
+    await act(async () => {
+      await result.current.refreshHistory();
+    });
+
+    expect(result.current.messages).toEqual([
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'Initial message',
+        serverId: 2,
+      }),
+    ]);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('should skip background polling while the document is hidden', async () => {
+    vi.useFakeTimers();
+    const originalHidden = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden');
+    let hidden = false;
+
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      get: () => hidden,
+    });
+
+    mockFetch.mockImplementation((url, options) => {
+      if (options?.method === 'GET' || !options?.method) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(buildHistoryPayload([], 'chat-1', 0)),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+
+    try {
+      await act(async () => {
+        renderHook(() => useChat());
+        await Promise.resolve();
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      hidden = true;
+
+      await act(async () => {
+        vi.advanceTimersByTime(15000);
+        await Promise.resolve();
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    } finally {
+      if (originalHidden) {
+        Object.defineProperty(document, 'hidden', originalHidden);
+      }
+      vi.useRealTimers();
+    }
+  });
+
   it('should trim whitespace from messages', async () => {
     mockFetch.mockImplementation((url) => {
       if (url.includes('/api/chat/history')) {

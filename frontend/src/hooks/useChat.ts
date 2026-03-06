@@ -49,6 +49,7 @@ interface UseChatReturn {
 const CLIENT_ID = uuidv4();
 const POLL_INTERVAL_MS = 5000;
 const HISTORY_LIMIT = 200;
+const INITIAL_HISTORY_ERROR = 'Failed to load chat history. Starting fresh.';
 
 export const useChat = (): UseChatReturn => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -63,6 +64,7 @@ export const useChat = (): UseChatReturn => {
   const fetchInProgressRef = useRef<boolean>(false);
   const currentChatIdRef = useRef<string | null>(null);
   const lastMessageIdRef = useRef<number>(0);
+  const hasLoadedHistoryRef = useRef<boolean>(false);
 
   const mapServerMessage = useCallback((message: ServerChatMessage): ChatMessage => {
     return {
@@ -128,6 +130,7 @@ export const useChat = (): UseChatReturn => {
     fetchInProgressRef.current = true;
     setIsFetchingHistory(true);
     try {
+      setError((previous) => (previous === INITIAL_HISTORY_ERROR ? null : previous));
       let page = 0;
       let keepFetching = true;
       let syncingOlderPages = false;
@@ -138,6 +141,7 @@ export const useChat = (): UseChatReturn => {
           : '';
         const endpoint = `/api/chat/history?after_id=${lastMessageIdRef.current}&limit=${HISTORY_LIMIT}${clientChatQuery}`;
         const data = await get<ChatHistoryResponse>(endpoint);
+        hasLoadedHistoryRef.current = true;
         const serverMessages = (data.messages ?? []).map(mapServerMessage);
         const maxIncomingId = getMaxServerId(serverMessages);
         const chatChanged = data.chat_mismatch || currentChatIdRef.current !== data.chat_id;
@@ -178,12 +182,15 @@ export const useChat = (): UseChatReturn => {
       }
     } catch (err) {
       console.error('Failed to fetch chat history:', err);
-      setError('Failed to load chat history. Starting fresh.');
-      setMessages([]);
-      setHistorySyncNotice(null);
+      if (!hasLoadedHistoryRef.current) {
+        setError(INITIAL_HISTORY_ERROR);
+        setMessages([]);
+        setHistorySyncNotice(null);
+        currentChatIdRef.current = null;
+        lastMessageIdRef.current = 0;
+      }
+
       setIsSyncingHistory(false);
-      currentChatIdRef.current = null;
-      lastMessageIdRef.current = 0;
     } finally {
       setIsSyncingHistory(false);
       setIsFetchingHistory(false);
@@ -203,7 +210,9 @@ export const useChat = (): UseChatReturn => {
     if (!token) return;
 
     const intervalId = window.setInterval(() => {
-      void fetchHistory();
+      if (!document.hidden) {
+        void fetchHistory();
+      }
     }, POLL_INTERVAL_MS);
 
     const handleWindowFocus = () => {
