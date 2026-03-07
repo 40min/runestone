@@ -79,6 +79,19 @@
     "path": "adverbs/tidsadverb.md"
   },
   {
+    "url": "{HOST}/?view=grammar&cheatsheet=adverbs%2Fkomparation",
+    "tags": [
+      "adverbs",
+      "comparison",
+      "komparation",
+      "gärna",
+      "hellre",
+      "helst"
+    ],
+    "annotation": "Guide to Swedish adverb comparison (komparation), featuring irregular forms like gärna/hellre/helst and distance adverbs like nära.",
+    "path": "adverbs/komparation.md"
+  },
+  {
     "url": "{HOST}/?view=grammar&cheatsheet=nouns%2Fbestamd_obest_plural",
     "tags": [
       "nouns",
