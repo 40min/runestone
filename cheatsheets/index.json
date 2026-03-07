@@ -298,6 +298,16 @@
     "path": "tiny-bits/komparation.md"
   },
   {
+    "url": "{HOST}/?view=grammar&cheatsheet=tiny-bits%2Fcomparisons_for_equal",
+    "tags": [
+      "comparison",
+      "lika...som",
+      "equality"
+    ],
+    "annotation": "Guide to Swedish equality comparisons using 'lika...som', covering noun comparisons, plural adjective agreement, and phrase comparisons.",
+    "path": "tiny-bits/comparisons_for_equal.md"
+  },
+  {
     "url": "{HOST}/?view=grammar&cheatsheet=tiny-bits%2Fobjectspronomen",
     "tags": [
       "pronouns",
