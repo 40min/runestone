@@ -46,7 +46,7 @@
 
 > When both sides of the comparison are **full phrases** (not just nouns), the adjective takes the **-t form**. 🧩
 
-**Att bo på landet är lika mysig**t** som att bo i stan.**
+**Att bo på landet är lika mysig*t* som att bo i stan.**
 *Living in the countryside is just as cozy as living in the city.*
 
 ➡️ phrase + **lika** + adjective**-t** + **som** + phrase
