@@ -79,6 +79,19 @@
     "path": "adverbs/tidsadverb.md"
   },
   {
+    "url": "{HOST}/?view=grammar&cheatsheet=adverbs%2Fkomparation",
+    "tags": [
+      "adverbs",
+      "comparison",
+      "komparation",
+      "gärna",
+      "hellre",
+      "helst"
+    ],
+    "annotation": "Guide to Swedish adverb comparison (komparation), featuring irregular forms like gärna/hellre/helst and distance adverbs like nära.",
+    "path": "adverbs/komparation.md"
+  },
+  {
     "url": "{HOST}/?view=grammar&cheatsheet=nouns%2Fbestamd_obest_plural",
     "tags": [
       "nouns",
@@ -283,6 +296,16 @@
     ],
     "annotation": "Quick reference for Swedish comparison forms of common adjectives and adverbs like 'många', 'få', and 'lite'.",
     "path": "tiny-bits/komparation.md"
+  },
+  {
+    "url": "{HOST}/?view=grammar&cheatsheet=tiny-bits%2Fcomparisons_for_equal",
+    "tags": [
+      "comparison",
+      "lika...som",
+      "equality"
+    ],
+    "annotation": "Guide to Swedish equality comparisons using 'lika...som', covering noun comparisons, plural adjective agreement, and phrase comparisons.",
+    "path": "tiny-bits/comparisons_for_equal.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=tiny-bits%2Fobjectspronomen",

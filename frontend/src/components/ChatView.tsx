@@ -293,6 +293,7 @@ const ChatView: React.FC = () => {
                   role={msg.role}
                   content={msg.content}
                   sources={msg.sources}
+                  isLast={index === messages.length - 1}
                 />
               </div>
             ))
