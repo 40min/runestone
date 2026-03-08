@@ -71,7 +71,7 @@ describe("ChatMessageBubble", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("collapses long messages and toggles on click", async () => {
+  it("collapses long messages and toggles via button", async () => {
     const user = userEvent.setup();
     const longText = "a".repeat(201);
     render(<ChatMessageBubble role="assistant" content={longText} />);
@@ -80,12 +80,26 @@ describe("ChatMessageBubble", () => {
     expect(screen.getByText("...")).toBeInTheDocument();
     expect(screen.queryByText(longText)).not.toBeInTheDocument();
 
-    await user.click(screen.getByText("a".repeat(200)));
+    const showMoreBtn = screen.getByRole("button", { name: /show more/i });
+    await user.click(showMoreBtn);
+
     expect(screen.getByText(longText)).toBeInTheDocument();
     expect(screen.queryByText("...")).not.toBeInTheDocument();
 
-    await user.click(screen.getByText(longText));
+    const showLessBtn = screen.getByRole("button", { name: /show less/i });
+    await user.click(showLessBtn);
+
     expect(screen.getByText("a".repeat(200))).toBeInTheDocument();
     expect(screen.getByText("...")).toBeInTheDocument();
+  });
+
+  it("does not collapse long messages if isLast is true", () => {
+    const longText = "a".repeat(201);
+    render(
+      <ChatMessageBubble role="assistant" content={longText} isLast={true} />,
+    );
+
+    expect(screen.getByText(longText)).toBeInTheDocument();
+    expect(screen.queryByText("...")).not.toBeInTheDocument();
   });
 });

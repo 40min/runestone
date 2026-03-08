@@ -1,21 +1,24 @@
 import React, { useState } from "react";
-import { Box, Link, Typography } from "@mui/material";
+import { Box, IconButton, Link, Typography } from "@mui/material";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 interface ChatMessageBubbleProps {
   role: "user" | "assistant";
   content: string;
   sources?: { title: string; url: string; date: string }[] | null;
+  isLast?: boolean;
 }
 
 export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   role,
   content,
   sources,
+  isLast,
 }) => {
   const maxCollapsedChars = 200;
   const isLongMessage = content.length > maxCollapsedChars;
   const [isExpanded, setIsExpanded] = useState(false);
-  const isCollapsed = isLongMessage && !isExpanded;
+  const isCollapsed = !isLast && isLongMessage && !isExpanded;
   const hasSources = role === "assistant" && sources && sources.length > 0;
   const resolveSafeUrl = (url: string) => {
     try {
@@ -87,11 +90,6 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   const displayedContent = isCollapsed
     ? content.slice(0, maxCollapsedChars)
     : content;
-  const handleToggle = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!isLongMessage) return;
-    if ((event.target as HTMLElement).closest("a")) return;
-    setIsExpanded((prev) => !prev);
-  };
 
   return (
     <Box
@@ -118,31 +116,48 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       >
         <Typography
           component="div"
-          onClick={handleToggle}
           sx={{
             color: "white",
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
-            cursor: isLongMessage ? "pointer" : "default",
           }}
         >
           {renderContentWithLinks(displayedContent)}
           {isCollapsed && (
-            <>
-              <Box
-                component="span"
-                sx={{
-                  color: "var(--primary-color)",
-                  fontWeight: 800,
-                  letterSpacing: "0.12em",
-                  ml: 0.5,
-                }}
-              >
-                ...
-              </Box>
-            </>
+            <Box
+              component="span"
+              sx={{
+                color: "var(--primary-color)",
+                fontWeight: 800,
+                letterSpacing: "0.12em",
+                ml: 0.5,
+              }}
+            >
+              ...
+            </Box>
           )}
         </Typography>
+
+        {!isLast && isLongMessage && (
+          <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+            <IconButton
+              onClick={() => setIsExpanded(!isExpanded)}
+              size="small"
+              aria-label={isExpanded ? "Show less" : "Show more"}
+              sx={{
+                color: "var(--primary-color)",
+                mt: 0.5,
+                backgroundColor: "rgba(147, 51, 234, 0.1)",
+                borderRadius: "6px",
+                "&:hover": {
+                  backgroundColor: "rgba(147, 51, 234, 0.2)",
+                },
+              }}
+            >
+              {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            </IconButton>
+          </Box>
+        )}
         {hasSources && (
           <Box sx={{ mt: 1.5 }}>
             <Typography
