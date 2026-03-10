@@ -389,6 +389,18 @@
     "path": "tiny-bits/presentering_det.md"
   },
   {
+    "url": "{HOST}/?view=grammar&cheatsheet=tiny-bits%2Fpresentering_ordfoljd",
+    "tags": [
+      "presentering",
+      "word order",
+      "ordföljd",
+      "det",
+      "formal subject"
+    ],
+    "annotation": "Detailed guide to Swedish word order when using formal subject 'det', covering normal and inverted statements as well as questions.",
+    "path": "tiny-bits/presentering_ordfoljd.md"
+  },
+  {
     "url": "{HOST}/?view=grammar&cheatsheet=verbs%2Fatt_cheat_sheet",
     "tags": [
       "verbs",
