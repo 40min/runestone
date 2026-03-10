@@ -416,6 +416,19 @@
     "path": "verbs/position-verbs.md"
   },
   {
+    "url": "{HOST}/?view=grammar&cheatsheet=verbs%2Fposition-verbs-2",
+    "tags": [
+      "verbs",
+      "position verbs",
+      "står",
+      "ligger",
+      "sitter",
+      "hänger"
+    ],
+    "annotation": "A guide to Swedish position verbs (står, ligger, sitter, hänger), explaining when to use each based on orientation, order, or attachment.",
+    "path": "verbs/position-verbs-2.md"
+  },
+  {
     "url": "{HOST}/?view=grammar&cheatsheet=verbs%2Fverb-forms",
     "tags": [
       "verbs",
