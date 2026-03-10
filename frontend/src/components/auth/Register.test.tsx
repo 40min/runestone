@@ -429,4 +429,43 @@ describe('Register Component', () => {
       consoleSpy.mockRestore();
     });
   });
+
+  describe('Success View', () => {
+    it('should show success message and return to login button after successful registration', async () => {
+      const user = userEvent.setup();
+      const mockRegister = vi.fn().mockResolvedValue({ message: "User registered successfully" });
+
+      const mockUseAuthActions = vi.mocked(useAuthActions);
+      mockUseAuthActions.mockReturnValue({
+        register: mockRegister,
+        login: vi.fn(),
+        updateProfile: vi.fn(),
+        logout: vi.fn(),
+        loading: false,
+        error: null,
+      });
+
+      renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
+
+      const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
+      const passwordInput = screen.getByLabelText(/^Password \(min\. 6 characters\)\s+\*\s*$/);
+      const confirmPasswordInput = screen.getByLabelText(/^Confirm Password\s+\*\s*$/);
+      const registerButton = screen.getByRole('button', { name: /register/i });
+
+      await user.type(emailInput, 'test@example.com');
+      await user.type(passwordInput, 'password123');
+      await user.type(confirmPasswordInput, 'password123');
+      await user.click(registerButton);
+
+      await waitFor(() => {
+        expect(screen.getByText('Registered!')).toBeInTheDocument();
+        expect(screen.getByText(/Your account has been created/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /return to login/i })).toBeInTheDocument();
+      });
+
+      // Clicking "Return to Login" should call onSwitchToLogin
+      await user.click(screen.getByRole('button', { name: /return to login/i }));
+      expect(onSwitchToLogin).toHaveBeenCalled();
+    });
+  });
 });

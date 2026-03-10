@@ -12,6 +12,7 @@ interface RegisterProps {
 }
 
 const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
+  const [isRegistered, setIsRegistered] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -56,6 +57,7 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
         name: name || undefined,
         surname: surname || undefined,
       });
+      setIsRegistered(true);
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "An error occurred";
@@ -70,6 +72,40 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
       });
     }
   };
+
+  if (isRegistered) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 3,
+          maxWidth: 400,
+          mx: "auto",
+          mt: 8,
+          p: 4,
+          backgroundColor: "rgba(255, 255, 255, 0.05)",
+          borderRadius: 2,
+          backdropFilter: "blur(10px)",
+          textAlign: "center",
+        }}
+      >
+        <h2 className="text-3xl font-bold text-white mb-2">
+          Registered!
+        </h2>
+        <p className="text-gray-300 leading-relaxed">
+          Your account has been created, but it needs to be activated by an administrator before you can log in.
+        </p>
+        <CustomButton
+          onClick={onSwitchToLogin}
+          variant="primary"
+          sx={{ mt: 2 }}
+        >
+          Return to Login
+        </CustomButton>
+      </Box>
+    );
+  }
 
   return (
     <Box

@@ -111,28 +111,11 @@ describe("useAuthActions", () => {
 
   it("handles successful registration", async () => {
     const mockRegisterResponse = { success: true };
-    const mockTokenResponse = { access_token: "test-token" };
-    const mockUserResponse = {
-      id: 1,
-      email: "test@example.com",
-      name: "Test",
-      surname: "User",
-      timezone: "UTC",
-      pages_recognised_count: 0,
-    };
 
     vi.mocked(globalThis.fetch)
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockRegisterResponse),
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockTokenResponse),
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockUserResponse),
       } as Response);
 
     const { result } = renderHook(() => useAuthActions(), { wrapper });
@@ -159,16 +142,10 @@ describe("useAuthActions", () => {
       })
     );
 
-    // Should automatically login after registration
-    expect(globalThis.fetch).toHaveBeenCalledWith(
+    // Should NOT automatically login after registration anymore
+    expect(globalThis.fetch).not.toHaveBeenCalledWith(
       "http://localhost:8010/api/auth/",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({
-          email: "test@example.com",
-          password: "password123",
-        }),
-      })
+      expect.any(Object)
     );
 
     await waitFor(() => {
@@ -373,30 +350,13 @@ describe("useAuthActions", () => {
     });
   });
 
-  it("auto-logs in after successful registration", async () => {
+  it("does not auto-login after successful registration", async () => {
     const mockRegisterResponse = { success: true };
-    const mockTokenResponse = { access_token: "registration-token" };
-    const mockUserResponse = {
-      id: 1,
-      email: "new@example.com",
-      name: "New",
-      surname: "User",
-      timezone: "UTC",
-      pages_recognised_count: 0,
-    };
 
     vi.mocked(globalThis.fetch)
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockRegisterResponse),
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockTokenResponse),
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockUserResponse),
       } as Response);
 
     const { result } = renderHook(() => useAuthActions(), { wrapper });
@@ -408,7 +368,7 @@ describe("useAuthActions", () => {
       });
     });
 
-    // Verify registration was called first
+    // Verify registration was called
     expect(globalThis.fetch).toHaveBeenCalledWith(
       "http://localhost:8010/api/auth/register",
       expect.objectContaining({
@@ -420,16 +380,10 @@ describe("useAuthActions", () => {
       })
     );
 
-    // Verify login was called with registration credentials
-    expect(globalThis.fetch).toHaveBeenCalledWith(
+    // Verify login was NOT called
+    expect(globalThis.fetch).not.toHaveBeenCalledWith(
       "http://localhost:8010/api/auth/",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({
-          email: "new@example.com",
-          password: "password123",
-        }),
-      })
+      expect.any(Object)
     );
   });
 
@@ -455,11 +409,30 @@ describe("useAuthActions", () => {
 
   it("handles concurrent register and login operations", async () => {
     const mockRegisterResponse = { success: true };
+    const mockTokenResponse = { access_token: "test-token" };
+    const mockUserResponse = {
+      id: 1,
+      email: "test@example.com",
+      name: "Test",
+      surname: "User",
+      timezone: "UTC",
+      pages_recognised_count: 5,
+    };
 
-    vi.mocked(globalThis.fetch).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockRegisterResponse),
-    } as Response);
+    // Need 3 mocks: 1 for register, 2 for login (token + user data)
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockRegisterResponse),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockTokenResponse),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockUserResponse),
+      } as Response);
 
     const { result } = renderHook(() => useAuthActions(), { wrapper });
 
