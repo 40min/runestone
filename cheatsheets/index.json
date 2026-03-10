@@ -32,11 +32,22 @@
       "exclamations",
       "utrop",
       "vilken",
-      "vad",
-      "swedish grammar"
+      "vad"
     ],
     "annotation": "Explains how to use 'vilken' and 'vad' for exclamations with adjectives in Swedish.",
     "path": "adjectives/utrop-med-adj.md"
+  },
+  {
+    "url": "{HOST}/?view=grammar&cheatsheet=adjectives%2Fser_adj_ut",
+    "tags": [
+      "adjectives",
+      "appearance",
+      "ser ut",
+      "comparison",
+      "agreement"
+    ],
+    "annotation": "Guide to using the construction 'ser + adjektiv + ut' (to look like something) in Swedish, covering adjective agreement, comparison, and the difference from 'är'.",
+    "path": "adjectives/ser_adj_ut.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=adverbs%2FNU_DA_adverb",
