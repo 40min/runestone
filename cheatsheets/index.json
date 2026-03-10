@@ -379,6 +379,16 @@
     "path": "tiny-bits/swedish-seasons-prepositions-cheatsheet.md"
   },
   {
+    "url": "{HOST}/?view=grammar&cheatsheet=tiny-bits%2Fpresentering_det",
+    "tags": [
+      "presentering",
+      "formal subject",
+      "det"
+    ],
+    "annotation": "Explains how to use 'det' as a formal subject to introduce new information with position, existence, and movement verbs.",
+    "path": "tiny-bits/presentering_det.md"
+  },
+  {
     "url": "{HOST}/?view=grammar&cheatsheet=verbs%2Fatt_cheat_sheet",
     "tags": [
       "verbs",
