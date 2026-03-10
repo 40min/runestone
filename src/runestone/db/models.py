@@ -43,7 +43,7 @@ class User(Base):
     personal_info = Column(Text, nullable=True)  # Student identity, preferences, goals
     areas_to_improve = Column(Text, nullable=True)  # Recurring struggles and error patterns
     knowledge_strengths = Column(Text, nullable=True)  # Mastered skills and concepts
-    memory_migrated = Column(Boolean, server_default=false(), nullable=False)  # Migration flag
+    active = Column(Boolean, default=False, server_default=false(), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

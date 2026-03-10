@@ -162,17 +162,6 @@ The web interface will be available at `http://localhost:5173` with the followin
 3. Upload a Swedish textbook page image
 4. View the structured analysis results
 
-### Agent Memory Migration
-
-Legacy user memory stored on the `users` table can be migrated to `memory_items`:
-
-```bash
-make migrate-memory ARGS="--dry-run --limit-users 5"
-make migrate-memory ARGS="--user-id 123"
-```
-
-The migration is idempotent and uses the `memory_migrated` flag on `users` to avoid duplicate work.
-
 ### Rune Recall Feature
 
 Runestone includes a Telegram bot for automated vocabulary recall and command processing:

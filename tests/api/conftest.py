@@ -115,7 +115,15 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
             return llm_client or mock_llm_client
 
         def override_get_current_user():
-            return current_user or test_user
+            user = current_user or test_user
+            if not user.active:
+                from fastapi import HTTPException, status
+
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="User is not active",
+                )
+            return user
 
         # Apply overrides
         overrides = {
@@ -302,6 +310,7 @@ def user_factory(db_session_factory):
                 "name": "Factory User",
                 "surname": "Testsson",
                 "timezone": "UTC",
+                "active": True,
                 **kwargs,
             }
             user = User(**user_data)
