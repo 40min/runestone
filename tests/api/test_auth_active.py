@@ -4,6 +4,8 @@ Integration tests for the user active flag in authorization.
 
 from fastapi import status
 
+from runestone.auth.security import hash_password
+
 
 class TestAuthActiveFlag:
     """Test cases for the user active flag in authorization."""
@@ -35,4 +37,19 @@ class TestAuthActiveFlag:
             response = await client.get("/api/vocabulary")
 
             assert response.status_code == status.HTTP_403_FORBIDDEN
+            assert response.json()["detail"] == "User is not active"
+
+    async def test_inactive_user_cannot_login(self, client_with_overrides, user_factory):
+        """Test that an inactive user cannot log in."""
+
+        # Create an inactive user
+        email = "inactive@example.com"
+        password = "password123"
+        await user_factory(email=email, hashed_password=hash_password(password), active=False)
+
+        # Attempt to login
+        async for client, _ in client_with_overrides():
+            response = await client.post("/api/auth/", json={"email": email, "password": password})
+
+            assert response.status_code == status.HTTP_401_UNAUTHORIZED
             assert response.json()["detail"] == "User is not active"
