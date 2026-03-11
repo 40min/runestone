@@ -413,6 +413,13 @@ LangGraph tools may execute concurrently. To keep DB operations safe, use async 
 - Rationale and pattern: [`TOOL_DB_DI_CONTEXT_MANAGERS.md`](TOOL_DB_DI_CONTEXT_MANAGERS.md:1)
 - Step-by-step plan: [`TOOL_DB_DI_IMPLEMENTATION_PLAN.md`](TOOL_DB_DI_IMPLEMENTATION_PLAN.md:1)
 
+### Agent Swarm (Coordinator + Specialists)
+
+Design docs:
+
+- Contracts + orchestration flow: [`AGENT_SWARM_CONTRACT.md`](AGENT_SWARM_CONTRACT.md:1)
+- Implementation milestones: [`AGENT_SWARM_PLAN.md`](AGENT_SWARM_PLAN.md:1)
+
 ## 📋 Requirements
 
 - **Python**: 3.13+

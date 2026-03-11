@@ -4,11 +4,13 @@
 
 Replace the current single teacher-agent model with a coordinator plus specialist agents so tool use becomes more reliable, prompts stay narrow, and each domain can evolve without overloading one system prompt.
 
-This document is both a product/design note and an implementation plan.
+This document is the implementation plan.
+
+Architecture, contracts, orchestration flow, and logging conventions live in `AGENT_SWARM_CONTRACT.md`.
 
 ## Problem Statement
 
-The current `AgentService` asks one agent to do all of the following in a single turn:
+The current `AgentService` (to be renamed to `AgentsManager`) asks one agent to do all of the following in a single turn:
 
 - teach Swedish naturally
 - decide when to read or write memory
@@ -40,392 +42,15 @@ This creates several issues:
 - Do not give all agents full tool access.
 - Do not rewrite the entire chat stack in one step.
 
-## Proposed Architecture
+## Architecture (Summary)
 
-### High-Level Shape
+See `AGENT_SWARM_CONTRACT.md` for the full contract and flow.
 
-Use a thin `Coordinator` plus a separate `TeacherAgent` and specialist agents with clear ownership.
+Key design decisions for v1:
 
-- `Coordinator`
-  - is not user-facing
-  - decides which specialists to invoke and in which phase
-  - passes only the minimum relevant context to each specialist
-  - collects structured outputs
-  - prepares the teacher input bundle
-
-- `TeacherAgent`
-  - owns the final user response
-  - focuses on teaching, tone, explanation quality, and conversational flow
-  - consumes specialist outputs instead of owning most tool policies
-
-- `WordKeeper`
-  - owns useful-word capture and `prioritize_words_for_learning`
-  - usually runs after the teacher response is drafted
-  - decides whether a word should be saved or prioritized based on the user message and teacher output
-
-- `MemoryReader`
-  - pre-response only
-  - reads relevant student memory and returns compact context for the teacher
-
-- `MemoryKeeper`
-  - post-response only
-  - owns memory persistence decisions after the teaching turn
-  - decides whether memory should be created, updated, promoted, reprioritized, or deleted
-
-- `NewsAgent`
-  - owns whether news lookup is needed
-  - chooses query strategy and result shape
-  - runs before the teacher response when external information is needed
-
-- `GrammarAgent`
-  - owns grammar lookup decisions and cheatsheet reading
-  - usually runs before the teacher response when references are needed
-
-- `UrlReaderAgent` or direct utility
-  - owns `read_url` only if it needs domain-specific judgment
-  - otherwise can remain a direct tool used by `Coordinator`
-
-## Design Principles
-
-### 1. Domain Ownership
-
-Each specialist owns:
-
-- its prompt
-- its tools
-- its decision policy
-- its output schema
-- its tests
-
-No two specialists should share write ownership of the same persistence domain.
-
-### 2. Structured Outputs
-
-Specialists should return structured results, not free-form prose as their primary output.
-
-Each specialist result should include:
-
-- `status`: `no_action` | `action_taken` | `error`
-- `actions`: tool calls attempted and outcomes
-- `artifacts`: structured domain payload
-- `notes_for_teacher`: short summary for final response composition
-
-Example:
-
-```json
-{
-  "status": "action_taken",
-  "actions": [
-    {
-      "tool": "prioritize_words_for_learning",
-      "status": "success",
-      "summary": "created=1, restored=0, prioritized=1, already_prioritized=0"
-    }
-  ],
-  "artifacts": {
-    "saved_words": ["avgorande", "forutsattning"]
-  },
-  "notes_for_teacher": "Two useful vocabulary items were saved for future recall."
-}
-```
-
-### 3. Narrow Context
-
-Each specialist should receive only:
-
-- latest user turn
-- short conversation window relevant to its domain
-- small shared context summary if needed
-
-Do not pass the full conversation history to every specialist.
-
-### 4. Coordinator Is Thin
-
-The coordinator should not re-implement specialist logic.
-
-It should only:
-
-- route
-- manage phases
-- collect results
-- resolve minor conflicts
-- prepare teacher context
-
-The teacher should not absorb orchestration duties back into its prompt.
-
-### 5. Different Domains Use Different Flows
-
-Not all specialists belong to the same orchestration phase.
-
-- `pre-response specialists`
-  - gather information needed before the teacher can answer
-  - examples: `MemoryReader`, `NewsAgent`, `GrammarAgent`, maybe `UrlReaderAgent`
-
-- `post-response specialists`
-  - persist or interpret outcomes that depend on the teacher's reasoning or answer
-  - examples: `WordKeeper`, `MemoryKeeper`
-
-This is intentional. Some domains need the teacher's draft or final answer as an input signal.
-
-## Why This Instead of a Generic Plan/Execute/Respond Pipeline
-
-A generic execution stage would centralize too much domain behavior again. News, memory, and vocabulary are not passive tools; they each involve judgment:
-
-- whether to act
-- which tool arguments to use
-- whether the result is meaningful
-- whether the result should affect the final response
-
-That judgment belongs inside domain specialists, not inside a global executor.
-
-## Agent Contracts
-
-### Coordinator Contract
-
-Input:
-
-- latest user message
-- recent chat history
-- current user metadata
-
-Output:
-
-- routing decisions
-- teacher input bundle
-- audit trail of specialists invoked
-
-Responsibilities:
-
-- decide which specialists to invoke and in which phase
-- avoid duplicate specialist calls
-- keep orchestration narrow and predictable
-
-### TeacherAgent Contract
-
-Input:
-
-- latest user message
-- recent chat history
-- compact outputs from pre-response specialists
-- optional post-response notes only if needed for user-visible acknowledgements
-
-Output:
-
-- final assistant response
-- optional sources
-
-Responsibilities:
-
-- produce a coherent pedagogical response
-- use specialist outputs naturally
-- never claim persistence unless a specialist reports success
-
-### WordKeeper Contract
-
-Input:
-
-- latest user message
-- teacher draft or final response
-- recent relevant snippets from conversation
-- optional mother tongue
-
-Tools:
-
-- `prioritize_words_for_learning`
-
-Decisions:
-
-- should a word be saved
-- which words to save
-- translation/example completion rules
-
-Typical phase:
-
-- `post-response`
-
-Reason:
-
-- useful vocabulary may only become obvious after the teacher has interpreted the student's message and prepared an explanation or correction
-
-Output artifacts:
-
-- saved words
-- skipped words
-- tool action summary
-
-### MemoryReader Contract
-
-Input:
-
-- latest user message
-- recent relevant chat turns
-- optional routing hints from coordinator
-
-Tools:
-
-- `start_student_info`
-- `read_memory`
-
-Decisions:
-
-- whether memory should be read for this turn
-- what subset of memory is relevant
-- how to compress memory into a small context bundle for the teacher
-
-Typical phase:
-
-- `pre-response`
-
-Output artifacts:
-
-- memory context summary
-- memory items consulted
-- reasons for no action
-
-### MemoryKeeper Contract
-
-Input:
-
-- latest user message
-- teacher draft or final response
-- recent relevant chat turns
-- optional memory summary
-
-Tools:
-
-- `upsert_memory_item`
-- `update_memory_status`
-- `update_memory_priority`
-- `promote_to_strength`
-- `delete_memory_item`
-
-Decisions:
-
-- whether a fact or learning signal is durable enough to store
-- whether a change is create/update/status-change/delete
-
-Typical phase:
-
-- `post-response`
-
-Reason:
-
-- some signals are only visible after the teacher has interpreted the turn, such as repeated struggle, demonstrated mastery, or a clarified goal
-
-Output artifacts:
-
-- changed memory items
-- reasons for no action
-
-### NewsAgent Contract
-
-Input:
-
-- latest user message
-- optional recent context
-
-Tools:
-
-- `search_news_with_dates`
-
-Decisions:
-
-- whether the user is actually asking for news
-- query formulation
-- timelimit and result count
-
-Output artifacts:
-
-- sources
-- short domain summary
-
-### GrammarAgent Contract
-
-Input:
-
-- latest user message
-- optional recent learner mistakes or topic context
-
-Tools:
-
-- `search_grammar`
-- `read_grammar_page`
-
-Decisions:
-
-- whether a grammar reference is useful
-- which cheatsheet(s) to read
-
-Output artifacts:
-
-- selected grammar references
-- distilled explanation points
-
-## Orchestration Flow
-
-Use phase-aware orchestration. Different specialists run at different times.
-
-### Phase A: Pre-Response Routing
-
-`Coordinator` inspects the turn and chooses zero or more pre-response specialists.
-
-Examples:
-
-- "My biggest problem is word order" -> `MemoryReader`, maybe `GrammarAgent`
-- "What happened in Sweden this week?" -> `NewsAgent`
-- "Is this sentence correct?" -> maybe `GrammarAgent`, maybe no specialists
-
-### Phase B: Pre-Response Specialist Execution
-
-Pre-response specialists run and return structured results for the teacher.
-
-Preferred execution model:
-
-- run independent specialists in parallel where safe
-- keep write domains out of this phase
-- preserve logs and outputs per specialist
-
-Potential safe parallel combinations:
-
-- `MemoryReader` + `NewsAgent`
-- `MemoryReader` + `GrammarAgent`
-- `NewsAgent` + `GrammarAgent`
-
-### Phase C: Teacher Response
-
-`TeacherAgent` answers the user using:
-
-- latest user message
-- recent conversation context
-- pre-response specialist outputs
-
-### Phase D: Post-Response Routing
-
-`Coordinator` inspects the user turn plus teacher response and chooses zero or more post-response specialists.
-
-Examples:
-
-- teacher introduced or highlighted useful vocabulary -> `WordKeeper`
-- teacher observed repeated confusion or a new durable learner fact -> `MemoryKeeper`
-
-### Phase E: Post-Response Specialist Execution
-
-Post-response specialists run and return structured results.
-
-Potential safe parallel combinations:
-
-- `WordKeeper` + `MemoryKeeper`
-
-### Phase F: Finalization
-
-The system finalizes:
-
-- the teacher answer
-- optional mention of successful side effects when appropriate
-- optional news sources
-- optional grammar references
-
-The coordinator should not expose internal agent chatter.
+- `read_url` remains a direct tool (invoked by `CoordinatorAgent` and/or retrieval specialists), not by `TeacherAgent`.
+- Coordinator is an LLM agent (not a hardcoded policy layer).
+- Post-response specialist results are persisted as internal "agent side effects" records; do not rewrite the already-sent teacher reply.
 
 ## Implementation Plan
 
@@ -435,14 +60,17 @@ Deliverables:
 
 - add a shared structured result schema for specialist outputs
 - add a base specialist interface
-- keep current `AgentService` behavior unchanged
+- keep current `AgentService`/`AgentsManager` user-visible behavior unchanged
 
 Tasks:
 
-- create `agent/specialists/` package
+- rename `agent` -> `agents`
+- rename `AgentService` -> `AgentsManager` to emphasize multi-agent ownership
+- create `agents/specialists/` package
 - define `SpecialistResult` schema
 - define specialist invocation interface
 - add logging shape for specialist runs
+- add `[agents:<component>]` prefix convention for all coordinator/specialist logs
 
 Success criteria:
 
@@ -459,6 +87,7 @@ Tasks:
 
 - create `WordKeeper` prompt and service
 - wire `WordKeeper` into the `post-response` phase
+- add a `pre-response` fast path for explicit "save this word" user commands (so the teacher can confirm truthfully in the same turn)
 - remove word-saving policy from teacher agent prompt or reduce it to routing guidance
 - add structured tests for:
   - explicit save requests
@@ -500,7 +129,7 @@ Tasks:
 
 - create `NewsAgent`
 - create `GrammarAgent`
-- decide whether `read_url` remains direct or becomes its own specialist
+- ensure `NewsAgent` can read selected sources via `read_url` when needed
 - add source/result schemas
 
 Success criteria:
@@ -544,24 +173,11 @@ Success criteria:
 
 ## Logging and Observability
 
-Each specialist invocation should log:
+See `AGENT_SWARM_CONTRACT.md` for the log contract and examples.
 
-- specialist name
-- user id
-- routing reason
-- input summary
-- tools called
-- action result
-- latency
-- failure details
+Implementation requirement:
 
-Recommended log examples:
-
-- `Coordinator pre-phase selection: user_id=12 specialists=MemoryReader,NewsAgent`
-- `Coordinator post-phase selection: user_id=12 specialists=WordKeeper`
-- `WordKeeper result: status=action_taken saved_words=2`
-- `MemoryReader result: status=action_taken items_read=3`
-- `MemoryKeeper result: status=no_action reason=no durable memory in turn`
+- prefix every coordinator/specialist log line with `[agents:<component>]` so it is easy to grep.
 
 ## Testing Strategy
 
@@ -626,7 +242,7 @@ Implement incrementally without breaking the public chat interface.
 
 Step 1:
 
-- add specialist framework behind existing `AgentService`
+- add specialist framework behind existing `AgentService` (renaming it to `AgentsManager` as part of this step)
 
 Step 2:
 
@@ -648,18 +264,23 @@ This reduces risk and makes it easy to compare old vs new behavior.
 
 ## Open Questions
 
-- Should `read_url` remain a direct tool or become a dedicated specialist?
-- Should specialist outputs be produced by LLM agents only, or should some domains allow deterministic post-processing?
-- How much conversation history should each specialist receive by default?
-- Should the coordinator be an LLM agent or a simpler policy layer?
-- Should post-response specialists run on the teacher draft or the finalized teacher response?
-- Should memory and vocabulary specialists be allowed to request a second pass if context is insufficient?
+Resolved for v1:
+
+- `read_url`: remains a direct tool; `TeacherAgent` should not call it directly.
+- Coordinator: LLM agent.
+- Second passes: do not allow specialists to request them; provide fixed context windows instead.
+- Post-response execution: run post-response specialists on the finalized teacher response and persist results as internal "agent side effects" records.
+
+Still discussable:
+
+- Should specialist outputs be produced by LLM agents only, or should some domains allow deterministic post-processing (with purely mechanical work wrapped as tools)?
+- How much conversation history should each specialist receive by default (per specialist/tool), beyond the baseline suggestions in `AGENT_SWARM_CONTRACT.md`?
 
 ## Recommended First Cut
 
 Build the smallest useful version first:
 
-- `Coordinator`
+- `CoordinatorAgent`
 - `TeacherAgent`
 - `WordKeeper`
 - `MemoryReader`
