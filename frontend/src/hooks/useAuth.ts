@@ -77,7 +77,6 @@ export const useAuthActions = (): UseAuthActionsReturn => {
 
       try {
         await post("/api/auth/register", data);
-        await login({ email: data.email, password: data.password });
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : "An error occurred";
@@ -87,7 +86,7 @@ export const useAuthActions = (): UseAuthActionsReturn => {
         setLoading(false);
       }
     },
-    [post, login]
+    [post]
   );
 
   const updateProfile = useCallback(

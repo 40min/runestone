@@ -32,11 +32,22 @@
       "exclamations",
       "utrop",
       "vilken",
-      "vad",
-      "swedish grammar"
+      "vad"
     ],
     "annotation": "Explains how to use 'vilken' and 'vad' for exclamations with adjectives in Swedish.",
     "path": "adjectives/utrop-med-adj.md"
+  },
+  {
+    "url": "{HOST}/?view=grammar&cheatsheet=adjectives%2Fser_adj_ut",
+    "tags": [
+      "adjectives",
+      "appearance",
+      "ser ut",
+      "comparison",
+      "agreement"
+    ],
+    "annotation": "Guide to using the construction 'ser + adjektiv + ut' (to look like something) in Swedish, covering adjective agreement, comparison, and the difference from 'är'.",
+    "path": "adjectives/ser_adj_ut.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=adverbs%2FNU_DA_adverb",
@@ -368,6 +379,28 @@
     "path": "tiny-bits/swedish-seasons-prepositions-cheatsheet.md"
   },
   {
+    "url": "{HOST}/?view=grammar&cheatsheet=tiny-bits%2Fpresentering_det",
+    "tags": [
+      "presentering",
+      "formal subject",
+      "det"
+    ],
+    "annotation": "Explains how to use 'det' as a formal subject to introduce new information with position, existence, and movement verbs.",
+    "path": "tiny-bits/presentering_det.md"
+  },
+  {
+    "url": "{HOST}/?view=grammar&cheatsheet=tiny-bits%2Fpresentering_ordfoljd",
+    "tags": [
+      "presentering",
+      "word order",
+      "ordföljd",
+      "det",
+      "formal subject"
+    ],
+    "annotation": "Detailed guide to Swedish word order when using formal subject 'det', covering normal and inverted statements as well as questions.",
+    "path": "tiny-bits/presentering_ordfoljd.md"
+  },
+  {
     "url": "{HOST}/?view=grammar&cheatsheet=verbs%2Fatt_cheat_sheet",
     "tags": [
       "verbs",
@@ -403,6 +436,19 @@
     ],
     "annotation": "Explains the use of Swedish position verbs (sitter, står, ligger och) to describe ongoing actions.",
     "path": "verbs/position-verbs.md"
+  },
+  {
+    "url": "{HOST}/?view=grammar&cheatsheet=verbs%2Fposition-verbs-2",
+    "tags": [
+      "verbs",
+      "position verbs",
+      "står",
+      "ligger",
+      "sitter",
+      "hänger"
+    ],
+    "annotation": "A guide to Swedish position verbs (står, ligger, sitter, hänger), explaining when to use each based on orientation, order, or attachment.",
+    "path": "verbs/position-verbs-2.md"
   },
   {
     "url": "{HOST}/?view=grammar&cheatsheet=verbs%2Fverb-forms",

@@ -71,6 +71,7 @@ async def db_with_test_user(db_session_factory):
             hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYQmP7XzL6",
             timezone="UTC",
             pages_recognised_count=0,
+            active=True,
         )
         db.add(test_user)
         await db.commit()
