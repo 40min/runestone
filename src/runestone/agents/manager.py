@@ -44,8 +44,10 @@ class AgentsManager:
         )
 
         logger.info(
-            f"[agents:manager] Initialized AgentsManager with provider={settings.chat_provider}, "
-            f"model={settings.chat_model}, persona={settings.agent_persona}"
+            "[agents:manager] Initialized AgentsManager with provider=%s, model=%s, persona=%s",
+            settings.chat_provider,
+            settings.chat_model,
+            settings.agent_persona,
         )
 
     def _init_allowed_ports(self):
