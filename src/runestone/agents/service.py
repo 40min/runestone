@@ -1,7 +1,7 @@
 """
 Service layer for the chat agent.
 
-This module contains the AgentService class that handles chat interactions
+This module contains the AgentsManager class that handles chat interactions
 using LangChain's ReAct agent pattern.
 """
 
@@ -15,11 +15,11 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
-from runestone.agent.prompts import load_persona
-from runestone.agent.schemas import ChatMessage
-from runestone.agent.tools.context import AgentContext
-from runestone.agent.tools.grammar import read_grammar_page, search_grammar
-from runestone.agent.tools.memory import (
+from runestone.agents.prompts import load_persona
+from runestone.agents.schemas import ChatMessage
+from runestone.agents.tools.context import AgentContext
+from runestone.agents.tools.grammar import read_grammar_page, search_grammar
+from runestone.agents.tools.memory import (
     delete_memory_item,
     promote_to_strength,
     read_memory,
@@ -28,9 +28,9 @@ from runestone.agent.tools.memory import (
     update_memory_status,
     upsert_memory_item,
 )
-from runestone.agent.tools.news import search_news_with_dates
-from runestone.agent.tools.read_url import read_url
-from runestone.agent.tools.vocabulary import prioritize_words_for_learning
+from runestone.agents.tools.news import search_news_with_dates
+from runestone.agents.tools.read_url import read_url
+from runestone.agents.tools.vocabulary import prioritize_words_for_learning
 from runestone.config import Settings
 from runestone.db.models import User
 from runestone.rag.index import GrammarIndex
@@ -40,8 +40,12 @@ from runestone.services.vocabulary_service import VocabularyService
 logger = logging.getLogger(__name__)
 
 
-class AgentService:
-    """Service for managing chat agent interactions using LangChain ReAct agent."""
+class AgentsManager:
+    """
+    Service for managing chat agent interactions using LangChain ReAct agent.
+
+    All log lines should be prefixed with `[agents:manager]` for consistency.
+    """
 
     MAX_HISTORY_MESSAGES = 20
 
@@ -66,7 +70,7 @@ class AgentService:
         self._init_allowed_ports()
 
         logger.info(
-            f"Initialized AgentService with provider={settings.chat_provider}, "
+            f"[agents:manager] Initialized AgentsManager with provider={settings.chat_provider}, "
             f"model={settings.chat_model}, persona={settings.agent_persona}"
         )
 

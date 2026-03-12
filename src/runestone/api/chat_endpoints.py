@@ -10,7 +10,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 
-from runestone.agent.schemas import (
+from runestone.agents.schemas import (
     ChatHistoryResponse,
     ChatRequest,
     ChatResponse,

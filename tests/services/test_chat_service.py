@@ -13,7 +13,7 @@ from runestone.services.chat_service import ChatService
 
 @pytest.fixture
 def mock_agent_service():
-    """Create a mock AgentService."""
+    """Create a mock AgentsManager."""
     mock = AsyncMock()
     mock.generate_response.return_value = ("Björn's reply", None)
     return mock

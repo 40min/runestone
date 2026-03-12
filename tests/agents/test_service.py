@@ -1,7 +1,7 @@
 """
 Tests for the agent service.
 
-This module tests the AgentService class, including prompt formatting,
+This module tests the AgentsManager class, including prompt formatting,
 history management, and LLM interaction via LangChain agent.
 """
 
@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from runestone.agent.schemas import ChatMessage
-from runestone.agent.service import AgentService
+from runestone.agents.schemas import ChatMessage
+from runestone.agents.service import AgentsManager
 from runestone.config import Settings
 
 
@@ -37,10 +37,10 @@ def mock_chat_model():
 
 @pytest.fixture
 def agent_service(mock_settings, mock_user_service, mock_chat_model):
-    """Create an AgentService instance with mocked dependencies."""
-    with patch("runestone.agent.service.ChatOpenAI", return_value=mock_chat_model):
-        with patch("runestone.agent.service.create_agent"):
-            service = AgentService(mock_settings)
+    """Create an AgentsManager instance with mocked dependencies."""
+    with patch("runestone.agents.service.ChatOpenAI", return_value=mock_chat_model):
+        with patch("runestone.agents.service.create_agent"):
+            service = AgentsManager(mock_settings)
             # Mock the agent executor
             service.agent = AsyncMock()
             return service
@@ -71,9 +71,9 @@ def mock_user():
 
 def test_build_agent(mock_settings, mock_chat_model, mock_user_service):
     """Test that build_agent creates a ReAct agent with tools."""
-    with patch("runestone.agent.service.ChatOpenAI", return_value=mock_chat_model):
-        with patch("runestone.agent.service.create_agent") as mock_create_agent:
-            service = AgentService(mock_settings)
+    with patch("runestone.agents.service.ChatOpenAI", return_value=mock_chat_model):
+        with patch("runestone.agents.service.create_agent") as mock_create_agent:
+            service = AgentsManager(mock_settings)
             service.build_agent()
 
             mock_create_agent.assert_called()
@@ -184,9 +184,9 @@ def test_openai_provider_configuration(mock_settings, mock_user_service):
     """Test that OpenAI provider is configured correctly."""
     mock_settings.chat_provider = "openai"
 
-    with patch("runestone.agent.service.ChatOpenAI") as mock_chat_openai:
-        with patch("runestone.agent.service.create_agent"):
-            AgentService(mock_settings)
+    with patch("runestone.agents.service.ChatOpenAI") as mock_chat_openai:
+        with patch("runestone.agents.service.create_agent"):
+            AgentsManager(mock_settings)
 
             # Verify ChatOpenAI was called with correct parameters
             call_kwargs = mock_chat_openai.call_args[1]
@@ -208,7 +208,7 @@ def test_format_sources():
             }
         )
 
-    formatted = AgentService._format_sources(sources)
+    formatted = AgentsManager._format_sources(sources)
     assert formatted.count("\n") >= 1
     assert "[NEWS_SOURCES]" in formatted
     assert "example.com" in formatted

@@ -10,7 +10,7 @@ from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from runestone.agent.tools.context import AgentContext
+from runestone.agents.tools.context import AgentContext
 
 logger = logging.getLogger(__name__)
 

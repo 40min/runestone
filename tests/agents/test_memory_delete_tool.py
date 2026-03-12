@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from runestone.agent.tools.memory import delete_memory_item
+from runestone.agents.tools.memory import delete_memory_item
 
 
 @pytest.mark.anyio
@@ -14,7 +14,7 @@ async def test_delete_memory_item_calls_service():
     mock_service = MagicMock()
     mock_service.delete_item = AsyncMock()
 
-    with patch("runestone.agent.tools.memory.provide_memory_item_service") as mock_provider:
+    with patch("runestone.agents.tools.memory.provide_memory_item_service") as mock_provider:
         mock_provider.return_value.__aenter__ = AsyncMock(return_value=mock_service)
         mock_provider.return_value.__aexit__ = AsyncMock()
 

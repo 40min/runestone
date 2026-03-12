@@ -11,7 +11,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from runestone.agent.service import AgentService
+from runestone.agents.service import AgentsManager
 from runestone.config import Settings, settings
 from runestone.core.analyzer import ContentAnalyzer
 from runestone.core.clients.base import BaseLLMClient
@@ -241,7 +241,7 @@ def get_grammar_service(request: Request) -> GrammarService:
     return request.app.state.grammar_service
 
 
-def get_agent_service(request: Request) -> AgentService:
+def get_agent_service(request: Request) -> AgentsManager:
     """
     Dependency injection for agent service.
 
@@ -249,7 +249,7 @@ def get_agent_service(request: Request) -> AgentService:
         request: FastAPI request object
 
     Returns:
-        AgentService: Cached service instance for chat agent operations
+        AgentsManager: Cached service instance for chat agent operations
     """
     return request.app.state.agent_service
 
@@ -284,7 +284,7 @@ def get_chat_service(
     settings: Annotated[Settings, Depends(get_settings)],
     repo: Annotated[ChatRepository, Depends(get_chat_repository)],
     user_service: Annotated[UserService, Depends(get_user_service)],
-    agent_service: Annotated[AgentService, Depends(get_agent_service)],
+    agent_service: Annotated[AgentsManager, Depends(get_agent_service)],
     processor: Annotated[RunestoneProcessor, Depends(get_runestone_processor)],
     vocabulary_service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
     tts_service: Annotated[TTSService, Depends(get_tts_service)],
@@ -297,7 +297,7 @@ def get_chat_service(
         settings: Application settings from dependency injection
         repo: ChatRepository from dependency injection
         user_service: UserService from dependency injection
-        agent_service: AgentService from dependency injection
+        agent_service: AgentsManager from dependency injection
         processor: RunestoneProcessor from dependency injection
         vocabulary_service: VocabularyService from dependency injection
         tts_service: TTSService from dependency injection
