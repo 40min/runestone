@@ -11,7 +11,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from runestone.agents.service import AgentsManager
+from runestone.agents.manager import AgentsManager
 from runestone.config import Settings, settings
 from runestone.core.analyzer import ContentAnalyzer
 from runestone.core.clients.base import BaseLLMClient

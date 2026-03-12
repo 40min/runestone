@@ -11,7 +11,7 @@ from typing import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from runestone.agents.service import AgentsManager
+from runestone.agents.manager import AgentsManager
 from runestone.api.audio_ws import router as audio_ws_router
 from runestone.api.auth_endpoints import router as auth_router
 from runestone.api.chat_endpoints import router as chat_router
