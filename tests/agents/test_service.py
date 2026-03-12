@@ -1,17 +1,13 @@
 """
-Tests for the agent service.
-
-This module tests the AgentsManager class, including prompt formatting,
-history management, and LLM interaction via LangChain agent.
+Tests for AgentsManager orchestration.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, ToolMessage
 
-from runestone.agents.schemas import ChatMessage
-from runestone.agents.service import AgentsManager
+from runestone.agents.manager import AgentsManager
 from runestone.config import Settings
 
 
@@ -29,39 +25,6 @@ def mock_settings():
 
 
 @pytest.fixture
-def mock_chat_model():
-    """Create a mock LangChain chat model."""
-    mock_model = MagicMock()
-    return mock_model
-
-
-@pytest.fixture
-def agent_service(mock_settings, mock_user_service, mock_chat_model):
-    """Create an AgentsManager instance with mocked dependencies."""
-    with patch("runestone.agents.service.ChatOpenAI", return_value=mock_chat_model):
-        with patch("runestone.agents.service.create_agent"):
-            service = AgentsManager(mock_settings)
-            # Mock the agent executor
-            service.agent = AsyncMock()
-            return service
-
-
-@pytest.fixture
-def mock_user_service():
-    return MagicMock()
-
-
-@pytest.fixture
-def mock_memory_item_service():
-    return MagicMock()
-
-
-@pytest.fixture
-def mock_vocabulary_service():
-    return MagicMock()
-
-
-@pytest.fixture
 def mock_user():
     user = MagicMock()
     user.id = 1
@@ -69,174 +32,99 @@ def mock_user():
     return user
 
 
-def test_build_agent(mock_settings, mock_chat_model, mock_user_service):
-    """Test that build_agent creates a ReAct agent with tools."""
-    with patch("runestone.agents.service.ChatOpenAI", return_value=mock_chat_model):
-        with patch("runestone.agents.service.create_agent") as mock_create_agent:
-            service = AgentsManager(mock_settings)
-            service.build_agent()
-
-            mock_create_agent.assert_called()
-            call_kwargs = mock_create_agent.call_args[1]
-            assert call_kwargs["model"] == mock_chat_model
-            # Verify tools were passed to create_agent
-            tools = mock_create_agent.call_args[1]["tools"]
-            # read_memory, upsert_memory_item, update_memory_status, update_memory_priority,
-            # promote_to_strength, delete_memory_item, start_student_info,
-            # prioritize_words_for_learning, search_news_with_dates,
-            # search_grammar, read_grammar_page, read_url
-            assert len(tools) == 12
-            assert "MEMORY PROTOCOL" in call_kwargs["system_prompt"]
-            assert "TOOL TRUTHFULNESS (MANDATORY)" in call_kwargs["system_prompt"]
-            assert "Never pretend persistence happened." in call_kwargs["system_prompt"]
-            assert "This includes normal conversation, not only mistakes." in call_kwargs["system_prompt"]
+@pytest.fixture
+def mock_memory_item_service():
+    return MagicMock()
 
 
 @pytest.mark.anyio
-async def test_generate_response_orchestration(
-    agent_service, mock_user, mock_vocabulary_service, mock_memory_item_service
-):
-    """Test generate_response orchestration logic."""
-    message = "Hello"
-    history = []
+async def test_generate_response_delegates_to_teacher(mock_settings, mock_user, mock_memory_item_service):
+    """AgentsManager should delegate to TeacherAgent and unpack artifacts."""
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = MagicMock(
+        status="action_taken",
+        artifacts={"response": "Hi there!", "final_messages": []},
+    )
 
-    agent_service.agent.ainvoke.return_value = {
-        "messages": [HumanMessage(content="Hello"), AIMessage(content="Hi there!")]
-    }
-
-    response, sources = await agent_service.generate_response(
-        message, history, mock_user, mock_vocabulary_service, mock_memory_item_service
+    response, sources = await manager.generate_response(
+        "Hello",
+        [],
+        mock_user,
+        mock_memory_item_service,
     )
 
     assert response == "Hi there!"
     assert sources is None
-    agent_service.agent.ainvoke.assert_called_once()
+    manager.teacher.generate_response.assert_called_once()
+
+
+@pytest.mark.anyio
+async def test_generate_response_runs_cleanup_on_new_chat(mock_settings, mock_user, mock_memory_item_service):
+    """Cleanup should run when history is empty."""
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = MagicMock(
+        status="action_taken",
+        artifacts={"response": "Hi there!", "final_messages": []},
+    )
+
+    await manager.generate_response(
+        "Hello",
+        [],
+        mock_user,
+        mock_memory_item_service,
+    )
+
     mock_memory_item_service.cleanup_old_mastered_areas.assert_called_once_with(mock_user.id, older_than_days=90)
 
-    # Verify context injection (via AgentContext)
-    call_kwargs = agent_service.agent.ainvoke.call_args[1]
-    context = call_kwargs.get("context")
-    assert context.user == mock_user
-    # Note: vocabulary_service and memory_item_service are no longer in AgentContext
-    # Tools now use their own providers from agent.tools.db for concurrency safety
-
-    # Verify inputs to invoke
-    invoke_args = agent_service.agent.ainvoke.call_args[0][0]
-    messages = invoke_args["messages"]
-    assert len(messages) == 1
-    assert isinstance(messages[0], HumanMessage)
-    assert messages[0].content == "Hello"
-
 
 @pytest.mark.anyio
-async def test_generate_response_with_history(
-    agent_service, mock_user, mock_vocabulary_service, mock_memory_item_service
-):
-    """Test generate_response with conversation history."""
-    message = "Current msg"
-    history = [
-        ChatMessage(role="user", content="Old user msg"),
-        ChatMessage(
-            role="assistant",
-            content="Old bot msg",
-            sources=[{"title": "Nyhet", "url": "https://example.com", "date": "2026-02-05"}],
-        ),
-    ]
-
-    agent_service.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
-
-    await agent_service.generate_response(
-        message, history, mock_user, mock_vocabulary_service, mock_memory_item_service
+async def test_generate_response_skips_cleanup_with_history(mock_settings, mock_user, mock_memory_item_service):
+    """Cleanup should not run when history is present."""
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = MagicMock(
+        status="action_taken",
+        artifacts={"response": "Hi there!", "final_messages": []},
     )
+
+    await manager.generate_response(
+        "Hello",
+        [MagicMock(role="user", content="Old msg")],
+        mock_user,
+        mock_memory_item_service,
+    )
+
     mock_memory_item_service.cleanup_old_mastered_areas.assert_not_called()
 
-    invoke_args = agent_service.agent.ainvoke.call_args[0][0]
-    messages = invoke_args["messages"]
-    # History (2) + Current (1) = 3
-    assert len(messages) == 3
-    assert messages[0].content == "Old user msg"
-    assert "[NEWS_SOURCES]" in messages[1].content
-    assert "Old bot msg" in messages[1].content
-    assert messages[2].content == "Current msg"
-
 
 @pytest.mark.anyio
-async def test_generate_response_with_mother_tongue(
-    agent_service, mock_user, mock_vocabulary_service, mock_memory_item_service
-):
-    """Test generate_response injects mother tongue context."""
-    mock_user.mother_tongue = "Spanish"
-
-    agent_service.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
-
-    await agent_service.generate_response("msg", [], mock_user, mock_vocabulary_service, mock_memory_item_service)
-
-    invoke_args = agent_service.agent.ainvoke.call_args[0][0]
-    messages = invoke_args["messages"]
-
-    # We expect the mother tongue system message to be present
-    # Depending on implementation, it might be the only system message or one of them.
-    # Based on code: if no memory_context, only this system message.
-    assert any(isinstance(m, SystemMessage) and "Spanish" in m.content for m in messages)
-
-
-def test_openai_provider_configuration(mock_settings, mock_user_service):
-    """Test that OpenAI provider is configured correctly."""
-    mock_settings.chat_provider = "openai"
-
-    with patch("runestone.agents.service.ChatOpenAI") as mock_chat_openai:
-        with patch("runestone.agents.service.create_agent"):
-            AgentsManager(mock_settings)
-
-            # Verify ChatOpenAI was called with correct parameters
-            call_kwargs = mock_chat_openai.call_args[1]
-            assert call_kwargs["model"] == "test-model"
-            # The implementation uses api_key parameter, not openai_api_key
-            assert call_kwargs["api_key"] is not None
-    assert call_kwargs.get("base_url") is None  # No custom base for OpenAI
-
-
-def test_format_sources():
-    """Test that sources are formatted with cap and domain metadata."""
-    sources = []
-    for idx in range(1, 25):
-        sources.append(
-            {
-                "title": f"Title {idx}",
-                "url": f"https://example.com/article-{idx}",
-                "date": "2026-02-05",
-            }
-        )
-
-    formatted = AgentsManager._format_sources(sources)
-    assert formatted.count("\n") >= 1
-    assert "[NEWS_SOURCES]" in formatted
-    assert "example.com" in formatted
-    assert "Title 1" in formatted
-    assert "Title 20" in formatted
-    assert "Title 21" not in formatted
-
-
-@pytest.mark.anyio
-async def test_generate_response_extracts_sources(
-    agent_service, mock_user, mock_vocabulary_service, mock_memory_item_service
-):
-    """Test that news tool output is converted into sources."""
-    agent_service.agent.ainvoke.return_value = {
-        "messages": [
-            ToolMessage(
-                content=(
-                    '{"tool":"search_news_with_dates","results":[{"title":"Nyhet","url":"https://example.com",'
-                    '"date":"2026-02-05"}]}'
+async def test_generate_response_extracts_sources(mock_settings, mock_user, mock_memory_item_service):
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = MagicMock(
+        status="action_taken",
+        artifacts={
+            "response": "Svar med källor",
+            "final_messages": [
+                ToolMessage(
+                    content=(
+                        '{"tool":"search_news_with_dates","results":[{"title":"Nyhet","url":"https://example.com",'
+                        '"date":"2026-02-05"}]}'
+                    ),
+                    tool_call_id="tool-call-1",
                 ),
-                tool_call_id="tool-call-1",
-            ),
-            AIMessage(content="Svar med källor"),
-        ]
-    }
+                AIMessage(content="Svar med källor"),
+            ],
+        },
+    )
 
-    response, sources = await agent_service.generate_response(
-        "Nyheter", [], mock_user, mock_vocabulary_service, mock_memory_item_service
+    response, sources = await manager.generate_response(
+        "Nyheter",
+        [],
+        mock_user,
+        mock_memory_item_service,
     )
 
     assert response == "Svar med källor"
@@ -244,57 +132,69 @@ async def test_generate_response_extracts_sources(
 
 
 @pytest.mark.anyio
-async def test_generate_response_filters_unsafe_urls(
-    agent_service, mock_user, mock_vocabulary_service, mock_memory_item_service
-):
-    """Test that unsafe URLs are excluded from sources."""
-    agent_service.agent.ainvoke.return_value = {
-        "messages": [
-            ToolMessage(
-                content=(
-                    '{"tool":"search_news_with_dates","results":['
-                    '{"title":"Safe","url":"https://example.com","date":"2026-02-05"},'
-                    '{"title":"Unsafe","url":"javascript:alert(1)","date":"2026-02-05"}'
-                    "]}"
+async def test_generate_response_filters_unsafe_urls(mock_settings, mock_user, mock_memory_item_service):
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = MagicMock(
+        status="action_taken",
+        artifacts={
+            "response": "Svar med källor",
+            "final_messages": [
+                ToolMessage(
+                    content=(
+                        '{"tool":"search_news_with_dates","results":['
+                        '{"title":"Safe","url":"https://example.com","date":"2026-02-05"},'
+                        '{"title":"Unsafe","url":"javascript:alert(1)","date":"2026-02-05"}'
+                        "]}"
+                    ),
+                    tool_call_id="tool-call-2",
                 ),
-                tool_call_id="tool-call-2",
-            ),
-            AIMessage(content="Svar med källor"),
-        ]
-    }
+                AIMessage(content="Svar med källor"),
+            ],
+        },
+    )
 
-    _response, sources = await agent_service.generate_response(
-        "Nyheter", [], mock_user, mock_vocabulary_service, mock_memory_item_service
+    _response, sources = await manager.generate_response(
+        "Nyheter",
+        [],
+        mock_user,
+        mock_memory_item_service,
     )
 
     assert sources == [{"title": "Safe", "url": "https://example.com", "date": "2026-02-05"}]
 
 
 @pytest.mark.anyio
-async def test_generate_response_does_not_cap_grammar_sources(
-    agent_service, mock_user, mock_vocabulary_service, mock_memory_item_service
-):
-    """Test that grammar tool output is not capped by backend extraction."""
-    agent_service.agent.ainvoke.return_value = {
-        "messages": [
-            ToolMessage(
-                content=(
-                    '{"tool":"search_grammar","results":['
-                    '{"title":"Doc 1","url":"https://example.com/1"},'
-                    '{"title":"Doc 2","url":"https://example.com/2"},'
-                    '{"title":"Doc 3","url":"https://example.com/3"},'
-                    '{"title":"Doc 4","url":"https://example.com/4"},'
-                    '{"title":"Doc 5","url":"https://example.com/5"}'
-                    "]}"
+async def test_generate_response_does_not_cap_grammar_sources(mock_settings, mock_user, mock_memory_item_service):
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = MagicMock(
+        status="action_taken",
+        artifacts={
+            "response": "Svar med grammatik-källor",
+            "final_messages": [
+                ToolMessage(
+                    content=(
+                        '{"tool":"search_grammar","results":['
+                        '{"title":"Doc 1","url":"https://example.com/1"},'
+                        '{"title":"Doc 2","url":"https://example.com/2"},'
+                        '{"title":"Doc 3","url":"https://example.com/3"},'
+                        '{"title":"Doc 4","url":"https://example.com/4"},'
+                        '{"title":"Doc 5","url":"https://example.com/5"}'
+                        "]}"
+                    ),
+                    tool_call_id="tool-call-3",
                 ),
-                tool_call_id="tool-call-3",
-            ),
-            AIMessage(content="Svar med grammatik-källor"),
-        ]
-    }
+                AIMessage(content="Svar med grammatik-källor"),
+            ],
+        },
+    )
 
-    response, sources = await agent_service.generate_response(
-        "Grammatik", [], mock_user, mock_vocabulary_service, mock_memory_item_service
+    response, sources = await manager.generate_response(
+        "Grammatik",
+        [],
+        mock_user,
+        mock_memory_item_service,
     )
 
     assert response == "Svar med grammatik-källor"
@@ -307,22 +207,17 @@ async def test_generate_response_does_not_cap_grammar_sources(
     ]
 
 
-def test_is_safe_url(agent_service):
-    """Test URL safety validation."""
-    # Standard ports
-    assert agent_service._is_safe_url("https://example.com") is True
-    assert agent_service._is_safe_url("http://example.com") is True
+def test_is_safe_url(mock_settings):
+    manager = AgentsManager(mock_settings)
 
-    # Blocked schemes
-    assert agent_service._is_safe_url("javascript:alert(1)") is False
-    assert agent_service._is_safe_url("ftp://example.com") is False
+    assert manager._is_safe_url("https://example.com") is True
+    assert manager._is_safe_url("http://example.com") is True
 
-    # App port (5173 from mock_settings)
-    assert agent_service._is_safe_url("http://localhost:5173/?view=grammar") is True
+    assert manager._is_safe_url("javascript:alert(1)") is False
+    assert manager._is_safe_url("ftp://example.com") is False
 
-    # Other ports still blocked
-    assert agent_service._is_safe_url("http://localhost:8080") is False
+    assert manager._is_safe_url("http://localhost:5173/?view=grammar") is True
+    assert manager._is_safe_url("http://localhost:8080") is False
 
-    # Invalid URLs
-    assert agent_service._is_safe_url("http://[invalid-ip]") is False
-    assert agent_service._is_safe_url("http://user:pass@example.com") is False
+    assert manager._is_safe_url("http://[invalid-ip]") is False
+    assert manager._is_safe_url("http://user:pass@example.com") is False

@@ -106,7 +106,6 @@ class ChatService:
             message=message_text,
             history=history[:-1],  # Exclude current message (it's passed separately)
             user=user,
-            vocabulary_service=self.vocabulary_service,
             memory_item_service=self.memory_item_service,
         )
 
@@ -180,7 +179,6 @@ Instructions:
             message=translation_prompt,
             history=history,
             user=user,
-            vocabulary_service=self.vocabulary_service,
             memory_item_service=self.memory_item_service,
         )
 
