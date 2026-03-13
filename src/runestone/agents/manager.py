@@ -8,10 +8,12 @@ from typing import Optional
 from urllib.parse import urlparse
 
 from langchain_core.messages import ToolMessage
+from sqlalchemy.exc import SQLAlchemyError
 
 from runestone.agents.schemas import ChatMessage
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.config import Settings
+from runestone.core.exceptions import RunestoneError
 from runestone.db.models import User
 from runestone.rag.index import GrammarIndex
 from runestone.services.grammar_service import GrammarService
@@ -57,8 +59,8 @@ class AgentsManager:
                 app_parsed = urlparse(origin.strip())
                 if app_parsed.port:
                     self.allowed_ports.add(app_parsed.port)
-        except (ValueError, AttributeError):
-            pass
+        except (ValueError, AttributeError) as e:
+            logger.warning("[agents:manager] Configuration issue with allowed_origins: %s", e)
 
     async def generate_response(
         self,
@@ -75,7 +77,7 @@ class AgentsManager:
                 deleted_count = await memory_item_service.cleanup_old_mastered_areas(user.id, older_than_days=90)
                 if deleted_count:
                     logger.info("Cleaned up %s old mastered memory items for user %s", deleted_count, user.id)
-            except Exception as e:
+            except (SQLAlchemyError, ValueError, RuntimeError) as e:
                 logger.warning("Failed to cleanup old mastered memory items for user %s: %s", user.id, e)
 
         try:
@@ -84,8 +86,8 @@ class AgentsManager:
                 history=history,
                 user=user,
             )
-        except Exception as e:
-            logger.error(f"Error generating response: {e}")
+        except (RunestoneError, ValueError, RuntimeError) as e:
+            logger.error("[agents:manager] Error generating response: %s", e)
             raise
 
         response = result.artifacts.get("response", "I'm sorry, I couldn't generate a response.")

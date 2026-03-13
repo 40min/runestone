@@ -54,8 +54,10 @@ class TeacherAgent(BaseSpecialist):
         self.agent = self.build_agent()
 
         logger.info(
-            f"[agents:teacher] Initialized TeacherAgent with provider={settings.chat_provider}, "
-            f"model={settings.chat_model}, persona={settings.agent_persona}"
+            "[agents:teacher] Initialized TeacherAgent with provider=%s, " "model=%s, persona=%s",
+            settings.chat_provider,
+            settings.chat_model,
+            settings.agent_persona,
         )
 
     def build_agent(self):
