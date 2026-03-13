@@ -34,7 +34,7 @@ def mock_user():
 
 @pytest.fixture
 def mock_memory_item_service():
-    return MagicMock()
+    return AsyncMock()
 
 
 @pytest.mark.anyio
