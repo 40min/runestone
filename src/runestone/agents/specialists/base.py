@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+INFO_FOR_TEACHER_MAX_CHARS = 3000
+
 
 class SpecialistAction(BaseModel):
     """Represents a single tool action taken by a specialist."""
@@ -19,8 +21,21 @@ class SpecialistResult(BaseModel):
         ..., description="Overall outcome of the specialist run"
     )
     actions: list[SpecialistAction] = Field(default_factory=list, description="List of tool actions performed")
-    artifacts: dict = Field(default_factory=dict, description="Structured domain-specific information")
-    notes_for_teacher: str = Field("", description="Short summary to help the teacher agent compose a response")
+    info_for_teacher: str = Field(
+        "",
+        description=(
+            "Primary, size-bounded information for the TeacherAgent. "
+            "Must be safe to show to the teacher model and should avoid technical noise."
+        ),
+        max_length=INFO_FOR_TEACHER_MAX_CHARS,
+    )
+    artifacts: dict = Field(
+        default_factory=dict,
+        description=(
+            "Structured, machine-oriented payload for orchestration, persistence, dedupe, or testing. "
+            "Not intended to be consumed verbatim by the TeacherAgent."
+        ),
+    )
 
 
 class BaseSpecialist(ABC):

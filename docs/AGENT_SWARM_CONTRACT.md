@@ -61,8 +61,8 @@ Each specialist result should include:
 
 - `status`: `no_action` | `action_taken` | `error`
 - `actions`: tool calls attempted and outcomes
-- `artifacts`: structured domain payload
-- `notes_for_teacher`: short summary for final response composition
+- `info_for_teacher`: short, size-bounded summary for final response composition (max 3000 characters)
+- `artifacts`: structured domain payload (machine-oriented; not for verbatim teacher consumption)
 
 Example:
 
@@ -79,7 +79,7 @@ Example:
   "artifacts": {
     "saved_words": ["avgorande", "forutsattning"]
   },
-  "notes_for_teacher": "Two useful vocabulary items were saved for future recall."
+  "info_for_teacher": "Two useful vocabulary items were saved for future recall."
 }
 ```
 
@@ -143,9 +143,28 @@ Behavior requirements:
 
 Output (suggested shape):
 
-- `pre_response`: list of specialists to invoke, with `reason`, `context_window`, and expected artifacts
-- `teacher_bundle`: the exact bundle passed into the `TeacherAgent`
+- `pre_response`: list of specialists to invoke, with `reason`, `chat_history_size`, and expected artifacts
+- (future) `teacher_hints`: optional hints/policies for what to send to the teacher
 - `post_response`: list of specialists to invoke after the teacher response
+
+### Teacher Input Hints (Future)
+
+Coordinator-generated "what to send to the teacher" should be treated carefully to avoid hallucinating
+conversation history or tool outputs.
+
+Preferred design direction:
+
+- Teacher input is built deterministically in code from the real request `message` + `history`.
+- Coordinator may optionally return a small, validated hints/policy object (examples: desired history window,
+  whether to include a memory summary, or whether to request a compact recap) that the manager may apply.
+- Coordinator should never echo raw `history` back as "teacher input", and should never invent tool results.
+
+### Size Limits (All Specialists)
+
+To keep prompts stable and avoid flooding the TeacherAgent with unrelated details:
+
+- Specialists must keep `info_for_teacher` to 3000 characters or fewer.
+- Specialists should put any larger structured data into `artifacts` and rely on downstream code to interpret it.
 
 ## Agent Contracts
 

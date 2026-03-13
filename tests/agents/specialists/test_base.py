@@ -10,13 +10,13 @@ def test_specialist_result_validation():
     result = SpecialistResult(status="no_action")
     assert result.status == "no_action"
     assert result.actions == []
+    assert result.info_for_teacher == ""
     assert result.artifacts == {}
-    assert result.notes_for_teacher == ""
 
     # Valid result with actions and artifacts
     action = SpecialistAction(tool="test_tool", status="success", summary="did something")
     result = SpecialistResult(
-        status="action_taken", actions=[action], artifacts={"key": "value"}, notes_for_teacher="A note"
+        status="action_taken", actions=[action], artifacts={"key": "value"}, info_for_teacher="A note"
     )
     assert result.status == "action_taken"
     assert len(result.actions) == 1

@@ -81,3 +81,24 @@ class VoiceTranscriptionResponse(BaseModel):
     """Response from voice transcription."""
 
     text: str = Field(..., description="The transcribed text from voice input")
+
+
+class RoutingItem(BaseModel):
+    """Routing decision for a specialist agent."""
+
+    name: str = Field(..., description="Specialist name to invoke")
+    reason: str = Field(..., description="Why this specialist should run")
+    chat_history_size: int = Field(
+        ...,
+        description="Number of most recent chat messages to pass to the specialist",
+        ge=0,
+        le=20,
+    )
+
+
+class CoordinatorPlan(BaseModel):
+    """Coordinator routing plan for a single turn."""
+
+    pre_response: list[RoutingItem] = Field(default_factory=list, description="Pre-response specialists")
+    post_response: list[RoutingItem] = Field(default_factory=list, description="Post-response specialists")
+    audit: dict = Field(default_factory=dict, description="Audit metadata for observability")

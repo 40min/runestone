@@ -76,10 +76,10 @@ async def test_run_orchestration(teacher_agent, mock_user):
         "messages": [HumanMessage(content="Hello"), AIMessage(content="Hi there!")]
     }
 
-    result = await teacher_agent.generate_response(message="Hello", history=[], user=mock_user)
+    response, final_messages = await teacher_agent.generate_response(message="Hello", history=[], user=mock_user)
 
-    assert result.artifacts["response"] == "Hi there!"
-    assert isinstance(result.artifacts["final_messages"], list)
+    assert response == "Hi there!"
+    assert isinstance(final_messages, list)
     teacher_agent.agent.ainvoke.assert_called_once()
 
     invoke_args = teacher_agent.agent.ainvoke.call_args[0][0]

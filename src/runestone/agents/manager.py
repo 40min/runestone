@@ -2,15 +2,19 @@
 Service layer for chat agent orchestration.
 """
 
+import asyncio
 import json
 import logging
+import time
 from typing import Optional
 from urllib.parse import urlparse
 
 from langchain_core.messages import ToolMessage
 from sqlalchemy.exc import SQLAlchemyError
 
-from runestone.agents.schemas import ChatMessage
+from runestone.agents.coordinator import CoordinatorAgent
+from runestone.agents.schemas import ChatMessage, CoordinatorPlan
+from runestone.agents.specialists.registry import SpecialistRegistry
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.config import Settings
 from runestone.core.exceptions import RunestoneError
@@ -28,6 +32,8 @@ class AgentsManager:
     All log lines should be prefixed with `[agents:manager]` for consistency.
     """
 
+    COORDINATOR_MAX_HISTORY_MESSAGES = 5
+
     def __init__(
         self,
         settings: Settings,
@@ -39,11 +45,13 @@ class AgentsManager:
         """
         self.settings = settings
         self._init_allowed_ports()
+        self.coordinator = CoordinatorAgent(settings=settings)
         self.teacher = TeacherAgent(
             settings=settings,
             grammar_index=grammar_index,
             grammar_service=grammar_service,
         )
+        self.registry = SpecialistRegistry()
 
         logger.info(
             "[agents:manager] Initialized AgentsManager with provider=%s, model=%s, persona=%s",
@@ -80,20 +88,130 @@ class AgentsManager:
             except (SQLAlchemyError, ValueError, RuntimeError) as e:
                 logger.warning("Failed to cleanup old mastered memory items for user %s: %s", user.id, e)
 
+        coordinator_history = history[-self.COORDINATOR_MAX_HISTORY_MESSAGES :] if history else []
+        plan = None
         try:
-            result = await self.teacher.generate_response(
+            plan = await self.coordinator.plan(
+                message=message,
+                history=coordinator_history,
+                available_specialists=[name for name in self.registry.list_names() if name != "teacher"],
+            )
+        except (RunestoneError, ValueError, RuntimeError) as e:
+            logger.error("[agents:manager] Coordinator failed, falling back to teacher only: %s", e)
+
+        if plan is None:
+            plan = CoordinatorPlan(
+                pre_response=[],
+                post_response=[],
+                audit={"fallback": "coordinator_error"},
+            )
+        logger.info(
+            "[agents:coordinator] Pre-phase selection: user_id=%s specialists=%s",
+            user.id,
+            ",".join([item.name for item in plan.pre_response]) if plan.pre_response else "none",
+        )
+
+        pre_results = await self._run_specialists(
+            plan.pre_response,
+            message=message,
+            history=history,
+            user=user,
+        )
+
+        try:
+            teacher_response, final_messages = await self.teacher.generate_response(
                 message=message,
                 history=history,
                 user=user,
+                pre_results=pre_results,
             )
         except (RunestoneError, ValueError, RuntimeError) as e:
             logger.error("[agents:manager] Error generating response: %s", e)
             raise
 
-        response = result.artifacts.get("response", "I'm sorry, I couldn't generate a response.")
-        final_messages = result.artifacts.get("final_messages") or []
+        logger.info(
+            "[agents:coordinator] Post-phase selection: user_id=%s specialists=%s",
+            user.id,
+            ",".join([item.name for item in plan.post_response]) if plan.post_response else "none",
+        )
+        await self._run_specialists(
+            plan.post_response,
+            message=message,
+            history=history,
+            user=user,
+            teacher_response=teacher_response,
+            pre_results=pre_results,
+        )
+
+        response = teacher_response
         sources = self._extract_sources(final_messages)
         return response, sources
+
+    async def _run_specialists(
+        self,
+        routing_items,
+        *,
+        message: str,
+        history: list[ChatMessage],
+        user: User,
+        teacher_response: str | None = None,
+        pre_results: list[dict] | None = None,
+    ) -> list[dict]:
+        if not routing_items:
+            return []
+
+        async def _invoke(item, specialist):
+            started = time.monotonic()
+            history_window = history[-item.chat_history_size :] if item.chat_history_size else []
+            context = {
+                "message": message,
+                "history": history_window,
+                "user": user,
+                "teacher_response": teacher_response,
+                "pre_results": pre_results or [],
+                "routing_reason": item.reason,
+                "chat_history_size": item.chat_history_size,
+            }
+            try:
+                result = await specialist.run(context)
+                latency_ms = int((time.monotonic() - started) * 1000)
+                logger.info(
+                    "[agents:%s] Result: status=%s latency_ms=%s",
+                    item.name,
+                    result.status,
+                    latency_ms,
+                )
+                if result.artifacts and isinstance(result.artifacts, dict):
+                    try:
+                        artifacts_json = json.dumps(result.artifacts, ensure_ascii=False, default=str)
+                    except (TypeError, ValueError):
+                        artifacts_json = repr(result.artifacts)
+                    logger.info("[agents:%s] Artifacts: %s", item.name, artifacts_json)
+                return {"name": item.name, "result": result.model_dump(), "latency_ms": latency_ms}
+            except (RunestoneError, ValueError, RuntimeError):
+                latency_ms = int((time.monotonic() - started) * 1000)
+                logger.warning("[agents:manager] Specialist '%s' failed", item.name, exc_info=True)
+                return {
+                    "name": item.name,
+                    # Avoid feeding verbose/technical error details back into the teacher context.
+                    "result": {"status": "error", "info_for_teacher": ""},
+                    "latency_ms": latency_ms,
+                }
+
+        tasks = []
+        for item in routing_items:
+            specialist = self.registry.get(item.name)
+            if specialist is None:
+                logger.info("[agents:coordinator] Missing specialist '%s' - skipping", item.name)
+                continue
+            logger.info("[agents:coordinator] Running specialist '%s' reason=%s", item.name, item.reason)
+            tasks.append(_invoke(item, specialist))
+
+        if not tasks:
+            return []
+
+        # Fan-out / fan-in: run specialists concurrently but preserve routing order.
+        return await asyncio.gather(*tasks)
 
     @staticmethod
     def _safe_json_loads(payload):
