@@ -1,4 +1,3 @@
-```markdown
 # 🔍 Relativa bisatser med satsadverbial
 ## Relative Clauses with Sentence Adverbials
 
@@ -53,4 +52,3 @@ Sentence adverbials (**inte, aldrig, alltid, ofta, verkligen**, etc.) go **BEFOR
 ### 🪄 Adverbial cheat list
 `inte` • `aldrig` • `alltid` • `ofta` • `verkligen` • `redan` • `bara`
 → All of these go **before the first verb**. No exceptions. They are bossy like that. 😤
-```
