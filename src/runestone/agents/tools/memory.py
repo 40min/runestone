@@ -12,8 +12,8 @@ from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from runestone.agent.tools.context import AgentContext
-from runestone.agent.tools.service_providers import provide_memory_item_service
+from runestone.agents.tools.context import AgentContext
+from runestone.agents.tools.service_providers import provide_memory_item_service
 from runestone.api.memory_item_schemas import MemoryCategory, MemoryItemCreate, MemoryItemResponse
 
 logger = logging.getLogger(__name__)

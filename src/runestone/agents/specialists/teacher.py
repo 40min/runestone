@@ -1,25 +1,21 @@
 """
-Service layer for the chat agent.
-
-This module contains the AgentService class that handles chat interactions
-using LangChain's ReAct agent pattern.
+TeacherAgent specialist responsible for composing the final user response.
 """
 
-import json
 import logging
-from typing import Any, Optional
 from urllib.parse import urlparse
 
 from langchain.agents import create_agent
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
-from runestone.agent.prompts import load_persona
-from runestone.agent.schemas import ChatMessage
-from runestone.agent.tools.context import AgentContext
-from runestone.agent.tools.grammar import read_grammar_page, search_grammar
-from runestone.agent.tools.memory import (
+from runestone.agents.prompts import load_persona
+from runestone.agents.schemas import ChatMessage
+from runestone.agents.specialists.base import BaseSpecialist, SpecialistResult
+from runestone.agents.tools.context import AgentContext
+from runestone.agents.tools.grammar import read_grammar_page, search_grammar
+from runestone.agents.tools.memory import (
     delete_memory_item,
     promote_to_strength,
     read_memory,
@@ -28,20 +24,19 @@ from runestone.agent.tools.memory import (
     update_memory_status,
     upsert_memory_item,
 )
-from runestone.agent.tools.news import search_news_with_dates
-from runestone.agent.tools.read_url import read_url
-from runestone.agent.tools.vocabulary import prioritize_words_for_learning
+from runestone.agents.tools.news import search_news_with_dates
+from runestone.agents.tools.read_url import read_url
+from runestone.agents.tools.vocabulary import prioritize_words_for_learning
 from runestone.config import Settings
 from runestone.db.models import User
 from runestone.rag.index import GrammarIndex
 from runestone.services.grammar_service import GrammarService
-from runestone.services.vocabulary_service import VocabularyService
 
 logger = logging.getLogger(__name__)
 
 
-class AgentService:
-    """Service for managing chat agent interactions using LangChain ReAct agent."""
+class TeacherAgent(BaseSpecialist):
+    """LLM-based teacher agent responsible for final response generation."""
 
     MAX_HISTORY_MESSAGES = 20
 
@@ -51,34 +46,19 @@ class AgentService:
         grammar_index: GrammarIndex | None = None,
         grammar_service: GrammarService | None = None,
     ):
-        """
-        Initialize the agent service.
-
-        Args:
-            settings: Application settings containing chat configuration
-        """
+        super().__init__(name="teacher")
         self.settings = settings
         self.grammar_index = grammar_index
         self.grammar_service = grammar_service
         self.persona = load_persona(settings.agent_persona)
         self.agent = self.build_agent()
 
-        self._init_allowed_ports()
-
         logger.info(
-            f"Initialized AgentService with provider={settings.chat_provider}, "
-            f"model={settings.chat_model}, persona={settings.agent_persona}"
+            "[agents:teacher] Initialized TeacherAgent with provider=%s, " "model=%s, persona=%s",
+            settings.chat_provider,
+            settings.chat_model,
+            settings.agent_persona,
         )
-
-    def _init_allowed_ports(self):
-        self.allowed_ports = {80, 443}
-        try:
-            for origin in self.settings.allowed_origins.split(","):
-                app_parsed = urlparse(origin.strip())
-                if app_parsed.port:
-                    self.allowed_ports.add(app_parsed.port)
-        except (ValueError, AttributeError):
-            pass
 
     def build_agent(self):
         """
@@ -255,37 +235,26 @@ to read its contents before deciding.
 
         return agent
 
+    async def run(self, context: dict) -> SpecialistResult:
+        """
+        Execute the teacher agent.
+        """
+        return await self.generate_response(
+            message=context["message"],
+            history=context.get("history", []),
+            user=context["user"],
+        )
+
     async def generate_response(
         self,
         message: str,
         history: list[ChatMessage],
         user: User,
-        vocabulary_service: VocabularyService,
-        memory_item_service,
-    ) -> tuple[str, Optional[list[dict[str, str]]]]:
+    ) -> SpecialistResult:
+        """Generate the final user-facing response as a `SpecialistResult`.
+
+        Note: source extraction is done by `AgentsManager`, not here.
         """
-        Generate a response to a user message using the ReAct agent.
-
-        Args:
-            message: The user's message
-            history: Previous conversation messages
-            user: User model instance
-            vocabulary_service: VocabularyService instance
-            memory_item_service: MemoryItemService instance
-
-        Returns:
-            The agent's final text response and optional news sources
-
-        Raises:
-            Exception: If the agent invocation fails
-        """
-        if not history:
-            try:
-                deleted_count = await memory_item_service.cleanup_old_mastered_areas(user.id, older_than_days=90)
-                if deleted_count:
-                    logger.info("Cleaned up %s old mastered memory items for user %s", deleted_count, user.id)
-            except Exception as e:
-                logger.warning("Failed to cleanup old mastered memory items for user %s: %s", user.id, e)
 
         # Build conversation messages
         messages = []
@@ -313,75 +282,29 @@ to read its contents before deciding.
         # Add current user message
         messages.append(HumanMessage(content=message))
 
-        try:
-            result = await self.agent.ainvoke(
-                {"messages": messages},
-                context=AgentContext(
-                    user=user,
-                    grammar_index=self.grammar_index,
-                    grammar_service=self.grammar_service,
-                ),
-            )
+        result = await self.agent.ainvoke(
+            {"messages": messages},
+            context=AgentContext(
+                user=user,
+                grammar_index=self.grammar_index,
+                grammar_service=self.grammar_service,
+            ),
+        )
 
-            final_messages = result.get("messages", [])
-            sources = self._extract_sources(final_messages)
-            for msg in reversed(final_messages):
-                if hasattr(msg, "content") and msg.content:
-                    if hasattr(msg, "tool_call_id") or (hasattr(msg, "tool_calls") and msg.tool_calls):
-                        continue
-                    return msg.content, sources
-
-            return "I'm sorry, I couldn't generate a response.", None
-
-        except Exception as e:
-            logger.error(f"Error generating response: {e}")
-            raise
-
-    @staticmethod
-    def _safe_json_loads(payload: Any) -> Optional[dict]:
-        if isinstance(payload, dict):
-            return payload
-        if not isinstance(payload, str):
-            return None
-        try:
-            return json.loads(payload)
-        except json.JSONDecodeError:
-            return None
-
-    def _extract_sources(self, messages: list[Any]) -> Optional[list[dict[str, str]]]:
-        for msg in reversed(messages):
-            if not isinstance(msg, ToolMessage):
-                continue
-            payload = self._safe_json_loads(msg.content)
-            tool_name = payload.get("tool") if isinstance(payload, dict) else None
-            if not payload or tool_name not in ["search_news_with_dates", "search_grammar"]:
-                continue
-            if payload.get("error"):
-                return None
-            results = payload.get("results")
-            if not isinstance(results, list):
-                return None
-
-            sources: list[dict[str, str]] = []
-            seen_urls = set()
-            for item in results:
-                if not isinstance(item, dict):
+        final_messages = result.get("messages", [])
+        for msg in reversed(final_messages):
+            if hasattr(msg, "content") and msg.content:
+                if hasattr(msg, "tool_call_id") or (hasattr(msg, "tool_calls") and msg.tool_calls):
                     continue
-                title = item.get("title")
-                url = item.get("url")
-                date = item.get("date", "")  # Date is optional for grammar
-                if not title or not url:
-                    continue
-                if not self._is_safe_url(url):
-                    continue
-                if url in seen_urls:
-                    continue
-                sources.append({"title": title, "url": url, "date": date})
-                seen_urls.add(url)
+                return SpecialistResult(
+                    status="action_taken",
+                    artifacts={"response": msg.content, "final_messages": final_messages},
+                )
 
-            return sources or None
-
-        return None
+        return SpecialistResult(
+            status="error",
+            artifacts={"response": "I'm sorry, I couldn't generate a response.", "final_messages": final_messages},
+        )
 
     @staticmethod
     def _format_sources(sources: list[dict[str, str]]) -> str:
@@ -420,29 +343,3 @@ to read its contents before deciding.
                 else:
                     lines.append(f"{idx}. {title} - {url}")
         return "\n".join(lines)
-
-    def _is_safe_url(self, url: str) -> bool:
-        try:
-            parsed = urlparse(url)
-        except ValueError:
-            logger.info("Rejected source URL (parse error): %s", url)
-            return False
-        if parsed.username or parsed.password:
-            logger.info("Rejected source URL (credentials not allowed): %s", url)
-            return False
-        try:
-            port = parsed.port
-        except ValueError:
-            logger.info("Rejected source URL (invalid port): %s", url)
-            return False
-        if parsed.scheme not in {"http", "https"}:
-            logger.info("Rejected source URL (scheme not allowed): %s", url)
-            return False
-
-        if port is not None and port not in self.allowed_ports:
-            logger.info("Rejected source URL (port not allowed): %s", url)
-            return False
-        if not parsed.netloc:
-            logger.info("Rejected source URL (missing netloc): %s", url)
-            return False
-        return True

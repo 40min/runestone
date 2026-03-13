@@ -9,7 +9,7 @@ from typing import Dict, List
 
 import yaml
 
-from runestone.agent.schemas import ChatMessage
+from runestone.agents.schemas import ChatMessage
 
 
 def load_persona(persona_name: str) -> Dict[str, str]:

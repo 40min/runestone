@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from runestone.agent.tools.memory import start_student_info
+from runestone.agents.tools.memory import start_student_info
 from runestone.api.memory_item_schemas import MemoryCategory, MemoryItemResponse
 
 
@@ -87,7 +87,7 @@ async def test_start_student_info_fetches_token_bounded_subset():
     mock_service = MagicMock()
     mock_service.list_memory_items = AsyncMock(side_effect=_list_memory_items)
 
-    with patch("runestone.agent.tools.memory.provide_memory_item_service") as mock_provider:
+    with patch("runestone.agents.tools.memory.provide_memory_item_service") as mock_provider:
         mock_provider.return_value.__aenter__ = AsyncMock(return_value=mock_service)
         mock_provider.return_value.__aexit__ = AsyncMock()
 
@@ -109,7 +109,7 @@ async def test_start_student_info_no_items():
     mock_service = MagicMock()
     mock_service.list_memory_items = AsyncMock(return_value=[])
 
-    with patch("runestone.agent.tools.memory.provide_memory_item_service") as mock_provider:
+    with patch("runestone.agents.tools.memory.provide_memory_item_service") as mock_provider:
         mock_provider.return_value.__aenter__ = AsyncMock(return_value=mock_service)
         mock_provider.return_value.__aexit__ = AsyncMock()
 

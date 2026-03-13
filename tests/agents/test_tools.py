@@ -1,7 +1,7 @@
 import pytest
 
-from runestone.agent.tools import news as agent_news
-from runestone.agent.tools.vocabulary import WordPrioritisationItem
+from runestone.agents.tools import news as agent_news
+from runestone.agents.tools.vocabulary import WordPrioritisationItem
 
 
 class FakeDDGS:

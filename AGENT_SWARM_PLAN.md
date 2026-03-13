@@ -76,11 +76,52 @@ Success criteria:
 
 - can instantiate a specialist and return a structured `no_action`
 
-### Milestone 2: Extract WordKeeper
+### Milestone 2: Split Manager and TeacherAgent
 
 Deliverables:
 
-- move vocabulary-saving responsibility out of the teacher prompt
+- rename the manager model module to `manager.py`
+- decouple the teacher implementation from `AgentsManager`
+- introduce `TeacherAgent` as the first specialist
+
+Tasks:
+
+- rename `runestone/agents/service.py` -> `runestone/agents/manager.py`
+- update imports to use `runestone.agents.manager`
+- extract teacher prompt + execution into `TeacherAgent` specialist
+- have `AgentsManager` call `TeacherAgent` directly (no coordinator yet)
+- keep user-visible behavior unchanged
+
+Success criteria:
+
+- `AgentsManager` and `TeacherAgent` are separate components
+- `TeacherAgent` can be invoked independently in tests
+
+### Milestone 3: Introduce Coordinator for Pre/Post Orchestration
+
+Deliverables:
+
+- replace direct all-tools teacher path with coordinator + teacher
+- enable pre- and post-response specialist execution
+
+Tasks:
+
+- create routing policy
+- add specialist registry
+- implement phased fan-out/fan-in orchestration
+- add teacher input bundle creation
+- preserve existing source extraction behavior for news
+
+Success criteria:
+
+- same user-facing chat endpoint, but internals run coordinator plus specialists
+- coordinator can execute pre/post phases deterministically
+
+### Milestone 4: Extract WordKeeper
+
+Deliverables:
+
+- move vocabulary responsibility out of the teacher prompt
 - `WordKeeper` owns `prioritize_words_for_learning`
 
 Tasks:
@@ -99,7 +140,7 @@ Success criteria:
 
 - word-saving behavior can be tested without invoking the teacher prompt
 
-### Milestone 3: Extract MemoryReader and MemoryKeeper
+### Milestone 5: Extract MemoryReader and MemoryKeeper
 
 Deliverables:
 
@@ -119,42 +160,38 @@ Success criteria:
 - teacher no longer owns memory tool rules directly
 - memory retrieval and memory persistence are independently testable
 
-### Milestone 4: Extract NewsAgent and GrammarAgent
+### Milestone 6: Extract NewsAgent
 
 Deliverables:
 
-- reference and retrieval domains become specialists
+- news reference and retrieval becomes a specialist
 
 Tasks:
 
 - create `NewsAgent`
-- create `GrammarAgent`
 - ensure `NewsAgent` can read selected sources via `read_url` when needed
 - add source/result schemas
 
 Success criteria:
 
-- teacher only routes and composes
+- teacher routes news retrieval through `NewsAgent`
 
-### Milestone 5: Introduce Coordinator and TeacherAgent Split
+### Milestone 7: Extract GrammarAgent
 
 Deliverables:
 
-- replace direct all-tools teacher agent with phased coordinator plus separate teacher
+- grammar reference and retrieval becomes a specialist
 
 Tasks:
 
-- create routing policy
-- add specialist registry
-- implement phased fan-out/fan-in orchestration
-- add teacher input bundle creation
-- preserve existing source extraction behavior for news
+- create `GrammarAgent`
+- add source/result schemas
 
 Success criteria:
 
-- same user-facing chat endpoint, but internals run coordinator plus specialists
+- teacher routes grammar retrieval through `GrammarAgent`
 
-### Milestone 6: Reduce Monolithic Prompt
+### Milestone 8: Reduce Monolithic Prompt
 
 Deliverables:
 
@@ -246,17 +283,29 @@ Step 1:
 
 Step 2:
 
-- add `WordKeeper` as a post-response specialist, keep everything else in current teacher path
+- rename manager module to `manager.py` and extract `TeacherAgent` as the first specialist
 
 Step 3:
 
-- route `MemoryReader` and `MemoryKeeper`
+- introduce `CoordinatorAgent` and phased pre/post execution
 
 Step 4:
 
-- route `NewsAgent` and `GrammarAgent`
+- add `WordKeeper` as a specialist
 
 Step 5:
+
+- add `MemoryReader` and `MemoryKeeper` as specialists
+
+Step 6:
+
+- add `NewsAgent` as a specialist
+
+Step 7:
+
+- add `GrammarAgent` as a specialist
+
+Step 8:
 
 - shrink teacher prompt and tool list
 

@@ -5,9 +5,9 @@ Service for managing chat interactions and history.
 import logging
 from typing import List
 
-from runestone.agent.schemas import ChatHistoryResponse
-from runestone.agent.schemas import ChatMessage as ChatMessageSchema
-from runestone.agent.service import AgentService
+from runestone.agents.manager import AgentsManager
+from runestone.agents.schemas import ChatHistoryResponse
+from runestone.agents.schemas import ChatMessage as ChatMessageSchema
 from runestone.config import Settings
 from runestone.core.exceptions import RunestoneError
 from runestone.core.processor import RunestoneProcessor
@@ -27,7 +27,7 @@ class ChatService:
         settings: Settings,
         repository: ChatRepository,
         user_service: UserService,
-        agent_service: AgentService,
+        agent_service: AgentsManager,
         processor: RunestoneProcessor,
         vocabulary_service: VocabularyService,
         tts_service: TTSService,
@@ -106,7 +106,6 @@ class ChatService:
             message=message_text,
             history=history[:-1],  # Exclude current message (it's passed separately)
             user=user,
-            vocabulary_service=self.vocabulary_service,
             memory_item_service=self.memory_item_service,
         )
 
@@ -180,7 +179,6 @@ Instructions:
             message=translation_prompt,
             history=history,
             user=user,
-            vocabulary_service=self.vocabulary_service,
             memory_item_service=self.memory_item_service,
         )
 

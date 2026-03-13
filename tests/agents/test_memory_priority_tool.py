@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from runestone.agent.tools.memory import update_memory_priority
+from runestone.agents.tools.memory import update_memory_priority
 
 
 @pytest.mark.anyio
@@ -12,7 +12,7 @@ async def test_update_memory_priority_calls_service():
     mock_service = MagicMock()
     mock_service.update_item_priority = AsyncMock(return_value=SimpleNamespace(id=7, key="verb_tense", priority=1))
 
-    with patch("runestone.agent.tools.memory.provide_memory_item_service") as mock_provider:
+    with patch("runestone.agents.tools.memory.provide_memory_item_service") as mock_provider:
         mock_provider.return_value.__aenter__ = AsyncMock(return_value=mock_service)
         mock_provider.return_value.__aexit__ = AsyncMock()
 
@@ -30,7 +30,7 @@ async def test_update_memory_priority_null_maps_to_lowest_calls_service():
     mock_service = MagicMock()
     mock_service.update_item_priority = AsyncMock(return_value=SimpleNamespace(id=7, key="verb_tense", priority=9))
 
-    with patch("runestone.agent.tools.memory.provide_memory_item_service") as mock_provider:
+    with patch("runestone.agents.tools.memory.provide_memory_item_service") as mock_provider:
         mock_provider.return_value.__aenter__ = AsyncMock(return_value=mock_service)
         mock_provider.return_value.__aexit__ = AsyncMock()
 

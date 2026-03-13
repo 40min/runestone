@@ -156,7 +156,7 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
         tts_service_instance = tts_service or Mock()
         overrides[get_tts_service] = lambda: tts_service_instance
 
-        # Always provide AgentService via dependency + app.state so callers that
+        # Always provide AgentsManager via dependency + app.state so callers that
         # access request.app.state.* directly don't explode.
         from runestone.dependencies import get_agent_service
 
@@ -282,7 +282,7 @@ def mock_grammar_service():
 
 @pytest.fixture
 def mock_agent_service():
-    """Create a standardized mock AgentService."""
+    """Create a standardized mock AgentsManager."""
     from unittest.mock import AsyncMock
 
     mock = AsyncMock()

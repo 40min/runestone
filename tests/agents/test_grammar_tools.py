@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.documents import Document
 
-from runestone.agent.tools import grammar as grammar_tools
+from runestone.agents.tools import grammar as grammar_tools
 from runestone.services.grammar_service import GrammarService
 
 
