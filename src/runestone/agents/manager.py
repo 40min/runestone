@@ -13,13 +13,14 @@ from langchain_core.messages import ToolMessage
 from sqlalchemy.exc import SQLAlchemyError
 
 from runestone.agents.coordinator import CoordinatorAgent
-from runestone.agents.schemas import ChatMessage, CoordinatorPlan
+from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem
 from runestone.agents.specialists.registry import SpecialistRegistry
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.config import Settings
 from runestone.core.exceptions import RunestoneError
 from runestone.db.models import User
 from runestone.rag.index import GrammarIndex
+from runestone.services.agent_side_effect_service import AgentSideEffectService
 from runestone.services.grammar_service import GrammarService
 
 logger = logging.getLogger(__name__)
@@ -73,9 +74,11 @@ class AgentsManager:
     async def generate_response(
         self,
         message: str,
+        chat_id: str,
         history: list[ChatMessage],
         user: User,
         memory_item_service,
+        side_effect_service: AgentSideEffectService,
     ) -> tuple[str, Optional[list[dict[str, str]]]]:
         """
         Generate a response to a user message using the teacher specialist.
@@ -84,9 +87,15 @@ class AgentsManager:
             try:
                 deleted_count = await memory_item_service.cleanup_old_mastered_areas(user.id, older_than_days=90)
                 if deleted_count:
-                    logger.info("Cleaned up %s old mastered memory items for user %s", deleted_count, user.id)
+                    logger.info(
+                        "[agents:manager] Cleaned up %s old mastered memory items for user %s",
+                        deleted_count,
+                        user.id,
+                    )
             except (SQLAlchemyError, ValueError, RuntimeError) as e:
-                logger.warning("Failed to cleanup old mastered memory items for user %s: %s", user.id, e)
+                logger.warning(
+                    "[agents:manager] Failed to cleanup old mastered memory items for user %s: %s", user.id, e
+                )
 
         coordinator_history = history[-self.COORDINATOR_MAX_HISTORY_MESSAGES :] if history else []
         plan = None
@@ -106,7 +115,7 @@ class AgentsManager:
                 audit={"fallback": "coordinator_error"},
             )
         logger.info(
-            "[agents:coordinator] Pre-phase selection: user_id=%s specialists=%s",
+            "[agents:manager] Pre-phase selection: user_id=%s specialists=%s",
             user.id,
             ",".join([item.name for item in plan.pre_response]) if plan.pre_response else "none",
         )
@@ -117,6 +126,10 @@ class AgentsManager:
             history=history,
             user=user,
         )
+        recent_side_effects = await side_effect_service.load_recent_for_teacher(
+            user_id=user.id,
+            chat_id=chat_id,
+        )
 
         try:
             teacher_response, final_messages = await self.teacher.generate_response(
@@ -124,23 +137,29 @@ class AgentsManager:
                 history=history,
                 user=user,
                 pre_results=pre_results,
+                recent_side_effects=recent_side_effects,
             )
         except (RunestoneError, ValueError, RuntimeError) as e:
             logger.error("[agents:manager] Error generating response: %s", e)
             raise
 
         logger.info(
-            "[agents:coordinator] Post-phase selection: user_id=%s specialists=%s",
+            "[agents:manager] Post-phase selection: user_id=%s specialists=%s",
             user.id,
             ",".join([item.name for item in plan.post_response]) if plan.post_response else "none",
         )
-        await self._run_specialists(
+        post_results = await self._run_specialists(
             plan.post_response,
             message=message,
             history=history,
             user=user,
             teacher_response=teacher_response,
             pre_results=pre_results,
+        )
+        await side_effect_service.replace_post_response_side_effects(
+            user_id=user.id,
+            chat_id=chat_id,
+            results=post_results,
         )
 
         response = teacher_response
@@ -149,7 +168,7 @@ class AgentsManager:
 
     async def _run_specialists(
         self,
-        routing_items,
+        routing_items: list[RoutingItem],
         *,
         message: str,
         history: list[ChatMessage],
@@ -187,7 +206,12 @@ class AgentsManager:
                     except (TypeError, ValueError):
                         artifacts_json = repr(result.artifacts)
                     logger.info("[agents:%s] Artifacts: %s", item.name, artifacts_json)
-                return {"name": item.name, "result": result.model_dump(), "latency_ms": latency_ms}
+                return {
+                    "name": item.name,
+                    "result": result.model_dump(),
+                    "latency_ms": latency_ms,
+                    "routing_reason": item.reason,
+                }
             except (RunestoneError, ValueError, RuntimeError):
                 latency_ms = int((time.monotonic() - started) * 1000)
                 logger.warning("[agents:manager] Specialist '%s' failed", item.name, exc_info=True)
@@ -196,15 +220,16 @@ class AgentsManager:
                     # Avoid feeding verbose/technical error details back into the teacher context.
                     "result": {"status": "error", "info_for_teacher": ""},
                     "latency_ms": latency_ms,
+                    "routing_reason": item.reason,
                 }
 
         tasks = []
         for item in routing_items:
             specialist = self.registry.get(item.name)
             if specialist is None:
-                logger.info("[agents:coordinator] Missing specialist '%s' - skipping", item.name)
+                logger.info("[agents:manager] Missing specialist '%s' - skipping", item.name)
                 continue
-            logger.info("[agents:coordinator] Running specialist '%s' reason=%s", item.name, item.reason)
+            logger.info("[agents:manager] Running specialist '%s' reason=%s", item.name, item.reason)
             tasks.append(_invoke(item, specialist))
 
         if not tasks:

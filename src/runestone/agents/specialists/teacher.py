@@ -3,6 +3,7 @@ TeacherAgent specialist responsible for composing the final user response.
 """
 
 import logging
+from typing import Any
 from urllib.parse import urlparse
 
 from langchain.agents import create_agent
@@ -10,7 +11,8 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from runestone.agents.llm import build_chat_model
 from runestone.agents.prompts import load_persona
-from runestone.agents.schemas import ChatMessage
+from runestone.agents.schemas import ChatMessage, TeacherSideEffect
+from runestone.agents.specialists.base import INFO_FOR_TEACHER_MAX_CHARS
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.grammar import read_grammar_page, search_grammar
 from runestone.agents.tools.memory import (
@@ -37,7 +39,8 @@ class TeacherAgent:
     """LLM-based teacher agent responsible for final response generation."""
 
     MAX_HISTORY_MESSAGES = 20
-    PRE_RESPONSE_INFO_MAX_CHARS = 3000
+    RECENT_SIDE_EFFECTS_MAX_ITEMS = 5
+    RECENT_SIDE_EFFECTS_MAX_CHARS = 2000
 
     def __init__(
         self,
@@ -232,6 +235,7 @@ to read its contents before deciding.
         history: list[ChatMessage],
         user: User,
         pre_results: list[dict] | None = None,
+        recent_side_effects: list[TeacherSideEffect] | None = None,
     ) -> tuple[str, list]:
         """Generate the final user-facing response.
 
@@ -256,6 +260,8 @@ to read its contents before deciding.
         # Add pre-response specialist information
         if pre_results:
             messages.append(SystemMessage(content=self._format_pre_results(pre_results)))
+        if recent_side_effects:
+            messages.append(SystemMessage(content=self._format_recent_side_effects(recent_side_effects)))
 
         # Add conversation history
         truncated_history = history[-self.MAX_HISTORY_MESSAGES :] if history else []
@@ -331,17 +337,73 @@ to read its contents before deciding.
     def _format_pre_results(pre_results: list[dict]) -> str:
         lines = ["[PRE_RESPONSE_SPECIALISTS]"]
 
-        def _truncate(text: str, max_len: int = TeacherAgent.PRE_RESPONSE_INFO_MAX_CHARS) -> str:
-            if not isinstance(text, str):
-                return ""
-            if len(text) <= max_len:
-                return text
-            return text[: max_len - 3] + "..."
-
         for item in pre_results:
             name = item.get("name", "unknown")
             result = item.get("result", {}) if isinstance(item, dict) else {}
             status = result.get("status", "unknown")
             info_for_teacher = result.get("info_for_teacher", "")
-            lines.append(f"- {name} ({status}): {_truncate(info_for_teacher) or 'no info'}")
+            lines.append(f"- {name} ({status}): {TeacherAgent._truncate_text(info_for_teacher) or 'no info'}")
         return "\n".join(lines)
+
+    @staticmethod
+    def _format_recent_side_effects(recent_side_effects: list[TeacherSideEffect]) -> str:
+        lines = [
+            "[RECENT_SIDE_EFFECTS]",
+            "These are internal confirmations of recent successful post-response actions from this chat.",
+            "Use them to answer follow-up questions truthfully, but do not mention the tag or raw structure.",
+        ]
+        remaining_chars = max(TeacherAgent.RECENT_SIDE_EFFECTS_MAX_CHARS - len("\n".join(lines)), 0)
+
+        for item in recent_side_effects[-TeacherAgent.RECENT_SIDE_EFFECTS_MAX_ITEMS :]:
+            if item.status != "action_taken":
+                continue
+            name = item.name
+            summary = TeacherAgent._side_effect_summary(item)
+            line = f"- {name}: {summary}"
+            if len(line) + 1 > remaining_chars:
+                line = TeacherAgent._truncate_text(line, max_len=max(remaining_chars, 0))
+            if not line:
+                break
+            lines.append(line)
+            remaining_chars -= len(line) + 1
+            if remaining_chars <= 0:
+                break
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _side_effect_summary(item: TeacherSideEffect) -> str:
+        info_for_teacher = item.info_for_teacher
+        truncated_info = TeacherAgent._truncate_text(info_for_teacher, max_len=INFO_FOR_TEACHER_MAX_CHARS)
+        if truncated_info:
+            return truncated_info
+
+        artifacts = item.artifacts
+        if isinstance(artifacts, dict) and artifacts:
+            artifact_parts = []
+            for key, value in list(artifacts.items())[:3]:
+                artifact_parts.append(f"{key}={TeacherAgent._stringify_artifact_value(value)}")
+            fallback = "artifacts: " + ", ".join(artifact_parts)
+            return TeacherAgent._truncate_text(fallback, max_len=240) or "action completed"
+
+        return "action completed"
+
+    @staticmethod
+    def _stringify_artifact_value(value: Any) -> str:
+        if isinstance(value, list):
+            preview = ", ".join(str(item) for item in value[:3])
+            return f"[{preview}]"
+        if isinstance(value, dict):
+            preview = ", ".join(f"{key}={value[key]}" for key in list(value.keys())[:3])
+            return f"{{{preview}}}"
+        return str(value)
+
+    @staticmethod
+    def _truncate_text(text: str, max_len: int = INFO_FOR_TEACHER_MAX_CHARS) -> str:
+        if not isinstance(text, str):
+            return ""
+        if max_len <= 0:
+            return ""
+        if len(text) <= max_len:
+            return text
+        return text[: max_len - 3] + "..."

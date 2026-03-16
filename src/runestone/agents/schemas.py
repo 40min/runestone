@@ -6,7 +6,7 @@ This module defines the data models for chat requests and responses.
 
 import json
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
@@ -102,3 +102,16 @@ class CoordinatorPlan(BaseModel):
     pre_response: list[RoutingItem] = Field(default_factory=list, description="Pre-response specialists")
     post_response: list[RoutingItem] = Field(default_factory=list, description="Post-response specialists")
     audit: dict = Field(default_factory=dict, description="Audit metadata for observability")
+
+
+class TeacherSideEffect(BaseModel):
+    """Typed side-effect payload consumed by the teacher prompt layer."""
+
+    name: str = Field(..., description="Specialist name")
+    phase: str = Field(..., description="Execution phase")
+    status: str = Field(..., description="Specialist status")
+    info_for_teacher: str = Field("", description="Teacher-facing summary")
+    artifacts: dict[str, Any] = Field(default_factory=dict, description="Structured specialist artifacts")
+    routing_reason: str = Field("", description="Coordinator rationale")
+    latency_ms: int | None = Field(None, description="Specialist execution latency in milliseconds")
+    created_at: datetime | None = Field(None, description="Persisted record timestamp")

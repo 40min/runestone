@@ -2,12 +2,13 @@
 Tests for the TeacherAgent specialist.
 """
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from runestone.agents.schemas import ChatMessage
+from runestone.agents.schemas import ChatMessage, TeacherSideEffect
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.config import Settings
 
@@ -128,6 +129,104 @@ async def test_run_with_mother_tongue(teacher_agent, mock_user):
     assert any(isinstance(m, SystemMessage) and "Spanish" in m.content for m in messages)
 
 
+def test_format_recent_side_effects_prefers_info_for_teacher():
+    formatted = TeacherAgent._format_recent_side_effects(
+        [
+            TeacherSideEffect(
+                name="word_keeper",
+                phase="post_response",
+                status="action_taken",
+                info_for_teacher="Saved 2 vocabulary items.",
+                artifacts={"saved_words": ["ord", "fras"]},
+                routing_reason="save request",
+            )
+        ]
+    )
+
+    assert "[RECENT_SIDE_EFFECTS]" in formatted
+    assert "Saved 2 vocabulary items." in formatted
+    assert "artifacts:" not in formatted
+
+
+def test_format_recent_side_effects_falls_back_to_artifacts():
+    formatted = TeacherAgent._format_recent_side_effects(
+        [
+            TeacherSideEffect(
+                name="word_keeper",
+                phase="post_response",
+                status="action_taken",
+                info_for_teacher="",
+                artifacts={"saved_words": ["ord", "fras"]},
+                routing_reason="save request",
+            )
+        ]
+    )
+
+    assert "artifacts:" in formatted
+    assert "saved_words=[ord, fras]" in formatted
+
+
+def test_format_recent_side_effects_respects_budget():
+    formatted = TeacherAgent._format_recent_side_effects(
+        [
+            TeacherSideEffect(
+                name=f"specialist-{idx}",
+                phase="post_response",
+                status="action_taken",
+                info_for_teacher="x" * 700,
+                artifacts={},
+                routing_reason="test",
+            )
+            for idx in range(10)
+        ]
+    )
+
+    assert len(formatted) <= TeacherAgent.RECENT_SIDE_EFFECTS_MAX_CHARS + 200
+
+
+@pytest.mark.anyio
+async def test_generate_response_prompt_matches_fixture(teacher_agent, mock_user):
+    mock_user.mother_tongue = "Spanish"
+    history = [
+        ChatMessage(role="user", content="Old user msg"),
+        ChatMessage(
+            role="assistant",
+            content="Old bot msg",
+            sources=[{"title": "Nyhet", "url": "https://example.com", "date": "2026-02-05"}],
+        ),
+    ]
+    teacher_agent.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
+
+    await teacher_agent.generate_response(
+        message="Please confirm what you saved yesterday.",
+        history=history,
+        user=mock_user,
+        pre_results=[
+            {
+                "name": "word_keeper",
+                "result": {"status": "action_taken", "info_for_teacher": "Saved 2 vocabulary items."},
+            }
+        ],
+        recent_side_effects=[
+            TeacherSideEffect(
+                name="word_keeper",
+                phase="post_response",
+                status="action_taken",
+                info_for_teacher="Saved 2 vocabulary items.",
+                artifacts={"saved_words": ["ord", "fras"]},
+                routing_reason="save request",
+            )
+        ],
+    )
+
+    invoke_args = teacher_agent.agent.ainvoke.call_args[0][0]
+    actual_prompt = _serialize_messages(invoke_args["messages"])
+    expected_prompt = Path("tests/agents/fixtures/teacher_prompt_full.txt").read_text(encoding="utf-8").strip()
+
+    assert actual_prompt == expected_prompt
+    assert len(actual_prompt) > 0
+
+
 def test_openai_provider_configuration(mock_settings):
     """Test that OpenAI provider is configured correctly."""
     mock_settings.chat_provider = "openai"
@@ -161,3 +260,18 @@ def test_format_sources():
     assert "Title 1" in formatted
     assert "Title 20" in formatted
     assert "Title 21" not in formatted
+
+
+def _serialize_messages(messages: list) -> str:
+    blocks = []
+    for message in messages:
+        if isinstance(message, SystemMessage):
+            role = "SYSTEM"
+        elif isinstance(message, HumanMessage):
+            role = "HUMAN"
+        elif isinstance(message, AIMessage):
+            role = "AI"
+        else:
+            role = message.__class__.__name__.upper()
+        blocks.append(f"[{role}]\n{message.content}")
+    return "\n\n".join(blocks).strip()

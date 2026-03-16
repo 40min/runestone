@@ -1,0 +1,26 @@
+[SYSTEM]
+[IMPORTANT] STUDENT'S MOTHER TONGUE: Spanish
+
+Respond only in the student's mother tongue. Use this information to personalize your teaching.
+
+[SYSTEM]
+[PRE_RESPONSE_SPECIALISTS]
+- word_keeper (action_taken): Saved 2 vocabulary items.
+
+[SYSTEM]
+[RECENT_SIDE_EFFECTS]
+These are internal confirmations of recent successful post-response actions from this chat.
+Use them to answer follow-up questions truthfully, but do not mention the tag or raw structure.
+- word_keeper: Saved 2 vocabulary items.
+
+[HUMAN]
+Old user msg
+
+[AI]
+Old bot msg
+
+[NEWS_SOURCES]
+1. Nyhet (2026-02-05, example.com) - https://example.com/
+
+[HUMAN]
+Please confirm what you saved yesterday.

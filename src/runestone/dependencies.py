@@ -17,12 +17,14 @@ from runestone.core.analyzer import ContentAnalyzer
 from runestone.core.clients.base import BaseLLMClient
 from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
+from runestone.db.agent_side_effect_repository import AgentSideEffectRepository
 from runestone.db.chat_repository import ChatRepository
 from runestone.db.database import get_db
 from runestone.db.memory_item_repository import MemoryItemRepository
 from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.rag.index import GrammarIndex
+from runestone.services.agent_side_effect_service import AgentSideEffectService
 from runestone.services.chat_service import ChatService
 from runestone.services.grammar_service import GrammarService
 from runestone.services.memory_item_service import MemoryItemService
@@ -92,6 +94,36 @@ def get_memory_item_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> 
         MemoryItemRepository: Repository instance with database session
     """
     return MemoryItemRepository(db)
+
+
+def get_agent_side_effect_repository(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AgentSideEffectRepository:
+    """
+    Dependency injection for agent side-effect repository.
+
+    Args:
+        db: Database session from FastAPI dependency injection
+
+    Returns:
+        AgentSideEffectRepository: Repository instance with database session
+    """
+    return AgentSideEffectRepository(db)
+
+
+def get_agent_side_effect_service(
+    repository: Annotated[AgentSideEffectRepository, Depends(get_agent_side_effect_repository)],
+) -> AgentSideEffectService:
+    """
+    Dependency injection for agent side-effect service.
+
+    Args:
+        repository: AgentSideEffectRepository from dependency injection
+
+    Returns:
+        AgentSideEffectService: Service instance with repository dependency
+    """
+    return AgentSideEffectService(repository)
 
 
 def get_user_service(
@@ -283,6 +315,7 @@ def get_grammar_index(request: Request) -> GrammarIndex:
 def get_chat_service(
     settings: Annotated[Settings, Depends(get_settings)],
     repo: Annotated[ChatRepository, Depends(get_chat_repository)],
+    side_effect_service: Annotated[AgentSideEffectService, Depends(get_agent_side_effect_service)],
     user_service: Annotated[UserService, Depends(get_user_service)],
     agent_service: Annotated[AgentsManager, Depends(get_agent_service)],
     processor: Annotated[RunestoneProcessor, Depends(get_runestone_processor)],
@@ -306,7 +339,15 @@ def get_chat_service(
         ChatService: Service instance for chat operations
     """
     return ChatService(
-        settings, repo, user_service, agent_service, processor, vocabulary_service, tts_service, memory_item_service
+        settings,
+        repo,
+        side_effect_service,
+        user_service,
+        agent_service,
+        processor,
+        vocabulary_service,
+        tts_service,
+        memory_item_service,
     )
 
 
