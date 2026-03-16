@@ -50,6 +50,17 @@
     "path": "adjectives/ser_adj_ut.md"
   },
   {
+    "url": "{HOST}/?view=grammar&cheatsheet=adjectives%2Fbestamd_form",
+    "tags": [
+      "adjectives",
+      "definite form",
+      "bestämd form",
+      "agreement"
+    ],
+    "annotation": "A guide to the definite form of Swedish adjectives, explaining when to use it with articles, possessive pronouns, and in special contexts like addressing people or names.",
+    "path": "adjectives/bestamd_form.md"
+  },
+  {
     "url": "{HOST}/?view=grammar&cheatsheet=adverbs%2FNU_DA_adverb",
     "tags": [
       "adverbs",
