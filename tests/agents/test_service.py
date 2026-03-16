@@ -27,6 +27,7 @@ def mock_settings():
     settings = MagicMock(spec=Settings)
     settings.chat_provider = "openrouter"
     settings.chat_model = "test-model"
+    settings.coordinator_model = None
     settings.agent_persona = "default"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"

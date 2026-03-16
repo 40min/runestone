@@ -7,9 +7,8 @@ from urllib.parse import urlparse
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
-from pydantic import SecretStr
 
+from runestone.agents.llm import build_chat_model
 from runestone.agents.prompts import load_persona
 from runestone.agents.schemas import ChatMessage
 from runestone.agents.tools.context import AgentContext
@@ -69,24 +68,7 @@ class TeacherAgent:
         settings = self.settings
 
         # Initialize the LangChain chat model
-        if settings.chat_provider == "openrouter":
-            api_key = settings.openrouter_api_key
-            api_base = "https://openrouter.ai/api/v1"
-        elif settings.chat_provider == "openai":
-            api_key = settings.openai_api_key
-            api_base = None
-        else:
-            raise ValueError(f"Unsupported chat provider: {settings.chat_provider}")
-
-        if not api_key:
-            raise ValueError(f"API key for {settings.chat_provider} is not configured")
-
-        chat_model = ChatOpenAI(
-            model=settings.chat_model,
-            api_key=SecretStr(api_key) if api_key else None,
-            base_url=api_base,
-            temperature=1,
-        )
+        chat_model = build_chat_model(settings, temperature=1)
 
         tools = [
             start_student_info,

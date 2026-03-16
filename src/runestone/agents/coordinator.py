@@ -6,10 +6,10 @@ import json
 import logging
 import time
 
+from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
-from pydantic import SecretStr
 
+from runestone.agents.llm import build_chat_model
 from runestone.agents.schemas import ChatMessage, CoordinatorPlan
 from runestone.config import Settings
 
@@ -51,33 +51,16 @@ class CoordinatorAgent:
 
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.model = self._build_model()
+        self.model = build_chat_model(
+            settings,
+            model_name=settings.coordinator_model or settings.chat_model,
+            temperature=0,
+        )
 
         logger.info(
             "[agents:coordinator] Initialized CoordinatorAgent with provider=%s, model=%s",
             settings.chat_provider,
-            settings.chat_model,
-        )
-
-    def _build_model(self):
-        settings = self.settings
-        if settings.chat_provider == "openrouter":
-            api_key = settings.openrouter_api_key
-            api_base = "https://openrouter.ai/api/v1"
-        elif settings.chat_provider == "openai":
-            api_key = settings.openai_api_key
-            api_base = None
-        else:
-            raise ValueError(f"Unsupported chat provider: {settings.chat_provider}")
-
-        if not api_key:
-            raise ValueError(f"API key for {settings.chat_provider} is not configured")
-
-        return ChatOpenAI(
-            model=settings.chat_model,
-            api_key=SecretStr(api_key) if api_key else None,
-            base_url=api_base,
-            temperature=0,
+            settings.coordinator_model,
         )
 
     async def plan(
@@ -95,12 +78,30 @@ class CoordinatorAgent:
             "history": [msg.model_dump() for msg in history],
             "available_specialists": available_specialists,
         }
-        result = await model.ainvoke(
-            [
-                SystemMessage(content=COORDINATOR_SYSTEM_PROMPT),
-                HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
-            ]
-        )
-        latency_ms = int((time.monotonic() - started) * 1000)
-        logger.info("[agents:coordinator] Plan created in %sms", latency_ms)
-        return result
+
+        try:
+            result = await model.ainvoke(
+                [
+                    SystemMessage(content=COORDINATOR_SYSTEM_PROMPT),
+                    HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
+                ]
+            )
+            latency_ms = int((time.monotonic() - started) * 1000)
+            logger.info("[agents:coordinator] Plan created in %sms", latency_ms)
+            return result
+        except OutputParserException as e:
+            logger.error("[agents:coordinator] Schema validation failed: %s", str(e))
+            # Fallback to teacher only if plan fails
+            return CoordinatorPlan(
+                pre_response=[],
+                post_response=[],
+                audit={"error": "output_parsing", "details": str(e)},
+            )
+        except Exception as e:
+            logger.error("[agents:coordinator] Coordinator execution failed: %s", str(e))
+            # Return a safe fallback plan
+            return CoordinatorPlan(
+                pre_response=[],
+                post_response=[],
+                audit={"error": "generic_error", "details": str(e)},
+            )

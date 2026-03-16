@@ -35,7 +35,7 @@ def mock_chat_model():
 @pytest.fixture
 def teacher_agent(mock_settings, mock_chat_model):
     """Create a TeacherAgent instance with mocked dependencies."""
-    with patch("runestone.agents.specialists.teacher.ChatOpenAI", return_value=mock_chat_model):
+    with patch("runestone.agents.specialists.teacher.build_chat_model", return_value=mock_chat_model):
         with patch("runestone.agents.specialists.teacher.create_agent"):
             agent = TeacherAgent(mock_settings)
             # Mock the agent executor
@@ -53,7 +53,7 @@ def mock_user():
 
 def test_build_agent(mock_settings, mock_chat_model):
     """Test that build_agent creates a ReAct agent with tools."""
-    with patch("runestone.agents.specialists.teacher.ChatOpenAI", return_value=mock_chat_model):
+    with patch("runestone.agents.specialists.teacher.build_chat_model", return_value=mock_chat_model):
         with patch("runestone.agents.specialists.teacher.create_agent") as mock_create_agent:
             agent = TeacherAgent(mock_settings)
             agent.build_agent()
@@ -132,14 +132,14 @@ def test_openai_provider_configuration(mock_settings):
     """Test that OpenAI provider is configured correctly."""
     mock_settings.chat_provider = "openai"
 
-    with patch("runestone.agents.specialists.teacher.ChatOpenAI") as mock_chat_openai:
+    with patch("runestone.agents.llm.ChatOpenAI") as mock_chat_openai:
         with patch("runestone.agents.specialists.teacher.create_agent"):
             TeacherAgent(mock_settings)
 
             call_kwargs = mock_chat_openai.call_args[1]
             assert call_kwargs["model"] == "test-model"
             assert call_kwargs["api_key"] is not None
-    assert call_kwargs.get("base_url") is None
+            assert call_kwargs.get("base_url") is None
 
 
 def test_format_sources():
