@@ -13,7 +13,9 @@ class SpecialistRegistry:
     def __init__(self):
         self._specialists: OrderedDict[str, BaseSpecialist] = OrderedDict()
 
-    def register(self, specialist: BaseSpecialist) -> None:
+    def register(self, specialist: BaseSpecialist, overwrite: bool = False) -> None:
+        if not overwrite and specialist.name in self._specialists:
+            raise ValueError(f"Specialist '{specialist.name}' is already registered")
         self._specialists[specialist.name] = specialist
 
     def get(self, name: str) -> BaseSpecialist | None:

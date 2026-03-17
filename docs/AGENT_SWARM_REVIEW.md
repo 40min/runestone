@@ -265,7 +265,7 @@ from typing import Annotated
 info_for_teacher: Annotated[str, StringConstraints(max_length=INFO_FOR_TEACHER_MAX_CHARS)] = ""
 ```
 
-### `specialists/registry.py`
+### `specialists/registry.py` (fixed)
 
 **Well-implemented.** `OrderedDict` preserves registration order (good for deterministic routing order). The API is minimal and correct.
 
