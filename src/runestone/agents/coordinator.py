@@ -42,6 +42,13 @@ Specialists (typical ownership; some may not be available yet):
 - grammar (pre/post): finds relevant cheatsheet(s) and returns a distilled explanation; may be post if teacher decides
   to add a reference after composing the response.
 
+WordKeeper routing guidance:
+- Pre-response `word_keeper`: explicit requests like "save this word", "remember this phrase", "add this word".
+- Post-response `word_keeper`: the teacher reply highlights candidate vocabulary with phrasing like
+  "the key words here are", "good words to memorize", "let's keep these words in mind", or similar.
+- When routing `word_keeper`, remember it can extract translation/example context from the recent chat and from
+  `teacher_response`, so a small history window plus the teacher reply is usually enough.
+
 Never include `teacher` in `pre_response` or `post_response`. The teacher call is always executed by the manager.
 """
 

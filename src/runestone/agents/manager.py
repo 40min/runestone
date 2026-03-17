@@ -18,6 +18,7 @@ from runestone.agents.specialists.base import SpecialistContext
 from runestone.agents.specialists.memory_reader import MemoryReaderSpecialist
 from runestone.agents.specialists.registry import SpecialistRegistry
 from runestone.agents.specialists.teacher import TeacherAgent
+from runestone.agents.specialists.word_keeper import WordKeeperSpecialist
 from runestone.config import Settings
 from runestone.core.exceptions import RunestoneError
 from runestone.db.models import User
@@ -56,6 +57,7 @@ class AgentsManager:
         )
         self.registry = SpecialistRegistry()
         self.registry.register(MemoryReaderSpecialist())
+        self.registry.register(WordKeeperSpecialist(settings))
 
         logger.info(
             "[agents:manager] Initialized AgentsManager with provider=%s, model=%s, persona=%s",

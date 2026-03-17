@@ -262,6 +262,7 @@ def test_is_safe_url(mock_settings):
 def test_manager_registers_default_specialists(mock_settings):
     manager = AgentsManager(mock_settings)
     assert "memory_reader" in manager.registry.list_names()
+    assert "word_keeper" in manager.registry.list_names()
 
 
 @pytest.mark.anyio
@@ -375,7 +376,7 @@ async def test_post_response_results_are_forwarded_to_side_effect_service(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
     manager = AgentsManager(mock_settings)
-    manager.registry.register(_ActionSpecialist())
+    manager.registry.register(_ActionSpecialist(), overwrite=True)
     manager.coordinator.plan = AsyncMock(
         return_value=CoordinatorPlan(
             pre_response=[],

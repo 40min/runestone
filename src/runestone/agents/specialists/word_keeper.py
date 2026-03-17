@@ -1,0 +1,232 @@
+"""
+WordKeeper specialist responsible for vocabulary capture and prioritization.
+"""
+
+import json
+import logging
+import time
+from typing import Literal
+
+from langchain_core.exceptions import OutputParserException
+from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel, Field
+
+from runestone.agents.llm import build_chat_model
+from runestone.agents.specialists.base import BaseSpecialist, SpecialistAction, SpecialistContext, SpecialistResult
+from runestone.agents.tools.service_providers import provide_vocabulary_service
+from runestone.config import Settings
+
+logger = logging.getLogger(__name__)
+
+
+WORDKEEPER_SYSTEM_PROMPT = """
+You are WordKeeper, an internal specialist for a Swedish tutoring app.
+You do not speak to the student. You decide whether vocabulary should be saved.
+
+Rules:
+- Be conservative. If there is no clear save signal, return no candidates.
+- Return valid JSON matching the schema.
+- Use the latest user message, short history, and teacher response (if provided).
+- Pre-response: act only for explicit save/add/remember/keep-word requests.
+- Post-response: act only when the teacher clearly highlights key words, useful words, or words to memorize.
+- Prefer vocabulary already discussed in the chat.
+- For each candidate, extract `word_phrase` exactly as the Swedish word or phrase to save.
+- Prefer `translation` from the chat if it is already present.
+- Prefer `example_phrase` from the teacher response or recent chat if there is
+  already a good Swedish sentence using the word.
+- If `translation` is missing, infer a concise translation in `target_translation_language`.
+- If `example_phrase` is missing, generate a short natural Swedish example sentence using the word.
+- Always return both `translation` and `example_phrase` for every save candidate.
+- Never invent candidates just because a Swedish word appears in the conversation.
+"""
+
+
+class SaveCandidate(BaseModel):
+    """Candidate vocabulary item extracted from the current turn."""
+
+    word_phrase: str = Field(..., description="Swedish word or phrase to save")
+    translation: str | None = Field(None, description="Concise translation from the chat if available")
+    example_phrase: str | None = Field(None, description="Swedish example sentence from the chat if available")
+    reason: str = Field("", description="Brief reason why this word should be saved")
+
+
+class WordKeeperExtraction(BaseModel):
+    """Structured result for WordKeeper extraction."""
+
+    decision: Literal["no_action", "save_words"] = Field(..., description="Whether any words should be saved")
+    candidates: list[SaveCandidate] = Field(default_factory=list, description="Words selected for saving")
+
+
+class WordKeeperSpecialist(BaseSpecialist):
+    """Specialist that owns vocabulary capture and prioritization."""
+
+    def __init__(self, settings: Settings):
+        super().__init__(name="word_keeper")
+        self.settings = settings
+        self.model = build_chat_model(settings, temperature=0)
+        logger.info(
+            "[agents:wordkeeper] Initialized WordKeeperSpecialist with provider=%s, model=%s",
+            settings.chat_provider,
+            settings.chat_model,
+        )
+
+    async def run(self, context: SpecialistContext) -> SpecialistResult:
+        started = time.monotonic()
+        extraction = await self._extract_candidates(context)
+        if extraction.decision == "no_action" or not extraction.candidates:
+            return SpecialistResult(
+                status="no_action",
+                actions=[],
+                info_for_teacher="",
+                artifacts={"saved_words": [], "skipped_words": [], "save_candidates": []},
+            )
+
+        unique_candidates = self._dedupe_candidates(extraction.candidates)
+        saved_words: list[str] = []
+        skipped_words: list[dict[str, str]] = []
+        save_candidates: list[dict[str, str]] = []
+        action_counts = {"created": 0, "restored": 0, "prioritized": 0, "already_prioritized": 0}
+
+        try:
+            async with provide_vocabulary_service() as vocabulary_service:
+                for candidate in unique_candidates:
+                    completed = self._normalize_candidate(candidate)
+                    save_candidates.append(
+                        {
+                            "word_phrase": completed["word_phrase"],
+                            "translation": completed["translation"],
+                            "example_phrase": completed["example_phrase"],
+                            "reason": candidate.reason,
+                        }
+                    )
+
+                    if not completed["translation"] or not completed["example_phrase"]:
+                        skipped_words.append(
+                            {
+                                "word_phrase": candidate.word_phrase,
+                                "reason": "missing_required_fields_after_completion",
+                            }
+                        )
+                        continue
+
+                    result = await vocabulary_service.upsert_priority_word(
+                        word_phrase=completed["word_phrase"],
+                        translation=completed["translation"],
+                        example_phrase=completed["example_phrase"],
+                        user_id=context.user.id,
+                    )
+                    action = str(result.get("action", "prioritized"))
+                    if action not in action_counts:
+                        action = "prioritized"
+                    action_counts[action] += 1
+                    saved_words.append(completed["word_phrase"])
+
+        except Exception as exc:
+            latency_ms = int((time.monotonic() - started) * 1000)
+            logger.warning("[agents:wordkeeper] Failed to save words after %sms: %s", latency_ms, exc, exc_info=True)
+            return SpecialistResult(
+                status="error",
+                actions=[
+                    SpecialistAction(
+                        tool="prioritize_words_for_learning",
+                        status="error",
+                        summary="Failed to save vocabulary candidates",
+                    )
+                ],
+                info_for_teacher="",
+                artifacts={
+                    "saved_words": saved_words,
+                    "skipped_words": skipped_words,
+                    "save_candidates": save_candidates,
+                },
+            )
+
+        if not saved_words:
+            return SpecialistResult(
+                status="no_action",
+                actions=[],
+                info_for_teacher="",
+                artifacts={
+                    "saved_words": [],
+                    "skipped_words": skipped_words,
+                    "save_candidates": save_candidates,
+                },
+            )
+
+        summary = (
+            f"created={action_counts['created']}, restored={action_counts['restored']}, "
+            f"prioritized={action_counts['prioritized']}, already_prioritized={action_counts['already_prioritized']}"
+        )
+        logger.info(
+            "[agents:wordkeeper] Saved %s word(s): %s",
+            len(saved_words),
+            summary,
+        )
+        return SpecialistResult(
+            status="action_taken",
+            actions=[
+                SpecialistAction(
+                    tool="prioritize_words_for_learning",
+                    status="success",
+                    summary=summary,
+                )
+            ],
+            info_for_teacher=f"Saved {len(saved_words)} vocabulary item(s) for future recall.",
+            artifacts={
+                "saved_words": saved_words,
+                "skipped_words": skipped_words,
+                "save_candidates": save_candidates,
+                "action_counts": action_counts,
+            },
+        )
+
+    async def _extract_candidates(self, context: SpecialistContext) -> WordKeeperExtraction:
+        model = self.model.with_structured_output(WordKeeperExtraction)
+        payload = {
+            "message": context.message,
+            "history": [msg.model_dump(mode="json") for msg in context.history],
+            "teacher_response": context.teacher_response,
+            "routing_reason": context.routing_reason,
+            "phase": "post_response" if context.teacher_response else "pre_response",
+            "target_translation_language": self._target_translation_language(context),
+        }
+        try:
+            return await model.ainvoke(
+                [
+                    SystemMessage(content=WORDKEEPER_SYSTEM_PROMPT),
+                    HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
+                ]
+            )
+        except OutputParserException as exc:
+            logger.warning("[agents:wordkeeper] Extraction schema validation failed: %s", exc)
+            return WordKeeperExtraction(decision="no_action", candidates=[])
+        except Exception as exc:
+            logger.warning("[agents:wordkeeper] Extraction failed: %s", exc, exc_info=True)
+            return WordKeeperExtraction(decision="no_action", candidates=[])
+
+    @staticmethod
+    def _dedupe_candidates(candidates: list[SaveCandidate]) -> list[SaveCandidate]:
+        deduped: list[SaveCandidate] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            normalized = candidate.word_phrase.strip().casefold()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            deduped.append(candidate)
+        return deduped
+
+    @staticmethod
+    def _normalize_candidate(candidate: SaveCandidate) -> dict[str, str]:
+        return {
+            "word_phrase": candidate.word_phrase.strip(),
+            "translation": (candidate.translation or "").strip(),
+            "example_phrase": (candidate.example_phrase or "").strip(),
+        }
+
+    @staticmethod
+    def _target_translation_language(context: SpecialistContext) -> str:
+        mother_tongue = getattr(context.user, "mother_tongue", None)
+        if isinstance(mother_tongue, str) and mother_tongue.strip():
+            return mother_tongue.strip()
+        return "English"

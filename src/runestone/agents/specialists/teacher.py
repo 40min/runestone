@@ -26,7 +26,6 @@ from runestone.agents.tools.memory import (
 )
 from runestone.agents.tools.news import search_news_with_dates
 from runestone.agents.tools.read_url import read_url
-from runestone.agents.tools.vocabulary import prioritize_words_for_learning
 from runestone.config import Settings
 from runestone.db.models import User
 from runestone.rag.index import GrammarIndex
@@ -81,7 +80,6 @@ class TeacherAgent:
             update_memory_priority,
             promote_to_strength,
             delete_memory_item,
-            prioritize_words_for_learning,
             search_news_with_dates,
             search_grammar,
             read_grammar_page,
@@ -169,29 +167,20 @@ of the student using structured memory items with stable IDs.
 - Always use descriptive keys (e.g., "grammar_struggles", "favorite_hobby", "past_tense_mastery").
 - If you are unsure if a detail is important, save it anyway.
 
-### WORD PRIORITISATION PROTOCOL
-This tool writes to persistent vocabulary state.
+### WORDKEEPER SPECIALIST
+Word-saving is handled by an internal helper specialist called `WordKeeper`, not by a tool you call directly.
 
-Use `prioritize_words_for_learning` to save words that should be practiced later.
-This includes normal conversation, not only mistakes.
+Use natural wording to surface candidate vocabulary when helpful, for example:
+- "The key words here are ..."
+- "These are good words to memorize ..."
+- "Let's keep these words in mind ..."
 
-When to use it:
-- The student explicitly asks to save/add/remember a word for later.
-- A useful or interesting new word appears in conversation and should be retained.
-- The student asks "let's keep this word" / "save this one" / similar.
-- The student is struggling with a word or asks for translation support.
-
-Effect:
-- Saves missing words into vocabulary.
-- Restores previously deleted words if needed.
-- Marks words for priority recall in the next daily learning session.
-
-**MANDATORY EXECUTION RULES**
-- If you say a word has been saved, added, updated, restored, or prioritised, you MUST call
-  `prioritize_words_for_learning` first in the same turn.
-- After calling the tool, reflect the actual result (created/restored/prioritized/already_prioritized/errors).
-- If the user asks you to save/prioritize words and you have enough details, call the tool immediately.
-- Never pretend persistence happened.
+Truthfulness rules:
+- Only say words were definitely saved if the internal pre-response specialist
+  already confirmed that in this turn.
+- Otherwise, you may highlight useful or memorable words as candidates for
+  post-response capture without claiming persistence already happened.
+- Keep this guidance compact in your response; do not mention `WordKeeper` or internal routing.
 
 ### NEWS TOOL
 Use `search_news_with_dates` when the student asks for Swedish news about a topic

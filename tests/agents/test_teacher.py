@@ -63,11 +63,14 @@ def test_build_agent(mock_settings, mock_chat_model):
             call_kwargs = mock_create_agent.call_args[1]
             assert call_kwargs["model"] == mock_chat_model
             tools = mock_create_agent.call_args[1]["tools"]
-            assert len(tools) == 12
+            assert len(tools) == 11
+            assert all(getattr(tool, "name", None) != "prioritize_words_for_learning" for tool in tools)
             assert "MEMORY PROTOCOL" in call_kwargs["system_prompt"]
             assert "TOOL TRUTHFULNESS (MANDATORY)" in call_kwargs["system_prompt"]
-            assert "Never pretend persistence happened." in call_kwargs["system_prompt"]
-            assert "This includes normal conversation, not only mistakes." in call_kwargs["system_prompt"]
+            assert "only say words were definitely saved" in call_kwargs["system_prompt"].lower()
+            assert "WORDKEEPER SPECIALIST" in call_kwargs["system_prompt"]
+            assert "The key words here are" in call_kwargs["system_prompt"]
+            assert "not by a tool you call directly" in call_kwargs["system_prompt"]
 
 
 def test_format_pre_results_uses_info_for_teacher_only():
