@@ -70,9 +70,16 @@ class AgentSideEffectService:
                 user_id=user_id,
                 chat_id=chat_id,
                 phase="post_response",
+                commit=False,
             )
             if records:
-                await self.repository.add_many(user_id=user_id, chat_id=chat_id, records=records)
+                await self.repository.add_many(
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    records=records,
+                    commit=False,
+                )
+            await self.repository.db.commit()
             logger.info(
                 "[agents:side-effects] Replaced post-response side effects: "
                 "user_id=%s chat_id=%s deleted=%s inserted=%s",
@@ -82,9 +89,11 @@ class AgentSideEffectService:
                 len(records),
             )
         except (SQLAlchemyError, ValueError, RuntimeError) as e:
+            await self.repository.db.rollback()
             logger.warning(
                 "[agents:side-effects] Failed to replace post-response side effects for user %s chat %s: %s",
                 user_id,
                 chat_id,
                 e,
             )
+            raise

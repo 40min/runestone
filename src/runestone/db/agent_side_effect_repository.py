@@ -13,7 +13,13 @@ class AgentSideEffectRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def add_many(self, user_id: int, chat_id: str, records: list[dict[str, Any]]) -> list[AgentSideEffect]:
+    async def add_many(
+        self,
+        user_id: int,
+        chat_id: str,
+        records: list[dict[str, Any]],
+        commit: bool = True,
+    ) -> list[AgentSideEffect]:
         created: list[AgentSideEffect] = []
         for record in records:
             artifacts = record.get("artifacts")
@@ -31,7 +37,8 @@ class AgentSideEffectRepository:
             self.db.add(model)
             created.append(model)
 
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
 
         for model in created:
             await self.db.refresh(model)
@@ -62,14 +69,21 @@ class AgentSideEffectRepository:
         records = list(result.scalars().all())
         return list(reversed(records))
 
-    async def delete_for_chat_phase(self, user_id: int, chat_id: str, *, phase: str = "post_response") -> int:
+    async def delete_for_chat_phase(
+        self,
+        user_id: int,
+        chat_id: str,
+        phase: str = "post_response",
+        commit: bool = True,
+    ) -> int:
         stmt = delete(AgentSideEffect).where(
             AgentSideEffect.user_id == user_id,
             AgentSideEffect.chat_id == chat_id,
             AgentSideEffect.phase == phase,
         )
         result = await self.db.execute(stmt)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
         return int(result.rowcount or 0)
 
     @staticmethod
