@@ -20,7 +20,7 @@ def mock_settings():
     settings = MagicMock(spec=Settings)
     settings.chat_provider = "openrouter"
     settings.chat_model = "test-model"
-    settings.coordinator_model = None
+    settings.coordinator_model = "test-coordinator-model"
     settings.agent_persona = "default"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
@@ -257,6 +257,11 @@ def test_is_safe_url(mock_settings):
     assert manager._is_safe_url("http://localhost:8080") is False
     assert manager._is_safe_url("http://[invalid-ip]") is False
     assert manager._is_safe_url("http://user:pass@example.com") is False
+
+
+def test_manager_registers_default_specialists(mock_settings):
+    manager = AgentsManager(mock_settings)
+    assert "memory_reader" in manager.registry.list_names()
 
 
 @pytest.mark.anyio

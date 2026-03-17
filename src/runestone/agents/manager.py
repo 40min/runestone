@@ -15,6 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from runestone.agents.coordinator import CoordinatorAgent
 from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem
 from runestone.agents.specialists.base import SpecialistContext
+from runestone.agents.specialists.memory_reader import MemoryReaderSpecialist
 from runestone.agents.specialists.registry import SpecialistRegistry
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.config import Settings
@@ -54,6 +55,7 @@ class AgentsManager:
             grammar_service=grammar_service,
         )
         self.registry = SpecialistRegistry()
+        self.registry.register(MemoryReaderSpecialist())
 
         logger.info(
             "[agents:manager] Initialized AgentsManager with provider=%s, model=%s, persona=%s",
@@ -213,7 +215,7 @@ class AgentsManager:
                     "latency_ms": latency_ms,
                     "routing_reason": item.reason,
                 }
-            except (RunestoneError, ValueError, RuntimeError):
+            except Exception:
                 latency_ms = int((time.monotonic() - started) * 1000)
                 logger.warning("[agents:manager] Specialist '%s' failed", item.name, exc_info=True)
                 return {

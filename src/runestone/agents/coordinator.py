@@ -53,7 +53,7 @@ class CoordinatorAgent:
         self.settings = settings
         self.model = build_chat_model(
             settings,
-            model_name=settings.coordinator_model or settings.chat_model,
+            model_name=settings.coordinator_model,
             temperature=0,
         )
 
@@ -75,7 +75,7 @@ class CoordinatorAgent:
         model = self.model.with_structured_output(CoordinatorPlan)
         payload = {
             "message": message,
-            "history": [msg.model_dump() for msg in history],
+            "history": [msg.model_dump(mode="json") for msg in history],
             "available_specialists": available_specialists,
         }
 

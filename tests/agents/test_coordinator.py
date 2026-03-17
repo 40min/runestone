@@ -19,7 +19,7 @@ def mock_settings():
     settings = MagicMock(spec=Settings)
     settings.chat_provider = "openrouter"
     settings.chat_model = "grok-core"
-    settings.coordinator_model = None
+    settings.coordinator_model = "grok-coordinator"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
     return settings
@@ -43,13 +43,13 @@ def coordinator_agent(mock_settings, mock_chat_model):
         return agent
 
 
-def test_init_default_model(mock_settings, mock_chat_model):
-    """Test initialization with default chat model."""
+def test_init_uses_coordinator_model(mock_settings, mock_chat_model):
+    """Test initialization with required coordinator model."""
     with patch("runestone.agents.coordinator.build_chat_model", return_value=mock_chat_model) as mock_build:
         CoordinatorAgent(mock_settings)
         mock_build.assert_called_once_with(
             mock_settings,
-            model_name="grok-core",
+            model_name="grok-coordinator",
             temperature=0,
         )
 

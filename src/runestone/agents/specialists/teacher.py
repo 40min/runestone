@@ -411,4 +411,6 @@ to read its contents before deciding.
             return ""
         if len(text) <= max_len:
             return text
+        if max_len < 4:
+            return text[:max_len]
         return text[: max_len - 3] + "..."
