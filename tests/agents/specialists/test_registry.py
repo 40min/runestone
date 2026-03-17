@@ -1,9 +1,9 @@
-from runestone.agents.specialists.base import BaseSpecialist, SpecialistResult
+from runestone.agents.specialists.base import BaseSpecialist, SpecialistContext, SpecialistResult
 from runestone.agents.specialists.registry import SpecialistRegistry
 
 
 class _MockSpecialist(BaseSpecialist):
-    async def run(self, context: dict) -> SpecialistResult:
+    async def run(self, context: SpecialistContext) -> SpecialistResult:
         return SpecialistResult(status="no_action")
 
 

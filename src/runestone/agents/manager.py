@@ -14,6 +14,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from runestone.agents.coordinator import CoordinatorAgent
 from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem
+from runestone.agents.specialists.base import SpecialistContext
 from runestone.agents.specialists.registry import SpecialistRegistry
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.config import Settings
@@ -182,15 +183,15 @@ class AgentsManager:
         async def _invoke(item, specialist):
             started = time.monotonic()
             history_window = history[-item.chat_history_size :] if item.chat_history_size else []
-            context = {
-                "message": message,
-                "history": history_window,
-                "user": user,
-                "teacher_response": teacher_response,
-                "pre_results": pre_results or [],
-                "routing_reason": item.reason,
-                "chat_history_size": item.chat_history_size,
-            }
+            context = SpecialistContext(
+                message=message,
+                history=history_window,
+                user=user,
+                teacher_response=teacher_response,
+                pre_results=pre_results or [],
+                routing_reason=item.reason,
+                chat_history_size=item.chat_history_size,
+            )
             try:
                 result = await specialist.run(context)
                 latency_ms = int((time.monotonic() - started) * 1000)

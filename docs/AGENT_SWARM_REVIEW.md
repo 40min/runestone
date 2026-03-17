@@ -222,20 +222,20 @@ The agent used to be built in `__init__` via `self.agent = self.build_agent()`. 
 
 Resolution: the builder is now private as `_build_agent()`, and teacher tests were updated to target the private construction helper directly.
 
-### `specialists/base.py`
+### `specialists/base.py` (fixed)
 
 **Strengths:**
 - Clean Pydantic models with field descriptions
 - `INFO_FOR_TEACHER_MAX_CHARS = 3000` constant matches the contract exactly
-- Abstract `run(context: dict)` is a good minimal interface
+- Abstract `run(context: SpecialistContext)` now enforces a typed contract
 
 **Issues:**
 
-**A. `context: dict` is too loose for a contract**
+**A. `context: dict` is too loose for a contract (fixed)**
 
 The specialist interface passes everything as an untyped `dict`. If specialist authors forget to unpack `user`, `message`, or `teacher_response`, they get a `KeyError` at runtime rather than a type error at instantiation.
 
-**Recommendation:** Define a `SpecialistContext` dataclass or Pydantic model (even a simple one) and make `run(context: SpecialistContext)` typed. This makes misuse impossible.
+Resolution: Added `SpecialistContext` as a typed Pydantic input model and updated `BaseSpecialist.run` to `run(context: SpecialistContext)`. Manager orchestration now passes this typed context object to specialists.
 
 ```python
 class SpecialistContext(BaseModel):
@@ -248,7 +248,7 @@ class SpecialistContext(BaseModel):
     chat_history_size: int = 0
 ```
 
-**B. `SpecialistResult.info_for_teacher` uses `max_length` but Pydantic v2 does not enforce it**
+**B. `SpecialistResult.info_for_teacher` uses `max_length` but Pydantic v2 does not enforce it (fixed)**
 
 ```python
 info_for_teacher: str = Field("", ..., max_length=INFO_FOR_TEACHER_MAX_CHARS)
@@ -256,7 +256,7 @@ info_for_teacher: str = Field("", ..., max_length=INFO_FOR_TEACHER_MAX_CHARS)
 
 In Pydantic v2, `max_length` on `Field` for `str` is a JSON Schema annotation but is **not enforced at validation time** by default unless you use `Annotated[str, StringConstraints(max_length=...)]`. The `_truncate` in `_format_pre_results` compensates, but a downstream specialist could return an oversized string that passes `SpecialistResult.model_validate(...)` without error.
 
-**Recommendation:** Use `Annotated` with proper `StringConstraints`:
+Resolution: Migrated to `Annotated[str, StringConstraints(max_length=...)]` so validation enforces the `INFO_FOR_TEACHER_MAX_CHARS` bound at runtime.
 
 ```python
 from pydantic import StringConstraints

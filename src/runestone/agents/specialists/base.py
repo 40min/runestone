@@ -1,9 +1,23 @@
 from abc import ABC, abstractmethod
-from typing import Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
+
+from runestone.agents.schemas import ChatMessage
 
 INFO_FOR_TEACHER_MAX_CHARS = 3000
+
+
+class SpecialistContext(BaseModel):
+    """Typed specialist input passed from the manager."""
+
+    message: str
+    history: list[ChatMessage] = Field(default_factory=list)
+    user: Any
+    teacher_response: str | None = None
+    pre_results: list[dict[str, Any]] = Field(default_factory=list)
+    routing_reason: str = ""
+    chat_history_size: int = 0
 
 
 class SpecialistAction(BaseModel):
@@ -21,15 +35,14 @@ class SpecialistResult(BaseModel):
         ..., description="Overall outcome of the specialist run"
     )
     actions: list[SpecialistAction] = Field(default_factory=list, description="List of tool actions performed")
-    info_for_teacher: str = Field(
+    info_for_teacher: Annotated[str, StringConstraints(max_length=INFO_FOR_TEACHER_MAX_CHARS)] = Field(
         "",
         description=(
             "Primary, size-bounded information for the TeacherAgent. "
             "Must be safe to show to the teacher model and should avoid technical noise."
         ),
-        max_length=INFO_FOR_TEACHER_MAX_CHARS,
     )
-    artifacts: dict = Field(
+    artifacts: dict[str, Any] = Field(
         default_factory=dict,
         description=(
             "Structured, machine-oriented payload for orchestration, persistence, dedupe, or testing. "
@@ -45,12 +58,12 @@ class BaseSpecialist(ABC):
         self.name = name
 
     @abstractmethod
-    async def run(self, context: dict) -> SpecialistResult:
+    async def run(self, context: SpecialistContext) -> SpecialistResult:
         """
         Execute the specialist logic.
 
         Args:
-            context: Dictionary containing relevant conversation context and dependencies.
+            context: Typed specialist context containing relevant conversation data and dependencies.
 
         Returns:
             SpecialistResult: Structured output of the specialist run.

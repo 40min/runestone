@@ -9,7 +9,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from runestone.agents.manager import AgentsManager
 from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem, TeacherSideEffect
-from runestone.agents.specialists.base import BaseSpecialist, SpecialistResult
+from runestone.agents.specialists.base import BaseSpecialist, SpecialistContext, SpecialistResult
 from runestone.config import Settings
 from runestone.services.agent_side_effect_service import AgentSideEffectService
 
@@ -281,8 +281,8 @@ class _CaptureHistorySpecialist(BaseSpecialist):
         super().__init__(name="capture_history")
         self.seen_history = None
 
-    async def run(self, context: dict) -> SpecialistResult:
-        self.seen_history = context.get("history")
+    async def run(self, context: SpecialistContext) -> SpecialistResult:
+        self.seen_history = context.history
         return SpecialistResult(status="no_action")
 
 
@@ -357,7 +357,7 @@ class _ActionSpecialist(BaseSpecialist):
     def __init__(self):
         super().__init__(name="word_keeper")
 
-    async def run(self, context: dict) -> SpecialistResult:
+    async def run(self, context: SpecialistContext) -> SpecialistResult:
         return SpecialistResult(
             status="action_taken",
             info_for_teacher="Saved 2 vocabulary items.",
