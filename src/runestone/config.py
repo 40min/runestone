@@ -61,7 +61,8 @@ class Settings(BaseSettings):
 
     # Chat Agent Configuration
     chat_provider: str = "openrouter"
-    chat_model: str = "x-ai/grok-2-1212"
+    chat_model: str
+    coordinator_model: str
     agent_persona: str = "default"
 
     # Chat History Configuration

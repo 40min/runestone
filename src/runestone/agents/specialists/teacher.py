@@ -3,16 +3,16 @@ TeacherAgent specialist responsible for composing the final user response.
 """
 
 import logging
+from typing import Any
 from urllib.parse import urlparse
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
-from pydantic import SecretStr
 
+from runestone.agents.llm import build_chat_model
 from runestone.agents.prompts import load_persona
-from runestone.agents.schemas import ChatMessage
-from runestone.agents.specialists.base import BaseSpecialist, SpecialistResult
+from runestone.agents.schemas import ChatMessage, TeacherSideEffect
+from runestone.agents.specialists.base import INFO_FOR_TEACHER_MAX_CHARS
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.grammar import read_grammar_page, search_grammar
 from runestone.agents.tools.memory import (
@@ -35,10 +35,12 @@ from runestone.services.grammar_service import GrammarService
 logger = logging.getLogger(__name__)
 
 
-class TeacherAgent(BaseSpecialist):
+class TeacherAgent:
     """LLM-based teacher agent responsible for final response generation."""
 
     MAX_HISTORY_MESSAGES = 20
+    RECENT_SIDE_EFFECTS_MAX_ITEMS = 5
+    RECENT_SIDE_EFFECTS_MAX_CHARS = 2000
 
     def __init__(
         self,
@@ -46,12 +48,11 @@ class TeacherAgent(BaseSpecialist):
         grammar_index: GrammarIndex | None = None,
         grammar_service: GrammarService | None = None,
     ):
-        super().__init__(name="teacher")
         self.settings = settings
         self.grammar_index = grammar_index
         self.grammar_service = grammar_service
         self.persona = load_persona(settings.agent_persona)
-        self.agent = self.build_agent()
+        self.agent = self._build_agent()
 
         logger.info(
             "[agents:teacher] Initialized TeacherAgent with provider=%s, " "model=%s, persona=%s",
@@ -60,7 +61,7 @@ class TeacherAgent(BaseSpecialist):
             settings.agent_persona,
         )
 
-    def build_agent(self):
+    def _build_agent(self):
         """
         Build a ReAct agent with tools.
 
@@ -70,24 +71,7 @@ class TeacherAgent(BaseSpecialist):
         settings = self.settings
 
         # Initialize the LangChain chat model
-        if settings.chat_provider == "openrouter":
-            api_key = settings.openrouter_api_key
-            api_base = "https://openrouter.ai/api/v1"
-        elif settings.chat_provider == "openai":
-            api_key = settings.openai_api_key
-            api_base = None
-        else:
-            raise ValueError(f"Unsupported chat provider: {settings.chat_provider}")
-
-        if not api_key:
-            raise ValueError(f"API key for {settings.chat_provider} is not configured")
-
-        chat_model = ChatOpenAI(
-            model=settings.chat_model,
-            api_key=SecretStr(api_key) if api_key else None,
-            base_url=api_base,
-            temperature=1,
-        )
+        chat_model = build_chat_model(settings, temperature=1)
 
         tools = [
             start_student_info,
@@ -107,6 +91,16 @@ class TeacherAgent(BaseSpecialist):
         # Build system prompt with persona and tool instructions
         system_prompt = self.persona["system_prompt"]
         system_prompt += """
+
+### PRE-RESPONSE SPECIALISTS (INTERNAL)
+You may receive an internal system message starting with `[PRE_RESPONSE_SPECIALISTS]`.
+This is structured context produced by helper specialists executed before your response.
+
+Rules:
+- Treat it as internal context from helper specialists; use it when it improves your answer.
+- Do not mention the tag or raw internal formatting to the student.
+- Prefer `info_for_teacher` over raw artifacts.
+- If a specialist reports `status="error"`, ignore it and proceed normally.
 
 ### RESPONSE GUIDELINES
 - **NO ECHOING:** You are strictly forbidden from simply repeating the student's input.
@@ -235,23 +229,18 @@ to read its contents before deciding.
 
         return agent
 
-    async def run(self, context: dict) -> SpecialistResult:
-        """
-        Execute the teacher agent.
-        """
-        return await self.generate_response(
-            message=context["message"],
-            history=context.get("history", []),
-            user=context["user"],
-        )
-
     async def generate_response(
         self,
         message: str,
         history: list[ChatMessage],
         user: User,
-    ) -> SpecialistResult:
-        """Generate the final user-facing response as a `SpecialistResult`.
+        pre_results: list[dict] | None = None,
+        recent_side_effects: list[TeacherSideEffect] | None = None,
+    ) -> tuple[str, list]:
+        """Generate the final user-facing response.
+
+        Returns:
+            (response_text, final_messages)
 
         Note: source extraction is done by `AgentsManager`, not here.
         """
@@ -267,6 +256,12 @@ to read its contents before deciding.
                 "Use this information to personalize your teaching."
             )
             messages.append(SystemMessage(content=language_msg))
+
+        # Add pre-response specialist information
+        if pre_results:
+            messages.append(SystemMessage(content=self._format_pre_results(pre_results)))
+        if recent_side_effects:
+            messages.append(SystemMessage(content=self._format_recent_side_effects(recent_side_effects)))
 
         # Add conversation history
         truncated_history = history[-self.MAX_HISTORY_MESSAGES :] if history else []
@@ -296,15 +291,9 @@ to read its contents before deciding.
             if hasattr(msg, "content") and msg.content:
                 if hasattr(msg, "tool_call_id") or (hasattr(msg, "tool_calls") and msg.tool_calls):
                     continue
-                return SpecialistResult(
-                    status="action_taken",
-                    artifacts={"response": msg.content, "final_messages": final_messages},
-                )
+                return msg.content, final_messages
 
-        return SpecialistResult(
-            status="error",
-            artifacts={"response": "I'm sorry, I couldn't generate a response.", "final_messages": final_messages},
-        )
+        return "I'm sorry, I couldn't generate a response.", final_messages
 
     @staticmethod
     def _format_sources(sources: list[dict[str, str]]) -> str:
@@ -343,3 +332,85 @@ to read its contents before deciding.
                 else:
                     lines.append(f"{idx}. {title} - {url}")
         return "\n".join(lines)
+
+    @staticmethod
+    def _format_pre_results(pre_results: list[dict]) -> str:
+        lines = ["[PRE_RESPONSE_SPECIALISTS]"]
+
+        for item in pre_results:
+            name = item.get("name", "unknown")
+            result = item.get("result", {}) if isinstance(item, dict) else {}
+            status = result.get("status", "unknown")
+            info_for_teacher = result.get("info_for_teacher", "")
+            # Raw artifacts stay machine-oriented; teacher-facing context should
+            # come from info_for_teacher and recent side-effect summaries.
+            lines.append(
+                f"- {name} ({status}): "
+                f"{TeacherAgent._truncate_text(info_for_teacher, max_len=INFO_FOR_TEACHER_MAX_CHARS) or 'no info'}"
+            )
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_recent_side_effects(recent_side_effects: list[TeacherSideEffect]) -> str:
+        lines = [
+            "[RECENT_SIDE_EFFECTS]",
+            "These are internal confirmations of recent successful post-response actions from this chat.",
+            "Use them to answer follow-up questions truthfully, but do not mention the tag or raw structure.",
+        ]
+        remaining_chars = max(TeacherAgent.RECENT_SIDE_EFFECTS_MAX_CHARS - len("\n".join(lines)), 0)
+
+        for item in recent_side_effects[-TeacherAgent.RECENT_SIDE_EFFECTS_MAX_ITEMS :]:
+            if item.status != "action_taken":
+                continue
+            name = item.name
+            summary = TeacherAgent._side_effect_summary(item)
+            line = f"- {name}: {summary}"
+            if len(line) + 1 > remaining_chars:
+                line = TeacherAgent._truncate_text(line, max_len=max(remaining_chars, 0))
+            if not line:
+                break
+            lines.append(line)
+            remaining_chars -= len(line) + 1
+            if remaining_chars <= 0:
+                break
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _side_effect_summary(item: TeacherSideEffect) -> str:
+        info_for_teacher = item.info_for_teacher
+        truncated_info = TeacherAgent._truncate_text(info_for_teacher, max_len=INFO_FOR_TEACHER_MAX_CHARS)
+        if truncated_info:
+            return truncated_info
+
+        artifacts = item.artifacts
+        if isinstance(artifacts, dict) and artifacts:
+            artifact_parts = []
+            for key, value in list(artifacts.items())[:3]:
+                artifact_parts.append(f"{key}={TeacherAgent._stringify_artifact_value(value)}")
+            fallback = "artifacts: " + ", ".join(artifact_parts)
+            return TeacherAgent._truncate_text(fallback, max_len=240) or "action completed"
+
+        return "action completed"
+
+    @staticmethod
+    def _stringify_artifact_value(value: Any) -> str:
+        if isinstance(value, list):
+            preview = ", ".join(str(item) for item in value[:3])
+            return f"[{preview}]"
+        if isinstance(value, dict):
+            preview = ", ".join(f"{key}={value[key]}" for key in list(value.keys())[:3])
+            return f"{{{preview}}}"
+        return str(value)
+
+    @staticmethod
+    def _truncate_text(text: str, max_len: int = INFO_FOR_TEACHER_MAX_CHARS) -> str:
+        if not isinstance(text, str):
+            return ""
+        if max_len <= 0:
+            return ""
+        if len(text) <= max_len:
+            return text
+        if max_len < 4:
+            return text[:max_len]
+        return text[: max_len - 3] + "..."

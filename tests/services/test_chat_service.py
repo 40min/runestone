@@ -7,7 +7,9 @@ from uuid import uuid4
 
 import pytest
 
+from runestone.db.agent_side_effect_repository import AgentSideEffectRepository
 from runestone.db.chat_repository import ChatRepository
+from runestone.services.agent_side_effect_service import AgentSideEffectService
 from runestone.services.chat_service import ChatService
 
 
@@ -82,11 +84,13 @@ def chat_service(
 ):
     """Create a ChatService instance with real repository and mock agent/user services."""
     repository = ChatRepository(db_session)
+    side_effect_service = AgentSideEffectService(AgentSideEffectRepository(db_session))
     mock_settings = Mock()
     mock_settings.chat_history_retention_days = 7
     return ChatService(
         mock_settings,
         repository,
+        side_effect_service,
         mock_user_service,
         mock_agent_service,
         mock_processor,
@@ -124,6 +128,7 @@ async def test_process_message_orchestration(chat_service, db_with_test_user, mo
     kwargs = mock_agent_service.generate_response.call_args.kwargs
 
     assert kwargs["message"] == "Hej Björn"
+    assert kwargs["chat_id"] == user.current_chat_id
     assert kwargs["history"] == []
     assert kwargs["user"] == user
 

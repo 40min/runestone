@@ -1,8 +1,19 @@
 # Agent Swarm Contracts (Coordinator + Specialists)
 
-This document describes the proposed agent roles, tool access, structured contracts, and orchestration flow.
+This document describes the target agent roles, tool access, structured contracts, and orchestration flow.
+It also captures the current MS3 implementation status where behavior differs from the end-state target.
 
 For implementation milestones and delivery sequencing, see `AGENT_SWARM_PLAN.md`.
+
+## Current Implementation Status (MS3)
+
+This section reflects the branch implementation in `feat/agent-swarm-ms3`.
+
+- Live specialist registry currently includes `memory_reader` only.
+- `CoordinatorAgent` returns structured `CoordinatorPlan` with `pre_response`, `post_response`, and `audit`, and is constrained by `available_specialists`.
+- `AgentsManager` executes routed specialists concurrently, passes typed context windows (`chat_history_size`), and forwards `pre_results` to `TeacherAgent`.
+- Post-response side effects are persisted (`agent_side_effects` table) and recent successful records are injected into teacher context as internal `[RECENT_SIDE_EFFECTS]`.
+- `TeacherAgent` still owns direct tool access in MS3 as a transitional step; specialist-by-specialist tool extraction is planned in later milestones.
 
 ## Proposed Architecture
 
@@ -43,7 +54,7 @@ Use a thin `CoordinatorAgent` plus a separate `TeacherAgent` and specialist agen
 - `GrammarAgent`
   - owns grammar lookup decisions and cheatsheet reading
 
-### Tool Access Policy (First Cut)
+### Tool Access Policy (Target)
 
 - `TeacherAgent`: no tools (or strictly non-persistent, non-network helpers if absolutely required)
 - `CoordinatorAgent`: orchestration-only + direct utility reads (`read_url`) when needed
@@ -53,6 +64,12 @@ Use a thin `CoordinatorAgent` plus a separate `TeacherAgent` and specialist agen
 - `NewsAgent`: `search_news_with_dates`, `read_url`
 - `GrammarAgent`: `search_grammar`, `read_grammar_page`
 
+Current MS3 snapshot:
+
+- `TeacherAgent` still has direct access to memory/vocabulary/news/grammar/url tools.
+- `CoordinatorAgent` is orchestration-only (no direct tool calls).
+- `MemoryReader` runs via `MemoryItemService` access in specialist code.
+
 ## Structured Outputs
 
 Specialists should return structured results, not free-form prose as their primary output.
@@ -61,8 +78,8 @@ Each specialist result should include:
 
 - `status`: `no_action` | `action_taken` | `error`
 - `actions`: tool calls attempted and outcomes
-- `artifacts`: structured domain payload
-- `notes_for_teacher`: short summary for final response composition
+- `info_for_teacher`: short, size-bounded summary for final response composition (max 3000 characters)
+- `artifacts`: structured domain payload (machine-oriented; not for verbatim teacher consumption)
 
 Example:
 
@@ -79,7 +96,7 @@ Example:
   "artifacts": {
     "saved_words": ["avgorande", "forutsattning"]
   },
-  "notes_for_teacher": "Two useful vocabulary items were saved for future recall."
+  "info_for_teacher": "Two useful vocabulary items were saved for future recall."
 }
 ```
 
@@ -143,9 +160,28 @@ Behavior requirements:
 
 Output (suggested shape):
 
-- `pre_response`: list of specialists to invoke, with `reason`, `context_window`, and expected artifacts
-- `teacher_bundle`: the exact bundle passed into the `TeacherAgent`
+- `pre_response`: list of specialists to invoke, with `reason`, `chat_history_size`, and expected artifacts
+- (future) `teacher_hints`: optional hints/policies for what to send to the teacher
 - `post_response`: list of specialists to invoke after the teacher response
+
+### Teacher Input Hints (Future)
+
+Coordinator-generated "what to send to the teacher" should be treated carefully to avoid hallucinating
+conversation history or tool outputs.
+
+Preferred design direction:
+
+- Teacher input is built deterministically in code from the real request `message` + `history`.
+- Coordinator may optionally return a small, validated hints/policy object (examples: desired history window,
+  whether to include a memory summary, or whether to request a compact recap) that the manager may apply.
+- Coordinator should never echo raw `history` back as "teacher input", and should never invent tool results.
+
+### Size Limits (All Specialists)
+
+To keep prompts stable and avoid flooding the TeacherAgent with unrelated details:
+
+- Specialists must keep `info_for_teacher` to 3000 characters or fewer.
+- Specialists should put any larger structured data into `artifacts` and rely on downstream code to interpret it.
 
 ## Agent Contracts
 
@@ -160,7 +196,7 @@ Input:
 Output:
 
 - routing decisions
-- teacher input bundle
+- optional teacher input hints/policies (future)
 - audit trail of specialists invoked
 
 Responsibilities:
@@ -176,7 +212,7 @@ Input:
 - latest user message
 - recent chat history
 - compact outputs from pre-response specialists
-- optional side-effect confirmations from pre-response fast path only (e.g., WordKeeper ran pre-response successfully)
+- optional confirmations from recent persisted side effects (post-response records from prior turns)
 
 Output:
 
@@ -409,8 +445,8 @@ Add a consistent tag for agent-swarm logs so they are easy to grep:
 
 Recommended log examples:
 
-- `[agents:coordinator] Pre-phase selection: user_id=12 specialists=MemoryReader,NewsAgent`
-- `[agents:coordinator] Post-phase selection: user_id=12 specialists=WordKeeper`
+- `[agents:manager] Pre-phase selection: user_id=12 specialists=MemoryReader,NewsAgent`
+- `[agents:manager] Post-phase selection: user_id=12 specialists=WordKeeper`
 - `[agents:wordkeeper] Result: status=action_taken saved_words=2`
 - `[agents:memoryreader] Result: status=action_taken items_read=3`
 - `[agents:memorykeeper] Result: status=no_action reason=no durable memory in turn`

@@ -111,6 +111,29 @@ class ChatMessage(Base):
     __table_args__ = (Index("ix_chat_messages_user_id_chat_id_id", "user_id", "chat_id", "id"),)
 
 
+class AgentSideEffect(Base):
+    """Persisted internal side effects from specialist execution."""
+
+    __tablename__ = "agent_side_effects"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    chat_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    specialist_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    phase: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    info_for_teacher: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    artifacts_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    routing_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    __table_args__ = (
+        Index("ix_agent_side_effects_user_chat_created", "user_id", "chat_id", "created_at"),
+        Index("ix_agent_side_effects_user_chat_phase", "user_id", "chat_id", "phase"),
+    )
+
+
 class ChatSummary(Base):
     """Chat summary table model for future compression."""
 

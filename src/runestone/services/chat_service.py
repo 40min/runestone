@@ -12,6 +12,7 @@ from runestone.config import Settings
 from runestone.core.exceptions import RunestoneError
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.chat_repository import ChatRepository
+from runestone.services.agent_side_effect_service import AgentSideEffectService
 from runestone.services.tts_service import TTSService
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
@@ -26,6 +27,7 @@ class ChatService:
         self,
         settings: Settings,
         repository: ChatRepository,
+        side_effect_service: AgentSideEffectService,
         user_service: UserService,
         agent_service: AgentsManager,
         processor: RunestoneProcessor,
@@ -46,6 +48,7 @@ class ChatService:
         """
         self.settings = settings
         self.repository = repository
+        self.side_effect_service = side_effect_service
         self.user_service = user_service
         self.agent_service = agent_service
         self.processor = processor
@@ -104,9 +107,11 @@ class ChatService:
         # 5. Generate response using the ReAct agent
         assistant_text, sources = await self.agent_service.generate_response(
             message=message_text,
+            chat_id=chat_id,
             history=history[:-1],  # Exclude current message (it's passed separately)
             user=user,
             memory_item_service=self.memory_item_service,
+            side_effect_service=self.side_effect_service,
         )
 
         # 6. Save assistant message
@@ -177,9 +182,11 @@ Instructions:
         # 6. Generate response using the ReAct agent
         assistant_text, _sources = await self.agent_service.generate_response(
             message=translation_prompt,
+            chat_id=chat_id,
             history=history,
             user=user,
             memory_item_service=self.memory_item_service,
+            side_effect_service=self.side_effect_service,
         )
 
         # 7. Save assistant message

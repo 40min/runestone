@@ -2,12 +2,13 @@
 Tests for the TeacherAgent specialist.
 """
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from runestone.agents.schemas import ChatMessage
+from runestone.agents.schemas import ChatMessage, TeacherSideEffect
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.config import Settings
 
@@ -35,7 +36,7 @@ def mock_chat_model():
 @pytest.fixture
 def teacher_agent(mock_settings, mock_chat_model):
     """Create a TeacherAgent instance with mocked dependencies."""
-    with patch("runestone.agents.specialists.teacher.ChatOpenAI", return_value=mock_chat_model):
+    with patch("runestone.agents.specialists.teacher.build_chat_model", return_value=mock_chat_model):
         with patch("runestone.agents.specialists.teacher.create_agent"):
             agent = TeacherAgent(mock_settings)
             # Mock the agent executor
@@ -52,11 +53,11 @@ def mock_user():
 
 
 def test_build_agent(mock_settings, mock_chat_model):
-    """Test that build_agent creates a ReAct agent with tools."""
-    with patch("runestone.agents.specialists.teacher.ChatOpenAI", return_value=mock_chat_model):
+    """Test that _build_agent creates a ReAct agent with tools."""
+    with patch("runestone.agents.specialists.teacher.build_chat_model", return_value=mock_chat_model):
         with patch("runestone.agents.specialists.teacher.create_agent") as mock_create_agent:
             agent = TeacherAgent(mock_settings)
-            agent.build_agent()
+            agent._build_agent()
 
             mock_create_agent.assert_called()
             call_kwargs = mock_create_agent.call_args[1]
@@ -69,6 +70,51 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "This includes normal conversation, not only mistakes." in call_kwargs["system_prompt"]
 
 
+def test_format_pre_results_uses_info_for_teacher_only():
+    formatted = TeacherAgent._format_pre_results(
+        [
+            {
+                "name": "word_keeper",
+                "result": {
+                    "status": "action_taken",
+                    "info_for_teacher": "Saved 2 vocabulary items.",
+                    "artifacts": {"saved_words": ["ord", "fras"]},
+                },
+            }
+        ]
+    )
+
+    assert "[PRE_RESPONSE_SPECIALISTS]" in formatted
+    assert "Saved 2 vocabulary items." in formatted
+    assert "saved_words" not in formatted
+    assert "artifacts:" not in formatted
+
+
+def test_format_pre_results_uses_no_info_fallback():
+    formatted = TeacherAgent._format_pre_results(
+        [
+            {
+                "name": "memory_reader",
+                "result": {"status": "action_taken", "info_for_teacher": "", "artifacts": {"items": ["goal"]}},
+            }
+        ]
+    )
+
+    assert "- memory_reader (action_taken): no info" in formatted
+    assert "items" not in formatted
+
+
+def test_format_pre_results_truncates_long_summary():
+    long_summary = "x" * (TeacherAgent.RECENT_SIDE_EFFECTS_MAX_CHARS + 2000)
+
+    formatted = TeacherAgent._format_pre_results(
+        [{"name": "grammar", "result": {"status": "action_taken", "info_for_teacher": long_summary}}]
+    )
+
+    assert len(formatted) < len(long_summary)
+    assert formatted.endswith("...")
+
+
 @pytest.mark.anyio
 async def test_run_orchestration(teacher_agent, mock_user):
     """Test run orchestration logic."""
@@ -76,10 +122,10 @@ async def test_run_orchestration(teacher_agent, mock_user):
         "messages": [HumanMessage(content="Hello"), AIMessage(content="Hi there!")]
     }
 
-    result = await teacher_agent.generate_response(message="Hello", history=[], user=mock_user)
+    response, final_messages = await teacher_agent.generate_response(message="Hello", history=[], user=mock_user)
 
-    assert result.artifacts["response"] == "Hi there!"
-    assert isinstance(result.artifacts["final_messages"], list)
+    assert response == "Hi there!"
+    assert isinstance(final_messages, list)
     teacher_agent.agent.ainvoke.assert_called_once()
 
     invoke_args = teacher_agent.agent.ainvoke.call_args[0][0]
@@ -128,18 +174,116 @@ async def test_run_with_mother_tongue(teacher_agent, mock_user):
     assert any(isinstance(m, SystemMessage) and "Spanish" in m.content for m in messages)
 
 
+def test_format_recent_side_effects_prefers_info_for_teacher():
+    formatted = TeacherAgent._format_recent_side_effects(
+        [
+            TeacherSideEffect(
+                name="word_keeper",
+                phase="post_response",
+                status="action_taken",
+                info_for_teacher="Saved 2 vocabulary items.",
+                artifacts={"saved_words": ["ord", "fras"]},
+                routing_reason="save request",
+            )
+        ]
+    )
+
+    assert "[RECENT_SIDE_EFFECTS]" in formatted
+    assert "Saved 2 vocabulary items." in formatted
+    assert "artifacts:" not in formatted
+
+
+def test_format_recent_side_effects_falls_back_to_artifacts():
+    formatted = TeacherAgent._format_recent_side_effects(
+        [
+            TeacherSideEffect(
+                name="word_keeper",
+                phase="post_response",
+                status="action_taken",
+                info_for_teacher="",
+                artifacts={"saved_words": ["ord", "fras"]},
+                routing_reason="save request",
+            )
+        ]
+    )
+
+    assert "artifacts:" in formatted
+    assert "saved_words=[ord, fras]" in formatted
+
+
+def test_format_recent_side_effects_respects_budget():
+    formatted = TeacherAgent._format_recent_side_effects(
+        [
+            TeacherSideEffect(
+                name=f"specialist-{idx}",
+                phase="post_response",
+                status="action_taken",
+                info_for_teacher="x" * 700,
+                artifacts={},
+                routing_reason="test",
+            )
+            for idx in range(10)
+        ]
+    )
+
+    assert len(formatted) <= TeacherAgent.RECENT_SIDE_EFFECTS_MAX_CHARS + 200
+
+
+@pytest.mark.anyio
+async def test_generate_response_prompt_matches_fixture(teacher_agent, mock_user):
+    mock_user.mother_tongue = "Spanish"
+    history = [
+        ChatMessage(role="user", content="Old user msg"),
+        ChatMessage(
+            role="assistant",
+            content="Old bot msg",
+            sources=[{"title": "Nyhet", "url": "https://example.com", "date": "2026-02-05"}],
+        ),
+    ]
+    teacher_agent.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
+
+    await teacher_agent.generate_response(
+        message="Please confirm what you saved yesterday.",
+        history=history,
+        user=mock_user,
+        pre_results=[
+            {
+                "name": "word_keeper",
+                "result": {"status": "action_taken", "info_for_teacher": "Saved 2 vocabulary items."},
+            }
+        ],
+        recent_side_effects=[
+            TeacherSideEffect(
+                name="word_keeper",
+                phase="post_response",
+                status="action_taken",
+                info_for_teacher="Saved 2 vocabulary items.",
+                artifacts={"saved_words": ["ord", "fras"]},
+                routing_reason="save request",
+            )
+        ],
+    )
+
+    invoke_args = teacher_agent.agent.ainvoke.call_args[0][0]
+    actual_prompt = _serialize_messages(invoke_args["messages"])
+    expected_prompt = Path("tests/agents/fixtures/teacher_prompt_full.txt").read_text(encoding="utf-8").strip()
+
+    assert actual_prompt == expected_prompt
+    assert len(actual_prompt) > 0
+
+
 def test_openai_provider_configuration(mock_settings):
     """Test that OpenAI provider is configured correctly."""
     mock_settings.chat_provider = "openai"
 
-    with patch("runestone.agents.specialists.teacher.ChatOpenAI") as mock_chat_openai:
+    with patch("runestone.agents.llm.ChatOpenAI") as mock_chat_openai:
         with patch("runestone.agents.specialists.teacher.create_agent"):
             TeacherAgent(mock_settings)
 
             call_kwargs = mock_chat_openai.call_args[1]
             assert call_kwargs["model"] == "test-model"
             assert call_kwargs["api_key"] is not None
-    assert call_kwargs.get("base_url") is None
+            assert call_kwargs.get("base_url") is None
 
 
 def test_format_sources():
@@ -161,3 +305,18 @@ def test_format_sources():
     assert "Title 1" in formatted
     assert "Title 20" in formatted
     assert "Title 21" not in formatted
+
+
+def _serialize_messages(messages: list) -> str:
+    blocks = []
+    for message in messages:
+        if isinstance(message, SystemMessage):
+            role = "SYSTEM"
+        elif isinstance(message, HumanMessage):
+            role = "HUMAN"
+        elif isinstance(message, AIMessage):
+            role = "AI"
+        else:
+            role = message.__class__.__name__.upper()
+        blocks.append(f"[{role}]\n{message.content}")
+    return "\n\n".join(blocks).strip()

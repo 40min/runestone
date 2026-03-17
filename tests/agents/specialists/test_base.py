@@ -1,7 +1,13 @@
 import pytest
 from pydantic import ValidationError
 
-from runestone.agents.specialists.base import BaseSpecialist, SpecialistAction, SpecialistResult
+from runestone.agents.specialists.base import (
+    INFO_FOR_TEACHER_MAX_CHARS,
+    BaseSpecialist,
+    SpecialistAction,
+    SpecialistContext,
+    SpecialistResult,
+)
 
 
 def test_specialist_result_validation():
@@ -10,13 +16,13 @@ def test_specialist_result_validation():
     result = SpecialistResult(status="no_action")
     assert result.status == "no_action"
     assert result.actions == []
+    assert result.info_for_teacher == ""
     assert result.artifacts == {}
-    assert result.notes_for_teacher == ""
 
     # Valid result with actions and artifacts
     action = SpecialistAction(tool="test_tool", status="success", summary="did something")
     result = SpecialistResult(
-        status="action_taken", actions=[action], artifacts={"key": "value"}, notes_for_teacher="A note"
+        status="action_taken", actions=[action], artifacts={"key": "value"}, info_for_teacher="A note"
     )
     assert result.status == "action_taken"
     assert len(result.actions) == 1
@@ -26,6 +32,9 @@ def test_specialist_result_validation():
     # Invalid status
     with pytest.raises(ValidationError):
         SpecialistResult(status="invalid_status")
+
+    with pytest.raises(ValidationError):
+        SpecialistResult(status="no_action", info_for_teacher="x" * (INFO_FOR_TEACHER_MAX_CHARS + 1))
 
 
 def test_base_specialist_is_abstract():
@@ -37,7 +46,7 @@ def test_base_specialist_is_abstract():
 class MockSpecialist(BaseSpecialist):
     """A concrete implementation for testing."""
 
-    async def run(self, context: dict) -> SpecialistResult:
+    async def run(self, context: SpecialistContext) -> SpecialistResult:
         return SpecialistResult(status="no_action")
 
 
@@ -46,5 +55,6 @@ async def test_concrete_specialist_instantiation():
     """Test that a concrete specialist can be instantiated and run."""
     specialist = MockSpecialist(name="mock")
     assert specialist.name == "mock"
-    result = await specialist.run({})
+    context = SpecialistContext(message="Hi", history=[], user=object())
+    result = await specialist.run(context)
     assert result.status == "no_action"
