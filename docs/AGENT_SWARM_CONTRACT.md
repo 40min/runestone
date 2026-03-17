@@ -1,8 +1,19 @@
 # Agent Swarm Contracts (Coordinator + Specialists)
 
-This document describes the proposed agent roles, tool access, structured contracts, and orchestration flow.
+This document describes the target agent roles, tool access, structured contracts, and orchestration flow.
+It also captures the current MS3 implementation status where behavior differs from the end-state target.
 
 For implementation milestones and delivery sequencing, see `AGENT_SWARM_PLAN.md`.
+
+## Current Implementation Status (MS3)
+
+This section reflects the branch implementation in `feat/agent-swarm-ms3`.
+
+- Live specialist registry currently includes `memory_reader` only.
+- `CoordinatorAgent` returns structured `CoordinatorPlan` with `pre_response`, `post_response`, and `audit`, and is constrained by `available_specialists`.
+- `AgentsManager` executes routed specialists concurrently, passes typed context windows (`chat_history_size`), and forwards `pre_results` to `TeacherAgent`.
+- Post-response side effects are persisted (`agent_side_effects` table) and recent successful records are injected into teacher context as internal `[RECENT_SIDE_EFFECTS]`.
+- `TeacherAgent` still owns direct tool access in MS3 as a transitional step; specialist-by-specialist tool extraction is planned in later milestones.
 
 ## Proposed Architecture
 
@@ -43,7 +54,7 @@ Use a thin `CoordinatorAgent` plus a separate `TeacherAgent` and specialist agen
 - `GrammarAgent`
   - owns grammar lookup decisions and cheatsheet reading
 
-### Tool Access Policy (First Cut)
+### Tool Access Policy (Target)
 
 - `TeacherAgent`: no tools (or strictly non-persistent, non-network helpers if absolutely required)
 - `CoordinatorAgent`: orchestration-only + direct utility reads (`read_url`) when needed
@@ -52,6 +63,12 @@ Use a thin `CoordinatorAgent` plus a separate `TeacherAgent` and specialist agen
 - `WordKeeper`: `prioritize_words_for_learning`
 - `NewsAgent`: `search_news_with_dates`, `read_url`
 - `GrammarAgent`: `search_grammar`, `read_grammar_page`
+
+Current MS3 snapshot:
+
+- `TeacherAgent` still has direct access to memory/vocabulary/news/grammar/url tools.
+- `CoordinatorAgent` is orchestration-only (no direct tool calls).
+- `MemoryReader` runs via `MemoryItemService` access in specialist code.
 
 ## Structured Outputs
 
@@ -179,7 +196,7 @@ Input:
 Output:
 
 - routing decisions
-- teacher input bundle
+- optional teacher input hints/policies (future)
 - audit trail of specialists invoked
 
 Responsibilities:
@@ -195,7 +212,7 @@ Input:
 - latest user message
 - recent chat history
 - compact outputs from pre-response specialists
-- optional side-effect confirmations from pre-response fast path only (e.g., WordKeeper ran pre-response successfully)
+- optional confirmations from recent persisted side effects (post-response records from prior turns)
 
 Output:
 
@@ -428,8 +445,8 @@ Add a consistent tag for agent-swarm logs so they are easy to grep:
 
 Recommended log examples:
 
-- `[agents:coordinator] Pre-phase selection: user_id=12 specialists=MemoryReader,NewsAgent`
-- `[agents:coordinator] Post-phase selection: user_id=12 specialists=WordKeeper`
+- `[agents:manager] Pre-phase selection: user_id=12 specialists=MemoryReader,NewsAgent`
+- `[agents:manager] Post-phase selection: user_id=12 specialists=WordKeeper`
 - `[agents:wordkeeper] Result: status=action_taken saved_words=2`
 - `[agents:memoryreader] Result: status=action_taken items_read=3`
 - `[agents:memorykeeper] Result: status=no_action reason=no durable memory in turn`
