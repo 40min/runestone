@@ -53,11 +53,11 @@ def mock_user():
 
 
 def test_build_agent(mock_settings, mock_chat_model):
-    """Test that build_agent creates a ReAct agent with tools."""
+    """Test that _build_agent creates a ReAct agent with tools."""
     with patch("runestone.agents.specialists.teacher.build_chat_model", return_value=mock_chat_model):
         with patch("runestone.agents.specialists.teacher.create_agent") as mock_create_agent:
             agent = TeacherAgent(mock_settings)
-            agent.build_agent()
+            agent._build_agent()
 
             mock_create_agent.assert_called()
             call_kwargs = mock_create_agent.call_args[1]
@@ -68,6 +68,51 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "TOOL TRUTHFULNESS (MANDATORY)" in call_kwargs["system_prompt"]
             assert "Never pretend persistence happened." in call_kwargs["system_prompt"]
             assert "This includes normal conversation, not only mistakes." in call_kwargs["system_prompt"]
+
+
+def test_format_pre_results_uses_info_for_teacher_only():
+    formatted = TeacherAgent._format_pre_results(
+        [
+            {
+                "name": "word_keeper",
+                "result": {
+                    "status": "action_taken",
+                    "info_for_teacher": "Saved 2 vocabulary items.",
+                    "artifacts": {"saved_words": ["ord", "fras"]},
+                },
+            }
+        ]
+    )
+
+    assert "[PRE_RESPONSE_SPECIALISTS]" in formatted
+    assert "Saved 2 vocabulary items." in formatted
+    assert "saved_words" not in formatted
+    assert "artifacts:" not in formatted
+
+
+def test_format_pre_results_uses_no_info_fallback():
+    formatted = TeacherAgent._format_pre_results(
+        [
+            {
+                "name": "memory_reader",
+                "result": {"status": "action_taken", "info_for_teacher": "", "artifacts": {"items": ["goal"]}},
+            }
+        ]
+    )
+
+    assert "- memory_reader (action_taken): no info" in formatted
+    assert "items" not in formatted
+
+
+def test_format_pre_results_truncates_long_summary():
+    long_summary = "x" * (TeacherAgent.RECENT_SIDE_EFFECTS_MAX_CHARS + 2000)
+
+    formatted = TeacherAgent._format_pre_results(
+        [{"name": "grammar", "result": {"status": "action_taken", "info_for_teacher": long_summary}}]
+    )
+
+    assert len(formatted) < len(long_summary)
+    assert formatted.endswith("...")
 
 
 @pytest.mark.anyio

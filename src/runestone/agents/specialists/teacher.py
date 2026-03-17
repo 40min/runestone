@@ -52,7 +52,7 @@ class TeacherAgent:
         self.grammar_index = grammar_index
         self.grammar_service = grammar_service
         self.persona = load_persona(settings.agent_persona)
-        self.agent = self.build_agent()
+        self.agent = self._build_agent()
 
         logger.info(
             "[agents:teacher] Initialized TeacherAgent with provider=%s, " "model=%s, persona=%s",
@@ -61,7 +61,7 @@ class TeacherAgent:
             settings.agent_persona,
         )
 
-    def build_agent(self):
+    def _build_agent(self):
         """
         Build a ReAct agent with tools.
 
@@ -342,7 +342,12 @@ to read its contents before deciding.
             result = item.get("result", {}) if isinstance(item, dict) else {}
             status = result.get("status", "unknown")
             info_for_teacher = result.get("info_for_teacher", "")
-            lines.append(f"- {name} ({status}): {TeacherAgent._truncate_text(info_for_teacher) or 'no info'}")
+            # Raw artifacts stay machine-oriented; teacher-facing context should
+            # come from info_for_teacher and recent side-effect summaries.
+            lines.append(
+                f"- {name} ({status}): "
+                f"{TeacherAgent._truncate_text(info_for_teacher, max_len=INFO_FOR_TEACHER_MAX_CHARS) or 'no info'}"
+            )
         return "\n".join(lines)
 
     @staticmethod

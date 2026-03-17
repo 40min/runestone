@@ -130,7 +130,7 @@ If the LLM returns malformed JSON, `with_structured_output` raises an exception,
 
 **Recommendation:** Catch and log `OutputParserException` separately from network errors for better observability.
 
-### `manager.py`
+### `manager.py` (fixed)
 
 **Strengths:**
 - Phase A→B→C→D→E→F is clean and readable
@@ -140,7 +140,7 @@ If the LLM returns malformed JSON, `with_structured_output` raises an exception,
 
 **Issues:**
 
-**A. Log prefix mismatch — coordinator logs emitted from manager**
+**A. Log prefix mismatch — coordinator logs emitted from manager** (fixed)
 
 ```python
 # manager.py lines 108-111 and 132-135
@@ -152,7 +152,7 @@ These lines use the `[agents:coordinator]` prefix but are emitted by the **manag
 
 **Recommendation:** Move the routing selection log lines into `coordinator.py`'s `plan()` method (they have access to the plan result there), and use `[agents:manager]` for anything emitted in `manager.py`.
 
-**B. `_run_specialists` type annotation is untyped**
+**B. `_run_specialists` type annotation is untyped** (fixed)
 
 ```python
 async def _run_specialists(self, routing_items, ...) -> list[dict]:
@@ -160,7 +160,7 @@ async def _run_specialists(self, routing_items, ...) -> list[dict]:
 
 `routing_items` should be annotated `list[RoutingItem]`.
 
-**C. Missing log for post-response specialist results**
+**C. Missing log for post-response specialist results** (fixed)
 
 Post-response specialist results are gathered but unlike pre-response, they are never stored or logged as "side-effects records" (Phase F from the contract). The spec says:
 
@@ -170,7 +170,7 @@ This Phase F persistence is not implemented. The results are gathered and then d
 
 **Recommendation:** At minimum, log the post-response results as a structured summary entry, and add a comment that Phase F persistence is deferred (note which MS it belongs to).
 
-### `specialists/teacher.py`
+### `specialists/teacher.py` (fixed)
 
 **Strengths:**
 - Clean decoupling from `BaseSpecialist` (correct for MS3 — teacher is not a routable specialist)
@@ -180,37 +180,47 @@ This Phase F persistence is not implemented. The results are gathered and then d
 
 **Issues:**
 
-**A. `_format_pre_results` only surfaces `info_for_teacher`, drops `artifacts`**
+**A. `_format_pre_results` only surfaces `info_for_teacher`, drops `artifacts` (fixed)**
 
 The formatted context sent to the teacher is:
 
 ```python
-lines.append(f"- {name} ({status}): {_truncate(info_for_teacher) or 'no info'}")
+lines.append(
+    f"- {name} ({status}): "
+    f"{TeacherAgent._truncate_text(info_for_teacher, max_len=INFO_FOR_TEACHER_MAX_CHARS) or 'no info'}"
+)
 ```
 
-Artifacts are completely invisible to the teacher. This is intentional (artifacts are machine-oriented) — but the teacher has no way to know *which* words were saved, *which* memory was read, etc. The contract says:
+Resolution:
+- Keep raw `artifacts` out of `_format_pre_results`; they remain machine-oriented.
+- Teacher-visible tool/action context is now expected to come from specialist-authored `info_for_teacher` and manager-injected `[RECENT_SIDE_EFFECTS]`.
+- Unit tests now lock in that pre-response formatting does not leak raw artifacts.
+
+The contract says:
 
 > `info_for_teacher`: primary, size-bounded information for the TeacherAgent. Prefer `info_for_teacher` over raw artifacts.
 
-The design is correct; this is a reminder that **specialist implementations must put useful teacher-facing summaries in `info_for_teacher`**, not just `artifacts`. This should be called out in the specialist authoring guide.
+This item is now resolved without widening the teacher prompt contract.
 
-**B. `_format_pre_results` is declared `@staticmethod` but references `TeacherAgent.PRE_RESPONSE_INFO_MAX_CHARS`**
+**B. `_format_pre_results` is declared `@staticmethod` but references `TeacherAgent.PRE_RESPONSE_INFO_MAX_CHARS` (fixed)**
 
 ```python
 @staticmethod
 def _format_pre_results(pre_results: list[dict]) -> str:
-    def _truncate(text: str, max_len: int = TeacherAgent.PRE_RESPONSE_INFO_MAX_CHARS) -> str:
+    ...
 ```
 
 A `@staticmethod` referencing the class by name is a code smell — it's a hidden coupling to the class. If the method is moved, renamed, or subclassed, this silently breaks.
 
-**Recommendation:** Pass `max_len` as an explicit parameter or use a module-level constant (`INFO_FOR_TEACHER_MAX_CHARS` already exists in `base.py`).
+Resolution: `_format_pre_results` now truncates via the shared `INFO_FOR_TEACHER_MAX_CHARS` constant directly, removing the class-name coupling.
 
-**C. `build_agent` is called in `__init__` but is also a public method**
+**C. `build_agent` is called in `__init__` but is also a public method (fixed)**
 
-The agent gets built once in `__init__` via `self.agent = self.build_agent()`. `build_agent` is public, which implies it might be called by tests or external code — but calling it again replaces the agent. Either:
+The agent used to be built in `__init__` via `self.agent = self.build_agent()`. Because `build_agent` was public, tests or external code could call it again and implicitly replace the agent. Either:
 - Make it `_build_agent` (private), or
 - Document that it should only be called once and is exposed only for testability.
+
+Resolution: the builder is now private as `_build_agent()`, and teacher tests were updated to target the private construction helper directly.
 
 ### `specialists/base.py`
 
