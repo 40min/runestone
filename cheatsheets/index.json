@@ -538,5 +538,17 @@
     ],
     "annotation": "Guide to Swedish relative clauses with sentence adverbials (satsadverbial), explaining the placement of 'inte', 'aldrig', etc.",
     "path": "word_order/relativa_bisatser_med_satsadverbial.md"
+  },
+  {
+    "url": "{HOST}/?view=grammar&cheatsheet=adjectives%2Fadjectiv_plus_substantive",
+    "tags": [
+      "adjectives",
+      "nouns",
+      "grammar",
+      "substantive",
+      "combinations"
+    ],
+    "annotation": "A guide to the three combinations of Swedish Adjective + Substantive: Quantity, Definite, and Possessive.",
+    "path": "adjectives/adjectiv_plus_substantive.md"
   }
 ]
