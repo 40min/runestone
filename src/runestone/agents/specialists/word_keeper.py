@@ -86,6 +86,7 @@ class WordKeeperSpecialist(BaseSpecialist):
         skipped_words: list[dict[str, str]] = []
         save_candidates: list[dict[str, str]] = []
         action_counts = {"created": 0, "restored": 0, "prioritized": 0, "already_prioritized": 0}
+        service_error_count = 0
 
         try:
             async with provide_vocabulary_service() as vocabulary_service:
@@ -109,12 +110,29 @@ class WordKeeperSpecialist(BaseSpecialist):
                         )
                         continue
 
-                    result = await vocabulary_service.upsert_priority_word(
-                        word_phrase=completed["word_phrase"],
-                        translation=completed["translation"],
-                        example_phrase=completed["example_phrase"],
-                        user_id=context.user.id,
-                    )
+                    try:
+                        result = await vocabulary_service.upsert_priority_word(
+                            word_phrase=completed["word_phrase"],
+                            translation=completed["translation"],
+                            example_phrase=completed["example_phrase"],
+                            user_id=context.user.id,
+                        )
+                    except Exception as exc:
+                        service_error_count += 1
+                        logger.warning(
+                            "[agents:wordkeeper] Failed to save word '%s': %s",
+                            completed["word_phrase"],
+                            exc,
+                            exc_info=True,
+                        )
+                        skipped_words.append(
+                            {
+                                "word_phrase": completed["word_phrase"],
+                                "reason": f"vocabulary_service_error: {type(exc).__name__}",
+                            }
+                        )
+                        continue
+
                     action = str(result.get("action", "prioritized"))
                     if action not in action_counts:
                         action = "prioritized"
@@ -146,6 +164,24 @@ class WordKeeperSpecialist(BaseSpecialist):
                 },
             )
 
+        if not saved_words and service_error_count > 0:
+            return SpecialistResult(
+                status="error",
+                actions=[
+                    SpecialistAction(
+                        tool="prioritize_words_for_learning",
+                        status="error",
+                        summary="Failed to save vocabulary candidates",
+                    )
+                ],
+                info_for_teacher="",
+                artifacts={
+                    "saved_words": [],
+                    "skipped_words": skipped_words,
+                    "save_candidates": save_candidates,
+                },
+            )
+
         if not saved_words:
             return SpecialistResult(
                 status="no_action",
@@ -167,6 +203,9 @@ class WordKeeperSpecialist(BaseSpecialist):
             len(saved_words),
             summary,
         )
+        info_for_teacher = f"Saved {len(saved_words)} vocabulary item(s) for future recall."
+        if service_error_count:
+            info_for_teacher += f" Skipped {service_error_count} item(s) due to internal errors."
         return SpecialistResult(
             status="action_taken",
             actions=[
@@ -176,7 +215,7 @@ class WordKeeperSpecialist(BaseSpecialist):
                     summary=summary,
                 )
             ],
-            info_for_teacher=f"Saved {len(saved_words)} vocabulary item(s) for future recall.",
+            info_for_teacher=info_for_teacher,
             artifacts={
                 "saved_words": saved_words,
                 "skipped_words": skipped_words,

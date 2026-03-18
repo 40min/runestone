@@ -257,10 +257,16 @@ async def test_word_keeper_reports_partial_save_when_later_candidate_fails(speci
             )
         )
 
-    assert result.status == "error"
-    assert result.actions[0].status == "error"
+    assert result.status == "action_taken"
+    assert result.actions[0].status == "success"
     assert result.artifacts["saved_words"] == ["avgorande"]
-    assert result.info_for_teacher == "Partially saved 1 vocabulary item(s) before an internal error."
+    assert len(result.artifacts["skipped_words"]) == 1
+    assert result.artifacts["skipped_words"][0]["word_phrase"] == "noggrann"
+    assert result.artifacts["skipped_words"][0]["reason"].startswith("vocabulary_service_error:")
+    assert (
+        result.info_for_teacher
+        == "Saved 1 vocabulary item(s) for future recall. Skipped 1 item(s) due to internal errors."
+    )
 
 
 @pytest.mark.anyio
