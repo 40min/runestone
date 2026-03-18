@@ -199,8 +199,9 @@ class WordKeeperSpecialist(BaseSpecialist):
             f"prioritized={action_counts['prioritized']}, already_prioritized={action_counts['already_prioritized']}"
         )
         logger.info(
-            "[agents:wordkeeper] Saved %s word(s): %s",
+            "[agents:wordkeeper] Saved %s word(s) in %sms: %s",
             len(saved_words),
+            int((time.monotonic() - started) * 1000),
             summary,
         )
         info_for_teacher = f"Saved {len(saved_words)} vocabulary item(s) for future recall."
