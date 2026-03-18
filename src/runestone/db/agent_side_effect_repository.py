@@ -39,9 +39,14 @@ class AgentSideEffectRepository:
 
         if commit:
             await self.db.commit()
+            for model in created:
+                await self.db.refresh(model)
+            return created
 
-        for model in created:
-            await self.db.refresh(model)
+        # Keep inserts in the current transaction while making instances persistent.
+        # This allows callers to compose add/delete work and commit once.
+        if created:
+            await self.db.flush()
 
         return created
 

@@ -130,7 +130,7 @@ async def test_word_keeper_prefers_chat_fields_for_save_candidate(specialist, mo
 
 
 @pytest.mark.anyio
-async def test_word_keeper_fills_missing_fields_before_save(specialist, mock_chat_model, mock_user):
+async def test_word_keeper_saves_post_response_candidate(specialist, mock_chat_model, mock_user):
     mock_llm = mock_chat_model.with_structured_output.return_value
     mock_llm.ainvoke.return_value = WordKeeperExtraction(
         decision="save_words",
@@ -169,6 +169,45 @@ async def test_word_keeper_fills_missing_fields_before_save(specialist, mock_cha
         example_phrase="En viktig forutsattning ar tid.",
         user_id=12,
     )
+
+
+@pytest.mark.anyio
+async def test_word_keeper_skips_candidate_with_missing_required_fields(specialist, mock_chat_model, mock_user):
+    mock_llm = mock_chat_model.with_structured_output.return_value
+    mock_llm.ainvoke.return_value = WordKeeperExtraction(
+        decision="save_words",
+        candidates=[
+            SaveCandidate(
+                word_phrase="forutsattning",
+                translation=None,
+                example_phrase="En viktig forutsattning ar tid.",
+                reason="teacher highlighted key words",
+            )
+        ],
+    )
+    vocabulary_service = MagicMock()
+    vocabulary_service.upsert_priority_word = AsyncMock()
+
+    with patch(
+        "runestone.agents.specialists.word_keeper.provide_vocabulary_service",
+        _service_provider(vocabulary_service),
+    ):
+        result = await specialist.run(
+            SpecialistContext(
+                message="Explain this word",
+                history=[],
+                user=mock_user,
+                teacher_response="These are good words to memorize: forutsattning.",
+                routing_reason="teacher highlighted words to memorize",
+            )
+        )
+
+    assert result.status == "no_action"
+    assert result.artifacts["saved_words"] == []
+    assert result.artifacts["skipped_words"] == [
+        {"word_phrase": "forutsattning", "reason": "missing_required_fields_after_completion"}
+    ]
+    vocabulary_service.upsert_priority_word.assert_not_awaited()
 
 
 @pytest.mark.anyio

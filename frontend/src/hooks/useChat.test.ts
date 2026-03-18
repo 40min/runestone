@@ -374,6 +374,124 @@ describe('useChat', () => {
     }
   });
 
+  it('should back off polling when no new history arrives', async () => {
+    vi.useFakeTimers();
+
+    mockFetch.mockImplementation((url, options) => {
+      if (options?.method === 'GET' || !options?.method) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(buildHistoryPayload([], 'chat-1', 0)),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+
+    try {
+      await act(async () => {
+        renderHook(() => useChat());
+        await Promise.resolve();
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(5000);
+        await Promise.resolve();
+      });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        vi.advanceTimersByTime(9999);
+        await Promise.resolve();
+      });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+        await Promise.resolve();
+      });
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+
+      await act(async () => {
+        vi.advanceTimersByTime(20000);
+        await Promise.resolve();
+      });
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('should reset polling interval after receiving new history', async () => {
+    vi.useFakeTimers();
+    let historyCallCount = 0;
+
+    mockFetch.mockImplementation((url, options) => {
+      if (options?.method === 'GET' || !options?.method) {
+        historyCallCount++;
+        if (historyCallCount === 3) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve(
+                buildHistoryPayload([{ id: 1, role: 'assistant', content: 'New message' }], 'chat-1', 1)
+              ),
+          });
+        }
+
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(buildHistoryPayload([], 'chat-1', 0)),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+
+    try {
+      await act(async () => {
+        renderHook(() => useChat());
+        await Promise.resolve();
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(5000);
+        await Promise.resolve();
+      });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        vi.advanceTimersByTime(10000);
+        await Promise.resolve();
+      });
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+
+      await act(async () => {
+        vi.advanceTimersByTime(4999);
+        await Promise.resolve();
+      });
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+        await Promise.resolve();
+      });
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('should trim whitespace from messages', async () => {
     mockFetch.mockImplementation((url) => {
       if (url.includes('/api/chat/history')) {
