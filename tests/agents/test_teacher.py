@@ -9,6 +9,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from runestone.agents.schemas import ChatMessage, TeacherSideEffect
+from runestone.agents.specialists.base import INFO_FOR_TEACHER_MAX_CHARS
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
 
@@ -123,7 +124,7 @@ def test_format_pre_results_uses_no_info_fallback():
 
 
 def test_format_pre_results_truncates_long_summary():
-    long_summary = "x" * (TeacherAgent.RECENT_SIDE_EFFECTS_MAX_CHARS + 2000)
+    long_summary = "x" * (INFO_FOR_TEACHER_MAX_CHARS + 2000)
 
     formatted = TeacherAgent._format_pre_results(
         [{"name": "grammar", "result": {"status": "action_taken", "info_for_teacher": long_summary}}]
@@ -131,6 +132,17 @@ def test_format_pre_results_truncates_long_summary():
 
     assert len(formatted) < len(long_summary)
     assert formatted.endswith("...")
+
+
+def test_format_pre_results_logs_when_summary_is_truncated(caplog):
+    long_summary = "x" * (INFO_FOR_TEACHER_MAX_CHARS + 2000)
+
+    with caplog.at_level("WARNING"):
+        TeacherAgent._format_pre_results(
+            [{"name": "grammar", "result": {"status": "action_taken", "info_for_teacher": long_summary}}]
+        )
+
+    assert "Truncated text for pre_result:grammar" in caplog.text
 
 
 @pytest.mark.anyio
@@ -245,6 +257,37 @@ def test_format_recent_side_effects_respects_budget():
     )
 
     assert len(formatted) <= TeacherAgent.RECENT_SIDE_EFFECTS_MAX_CHARS + 200
+
+
+def test_format_recent_side_effects_logs_when_limits_hit(caplog):
+    items = [
+        TeacherSideEffect(
+            name=f"specialist-{idx}",
+            phase="post_response",
+            status="action_taken",
+            info_for_teacher="x" * 700,
+            artifacts={},
+            routing_reason="test",
+        )
+        for idx in range(10)
+    ]
+
+    with caplog.at_level("WARNING"):
+        TeacherAgent._format_recent_side_effects(items)
+
+    assert "Truncated recent side effects from 10 to 5 items" in caplog.text
+    assert "Exhausted recent side effects char budget" in caplog.text
+
+
+@pytest.mark.anyio
+async def test_generate_response_logs_when_history_is_truncated(teacher_agent, mock_user, caplog):
+    history = [ChatMessage(role="user", content=f"m{i}") for i in range(TeacherAgent.MAX_HISTORY_MESSAGES + 3)]
+    teacher_agent.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
+
+    with caplog.at_level("WARNING"):
+        await teacher_agent.generate_response(message="Current msg", history=history, user=mock_user)
+
+    assert "Truncated chat history" in caplog.text
 
 
 @pytest.mark.anyio

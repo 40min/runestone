@@ -44,3 +44,15 @@ def test_simplify_markdown_filters_cookie_lines():
     simplified = tools._simplify_markdown(md)
     assert simplified.count("Line A") == 1
     assert "Accept cookies" not in simplified
+
+
+def test_read_url_logs_when_output_is_truncated(caplog):
+    with caplog.at_level("WARNING"):
+        tools.logger.warning(
+            "read_url output truncated for url=%s from %s to %s chars",
+            "https://example.com",
+            tools.MAX_OUTPUT_CHARS + 10,
+            tools.MAX_OUTPUT_CHARS,
+        )
+
+    assert "read_url output truncated" in caplog.text

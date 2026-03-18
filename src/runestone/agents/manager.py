@@ -103,6 +103,12 @@ class AgentsManager:
                 )
 
         coordinator_history = history[-self.COORDINATOR_MAX_HISTORY_MESSAGES :] if history else []
+        if history and len(history) > self.COORDINATOR_MAX_HISTORY_MESSAGES:
+            logger.warning(
+                "[agents:manager] Truncated coordinator history from %s to %s messages",
+                len(history),
+                len(coordinator_history),
+            )
         plan = None
         try:
             plan = await self.coordinator.plan(
@@ -187,6 +193,13 @@ class AgentsManager:
         async def _invoke(item, specialist):
             started = time.monotonic()
             history_window = history[-item.chat_history_size :] if item.chat_history_size else []
+            if item.chat_history_size and len(history) > item.chat_history_size:
+                logger.warning(
+                    "[agents:manager] Truncated specialist history for '%s' from %s to %s messages",
+                    item.name,
+                    len(history),
+                    len(history_window),
+                )
             context = SpecialistContext(
                 message=message,
                 history=history_window,

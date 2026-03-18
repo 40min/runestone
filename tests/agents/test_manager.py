@@ -114,6 +114,24 @@ async def test_coordinator_history_is_truncated(
 
 
 @pytest.mark.anyio
+async def test_coordinator_history_truncation_logs_warning(
+    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service, caplog
+):
+    manager = AgentsManager(mock_settings)
+    manager.coordinator.plan = AsyncMock(return_value=CoordinatorPlan(pre_response=[], post_response=[], audit={}))
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = ("Hi there!", [])
+
+    history = [ChatMessage(role="user", content=f"m{i}") for i in range(10)]
+    with caplog.at_level("WARNING"):
+        await manager.generate_response(
+            "Hello", "chat-1", history, mock_user, mock_memory_item_service, mock_side_effect_service
+        )
+
+    assert "Truncated coordinator history" in caplog.text
+
+
+@pytest.mark.anyio
 async def test_generate_response_runs_cleanup_on_new_chat(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
@@ -351,6 +369,43 @@ async def test_specialist_history_is_truncated(mock_settings, mock_user, mock_me
     assert capture.seen_history is not None
     assert len(capture.seen_history) == 1
     assert capture.seen_history[0].content == "m3"
+
+
+@pytest.mark.anyio
+async def test_specialist_history_truncation_logs_warning(mock_settings, mock_user, mock_memory_item_service, caplog):
+    manager = AgentsManager(mock_settings)
+    capture = _CaptureHistorySpecialist()
+    manager.registry.register(capture)
+    manager.coordinator.plan = AsyncMock(
+        return_value=CoordinatorPlan(
+            pre_response=[RoutingItem(name="capture_history", reason="test", chat_history_size=1)],
+            post_response=[],
+            audit={},
+        )
+    )
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = ("Hi there!", [])
+
+    history = [
+        ChatMessage(role="user", content="m1"),
+        ChatMessage(role="assistant", content="m2"),
+        ChatMessage(role="user", content="m3"),
+    ]
+    side_effect_service = MagicMock(spec=AgentSideEffectService)
+    side_effect_service.load_recent_for_teacher = AsyncMock(return_value=[])
+    side_effect_service.replace_post_response_side_effects = AsyncMock(return_value=None)
+
+    with caplog.at_level("WARNING"):
+        await manager.generate_response(
+            "Hello",
+            "chat-1",
+            history,
+            mock_user,
+            mock_memory_item_service,
+            side_effect_service,
+        )
+
+    assert "Truncated specialist history for 'capture_history'" in caplog.text
 
 
 @pytest.mark.anyio

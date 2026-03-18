@@ -254,6 +254,12 @@ to read its contents before deciding.
 
         # Add conversation history
         truncated_history = history[-self.MAX_HISTORY_MESSAGES :] if history else []
+        if history and len(history) > self.MAX_HISTORY_MESSAGES:
+            logger.warning(
+                "[agents:teacher] Truncated chat history from %s to %s messages",
+                len(history),
+                len(truncated_history),
+            )
         for msg in truncated_history:
             if msg.role == "user":
                 messages.append(HumanMessage(content=msg.content))
@@ -290,6 +296,12 @@ to read its contents before deciding.
             return ""
         lines = ["", "", "[NEWS_SOURCES]"]
         max_sources = 20
+        if len(sources) > max_sources:
+            logger.warning(
+                "[agents:teacher] Truncated news sources from %s to %s items",
+                len(sources),
+                max_sources,
+            )
         for idx, item in enumerate(sources[:max_sources], start=1):
             if isinstance(item, dict):
                 data = item
@@ -331,12 +343,14 @@ to read its contents before deciding.
             result = item.get("result", {}) if isinstance(item, dict) else {}
             status = result.get("status", "unknown")
             info_for_teacher = result.get("info_for_teacher", "")
+            truncated_info = TeacherAgent._truncate_text(
+                info_for_teacher,
+                max_len=INFO_FOR_TEACHER_MAX_CHARS,
+                log_label=f"pre_result:{name}",
+            )
             # Raw artifacts stay machine-oriented; teacher-facing context should
             # come from info_for_teacher and recent side-effect summaries.
-            lines.append(
-                f"- {name} ({status}): "
-                f"{TeacherAgent._truncate_text(info_for_teacher, max_len=INFO_FOR_TEACHER_MAX_CHARS) or 'no info'}"
-            )
+            lines.append(f"- {name} ({status}): " f"{truncated_info or 'no info'}")
         return "\n".join(lines)
 
     @staticmethod
@@ -347,20 +361,37 @@ to read its contents before deciding.
             "Use them to answer follow-up questions truthfully, but do not mention the tag or raw structure.",
         ]
         remaining_chars = max(TeacherAgent.RECENT_SIDE_EFFECTS_MAX_CHARS - len("\n".join(lines)), 0)
+        visible_side_effects = recent_side_effects[-TeacherAgent.RECENT_SIDE_EFFECTS_MAX_ITEMS :]
+        if len(recent_side_effects) > TeacherAgent.RECENT_SIDE_EFFECTS_MAX_ITEMS:
+            logger.warning(
+                "[agents:teacher] Truncated recent side effects from %s to %s items",
+                len(recent_side_effects),
+                len(visible_side_effects),
+            )
 
-        for item in recent_side_effects[-TeacherAgent.RECENT_SIDE_EFFECTS_MAX_ITEMS :]:
+        for item in visible_side_effects:
             if item.status != "action_taken":
                 continue
             name = item.name
             summary = TeacherAgent._side_effect_summary(item)
             line = f"- {name}: {summary}"
             if len(line) + 1 > remaining_chars:
-                line = TeacherAgent._truncate_text(line, max_len=max(remaining_chars, 0))
+                logger.warning(
+                    "[agents:teacher] Truncated recent side effects text for '%s' to fit %s-char budget",
+                    name,
+                    TeacherAgent.RECENT_SIDE_EFFECTS_MAX_CHARS,
+                )
+                line = TeacherAgent._truncate_text(
+                    line,
+                    max_len=max(remaining_chars, 0),
+                    log_label=f"recent_side_effect_line:{name}",
+                )
             if not line:
                 break
             lines.append(line)
             remaining_chars -= len(line) + 1
             if remaining_chars <= 0:
+                logger.warning("[agents:teacher] Exhausted recent side effects char budget")
                 break
 
         return "\n".join(lines)
@@ -368,7 +399,11 @@ to read its contents before deciding.
     @staticmethod
     def _side_effect_summary(item: TeacherSideEffect) -> str:
         info_for_teacher = item.info_for_teacher
-        truncated_info = TeacherAgent._truncate_text(info_for_teacher, max_len=INFO_FOR_TEACHER_MAX_CHARS)
+        truncated_info = TeacherAgent._truncate_text(
+            info_for_teacher,
+            max_len=INFO_FOR_TEACHER_MAX_CHARS,
+            log_label=f"side_effect_info:{item.name}",
+        )
         if truncated_info:
             return truncated_info
 
@@ -378,7 +413,14 @@ to read its contents before deciding.
             for key, value in list(artifacts.items())[:3]:
                 artifact_parts.append(f"{key}={TeacherAgent._stringify_artifact_value(value)}")
             fallback = "artifacts: " + ", ".join(artifact_parts)
-            return TeacherAgent._truncate_text(fallback, max_len=240) or "action completed"
+            return (
+                TeacherAgent._truncate_text(
+                    fallback,
+                    max_len=240,
+                    log_label=f"side_effect_artifacts:{item.name}",
+                )
+                or "action completed"
+            )
 
         return "action completed"
 
@@ -393,13 +435,30 @@ to read its contents before deciding.
         return str(value)
 
     @staticmethod
-    def _truncate_text(text: str, max_len: int = INFO_FOR_TEACHER_MAX_CHARS) -> str:
+    def _truncate_text(
+        text: str,
+        max_len: int = INFO_FOR_TEACHER_MAX_CHARS,
+        *,
+        log_label: str | None = None,
+    ) -> str:
         if not isinstance(text, str):
             return ""
         if max_len <= 0:
+            if text:
+                logger.warning(
+                    "[agents:teacher] Dropped text%s because max_len=%s",
+                    f" for {log_label}" if log_label else "",
+                    max_len,
+                )
             return ""
         if len(text) <= max_len:
             return text
+        logger.warning(
+            "[agents:teacher] Truncated text%s from %s to %s chars",
+            f" for {log_label}" if log_label else "",
+            len(text),
+            max_len,
+        )
         if max_len < 4:
             return text[:max_len]
         return text[: max_len - 3] + "..."
