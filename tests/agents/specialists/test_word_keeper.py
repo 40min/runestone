@@ -217,6 +217,53 @@ async def test_word_keeper_returns_error_on_tool_failure(specialist, mock_chat_m
 
 
 @pytest.mark.anyio
+async def test_word_keeper_reports_partial_save_when_later_candidate_fails(specialist, mock_chat_model, mock_user):
+    mock_llm = mock_chat_model.with_structured_output.return_value
+    mock_llm.ainvoke.return_value = WordKeeperExtraction(
+        decision="save_words",
+        candidates=[
+            SaveCandidate(
+                word_phrase="avgorande",
+                translation="decisive",
+                example_phrase="Det var ett avgorande beslut.",
+                reason="explicit save request",
+            ),
+            SaveCandidate(
+                word_phrase="noggrann",
+                translation="careful",
+                example_phrase="Var noggrann med detaljerna.",
+                reason="explicit save request",
+            ),
+        ],
+    )
+    vocabulary_service = MagicMock()
+    vocabulary_service.upsert_priority_word = AsyncMock(
+        side_effect=[
+            {"action": "created", "word_id": 1, "changed": True},
+            RuntimeError("db exploded"),
+        ]
+    )
+
+    with patch(
+        "runestone.agents.specialists.word_keeper.provide_vocabulary_service",
+        _service_provider(vocabulary_service),
+    ):
+        result = await specialist.run(
+            SpecialistContext(
+                message="Save these words for me: avgorande, noggrann",
+                history=[],
+                user=mock_user,
+                routing_reason="explicit save request",
+            )
+        )
+
+    assert result.status == "error"
+    assert result.actions[0].status == "error"
+    assert result.artifacts["saved_words"] == ["avgorande"]
+    assert result.info_for_teacher == "Partially saved 1 vocabulary item(s) before an internal error."
+
+
+@pytest.mark.anyio
 async def test_word_keeper_payload_uses_user_mother_tongue(specialist, mock_chat_model, mock_user):
     mock_user.mother_tongue = "Finnish"
     mock_llm = mock_chat_model.with_structured_output.return_value

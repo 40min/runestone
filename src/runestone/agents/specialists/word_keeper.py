@@ -124,6 +124,11 @@ class WordKeeperSpecialist(BaseSpecialist):
         except Exception as exc:
             latency_ms = int((time.monotonic() - started) * 1000)
             logger.warning("[agents:wordkeeper] Failed to save words after %sms: %s", latency_ms, exc, exc_info=True)
+            info_for_teacher = (
+                f"Partially saved {len(saved_words)} vocabulary item(s) before an internal error."
+                if saved_words
+                else ""
+            )
             return SpecialistResult(
                 status="error",
                 actions=[
@@ -133,7 +138,7 @@ class WordKeeperSpecialist(BaseSpecialist):
                         summary="Failed to save vocabulary candidates",
                     )
                 ],
-                info_for_teacher="",
+                info_for_teacher=info_for_teacher,
                 artifacts={
                     "saved_words": saved_words,
                     "skipped_words": skipped_words,
