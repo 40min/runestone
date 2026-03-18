@@ -12,8 +12,8 @@ from runestone.config import Settings
 @pytest.fixture
 def mock_settings():
     settings = MagicMock(spec=Settings)
-    settings.chat_provider = "openrouter"
-    settings.chat_model = "test-model"
+    settings.word_keeper_provider = "openrouter"
+    settings.word_keeper_model = "test-model"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
     return settings
@@ -38,6 +38,13 @@ def mock_user():
 def specialist(mock_settings, mock_chat_model):
     with patch("runestone.agents.specialists.word_keeper.build_chat_model", return_value=mock_chat_model):
         return WordKeeperSpecialist(mock_settings)
+
+
+def test_word_keeper_uses_structured_specialist_purpose(mock_settings, mock_chat_model):
+    with patch("runestone.agents.specialists.word_keeper.build_chat_model", return_value=mock_chat_model) as mock_build:
+        WordKeeperSpecialist(mock_settings)
+
+    mock_build.assert_called_once_with(mock_settings, "word_keeper")
 
 
 def _service_provider(service):

@@ -58,15 +58,11 @@ class CoordinatorAgent:
 
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.model = build_chat_model(
-            settings,
-            model_name=settings.coordinator_model,
-            temperature=0,
-        )
+        self.model = build_chat_model(settings, "coordinator")
 
         logger.info(
             "[agents:coordinator] Initialized CoordinatorAgent with provider=%s, model=%s",
-            settings.chat_provider,
+            settings.coordinator_provider,
             settings.coordinator_model,
         )
 

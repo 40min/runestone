@@ -10,7 +10,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from runestone.agents.manager import AgentsManager
 from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem, TeacherSideEffect
 from runestone.agents.specialists.base import BaseSpecialist, SpecialistContext, SpecialistResult
-from runestone.config import Settings
+from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
 from runestone.services.agent_side_effect_service import AgentSideEffectService
 
 
@@ -18,13 +18,36 @@ from runestone.services.agent_side_effect_service import AgentSideEffectService
 def mock_settings():
     """Create mock settings for testing."""
     settings = MagicMock(spec=Settings)
-    settings.chat_provider = "openrouter"
-    settings.chat_model = "test-model"
+    settings.teacher_provider = "openrouter"
+    settings.teacher_model = "test-model"
     settings.coordinator_model = "test-coordinator-model"
+    settings.coordinator_provider = "openrouter"
+    settings.word_keeper_provider = "openrouter"
+    settings.word_keeper_model = "test-model"
     settings.agent_persona = "default"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
     settings.allowed_origins = "http://localhost:5173"
+    settings.get_agent_llm_settings.side_effect = lambda agent_name: {
+        "teacher": AgentLLMSettings(
+            provider="openrouter",
+            model="test-model",
+            temperature=1.0,
+            reasoning_level=ReasoningLevel.NONE,
+        ),
+        "coordinator": AgentLLMSettings(
+            provider="openrouter",
+            model="test-coordinator-model",
+            temperature=0.0,
+            reasoning_level=ReasoningLevel.NONE,
+        ),
+        "word_keeper": AgentLLMSettings(
+            provider="openrouter",
+            model="test-model",
+            temperature=0.0,
+            reasoning_level=ReasoningLevel.NONE,
+        ),
+    }[agent_name]
     return settings
 
 

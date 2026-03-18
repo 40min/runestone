@@ -6,10 +6,31 @@ loaded from environment variables using Pydantic BaseSettings.
 """
 
 import os
-from typing import Optional
+from enum import Enum
+from typing import Literal, Optional
 
 from dotenv import load_dotenv
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings
+
+
+class ReasoningLevel(str, Enum):
+    """Supported reasoning effort levels for chat models."""
+
+    NONE = "none"
+    MINIMAL = "minimal"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class AgentLLMSettings(BaseSettings):
+    """Resolved LLM settings for a specific agent."""
+
+    provider: Literal["openrouter", "openai"]
+    model: str
+    temperature: float
+    reasoning_level: ReasoningLevel
 
 
 class Settings(BaseSettings):
@@ -60,9 +81,24 @@ class Settings(BaseSettings):
     cooldown_days: int = 7
 
     # Chat Agent Configuration
-    chat_provider: str = "openrouter"
-    chat_model: str
+    teacher_provider: Literal["openrouter", "openai"] = Field(
+        default="openrouter",
+        validation_alias=AliasChoices("TEACHER_PROVIDER", "CHAT_PROVIDER"),
+    )
+    teacher_model: str = Field(validation_alias=AliasChoices("TEACHER_MODEL", "CHAT_MODEL"))
+    teacher_temperature: float = 1.0
+    teacher_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
+
+    coordinator_provider: Optional[Literal["openrouter", "openai"]] = None
     coordinator_model: str
+    coordinator_temperature: float = 0.0
+    coordinator_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
+
+    word_keeper_provider: Optional[Literal["openrouter", "openai"]] = None
+    word_keeper_model: Optional[str] = None
+    word_keeper_temperature: float = 0.0
+    word_keeper_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
+
     agent_persona: str = "default"
 
     # Chat History Configuration
@@ -80,6 +116,44 @@ class Settings(BaseSettings):
     # TTS (Text-to-Speech) Configuration
     tts_model: str = "gpt-4o-mini-tts"
     tts_voice: str = "onyx"
+
+    @model_validator(mode="after")
+    def _apply_agent_defaults(self) -> "Settings":
+        if self.coordinator_provider is None:
+            self.coordinator_provider = self.teacher_provider
+        if self.word_keeper_provider is None:
+            self.word_keeper_provider = self.teacher_provider
+        if self.word_keeper_model is None:
+            self.word_keeper_model = self.teacher_model
+        return self
+
+    def get_agent_llm_settings(self, agent_name: Literal["teacher", "coordinator", "word_keeper"]) -> AgentLLMSettings:
+        """Return resolved model settings for the requested agent."""
+        if agent_name == "teacher":
+            return AgentLLMSettings(
+                provider=self.teacher_provider,
+                model=self.teacher_model,
+                temperature=self.teacher_temperature,
+                reasoning_level=self.teacher_reasoning_level,
+            )
+
+        if agent_name == "coordinator":
+            return AgentLLMSettings(
+                provider=self.coordinator_provider,
+                model=self.coordinator_model,
+                temperature=self.coordinator_temperature,
+                reasoning_level=self.coordinator_reasoning_level,
+            )
+
+        if agent_name == "word_keeper":
+            return AgentLLMSettings(
+                provider=self.word_keeper_provider,
+                model=self.word_keeper_model,
+                temperature=self.word_keeper_temperature,
+                reasoning_level=self.word_keeper_reasoning_level,
+            )
+
+        raise ValueError(f"Unsupported agent name: {agent_name}")
 
     class Config:
         """Pydantic configuration."""

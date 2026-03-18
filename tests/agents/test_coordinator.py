@@ -17,8 +17,7 @@ from runestone.config import Settings
 def mock_settings():
     """Create mock settings for testing."""
     settings = MagicMock(spec=Settings)
-    settings.chat_provider = "openrouter"
-    settings.chat_model = "grok-core"
+    settings.coordinator_provider = "openrouter"
     settings.coordinator_model = "grok-coordinator"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
@@ -47,11 +46,7 @@ def test_init_uses_coordinator_model(mock_settings, mock_chat_model):
     """Test initialization with required coordinator model."""
     with patch("runestone.agents.coordinator.build_chat_model", return_value=mock_chat_model) as mock_build:
         CoordinatorAgent(mock_settings)
-        mock_build.assert_called_once_with(
-            mock_settings,
-            model_name="grok-coordinator",
-            temperature=0,
-        )
+        mock_build.assert_called_once_with(mock_settings, "coordinator")
 
 
 def test_init_coordinator_model(mock_settings, mock_chat_model):
@@ -59,11 +54,7 @@ def test_init_coordinator_model(mock_settings, mock_chat_model):
     mock_settings.coordinator_model = "gpt-4o-mini"
     with patch("runestone.agents.coordinator.build_chat_model", return_value=mock_chat_model) as mock_build:
         CoordinatorAgent(mock_settings)
-        mock_build.assert_called_once_with(
-            mock_settings,
-            model_name="gpt-4o-mini",
-            temperature=0,
-        )
+        mock_build.assert_called_once_with(mock_settings, "coordinator")
 
 
 @pytest.mark.anyio

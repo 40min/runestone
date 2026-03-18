@@ -55,8 +55,8 @@ class TeacherAgent:
 
         logger.info(
             "[agents:teacher] Initialized TeacherAgent with provider=%s, " "model=%s, persona=%s",
-            settings.chat_provider,
-            settings.chat_model,
+            settings.teacher_provider,
+            settings.teacher_model,
             settings.agent_persona,
         )
 
@@ -70,7 +70,7 @@ class TeacherAgent:
         settings = self.settings
 
         # Initialize the LangChain chat model
-        chat_model = build_chat_model(settings, temperature=1)
+        chat_model = build_chat_model(settings, "teacher")
 
         tools = [
             start_student_info,

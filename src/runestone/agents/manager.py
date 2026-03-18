@@ -61,8 +61,8 @@ class AgentsManager:
 
         logger.info(
             "[agents:manager] Initialized AgentsManager with provider=%s, model=%s, persona=%s",
-            settings.chat_provider,
-            settings.chat_model,
+            settings.teacher_provider,
+            settings.teacher_model,
             settings.agent_persona,
         )
 

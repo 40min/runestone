@@ -10,19 +10,25 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from runestone.agents.schemas import ChatMessage, TeacherSideEffect
 from runestone.agents.specialists.teacher import TeacherAgent
-from runestone.config import Settings
+from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
 
 
 @pytest.fixture
 def mock_settings():
     """Create mock settings for testing."""
     settings = MagicMock(spec=Settings)
-    settings.chat_provider = "openrouter"
-    settings.chat_model = "test-model"
+    settings.teacher_provider = "openrouter"
+    settings.teacher_model = "test-model"
     settings.agent_persona = "default"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
     settings.allowed_origins = "http://localhost:5173"
+    settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+        provider="openrouter",
+        model="test-model",
+        temperature=1.0,
+        reasoning_level=ReasoningLevel.NONE,
+    )
     return settings
 
 
@@ -71,6 +77,15 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "WORDKEEPER SPECIALIST" in call_kwargs["system_prompt"]
             assert "The key words here are" in call_kwargs["system_prompt"]
             assert "not by a tool you call directly" in call_kwargs["system_prompt"]
+
+
+def test_build_agent_uses_teacher_purpose(mock_settings, mock_chat_model):
+    """Test teacher agent requests the teacher model profile."""
+    with patch("runestone.agents.specialists.teacher.build_chat_model", return_value=mock_chat_model) as mock_build:
+        with patch("runestone.agents.specialists.teacher.create_agent"):
+            TeacherAgent(mock_settings)
+
+    mock_build.assert_called_with(mock_settings, "teacher")
 
 
 def test_format_pre_results_uses_info_for_teacher_only():
@@ -277,7 +292,13 @@ async def test_generate_response_prompt_matches_fixture(teacher_agent, mock_user
 
 def test_openai_provider_configuration(mock_settings):
     """Test that OpenAI provider is configured correctly."""
-    mock_settings.chat_provider = "openai"
+    mock_settings.teacher_provider = "openai"
+    mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+        provider="openai",
+        model="test-model",
+        temperature=1.0,
+        reasoning_level=ReasoningLevel.NONE,
+    )
 
     with patch("runestone.agents.llm.ChatOpenAI") as mock_chat_openai:
         with patch("runestone.agents.specialists.teacher.create_agent"):
