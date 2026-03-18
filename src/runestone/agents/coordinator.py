@@ -37,17 +37,22 @@ Phases:
 Specialists (typical ownership; some may not be available yet):
 - memory_reader (pre): reads relevant student memory and returns compact context for teacher.
 - memory_keeper (post): persists durable facts or learning signals after the turn.
-- word_keeper (pre/post): saves vocabulary, typically post; pre only for explicit “save this word” commands.
+- word_keeper (pre): saves vocabulary when there is an explicit save signal or the previous teacher or
+  student message clearly marked words to remember.
 - news (pre): if user asks for news, performs search/read and returns sources + summary.
 - grammar (pre/post): finds relevant cheatsheet(s) and returns a distilled explanation; may be post if teacher decides
   to add a reference after composing the response.
 
 WordKeeper routing guidance:
-- Pre-response `word_keeper`: explicit requests like "save this word", "remember this phrase", "add this word".
-- Post-response `word_keeper`: the teacher reply highlights candidate vocabulary with phrasing like
-  "the key words here are", "good words to memorize", "let's keep these words in mind", or similar.
-- When routing `word_keeper`, remember it can extract translation/example context from the recent chat and from
-  `teacher_response`, so a small history window plus the teacher reply is usually enough.
+- Route `word_keeper` in `pre_response` only.
+- Use it when the student explicitly asks to save something, with requests like "save this word", "remember this
+  phrase", "add this word".
+- Also use it when the most recent teacher message explicitly says words should be remembered or saved, with
+  phrasing like "the key words here are", "good words to memorize", or "let's keep these words in mind".
+- Do not route it just because the student reused a word, the teacher corrected a sentence, or a word appears in
+  grammar explanation/example text.
+- Keep the history window small but include that most recent teacher message when you route `word_keeper`.
+- Leave `post_response` empty for `word_keeper`.
 
 Never include `teacher` in `pre_response` or `post_response`. The teacher call is always executed by the manager.
 """

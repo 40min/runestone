@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.exceptions import OutputParserException
 
-from runestone.agents.coordinator import CoordinatorAgent
+from runestone.agents.coordinator import COORDINATOR_SYSTEM_PROMPT, CoordinatorAgent
 from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem
 from runestone.config import Settings
 
@@ -55,6 +55,15 @@ def test_init_coordinator_model(mock_settings, mock_chat_model):
     with patch("runestone.agents.coordinator.build_chat_model", return_value=mock_chat_model) as mock_build:
         CoordinatorAgent(mock_settings)
         mock_build.assert_called_once_with(mock_settings, "coordinator")
+
+
+def test_word_keeper_prompt_keeps_routing_pre_only():
+    """Coordinator prompt should keep WordKeeper pre-only and teacher-cue based."""
+    assert "Route `word_keeper` in `pre_response` only." in COORDINATOR_SYSTEM_PROMPT
+    assert "most recent teacher message explicitly says words should be remembered or saved" in (
+        COORDINATOR_SYSTEM_PROMPT
+    )
+    assert "Do not route it just because the student reused a word" in COORDINATOR_SYSTEM_PROMPT
 
 
 @pytest.mark.anyio
