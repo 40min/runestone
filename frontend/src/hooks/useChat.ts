@@ -306,7 +306,7 @@ export const useChat = (): UseChatReturn => {
       channel.close();
       channelRef.current = null;
     };
-  }, [fetchHistory]);
+  }, [fetchHistory, resetPollingInterval]);
 
   const broadcastChange = useCallback(() => {
     if (channelRef.current) {

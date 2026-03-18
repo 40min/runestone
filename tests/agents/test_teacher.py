@@ -291,6 +291,37 @@ async def test_generate_response_logs_when_history_is_truncated(teacher_agent, m
 
 
 @pytest.mark.anyio
+async def test_generate_response_logs_timing_metadata(teacher_agent, mock_user, caplog):
+    teacher_agent.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
+
+    with caplog.at_level("INFO"):
+        await teacher_agent.generate_response(
+            message="Hej",
+            history=[ChatMessage(role="user", content="Tidigare")],
+            user=mock_user,
+            pre_results=[{"name": "memory_reader", "result": {"status": "action_taken"}}],
+            recent_side_effects=[
+                TeacherSideEffect(
+                    name="word_keeper",
+                    phase="post_response",
+                    status="action_taken",
+                    info_for_teacher="Saved 1 vocabulary item.",
+                    artifacts={},
+                    routing_reason="save request",
+                )
+            ],
+        )
+
+    assert "[agents:teacher] Response generated" in caplog.text
+    assert "latency_ms=" in caplog.text
+    assert "user_id=1" in caplog.text
+    assert "history_messages=1" in caplog.text
+    assert "pre_results=1" in caplog.text
+    assert "recent_side_effects=1" in caplog.text
+    assert "outcome=success" in caplog.text
+
+
+@pytest.mark.anyio
 async def test_generate_response_prompt_matches_fixture(teacher_agent, mock_user):
     mock_user.mother_tongue = "Spanish"
     history = [

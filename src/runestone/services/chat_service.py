@@ -10,6 +10,7 @@ from runestone.agents.schemas import ChatHistoryResponse
 from runestone.agents.schemas import ChatMessage as ChatMessageSchema
 from runestone.config import Settings
 from runestone.core.exceptions import RunestoneError
+from runestone.core.observability import timed_operation
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.chat_repository import ChatRepository
 from runestone.services.agent_side_effect_service import AgentSideEffectService
@@ -18,6 +19,15 @@ from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 
 logger = logging.getLogger(__name__)
+
+
+def _process_message_timing_fields(args, kwargs, _result, _error) -> dict[str, int | None]:
+    user_id = kwargs.get("user_id") if "user_id" in kwargs else (args[1] if len(args) > 1 else None)
+    message_text = kwargs.get("message_text") if "message_text" in kwargs else (args[2] if len(args) > 2 else "")
+    return {
+        "user_id": user_id,
+        "message_chars": len(message_text),
+    }
 
 
 class ChatService:
@@ -56,6 +66,7 @@ class ChatService:
         self.tts_service = tts_service
         self.memory_item_service = memory_item_service
 
+    @timed_operation(logger, "[chat:service] Message turn completed", fields_factory=_process_message_timing_fields)
     async def process_message(
         self,
         user_id: int,

@@ -21,6 +21,7 @@ from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.agents.specialists.word_keeper import WordKeeperSpecialist
 from runestone.config import Settings
 from runestone.core.exceptions import RunestoneError
+from runestone.core.observability import elapsed_ms_since
 from runestone.db.models import User
 from runestone.rag.index import GrammarIndex
 from runestone.services.agent_side_effect_service import AgentSideEffectService
@@ -211,7 +212,7 @@ class AgentsManager:
             )
             try:
                 result = await specialist.run(context)
-                latency_ms = int((time.monotonic() - started) * 1000)
+                latency_ms = elapsed_ms_since(started)
                 logger.info(
                     "[agents:%s] Result: status=%s latency_ms=%s",
                     item.name,
@@ -231,7 +232,7 @@ class AgentsManager:
                     "routing_reason": item.reason,
                 }
             except Exception:
-                latency_ms = int((time.monotonic() - started) * 1000)
+                latency_ms = elapsed_ms_since(started)
                 logger.warning("[agents:manager] Specialist '%s' failed", item.name, exc_info=True)
                 return {
                     "name": item.name,

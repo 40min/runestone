@@ -15,6 +15,7 @@ from runestone.agents.llm import build_chat_model
 from runestone.agents.specialists.base import BaseSpecialist, SpecialistAction, SpecialistContext, SpecialistResult
 from runestone.agents.tools.service_providers import provide_vocabulary_service
 from runestone.config import Settings
+from runestone.core.observability import elapsed_ms_since
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +141,7 @@ class WordKeeperSpecialist(BaseSpecialist):
                     saved_words.append(completed["word_phrase"])
 
         except Exception as exc:
-            latency_ms = int((time.monotonic() - started) * 1000)
+            latency_ms = elapsed_ms_since(started)
             logger.warning("[agents:wordkeeper] Failed to save words after %sms: %s", latency_ms, exc, exc_info=True)
             info_for_teacher = (
                 f"Partially saved {len(saved_words)} vocabulary item(s) before an internal error."
@@ -201,7 +202,7 @@ class WordKeeperSpecialist(BaseSpecialist):
         logger.info(
             "[agents:wordkeeper] Saved %s word(s) in %sms: %s",
             len(saved_words),
-            int((time.monotonic() - started) * 1000),
+            elapsed_ms_since(started),
             summary,
         )
         info_for_teacher = f"Saved {len(saved_words)} vocabulary item(s) for future recall."

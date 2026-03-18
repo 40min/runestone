@@ -27,11 +27,29 @@ from runestone.agents.tools.memory import (
 from runestone.agents.tools.news import search_news_with_dates
 from runestone.agents.tools.read_url import read_url
 from runestone.config import Settings
+from runestone.core.observability import timed_operation
 from runestone.db.models import User
 from runestone.rag.index import GrammarIndex
 from runestone.services.grammar_service import GrammarService
 
 logger = logging.getLogger(__name__)
+
+
+def _teacher_timing_fields(args, kwargs, _result, _error) -> dict[str, int | str | None]:
+    message = kwargs.get("message") if "message" in kwargs else (args[1] if len(args) > 1 else "")
+    history = kwargs.get("history") if "history" in kwargs else (args[2] if len(args) > 2 else [])
+    user = kwargs.get("user") if "user" in kwargs else (args[3] if len(args) > 3 else None)
+    pre_results = kwargs.get("pre_results") if "pre_results" in kwargs else (args[4] if len(args) > 4 else None)
+    recent_side_effects = (
+        kwargs.get("recent_side_effects") if "recent_side_effects" in kwargs else (args[5] if len(args) > 5 else None)
+    )
+    return {
+        "user_id": getattr(user, "id", None),
+        "message_chars": len(message),
+        "history_messages": len(history),
+        "pre_results": len(pre_results or []),
+        "recent_side_effects": len(recent_side_effects or []),
+    }
 
 
 class TeacherAgent:
@@ -218,6 +236,7 @@ to read its contents before deciding.
 
         return agent
 
+    @timed_operation(logger, "[agents:teacher] Response generated", fields_factory=_teacher_timing_fields)
     async def generate_response(
         self,
         message: str,

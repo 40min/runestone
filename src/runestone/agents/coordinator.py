@@ -4,7 +4,6 @@ Coordinator agent responsible for routing and orchestration planning.
 
 import json
 import logging
-import time
 
 from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -12,6 +11,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from runestone.agents.llm import build_chat_model
 from runestone.agents.schemas import ChatMessage, CoordinatorPlan
 from runestone.config import Settings
+from runestone.core.observability import timed_operation
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +66,7 @@ class CoordinatorAgent:
             settings.coordinator_model,
         )
 
+    @timed_operation(logger, "[agents:coordinator] Plan completed")
     async def plan(
         self,
         message: str,
@@ -74,7 +75,6 @@ class CoordinatorAgent:
         available_specialists: list[str],
     ) -> CoordinatorPlan:
         """Return a routing plan for the given turn."""
-        started = time.monotonic()
         model = self.model.with_structured_output(CoordinatorPlan)
         payload = {
             "message": message,
@@ -89,8 +89,6 @@ class CoordinatorAgent:
                     HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
                 ]
             )
-            latency_ms = int((time.monotonic() - started) * 1000)
-            logger.info("[agents:coordinator] Plan created in %sms", latency_ms)
             return result
         except OutputParserException as e:
             logger.error("[agents:coordinator] Schema validation failed: %s", str(e))
