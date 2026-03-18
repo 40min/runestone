@@ -15,7 +15,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from runestone.agents.coordinator import CoordinatorAgent
 from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem
 from runestone.agents.specialists.base import SpecialistContext
-from runestone.agents.specialists.memory_reader import MemoryReaderSpecialist
+
+# from runestone.agents.specialists.memory_reader import MemoryReaderSpecialist
 from runestone.agents.specialists.registry import SpecialistRegistry
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.agents.specialists.word_keeper import WordKeeperSpecialist
@@ -57,7 +58,9 @@ class AgentsManager:
             grammar_service=grammar_service,
         )
         self.registry = SpecialistRegistry()
-        self.registry.register(MemoryReaderSpecialist())
+        # todo: enable memory reader after we finish memory tools
+        # migrations to agents
+        # self.registry.register(MemoryReaderSpecialist())
         self.registry.register(WordKeeperSpecialist(settings))
 
         logger.info(
