@@ -39,6 +39,7 @@ class AgentsManager:
     """
 
     COORDINATOR_MAX_HISTORY_MESSAGES = 5
+    WORD_KEEPER_MAX_HISTORY_MESSAGES = 2
 
     def __init__(
         self,
@@ -196,8 +197,19 @@ class AgentsManager:
 
         async def _invoke(item, specialist):
             started = time.monotonic()
-            history_window = history[-item.chat_history_size :] if item.chat_history_size else []
-            if item.chat_history_size and len(history) > item.chat_history_size:
+            effective_history_size = item.chat_history_size
+            if item.name == "word_keeper":
+                effective_history_size = min(item.chat_history_size, self.WORD_KEEPER_MAX_HISTORY_MESSAGES)
+                if item.chat_history_size != effective_history_size:
+                    logger.warning(
+                        "[agents:manager] Capped specialist history for '%s' from %s to %s messages",
+                        item.name,
+                        item.chat_history_size,
+                        effective_history_size,
+                    )
+
+            history_window = history[-effective_history_size:] if effective_history_size else []
+            if effective_history_size and len(history) > effective_history_size:
                 logger.warning(
                     "[agents:manager] Truncated specialist history for '%s' from %s to %s messages",
                     item.name,
@@ -211,7 +223,7 @@ class AgentsManager:
                 teacher_response=teacher_response,
                 pre_results=pre_results or [],
                 routing_reason=item.reason,
-                chat_history_size=item.chat_history_size,
+                chat_history_size=effective_history_size,
             )
             try:
                 result = await specialist.run(context)

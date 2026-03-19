@@ -49,9 +49,12 @@ WordKeeper routing guidance:
   phrase", "add this word".
 - Also use it when the most recent teacher message explicitly says words should be remembered or saved, with
   phrasing like "the key words here are", "good words to memorize", or "let's keep these words in mind".
+- When deciding whether to route `word_keeper`, consider only the last two messages in `history`.
+- If you route `word_keeper`, set `chat_history_size` to exactly 2 so it only receives those two most recent
+  messages.
 - Do not route it just because the student reused a word, the teacher corrected a sentence, or a word appears in
   grammar explanation/example text.
-- Keep the history window small but include that most recent teacher message when you route `word_keeper`.
+- Ignore older save-worthy words from earlier turns; they should not trigger `word_keeper` again on later turns.
 - Leave `post_response` empty for `word_keeper`.
 
 Never include `teacher` in `pre_response` or `post_response`. The teacher call is always executed by the manager.

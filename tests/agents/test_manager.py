@@ -409,6 +409,45 @@ async def test_specialist_history_truncation_logs_warning(mock_settings, mock_us
 
 
 @pytest.mark.anyio
+async def test_word_keeper_history_is_capped_to_two_messages(
+    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+):
+    manager = AgentsManager(mock_settings)
+    capture = _CaptureHistorySpecialist()
+    capture.name = "word_keeper"
+    manager.registry.register(capture, overwrite=True)
+    manager.coordinator.plan = AsyncMock(
+        return_value=CoordinatorPlan(
+            pre_response=[RoutingItem(name="word_keeper", reason="save words", chat_history_size=6)],
+            post_response=[],
+            audit={},
+        )
+    )
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = ("Hi there!", [])
+
+    history = [
+        ChatMessage(role="user", content="m1"),
+        ChatMessage(role="assistant", content="m2"),
+        ChatMessage(role="user", content="m3"),
+        ChatMessage(role="assistant", content="m4"),
+    ]
+
+    await manager.generate_response(
+        "Hello",
+        "chat-1",
+        history,
+        mock_user,
+        mock_memory_item_service,
+        mock_side_effect_service,
+    )
+
+    assert capture.seen_history is not None
+    assert len(capture.seen_history) == 2
+    assert [msg.content for msg in capture.seen_history] == ["m3", "m4"]
+
+
+@pytest.mark.anyio
 async def test_recent_side_effects_passed_to_teacher(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
