@@ -302,8 +302,7 @@ def test_is_safe_url(mock_settings):
 
 def test_manager_registers_default_specialists(mock_settings):
     manager = AgentsManager(mock_settings)
-    assert "memory_reader" in manager.registry.list_names()
-    assert "word_keeper" in manager.registry.list_names()
+    assert manager.registry.list_names() == ["word_keeper"]
 
 
 @pytest.mark.anyio

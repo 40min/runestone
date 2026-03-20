@@ -962,6 +962,19 @@ class TestVocabularyService:
         mock_llm_client.improve_vocabulary_item.return_value = (
             '{"translation": "mock translation", "example_phrase": "mock example", "extra_info": "mock info"}'
         )
+        async with db_session_factory() as setup_db:
+            race_user = UserModel(
+                name="Race",
+                surname="Tester",
+                email="race-user@example.com",
+                hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYQmP7XzL6",
+                timezone="UTC",
+                pages_recognised_count=0,
+            )
+            setup_db.add(race_user)
+            await setup_db.commit()
+            await setup_db.refresh(race_user)
+            race_user_id = race_user.id
 
         async with db_session_factory() as db1, db_session_factory() as db2:
             service1 = VocabularyService(VocabularyRepository(db1), mock_settings, mock_llm_client)
@@ -972,13 +985,13 @@ class TestVocabularyService:
                     word_phrase="konkurrent",
                     translation="concurrent",
                     example_phrase="Detta ar ett konkurrent test.",
-                    user_id=1,
+                    user_id=race_user_id,
                 ),
                 service2.upsert_priority_word(
                     word_phrase="konkurrent",
                     translation="concurrent",
                     example_phrase="Detta ar ett konkurrent test.",
-                    user_id=1,
+                    user_id=race_user_id,
                 ),
             )
 
@@ -987,7 +1000,7 @@ class TestVocabularyService:
                 (
                     await verify_db.execute(
                         select(VocabularyModel).where(
-                            VocabularyModel.user_id == 1, VocabularyModel.word_phrase == "konkurrent"
+                            VocabularyModel.user_id == race_user_id, VocabularyModel.word_phrase == "konkurrent"
                         )
                     )
                 )

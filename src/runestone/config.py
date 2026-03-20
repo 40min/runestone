@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Literal, Optional
 
 from dotenv import load_dotenv
-from pydantic import AliasChoices, Field, model_validator
+from pydantic import AliasChoices, BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -24,7 +24,7 @@ class ReasoningLevel(str, Enum):
     HIGH = "high"
 
 
-class AgentLLMSettings(BaseSettings):
+class AgentLLMSettings(BaseModel):
     """Resolved LLM settings for a specific agent."""
 
     provider: Literal["openrouter", "openai"]
