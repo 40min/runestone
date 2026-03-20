@@ -26,13 +26,30 @@ from runestone.agents.tools.memory import (
 )
 from runestone.agents.tools.news import search_news_with_dates
 from runestone.agents.tools.read_url import read_url
-from runestone.agents.tools.vocabulary import prioritize_words_for_learning
 from runestone.config import Settings
+from runestone.core.observability import timed_operation
 from runestone.db.models import User
 from runestone.rag.index import GrammarIndex
 from runestone.services.grammar_service import GrammarService
 
 logger = logging.getLogger(__name__)
+
+
+def _teacher_timing_fields(args, kwargs, _result, _error) -> dict[str, int | str | None]:
+    message = kwargs.get("message") if "message" in kwargs else (args[1] if len(args) > 1 else "")
+    history = kwargs.get("history") if "history" in kwargs else (args[2] if len(args) > 2 else [])
+    user = kwargs.get("user") if "user" in kwargs else (args[3] if len(args) > 3 else None)
+    pre_results = kwargs.get("pre_results") if "pre_results" in kwargs else (args[4] if len(args) > 4 else None)
+    recent_side_effects = (
+        kwargs.get("recent_side_effects") if "recent_side_effects" in kwargs else (args[5] if len(args) > 5 else None)
+    )
+    return {
+        "user_id": getattr(user, "id", None),
+        "message_chars": len(message),
+        "history_messages": len(history),
+        "pre_results": len(pre_results or []),
+        "recent_side_effects": len(recent_side_effects or []),
+    }
 
 
 class TeacherAgent:
@@ -56,8 +73,8 @@ class TeacherAgent:
 
         logger.info(
             "[agents:teacher] Initialized TeacherAgent with provider=%s, " "model=%s, persona=%s",
-            settings.chat_provider,
-            settings.chat_model,
+            settings.teacher_provider,
+            settings.teacher_model,
             settings.agent_persona,
         )
 
@@ -71,7 +88,7 @@ class TeacherAgent:
         settings = self.settings
 
         # Initialize the LangChain chat model
-        chat_model = build_chat_model(settings, temperature=1)
+        chat_model = build_chat_model(settings, "teacher")
 
         tools = [
             start_student_info,
@@ -81,7 +98,6 @@ class TeacherAgent:
             update_memory_priority,
             promote_to_strength,
             delete_memory_item,
-            prioritize_words_for_learning,
             search_news_with_dates,
             search_grammar,
             read_grammar_page,
@@ -169,29 +185,20 @@ of the student using structured memory items with stable IDs.
 - Always use descriptive keys (e.g., "grammar_struggles", "favorite_hobby", "past_tense_mastery").
 - If you are unsure if a detail is important, save it anyway.
 
-### WORD PRIORITISATION PROTOCOL
-This tool writes to persistent vocabulary state.
+### WORDKEEPER SPECIALIST
+Word-saving is handled by an internal helper specialist called `WordKeeper`, not by a tool you call directly.
 
-Use `prioritize_words_for_learning` to save words that should be practiced later.
-This includes normal conversation, not only mistakes.
+Use natural wording to surface candidate vocabulary when helpful, for example:
+- "The key words here are ..."
+- "These are good words to memorize ..."
+- "Let's keep these words in mind ..."
 
-When to use it:
-- The student explicitly asks to save/add/remember a word for later.
-- A useful or interesting new word appears in conversation and should be retained.
-- The student asks "let's keep this word" / "save this one" / similar.
-- The student is struggling with a word or asks for translation support.
-
-Effect:
-- Saves missing words into vocabulary.
-- Restores previously deleted words if needed.
-- Marks words for priority recall in the next daily learning session.
-
-**MANDATORY EXECUTION RULES**
-- If you say a word has been saved, added, updated, restored, or prioritised, you MUST call
-  `prioritize_words_for_learning` first in the same turn.
-- After calling the tool, reflect the actual result (created/restored/prioritized/already_prioritized/errors).
-- If the user asks you to save/prioritize words and you have enough details, call the tool immediately.
-- Never pretend persistence happened.
+Truthfulness rules:
+- Only say words were definitely saved if the internal pre-response specialist
+  already confirmed that in this turn.
+- Otherwise, you may highlight useful or memorable words as candidates for
+  post-response capture without claiming persistence already happened.
+- Keep this guidance compact in your response; do not mention `WordKeeper` or internal routing.
 
 ### NEWS TOOL
 Use `search_news_with_dates` when the student asks for Swedish news about a topic
@@ -229,6 +236,7 @@ to read its contents before deciding.
 
         return agent
 
+    @timed_operation(logger, "[agents:teacher] Response generated", fields_factory=_teacher_timing_fields)
     async def generate_response(
         self,
         message: str,
@@ -265,6 +273,12 @@ to read its contents before deciding.
 
         # Add conversation history
         truncated_history = history[-self.MAX_HISTORY_MESSAGES :] if history else []
+        if history and len(history) > self.MAX_HISTORY_MESSAGES:
+            logger.warning(
+                "[agents:teacher] Truncated chat history from %s to %s messages",
+                len(history),
+                len(truncated_history),
+            )
         for msg in truncated_history:
             if msg.role == "user":
                 messages.append(HumanMessage(content=msg.content))
@@ -301,6 +315,12 @@ to read its contents before deciding.
             return ""
         lines = ["", "", "[NEWS_SOURCES]"]
         max_sources = 20
+        if len(sources) > max_sources:
+            logger.warning(
+                "[agents:teacher] Truncated news sources from %s to %s items",
+                len(sources),
+                max_sources,
+            )
         for idx, item in enumerate(sources[:max_sources], start=1):
             if isinstance(item, dict):
                 data = item
@@ -342,12 +362,14 @@ to read its contents before deciding.
             result = item.get("result", {}) if isinstance(item, dict) else {}
             status = result.get("status", "unknown")
             info_for_teacher = result.get("info_for_teacher", "")
+            truncated_info = TeacherAgent._truncate_text(
+                info_for_teacher,
+                max_len=INFO_FOR_TEACHER_MAX_CHARS,
+                log_label=f"pre_result:{name}",
+            )
             # Raw artifacts stay machine-oriented; teacher-facing context should
             # come from info_for_teacher and recent side-effect summaries.
-            lines.append(
-                f"- {name} ({status}): "
-                f"{TeacherAgent._truncate_text(info_for_teacher, max_len=INFO_FOR_TEACHER_MAX_CHARS) or 'no info'}"
-            )
+            lines.append(f"- {name} ({status}): " f"{truncated_info or 'no info'}")
         return "\n".join(lines)
 
     @staticmethod
@@ -358,20 +380,37 @@ to read its contents before deciding.
             "Use them to answer follow-up questions truthfully, but do not mention the tag or raw structure.",
         ]
         remaining_chars = max(TeacherAgent.RECENT_SIDE_EFFECTS_MAX_CHARS - len("\n".join(lines)), 0)
+        visible_side_effects = recent_side_effects[-TeacherAgent.RECENT_SIDE_EFFECTS_MAX_ITEMS :]
+        if len(recent_side_effects) > TeacherAgent.RECENT_SIDE_EFFECTS_MAX_ITEMS:
+            logger.warning(
+                "[agents:teacher] Truncated recent side effects from %s to %s items",
+                len(recent_side_effects),
+                len(visible_side_effects),
+            )
 
-        for item in recent_side_effects[-TeacherAgent.RECENT_SIDE_EFFECTS_MAX_ITEMS :]:
+        for item in visible_side_effects:
             if item.status != "action_taken":
                 continue
             name = item.name
             summary = TeacherAgent._side_effect_summary(item)
             line = f"- {name}: {summary}"
             if len(line) + 1 > remaining_chars:
-                line = TeacherAgent._truncate_text(line, max_len=max(remaining_chars, 0))
+                logger.warning(
+                    "[agents:teacher] Truncated recent side effects text for '%s' to fit %s-char budget",
+                    name,
+                    TeacherAgent.RECENT_SIDE_EFFECTS_MAX_CHARS,
+                )
+                line = TeacherAgent._truncate_text(
+                    line,
+                    max_len=max(remaining_chars, 0),
+                    log_label=f"recent_side_effect_line:{name}",
+                )
             if not line:
                 break
             lines.append(line)
             remaining_chars -= len(line) + 1
             if remaining_chars <= 0:
+                logger.warning("[agents:teacher] Exhausted recent side effects char budget")
                 break
 
         return "\n".join(lines)
@@ -379,7 +418,11 @@ to read its contents before deciding.
     @staticmethod
     def _side_effect_summary(item: TeacherSideEffect) -> str:
         info_for_teacher = item.info_for_teacher
-        truncated_info = TeacherAgent._truncate_text(info_for_teacher, max_len=INFO_FOR_TEACHER_MAX_CHARS)
+        truncated_info = TeacherAgent._truncate_text(
+            info_for_teacher,
+            max_len=INFO_FOR_TEACHER_MAX_CHARS,
+            log_label=f"side_effect_info:{item.name}",
+        )
         if truncated_info:
             return truncated_info
 
@@ -389,7 +432,14 @@ to read its contents before deciding.
             for key, value in list(artifacts.items())[:3]:
                 artifact_parts.append(f"{key}={TeacherAgent._stringify_artifact_value(value)}")
             fallback = "artifacts: " + ", ".join(artifact_parts)
-            return TeacherAgent._truncate_text(fallback, max_len=240) or "action completed"
+            return (
+                TeacherAgent._truncate_text(
+                    fallback,
+                    max_len=240,
+                    log_label=f"side_effect_artifacts:{item.name}",
+                )
+                or "action completed"
+            )
 
         return "action completed"
 
@@ -404,13 +454,30 @@ to read its contents before deciding.
         return str(value)
 
     @staticmethod
-    def _truncate_text(text: str, max_len: int = INFO_FOR_TEACHER_MAX_CHARS) -> str:
+    def _truncate_text(
+        text: str,
+        max_len: int = INFO_FOR_TEACHER_MAX_CHARS,
+        *,
+        log_label: str | None = None,
+    ) -> str:
         if not isinstance(text, str):
             return ""
         if max_len <= 0:
+            if text:
+                logger.warning(
+                    "[agents:teacher] Dropped text%s because max_len=%s",
+                    f" for {log_label}" if log_label else "",
+                    max_len,
+                )
             return ""
         if len(text) <= max_len:
             return text
+        logger.warning(
+            "[agents:teacher] Truncated text%s from %s to %s chars",
+            f" for {log_label}" if log_label else "",
+            len(text),
+            max_len,
+        )
         if max_len < 4:
             return text[:max_len]
         return text[: max_len - 3] + "..."

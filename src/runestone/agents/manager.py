@@ -15,11 +15,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from runestone.agents.coordinator import CoordinatorAgent
 from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem
 from runestone.agents.specialists.base import SpecialistContext
-from runestone.agents.specialists.memory_reader import MemoryReaderSpecialist
+
+# from runestone.agents.specialists.memory_reader import MemoryReaderSpecialist
 from runestone.agents.specialists.registry import SpecialistRegistry
 from runestone.agents.specialists.teacher import TeacherAgent
+from runestone.agents.specialists.word_keeper import WordKeeperSpecialist
 from runestone.config import Settings
 from runestone.core.exceptions import RunestoneError
+from runestone.core.observability import elapsed_ms_since
 from runestone.db.models import User
 from runestone.rag.index import GrammarIndex
 from runestone.services.agent_side_effect_service import AgentSideEffectService
@@ -36,6 +39,7 @@ class AgentsManager:
     """
 
     COORDINATOR_MAX_HISTORY_MESSAGES = 5
+    WORD_KEEPER_MAX_HISTORY_MESSAGES = 2
 
     def __init__(
         self,
@@ -55,12 +59,15 @@ class AgentsManager:
             grammar_service=grammar_service,
         )
         self.registry = SpecialistRegistry()
-        self.registry.register(MemoryReaderSpecialist())
+        # todo: enable memory reader after we finish memory tools
+        # migrations to agents
+        # self.registry.register(MemoryReaderSpecialist())
+        self.registry.register(WordKeeperSpecialist(settings))
 
         logger.info(
             "[agents:manager] Initialized AgentsManager with provider=%s, model=%s, persona=%s",
-            settings.chat_provider,
-            settings.chat_model,
+            settings.teacher_provider,
+            settings.teacher_model,
             settings.agent_persona,
         )
 
@@ -101,6 +108,12 @@ class AgentsManager:
                 )
 
         coordinator_history = history[-self.COORDINATOR_MAX_HISTORY_MESSAGES :] if history else []
+        if history and len(history) > self.COORDINATOR_MAX_HISTORY_MESSAGES:
+            logger.warning(
+                "[agents:manager] Truncated coordinator history from %s to %s messages",
+                len(history),
+                len(coordinator_history),
+            )
         plan = None
         try:
             plan = await self.coordinator.plan(
@@ -184,7 +197,25 @@ class AgentsManager:
 
         async def _invoke(item, specialist):
             started = time.monotonic()
-            history_window = history[-item.chat_history_size :] if item.chat_history_size else []
+            effective_history_size = item.chat_history_size
+            if item.name == "word_keeper":
+                effective_history_size = min(item.chat_history_size, self.WORD_KEEPER_MAX_HISTORY_MESSAGES)
+                if item.chat_history_size != effective_history_size:
+                    logger.warning(
+                        "[agents:manager] Capped specialist history for '%s' from %s to %s messages",
+                        item.name,
+                        item.chat_history_size,
+                        effective_history_size,
+                    )
+
+            history_window = history[-effective_history_size:] if effective_history_size else []
+            if effective_history_size and len(history) > effective_history_size:
+                logger.warning(
+                    "[agents:manager] Truncated specialist history for '%s' from %s to %s messages",
+                    item.name,
+                    len(history),
+                    len(history_window),
+                )
             context = SpecialistContext(
                 message=message,
                 history=history_window,
@@ -192,11 +223,11 @@ class AgentsManager:
                 teacher_response=teacher_response,
                 pre_results=pre_results or [],
                 routing_reason=item.reason,
-                chat_history_size=item.chat_history_size,
+                chat_history_size=effective_history_size,
             )
             try:
                 result = await specialist.run(context)
-                latency_ms = int((time.monotonic() - started) * 1000)
+                latency_ms = elapsed_ms_since(started)
                 logger.info(
                     "[agents:%s] Result: status=%s latency_ms=%s",
                     item.name,
@@ -216,7 +247,7 @@ class AgentsManager:
                     "routing_reason": item.reason,
                 }
             except Exception:
-                latency_ms = int((time.monotonic() - started) * 1000)
+                latency_ms = elapsed_ms_since(started)
                 logger.warning("[agents:manager] Specialist '%s' failed", item.name, exc_info=True)
                 return {
                     "name": item.name,

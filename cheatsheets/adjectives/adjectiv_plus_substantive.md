@@ -69,3 +69,16 @@
 | Bills gröna äppl**et**    | Bills gröna äpple |
 
 > Possessive already signals "we know whose it is" — the noun doesn't need to be definite too. 😌
+
+## 🔬 SPECIAL: liten across all 3 combos
+
+| Combo            | EN-ORD                    | ETT-ORD                    | PLURAL                    |
+| ---------------- | ------------------------- | -------------------------- | ------------------------- |
+| 1️⃣ **Quantity**   | en/ingen lite**n** bil    | ett/inget lite**t** äpple  | många/inga **små** bilar  |
+| 2️⃣ **Definite**   | den (här) li**lla** bilen | det (här) li**lla** äpplet | de (här) **små** bilarna  |
+| 3️⃣ **Possessive** | min/Olas li**lla** bil    | mitt/Bills li**lla** äpple | mina/Bills **små** äpplen |
+
+> 💡 **Pattern:**
+> - Obestämd singular → **liten / litet** (the weird ones 😬)
+> - Bestämd singular → **lilla** (always, no exceptions 😌)
+> - Plural → **små** (always, whether definite or not 🤝)

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.exceptions import OutputParserException
 
-from runestone.agents.coordinator import CoordinatorAgent
+from runestone.agents.coordinator import COORDINATOR_SYSTEM_PROMPT, CoordinatorAgent
 from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem
 from runestone.config import Settings
 
@@ -17,8 +17,7 @@ from runestone.config import Settings
 def mock_settings():
     """Create mock settings for testing."""
     settings = MagicMock(spec=Settings)
-    settings.chat_provider = "openrouter"
-    settings.chat_model = "grok-core"
+    settings.coordinator_provider = "openrouter"
     settings.coordinator_model = "grok-coordinator"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
@@ -47,11 +46,7 @@ def test_init_uses_coordinator_model(mock_settings, mock_chat_model):
     """Test initialization with required coordinator model."""
     with patch("runestone.agents.coordinator.build_chat_model", return_value=mock_chat_model) as mock_build:
         CoordinatorAgent(mock_settings)
-        mock_build.assert_called_once_with(
-            mock_settings,
-            model_name="grok-coordinator",
-            temperature=0,
-        )
+        mock_build.assert_called_once_with(mock_settings, "coordinator")
 
 
 def test_init_coordinator_model(mock_settings, mock_chat_model):
@@ -59,11 +54,18 @@ def test_init_coordinator_model(mock_settings, mock_chat_model):
     mock_settings.coordinator_model = "gpt-4o-mini"
     with patch("runestone.agents.coordinator.build_chat_model", return_value=mock_chat_model) as mock_build:
         CoordinatorAgent(mock_settings)
-        mock_build.assert_called_once_with(
-            mock_settings,
-            model_name="gpt-4o-mini",
-            temperature=0,
-        )
+        mock_build.assert_called_once_with(mock_settings, "coordinator")
+
+
+def test_word_keeper_prompt_keeps_routing_pre_only():
+    """Coordinator prompt should keep WordKeeper pre-only and teacher-cue based."""
+    assert "Route `word_keeper` in `pre_response` only." in COORDINATOR_SYSTEM_PROMPT
+    assert "most recent teacher message explicitly says words should be remembered or saved" in (
+        COORDINATOR_SYSTEM_PROMPT
+    )
+    assert "consider only the last two messages in `history`" in COORDINATOR_SYSTEM_PROMPT
+    assert "set `chat_history_size` to exactly 2" in COORDINATOR_SYSTEM_PROMPT
+    assert "Do not route it just because the student reused a word" in COORDINATOR_SYSTEM_PROMPT
 
 
 @pytest.mark.anyio

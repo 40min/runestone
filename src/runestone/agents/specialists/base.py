@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, StringConstraints
 
 from runestone.agents.schemas import ChatMessage
 
-INFO_FOR_TEACHER_MAX_CHARS = 3000
+INFO_FOR_TEACHER_MAX_CHARS = 12000
 
 
 class SpecialistContext(BaseModel):

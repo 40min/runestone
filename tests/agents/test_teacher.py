@@ -9,20 +9,27 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from runestone.agents.schemas import ChatMessage, TeacherSideEffect
+from runestone.agents.specialists.base import INFO_FOR_TEACHER_MAX_CHARS
 from runestone.agents.specialists.teacher import TeacherAgent
-from runestone.config import Settings
+from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
 
 
 @pytest.fixture
 def mock_settings():
     """Create mock settings for testing."""
     settings = MagicMock(spec=Settings)
-    settings.chat_provider = "openrouter"
-    settings.chat_model = "test-model"
+    settings.teacher_provider = "openrouter"
+    settings.teacher_model = "test-model"
     settings.agent_persona = "default"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
     settings.allowed_origins = "http://localhost:5173"
+    settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+        provider="openrouter",
+        model="test-model",
+        temperature=1.0,
+        reasoning_level=ReasoningLevel.NONE,
+    )
     return settings
 
 
@@ -63,11 +70,23 @@ def test_build_agent(mock_settings, mock_chat_model):
             call_kwargs = mock_create_agent.call_args[1]
             assert call_kwargs["model"] == mock_chat_model
             tools = mock_create_agent.call_args[1]["tools"]
-            assert len(tools) == 12
+            assert len(tools) == 11
+            assert all(getattr(tool, "name", None) != "prioritize_words_for_learning" for tool in tools)
             assert "MEMORY PROTOCOL" in call_kwargs["system_prompt"]
             assert "TOOL TRUTHFULNESS (MANDATORY)" in call_kwargs["system_prompt"]
-            assert "Never pretend persistence happened." in call_kwargs["system_prompt"]
-            assert "This includes normal conversation, not only mistakes." in call_kwargs["system_prompt"]
+            assert "only say words were definitely saved" in call_kwargs["system_prompt"].lower()
+            assert "WORDKEEPER SPECIALIST" in call_kwargs["system_prompt"]
+            assert "The key words here are" in call_kwargs["system_prompt"]
+            assert "not by a tool you call directly" in call_kwargs["system_prompt"]
+
+
+def test_build_agent_uses_teacher_purpose(mock_settings, mock_chat_model):
+    """Test teacher agent requests the teacher model profile."""
+    with patch("runestone.agents.specialists.teacher.build_chat_model", return_value=mock_chat_model) as mock_build:
+        with patch("runestone.agents.specialists.teacher.create_agent"):
+            TeacherAgent(mock_settings)
+
+    mock_build.assert_called_with(mock_settings, "teacher")
 
 
 def test_format_pre_results_uses_info_for_teacher_only():
@@ -105,7 +124,7 @@ def test_format_pre_results_uses_no_info_fallback():
 
 
 def test_format_pre_results_truncates_long_summary():
-    long_summary = "x" * (TeacherAgent.RECENT_SIDE_EFFECTS_MAX_CHARS + 2000)
+    long_summary = "x" * (INFO_FOR_TEACHER_MAX_CHARS + 2000)
 
     formatted = TeacherAgent._format_pre_results(
         [{"name": "grammar", "result": {"status": "action_taken", "info_for_teacher": long_summary}}]
@@ -113,6 +132,17 @@ def test_format_pre_results_truncates_long_summary():
 
     assert len(formatted) < len(long_summary)
     assert formatted.endswith("...")
+
+
+def test_format_pre_results_logs_when_summary_is_truncated(caplog):
+    long_summary = "x" * (INFO_FOR_TEACHER_MAX_CHARS + 2000)
+
+    with caplog.at_level("WARNING"):
+        TeacherAgent._format_pre_results(
+            [{"name": "grammar", "result": {"status": "action_taken", "info_for_teacher": long_summary}}]
+        )
+
+    assert "Truncated text for pre_result:grammar" in caplog.text
 
 
 @pytest.mark.anyio
@@ -229,6 +259,68 @@ def test_format_recent_side_effects_respects_budget():
     assert len(formatted) <= TeacherAgent.RECENT_SIDE_EFFECTS_MAX_CHARS + 200
 
 
+def test_format_recent_side_effects_logs_when_limits_hit(caplog):
+    items = [
+        TeacherSideEffect(
+            name=f"specialist-{idx}",
+            phase="post_response",
+            status="action_taken",
+            info_for_teacher="x" * 700,
+            artifacts={},
+            routing_reason="test",
+        )
+        for idx in range(10)
+    ]
+
+    with caplog.at_level("WARNING"):
+        TeacherAgent._format_recent_side_effects(items)
+
+    assert "Truncated recent side effects from 10 to 5 items" in caplog.text
+    assert "Exhausted recent side effects char budget" in caplog.text
+
+
+@pytest.mark.anyio
+async def test_generate_response_logs_when_history_is_truncated(teacher_agent, mock_user, caplog):
+    history = [ChatMessage(role="user", content=f"m{i}") for i in range(TeacherAgent.MAX_HISTORY_MESSAGES + 3)]
+    teacher_agent.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
+
+    with caplog.at_level("WARNING"):
+        await teacher_agent.generate_response(message="Current msg", history=history, user=mock_user)
+
+    assert "Truncated chat history" in caplog.text
+
+
+@pytest.mark.anyio
+async def test_generate_response_logs_timing_metadata(teacher_agent, mock_user, caplog):
+    teacher_agent.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
+
+    with caplog.at_level("INFO"):
+        await teacher_agent.generate_response(
+            message="Hej",
+            history=[ChatMessage(role="user", content="Tidigare")],
+            user=mock_user,
+            pre_results=[{"name": "memory_reader", "result": {"status": "action_taken"}}],
+            recent_side_effects=[
+                TeacherSideEffect(
+                    name="word_keeper",
+                    phase="post_response",
+                    status="action_taken",
+                    info_for_teacher="Saved 1 vocabulary item.",
+                    artifacts={},
+                    routing_reason="save request",
+                )
+            ],
+        )
+
+    assert "[agents:teacher] Response generated" in caplog.text
+    assert "latency_ms=" in caplog.text
+    assert "user_id=1" in caplog.text
+    assert "history_messages=1" in caplog.text
+    assert "pre_results=1" in caplog.text
+    assert "recent_side_effects=1" in caplog.text
+    assert "outcome=success" in caplog.text
+
+
 @pytest.mark.anyio
 async def test_generate_response_prompt_matches_fixture(teacher_agent, mock_user):
     mock_user.mother_tongue = "Spanish"
@@ -274,7 +366,13 @@ async def test_generate_response_prompt_matches_fixture(teacher_agent, mock_user
 
 def test_openai_provider_configuration(mock_settings):
     """Test that OpenAI provider is configured correctly."""
-    mock_settings.chat_provider = "openai"
+    mock_settings.teacher_provider = "openai"
+    mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+        provider="openai",
+        model="test-model",
+        temperature=1.0,
+        reasoning_level=ReasoningLevel.NONE,
+    )
 
     with patch("runestone.agents.llm.ChatOpenAI") as mock_chat_openai:
         with patch("runestone.agents.specialists.teacher.create_agent"):

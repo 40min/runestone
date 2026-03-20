@@ -10,7 +10,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from runestone.agents.manager import AgentsManager
 from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem, TeacherSideEffect
 from runestone.agents.specialists.base import BaseSpecialist, SpecialistContext, SpecialistResult
-from runestone.config import Settings
+from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
 from runestone.services.agent_side_effect_service import AgentSideEffectService
 
 
@@ -18,13 +18,36 @@ from runestone.services.agent_side_effect_service import AgentSideEffectService
 def mock_settings():
     """Create mock settings for testing."""
     settings = MagicMock(spec=Settings)
-    settings.chat_provider = "openrouter"
-    settings.chat_model = "test-model"
+    settings.teacher_provider = "openrouter"
+    settings.teacher_model = "test-model"
     settings.coordinator_model = "test-coordinator-model"
+    settings.coordinator_provider = "openrouter"
+    settings.word_keeper_provider = "openrouter"
+    settings.word_keeper_model = "test-model"
     settings.agent_persona = "default"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
     settings.allowed_origins = "http://localhost:5173"
+    settings.get_agent_llm_settings.side_effect = lambda agent_name: {
+        "teacher": AgentLLMSettings(
+            provider="openrouter",
+            model="test-model",
+            temperature=1.0,
+            reasoning_level=ReasoningLevel.NONE,
+        ),
+        "coordinator": AgentLLMSettings(
+            provider="openrouter",
+            model="test-coordinator-model",
+            temperature=0.0,
+            reasoning_level=ReasoningLevel.NONE,
+        ),
+        "word_keeper": AgentLLMSettings(
+            provider="openrouter",
+            model="test-model",
+            temperature=0.0,
+            reasoning_level=ReasoningLevel.NONE,
+        ),
+    }[agent_name]
     return settings
 
 
@@ -88,6 +111,24 @@ async def test_coordinator_history_is_truncated(
 
     _args, kwargs = manager.coordinator.plan.call_args
     assert len(kwargs["history"]) == manager.COORDINATOR_MAX_HISTORY_MESSAGES
+
+
+@pytest.mark.anyio
+async def test_coordinator_history_truncation_logs_warning(
+    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service, caplog
+):
+    manager = AgentsManager(mock_settings)
+    manager.coordinator.plan = AsyncMock(return_value=CoordinatorPlan(pre_response=[], post_response=[], audit={}))
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = ("Hi there!", [])
+
+    history = [ChatMessage(role="user", content=f"m{i}") for i in range(10)]
+    with caplog.at_level("WARNING"):
+        await manager.generate_response(
+            "Hello", "chat-1", history, mock_user, mock_memory_item_service, mock_side_effect_service
+        )
+
+    assert "Truncated coordinator history" in caplog.text
 
 
 @pytest.mark.anyio
@@ -261,7 +302,7 @@ def test_is_safe_url(mock_settings):
 
 def test_manager_registers_default_specialists(mock_settings):
     manager = AgentsManager(mock_settings)
-    assert "memory_reader" in manager.registry.list_names()
+    assert manager.registry.list_names() == ["word_keeper"]
 
 
 @pytest.mark.anyio
@@ -330,6 +371,82 @@ async def test_specialist_history_is_truncated(mock_settings, mock_user, mock_me
 
 
 @pytest.mark.anyio
+async def test_specialist_history_truncation_logs_warning(mock_settings, mock_user, mock_memory_item_service, caplog):
+    manager = AgentsManager(mock_settings)
+    capture = _CaptureHistorySpecialist()
+    manager.registry.register(capture)
+    manager.coordinator.plan = AsyncMock(
+        return_value=CoordinatorPlan(
+            pre_response=[RoutingItem(name="capture_history", reason="test", chat_history_size=1)],
+            post_response=[],
+            audit={},
+        )
+    )
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = ("Hi there!", [])
+
+    history = [
+        ChatMessage(role="user", content="m1"),
+        ChatMessage(role="assistant", content="m2"),
+        ChatMessage(role="user", content="m3"),
+    ]
+    side_effect_service = MagicMock(spec=AgentSideEffectService)
+    side_effect_service.load_recent_for_teacher = AsyncMock(return_value=[])
+    side_effect_service.replace_post_response_side_effects = AsyncMock(return_value=None)
+
+    with caplog.at_level("WARNING"):
+        await manager.generate_response(
+            "Hello",
+            "chat-1",
+            history,
+            mock_user,
+            mock_memory_item_service,
+            side_effect_service,
+        )
+
+    assert "Truncated specialist history for 'capture_history'" in caplog.text
+
+
+@pytest.mark.anyio
+async def test_word_keeper_history_is_capped_to_two_messages(
+    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+):
+    manager = AgentsManager(mock_settings)
+    capture = _CaptureHistorySpecialist()
+    capture.name = "word_keeper"
+    manager.registry.register(capture, overwrite=True)
+    manager.coordinator.plan = AsyncMock(
+        return_value=CoordinatorPlan(
+            pre_response=[RoutingItem(name="word_keeper", reason="save words", chat_history_size=6)],
+            post_response=[],
+            audit={},
+        )
+    )
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = ("Hi there!", [])
+
+    history = [
+        ChatMessage(role="user", content="m1"),
+        ChatMessage(role="assistant", content="m2"),
+        ChatMessage(role="user", content="m3"),
+        ChatMessage(role="assistant", content="m4"),
+    ]
+
+    await manager.generate_response(
+        "Hello",
+        "chat-1",
+        history,
+        mock_user,
+        mock_memory_item_service,
+        mock_side_effect_service,
+    )
+
+    assert capture.seen_history is not None
+    assert len(capture.seen_history) == 2
+    assert [msg.content for msg in capture.seen_history] == ["m3", "m4"]
+
+
+@pytest.mark.anyio
 async def test_recent_side_effects_passed_to_teacher(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
@@ -375,7 +492,7 @@ async def test_post_response_results_are_forwarded_to_side_effect_service(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
     manager = AgentsManager(mock_settings)
-    manager.registry.register(_ActionSpecialist())
+    manager.registry.register(_ActionSpecialist(), overwrite=True)
     manager.coordinator.plan = AsyncMock(
         return_value=CoordinatorPlan(
             pre_response=[],

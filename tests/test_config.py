@@ -7,6 +7,8 @@ import pytest
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings
 
+from runestone.config import ReasoningLevel, Settings
+
 
 class TestSettings:
     """Test the Settings class."""
@@ -99,3 +101,66 @@ class TestSettings:
         assert settings.openai_api_key == "test_openai_api_key_for_testing_only"
         assert settings.allowed_origins == "http://localhost:5173,http://127.0.0.1:5173,http://frontend:3010"
         assert settings.telegram_bot_token == "test_telegram_bot_token_for_testing_only"
+
+    def test_agent_reasoning_level_accepts_known_enum_values(self):
+        """Test per-agent reasoning settings are validated via enum."""
+        env_vars = {
+            "LLM_PROVIDER": "openai",
+            "OPENAI_API_KEY": "test-key",
+            "OPENROUTER_API_KEY": "test-openrouter-key",
+            "ALLOWED_ORIGINS": "http://localhost:3000",
+            "DATABASE_URL": "sqlite:///./test.db",
+            "TELEGRAM_BOT_TOKEN": "test-token",
+            "FRONTEND_URL": "http://localhost:5173",
+            "JWT_SECRET_KEY": "secret",
+            "TEACHER_MODEL": "teacher-model",
+            "COORDINATOR_MODEL": "coordinator-model",
+            "COORDINATOR_REASONING_LEVEL": "minimal",
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            test_settings = Settings()
+
+        assert test_settings.coordinator_reasoning_level == ReasoningLevel.MINIMAL
+
+    def test_agent_reasoning_level_rejects_unknown_values(self):
+        """Test invalid reasoning values fail validation."""
+        env_vars = {
+            "LLM_PROVIDER": "openai",
+            "OPENAI_API_KEY": "test-key",
+            "OPENROUTER_API_KEY": "test-openrouter-key",
+            "ALLOWED_ORIGINS": "http://localhost:3000",
+            "DATABASE_URL": "sqlite:///./test.db",
+            "TELEGRAM_BOT_TOKEN": "test-token",
+            "FRONTEND_URL": "http://localhost:5173",
+            "JWT_SECRET_KEY": "secret",
+            "TEACHER_MODEL": "teacher-model",
+            "COORDINATOR_MODEL": "coordinator-model",
+            "TEACHER_REASONING_LEVEL": "turbo",
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            with pytest.raises(ValidationError):
+                Settings()
+
+    def test_teacher_env_names_replace_chat_prefix_with_backward_compatible_alias(self):
+        """Test TEACHER_* env names are primary, with CHAT_* still accepted for migration."""
+        env_vars = {
+            "LLM_PROVIDER": "openai",
+            "OPENAI_API_KEY": "test-key",
+            "OPENROUTER_API_KEY": "test-openrouter-key",
+            "ALLOWED_ORIGINS": "http://localhost:3000",
+            "DATABASE_URL": "sqlite:///./test.db",
+            "TELEGRAM_BOT_TOKEN": "test-token",
+            "FRONTEND_URL": "http://localhost:5173",
+            "JWT_SECRET_KEY": "secret",
+            "CHAT_PROVIDER": "openrouter",
+            "CHAT_MODEL": "legacy-chat-model",
+            "COORDINATOR_MODEL": "coordinator-model",
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            test_settings = Settings()
+
+        assert test_settings.teacher_provider == "openrouter"
+        assert test_settings.teacher_model == "legacy-chat-model"

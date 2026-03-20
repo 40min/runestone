@@ -44,3 +44,20 @@ def test_simplify_markdown_filters_cookie_lines():
     simplified = tools._simplify_markdown(md)
     assert simplified.count("Line A") == 1
     assert "Accept cookies" not in simplified
+
+
+@pytest.mark.anyio
+async def test_read_url_logs_when_output_is_truncated(monkeypatch, caplog):
+    long_text = "x" * (tools.MAX_OUTPUT_CHARS + 64)
+
+    async def _fake_fetch_url_bytes(_url: str):
+        return long_text.encode("utf-8"), "https://example.com", "text/plain", False
+
+    monkeypatch.setattr(tools, "_fetch_url_bytes", _fake_fetch_url_bytes)
+
+    with caplog.at_level("WARNING"):
+        result = await tools.read_url.ainvoke({"url": "https://example.com"})
+
+    assert "read_url output truncated" in caplog.text
+    assert "[Truncated output.]" in result
+    assert "Note: Content was truncated due to size limits." in result

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import delete, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,6 +62,66 @@ class VocabularyRepository:
         await self.db.commit()
         await self.db.refresh(vocab)
         return vocab
+
+    async def upsert_priority_word(self, word_phrase: str, translation: str, example_phrase: str, user_id: int) -> dict:
+        """Atomically upsert a priority word and return action metadata.
+
+        Uses a single PostgreSQL statement with ON CONFLICT DO UPDATE.
+        """
+        stmt = text(
+            """
+            WITH existing AS (
+                SELECT id, in_learn, priority_learn
+                FROM vocabulary
+                WHERE user_id = :user_id AND word_phrase = :word_phrase
+            ),
+            upserted AS (
+                INSERT INTO vocabulary (user_id, word_phrase, translation, example_phrase, in_learn, priority_learn)
+                VALUES (:user_id, :word_phrase, :translation, :example_phrase, TRUE, TRUE)
+                ON CONFLICT (user_id, word_phrase) DO UPDATE
+                SET
+                    in_learn = TRUE,
+                    priority_learn = TRUE,
+                    updated_at = NOW()
+                RETURNING id, (xmax = 0) AS inserted
+            )
+            SELECT
+                u.id AS word_id,
+                CASE
+                    WHEN u.inserted THEN 'created'
+                    WHEN e.in_learn IS FALSE THEN 'restored'
+                    WHEN e.priority_learn IS FALSE THEN 'prioritized'
+                    ELSE 'already_prioritized'
+                END AS action,
+                CASE
+                    WHEN u.inserted THEN TRUE
+                    WHEN e.in_learn IS FALSE OR e.priority_learn IS FALSE THEN TRUE
+                    ELSE FALSE
+                END AS changed
+            FROM upserted u
+            LEFT JOIN existing e ON e.id = u.id
+            """
+        )
+        result = await self.db.execute(
+            stmt,
+            {
+                "user_id": user_id,
+                "word_phrase": word_phrase,
+                "translation": translation,
+                "example_phrase": example_phrase,
+            },
+        )
+        row = result.mappings().one()
+        await self.db.commit()
+        # Keep identity map in sync for sessions that already loaded this row.
+        await self.db.execute(
+            select(Vocabulary).where(Vocabulary.id == int(row["word_id"])).execution_options(populate_existing=True)
+        )
+        return {
+            "action": str(row["action"]),
+            "word_id": int(row["word_id"]),
+            "changed": bool(row["changed"]),
+        }
 
     async def upsert_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int):
         """Upsert vocabulary items: update if exists, insert if not."""

@@ -160,6 +160,26 @@ async def test_process_message_with_history(chat_service, db_with_test_user, moc
 
 
 @pytest.mark.anyio
+async def test_process_message_logs_total_turn_timing(
+    chat_service, db_with_test_user, mock_agent_service, mock_user_service, caplog
+):
+    """Test overall chat turn timing is logged."""
+    db, user = db_with_test_user
+    user.current_chat_id = str(uuid4())
+    mock_user_service.get_user_by_id.return_value = user
+    mock_user_service.get_or_create_current_chat_id.return_value = user.current_chat_id
+
+    with caplog.at_level("INFO"):
+        await chat_service.process_message(user.id, "Hej Björn")
+
+    assert "[chat:service] Message turn completed" in caplog.text
+    assert "latency_ms=" in caplog.text
+    assert f"user_id={user.id}" in caplog.text
+    assert "message_chars=9" in caplog.text
+    assert "outcome=success" in caplog.text
+
+
+@pytest.mark.anyio
 async def test_process_image_message_success(
     chat_service, db_with_test_user, mock_agent_service, mock_user_service, mock_processor
 ):

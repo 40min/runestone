@@ -179,10 +179,20 @@ async def _fetch_url_bytes(url: str) -> tuple[bytes, str, str, bool] | tuple[Non
                         remaining = MAX_FETCH_BYTES - len(buf)
                         if remaining <= 0:
                             truncated = True
+                            logger.warning(
+                                "read_url fetch truncated for url=%s at %s bytes",
+                                current_url,
+                                MAX_FETCH_BYTES,
+                            )
                             break
                         if len(chunk) > remaining:
                             buf.extend(chunk[:remaining])
                             truncated = True
+                            logger.warning(
+                                "read_url fetch truncated for url=%s at %s bytes",
+                                current_url,
+                                MAX_FETCH_BYTES,
+                            )
                             break
                         buf.extend(chunk)
 
@@ -313,6 +323,12 @@ async def read_url(url: str) -> str:
 
     was_truncated = False
     if len(body_md) > MAX_OUTPUT_CHARS:
+        logger.warning(
+            "read_url output truncated for url=%s from %s to %s chars",
+            final_url,
+            len(body_md),
+            MAX_OUTPUT_CHARS,
+        )
         body_md = body_md[:MAX_OUTPUT_CHARS].rstrip() + "\n\n[Truncated output.]"
         was_truncated = True
 

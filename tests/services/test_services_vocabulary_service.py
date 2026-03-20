@@ -4,6 +4,7 @@ Tests for vocabulary service functionality.
 This module contains tests for the vocabulary service.
 """
 
+import asyncio
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, Mock
 
@@ -17,6 +18,7 @@ from runestone.config import Settings
 from runestone.core.exceptions import VocabularyItemExists
 from runestone.db.models import User as UserModel
 from runestone.db.models import Vocabulary as VocabularyModel
+from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.services.vocabulary_service import VocabularyService
 
 
@@ -951,3 +953,63 @@ class TestVocabularyService:
 
         assert result["action"] == "already_prioritized"
         assert result["changed"] is False
+
+    async def test_upsert_priority_word_handles_concurrent_insert_race(self, db_session_factory):
+        """Concurrent upserts for same word should not surface integrity errors or duplicate rows."""
+        mock_settings = Mock(spec=Settings)
+        mock_settings.llm_provider = "openai"
+        mock_llm_client = AsyncMock()
+        mock_llm_client.improve_vocabulary_item.return_value = (
+            '{"translation": "mock translation", "example_phrase": "mock example", "extra_info": "mock info"}'
+        )
+        async with db_session_factory() as setup_db:
+            race_user = UserModel(
+                name="Race",
+                surname="Tester",
+                email="race-user@example.com",
+                hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYQmP7XzL6",
+                timezone="UTC",
+                pages_recognised_count=0,
+            )
+            setup_db.add(race_user)
+            await setup_db.commit()
+            await setup_db.refresh(race_user)
+            race_user_id = race_user.id
+
+        async with db_session_factory() as db1, db_session_factory() as db2:
+            service1 = VocabularyService(VocabularyRepository(db1), mock_settings, mock_llm_client)
+            service2 = VocabularyService(VocabularyRepository(db2), mock_settings, mock_llm_client)
+
+            result1, result2 = await asyncio.gather(
+                service1.upsert_priority_word(
+                    word_phrase="konkurrent",
+                    translation="concurrent",
+                    example_phrase="Detta ar ett konkurrent test.",
+                    user_id=race_user_id,
+                ),
+                service2.upsert_priority_word(
+                    word_phrase="konkurrent",
+                    translation="concurrent",
+                    example_phrase="Detta ar ett konkurrent test.",
+                    user_id=race_user_id,
+                ),
+            )
+
+        async with db_session_factory() as verify_db:
+            rows = (
+                (
+                    await verify_db.execute(
+                        select(VocabularyModel).where(
+                            VocabularyModel.user_id == race_user_id, VocabularyModel.word_phrase == "konkurrent"
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+
+        assert len(rows) == 1
+        assert rows[0].priority_learn is True
+        actions = {result1["action"], result2["action"]}
+        assert "created" in actions
+        assert actions.issubset({"created", "already_prioritized", "prioritized", "restored"})

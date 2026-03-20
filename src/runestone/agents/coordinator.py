@@ -4,7 +4,6 @@ Coordinator agent responsible for routing and orchestration planning.
 
 import json
 import logging
-import time
 
 from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -12,6 +11,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from runestone.agents.llm import build_chat_model
 from runestone.agents.schemas import ChatMessage, CoordinatorPlan
 from runestone.config import Settings
+from runestone.core.observability import timed_operation
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +37,25 @@ Phases:
 Specialists (typical ownership; some may not be available yet):
 - memory_reader (pre): reads relevant student memory and returns compact context for teacher.
 - memory_keeper (post): persists durable facts or learning signals after the turn.
-- word_keeper (pre/post): saves vocabulary, typically post; pre only for explicit “save this word” commands.
+- word_keeper (pre): saves vocabulary when there is an explicit save signal or the previous teacher or
+  student message clearly marked words to remember.
 - news (pre): if user asks for news, performs search/read and returns sources + summary.
 - grammar (pre/post): finds relevant cheatsheet(s) and returns a distilled explanation; may be post if teacher decides
   to add a reference after composing the response.
+
+WordKeeper routing guidance:
+- Route `word_keeper` in `pre_response` only.
+- Use it when the student explicitly asks to save something, with requests like "save this word", "remember this
+  phrase", "add this word".
+- Also use it when the most recent teacher message explicitly says words should be remembered or saved, with
+  phrasing like "the key words here are", "good words to memorize", or "let's keep these words in mind".
+- When deciding whether to route `word_keeper`, consider only the last two messages in `history`.
+- If you route `word_keeper`, set `chat_history_size` to exactly 2 so it only receives those two most recent
+  messages.
+- Do not route it just because the student reused a word, the teacher corrected a sentence, or a word appears in
+  grammar explanation/example text.
+- Ignore older save-worthy words from earlier turns; they should not trigger `word_keeper` again on later turns.
+- Leave `post_response` empty for `word_keeper`.
 
 Never include `teacher` in `pre_response` or `post_response`. The teacher call is always executed by the manager.
 """
@@ -51,18 +66,15 @@ class CoordinatorAgent:
 
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.model = build_chat_model(
-            settings,
-            model_name=settings.coordinator_model,
-            temperature=0,
-        )
+        self.model = build_chat_model(settings, "coordinator")
 
         logger.info(
             "[agents:coordinator] Initialized CoordinatorAgent with provider=%s, model=%s",
-            settings.chat_provider,
+            settings.coordinator_provider,
             settings.coordinator_model,
         )
 
+    @timed_operation(logger, "[agents:coordinator] Plan completed")
     async def plan(
         self,
         message: str,
@@ -71,7 +83,6 @@ class CoordinatorAgent:
         available_specialists: list[str],
     ) -> CoordinatorPlan:
         """Return a routing plan for the given turn."""
-        started = time.monotonic()
         model = self.model.with_structured_output(CoordinatorPlan)
         payload = {
             "message": message,
@@ -86,8 +97,6 @@ class CoordinatorAgent:
                     HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
                 ]
             )
-            latency_ms = int((time.monotonic() - started) * 1000)
-            logger.info("[agents:coordinator] Plan created in %sms", latency_ms)
             return result
         except OutputParserException as e:
             logger.error("[agents:coordinator] Schema validation failed: %s", str(e))

@@ -99,3 +99,30 @@ async def test_get_recent_for_teacher_orders_oldest_to_newest(side_effect_reposi
 
     records = await side_effect_repository.get_recent_for_teacher(user.id, chat_id, limit=2)
     assert [record.info_for_teacher for record in records] == ["First save", "Second save"]
+
+
+async def test_add_many_without_commit_flushes_for_later_commit(side_effect_repository, db_with_test_user):
+    db, user = db_with_test_user
+    chat_id = str(uuid4())
+
+    created = await side_effect_repository.add_many(
+        user_id=user.id,
+        chat_id=chat_id,
+        records=[
+            {
+                "specialist_name": "word_keeper",
+                "phase": "post_response",
+                "status": "action_taken",
+                "info_for_teacher": "Deferred commit",
+                "artifacts": {"saved_words": ["fika"]},
+            }
+        ],
+        commit=False,
+    )
+    await db.commit()
+
+    assert len(created) == 1
+    assert created[0].id is not None
+
+    records = await side_effect_repository.get_recent_for_teacher(user.id, chat_id)
+    assert [record.info_for_teacher for record in records] == ["Deferred commit"]

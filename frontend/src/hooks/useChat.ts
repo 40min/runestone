@@ -47,7 +47,8 @@ interface UseChatReturn {
 }
 
 const CLIENT_ID = uuidv4();
-const POLL_INTERVAL_MS = 5000;
+const INITIAL_POLL_INTERVAL_MS = 5000;
+const MAX_POLL_INTERVAL_MS = 60000;
 const HISTORY_LIMIT = 200;
 const INITIAL_HISTORY_ERROR = 'Failed to load chat history. Starting fresh.';
 
@@ -61,10 +62,27 @@ export const useChat = (): UseChatReturn => {
   const { get, post, delete: apiDelete } = useApi();
   const { token } = useAuth();
   const channelRef = useRef<BroadcastChannel | null>(null);
+  const pollTimeoutRef = useRef<number | null>(null);
+  const pollIntervalRef = useRef<number>(INITIAL_POLL_INTERVAL_MS);
   const fetchInProgressRef = useRef<boolean>(false);
   const currentChatIdRef = useRef<string | null>(null);
   const lastMessageIdRef = useRef<number>(0);
   const hasLoadedHistoryRef = useRef<boolean>(false);
+
+  const clearPollTimeout = useCallback(() => {
+    if (pollTimeoutRef.current !== null) {
+      window.clearTimeout(pollTimeoutRef.current);
+      pollTimeoutRef.current = null;
+    }
+  }, []);
+
+  const resetPollingInterval = useCallback(() => {
+    pollIntervalRef.current = INITIAL_POLL_INTERVAL_MS;
+  }, []);
+
+  const extendPollingInterval = useCallback(() => {
+    pollIntervalRef.current = Math.min(pollIntervalRef.current * 2, MAX_POLL_INTERVAL_MS);
+  }, []);
 
   const mapServerMessage = useCallback((message: ServerChatMessage): ChatMessage => {
     return {
@@ -124,8 +142,8 @@ export const useChat = (): UseChatReturn => {
     return maxServerId;
   }, []);
 
-  const fetchHistory = useCallback(async (force: boolean = false) => {
-    if ((!force && isLoading) || fetchInProgressRef.current || !token) return;
+  const fetchHistory = useCallback(async (force: boolean = false): Promise<boolean> => {
+    if ((!force && isLoading) || fetchInProgressRef.current || !token) return false;
 
     fetchInProgressRef.current = true;
     setIsFetchingHistory(true);
@@ -134,6 +152,7 @@ export const useChat = (): UseChatReturn => {
       let page = 0;
       let keepFetching = true;
       let syncingOlderPages = false;
+      let receivedUpdates = false;
 
       while (keepFetching && page < 20) {
         const clientChatQuery = currentChatIdRef.current
@@ -145,6 +164,7 @@ export const useChat = (): UseChatReturn => {
         const serverMessages = (data.messages ?? []).map(mapServerMessage);
         const maxIncomingId = getMaxServerId(serverMessages);
         const chatChanged = data.chat_mismatch || currentChatIdRef.current !== data.chat_id;
+        receivedUpdates = receivedUpdates || chatChanged || serverMessages.length > 0;
 
         if (chatChanged) {
           currentChatIdRef.current = data.chat_id;
@@ -180,6 +200,8 @@ export const useChat = (): UseChatReturn => {
       if (!syncingOlderPages) {
         setIsSyncingHistory(false);
       }
+
+      return receivedUpdates;
     } catch (err) {
       console.error('Failed to fetch chat history:', err);
       if (!hasLoadedHistoryRef.current) {
@@ -191,6 +213,7 @@ export const useChat = (): UseChatReturn => {
       }
 
       setIsSyncingHistory(false);
+      return false;
     } finally {
       setIsSyncingHistory(false);
       setIsFetchingHistory(false);
@@ -200,7 +223,7 @@ export const useChat = (): UseChatReturn => {
 
   // Initial fetch
   useEffect(() => {
-    fetchHistory();
+    void fetchHistory();
     // Only run on mount, but keep fetchHistory in deps for correctness
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -209,31 +232,60 @@ export const useChat = (): UseChatReturn => {
   useEffect(() => {
     if (!token) return;
 
-    const intervalId = window.setInterval(() => {
-      if (!document.hidden) {
-        void fetchHistory();
+    let isCancelled = false;
+
+    const scheduleNextPoll = () => {
+      if (isCancelled) {
+        return;
       }
-    }, POLL_INTERVAL_MS);
+
+      clearPollTimeout();
+      pollTimeoutRef.current = window.setTimeout(async () => {
+        if (document.hidden) {
+          scheduleNextPoll();
+          return;
+        }
+
+        const hasUpdates = await fetchHistory();
+        if (isCancelled) {
+          return;
+        }
+
+        if (hasUpdates) {
+          resetPollingInterval();
+        } else {
+          extendPollingInterval();
+        }
+
+        scheduleNextPoll();
+      }, pollIntervalRef.current);
+    };
 
     const handleWindowFocus = () => {
-      void fetchHistory();
+      resetPollingInterval();
+      void fetchHistory().finally(scheduleNextPoll);
     };
 
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        void fetchHistory();
+        resetPollingInterval();
+        void fetchHistory().finally(scheduleNextPoll);
       }
     };
+
+    resetPollingInterval();
+    scheduleNextPoll();
 
     window.addEventListener('focus', handleWindowFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      window.clearInterval(intervalId);
+      isCancelled = true;
+      clearPollTimeout();
       window.removeEventListener('focus', handleWindowFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [fetchHistory, token]);
+  }, [clearPollTimeout, extendPollingInterval, fetchHistory, resetPollingInterval, token]);
 
   // Same-browser tab synchronization (Broadcast Channel)
   useEffect(() => {
@@ -242,6 +294,7 @@ export const useChat = (): UseChatReturn => {
 
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'CHAT_UPDATED' && event.data?.sender !== CLIENT_ID) {
+        resetPollingInterval();
         void fetchHistory();
       }
     };
@@ -253,7 +306,7 @@ export const useChat = (): UseChatReturn => {
       channel.close();
       channelRef.current = null;
     };
-  }, [fetchHistory]);
+  }, [fetchHistory, resetPollingInterval]);
 
   const broadcastChange = useCallback(() => {
     if (channelRef.current) {
@@ -291,6 +344,7 @@ export const useChat = (): UseChatReturn => {
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
+        resetPollingInterval();
         broadcastChange();
         await fetchHistory(true);
       } catch (err) {
@@ -302,7 +356,7 @@ export const useChat = (): UseChatReturn => {
         setIsLoading(false);
       }
     },
-    [post, isLoading, broadcastChange, fetchHistory]
+    [post, isLoading, broadcastChange, fetchHistory, resetPollingInterval]
   );
 
   const startNewChat = useCallback(async () => {
@@ -314,6 +368,7 @@ export const useChat = (): UseChatReturn => {
       setHistorySyncNotice(null);
       currentChatIdRef.current = null;
       lastMessageIdRef.current = 0;
+      resetPollingInterval();
       broadcastChange();
     } catch (err) {
       console.error('Failed to clear chat history:', err);
@@ -321,11 +376,16 @@ export const useChat = (): UseChatReturn => {
     } finally {
       setIsLoading(false);
     }
-  }, [apiDelete, broadcastChange]);
+  }, [apiDelete, broadcastChange, resetPollingInterval]);
 
   const clearError = useCallback(() => {
     setError(null);
   }, []);
+
+  const refreshHistory = useCallback(async () => {
+    resetPollingInterval();
+    await fetchHistory(true);
+  }, [fetchHistory, resetPollingInterval]);
 
   return {
     messages,
@@ -337,6 +397,6 @@ export const useChat = (): UseChatReturn => {
     sendMessage,
     startNewChat,
     clearError,
-    refreshHistory: fetchHistory,
+    refreshHistory,
   };
 };
