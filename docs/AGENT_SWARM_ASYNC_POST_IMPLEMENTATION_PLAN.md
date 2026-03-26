@@ -1,7 +1,7 @@
 # Agent Swarm: Async Post Implementation Plan
 
 This document is the implementation plan for the design in
-[`AGENT_SWARM_ASYNC_POST_DESIGN.md`](/Users/40min/www/runestone/docs/AGENT_SWARM_ASYNC_POST_DESIGN.md).
+[`AGENT_SWARM_ASYNC_POST_DESIGN.md`](AGENT_SWARM_ASYNC_POST_DESIGN.md).
 
 It intentionally favors a small, incremental rollout.
 
