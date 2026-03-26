@@ -111,7 +111,7 @@ Deliverables:
 
 Tasks:
 
-- update [`chat_service.py`](/Users/40min/www/runestone/src/runestone/services/chat_service.py) so it:
+- update [`chat_service.py`](../src/runestone/services/chat_service.py) so it:
   - saves the user message
   - runs the synchronous pre + teacher path
   - saves the assistant message
