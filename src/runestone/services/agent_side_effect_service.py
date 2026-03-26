@@ -46,7 +46,7 @@ class AgentSideEffectService:
             for record in records
         ]
         if loaded:
-            logger.info(
+            logger.debug(
                 "[agents:side-effects] Loaded recent side effects: user_id=%s chat_id=%s count=%s",
                 user_id,
                 chat_id,
@@ -65,14 +65,14 @@ class AgentSideEffectService:
             deleted = await self.repository.delete_coordinator_rows(user_id=user_id, chat_id=chat_id, commit=False)
             await self.repository.db.commit()
             if deleted:
-                logger.info(
+                logger.debug(
                     "[agents:side-effects] Cleaned up %s old coordinator rows: user_id=%s chat_id=%s",
                     deleted,
                     user_id,
                     chat_id,
                 )
             row = await self.repository.create_coordinator_row(user_id=user_id, chat_id=chat_id, status="pending")
-            logger.info(
+            logger.debug(
                 "[agents:side-effects] Coordinator row created: user_id=%s chat_id=%s row_id=%s",
                 user_id,
                 chat_id,
@@ -93,7 +93,7 @@ class AgentSideEffectService:
 
     async def mark_coordinator_done(self, row_id: int) -> None:
         await self._update_status(row_id, "done")
-        logger.info("[agents:side-effects] Coordinator row marked done: row_id=%s", row_id)
+        logger.debug("[agents:side-effects] Coordinator row marked done: row_id=%s", row_id)
 
     async def mark_coordinator_failed(self, row_id: int) -> None:
         await self._update_status(row_id, "failed")
@@ -220,7 +220,7 @@ class AgentSideEffectService:
                     commit=False,
                 )
             await self.repository.db.commit()
-            logger.info(
+            logger.debug(
                 "[agents:side-effects] Replaced post specialist results: "
                 "user_id=%s chat_id=%s deleted=%s inserted=%s",
                 user_id,

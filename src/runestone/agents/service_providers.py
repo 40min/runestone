@@ -1,20 +1,14 @@
-"""
-Tool-safe async context-manager providers for LangGraph agent tools.
-
-These providers create fresh AsyncSession instances for each tool call,
-enabling safe concurrent execution without sharing sessions across tools.
-
-This module is separate from dependencies.py to avoid circular imports
-between agent tools and the main service layer.
-"""
+"""Async service providers for agent runtime paths that need isolated DB sessions."""
 
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from runestone.config import settings
+from runestone.db.agent_side_effect_repository import AgentSideEffectRepository
 from runestone.db.database import provide_db_session
 from runestone.db.memory_item_repository import MemoryItemRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
+from runestone.services.agent_side_effect_service import AgentSideEffectService
 from runestone.services.memory_item_service import MemoryItemService
 from runestone.services.vocabulary_service import VocabularyService
 
@@ -67,4 +61,19 @@ async def provide_vocabulary_service() -> AsyncIterator[VocabularyService]:
         repo = VocabularyRepository(session)
         llm_client = _create_llm_client()
         service = VocabularyService(repo, current_settings, llm_client)
+        yield service
+
+
+@asynccontextmanager
+async def provide_agent_side_effect_service() -> AsyncIterator[AgentSideEffectService]:
+    """
+    Context manager for side-effect writes in background agent tasks.
+
+    Background tasks run outside the request lifecycle and must use a dedicated
+    database session so coordinator status updates do not contend with request
+    message persistence on a shared asyncpg connection.
+    """
+    async with provide_db_session() as session:
+        repo = AgentSideEffectRepository(session)
+        service = AgentSideEffectService(repo)
         yield service

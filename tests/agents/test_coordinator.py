@@ -66,6 +66,7 @@ def test_word_keeper_prompt_eligibility():
     assert "consider only the last two messages in `history`" in COORDINATOR_SYSTEM_PROMPT
     assert "set `chat_history_size` to exactly 2" in COORDINATOR_SYSTEM_PROMPT
     assert "Do not route it just because the student reused a word" in COORDINATOR_SYSTEM_PROMPT
+    assert "Do not treat analysis/comparison intents as save signals" in COORDINATOR_SYSTEM_PROMPT
     assert "current_stage" in COORDINATOR_SYSTEM_PROMPT
     assert "do not speculate about the future teacher reply" in COORDINATOR_SYSTEM_PROMPT
 

@@ -4,6 +4,7 @@ Pre-response specialist that summarizes relevant user memory for the teacher.
 
 import logging
 
+from runestone.agents.service_providers import provide_memory_item_service
 from runestone.agents.specialists.base import (
     INFO_FOR_TEACHER_MAX_CHARS,
     BaseSpecialist,
@@ -11,7 +12,6 @@ from runestone.agents.specialists.base import (
     SpecialistContext,
     SpecialistResult,
 )
-from runestone.agents.tools.service_providers import provide_memory_item_service
 from runestone.api.memory_item_schemas import MemoryCategory
 
 logger = logging.getLogger(__name__)

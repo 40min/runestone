@@ -3,7 +3,8 @@ Tests for AgentsManager orchestration.
 """
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
@@ -124,7 +125,6 @@ async def test_process_turn_returns_teacher_reply_and_starts_background_post(
         user=mock_user,
         teacher_response="Teacher says hi",
         pre_results=[{"name": "pre"}],
-        side_effect_service=mock_side_effect_service,
         coordinator_row_id=42,
     )
 
@@ -579,24 +579,27 @@ async def test_start_background_post_turn_creates_task(mock_settings, mock_user,
     manager = AgentsManager(mock_settings)
     manager.run_post_turn = AsyncMock()
 
-    await manager.start_background_post_turn(
-        message="Hello",
-        chat_id="chat-1",
-        history=[],
-        user=mock_user,
-        teacher_response="Hi!",
-        pre_results=[],
-        side_effect_service=mock_side_effect_service,
-        coordinator_row_id=42,
-    )
+    @asynccontextmanager
+    async def _provider():
+        yield mock_side_effect_service
 
-    # Allow the task to run
-    await asyncio.sleep(0)
+    with patch("runestone.agents.manager.provide_agent_side_effect_service", _provider):
+        await manager.start_background_post_turn(
+            message="Hello",
+            chat_id="chat-1",
+            history=[],
+            user=mock_user,
+            teacher_response="Hi!",
+            pre_results=[],
+            coordinator_row_id=42,
+        )
+        # Allow the task to run
+        await asyncio.sleep(0)
 
-    manager.run_post_turn.assert_awaited_once()
-    # Task should be cleaned up after completion
-    await asyncio.sleep(0.05)
-    assert "chat-1" not in manager._post_task_registry.tasks
+        manager.run_post_turn.assert_awaited_once()
+        # Task should be cleaned up after completion
+        await asyncio.sleep(0.05)
+        assert "chat-1" not in manager._post_task_registry.tasks
 
 
 @pytest.mark.anyio
@@ -611,23 +614,26 @@ async def test_start_background_post_turn_returns_before_slow_post_finishes(
 
     manager.run_post_turn = slow_post_turn
 
-    await manager.start_background_post_turn(
-        message="Hello",
-        chat_id="chat-1",
-        history=[],
-        user=mock_user,
-        teacher_response="Hi!",
-        pre_results=[],
-        side_effect_service=mock_side_effect_service,
-        coordinator_row_id=42,
-    )
+    @asynccontextmanager
+    async def _provider():
+        yield mock_side_effect_service
 
-    assert "chat-1" in manager._post_task_registry.tasks
-    assert not manager._post_task_registry.tasks["chat-1"].done()
+    with patch("runestone.agents.manager.provide_agent_side_effect_service", _provider):
+        await manager.start_background_post_turn(
+            message="Hello",
+            chat_id="chat-1",
+            history=[],
+            user=mock_user,
+            teacher_response="Hi!",
+            pre_results=[],
+            coordinator_row_id=42,
+        )
+        assert "chat-1" in manager._post_task_registry.tasks
+        assert not manager._post_task_registry.tasks["chat-1"].done()
 
-    gate.set()
-    await asyncio.sleep(0.05)
-    assert "chat-1" not in manager._post_task_registry.tasks
+        gate.set()
+        await asyncio.sleep(0.05)
+        assert "chat-1" not in manager._post_task_registry.tasks
 
 
 @pytest.mark.anyio
@@ -640,23 +646,26 @@ async def test_start_background_post_turn_marks_failed_on_timeout(mock_settings,
 
     manager.run_post_turn = slow_post_turn
 
-    await manager.start_background_post_turn(
-        message="Hello",
-        chat_id="chat-1",
-        history=[],
-        user=mock_user,
-        teacher_response="Hi!",
-        pre_results=[],
-        side_effect_service=mock_side_effect_service,
-        coordinator_row_id=42,
-    )
+    @asynccontextmanager
+    async def _provider():
+        yield mock_side_effect_service
 
-    await asyncio.sleep(0.1)  # wait for timeout to fire
+    with patch("runestone.agents.manager.provide_agent_side_effect_service", _provider):
+        await manager.start_background_post_turn(
+            message="Hello",
+            chat_id="chat-1",
+            history=[],
+            user=mock_user,
+            teacher_response="Hi!",
+            pre_results=[],
+            coordinator_row_id=42,
+        )
+        await asyncio.sleep(0.1)  # wait for timeout to fire
 
-    mock_side_effect_service.mark_coordinator_failed_if_current.assert_awaited_once_with(
-        row_id=42, user_id=mock_user.id, chat_id="chat-1"
-    )
-    assert "chat-1" not in manager._post_task_registry.tasks
+        mock_side_effect_service.mark_coordinator_failed_if_current.assert_awaited_once_with(
+            row_id=42, user_id=mock_user.id, chat_id="chat-1"
+        )
+        assert "chat-1" not in manager._post_task_registry.tasks
 
 
 # ---------------------------------------------------------------------------

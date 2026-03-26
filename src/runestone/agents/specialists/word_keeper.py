@@ -12,8 +12,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from runestone.agents.llm import build_chat_model
+from runestone.agents.service_providers import provide_vocabulary_service
 from runestone.agents.specialists.base import BaseSpecialist, SpecialistAction, SpecialistContext, SpecialistResult
-from runestone.agents.tools.service_providers import provide_vocabulary_service
 from runestone.config import Settings
 from runestone.core.observability import elapsed_ms_since
 

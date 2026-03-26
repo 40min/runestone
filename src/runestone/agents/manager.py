@@ -15,6 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from runestone.agents.background_task_registry import BackgroundTaskRegistry
 from runestone.agents.coordinator import CoordinatorAgent
 from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem, TeacherSideEffect
+from runestone.agents.service_providers import provide_agent_side_effect_service
 from runestone.agents.specialists.base import SpecialistContext
 from runestone.agents.specialists.registry import SpecialistRegistry
 from runestone.agents.specialists.teacher import TeacherAgent
@@ -242,7 +243,6 @@ class AgentsManager:
             user=user,
             teacher_response=assistant_text,
             pre_results=pre_results,
-            side_effect_service=side_effect_service,
             coordinator_row_id=coordinator_row_id,
         )
 
@@ -346,7 +346,6 @@ class AgentsManager:
         user: User,
         teacher_response: str,
         pre_results: list[dict],
-        side_effect_service: AgentSideEffectService,
         coordinator_row_id: int,
     ) -> None:
         """
@@ -354,42 +353,43 @@ class AgentsManager:
         """
 
         async def _run():
-            try:
-                await asyncio.wait_for(
-                    self.run_post_turn(
-                        message=message,
+            async with provide_agent_side_effect_service() as background_side_effect_service:
+                try:
+                    await asyncio.wait_for(
+                        self.run_post_turn(
+                            message=message,
+                            chat_id=chat_id,
+                            history=history,
+                            user=user,
+                            teacher_response=teacher_response,
+                            pre_results=pre_results,
+                            side_effect_service=background_side_effect_service,
+                            coordinator_row_id=coordinator_row_id,
+                        ),
+                        timeout=self.POST_TASK_TIMEOUT_SECONDS,
+                    )
+                except asyncio.TimeoutError:
+                    logger.error(
+                        "[agents:post-task] Post task timed out after %ss: chat_id=%s",
+                        self.POST_TASK_TIMEOUT_SECONDS,
+                        chat_id,
+                    )
+                    await background_side_effect_service.mark_coordinator_failed_if_current(
+                        row_id=coordinator_row_id,
+                        user_id=user.id,
                         chat_id=chat_id,
-                        history=history,
-                        user=user,
-                        teacher_response=teacher_response,
-                        pre_results=pre_results,
-                        side_effect_service=side_effect_service,
-                        coordinator_row_id=coordinator_row_id,
-                    ),
-                    timeout=self.POST_TASK_TIMEOUT_SECONDS,
-                )
-            except asyncio.TimeoutError:
-                logger.error(
-                    "[agents:post-task] Post task timed out after %ss: chat_id=%s",
-                    self.POST_TASK_TIMEOUT_SECONDS,
-                    chat_id,
-                )
-                await side_effect_service.mark_coordinator_failed_if_current(
-                    row_id=coordinator_row_id,
-                    user_id=user.id,
-                    chat_id=chat_id,
-                )
-            except asyncio.CancelledError:
-                logger.info("[agents:post-task] Post task cancelled: chat_id=%s", chat_id)
-                await side_effect_service.mark_coordinator_failed_if_current(
-                    row_id=coordinator_row_id,
-                    user_id=user.id,
-                    chat_id=chat_id,
-                )
-            except Exception:
-                logger.error("[agents:post-task] Post task error: chat_id=%s", chat_id, exc_info=True)
-            finally:
-                self._unregister_post_task(chat_id)
+                    )
+                except asyncio.CancelledError:
+                    logger.info("[agents:post-task] Post task cancelled: chat_id=%s", chat_id)
+                    await background_side_effect_service.mark_coordinator_failed_if_current(
+                        row_id=coordinator_row_id,
+                        user_id=user.id,
+                        chat_id=chat_id,
+                    )
+                except Exception:
+                    logger.error("[agents:post-task] Post task error: chat_id=%s", chat_id, exc_info=True)
+                finally:
+                    self._unregister_post_task(chat_id)
 
         task = asyncio.create_task(_run())
         self._register_post_task(chat_id, task)

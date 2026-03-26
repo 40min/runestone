@@ -124,7 +124,7 @@ class ChatService:
             raise ValueError(f"User {user_id} not found")
 
         # 5. Generate response using agents
-        assistant_text, sources = await self.agent_service.generate_response(
+        assistant_text, sources = await self.agent_service.process_turn(
             message=message_text,
             chat_id=chat_id,
             history=history[:-1],

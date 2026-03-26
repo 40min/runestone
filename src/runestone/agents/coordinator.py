@@ -61,6 +61,8 @@ WordKeeper routing guidance:
   messages.
 - Do not route it just because the student reused a word, the teacher corrected a sentence, or a word appears
   in grammar explanation/example text.
+- Do not treat analysis/comparison intents as save signals (for example: "разобрать разницу между словами
+  'så' и 'so'" means explain the difference, not save the words).
 - Ignore older save-worthy words from earlier turns; they should not trigger `word_keeper` again on later turns.
 
 News routing guidance:
