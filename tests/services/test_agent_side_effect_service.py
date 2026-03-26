@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from runestone.agents.schemas import TeacherSideEffect
+from runestone.agents.schemas import CoordinatorRow, TeacherSideEffect
 from runestone.db.agent_side_effect_repository import AgentSideEffectRepository
 from runestone.services.agent_side_effect_service import AgentSideEffectService
 
@@ -293,6 +293,7 @@ async def test_load_latest_coordinator_row_returns_none_when_not_found(mock_repo
 async def test_load_latest_coordinator_row_deserializes_record(mock_repo):
     service = AgentSideEffectService(mock_repo)
     record = MagicMock()
+    record.id = 42
     record.specialist_name = "coordinator"
     record.phase = "post_response"
     record.status = "pending"
@@ -306,9 +307,7 @@ async def test_load_latest_coordinator_row_deserializes_record(mock_repo):
 
     result = await service.load_latest_coordinator_row(user_id=1, chat_id="chat-1")
 
-    assert result is not None
-    assert result.name == "coordinator"
-    assert result.status == "pending"
+    assert result == CoordinatorRow(id=42, status="pending", created_at=None)
 
 
 @pytest.mark.anyio

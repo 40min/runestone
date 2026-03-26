@@ -168,11 +168,11 @@ Decision:
 
 ### Read URL
 
-[`read_url`](/Users/40min/www/runestone/src/runestone/agents/tools/read_url.py) remains a direct teacher tool.
+[`read_url`](../src/runestone/agents/tools/read_url.py) remains a direct teacher tool.
 
 ### News
 
-[`search_news_with_dates`](/Users/40min/www/runestone/src/runestone/agents/tools/news.py) should be specialist-driven when possible.
+[`search_news_with_dates`](../src/runestone/agents/tools/news.py) should be specialist-driven when possible.
 
 Known-topic examples:
 
@@ -195,7 +195,7 @@ Decision:
 
 ### Memory
 
-[`memory.py`](/Users/40min/www/runestone/src/runestone/agents/tools/memory.py) is still the richest future specialist area.
+[`memory.py`](../src/runestone/agents/tools/memory.py) is still the richest future specialist area.
 
 Decision split:
 

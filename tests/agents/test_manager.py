@@ -492,8 +492,6 @@ async def test_handle_stale_post_task_cancels_live_task_and_marks_failed(mock_se
     stale_row.status = "pending"
     stale_row.id = 456
     mock_side_effect_service.load_latest_coordinator_row.return_value = stale_row
-    mock_side_effect_service.repository = AsyncMock()
-    mock_side_effect_service.repository.get_latest_coordinator_row.return_value = stale_row
     manager.cancel_post_task = MagicMock(return_value=True)
 
     await manager.handle_stale_post_task(
@@ -503,7 +501,11 @@ async def test_handle_stale_post_task_cancels_live_task_and_marks_failed(mock_se
     )
 
     manager.cancel_post_task.assert_called_once_with("chat-123")
-    mock_side_effect_service.mark_coordinator_failed.assert_awaited_once_with(456)
+    mock_side_effect_service.mark_coordinator_failed_if_current.assert_awaited_once_with(
+        row_id=456,
+        user_id=1,
+        chat_id="chat-123",
+    )
 
 
 @pytest.mark.anyio
@@ -521,7 +523,7 @@ async def test_handle_stale_post_task_ignores_done_row(mock_settings, mock_side_
     )
 
     manager.cancel_post_task.assert_not_called()
-    mock_side_effect_service.mark_coordinator_failed.assert_not_awaited()
+    mock_side_effect_service.mark_coordinator_failed_if_current.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

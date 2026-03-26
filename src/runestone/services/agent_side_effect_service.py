@@ -2,7 +2,7 @@ import logging
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from runestone.agents.schemas import TeacherSideEffect
+from runestone.agents.schemas import CoordinatorRow, TeacherSideEffect
 from runestone.db.agent_side_effect_repository import AgentSideEffectRepository
 
 logger = logging.getLogger(__name__)
@@ -142,7 +142,7 @@ class AgentSideEffectService:
             return False
         return bool(record and record.id == row_id)
 
-    async def load_latest_coordinator_row(self, user_id: int, chat_id: str) -> TeacherSideEffect | None:
+    async def load_latest_coordinator_row(self, user_id: int, chat_id: str) -> CoordinatorRow | None:
         """Return the latest coordinator tracking row for a chat, or None."""
         try:
             record = await self.repository.get_latest_coordinator_row(user_id=user_id, chat_id=chat_id)
@@ -156,14 +156,9 @@ class AgentSideEffectService:
             return None
         if record is None:
             return None
-        return TeacherSideEffect(
-            name=record.specialist_name,
-            phase=record.phase,
+        return CoordinatorRow(
+            id=record.id,
             status=record.status,
-            info_for_teacher=record.info_for_teacher,
-            artifacts=self.repository.deserialize_artifacts(record.artifacts_json),
-            routing_reason=record.routing_reason or "",
-            latency_ms=record.latency_ms,
             created_at=record.created_at,
         )
 
