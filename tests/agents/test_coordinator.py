@@ -57,36 +57,62 @@ def test_init_coordinator_model(mock_settings, mock_chat_model):
         mock_build.assert_called_once_with(mock_settings, "coordinator")
 
 
-def test_word_keeper_prompt_keeps_routing_pre_only():
-    """Coordinator prompt should keep WordKeeper pre-only and teacher-cue based."""
-    assert "Route `word_keeper` in `pre_response` only." in COORDINATOR_SYSTEM_PROMPT
-    assert "most recent teacher message explicitly says words should be remembered or saved" in (
-        COORDINATOR_SYSTEM_PROMPT
-    )
+def test_word_keeper_prompt_eligibility():
+    """Coordinator prompt should define WordKeeper eligibility correctly."""
+    assert "word_keeper" in COORDINATOR_SYSTEM_PROMPT
+    assert "pre_response" in COORDINATOR_SYSTEM_PROMPT
+    assert "post_response" in COORDINATOR_SYSTEM_PROMPT
+    assert "actual teacher reply explicitly highlights vocabulary" in COORDINATOR_SYSTEM_PROMPT
     assert "consider only the last two messages in `history`" in COORDINATOR_SYSTEM_PROMPT
     assert "set `chat_history_size` to exactly 2" in COORDINATOR_SYSTEM_PROMPT
     assert "Do not route it just because the student reused a word" in COORDINATOR_SYSTEM_PROMPT
+    assert "Do not treat analysis/comparison intents as save signals" in COORDINATOR_SYSTEM_PROMPT
+    assert "current_stage" in COORDINATOR_SYSTEM_PROMPT
+    assert "do not speculate about the future teacher reply" in COORDINATOR_SYSTEM_PROMPT
+
+
+def test_news_prompt_requires_known_topic():
+    assert "Route `news` in `pre_response` only when the student's current message names a clear topic" in (
+        COORDINATOR_SYSTEM_PROMPT
+    )
+    assert "Do NOT route `news` when the topic is still unclear" in COORDINATOR_SYSTEM_PROMPT
+
+
+def test_grammar_is_absent_from_coordinator_prompt():
+    assert "GrammarAgent" not in COORDINATOR_SYSTEM_PROMPT
+    assert "grammar specialist" not in COORDINATOR_SYSTEM_PROMPT
+    assert "search_grammar" not in COORDINATOR_SYSTEM_PROMPT
+
+
+def test_word_keeper_prompt_does_not_allow_anticipatory_post_routing():
+    assert "anticipate the teacher reply" not in COORDINATOR_SYSTEM_PROMPT
+    assert "actual teacher reply explicitly highlights vocabulary" in COORDINATOR_SYSTEM_PROMPT
 
 
 @pytest.mark.anyio
 async def test_plan_success(coordinator_agent, mock_chat_model):
     """Test successful plan generation."""
-    expected_plan = CoordinatorPlan(
+    raw_plan = CoordinatorPlan(
         pre_response=[RoutingItem(name="memory_reader", reason="Test", chat_history_size=2)],
         post_response=[RoutingItem(name="memory_keeper", reason="Test", chat_history_size=2)],
         audit={"trace": "ok"},
     )
     mock_llm = mock_chat_model.with_structured_output.return_value
-    mock_llm.ainvoke.return_value = expected_plan
+    mock_llm.ainvoke.return_value = raw_plan
 
     history = [ChatMessage(role="user", content="Hello")]
     plan = await coordinator_agent.plan(
         message="I am John",
         history=history,
+        current_stage="pre_response",
         available_specialists=["memory_reader", "memory_keeper"],
     )
 
-    assert plan == expected_plan
+    assert plan == CoordinatorPlan(
+        pre_response=[RoutingItem(name="memory_reader", reason="Test", chat_history_size=2)],
+        post_response=[],
+        audit={"trace": "ok"},
+    )
     mock_llm.ainvoke.assert_called_once()
 
     # Verify history is passed correctly
@@ -95,7 +121,55 @@ async def test_plan_success(coordinator_agent, mock_chat_model):
     payload = json.loads(human_msg.content)
     assert payload["message"] == "I am John"
     assert payload["history"][0]["content"] == "Hello"
+    assert payload["current_stage"] == "pre_response"
+    assert payload["teacher_response"] is None
     assert payload["available_specialists"] == ["memory_reader", "memory_keeper"]
+
+
+@pytest.mark.anyio
+async def test_plan_pre_turn_only_returns_pre_items(coordinator_agent, mock_chat_model):
+    expected_plan = CoordinatorPlan(
+        pre_response=[RoutingItem(name="memory_reader", reason="Test", chat_history_size=2)],
+        post_response=[RoutingItem(name="word_keeper", reason="Should be dropped", chat_history_size=2)],
+        audit={"trace": "ok"},
+    )
+    mock_llm = mock_chat_model.with_structured_output.return_value
+    mock_llm.ainvoke.return_value = expected_plan
+
+    plan = await coordinator_agent.plan_pre_turn(
+        message="I am John",
+        history=[],
+        available_specialists=["memory_reader", "word_keeper"],
+    )
+
+    assert [item.name for item in plan.pre_response] == ["memory_reader"]
+    assert plan.post_response == []
+
+
+@pytest.mark.anyio
+async def test_plan_post_turn_only_returns_post_items_and_passes_teacher_response(coordinator_agent, mock_chat_model):
+    expected_plan = CoordinatorPlan(
+        pre_response=[RoutingItem(name="memory_reader", reason="Should be dropped", chat_history_size=2)],
+        post_response=[RoutingItem(name="word_keeper", reason="Teacher highlighted words", chat_history_size=2)],
+        audit={"trace": "ok"},
+    )
+    mock_llm = mock_chat_model.with_structured_output.return_value
+    mock_llm.ainvoke.return_value = expected_plan
+
+    plan = await coordinator_agent.plan_post_turn(
+        message="What does hejda mean?",
+        history=[],
+        teacher_response="Useful words to remember: hejda",
+        available_specialists=["word_keeper"],
+    )
+
+    assert plan.pre_response == []
+    assert [item.name for item in plan.post_response] == ["word_keeper"]
+
+    call_args = mock_llm.ainvoke.call_args[0][0]
+    payload = json.loads(call_args[1].content)
+    assert payload["current_stage"] == "post_response"
+    assert payload["teacher_response"] == "Useful words to remember: hejda"
 
 
 @pytest.mark.anyio
@@ -107,6 +181,7 @@ async def test_plan_output_parser_exception(coordinator_agent, mock_chat_model):
     plan = await coordinator_agent.plan(
         message="msg",
         history=[],
+        current_stage="pre_response",
         available_specialists=["memory_reader"],
     )
 
@@ -124,6 +199,7 @@ async def test_plan_generic_exception(coordinator_agent, mock_chat_model):
     plan = await coordinator_agent.plan(
         message="msg",
         history=[],
+        current_stage="pre_response",
         available_specialists=["memory_reader"],
     )
 

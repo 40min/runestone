@@ -115,3 +115,11 @@ class TeacherSideEffect(BaseModel):
     routing_reason: str = Field("", description="Coordinator rationale")
     latency_ms: int | None = Field(None, description="Specialist execution latency in milliseconds")
     created_at: datetime | None = Field(None, description="Persisted record timestamp")
+
+
+class CoordinatorRow(BaseModel):
+    """Coordinator lifecycle row used to track background post-stage state."""
+
+    id: int = Field(..., description="Persisted coordinator row id")
+    status: str = Field(..., description="Coordinator status")
+    created_at: datetime | None = Field(None, description="Persisted row timestamp")

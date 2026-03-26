@@ -1,189 +1,208 @@
-# Agent Swarm Contracts (Coordinator + Specialists)
+# Agent Swarm: Architecture and Contract
 
-This document describes the target agent roles, tool access, structured contracts, and orchestration flow.
-It also captures the current MS3 implementation status where behavior differs from the end-state target.
+This document is the source of truth for the current agent-swarm architecture, routing contract, tool ownership, and async-post behavior.
 
-For implementation milestones and delivery sequencing, see `AGENT_SWARM_PLAN.md`.
+Historical context and earlier exploration were merged here from [`AGENT_SWARM_ASYNC_POST_DESIGN.md`](AGENT_SWARM_ASYNC_POST_DESIGN.md). Keep this file authoritative; treat the design doc as archival context only.
 
-## Current Implementation Status (MS3)
+For milestone tracking, see [`AGENT_SWARM_PLAN.md`](AGENT_SWARM_PLAN.md).
 
-This section reflects the branch implementation in `feat/agent-swarm-ms3`.
+## Current Status
 
-- Live specialist registry currently includes `memory_reader` only.
-- `CoordinatorAgent` returns structured `CoordinatorPlan` with `pre_response`, `post_response`, and `audit`, and is constrained by `available_specialists`.
-- `AgentsManager` executes routed specialists concurrently, passes typed context windows (`chat_history_size`), and forwards `pre_results` to `TeacherAgent`.
-- Post-response side effects are persisted (`agent_side_effects` table) and recent successful records are injected into teacher context as internal `[RECENT_SIDE_EFFECTS]`.
-- `TeacherAgent` still owns direct tool access in MS3 as a transitional step; specialist-by-specialist tool extraction is planned in later milestones.
+Implemented now:
 
-## Proposed Architecture
+- pre-first orchestration with async post processing
+- stage-specific coordinator planning (`pre_response` vs `post_response`)
+- teacher reply saved and returned before background post work finishes
+- post-stage replanning from the actual teacher reply
+- coordinator lifecycle tracking rows in `agent_side_effects`
+- coordinator-row ownership guard for post-result persistence and terminal status writes
+- in-memory post-task registry with stale next-turn cancellation
+- image flow using the same async-post pattern
 
-Use a thin `CoordinatorAgent` plus a separate `TeacherAgent` and specialist agents with clear ownership.
-
-- `CoordinatorAgent`
-  - is not user-facing
-  - decides which specialists to invoke and in which phase
-  - passes only the minimum relevant context to each specialist
-  - collects structured outputs
-  - prepares the teacher input bundle
-  - may call direct utility tools when it is strictly mechanical (e.g., `read_url`)
-  - deterministic/mechanical steps should be wrapped into tools (not performed as free-text transformations)
-
-- `TeacherAgent`
-  - owns the final user response
-  - focuses on teaching, tone, explanation quality, and conversational flow
-  - consumes specialist outputs instead of owning most tool policies
-  - should not call persistence/retrieval tools directly in the multi-agent design
-
-- `WordKeeper`
-  - owns useful-word capture and `prioritize_words_for_learning`
-  - usually runs post-response
-  - can also run pre-response for explicit user commands that expect immediate confirmation (e.g., "Save this word")
+Still planned, but not implemented:
 
 - `MemoryReader`
-  - pre-response only
-  - reads relevant student memory and returns compact context for the teacher
-
 - `MemoryKeeper`
-  - post-response only
-  - owns memory persistence decisions after the teaching turn
-
 - `NewsAgent`
-  - owns whether news lookup is needed
-  - chooses query strategy, selects sources, and (optionally) reads a small number of URLs for summarization
 
-- `GrammarAgent`
-  - owns grammar lookup decisions and cheatsheet reading
+Explicit non-goals for the current design:
 
-### Tool Access Policy (Target)
+- no grammar specialist
+- no durable queue or worker system
+- no retry/replay loops for failed post stages
+- no multiple user-facing reply agents
 
-- `TeacherAgent`: no tools (or strictly non-persistent, non-network helpers if absolutely required)
-- `CoordinatorAgent`: orchestration-only + direct utility reads (`read_url`) when needed
-- `MemoryReader`: `start_student_info`, `read_memory`
-- `MemoryKeeper`: `upsert_memory_item`, `update_memory_status`, `update_memory_priority`, `promote_to_strength`, `delete_memory_item`
-- `WordKeeper`: `prioritize_words_for_learning`
-- `NewsAgent`: `search_news_with_dates`, `read_url`
-- `GrammarAgent`: `search_grammar`, `read_grammar_page`
+## Decision Summary
 
-Current MS3 snapshot:
+### 1. Pre Stage Is the Main Specialist Stage
 
-- `TeacherAgent` still has direct access to memory/vocabulary/news/grammar/url tools.
-- `CoordinatorAgent` is orchestration-only (no direct tool calls).
-- `MemoryReader` runs via `MemoryItemService` access in specialist code.
+Most specialist work should happen before the teacher responds.
 
-## Structured Outputs
+Good fits for pre-stage specialist execution:
 
-Specialists should return structured results, not free-form prose as their primary output.
+- explicit word saving requests
+- reading learner memory
+- news lookup when the student already provided a topic
+- other retrieval or persistence actions that can be decided from the student turn
 
-Each specialist result should include:
+### 2. Grammar Stays Teacher-Owned
 
-- `status`: `no_action` | `action_taken` | `error`
-- `actions`: tool calls attempted and outcomes
-- `info_for_teacher`: short, size-bounded summary for final response composition (max 3000 characters)
-- `artifacts`: structured domain payload (machine-oriented; not for verbatim teacher consumption)
+Grammar tools remain directly available to the teacher.
 
-Example:
+Why:
 
-```json
-{
-  "status": "action_taken",
-  "actions": [
-    {
-      "tool": "prioritize_words_for_learning",
-      "status": "success",
-      "summary": "created=1, restored=0, prioritized=1, already_prioritized=0"
-    }
-  ],
-  "artifacts": {
-    "saved_words": ["avgorande", "forutsattning"]
-  },
-  "info_for_teacher": "Two useful vocabulary items were saved for future recall."
-}
-```
+- grammar lookup is often an in-the-moment pedagogical choice
+- the teacher may decide mid-reasoning that grammar lookup would help
+- splitting grammar into a specialist would make the interaction less natural
 
-## Output Validation (Pydantic + LangChain)
+### 3. Post Stage Still Exists
 
-Use Pydantic models as the single source of truth for coordinator and specialist outputs.
+A pure pre-only model is too weak for teacher-dependent persistence actions.
 
-Implementation options (compatible with existing `langchain` usage in this repo):
+Examples:
 
-- Prefer `ChatOpenAI(...).with_structured_output(MyPydanticModel)` for coordinator/specialist LLM calls so LangChain requests JSON matching the schema and parses it into the Pydantic object.
-- Keep a fallback path: ask for JSON, then `MyPydanticModel.model_validate_json(text)`; on validation failure, do a single repair retry (or return `status="error"` and log).
+- teacher-highlighted words worth saving
+- teacher-triggered memory updates
+- other persistence decisions that depend on the final teacher reply
 
-For tool inputs/outputs, continue using tool argument schemas (already Pydantic-backed).
+### 4. Post Stage Runs in Background
 
-## Context Passing Defaults
+The teacher response is saved and returned immediately. After that, the system:
 
-Context windows should be selected per specialist based on what its tools require (and kept stable enough to test).
+1. replans post-stage routing from the actual teacher reply
+2. runs post specialists
+3. persists side effects
 
-Important: preventing duplicate saves should be solved primarily via idempotent writes (stable keys / upserts) and an explicit "recent side effects" record, not by shrinking the text window alone.
+This background work is best-effort.
 
-Suggested defaults:
+## Tool and Specialist Ownership
 
-- `NewsAgent`: last 2 messages (`previous_assistant`, `current_user`)
-- `GrammarAgent`: last 4 messages
-- `MemoryReader`: last 6 messages (or last 2 pairs), because memory relevance often depends on the recent thread
-- `WordKeeper`: last 2 messages (`previous_assistant`, `current_user`) plus `teacher_response` when post-response
-- `MemoryKeeper`: last 2 messages (`previous_assistant`, `current_user`) plus `teacher_response`
+### TeacherAgent
 
-Additionally, `CoordinatorAgent` may provide a small "system context bundle" to all specialists:
+Owns:
 
-- stable learner profile (e.g., level, goals, mother tongue) if available
-- the latest persisted "agent side effects" record (structured, not raw logs), including recent successful actions
+- final user-facing response
+- grammar tools
+- `read_url`
 
-### Side-Effects Record (For Dedupe)
+Responsibilities:
 
-To avoid saving the same thing repeatedly across turns, the coordinator should include (and keep updated) a small list like:
+- pedagogical quality
+- tone and conversational flow
+- natural use of pre-specialist outputs and recent side effects
 
-- `recent_side_effects`: last N (e.g., 10) specialist actions with `turn_id`, `specialist`, `status`, and key artifacts (e.g., `saved_words`, `memory_keys_changed`)
+### CoordinatorAgent
 
-Specialist rule:
+Owns:
 
-- if the candidate word/memory key appears in `recent_side_effects` within the last K turns (e.g., 3), return `no_action` unless there is genuinely new information (e.g., different meaning/example, higher priority, status change).
+- stage-specific routing only
 
-Memory idempotency rule:
+Responsibilities:
 
-- memory writes must use stable keys (e.g., `area_to_improve:word_order`, `personal_info:goal`) so repeats update instead of creating duplicates.
+- decide which specialists to run for the current stage
+- keep routing conservative
+- return structured `CoordinatorPlan`
 
-No specialist should request a second pass; instead, give enough context by default and keep the windows small and consistent.
+Rules:
 
-## Coordinator Prompt Draft (Design Target)
+- for `pre_response`, populate only `pre_response`
+- for `post_response`, populate only `post_response`
+- never speculate about future teacher behavior during pre-stage planning
+- use the actual teacher reply as a primary signal during post-stage planning
 
-Persona: you are the teacher's assistant and orchestration coordinator. You do not speak to the student.
+### WordKeeper
 
-Behavior requirements:
+Owns:
 
-- be conservative: do not call specialists unless there is a clear trigger
-- be truthful: teacher must not claim side effects unless a specialist succeeded in the same turn (pre-response fast path)
-- keep costs low: avoid reading URLs unless necessary; cap number of URLs read; prefer short summaries
-- keep outputs deterministic: always emit the routing plan and structured inputs
-- for deterministic/mechanical work, call tools; do not "handwave" transformations in prose
+- useful-word capture via `prioritize_words_for_learning`
 
-Output (suggested shape):
+Runs in `pre_response` when:
 
-- `pre_response`: list of specialists to invoke, with `reason`, `chat_history_size`, and expected artifacts
-- (future) `teacher_hints`: optional hints/policies for what to send to the teacher
-- `post_response`: list of specialists to invoke after the teacher response
+- the student explicitly asks to save or remember words
 
-### Teacher Input Hints (Future)
+Runs in `post_response` when:
 
-Coordinator-generated "what to send to the teacher" should be treated carefully to avoid hallucinating
-conversation history or tool outputs.
+- the teacher reply explicitly highlights words worth learning
 
-Preferred design direction:
+### MemoryReader (planned)
 
-- Teacher input is built deterministically in code from the real request `message` + `history`.
-- Coordinator may optionally return a small, validated hints/policy object (examples: desired history window,
-  whether to include a memory summary, or whether to request a compact recap) that the manager may apply.
-- Coordinator should never echo raw `history` back as "teacher input", and should never invent tool results.
+Intended role:
 
-### Size Limits (All Specialists)
+- pre-stage memory retrieval for teacher context
 
-To keep prompts stable and avoid flooding the TeacherAgent with unrelated details:
+### MemoryKeeper (planned)
 
-- Specialists must keep `info_for_teacher` to 3000 characters or fewer.
-- Specialists should put any larger structured data into `artifacts` and rely on downstream code to interpret it.
+Intended role:
 
-## Agent Contracts
+- post-stage memory persistence when the final teacher reply provides the signal
+
+### NewsAgent (planned)
+
+Intended role:
+
+- pre-stage news lookup when the user already provided a clear topic
+
+## Tool Cases
+
+### WordKeeper
+
+Explicit student request examples:
+
+- "save these words"
+- "remember this phrase"
+- "add these words to my vocabulary"
+
+Decision:
+
+- handle in pre stage
+
+Teacher-highlighted vocabulary examples:
+
+- "these are key words"
+- "these are good words to memorize"
+- "let's keep these words in mind"
+
+Decision:
+
+- handle in post stage
+
+### Read URL
+
+[`read_url`](../src/runestone/agents/tools/read_url.py) remains a direct teacher tool.
+
+### News
+
+[`search_news_with_dates`](../src/runestone/agents/tools/news.py) should be specialist-driven when possible.
+
+Known-topic examples:
+
+- "let's read news about history"
+- "show me Swedish news about the economy"
+
+Decision:
+
+- handle in pre stage
+
+Vague examples:
+
+- "let's read some news"
+- "give me some news"
+
+Decision:
+
+- do not run a news specialist yet
+- let the teacher clarify the topic first
+
+### Memory
+
+[`memory.py`](../src/runestone/agents/tools/memory.py) is still the richest future specialist area.
+
+Decision split:
+
+- reading fits pre stage well
+- writing may happen in pre or post depending on whether the trigger is explicit from the student or derived from the teacher reply
+
+## Contracts
 
 ### CoordinatorAgent Contract
 
@@ -191,63 +210,37 @@ Input:
 
 - latest user message
 - recent chat history
-- current user metadata
+- current stage (`pre_response` or `post_response`)
+- actual teacher response for post-stage planning
+- available specialist names
 
 Output:
 
-- routing decisions
-- optional teacher input hints/policies (future)
-- audit trail of specialists invoked
-
-Responsibilities:
-
-- decide which specialists to invoke and in which phase
-- avoid duplicate specialist calls
-- keep orchestration narrow and predictable
+- `CoordinatorPlan`
+  - `pre_response`
+  - `post_response`
+  - `audit`
 
 ### TeacherAgent Contract
 
 Input:
 
 - latest user message
-- recent chat history
-- compact outputs from pre-response specialists
-- optional confirmations from recent persisted side effects (post-response records from prior turns)
+- recent conversation history
+- `[PRE_RESULTS]`
+- `[RECENT_SIDE_EFFECTS]`
 
 Output:
 
-- final assistant response
-- optional sources (news, grammar references)
-
-Responsibilities:
-
-- produce a coherent pedagogical response
-- use specialist outputs naturally
-- never claim persistence unless a specialist reports success for this turn
+- final user-facing response
 
 ### WordKeeper Contract
 
 Input:
 
 - latest user message
-- teacher draft or final response (when available)
-- recent relevant snippets from conversation
-- optional mother tongue
-
-Tools:
-
-- `prioritize_words_for_learning`
-
-Decisions:
-
-- should a word be saved
-- which words to save
-- translation/example completion rules
-
-Typical phase:
-
-- `post-response` (default)
-- `pre-response` (fast path) when user explicitly requests saving and confirmation should appear in the same teacher reply
+- recent relevant history
+- teacher response when running in post stage
 
 Output artifacts:
 
@@ -255,198 +248,176 @@ Output artifacts:
 - skipped words
 - tool action summary
 
-### MemoryReader Contract
-
-Input:
-
-- latest user message
-- recent relevant chat turns
-- optional routing hints from coordinator
-
-Tools:
-
-- `start_student_info`
-- `read_memory`
-
-Decisions:
-
-- whether memory should be read for this turn
-- what subset of memory is relevant
-- how to compress memory into a small context bundle for the teacher
-
-Typical phase:
-
-- `pre-response`
-
-Output artifacts:
-
-- memory context summary
-- memory items consulted
-- reasons for no action
-
-### MemoryKeeper Contract
-
-Input:
-
-- latest user message
-- teacher draft or final response
-- recent relevant chat turns
-- optional memory summary
-
-Tools:
-
-- `upsert_memory_item`
-- `update_memory_status`
-- `update_memory_priority`
-- `promote_to_strength`
-- `delete_memory_item`
-
-Decisions:
-
-- whether a fact or learning signal is durable enough to store
-- whether a change is create/update/status-change/delete
-
-Typical phase:
-
-- `post-response`
-
-Output artifacts:
-
-- changed memory items
-- reasons for no action
-
-### NewsAgent Contract
-
-Input:
-
-- latest user message
-- optional recent context
-
-Tools:
-
-- `search_news_with_dates`
-- `read_url`
-
-Decisions:
-
-- whether the user is actually asking for news
-- query formulation
-- timelimit and result count
-- which (few) URLs to read for better summaries
-
-Output artifacts:
-
-- sources (urls + titles)
-- short domain summary
-
-### GrammarAgent Contract
-
-Input:
-
-- latest user message
-- optional recent learner mistakes or topic context
-
-Tools:
-
-- `search_grammar`
-- `read_grammar_page`
-
-Decisions:
-
-- whether a grammar reference is useful
-- which cheatsheet(s) to read
-
-Output artifacts:
-
-- selected grammar references
-- distilled explanation points
-
 ## Orchestration Flow
 
-Use phase-aware orchestration. Different specialists run at different times.
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant C1 as Coordinator (pre)
+    participant S1 as Pre Specialists
+    participant T as Teacher
+    participant API as Chat Service
+    participant C2 as Coordinator (post, background)
+    participant S2 as Post Specialists
 
-### Phase A: Pre-Response Routing
+    U->>C1: user message + history
+    C1->>S1: pre plan
+    S1-->>T: pre artifacts
+    T-->>API: teacher reply
+    API-->>U: return response immediately
+    API->>C2: background post analysis
+    C2->>S2: post plan
+    S2-->>API: side effects persisted
+```
 
-`CoordinatorAgent` inspects the turn and chooses zero or more pre-response specialists.
+Visible path:
 
-Examples:
+1. user message
+2. pre coordinator
+3. pre specialists
+4. teacher reply
+5. save assistant message
+6. return HTTP response
 
-- "My biggest problem is word order" -> `MemoryReader`, maybe `GrammarAgent`
-- "What happened in Sweden this week?" -> `NewsAgent`
-- "Save this word for me: avgorande" -> `WordKeeper` (pre-response fast path)
+Background path:
 
-### Phase B: Pre-Response Specialist Execution
+1. mark coordinator `running`
+2. replan from actual teacher reply
+3. run post specialists
+4. persist specialist rows
+5. mark coordinator `done`
 
-Pre-response specialists run and return structured results for the teacher.
+## Side-Effect Model
 
-Preferred execution model:
+The `agent_side_effects` store remains the internal system of record for post-stage tracking and specialist artifacts.
 
-- run independent specialists in parallel where safe
-- keep write domains out of this phase (exception: explicit user command fast paths)
-- preserve logs and outputs per specialist
+Why:
 
-Potential safe parallel combinations:
+- `chat_messages` should stay user-visible
+- orchestration state is internal machinery
+- mixing them would pollute chat-history semantics
 
-- `MemoryReader` + `NewsAgent`
-- `MemoryReader` + `GrammarAgent`
-- `NewsAgent` + `GrammarAgent`
+### Coordinator Tracking Row
 
-### Phase C: Teacher Response
+Conventions:
 
-`TeacherAgent` answers the user using:
+- `specialist_name="coordinator"`
+- `phase="post_response"`
+- `status` in `pending | running | done | failed`
 
-- latest user message
-- recent conversation context
-- pre-response specialist outputs
+### Specialist Result Rows
 
-### Phase D: Post-Response Routing
+Specialist result statuses stay:
 
-`CoordinatorAgent` inspects the user turn plus teacher response and chooses zero or more post-response specialists.
+- `no_action`
+- `action_taken`
+- `error`
 
-Examples:
+Teacher-facing loading must exclude coordinator rows.
 
-- teacher introduced or highlighted useful vocabulary -> `WordKeeper`
-- teacher observed repeated confusion or a new durable learner fact -> `MemoryKeeper`
-- user explicitly requests a post-response action (e.g., "Save this word for me") but fast path was not used -> `WordKeeper`
+## Cleanup and Safety Policy
 
-### Phase E: Post-Response Specialist Execution
+### Cleanup Separation
 
-Post-response specialists run and return structured results.
+Coordinator lifecycle rows and specialist result rows are managed independently.
 
-Potential safe parallel combinations:
+Coordinator cleanup:
 
-- `WordKeeper` + `MemoryKeeper`
+- remove or replace older coordinator rows for the chat when starting a new post cycle
 
-### Phase F: Side-Effects Recording
+Specialist cleanup:
 
-Post-response results are persisted as a structured, non-user-visible "agent side effects" record in the conversation history (system/internal).
+- replace previous post specialist rows only when the current post run is ready to persist fresh results
+
+```mermaid
+flowchart LR
+    A["Start new post cycle"] --> B["Cleanup old coordinator rows"]
+    B --> C["Create fresh coordinator row"]
+    C --> D["Run background post stage"]
+    D --> E["Cleanup old post specialist rows"]
+    E --> F["Write fresh post specialist rows"]
+    F --> G["Mark coordinator done"]
+```
+
+### Minimal Safety Rule
+
+Late background work must not overwrite newer coordinator state.
+
+Practical rule:
+
+- post writes and terminal coordinator status updates may proceed only when `coordinator_row_id == latest_coordinator_row.id`
+
+## Next-Turn Handling
+
+Before processing a new user turn for an existing chat:
+
+1. load the latest coordinator row
+2. continue normally if there is no row or status is `done`
+3. treat `pending`, `running`, and `failed` as abnormal stale state
+4. cancel the live in-memory task if it still exists
+5. mark the row `failed` if needed
+6. continue with the new turn without replay
+
+```mermaid
+flowchart TD
+    A["New user turn arrives"] --> B{"Existing post coordinator row?"}
+    B -- No --> C["Continue normally"]
+    B -- Yes --> D{"Status = done?"}
+    D -- Yes --> C
+    D -- No --> E["Log abnormal state"]
+    E --> F["Cancel in-memory post task if still alive"]
+    F --> G["Mark coordinator row failed"]
+    G --> C
+```
+
+## Async Execution Policy
+
+The background post stage is best-effort.
+
+It should:
+
+1. create coordinator row with `pending`
+2. return the teacher reply to the user
+3. start background task
+4. mark coordinator row `running`
+5. run post coordinator
+6. run post specialists
+7. save specialist rows
+8. mark coordinator row `done`
+
+If anything fails:
+
+- mark coordinator row `failed`
+- log clearly
+- do not retry automatically
+
+## In-Memory Task Tracking
+
+Track one live `asyncio.Task` per active chat post stage, keyed by `chat_id`.
 
 Rules:
 
-- do not change the already-sent teacher reply
-- future turns may mention side effects only when they are confirmed by this record
+- store the task handle when background work starts
+- remove it when work completes
+- wrap the post stage in a hard timeout
+- if a new turn arrives while the task is still alive, cancel it
 
-## Logging and Observability
+## Observability
 
-Each specialist invocation should log:
+Prefix conventions:
 
-- specialist name
-- user id
-- routing reason
-- input summary
-- tools called
-- action result
-- latency
-- failure details
+- `[agents:manager]`
+- `[agents:coordinator]`
+- `[agents:side-effects]`
+- `[agents:post-task]`
+- `[agents:<specialist>]`
 
-Add a consistent tag for agent-swarm logs so they are easy to grep:
+## Future Work
 
-- prefix every log line with `[agents:<component>]` (examples: `coordinator`, `wordkeeper`, `memoryreader`)
+Possible future extraction work:
 
-Recommended log examples:
+- `MemoryReader`
+- `MemoryKeeper`
+- `NewsAgent`
 
-- `[agents:manager] Pre-phase selection: user_id=12 specialists=MemoryReader,NewsAgent`
-- `[agents:manager] Post-phase selection: user_id=12 specialists=WordKeeper`
-- `[agents:wordkeeper] Result: status=action_taken saved_words=2`
-- `[agents:memoryreader] Result: status=action_taken items_read=3`
-- `[agents:memorykeeper] Result: status=no_action reason=no durable memory in turn`
+These are roadmap ideas, not part of the current async-post commitment.
