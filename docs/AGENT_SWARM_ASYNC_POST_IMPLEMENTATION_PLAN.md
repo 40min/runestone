@@ -84,7 +84,7 @@ Deliverables:
 
 Tasks:
 
-- refactor [`manager.py`](/Users/40min/www/runestone/src/runestone/agents/manager.py) into explicit stages:
+- refactor [`manager.py`](../src/runestone/agents/manager.py) into explicit stages:
   - pre coordination
   - pre specialist execution
   - teacher response generation
