@@ -12,11 +12,10 @@ from urllib.parse import urlparse
 from langchain_core.messages import ToolMessage
 from sqlalchemy.exc import SQLAlchemyError
 
+from runestone.agents.background_task_registry import BackgroundTaskRegistry
 from runestone.agents.coordinator import CoordinatorAgent
-from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem
+from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem, TeacherSideEffect
 from runestone.agents.specialists.base import SpecialistContext
-
-# from runestone.agents.specialists.memory_reader import MemoryReaderSpecialist
 from runestone.agents.specialists.registry import SpecialistRegistry
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.agents.specialists.word_keeper import WordKeeperSpecialist
@@ -40,6 +39,7 @@ class AgentsManager:
 
     COORDINATOR_MAX_HISTORY_MESSAGES = 5
     WORD_KEEPER_MAX_HISTORY_MESSAGES = 2
+    POST_TASK_TIMEOUT_SECONDS = 15
 
     def __init__(
         self,
@@ -64,6 +64,8 @@ class AgentsManager:
         # self.registry.register(MemoryReaderSpecialist())
         self.registry.register(WordKeeperSpecialist(settings))
 
+        self._post_task_registry = BackgroundTaskRegistry(logger=logger, key_name="chat_id")
+
         logger.info(
             "[agents:manager] Initialized AgentsManager with provider=%s, model=%s, persona=%s",
             settings.teacher_provider,
@@ -81,7 +83,11 @@ class AgentsManager:
         except (ValueError, AttributeError) as e:
             logger.warning("[agents:manager] Configuration issue with allowed_origins: %s", e)
 
-    async def generate_response(
+    # ------------------------------------------------------------------
+    # Phase methods (public, individually testable)
+    # ------------------------------------------------------------------
+
+    async def prepare_pre_turn(
         self,
         message: str,
         chat_id: str,
@@ -89,9 +95,12 @@ class AgentsManager:
         user: User,
         memory_item_service,
         side_effect_service: AgentSideEffectService,
-    ) -> tuple[str, Optional[list[dict[str, str]]]]:
+    ) -> tuple[CoordinatorPlan, list[dict], list[TeacherSideEffect]]:
         """
-        Generate a response to a user message using the teacher specialist.
+        Run pre-stage: coordinator planning, pre specialists, side effect loading.
+
+        Returns:
+            (plan, pre_results, recent_side_effects)
         """
         if not history:
             try:
@@ -114,9 +123,9 @@ class AgentsManager:
                 len(history),
                 len(coordinator_history),
             )
-        plan = None
+        plan: CoordinatorPlan | None = None
         try:
-            plan = await self.coordinator.plan(
+            plan = await self.coordinator.plan_pre_turn(
                 message=message,
                 history=coordinator_history,
                 available_specialists=[name for name in self.registry.list_names() if name != "teacher"],
@@ -147,6 +156,19 @@ class AgentsManager:
             chat_id=chat_id,
         )
 
+        return plan, pre_results, recent_side_effects
+
+    async def generate_teacher_response(
+        self,
+        message: str,
+        history: list[ChatMessage],
+        user: User,
+        pre_results: list[dict],
+        recent_side_effects: list[TeacherSideEffect],
+    ) -> tuple[str, Optional[list[dict[str, str]]]]:
+        """
+        Run teacher agent synchronously and return (response_text, sources).
+        """
         try:
             teacher_response, final_messages = await self.teacher.generate_response(
                 message=message,
@@ -159,28 +181,261 @@ class AgentsManager:
             logger.error("[agents:manager] Error generating response: %s", e)
             raise
 
-        logger.info(
-            "[agents:manager] Post-phase selection: user_id=%s specialists=%s",
-            user.id,
-            ",".join([item.name for item in plan.post_response]) if plan.post_response else "none",
+        sources = self._extract_sources(final_messages)
+        return teacher_response, sources
+
+    async def process_turn(
+        self,
+        *,
+        message: str,
+        chat_id: str,
+        history: list[ChatMessage],
+        user: User,
+        memory_item_service,
+        side_effect_service: AgentSideEffectService,
+    ) -> tuple[str, Optional[list[dict[str, str]]]]:
+        """
+        Run the agent-owned portion of a prepared chat turn.
+
+        The caller is responsible for message/session persistence before this call:
+        - user message already saved when applicable
+        - history already loaded
+        - user already resolved
+
+        The caller also remains responsible for chat delivery concerns after this call:
+        - persisting the assistant message
+        - optional TTS push to the client
+        """
+        if history:
+            await self.handle_stale_post_task(
+                user_id=user.id,
+                chat_id=chat_id,
+                side_effect_service=side_effect_service,
+            )
+
+        _plan, pre_results, recent_side_effects = await self.prepare_pre_turn(
+            message=message,
+            chat_id=chat_id,
+            history=history,
+            user=user,
+            memory_item_service=memory_item_service,
+            side_effect_service=side_effect_service,
         )
-        post_results = await self._run_specialists(
-            plan.post_response,
+
+        assistant_text, sources = await self.generate_teacher_response(
             message=message,
             history=history,
             user=user,
-            teacher_response=teacher_response,
             pre_results=pre_results,
-        )
-        await side_effect_service.replace_post_response_side_effects(
-            user_id=user.id,
-            chat_id=chat_id,
-            results=post_results,
+            recent_side_effects=recent_side_effects,
         )
 
-        response = teacher_response
-        sources = self._extract_sources(final_messages)
-        return response, sources
+        coordinator_row_id = await side_effect_service.create_post_coordinator_row(
+            user_id=user.id,
+            chat_id=chat_id,
+        )
+
+        await self.start_background_post_turn(
+            message=message,
+            chat_id=chat_id,
+            history=history,
+            user=user,
+            teacher_response=assistant_text,
+            pre_results=pre_results,
+            side_effect_service=side_effect_service,
+            coordinator_row_id=coordinator_row_id,
+        )
+
+        return assistant_text, sources
+
+    async def run_post_turn(
+        self,
+        message: str,
+        chat_id: str,
+        history: list[ChatMessage],
+        user: User,
+        teacher_response: str,
+        pre_results: list[dict],
+        side_effect_service: AgentSideEffectService,
+        coordinator_row_id: int,
+    ) -> None:
+        """
+        Run post-stage: post specialists and persist side effects.
+
+        Called from within a background asyncio.Task. Updates coordinator tracking row.
+        """
+        await side_effect_service.mark_coordinator_running(coordinator_row_id)
+
+        try:
+            coordinator_history = history[-self.COORDINATOR_MAX_HISTORY_MESSAGES :] if history else []
+            if history and len(history) > self.COORDINATOR_MAX_HISTORY_MESSAGES:
+                logger.warning(
+                    "[agents:manager] Truncated coordinator history from %s to %s messages",
+                    len(history),
+                    len(coordinator_history),
+                )
+
+            plan = await self.coordinator.plan_post_turn(
+                message=message,
+                history=coordinator_history,
+                teacher_response=teacher_response,
+                available_specialists=[name for name in self.registry.list_names() if name != "teacher"],
+            )
+            logger.info(
+                "[agents:manager] Post-phase selection: user_id=%s specialists=%s",
+                user.id,
+                ",".join([item.name for item in plan.post_response]) if plan.post_response else "none",
+            )
+
+            post_results = await self._run_specialists(
+                plan.post_response,
+                message=message,
+                history=history,
+                user=user,
+                teacher_response=teacher_response,
+                pre_results=pre_results,
+            )
+            persisted = await side_effect_service.replace_post_specialist_results(
+                user_id=user.id,
+                chat_id=chat_id,
+                results=post_results,
+                coordinator_row_id=coordinator_row_id,
+            )
+            if not persisted:
+                logger.warning(
+                    "[agents:manager] Skipped stale post-turn persistence: user_id=%s chat_id=%s row_id=%s",
+                    user.id,
+                    chat_id,
+                    coordinator_row_id,
+                )
+                return
+            await side_effect_service.mark_coordinator_done_if_current(
+                row_id=coordinator_row_id,
+                user_id=user.id,
+                chat_id=chat_id,
+            )
+            logger.info("[agents:manager] Post-turn completed: user_id=%s chat_id=%s", user.id, chat_id)
+        except Exception:
+            logger.error("[agents:manager] Post-turn failed: user_id=%s chat_id=%s", user.id, chat_id, exc_info=True)
+            await side_effect_service.mark_coordinator_failed_if_current(
+                row_id=coordinator_row_id,
+                user_id=user.id,
+                chat_id=chat_id,
+            )
+            raise
+
+    # ------------------------------------------------------------------
+    # Background task registry
+    # ------------------------------------------------------------------
+
+    def _register_post_task(self, chat_id: str, task: asyncio.Task) -> None:
+        self._post_task_registry.register(chat_id, task)
+
+    def _unregister_post_task(self, chat_id: str) -> None:
+        self._post_task_registry.unregister(chat_id)
+
+    def cancel_post_task(self, chat_id: str) -> bool:
+        """Cancel any live background post task for chat_id. Returns True if a task was cancelled."""
+        return self._post_task_registry.cancel(chat_id)
+
+    async def start_background_post_turn(
+        self,
+        message: str,
+        chat_id: str,
+        history: list[ChatMessage],
+        user: User,
+        teacher_response: str,
+        pre_results: list[dict],
+        side_effect_service: AgentSideEffectService,
+        coordinator_row_id: int,
+    ) -> None:
+        """
+        Fire-and-forget: wrap run_post_turn in a timeout and register the task handle.
+        """
+
+        async def _run():
+            try:
+                await asyncio.wait_for(
+                    self.run_post_turn(
+                        message=message,
+                        chat_id=chat_id,
+                        history=history,
+                        user=user,
+                        teacher_response=teacher_response,
+                        pre_results=pre_results,
+                        side_effect_service=side_effect_service,
+                        coordinator_row_id=coordinator_row_id,
+                    ),
+                    timeout=self.POST_TASK_TIMEOUT_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    "[agents:post-task] Post task timed out after %ss: chat_id=%s",
+                    self.POST_TASK_TIMEOUT_SECONDS,
+                    chat_id,
+                )
+                await side_effect_service.mark_coordinator_failed_if_current(
+                    row_id=coordinator_row_id,
+                    user_id=user.id,
+                    chat_id=chat_id,
+                )
+            except asyncio.CancelledError:
+                logger.info("[agents:post-task] Post task cancelled: chat_id=%s", chat_id)
+                await side_effect_service.mark_coordinator_failed_if_current(
+                    row_id=coordinator_row_id,
+                    user_id=user.id,
+                    chat_id=chat_id,
+                )
+            except Exception:
+                logger.error("[agents:post-task] Post task error: chat_id=%s", chat_id, exc_info=True)
+            finally:
+                self._unregister_post_task(chat_id)
+
+        task = asyncio.create_task(_run())
+        self._register_post_task(chat_id, task)
+        logger.info(
+            "[agents:post-task] Background task started: chat_id=%s timeout=%ss",
+            chat_id,
+            self.POST_TASK_TIMEOUT_SECONDS,
+        )
+
+    async def handle_stale_post_task(
+        self,
+        *,
+        user_id: int,
+        chat_id: str,
+        side_effect_service: AgentSideEffectService,
+    ) -> None:
+        """
+        Next-turn check: inspect the previous post coordinator row for this chat.
+        Cancel any live background task and mark stale rows as failed.
+        """
+        coordinator_row = await side_effect_service.load_latest_coordinator_row(user_id=user_id, chat_id=chat_id)
+        if coordinator_row is None or coordinator_row.status == "done":
+            return
+
+        logger.warning(
+            "[agents:post-task] Stale post coordinator row detected: chat_id=%s status=%s — cancelling",
+            chat_id,
+            coordinator_row.status,
+        )
+
+        self.cancel_post_task(chat_id)
+
+        try:
+            record = await side_effect_service.repository.get_latest_coordinator_row(user_id=user_id, chat_id=chat_id)
+            if record and record.status not in ("done", "failed"):
+                await side_effect_service.mark_coordinator_failed(record.id)
+        except Exception:
+            logger.warning(
+                "[agents:post-task] Failed to mark stale coordinator row as failed: chat_id=%s",
+                chat_id,
+                exc_info=True,
+            )
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
 
     async def _run_specialists(
         self,

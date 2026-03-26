@@ -4,143 +4,105 @@
 
 Replace the current single teacher-agent model with a coordinator plus specialist agents so tool use becomes more reliable, prompts stay narrow, and each domain can evolve without overloading one system prompt.
 
-This document is the implementation plan.
+## Completed Milestones (MS1–MS4)
 
-Architecture, contracts, orchestration flow, and logging conventions live in `AGENT_SWARM_CONTRACT.md`.
+The following were delivered in `feat/agent-swarm-ms1` through `feat/agent-swarm-ms4`:
 
-## Problem Statement
+- **MS1**: Introduced specialist interfaces, `SpecialistResult` schema, `agents/specialists/` package, `[agents:<component>]` log convention.
+- **MS2**: Split `AgentService` → `AgentsManager` + `TeacherAgent` as first specialist.
+- **MS3**: Introduced `CoordinatorAgent` for pre/post orchestration with structured `CoordinatorPlan`, concurrent specialist fan-out, and `agent_side_effects` persistence.
+- **MS4**: Extracted `WordKeeper` specialist; pre-response fast path for explicit save requests; post-response path for teacher-highlighted vocabulary.
 
-The current `AgentService` (to be renamed to `AgentsManager`) asks one agent to do all of the following in a single turn:
+## Design Direction (Post-MS4)
 
-- teach Swedish naturally
-- decide when to read or write memory
-- decide when to save useful vocabulary
-- decide when to search grammar references
-- decide when to search news
-- decide when to read URLs
+After MS4 the team rethought the synchronous post-stage execution. The new direction is:
 
-This creates several issues:
+- pre-stage becomes the primary specialist stage
+- grammar tools remain directly available to the teacher (no specialist)
+- post stage is preserved but runs **asynchronously** in the background
+- student is not blocked on post-stage latency
+- no queues, no retries, no replay loops
 
-- prompt overload: too many responsibilities compete for attention
-- weak operational discipline: the agent chats well but may skip tools
-- poor observability: difficult to tell whether a domain rule failed or was never considered
-- poor scalability: every new tool makes the same agent less reliable
+Full design rationale: [`AGENT_SWARM_ASYNC_POST_DESIGN.md`](AGENT_SWARM_ASYNC_POST_DESIGN.md)
 
-## Goals
+Implementation plan: [`AGENT_SWARM_ASYNC_POST_IMPLEMENTATION_PLAN.md`](AGENT_SWARM_ASYNC_POST_IMPLEMENTATION_PLAN.md)
 
-- Keep the teacher experience natural and conversational.
-- Move domain-specific tool reasoning into specialist agents.
-- Make vocabulary and memory persistence more reliable.
-- Keep each specialist prompt small, narrow, and testable.
-- Preserve the ability for a domain agent to decide whether action is needed.
-- Add structured outputs so orchestration is deterministic even when specialist reasoning is not.
+## Active Milestones (Async Post Redesign)
 
-## Non-Goals
+### Milestone 1: Lock the Contract
 
-- Do not build an unrestricted free-form agent swarm.
-- Do not let multiple agents independently generate final user-facing replies.
-- Do not give all agents full tool access.
-- Do not rewrite the entire chat stack in one step.
+- [x] Design doc accepted as current direction
+- [x] Implementation plan accepted
+- [x] Docs renewed (this file + `AGENT_SWARM_CONTRACT.md`)
 
-## Architecture (Summary)
+### Milestone 2: Split Manager Into Sync and Async Phases
 
-See `AGENT_SWARM_CONTRACT.md` for the full contract and flow.
+Refactor `manager.py` into explicit stage methods:
 
-Key design decisions for v1:
+- `prepare_pre_turn()` – coordinator plan + pre specialists + side effect load
+- `generate_teacher_response()` – teacher only
+- `run_post_turn()` – post coordinator replanning + post specialists + persist
 
-- `read_url` remains a direct tool (invoked by `CoordinatorAgent` and/or retrieval specialists), not by `TeacherAgent`.
-- Coordinator is an LLM agent (not a hardcoded policy layer).
-- Post-response specialist results are persisted as internal "agent side effects" records; do not rewrite the already-sent teacher reply.
+Return boundary moves to after `generate_teacher_response()`.
 
-## Implementation Plan
+### Milestone 3: Move HTTP Return Boundary Earlier
 
-### Milestone 1: Introduce Specialist Interfaces
+Update `chat_service.py` to:
 
-Deliverables:
+1. Save user message
+2. Check previous post coordinator state (next-turn hook)
+3. Run sync pre + teacher path
+4. Save assistant message
+5. Create post coordinator tracking row (`pending`)
+6. **Return response immediately**
+7. Fire background `run_post_turn()`
 
-- add a shared structured result schema for specialist outputs
-- add a base specialist interface
-- keep current `AgentService`/`AgentsManager` user-visible behavior unchanged
+Applies to both `process_message()` and `process_image_message()`.
 
-Tasks:
+### Milestone 4: Add Post Coordinator Tracking
 
-- rename `agent` -> `agents`
-- rename `AgentService` -> `AgentsManager` to emphasize multi-agent ownership
-- create `agents/specialists/` package
-- define `SpecialistResult` schema
-- define specialist invocation interface
-- add logging shape for specialist runs
-- add `[agents:<component>]` prefix convention for all coordinator/specialist logs
+Reuse `agent_side_effects` table with `specialist_name="coordinator"`.
+Add service methods: create pending row, mark running/done/failed, load latest.
+`load_recent_for_teacher` must exclude coordinator rows.
 
-Success criteria:
+### Milestone 5: Separate Cleanup Paths
 
-- can instantiate a specialist and return a structured `no_action`
+Split cleanup so coordinator rows and specialist result rows are managed independently.
+Remove `replace_post_response_side_effects()`; replace with:
+- `cleanup_coordinator_rows()`
+- `replace_post_specialist_results()`
 
-### Milestone 2: Split Manager and TeacherAgent
+### Milestone 6: Background Task Registry
 
-Deliverables:
+In-memory dict keyed by `chat_id`. One `asyncio.Task` per active post stage.
+Timeout: 15 seconds. Cancel on next-turn stale detection.
 
-- rename the manager model module to `manager.py`
-- decouple the teacher implementation from `AgentsManager`
-- introduce `TeacherAgent` as the first specialist
+### Milestone 7: Next-Turn Check
 
-Tasks:
+Before processing any non-first user turn, inspect the latest coordinator row.
+If stale (`pending`/`running`/`failed`): log loudly, cancel task, mark failed, continue.
 
-- rename `runestone/agents/service.py` -> `runestone/agents/manager.py`
-- update imports to use `runestone.agents.manager`
-- extract teacher prompt + execution into `TeacherAgent` specialist
-- have `AgentsManager` call `TeacherAgent` directly (no coordinator yet)
-- keep user-visible behavior unchanged
+### Milestone 8: Align Specialist Routing
 
-Success criteria:
+Update coordinator prompt:
+- WordKeeper eligible for `post_response` when teacher highlights vocabulary
+- News routing: known topic → pre; vague request → skip
+- Remove any grammar-specialist routing mentions
 
-- `AgentsManager` and `TeacherAgent` are separate components
-- `TeacherAgent` can be invoked independently in tests
+## Follow-Up Corrections (Fixed)
 
-### Milestone 3: Introduce Coordinator for Pre/Post Orchestration
+The async-post follow-up corrections have now been implemented:
 
-Deliverables:
+- rerun the coordinator after the teacher response is known
+- make coordinator prompting explicitly stage-specific
+- guard post-result persistence with coordinator-row ownership checks
+- add async overlap and stale-writer coverage
 
-- replace direct all-tools teacher path with coordinator + teacher
-- enable pre- and post-response specialist execution
+## Possible Future Work
 
-Tasks:
+The items below are exploratory roadmap ideas, not part of the accepted async-post commitment.
 
-- create routing policy
-- add specialist registry
-- implement phased fan-out/fan-in orchestration
-- add teacher input bundle creation
-- preserve existing source extraction behavior for news
-
-Success criteria:
-
-- same user-facing chat endpoint, but internals run coordinator plus specialists
-- coordinator can execute pre/post phases deterministically
-
-### Milestone 4: Extract WordKeeper
-
-Deliverables:
-
-- move vocabulary responsibility out of the teacher prompt
-- `WordKeeper` owns `prioritize_words_for_learning`
-
-Tasks:
-
-- create `WordKeeper` prompt and service
-- wire `WordKeeper` into the `post-response` phase
-- add a `pre-response` fast path for explicit "save this word" user commands (so the teacher can confirm truthfully in the same turn)
-- remove word-saving policy from teacher agent prompt or reduce it to routing guidance
-- add structured tests for:
-  - explicit save requests
-  - useful word discovered in normal conversation
-  - no-action cases
-  - tool failure propagation
-
-Success criteria:
-
-- word-saving behavior can be tested without invoking the teacher prompt
-
-### Milestone 5: Extract MemoryReader and MemoryKeeper
+### MemoryReader and MemoryKeeper Extraction
 
 Deliverables:
 
@@ -160,11 +122,11 @@ Success criteria:
 - teacher no longer owns memory tool rules directly
 - memory retrieval and memory persistence are independently testable
 
-### Milestone 6: Extract NewsAgent
+### NewsAgent Extraction
 
 Deliverables:
 
-- news reference and retrieval becomes a specialist
+- reference and retrieval domains become specialists
 
 Tasks:
 
@@ -174,24 +136,9 @@ Tasks:
 
 Success criteria:
 
-- teacher routes news retrieval through `NewsAgent`
+- teacher only routes and composes
 
-### Milestone 7: Extract GrammarAgent
-
-Deliverables:
-
-- grammar reference and retrieval becomes a specialist
-
-Tasks:
-
-- create `GrammarAgent`
-- add source/result schemas
-
-Success criteria:
-
-- teacher routes grammar retrieval through `GrammarAgent`
-
-### Milestone 8: Reduce Monolithic Prompt
+### Teacher Prompt Reduction
 
 Deliverables:
 
@@ -208,150 +155,43 @@ Success criteria:
 
 - teacher prompt is substantially shorter and easier to maintain
 
-## Logging and Observability
+## Architecture Summary
 
-See `AGENT_SWARM_CONTRACT.md` for the log contract and examples.
+```
+user message
+    → Coordinator (pre plan)
+    → Pre Specialists (parallel)
+    → Teacher
+    → [HTTP response returned]
+    ↓ (background)
+    → Coordinator (post plan)
+    → Post Specialists (parallel)
+    → Side effects persisted
+```
 
-Implementation requirement:
+## Logging Conventions
 
-- prefix every coordinator/specialist log line with `[agents:<component>]` so it is easy to grep.
+All agent log lines use `[agents:<component>]` prefix.
 
-## Testing Strategy
+- `[agents:manager]` – orchestration flow
+- `[agents:coordinator]` – coordinator planning
+- `[agents:side-effects]` – side effect lifecycle
+- `[agents:post-task]` – background task events
 
-### Unit Tests
+## Tool Access Policy (Current)
 
-- specialist prompt contract tests
-- routing tests
-- result-schema tests
-- failure handling tests
+| Agent              | Tools                                         |
+| ------------------ | --------------------------------------------- |
+| `TeacherAgent`     | grammar tools + read_url                      |
+| `CoordinatorAgent` | none (planning only)                          |
+| `WordKeeper`       | `prioritize_words_for_learning`               |
+| `MemoryReader`     | `start_student_info`, `read_memory` (future)  |
+| `MemoryKeeper`     | memory write tools (future)                   |
+| `NewsAgent`        | `search_news_with_dates`, `read_url` (future) |
 
-### Integration Tests
+## Non-Goals (Unchanged)
 
-- coordinator invokes correct specialists for representative turns
-- specialists do not over-trigger
-- successful specialist actions affect final response language correctly
-- persistence claims are never made without successful tool results
-
-### Regression Tests
-
-- useful-word capture during normal conversation
-- explicit "save this word" behavior
-- memory creation for durable student facts
-- news lookup only when relevant
-
-## Risks
-
-### Risk: Over-Engineering Into an Unmanageable Swarm
-
-Mitigation:
-
-- use one coordinator and a small fixed set of specialists
-- no arbitrary agent-to-agent chat
-- no shared ownership across domains
-
-### Risk: Latency Increase
-
-Mitigation:
-
-- only invoke specialists when routed
-- parallelize independent specialists
-- keep specialist context windows short
-
-### Risk: Duplicate or Conflicting Behavior
-
-Mitigation:
-
-- strict domain ownership
-- structured contracts
-- one final response generator
-
-### Risk: Routing Drift
-
-Mitigation:
-
-- explicit routing tests
-- routing logs
-- start with a small specialist set
-
-## Migration Strategy
-
-Implement incrementally without breaking the public chat interface.
-
-Step 1:
-
-- add specialist framework behind existing `AgentService` (renaming it to `AgentsManager` as part of this step)
-
-Step 2:
-
-- rename manager module to `manager.py` and extract `TeacherAgent` as the first specialist
-
-Step 3:
-
-- introduce `CoordinatorAgent` and phased pre/post execution
-
-Step 4:
-
-- add `WordKeeper` as a specialist
-
-Step 5:
-
-- add `MemoryReader` and `MemoryKeeper` as specialists
-
-Step 6:
-
-- add `NewsAgent` as a specialist
-
-Step 7:
-
-- add `GrammarAgent` as a specialist
-
-Step 8:
-
-- shrink teacher prompt and tool list
-
-This reduces risk and makes it easy to compare old vs new behavior.
-
-## Open Questions
-
-Resolved for v1:
-
-- `read_url`: remains a direct tool; `TeacherAgent` should not call it directly.
-- Coordinator: LLM agent.
-- Second passes: do not allow specialists to request them; provide fixed context windows instead.
-- Post-response execution: run post-response specialists on the finalized teacher response and persist results as internal "agent side effects" records.
-
-Still discussable:
-
-- Should specialist outputs be produced by LLM agents only, or should some domains allow deterministic post-processing (with purely mechanical work wrapped as tools)?
-- How much conversation history should each specialist receive by default (per specialist/tool), beyond the baseline suggestions in `AGENT_SWARM_CONTRACT.md`?
-
-## Recommended First Cut
-
-Build the smallest useful version first:
-
-- `CoordinatorAgent`
-- `TeacherAgent`
-- `WordKeeper`
-- `MemoryReader`
-- `MemoryKeeper`
-
-Leave `NewsAgent` and `GrammarAgent` in the current teacher path temporarily if needed.
-
-Reason:
-
-- the current biggest reliability gap is persistence, not retrieval
-- word and memory behaviors are exactly where prompt overload is hurting most
-- splitting memory into read and write paths keeps phase boundaries clean
-
-## Acceptance Criteria
-
-The redesign is successful when:
-
-- the teacher no longer directly owns most write-tool policies
-- the coordinator remains small and phase-aware
-- useful words are saved reliably during normal conversation
-- relevant memory is read before the teacher answers when needed
-- durable memory updates happen reliably
-- prompts are shorter and more maintainable
-- logs clearly show which specialist acted and why
-- the final answer remains conversational and coherent
+- No unrestricted free-form agent swarm
+- No multiple agents generating final user-facing replies
+- No automatic retry or replay loops
+- No durable background queues

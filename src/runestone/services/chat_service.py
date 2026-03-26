@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def _process_message_timing_fields(args, kwargs, _result, _error) -> dict[str, int | None]:
+    """Extract stable log fields for the per-turn timing decorator."""
     user_id = kwargs.get("user_id") if "user_id" in kwargs else (args[1] if len(args) > 1 else None)
     message_text = kwargs.get("message_text") if "message_text" in kwargs else (args[2] if len(args) > 2 else "")
     return {
@@ -31,7 +32,14 @@ def _process_message_timing_fields(args, kwargs, _result, _error) -> dict[str, i
 
 
 class ChatService:
-    """Service to handle business logic of chat interactions."""
+    """
+    Service layer for chat-turn orchestration and history APIs.
+
+    `ChatService` owns request-level workflow: resolving the active chat session,
+    persisting messages, loading agent context, and returning API-facing history
+    metadata. Agent planning/execution stays in `AgentsManager`; persistence stays
+    in repository and domain services.
+    """
 
     def __init__(
         self,
@@ -46,15 +54,11 @@ class ChatService:
         memory_item_service,
     ):
         """
-        Initialize the chat service.
+        Wire together the collaborators needed for a full chat turn.
 
-        Args:
-            settings: Application settings
-            repository: Chat repository for database operations
-            user_service: User service for user and memory operations
-            agent_service: Agent service for LLM interactions
-            processor: Runestone processor for OCR operations
-            tts_service: TTS service for text-to-speech synthesis
+        The service itself stays intentionally thin: it coordinates request flow
+        and business rules, while delegating persistence, OCR, TTS, and agent
+        execution to dedicated services.
         """
         self.settings = settings
         self.repository = repository
@@ -75,17 +79,21 @@ class ChatService:
         speed: float = 1.0,
     ) -> tuple[str, list[dict] | None]:
         """
-        Process a user message: save, truncate, fetch context, generate response, save response.
+        Process one text chat turn end to end.
+
+        The method persists the user message first so the database remains the
+        source of truth for the turn, then loads history for the agent and hands
+        orchestration to `AgentsManager`. The manager returns the assistant reply
+        immediately and schedules any post-turn specialist work in the background.
 
         Args:
-            user_id: ID of the user
-            message_text: The user's message
-            tts_expected: Whether to synthesize TTS audio for the response
-            speed: Speed of the speech
-
-        Returns:
-            The assistant's response text and optional news sources
+            user_id: Authenticated user whose active chat session should receive the turn.
+            message_text: Raw user message content for the current turn.
+            tts_expected: Whether the caller expects audio for the assistant reply.
+            speed: Speech playback multiplier passed to TTS generation, where `1.0`
+                means normal playback speed.
         """
+
         # 1. Resolve current chat session and save user message
         chat_id = await self.get_or_create_current_chat_id(user_id)
         await self.repository.add_message(user_id, chat_id, "user", message_text)
@@ -115,11 +123,11 @@ class ChatService:
         if not user:
             raise ValueError(f"User {user_id} not found")
 
-        # 5. Generate response using the ReAct agent
+        # 5. Generate response using agents
         assistant_text, sources = await self.agent_service.generate_response(
             message=message_text,
             chat_id=chat_id,
-            history=history[:-1],  # Exclude current message (it's passed separately)
+            history=history[:-1],
             user=user,
             memory_item_service=self.memory_item_service,
             side_effect_service=self.side_effect_service,
@@ -136,17 +144,15 @@ class ChatService:
 
     async def process_image_message(self, user_id: int, image_content: bytes) -> str:
         """
-        Process image for OCR and generate translation response.
+        OCR an uploaded image and route the extracted text through the teacher flow.
+
+        Image uploads do not create a separate user chat message today. Instead we
+        build an explicit translation prompt from OCR output and process it as a
+        normal agent turn so post-turn specialist handling stays consistent.
 
         Args:
-            user_id: ID of the user
-            image_content: Image file content as bytes
-
-        Returns:
-            Translation response message
-
-        Raises:
-            RunestoneError: If OCR fails or returns empty text
+            user_id: Authenticated user whose active chat session should receive the reply.
+            image_content: Uploaded image bytes that will be sent through OCR.
         """
         # 1. Run OCR on image content (async)
         ocr_result = await self.processor.run_ocr(image_content)
@@ -179,7 +185,6 @@ class ChatService:
 
         # 5. Build translation prompt with OCR text
         mother_tongue = user.mother_tongue or "English"
-
         translation_prompt = f"""User uploaded an image with Swedish text. Please translate it phrase-by-phrase.
 
 OCR Text:
@@ -190,8 +195,7 @@ Instructions:
 2. Then provide phrase-by-phrase translation in format: "Swedish phrase (translation). Next phrase (translation)."
 3. Use {mother_tongue} for all translations."""
 
-        # 6. Generate response using the ReAct agent
-        assistant_text, _sources = await self.agent_service.generate_response(
+        assistant_text, _sources = await self.agent_service.process_turn(
             message=translation_prompt,
             chat_id=chat_id,
             history=history,
@@ -200,55 +204,48 @@ Instructions:
             side_effect_service=self.side_effect_service,
         )
 
-        # 7. Save assistant message
         await self.repository.add_message(user_id, chat_id, "assistant", assistant_text)
 
         return assistant_text
 
+    # ------------------------------------------------------------------
+    # Chat session management
+    # ------------------------------------------------------------------
+
     async def get_or_create_current_chat_id(self, user_id: int) -> str:
-        """
-        Get user current chat id and create one if absent.
-        """
+        """Return the active chat session id, creating one if needed."""
         return await self.user_service.get_or_create_current_chat_id(user_id)
 
     async def start_new_chat(self, user_id: int) -> str:
-        """
-        Rotate the current chat id for the user.
-        """
+        """Rotate the user onto a fresh chat session id."""
         return await self.user_service.rotate_current_chat_id(user_id)
 
     async def clear_history(self, user_id: int) -> str:
-        """
-        Backward-compatible alias for starting a new chat session.
-        """
+        """Backward-compatible alias for starting a new chat session."""
         return await self.start_new_chat(user_id)
 
     async def get_latest_id(self, user_id: int, chat_id: str) -> int:
-        """
-        Get latest message id in a chat session.
-        """
+        """Return the newest persisted message id for a chat session."""
         return await self.repository.get_latest_id(user_id, chat_id)
 
     async def get_oldest_id(self, user_id: int, chat_id: str) -> int:
-        """
-        Get oldest message id in a chat session.
-        """
+        """Return the oldest persisted message id still retained for a chat session."""
         return await self.repository.get_oldest_id(user_id, chat_id)
 
     async def get_history(
         self, user_id: int, chat_id: str, after_id: int = 0, limit: int = 200
     ) -> List[ChatMessageSchema]:
         """
-        Get chat history for a user chat session, optionally incrementally.
+        Load validated chat history records for one session.
+
+        Repository models are converted into API-facing schemas here so callers do
+        not need to care about persistence details.
 
         Args:
-            user_id: ID of the user
-            chat_id: Active chat session ID
-            after_id: Return only messages with id greater than this value
-            limit: Maximum number of messages to return
-
-        Returns:
-            List of ChatMessage schemas with sources deserialized
+            user_id: Authenticated user who owns the chat session.
+            chat_id: Chat session identifier to read from.
+            after_id: Optional cursor; only messages with a larger id are returned.
+            limit: Maximum number of messages to return.
         """
         history = await self.repository.get_history_after_id(user_id, chat_id, after_id=after_id, limit=limit)
         return [ChatMessageSchema.model_validate(message) for message in history]
@@ -263,20 +260,16 @@ Instructions:
         """
         Build a complete history response for API consumers.
 
-        This method centralizes chat-history business rules:
-        - Resolve and validate the active chat session
-        - Detect client/server chat mismatch and reset stale cursors
-        - Provide pagination metadata (`has_more`)
-        - Provide retention-gap hint (`history_truncated`) when confidence is high
+        This centralizes the chat-history rules that the frontend relies on:
+        active-session resolution, stale client chat detection, incremental
+        pagination metadata, and a best-effort signal that retention truncated
+        earlier messages.
 
         Args:
-            user_id: ID of the user
-            after_id: Client cursor (server message id)
-            limit: Page size
-            client_chat_id: Optional client-side active chat id
-
-        Returns:
-            Fully populated ChatHistoryResponse
+            user_id: Authenticated user requesting history.
+            after_id: Incremental history cursor from the client.
+            limit: Maximum number of messages to include in the response.
+            client_chat_id: Client-side active chat id used to detect session drift.
         """
         chat_id = await self.get_or_create_current_chat_id(user_id)
         chat_mismatch = bool(client_chat_id and client_chat_id != chat_id)

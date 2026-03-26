@@ -1,7 +1,7 @@
 import json
 from typing import Any
 
-from sqlalchemy import delete, desc, select
+from sqlalchemy import delete, desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from runestone.db.models import AgentSideEffect
@@ -44,7 +44,6 @@ class AgentSideEffectRepository:
             return created
 
         # Keep inserts in the current transaction while making instances persistent.
-        # This allows callers to compose add/delete work and commit once.
         if created:
             await self.db.flush()
 
@@ -59,12 +58,14 @@ class AgentSideEffectRepository:
         statuses: tuple[str, ...] = ("action_taken",),
         limit: int = 5,
     ) -> list[AgentSideEffect]:
+        """Load specialist result rows; excludes coordinator tracking rows."""
         stmt = (
             select(AgentSideEffect)
             .where(
                 AgentSideEffect.user_id == user_id,
                 AgentSideEffect.chat_id == chat_id,
                 AgentSideEffect.phase == phase,
+                AgentSideEffect.specialist_name != "coordinator",
                 AgentSideEffect.status.in_(statuses),
             )
             .order_by(desc(AgentSideEffect.created_at), desc(AgentSideEffect.id))
@@ -81,10 +82,77 @@ class AgentSideEffectRepository:
         phase: str = "post_response",
         commit: bool = True,
     ) -> int:
+        """Delete specialist result rows for a phase; never touches coordinator rows."""
         stmt = delete(AgentSideEffect).where(
             AgentSideEffect.user_id == user_id,
             AgentSideEffect.chat_id == chat_id,
             AgentSideEffect.phase == phase,
+            AgentSideEffect.specialist_name != "coordinator",
+        )
+        result = await self.db.execute(stmt)
+        if commit:
+            await self.db.commit()
+        return int(result.rowcount or 0)
+
+    # ------------------------------------------------------------------
+    # Coordinator tracking row methods
+    # ------------------------------------------------------------------
+
+    async def create_coordinator_row(
+        self,
+        user_id: int,
+        chat_id: str,
+        status: str = "pending",
+    ) -> AgentSideEffect:
+        """Create a coordinator lifecycle tracking row and return it."""
+        model = AgentSideEffect(
+            user_id=user_id,
+            chat_id=chat_id,
+            specialist_name="coordinator",
+            phase="post_response",
+            status=status,
+            info_for_teacher="",
+        )
+        self.db.add(model)
+        await self.db.commit()
+        await self.db.refresh(model)
+        return model
+
+    async def update_coordinator_status(self, row_id: int, status: str) -> None:
+        stmt = update(AgentSideEffect).where(AgentSideEffect.id == row_id).values(status=status)
+        await self.db.execute(stmt)
+        await self.db.commit()
+
+    async def get_latest_coordinator_row(
+        self,
+        user_id: int,
+        chat_id: str,
+    ) -> AgentSideEffect | None:
+        stmt = (
+            select(AgentSideEffect)
+            .where(
+                AgentSideEffect.user_id == user_id,
+                AgentSideEffect.chat_id == chat_id,
+                AgentSideEffect.specialist_name == "coordinator",
+                AgentSideEffect.phase == "post_response",
+            )
+            .order_by(desc(AgentSideEffect.id))
+            .limit(1)
+        )
+        result = await self.db.execute(stmt)
+        return result.scalars().first()
+
+    async def delete_coordinator_rows(
+        self,
+        user_id: int,
+        chat_id: str,
+        commit: bool = True,
+    ) -> int:
+        """Delete all coordinator tracking rows for a chat (separate from specialist rows)."""
+        stmt = delete(AgentSideEffect).where(
+            AgentSideEffect.user_id == user_id,
+            AgentSideEffect.chat_id == chat_id,
+            AgentSideEffect.specialist_name == "coordinator",
         )
         result = await self.db.execute(stmt)
         if commit:
