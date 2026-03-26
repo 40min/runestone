@@ -156,7 +156,7 @@ Deliverables:
 
 Tasks:
 
-- split cleanup logic in [`agent_side_effect_service.py`](/Users/40min/www/runestone/src/runestone/services/agent_side_effect_service.py)
+- split cleanup logic in [`agent_side_effect_service.py`](../src/runestone/services/agent_side_effect_service.py)
 - support:
   - coordinator-row replacement/cleanup
   - post specialist result replacement/cleanup
