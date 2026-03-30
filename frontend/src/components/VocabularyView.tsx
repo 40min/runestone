@@ -13,7 +13,7 @@ import {
 import AddEditVocabularyModal from "./AddEditVocabularyModal";
 
 const statCards = [
-  { key: "words_in_learn_count", label: "Words Learning" },
+  { key: "words_in_learn_count", label: "Words Studied" },
   { key: "words_skipped_count", label: "Words Skipped" },
   { key: "overall_words_count", label: "Overall Words" },
   { key: "words_prioritized_count", label: "Prioritised Words" },

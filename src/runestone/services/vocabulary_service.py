@@ -119,12 +119,7 @@ class VocabularyService:
 
     async def get_vocabulary_stats(self, user_id: int) -> VocabularyStatsResponse:
         """Return active vocabulary counters for the Vocabulary tab."""
-        return VocabularyStatsResponse(
-            words_in_learn_count=await self.repo.get_words_in_learn_count(user_id),
-            words_skipped_count=await self.repo.get_words_skipped_count(user_id),
-            overall_words_count=await self.repo.get_overall_words_count(user_id),
-            words_prioritized_count=await self.repo.get_words_prioritized_count(user_id),
-        )
+        return await self.repo.get_vocabulary_stats(user_id)
 
     async def update_vocabulary_item(self, item_id: int, update: VocabularyUpdate, user_id: int) -> VocabularySchema:
         """Update a vocabulary item and return the updated record."""
