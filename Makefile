@@ -12,6 +12,9 @@
 .PHONY: init-state docker-up docker-down docker-build restart-recall rebuild-restart-recall rebuild-restart-all rebuild-container
 .PHONY: check-readiness
 
+# Keep uv cache inside the repository for reproducible local/dev/CI make runs.
+export UV_CACHE_DIR := $(CURDIR)/.uv-cache
+
 
 # =============================================================================
 # HELP AND INFO

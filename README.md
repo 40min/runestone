@@ -249,6 +249,16 @@ make install-dev
 pre-commit install
 ```
 
+### UV Cache Location
+
+`make` exports `UV_CACHE_DIR=$(CURDIR)/.uv-cache` so every `uv` command run through project targets uses a repository-local cache instead of `~/.cache/uv`. This keeps cache state local to the workspace and avoids home-directory cache permission issues in sandboxed/dev environments.
+
+Override it for a single run when needed:
+
+```bash
+UV_CACHE_DIR=/custom/path make lint-check
+```
+
 ### Available Make Commands
 
 ```bash
