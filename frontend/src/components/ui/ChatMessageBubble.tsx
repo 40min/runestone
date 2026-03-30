@@ -1,11 +1,13 @@
 import React, { useState } from "react";
 import { Box, IconButton, Link, Typography } from "@mui/material";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { formatResponseTime } from "./ChatMessageBubble.utils";
 
 interface ChatMessageBubbleProps {
   role: "user" | "assistant";
   content: string;
   sources?: { title: string; url: string; date: string }[] | null;
+  responseTimeMs?: number;
   isLast?: boolean;
 }
 
@@ -13,6 +15,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   role,
   content,
   sources,
+  responseTimeMs,
   isLast,
 }) => {
   const maxCollapsedChars = 200;
@@ -157,6 +160,17 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
             </IconButton>
           </Box>
+        )}
+        {role === "assistant" && typeof responseTimeMs === "number" && (
+          <Typography
+            sx={(theme) => ({
+              color: theme.palette.grey[400],
+              fontSize: "0.72rem",
+              mt: 1,
+            })}
+          >
+            Teacher responded in {formatResponseTime(responseTimeMs)}
+          </Typography>
         )}
         {hasSources && (
           <Box sx={{ mt: 1.5 }}>

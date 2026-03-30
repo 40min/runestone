@@ -679,9 +679,13 @@ class _CaptureHistorySpecialist(BaseSpecialist):
     def __init__(self):
         super().__init__(name="capture_history")
         self.seen_history = None
+        self.seen_teacher_response = None
+        self.seen_routing_reason = None
 
     async def run(self, context: SpecialistContext) -> SpecialistResult:
         self.seen_history = context.history
+        self.seen_teacher_response = context.teacher_response
+        self.seen_routing_reason = context.routing_reason
         return SpecialistResult(status="no_action")
 
 
@@ -777,6 +781,45 @@ async def test_word_keeper_history_is_capped_to_two_messages(
     assert capture.seen_history is not None
     assert len(capture.seen_history) == 2
     assert [msg.content for msg in capture.seen_history] == ["m3", "m4"]
+
+
+@pytest.mark.anyio
+async def test_run_post_turn_passes_previous_history_and_current_teacher_response_to_word_keeper(
+    mock_settings, mock_user, mock_side_effect_service
+):
+    manager = AgentsManager(mock_settings)
+    capture = _CaptureHistorySpecialist()
+    capture.name = "word_keeper"
+    manager.registry.register(capture, overwrite=True)
+    manager.coordinator.plan_post_turn = AsyncMock(
+        return_value=_make_plan(
+            post=[RoutingItem(name="word_keeper", reason="teacher highlighted words", chat_history_size=2)]
+        )
+    )
+
+    history = [
+        ChatMessage(role="user", content="Can you explain these words?"),
+        ChatMessage(role="assistant", content="Let's save these words: beskriva, bekräfta."),
+    ]
+
+    await manager.run_post_turn(
+        message="Jag begriper inte.",
+        chat_id="chat-1",
+        history=history,
+        user=mock_user,
+        teacher_response="Let's keep this new word in mind: begripa.",
+        pre_results=[],
+        side_effect_service=mock_side_effect_service,
+        coordinator_row_id=99,
+    )
+
+    assert capture.seen_history is not None
+    assert [msg.content for msg in capture.seen_history] == [
+        "Can you explain these words?",
+        "Let's save these words: beskriva, bekräfta.",
+    ]
+    assert capture.seen_teacher_response == "Let's keep this new word in mind: begripa."
+    assert capture.seen_routing_reason == "teacher highlighted words"
 
 
 @pytest.mark.anyio

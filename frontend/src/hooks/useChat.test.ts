@@ -1,12 +1,20 @@
 // @vitest-environment jsdom
 import { renderHook, waitFor, act } from '@testing-library/react';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useChat } from './useChat';
+
+const mockNow = vi.fn();
 
 // Mock config
 vi.mock('../config', () => ({
   API_BASE_URL: 'http://localhost:8010',
 }));
+
+Object.defineProperty(globalThis, 'performance', {
+  value: { now: () => mockNow() },
+  writable: true,
+  configurable: true,
+});
 
 // Mock fetch
 const mockFetch = vi.fn();
@@ -61,7 +69,14 @@ const setupDefaultMocks = () => {
 describe('useChat', () => {
   beforeEach(() => {
     mockFetch.mockClear();
+    mockNow.mockReset();
+    mockNow.mockReturnValue(0);
     setupDefaultMocks();
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
   });
 
   it('should initialize with empty messages', async () => {
@@ -77,6 +92,8 @@ describe('useChat', () => {
   });
 
   it('should send a message successfully', async () => {
+    mockNow.mockReturnValueOnce(1000).mockReturnValueOnce(2500);
+
     mockFetch.mockImplementation((url) => {
       if (url.includes('/api/chat/history')) {
         return Promise.resolve({
@@ -131,6 +148,7 @@ describe('useChat', () => {
         expect.objectContaining({
           role: 'assistant',
           content: 'Hej! Jag mår bra, tack!',
+          responseTimeMs: 1500,
         })
       );
       expect(result.current.isLoading).toBe(false);

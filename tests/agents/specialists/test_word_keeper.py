@@ -5,7 +5,12 @@ import pytest
 
 from runestone.agents.schemas import ChatMessage
 from runestone.agents.specialists.base import SpecialistContext
-from runestone.agents.specialists.word_keeper import SaveCandidate, WordKeeperExtraction, WordKeeperSpecialist
+from runestone.agents.specialists.word_keeper import (
+    WORDKEEPER_SYSTEM_PROMPT,
+    SaveCandidate,
+    WordKeeperExtraction,
+    WordKeeperSpecialist,
+)
 from runestone.config import Settings
 
 
@@ -45,6 +50,24 @@ def test_word_keeper_uses_structured_specialist_purpose(mock_settings, mock_chat
         WordKeeperSpecialist(mock_settings)
 
     mock_build.assert_called_once_with(mock_settings, "word_keeper")
+
+
+def test_word_keeper_prompt_limits_pre_stage_to_explicit_save_requests():
+    assert "### Pre-response phase" in WORDKEEPER_SYSTEM_PROMPT
+    assert "Save ONLY when the student explicitly requests it" in (WORDKEEPER_SYSTEM_PROMPT)
+    assert (
+        "Do NOT save words just because an earlier assistant message in `history` highlighted or introduced them."
+        in (WORDKEEPER_SYSTEM_PROMPT)
+    )
+
+
+def test_word_keeper_prompt_uses_teacher_response_as_current_post_stage_signal():
+    assert "### Post-response phase" in WORDKEEPER_SYSTEM_PROMPT
+    assert "Treat `teacher_response` as the authoritative current teacher message." in (WORDKEEPER_SYSTEM_PROMPT)
+    assert "By default, ignore older assistant messages in `history` when deciding what to save." in (
+        WORDKEEPER_SYSTEM_PROMPT
+    )
+    assert "Use older history ONLY when the student explicitly asks to revisit it." in (WORDKEEPER_SYSTEM_PROMPT)
 
 
 def _service_provider(service):
@@ -352,3 +375,58 @@ async def test_word_keeper_payload_defaults_translation_language_to_english(spec
     call_args = mock_llm.ainvoke.call_args[0][0]
     payload = call_args[1].content
     assert '"target_translation_language": "English"' in payload
+
+
+@pytest.mark.anyio
+async def test_word_keeper_post_response_payload_keeps_previous_teacher_message_in_history_but_marks_post_phase(
+    specialist, mock_chat_model, mock_user
+):
+    mock_llm = mock_chat_model.with_structured_output.return_value
+    mock_llm.ainvoke.return_value = WordKeeperExtraction(decision="no_action", candidates=[])
+
+    await specialist.run(
+        SpecialistContext(
+            message="Jag begriper inte.",
+            history=[
+                ChatMessage(role="user", content="Can you explain these words?"),
+                ChatMessage(role="assistant", content="Let's save these words: beskriva, bekräfta."),
+            ],
+            user=mock_user,
+            teacher_response="Let's keep this new word in mind: begripa.",
+            routing_reason="teacher highlighted words to memorize",
+        )
+    )
+
+    call_args = mock_llm.ainvoke.call_args[0][0]
+    payload = call_args[1].content
+    assert '"phase": "post_response"' in payload
+    assert '"teacher_response": "Let\'s keep this new word in mind: begripa."' in payload
+    assert '"content": "Let\'s save these words: beskriva, bekräfta."' in payload
+
+
+@pytest.mark.anyio
+async def test_word_keeper_payload_preserves_earlier_history_for_explicit_revisit_request(
+    specialist, mock_chat_model, mock_user
+):
+    mock_llm = mock_chat_model.with_structured_output.return_value
+    mock_llm.ainvoke.return_value = WordKeeperExtraction(decision="no_action", candidates=[])
+
+    await specialist.run(
+        SpecialistContext(
+            message="Ok, save the words you mentioned before.",
+            history=[
+                ChatMessage(role="user", content="Can you explain these words?"),
+                ChatMessage(role="assistant", content="Let's save these words: beskriva, bekräfta."),
+                ChatMessage(role="user", content="Thanks, and one more question."),
+                ChatMessage(role="assistant", content="Sure, ask away."),
+            ],
+            user=mock_user,
+            routing_reason="explicit earlier-history save request",
+        )
+    )
+
+    call_args = mock_llm.ainvoke.call_args[0][0]
+    payload = call_args[1].content
+    assert '"phase": "pre_response"' in payload
+    assert '"message": "Ok, save the words you mentioned before."' in payload
+    assert '"content": "Let\'s save these words: beskriva, bekräfta."' in payload

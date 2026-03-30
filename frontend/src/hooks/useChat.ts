@@ -31,6 +31,7 @@ interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   sources?: NewsSource[] | null;
+  responseTimeMs?: number;
 }
 
 interface UseChatReturn {
@@ -119,7 +120,10 @@ export const useChat = (): UseChatReturn => {
       );
 
       if (optimisticIndex >= 0) {
-        next[optimisticIndex] = incomingMessage;
+        next[optimisticIndex] = {
+          ...incomingMessage,
+          responseTimeMs: next[optimisticIndex].responseTimeMs,
+        };
       } else {
         next.push(incomingMessage);
       }
@@ -317,6 +321,7 @@ export const useChat = (): UseChatReturn => {
   const sendMessage = useCallback(
     async (userMessage: string, ttsExpected: boolean = false, speed: number = 1.0) => {
       if (!userMessage.trim() || isLoading) return;
+      const startedAt = performance.now();
 
       const newUserMessage: ChatMessage = {
         id: uuidv4(),
@@ -341,6 +346,7 @@ export const useChat = (): UseChatReturn => {
           role: 'assistant',
           content: data.message,
           sources: data.sources ?? undefined,
+          responseTimeMs: Math.max(0, Math.round(performance.now() - startedAt)),
         };
 
         setMessages((prev) => [...prev, assistantMessage]);

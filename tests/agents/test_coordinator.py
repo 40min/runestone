@@ -62,20 +62,20 @@ def test_word_keeper_prompt_eligibility():
     assert "word_keeper" in COORDINATOR_SYSTEM_PROMPT
     assert "pre_response" in COORDINATOR_SYSTEM_PROMPT
     assert "post_response" in COORDINATOR_SYSTEM_PROMPT
-    assert "actual teacher reply explicitly highlights vocabulary" in COORDINATOR_SYSTEM_PROMPT
-    assert "consider only the last two messages in `history`" in COORDINATOR_SYSTEM_PROMPT
-    assert "set `chat_history_size` to exactly 2" in COORDINATOR_SYSTEM_PROMPT
-    assert "Do not route it just because the student reused a word" in COORDINATOR_SYSTEM_PROMPT
-    assert "Do not treat analysis/comparison intents as save signals" in COORDINATOR_SYSTEM_PROMPT
-    assert "current_stage" in COORDINATOR_SYSTEM_PROMPT
-    assert "do not speculate about the future teacher reply" in COORDINATOR_SYSTEM_PROMPT
+    assert "teacher_response" in COORDINATOR_SYSTEM_PROMPT
+    assert "If the current student explicitly asks to save words from an earlier turn" in (COORDINATOR_SYSTEM_PROMPT)
+    assert "An earlier teacher message highlighted vocabulary but the student did not request saving it." in (
+        COORDINATOR_SYSTEM_PROMPT
+    )
+    assert "Words were already saved in earlier turns — do not re-trigger on later turns." in (
+        COORDINATOR_SYSTEM_PROMPT
+    )
+    assert "For all normal word_keeper cases, set `chat_history_size` to `2`." in COORDINATOR_SYSTEM_PROMPT
 
 
 def test_news_prompt_requires_known_topic():
-    assert "Route `news` in `pre_response` only when the student's current message names a clear topic" in (
-        COORDINATOR_SYSTEM_PROMPT
-    )
-    assert "Do NOT route `news` when the topic is still unclear" in COORDINATOR_SYSTEM_PROMPT
+    assert "**Route when:** The student's current message names a clear, specific topic" in (COORDINATOR_SYSTEM_PROMPT)
+    assert "**Do NOT route when:** The topic is vague or unspecified" in COORDINATOR_SYSTEM_PROMPT
 
 
 def test_grammar_is_absent_from_coordinator_prompt():
@@ -86,7 +86,15 @@ def test_grammar_is_absent_from_coordinator_prompt():
 
 def test_word_keeper_prompt_does_not_allow_anticipatory_post_routing():
     assert "anticipate the teacher reply" not in COORDINATOR_SYSTEM_PROMPT
-    assert "actual teacher reply explicitly highlights vocabulary" in COORDINATOR_SYSTEM_PROMPT
+    assert "The actual `teacher_response` explicitly marks vocabulary as worth saving" in COORDINATOR_SYSTEM_PROMPT
+
+
+def test_word_keeper_prompt_limits_pre_stage_to_explicit_save_requests():
+    assert "**Route in pre_response when:**" in COORDINATOR_SYSTEM_PROMPT
+    assert "The current student message explicitly asks to save vocabulary in this turn" in (COORDINATOR_SYSTEM_PROMPT)
+    assert "An earlier teacher message highlighted vocabulary but the student did not request saving it." in (
+        COORDINATOR_SYSTEM_PROMPT
+    )
 
 
 @pytest.mark.anyio

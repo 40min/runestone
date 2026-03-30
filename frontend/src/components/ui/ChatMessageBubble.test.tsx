@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import React from "react";
 import userEvent from "@testing-library/user-event";
 import { ChatMessageBubble } from "./ChatMessageBubble";
+import { formatResponseTime } from "./ChatMessageBubble.utils";
 
 describe("ChatMessageBubble", () => {
   it("renders assistant sources with link and date", () => {
@@ -101,5 +102,31 @@ describe("ChatMessageBubble", () => {
 
     expect(screen.getByText(longText)).toBeInTheDocument();
     expect(screen.queryByText("...")).not.toBeInTheDocument();
+  });
+
+  it("renders assistant response time when present", () => {
+    render(
+      <ChatMessageBubble
+        role="assistant"
+        content="Snabbt svar"
+        responseTimeMs={1420}
+      />,
+    );
+
+    expect(screen.getByText("Teacher responded in 1.4 s")).toBeInTheDocument();
+  });
+
+  it("does not render response time for user messages", () => {
+    render(
+      <ChatMessageBubble role="user" content="Hej!" responseTimeMs={250} />,
+    );
+
+    expect(screen.queryByText(/Teacher responded in/i)).not.toBeInTheDocument();
+  });
+
+  it("formats response time for milliseconds and seconds", () => {
+    expect(formatResponseTime(420)).toBe("420 ms");
+    expect(formatResponseTime(1420)).toBe("1.4 s");
+    expect(formatResponseTime(10999)).toBe("11 s");
   });
 });
