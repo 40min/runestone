@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Box, Typography } from "@mui/material";
-import { useRecentVocabulary } from "../hooks/useVocabulary";
+import { useRecentVocabulary, useVocabularyStats } from "../hooks/useVocabulary";
 import {
   LoadingSpinner,
   ErrorAlert,
@@ -12,11 +12,24 @@ import {
 } from "./ui";
 import AddEditVocabularyModal from "./AddEditVocabularyModal";
 
+const statCards = [
+  { key: "words_in_learn_count", label: "Words Learning" },
+  { key: "words_skipped_count", label: "Words Skipped" },
+  { key: "overall_words_count", label: "Overall Words" },
+  { key: "words_prioritized_count", label: "Prioritised Words" },
+] as const;
+
 const VocabularyView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeSearchTerm, setActiveSearchTerm] = useState("");
   const [preciseSearch, setPreciseSearch] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const {
+    stats,
+    loading: statsLoading,
+    error: statsError,
+    refetch: refetchStats,
+  } = useVocabularyStats();
   const {
     recentVocabulary,
     loading,
@@ -61,11 +74,13 @@ const VocabularyView: React.FC = () => {
     } else {
       await createVocabularyItem(updatedItem);
     }
+    await refetchStats();
   };
 
   const handleDelete = async () => {
     if (editingItem) {
       await deleteVocabularyItem(editingItem.id);
+      await refetchStats();
     }
   };
 
@@ -81,6 +96,62 @@ const VocabularyView: React.FC = () => {
   return (
     <Box sx={{ py: 8 }}>
       <SectionTitle>Recent Vocabulary</SectionTitle>
+
+      {statsError ? (
+        <ErrorAlert message={statsError} />
+      ) : (
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              sm: "repeat(2, minmax(0, 1fr))",
+              lg: "repeat(4, minmax(0, 1fr))",
+            },
+            gap: 1,
+            mb: 2.5,
+          }}
+        >
+          {statCards.map((card) => (
+            <Box
+              key={card.key}
+              sx={{
+                p: 1.25,
+                borderRadius: 1.5,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 1,
+                background:
+                  "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                backdropFilter: "blur(10px)",
+              }}
+            >
+              <Typography
+                sx={{
+                  color: "rgba(255, 255, 255, 0.7)",
+                  fontSize: "0.75rem",
+                  mb: 0,
+                }}
+              >
+                {card.label}
+              </Typography>
+              <Typography
+                sx={{
+                  color: "white",
+                  fontSize: { xs: "1.05rem", sm: "1.2rem" },
+                  fontWeight: 700,
+                  lineHeight: 1.1,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {statsLoading || !stats ? "..." : stats[card.key]}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      )}
 
       <Box
         sx={{

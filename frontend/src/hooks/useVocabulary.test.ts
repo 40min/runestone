@@ -1,6 +1,6 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import useVocabulary, { useRecentVocabulary, improveVocabularyItem } from './useVocabulary';
+import useVocabulary, { useRecentVocabulary, useVocabularyStats, improveVocabularyItem } from './useVocabulary';
 import { VOCABULARY_IMPROVEMENT_MODES } from '../constants';
 import { ApiClientOptions } from '../utils/api';
 
@@ -761,6 +761,59 @@ describe('useRecentVocabulary', () => {
       await expect(
         result.current.deleteVocabularyItem(1)
       ).rejects.toThrow('Failed to delete vocabulary item: HTTP 500');
+    });
+  });
+});
+
+describe('useVocabularyStats', () => {
+  beforeEach(() => {
+    mockFetch.mockClear();
+  });
+
+  it('should fetch vocabulary stats successfully', async () => {
+    const mockStatsResponse = {
+      words_in_learn_count: 4,
+      words_skipped_count: 6,
+      overall_words_count: 10,
+      words_prioritized_count: 3,
+    };
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockStatsResponse),
+    });
+
+    const { result } = renderHook(() => useVocabularyStats());
+
+    await waitFor(() => {
+      expect(result.current.stats).toEqual(mockStatsResponse);
+      expect(result.current.loading).toBe(false);
+      expect(result.current.error).toBeNull();
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:8010/api/vocabulary/stats',
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+    );
+  });
+
+  it('should handle vocabulary stats fetch error', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      json: () => Promise.resolve({ detail: 'Failed to fetch vocabulary stats' }),
+    });
+
+    const { result } = renderHook(() => useVocabularyStats());
+
+    await waitFor(() => {
+      expect(result.current.error).toBe('Failed to fetch vocabulary stats');
+      expect(result.current.loading).toBe(false);
+      expect(result.current.stats).toBeNull();
     });
   });
 });

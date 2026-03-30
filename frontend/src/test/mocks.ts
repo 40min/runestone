@@ -26,9 +26,6 @@ export const createMockUserData = (overrides = {}) => ({
   surname: "User",
   timezone: "UTC",
   pages_recognised_count: 0,
-  words_in_learn_count: 0,
-  words_skipped_count: 0,
-  overall_words_count: 0,
   ...overrides,
 });
 

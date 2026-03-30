@@ -69,12 +69,7 @@ class UserService:
         }
 
     async def get_user_profile(self, user: User) -> UserProfileResponse:
-        """Get user profile with stats."""
-        # Get vocabulary stats
-        words_in_learn_count = await self.vocab_repo.get_words_in_learn_count(user.id)
-        words_skipped_count = await self.vocab_repo.get_words_skipped_count(user.id)
-        overall_words_count = await self.vocab_repo.get_overall_words_count(user.id)
-
+        """Get user profile."""
         # Parse JSON memory fields with error handling
         memory = self.get_user_memory(user)
 
@@ -86,9 +81,6 @@ class UserService:
             mother_tongue=user.mother_tongue,
             timezone=user.timezone,
             pages_recognised_count=user.pages_recognised_count,
-            words_in_learn_count=words_in_learn_count,
-            words_skipped_count=words_skipped_count,
-            overall_words_count=overall_words_count,
             personal_info=memory["personal_info"],
             areas_to_improve=memory["areas_to_improve"],
             knowledge_strengths=memory["knowledge_strengths"],

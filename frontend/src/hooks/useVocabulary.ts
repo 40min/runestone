@@ -17,6 +17,13 @@ interface SavedVocabularyItem {
   updated_at: string;
 }
 
+export interface VocabularyStats {
+  words_in_learn_count: number;
+  words_skipped_count: number;
+  overall_words_count: number;
+  words_prioritized_count: number;
+}
+
 interface UseVocabularyReturn {
   vocabulary: SavedVocabularyItem[];
   loading: boolean;
@@ -39,6 +46,13 @@ interface UseRecentVocabularyReturn {
   ) => Promise<void>;
   createVocabularyItem: (item: Partial<SavedVocabularyItem>) => Promise<void>;
   deleteVocabularyItem: (id: number) => Promise<void>;
+}
+
+interface UseVocabularyStatsReturn {
+  stats: VocabularyStats | null;
+  loading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
 }
 
 const useVocabulary = (): UseVocabularyReturn => {
@@ -81,6 +95,43 @@ const useVocabulary = (): UseVocabularyReturn => {
 };
 
 export default useVocabulary;
+
+export const useVocabularyStats = (): UseVocabularyStatsReturn => {
+  const [stats, setStats] = useState<VocabularyStats | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const hasFetchedRef = useRef(false);
+  const { get } = useApi();
+
+  const fetchStats = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await get<VocabularyStats>("/api/vocabulary/stats");
+      setStats(data);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to fetch vocabulary stats";
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, [get]);
+
+  useEffect(() => {
+    if (!hasFetchedRef.current) {
+      hasFetchedRef.current = true;
+      fetchStats();
+    }
+  }, [fetchStats]);
+
+  return {
+    stats,
+    loading,
+    error,
+    refetch: fetchStats,
+  };
+};
 
 export const useRecentVocabulary = (
   searchQuery?: string,

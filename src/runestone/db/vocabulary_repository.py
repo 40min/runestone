@@ -347,21 +347,36 @@ class VocabularyRepository:
         return result.rowcount > 0
 
     async def get_words_in_learn_count(self, user_id: int) -> int:
-        """Get count of vocabulary items with in_learn=True AND last_learned IS NOT NULL for a user."""
+        """Get count of active vocabulary items that have been learned at least once."""
         stmt = select(func.count(Vocabulary.id)).filter(
-            Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True), Vocabulary.last_learned.isnot(None)
+            Vocabulary.user_id == user_id,
+            Vocabulary.in_learn.is_(True),
+            Vocabulary.last_learned.isnot(None),
         )
         result = await self.db.execute(stmt)
         return result.scalar() or 0
 
     async def get_words_skipped_count(self, user_id: int) -> int:
         """Get count of vocabulary items with in_learn=False for a user."""
-        stmt = select(func.count(Vocabulary.id)).filter(Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(False))
+        stmt = select(func.count(Vocabulary.id)).filter(
+            Vocabulary.user_id == user_id,
+            Vocabulary.in_learn.is_(False),
+        )
         result = await self.db.execute(stmt)
         return result.scalar() or 0
 
     async def get_overall_words_count(self, user_id: int) -> int:
         """Get total count of all vocabulary items for a user."""
         stmt = select(func.count(Vocabulary.id)).filter(Vocabulary.user_id == user_id)
+        result = await self.db.execute(stmt)
+        return result.scalar() or 0
+
+    async def get_words_prioritized_count(self, user_id: int) -> int:
+        """Get count of active vocabulary items flagged for priority learning."""
+        stmt = select(func.count(Vocabulary.id)).filter(
+            Vocabulary.user_id == user_id,
+            Vocabulary.in_learn.is_(True),
+            Vocabulary.priority_learn.is_(True),
+        )
         result = await self.db.execute(stmt)
         return result.scalar() or 0

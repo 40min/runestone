@@ -8,7 +8,13 @@ for vocabulary-related operations.
 from typing import List
 
 from ..api.schemas import Vocabulary as VocabularySchema
-from ..api.schemas import VocabularyImproveRequest, VocabularyImproveResponse, VocabularyItemCreate, VocabularyUpdate
+from ..api.schemas import (
+    VocabularyImproveRequest,
+    VocabularyImproveResponse,
+    VocabularyItemCreate,
+    VocabularyStatsResponse,
+    VocabularyUpdate,
+)
 from ..config import Settings
 from ..core.clients.base import BaseLLMClient
 from ..core.constants import VOCABULARY_BATCH_SIZE
@@ -110,6 +116,15 @@ class VocabularyService:
                 )
             )
         return result
+
+    async def get_vocabulary_stats(self, user_id: int) -> VocabularyStatsResponse:
+        """Return active vocabulary counters for the Vocabulary tab."""
+        return VocabularyStatsResponse(
+            words_in_learn_count=await self.repo.get_words_in_learn_count(user_id),
+            words_skipped_count=await self.repo.get_words_skipped_count(user_id),
+            overall_words_count=await self.repo.get_overall_words_count(user_id),
+            words_prioritized_count=await self.repo.get_words_prioritized_count(user_id),
+        )
 
     async def update_vocabulary_item(self, item_id: int, update: VocabularyUpdate, user_id: int) -> VocabularySchema:
         """Update a vocabulary item and return the updated record."""

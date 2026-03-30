@@ -153,6 +153,45 @@ class TestVocabularyService:
         assert len(result) == 1
         assert result[0].word_phrase == "ett päron"
 
+    async def test_get_vocabulary_stats(self, service, db_session):
+        """Test retrieving active-word vocabulary statistics."""
+        db_session.add_all(
+            [
+                VocabularyModel(
+                    user_id=1,
+                    word_phrase="learned-priority",
+                    translation="x",
+                    in_learn=True,
+                    priority_learn=True,
+                    last_learned=datetime.now(timezone.utc),
+                ),
+                VocabularyModel(
+                    user_id=1,
+                    word_phrase="active-unlearned",
+                    translation="x",
+                    in_learn=True,
+                    priority_learn=False,
+                    last_learned=None,
+                ),
+                VocabularyModel(
+                    user_id=1,
+                    word_phrase="deleted-priority",
+                    translation="x",
+                    in_learn=False,
+                    priority_learn=True,
+                    last_learned=None,
+                ),
+            ]
+        )
+        await db_session.commit()
+
+        stats = await service.get_vocabulary_stats(user_id=1)
+
+        assert stats.words_in_learn_count == 1
+        assert stats.words_skipped_count == 1
+        assert stats.overall_words_count == 3
+        assert stats.words_prioritized_count == 1
+
     async def test_get_vocabulary_recent(self, service, db_session):
         """Test retrieving vocabulary items sorted by creation date (most recent first)."""
         # Add test data with specific creation dates

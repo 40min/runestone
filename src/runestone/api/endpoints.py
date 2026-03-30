@@ -21,6 +21,7 @@ from runestone.api.schemas import (
     VocabularyImproveResponse,
     VocabularyItemCreate,
     VocabularySaveRequest,
+    VocabularyStatsResponse,
     VocabularyUpdate,
 )
 from runestone.auth.dependencies import get_current_user
@@ -252,6 +253,29 @@ async def save_vocabulary_item(
         raise HTTPException(
             status_code=500,
             detail="An error occurred while saving the vocabulary item. Please try again later.",
+        )
+
+
+@router.get(
+    "/vocabulary/stats",
+    response_model=VocabularyStatsResponse,
+    responses={
+        200: {"description": "Vocabulary statistics retrieved successfully"},
+        500: {"model": ErrorResponse, "description": "Database error"},
+    },
+)
+async def get_vocabulary_stats(
+    service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> VocabularyStatsResponse:
+    """Return current-user vocabulary stats for the Vocabulary tab."""
+    try:
+        return await service.get_vocabulary_stats(current_user.id)
+    except Exception:
+        logger.exception("Failed to retrieve vocabulary stats")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while retrieving vocabulary stats. Please try again later.",
         )
 
 

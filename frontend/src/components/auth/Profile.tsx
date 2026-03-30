@@ -135,15 +135,6 @@ const Profile: React.FC = () => {
           <strong>Pages Recognised:</strong>{" "}
           {userData.pages_recognised_count || 0}
         </Typography>
-        <Typography variant="body1" sx={{ mb: 1 }}>
-          <strong>Words Learning:</strong> {userData.words_in_learn_count || 0}
-        </Typography>
-        <Typography variant="body1" sx={{ mb: 1 }}>
-          <strong>Words Skipped:</strong> {userData.words_skipped_count || 0}
-        </Typography>
-        <Typography variant="body1" sx={{ mb: 1 }}>
-          <strong>Overall Words:</strong> {userData.overall_words_count || 0}
-        </Typography>
       </Box>
 
       <AuthTextField
