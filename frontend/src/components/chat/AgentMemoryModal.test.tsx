@@ -63,6 +63,35 @@ describe('AgentMemoryModal', () => {
     expect(screen.getByLabelText(/Content/i)).toBeInTheDocument();
   });
 
+  it('shows category-specific status options in add form for area_to_improve', () => {
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+
+    fireEvent.click(screen.getByText('Areas to Improve'));
+    fireEvent.click(screen.getByText('Add Item'));
+
+    const formStatusSelect = document.querySelector(
+      '[aria-labelledby="form-status-label"]'
+    ) as HTMLElement;
+    fireEvent.mouseDown(formStatusSelect);
+    expect(screen.getByText('Struggling')).toBeInTheDocument();
+    expect(screen.getByText('Improving')).toBeInTheDocument();
+    expect(screen.getByText('Mastered')).toBeInTheDocument();
+    expect(screen.queryByText('Outdated')).not.toBeInTheDocument();
+  });
+
+  it('does not offer Active status for area_to_improve in add form', () => {
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+
+    fireEvent.click(screen.getByText('Areas to Improve'));
+    fireEvent.click(screen.getByText('Add Item'));
+
+    const formStatusSelect = document.querySelector(
+      '[aria-labelledby="form-status-label"]'
+    ) as HTMLElement;
+    fireEvent.mouseDown(formStatusSelect);
+    expect(screen.queryByText('Active')).not.toBeInTheDocument();
+  });
+
   it('displays items in cards', () => {
     const mockItems = [
       {

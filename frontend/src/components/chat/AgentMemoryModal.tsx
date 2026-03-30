@@ -70,6 +70,12 @@ const STATUS_OPTIONS: Record<
   archived: { label: "Archived", color: "default" },
 };
 
+const STATUS_VALUES_BY_CATEGORY: Record<MemoryCategory, string[]> = {
+  personal_info: ["active", "outdated"],
+  area_to_improve: ["struggling", "improving", "mastered"],
+  knowledge_strength: ["active", "archived"],
+};
+
 const PRIORITY_OPTIONS = [
   { value: "", label: "P9 (default lowest)" },
   { value: "0", label: "P0 (highest)" },
@@ -260,6 +266,16 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
     await updatePriority(id, priority);
   };
 
+  const renderStatusMenuItems = (category: MemoryCategory) =>
+    STATUS_VALUES_BY_CATEGORY[category].map((val) => {
+      const info = STATUS_OPTIONS[val];
+      return (
+        <MenuItem key={val} value={val}>
+          {info?.label ?? val}
+        </MenuItem>
+      );
+    });
+
   return (
     <>
       <Dialog
@@ -339,11 +355,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
                 <MenuItem value="all">All statuses</MenuItem>
-                {Object.entries(STATUS_OPTIONS).map(([val, info]) => (
-                  <MenuItem key={val} value={val}>
-                    {info.label}
-                  </MenuItem>
-                ))}
+                {renderStatusMenuItems(activeTab)}
               </Select>
             </FormControl>
 
@@ -696,11 +708,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
               }
             >
               <MenuItem value="">Default</MenuItem>
-              {Object.entries(STATUS_OPTIONS).map(([val, info]) => (
-                <MenuItem key={val} value={val}>
-                  {info.label}
-                </MenuItem>
-              ))}
+              {renderStatusMenuItems(formData.category)}
             </Select>
           </FormControl>
           {/* Priority — only for area_to_improve */}
