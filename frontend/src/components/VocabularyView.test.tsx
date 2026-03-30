@@ -6,6 +6,17 @@ import { vi } from 'vitest';
 // Mock the useVocabulary hook
 vi.mock('../hooks/useVocabulary', () => ({
   default: vi.fn(),
+  useVocabularyStats: vi.fn(() => ({
+    stats: {
+      words_in_learn_count: 3,
+      words_skipped_count: 2,
+      overall_words_count: 5,
+      words_prioritized_count: 1,
+    },
+    loading: false,
+    error: null,
+    refetch: vi.fn(),
+  })),
   useRecentVocabulary: vi.fn(() => ({
     recentVocabulary: [],
     loading: false,
@@ -33,11 +44,34 @@ vi.mock('../utils/api', () => ({
   })),
 }));
 
+vi.mock("./AddEditVocabularyModal", () => ({
+  default: ({
+    open,
+    onSave,
+    onDelete,
+  }: {
+    open: boolean;
+    onSave: (item: Record<string, unknown>) => Promise<void>;
+    onDelete: () => Promise<void>;
+  }) =>
+    open ? (
+      <div>
+        <button type="button" onClick={() => void onSave({ word_phrase: "updated-word" })}>
+          Mock Save
+        </button>
+        <button type="button" onClick={() => void onDelete()}>
+          Mock Delete
+        </button>
+      </div>
+    ) : null,
+}));
+
 import VocabularyView from "./VocabularyView";
-import { useRecentVocabulary } from '../hooks/useVocabulary';
+import { useRecentVocabulary, useVocabularyStats } from '../hooks/useVocabulary';
 import { AuthProvider } from '../context/AuthContext';
 
 const mockUseRecentVocabulary = vi.mocked(useRecentVocabulary);
+const mockUseVocabularyStats = vi.mocked(useVocabularyStats);
 
 const renderWithAuthProvider = (component: React.ReactElement) => {
   return render(
@@ -50,6 +84,7 @@ const renderWithAuthProvider = (component: React.ReactElement) => {
 describe("VocabularyView", () => {
   beforeEach(() => {
     mockUseRecentVocabulary.mockClear();
+    mockUseVocabularyStats.mockClear();
   });
 
   it("renders loading state on initial load", () => {
@@ -201,9 +236,44 @@ describe("VocabularyView", () => {
 
     renderWithAuthProvider(<VocabularyView />);
 
+    expect(screen.getByText("Words Studied")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("Words Skipped")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("Overall Words")).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(screen.getByText("Prioritised Words")).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
     expect(screen.getByText("Recent Vocabulary")).toBeInTheDocument();
     expect(screen.getByText("No vocabulary saved yet.")).toBeInTheDocument();
     expect(screen.getByText("Analyze some text and save vocabulary items to see them here.")).toBeInTheDocument();
+  });
+
+  it("renders vocabulary stats error without blocking the table view", () => {
+    mockUseVocabularyStats.mockReturnValue({
+      stats: null,
+      loading: false,
+      error: "Failed to fetch vocabulary stats",
+      refetch: vi.fn(),
+    });
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+    });
+
+    renderWithAuthProvider(<VocabularyView />);
+
+    expect(screen.getByText("Failed to fetch vocabulary stats")).toBeInTheDocument();
+    expect(screen.getByText("Recent Vocabulary")).toBeInTheDocument();
   });
 
   it("renders search input", () => {
@@ -465,5 +535,76 @@ describe("VocabularyView", () => {
 
     // Should display dash for null example_phrase and null extra_info
     expect(screen.getAllByText("—")).toHaveLength(2);
+  });
+
+  const setupStatsRefetchOnEdit = () => {
+    const refetchStats = vi.fn().mockResolvedValue(undefined);
+    const updateVocabularyItem = vi.fn().mockResolvedValue(undefined);
+    const deleteVocabularyItem = vi.fn().mockResolvedValue(undefined);
+
+    mockUseVocabularyStats.mockReturnValue({
+      stats: {
+        words_in_learn_count: 3,
+        words_skipped_count: 2,
+        overall_words_count: 5,
+        words_prioritized_count: 1,
+      },
+      loading: false,
+      error: null,
+      refetch: refetchStats,
+    });
+
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+      isEditModalOpen: true,
+      editingItem: {
+        id: 1,
+        user_id: 1,
+        word_phrase: "hej",
+        translation: "hello",
+        example_phrase: null,
+        extra_info: null,
+        in_learn: false,
+        priority_learn: false,
+        last_learned: null,
+        learned_times: 0,
+        created_at: "2023-10-27T10:00:00Z",
+        updated_at: "2023-10-27T10:00:00Z",
+      },
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem,
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem,
+    });
+
+    return { deleteVocabularyItem, refetchStats, updateVocabularyItem };
+  };
+
+  it("refetches stats after saving an existing vocabulary item", async () => {
+    const { refetchStats, updateVocabularyItem } = setupStatsRefetchOnEdit();
+
+    renderWithAuthProvider(<VocabularyView />);
+    fireEvent.click(screen.getByRole("button", { name: "Mock Save" }));
+
+    await waitFor(() => {
+      expect(updateVocabularyItem).toHaveBeenCalledWith(1, { word_phrase: "updated-word" });
+      expect(refetchStats).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("refetches stats after deleting an existing vocabulary item", async () => {
+    const { deleteVocabularyItem, refetchStats } = setupStatsRefetchOnEdit();
+
+    renderWithAuthProvider(<VocabularyView />);
+    fireEvent.click(screen.getByRole("button", { name: "Mock Delete" }));
+
+    await waitFor(() => {
+      expect(deleteVocabularyItem).toHaveBeenCalledWith(1);
+      expect(refetchStats).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -13,7 +13,7 @@ class TestUserProfileEndpoints:
     """Test cases for user profile endpoints."""
 
     async def test_get_user_profile_success(self, client):
-        """Test successful retrieval of user profile with stats."""
+        """Test successful retrieval of user profile."""
         response = await client.get("/api/me")
 
         assert response.status_code == 200
@@ -26,16 +26,12 @@ class TestUserProfileEndpoints:
         assert data["surname"] == "Testsson"
         assert data["timezone"] == "UTC"
         assert data["pages_recognised_count"] == 0
-        assert data["words_in_learn_count"] == 0
-        assert data["words_skipped_count"] == 0
-        assert data["overall_words_count"] == 0
         assert "created_at" in data
         assert "updated_at" in data
 
-    async def test_get_user_profile_with_vocabulary_stats(self, client):
-        """Test user profile with vocabulary statistics."""
+    async def test_get_vocabulary_stats(self, client):
+        """Test vocabulary stats endpoint returns active-word counters."""
 
-        # Save some vocabulary items
         vocab_payload = {
             "items": [
                 {
@@ -47,44 +43,36 @@ class TestUserProfileEndpoints:
                     "word_phrase": "en banan",
                     "translation": "a banana",
                     "in_learn": True,
+                    "priority_learn": True,
                 },
                 {
                     "word_phrase": "ett päron",
                     "translation": "a pear",
-                    "in_learn": False,  # Not in learning
+                    "in_learn": False,
+                    "priority_learn": True,
                 },
             ],
-            "enrich": False,  # Disable enrichment for tests
+            "enrich": False,
         }
         await client.post("/api/vocabulary", json=vocab_payload)
 
-        # Update one item to be learned
         response = await client.get("/api/vocabulary")
-        if response.status_code != 200:
-            print(f"Response status: {response.status_code}")
-            print(f"Response content: {response.content}")
         vocab_items = response.json()
-        # Find the item with "ett äpple" which has in_learn=True
         apple_item = next(item for item in vocab_items if item["word_phrase"] == "ett äpple")
         learned_item_id = apple_item["id"]
 
-        # Use update_last_learned method to properly increment learned_times
         repo = VocabularyRepository(client.db)
         vocab = await repo.get_vocabulary_item(learned_item_id, client.user.id)
         await repo.update_last_learned(vocab)
 
-        # Get user profile
-        response = await client.get("/api/me")
+        response = await client.get("/api/vocabulary/stats")
         assert response.status_code == 200
         data = response.json()
 
-        # Verify stats
-        # words_in_learn_count: count of words with in_learn=True AND last_learned IS NOT NULL
-        assert data["words_in_learn_count"] == 1  # Only ett äpple (has last_learned)
-        # words_skipped_count: count of words with in_learn=False
-        assert data["words_skipped_count"] == 1  # ett päron (in_learn=False)
-        # overall_words_count: total count of all words
-        assert data["overall_words_count"] == 3  # All three words
+        assert data["words_in_learn_count"] == 1
+        assert data["words_skipped_count"] == 1
+        assert data["overall_words_count"] == 3
+        assert data["words_prioritized_count"] == 1
 
     async def test_update_user_profile_success(self, client):
         """Test successful user profile update."""

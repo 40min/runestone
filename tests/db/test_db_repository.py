@@ -1436,7 +1436,7 @@ class TestVocabularyRepositoryStats:
     """Test cases for vocabulary repository statistics methods."""
 
     async def test_get_words_in_learn_count(self, repo, db_session):
-        """Test counting words in learning (in_learn=True AND last_learned IS NOT NULL)."""
+        """Test counting active words that have been learned at least once."""
 
         # Create test user
         user = User(
@@ -1474,13 +1474,13 @@ class TestVocabularyRepositoryStats:
                 word_phrase="word4",
                 translation="trans4",
                 in_learn=True,
-                last_learned=None,  # No last_learned, shouldn't be counted
+                last_learned=None,
             ),
         ]
         db_session.add_all(vocab_items)
         await db_session.commit()
 
-        # Test stats - only word1 and word2 should be counted (in_learn=True AND last_learned IS NOT NULL)
+        # Only active words with a learning timestamp should be counted.
         count = await repo.get_words_in_learn_count(user.id)
         assert count == 2
 
@@ -1503,6 +1503,7 @@ class TestVocabularyRepositoryStats:
                 word_phrase="word1",
                 translation="trans1",
                 in_learn=True,
+                last_learned=datetime.now(timezone.utc),
             ),
             VocabularyModel(
                 user_id=user.id,
@@ -1516,11 +1517,18 @@ class TestVocabularyRepositoryStats:
                 translation="trans3",
                 in_learn=False,  # Skipped
             ),
+            VocabularyModel(
+                user_id=user.id,
+                word_phrase="word4",
+                translation="trans4",
+                in_learn=True,
+                last_learned=None,
+            ),
         ]
         db_session.add_all(vocab_items)
         await db_session.commit()
 
-        # Test stats - word2 and word3 should be counted (in_learn=False)
+        # word2 and word3 should be counted (in_learn=False).
         count = await repo.get_words_skipped_count(user.id)
         assert count == 2
 
@@ -1560,6 +1568,101 @@ class TestVocabularyRepositoryStats:
         db_session.add_all(vocab_items)
         await db_session.commit()
 
-        # Test stats - all 3 words should be counted
+        # All words should be counted.
         count = await repo.get_overall_words_count(user.id)
         assert count == 3
+
+    async def test_get_words_prioritized_count(self, repo, db_session):
+        """Test counting active priority words only."""
+
+        user = User(
+            email="priority@example.com",
+            hashed_password="dummy",
+            name="Priority User",
+        )
+        db_session.add(user)
+        await db_session.commit()
+
+        db_session.add_all(
+            [
+                VocabularyModel(
+                    user_id=user.id,
+                    word_phrase="word1",
+                    translation="trans1",
+                    in_learn=True,
+                    priority_learn=True,
+                ),
+                VocabularyModel(
+                    user_id=user.id,
+                    word_phrase="word2",
+                    translation="trans2",
+                    in_learn=True,
+                    priority_learn=True,
+                ),
+                VocabularyModel(
+                    user_id=user.id,
+                    word_phrase="word3",
+                    translation="trans3",
+                    in_learn=True,
+                    priority_learn=False,
+                ),
+                VocabularyModel(
+                    user_id=user.id,
+                    word_phrase="word4",
+                    translation="trans4",
+                    in_learn=False,
+                    priority_learn=True,
+                ),
+            ]
+        )
+        await db_session.commit()
+
+        count = await repo.get_words_prioritized_count(user.id)
+        assert count == 2
+
+    async def test_get_vocabulary_stats(self, repo, db_session):
+        """Test aggregate stats payload for a user's vocabulary."""
+        user = User(
+            email="stats-all@example.com",
+            hashed_password="dummy",
+            name="Stats All User",
+        )
+        db_session.add(user)
+        await db_session.commit()
+
+        db_session.add_all(
+            [
+                VocabularyModel(
+                    user_id=user.id,
+                    word_phrase="active-learned",
+                    translation="trans1",
+                    in_learn=True,
+                    priority_learn=False,
+                    last_learned=datetime.now(timezone.utc),
+                ),
+                VocabularyModel(
+                    user_id=user.id,
+                    word_phrase="active-unlearned",
+                    translation="trans2",
+                    in_learn=True,
+                    priority_learn=True,
+                    last_learned=None,
+                ),
+                VocabularyModel(
+                    user_id=user.id,
+                    word_phrase="skipped",
+                    translation="trans3",
+                    in_learn=False,
+                    priority_learn=True,
+                    last_learned=None,
+                ),
+            ]
+        )
+        await db_session.commit()
+
+        stats = await repo.get_vocabulary_stats(user.id)
+
+        assert stats.words_in_learn_count == 1
+        assert stats.words_skipped_count == 1
+        assert stats.overall_words_count == 3
+        assert stats.words_prioritized_count == 1

@@ -36,6 +36,7 @@ __all__ = [
     "VocabularyImproveResponse",
     "CheatsheetInfo",
     "CheatsheetContent",
+    "VocabularyStatsResponse",
     "UserProfileResponse",
     "UserProfileUpdate",
 ]
@@ -136,8 +137,17 @@ class CheatsheetContent(BaseModel):
     content: str
 
 
+class VocabularyStatsResponse(BaseModel):
+    """Schema for active vocabulary statistics shown in the Vocabulary tab."""
+
+    words_in_learn_count: int
+    words_skipped_count: int
+    overall_words_count: int
+    words_prioritized_count: int
+
+
 class UserProfileResponse(BaseModel):
-    """Schema for user profile response with stats."""
+    """Schema for user profile response."""
 
     id: int
     email: str
@@ -146,9 +156,6 @@ class UserProfileResponse(BaseModel):
     mother_tongue: Optional[str] = None
     timezone: str
     pages_recognised_count: int
-    words_in_learn_count: int
-    words_skipped_count: int
-    overall_words_count: int
     # Agent memory fields
     personal_info: Optional[dict] = None
     areas_to_improve: Optional[dict] = None

@@ -52,9 +52,6 @@ describe("Profile", () => {
     mother_tongue: "English",
     timezone: "UTC",
     pages_recognised_count: 10,
-    words_in_learn_count: 25,
-    words_skipped_count: 150,
-    overall_words_count: 200,
   };
 
   const createMockUpdateProfile = (response: typeof mockUserData) =>
@@ -87,12 +84,9 @@ describe("Profile", () => {
     expect(screen.getByDisplayValue("test@example.com")).toBeInTheDocument();
     expect(screen.getAllByText("Pages Recognised:")[0]).toBeInTheDocument();
     expect(screen.getByText("10")).toBeInTheDocument();
-    expect(screen.getAllByText("Words Learning:")[0]).toBeInTheDocument();
-    expect(screen.getByText("25")).toBeInTheDocument();
-    expect(screen.getAllByText("Words Skipped:")[0]).toBeInTheDocument();
-    expect(screen.getByText("150")).toBeInTheDocument();
-    expect(screen.getAllByText("Overall Words:")[0]).toBeInTheDocument();
-    expect(screen.getByText("200")).toBeInTheDocument();
+    expect(screen.queryByText("Words Learning:")).not.toBeInTheDocument();
+    expect(screen.queryByText("Words Skipped:")).not.toBeInTheDocument();
+    expect(screen.queryByText("Overall Words:")).not.toBeInTheDocument();
   });
 
   it("displays form fields with user data", async () => {
@@ -239,25 +233,19 @@ describe("Profile", () => {
     });
   });
 
-  it("renders all three stats correctly", async () => {
+  it("renders only the profile-side stat", async () => {
     render(<Profile />, { wrapper });
 
     expect(screen.getAllByText("Pages Recognised:")[0]).toBeInTheDocument();
     expect(screen.getByText("10")).toBeInTheDocument();
-    expect(screen.getAllByText("Words Learning:")[0]).toBeInTheDocument();
-    expect(screen.getByText("25")).toBeInTheDocument();
-    expect(screen.getAllByText("Words Skipped:")[0]).toBeInTheDocument();
-    expect(screen.getByText("150")).toBeInTheDocument();
-    expect(screen.getAllByText("Overall Words:")[0]).toBeInTheDocument();
-    expect(screen.getByText("200")).toBeInTheDocument();
+    expect(screen.queryByText("Words Learning:")).not.toBeInTheDocument();
+    expect(screen.queryByText("Words Skipped:")).not.toBeInTheDocument();
+    expect(screen.queryByText("Overall Words:")).not.toBeInTheDocument();
   });
 
-  it("handles null values in stats by displaying zero", async () => {
+  it("does not render vocabulary stats in the profile summary", async () => {
     const userDataWithNulls = {
       ...mockUserData,
-      words_in_learn_count: null,
-      words_skipped_count: null,
-      overall_words_count: null,
     };
 
     const wrapperWithNulls = ({ children }: { children: React.ReactNode }) => {
@@ -280,18 +268,10 @@ describe("Profile", () => {
 
     render(<Profile />, { wrapper: wrapperWithNulls });
 
-    expect(screen.getByText("Words Learning:")).toBeInTheDocument();
-    expect(screen.getByText("Words Skipped:")).toBeInTheDocument();
-    expect(screen.getByText("Overall Words:")).toBeInTheDocument();
-
-    const statsSection = screen.getByText("Words Learning:").closest("div");
-    expect(statsSection).toHaveTextContent("0");
-
-    const skippedSection = screen.getByText("Words Skipped:").closest("div");
-    expect(skippedSection).toHaveTextContent("0");
-
-    const overallSection = screen.getByText("Overall Words:").closest("div");
-    expect(overallSection).toHaveTextContent("0");
+    expect(screen.getByText("Pages Recognised:")).toBeInTheDocument();
+    expect(screen.queryByText("Words Learning:")).not.toBeInTheDocument();
+    expect(screen.queryByText("Words Skipped:")).not.toBeInTheDocument();
+    expect(screen.queryByText("Overall Words:")).not.toBeInTheDocument();
   });
 
   it("handles timezone selection", async () => {
