@@ -8,7 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.exceptions import OutputParserException
 
-from runestone.agents.coordinator import COORDINATOR_SYSTEM_PROMPT, CoordinatorAgent
+from runestone.agents.coordinator import (
+    COORDINATOR_POST_RESPONSE_PROMPT,
+    COORDINATOR_PRE_RESPONSE_PROMPT,
+    CoordinatorAgent,
+)
 from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem
 from runestone.config import Settings
 
@@ -59,41 +63,57 @@ def test_init_coordinator_model(mock_settings, mock_chat_model):
 
 def test_word_keeper_prompt_eligibility():
     """Coordinator prompt should define WordKeeper eligibility correctly."""
-    assert "word_keeper" in COORDINATOR_SYSTEM_PROMPT
-    assert "pre_response" in COORDINATOR_SYSTEM_PROMPT
-    assert "post_response" in COORDINATOR_SYSTEM_PROMPT
-    assert "teacher_response" in COORDINATOR_SYSTEM_PROMPT
-    assert "If the current student explicitly asks to save words from an earlier turn" in (COORDINATOR_SYSTEM_PROMPT)
+    assert "word_keeper" in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "word_keeper" in COORDINATOR_POST_RESPONSE_PROMPT
+    assert "If the current student explicitly asks to save words from an earlier turn" in (
+        COORDINATOR_PRE_RESPONSE_PROMPT
+    )
     assert "An earlier teacher message highlighted vocabulary but the student did not request saving it." in (
-        COORDINATOR_SYSTEM_PROMPT
+        COORDINATOR_PRE_RESPONSE_PROMPT
     )
     assert "Words were already saved in earlier turns — do not re-trigger on later turns." in (
-        COORDINATOR_SYSTEM_PROMPT
+        COORDINATOR_PRE_RESPONSE_PROMPT
     )
-    assert "For all normal word_keeper cases, set `chat_history_size` to `2`." in COORDINATOR_SYSTEM_PROMPT
+    assert "For all normal word_keeper cases, set `chat_history_size` to `2`." in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "For all normal word_keeper cases, set `chat_history_size` to `2`." in COORDINATOR_POST_RESPONSE_PROMPT
 
 
 def test_news_prompt_requires_known_topic():
-    assert "**Route when:** The student's current message names a clear, specific topic" in (COORDINATOR_SYSTEM_PROMPT)
-    assert "**Do NOT route when:** The topic is vague or unspecified" in COORDINATOR_SYSTEM_PROMPT
+    assert "**Route when:** The student's current message names a clear, specific topic" in (
+        COORDINATOR_PRE_RESPONSE_PROMPT
+    )
+    assert "**Do NOT route when:** The topic is vague or unspecified" in COORDINATOR_PRE_RESPONSE_PROMPT
 
 
 def test_grammar_is_absent_from_coordinator_prompt():
-    assert "GrammarAgent" not in COORDINATOR_SYSTEM_PROMPT
-    assert "grammar specialist" not in COORDINATOR_SYSTEM_PROMPT
-    assert "search_grammar" not in COORDINATOR_SYSTEM_PROMPT
+    assert "GrammarAgent" not in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "grammar specialist" not in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "search_grammar" not in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "GrammarAgent" not in COORDINATOR_POST_RESPONSE_PROMPT
+    assert "grammar specialist" not in COORDINATOR_POST_RESPONSE_PROMPT
+    assert "search_grammar" not in COORDINATOR_POST_RESPONSE_PROMPT
 
 
 def test_word_keeper_prompt_does_not_allow_anticipatory_post_routing():
-    assert "anticipate the teacher reply" not in COORDINATOR_SYSTEM_PROMPT
-    assert "The actual `teacher_response` explicitly marks vocabulary as worth saving" in COORDINATOR_SYSTEM_PROMPT
+    assert "anticipate the teacher reply" not in COORDINATOR_POST_RESPONSE_PROMPT
+    assert (
+        "The actual `teacher_response` explicitly marks vocabulary as worth saving" in COORDINATOR_POST_RESPONSE_PROMPT
+    )
+    assert "The teacher is only asking the student to practice, answer, or write another sentence using words." in (
+        COORDINATOR_POST_RESPONSE_PROMPT
+    )
 
 
 def test_word_keeper_prompt_limits_pre_stage_to_explicit_save_requests():
-    assert "**Route in pre_response when:**" in COORDINATOR_SYSTEM_PROMPT
-    assert "The current student message explicitly asks to save vocabulary in this turn" in (COORDINATOR_SYSTEM_PROMPT)
+    assert "**Route when:**" in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "The current student message explicitly asks to save vocabulary in this turn" in (
+        COORDINATOR_PRE_RESPONSE_PROMPT
+    )
     assert "An earlier teacher message highlighted vocabulary but the student did not request saving it." in (
-        COORDINATOR_SYSTEM_PROMPT
+        COORDINATOR_PRE_RESPONSE_PROMPT
+    )
+    assert "The student is moving to the next exercise or continuing the lesson without an explicit save request" in (
+        COORDINATOR_PRE_RESPONSE_PROMPT
     )
 
 
@@ -125,6 +145,7 @@ async def test_plan_success(coordinator_agent, mock_chat_model):
 
     # Verify history is passed correctly
     call_args = mock_llm.ainvoke.call_args[0][0]
+    assert call_args[0].content == COORDINATOR_PRE_RESPONSE_PROMPT
     human_msg = call_args[1]
     payload = json.loads(human_msg.content)
     assert payload["message"] == "I am John"
@@ -175,9 +196,50 @@ async def test_plan_post_turn_only_returns_post_items_and_passes_teacher_respons
     assert [item.name for item in plan.post_response] == ["word_keeper"]
 
     call_args = mock_llm.ainvoke.call_args[0][0]
+    assert call_args[0].content == COORDINATOR_POST_RESPONSE_PROMPT
     payload = json.loads(call_args[1].content)
     assert payload["current_stage"] == "post_response"
     assert payload["teacher_response"] == "Useful words to remember: hejda"
+
+
+@pytest.mark.anyio
+async def test_plan_pre_turn_uses_pre_prompt_for_next_task_style_message(coordinator_agent, mock_chat_model):
+    mock_llm = mock_chat_model.with_structured_output.return_value
+    mock_llm.ainvoke.return_value = CoordinatorPlan(pre_response=[], post_response=[], audit={"trace": "ok"})
+
+    plan = await coordinator_agent.plan_pre_turn(
+        message="Next task, please.",
+        history=[ChatMessage(role="assistant", content="Bra jobbat.")],
+        available_specialists=["word_keeper"],
+    )
+
+    assert plan.pre_response == []
+    call_args = mock_llm.ainvoke.call_args[0][0]
+    assert call_args[0].content == COORDINATOR_PRE_RESPONSE_PROMPT
+    payload = json.loads(call_args[1].content)
+    assert payload["message"] == "Next task, please."
+
+
+@pytest.mark.anyio
+async def test_plan_post_turn_uses_post_prompt_for_exercise_wording(coordinator_agent, mock_chat_model):
+    mock_llm = mock_chat_model.with_structured_output.return_value
+    mock_llm.ainvoke.return_value = CoordinatorPlan(pre_response=[], post_response=[], audit={"trace": "ok"})
+
+    teacher_response = (
+        "Try one more sentence using **vadret** or **varen**: " '"Jag gillar varen eftersom vadret ar bra."'
+    )
+    plan = await coordinator_agent.plan_post_turn(
+        message="Ok",
+        history=[],
+        teacher_response=teacher_response,
+        available_specialists=["word_keeper"],
+    )
+
+    assert plan.post_response == []
+    call_args = mock_llm.ainvoke.call_args[0][0]
+    assert call_args[0].content == COORDINATOR_POST_RESPONSE_PROMPT
+    payload = json.loads(call_args[1].content)
+    assert payload["teacher_response"] == teacher_response
 
 
 @pytest.mark.anyio

@@ -70,6 +70,17 @@ def test_word_keeper_prompt_uses_teacher_response_as_current_post_stage_signal()
     assert "Use older history ONLY when the student explicitly asks to revisit it." in (WORDKEEPER_SYSTEM_PROMPT)
 
 
+def test_word_keeper_prompt_rejects_exercise_wording_as_save_signal():
+    assert "Do NOT treat ordinary exercise wording as a save signal" in WORDKEEPER_SYSTEM_PROMPT
+    assert 'Do NOT save words from prompts like "use X or Y in a sentence"' in WORDKEEPER_SYSTEM_PROMPT
+    assert "Words that are only mentioned as options in a practice prompt or writing exercise." in (
+        WORDKEEPER_SYSTEM_PROMPT
+    )
+    assert "Bolded words that are emphasized for an exercise but not presented as vocabulary to memorize." in (
+        WORDKEEPER_SYSTEM_PROMPT
+    )
+
+
 def _service_provider(service):
     @asynccontextmanager
     async def _provider():

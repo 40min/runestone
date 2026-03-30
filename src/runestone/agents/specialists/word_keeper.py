@@ -40,6 +40,9 @@ Never invent candidates simply because a Swedish word appears in the conversatio
   - Named vocabulary sections (e.g. "подсказка по лексике", "key vocabulary", "useful words").
   - Structured word–translation lists or bullet pairs regardless of the header label.
   - Explicit save phrasing (e.g. "the key words here are", "good words to memorize").
+- Do NOT treat ordinary exercise wording as a save signal, even if words are bolded or repeated.
+- Do NOT save words from prompts like "use X or Y in a sentence", "try another sentence with X",
+  or other drill wording unless the teacher also explicitly says the words are worth remembering.
 - By default, ignore older assistant messages in `history` when deciding what to save.
 - Use older history ONLY when the student explicitly asks to revisit it.
 
@@ -47,6 +50,8 @@ Never invent candidates simply because a Swedish word appears in the conversatio
 - Words the student merely reused in their message.
 - Words that appear only in correction or example sentences without a save signal.
 - Words introduced in earlier turns unless the student explicitly references them.
+- Words that are only mentioned as options in a practice prompt or writing exercise.
+- Bolded words that are emphasized for an exercise but not presented as vocabulary to memorize.
 
 ## Extraction Rules (apply to every candidate)
 - `word_phrase` — the Swedish word or phrase, copied exactly as it appears.
