@@ -110,7 +110,13 @@ class MemoryItemRepository:
                 .over(
                     partition_by=bucket,
                     order_by=(
-                        case((MemoryItem.category == "area_to_improve", MemoryItem.priority), else_=99).asc(),
+                        case(
+                            (
+                                MemoryItem.category == "area_to_improve",
+                                func.coalesce(MemoryItem.priority, 9),
+                            ),
+                            else_=99,
+                        ).asc(),
                         MemoryItem.updated_at.desc(),
                         MemoryItem.id.asc(),
                     ),
@@ -138,7 +144,13 @@ class MemoryItemRepository:
                     (ranked.c.bucket == "knowledge_strength", 2),
                     else_=3,
                 ),
-                case((ranked.c.bucket == "area_to_improve", MemoryItem.priority), else_=99).asc(),
+                case(
+                    (
+                        ranked.c.bucket == "area_to_improve",
+                        func.coalesce(MemoryItem.priority, 9),
+                    ),
+                    else_=99,
+                ).asc(),
                 MemoryItem.updated_at.desc(),
                 MemoryItem.id.asc(),
             )

@@ -107,12 +107,6 @@ class TeacherAgent:
         # Build system prompt with persona and tool instructions
         system_prompt = self.persona["system_prompt"]
         system_prompt += """
-Rules:
-- Treat it as internal context from helper specialists; use it when it improves your answer.
-- Do not mention the tag or raw internal formatting to the student.
-- Prefer `info_for_teacher` over raw artifacts.
-- If a specialist reports `status="error"`, ignore it and proceed normally.
-
 ### STARTER MEMORY (INTERNAL)
 You may receive an internal system message starting with `[STARTER_MEMORY]`.
 This contains compact learner memory automatically injected for the first turn of a chat.
@@ -125,6 +119,12 @@ Rules:
 ### PRE-RESPONSE SPECIALISTS (INTERNAL)
 You may receive an internal system message starting with `[PRE_RESPONSE_SPECIALISTS]`.
 This is structured context produced by helper specialists executed before your response.
+
+Rules:
+- Treat it as internal context from helper specialists; use it when it improves your answer.
+- Do not mention the tag or raw internal formatting to the student.
+- Prefer `info_for_teacher` over raw artifacts.
+- If a specialist reports `status="error"`, ignore it and proceed normally.
 
 ### RESPONSE GUIDELINES
 - **NO ECHOING:** You are strictly forbidden from simply repeating the student's input.
@@ -276,11 +276,11 @@ to read its contents before deciding.
             )
             messages.append(SystemMessage(content=language_msg))
 
-        # Add pre-response specialist information
-        if pre_results:
-            messages.append(SystemMessage(content=self._format_pre_results(pre_results)))
+        # Add foundational context before derived specialist outputs.
         if starter_memory:
             messages.append(SystemMessage(content=self._format_starter_memory(starter_memory)))
+        if pre_results:
+            messages.append(SystemMessage(content=self._format_pre_results(pre_results)))
         if recent_side_effects:
             messages.append(SystemMessage(content=self._format_recent_side_effects(recent_side_effects)))
 
