@@ -512,7 +512,7 @@ async def test_memory_tool_with_runtime():
     )
 
     # Use .coroutine() and pass runtime directly
-    output = await start_student_info.coroutine(runtime)
+    output = await read_memory.coroutine(runtime, category="personal_info", status="active")
     assert output == "No memory items found."
 ```
 

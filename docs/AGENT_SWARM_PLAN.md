@@ -111,7 +111,7 @@ Deliverables:
 
 Tasks:
 
-- narrow `start_student_info` to a compact top-priority subset
+- inject compact starter memory from the service layer on first turn
 - keep `read_memory` available for on-demand teacher inspection
 - plan post-stage `MemoryKeeper` review rules for create/update/status/priority/promote/no-action
 - capture the design in [`AGENT_SWARM_MEMORY_MAINTENANCE_PLAN.md`](AGENT_SWARM_MEMORY_MAINTENANCE_PLAN.md)

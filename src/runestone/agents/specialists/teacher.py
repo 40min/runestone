@@ -19,7 +19,6 @@ from runestone.agents.tools.memory import (
     delete_memory_item,
     promote_to_strength,
     read_memory,
-    start_student_info,
     update_memory_priority,
     update_memory_status,
     upsert_memory_item,
@@ -40,14 +39,16 @@ def _teacher_timing_fields(args, kwargs, _result, _error) -> dict[str, int | str
     history = kwargs.get("history") if "history" in kwargs else (args[2] if len(args) > 2 else [])
     user = kwargs.get("user") if "user" in kwargs else (args[3] if len(args) > 3 else None)
     pre_results = kwargs.get("pre_results") if "pre_results" in kwargs else (args[4] if len(args) > 4 else None)
+    starter_memory = kwargs.get("starter_memory") if "starter_memory" in kwargs else (args[5] if len(args) > 5 else "")
     recent_side_effects = (
-        kwargs.get("recent_side_effects") if "recent_side_effects" in kwargs else (args[5] if len(args) > 5 else None)
+        kwargs.get("recent_side_effects") if "recent_side_effects" in kwargs else (args[6] if len(args) > 6 else None)
     )
     return {
         "user_id": getattr(user, "id", None),
         "message_chars": len(message),
         "history_messages": len(history),
         "pre_results": len(pre_results or []),
+        "starter_memory_chars": len(starter_memory or ""),
         "recent_side_effects": len(recent_side_effects or []),
     }
 
@@ -91,7 +92,6 @@ class TeacherAgent:
         chat_model = build_chat_model(settings, "teacher")
 
         tools = [
-            start_student_info,
             read_memory,
             upsert_memory_item,
             update_memory_status,
@@ -107,16 +107,24 @@ class TeacherAgent:
         # Build system prompt with persona and tool instructions
         system_prompt = self.persona["system_prompt"]
         system_prompt += """
-
-### PRE-RESPONSE SPECIALISTS (INTERNAL)
-You may receive an internal system message starting with `[PRE_RESPONSE_SPECIALISTS]`.
-This is structured context produced by helper specialists executed before your response.
-
 Rules:
 - Treat it as internal context from helper specialists; use it when it improves your answer.
 - Do not mention the tag or raw internal formatting to the student.
 - Prefer `info_for_teacher` over raw artifacts.
 - If a specialist reports `status="error"`, ignore it and proceed normally.
+
+### STARTER MEMORY (INTERNAL)
+You may receive an internal system message starting with `[STARTER_MEMORY]`.
+This contains compact learner memory automatically injected for the first turn of a chat.
+
+Rules:
+- Treat it as internal memory context prepared by the system.
+- Use it when it helps you personalize the response.
+- Do not mention the tag or raw structure to the student.
+
+### PRE-RESPONSE SPECIALISTS (INTERNAL)
+You may receive an internal system message starting with `[PRE_RESPONSE_SPECIALISTS]`.
+This is structured context produced by helper specialists executed before your response.
 
 ### RESPONSE GUIDELINES
 - **NO ECHOING:** You are strictly forbidden from simply repeating the student's input.
@@ -134,9 +142,9 @@ You are a memory-driven AI. Your effectiveness depends on maintaining a detailed
 of the student using structured memory items with stable IDs.
 
 **CRITICAL: Using Memory**
-- At the start of a new chat, you MUST call `start_student_info` to fetch token-bounded student context.
-- `start_student_info` is intentionally compact and only includes the highest-priority
-  `area_to_improve` items plus active strengths. If you need more memory detail, inspect it on-demand.
+- At the start of a new chat, compact starter memory may already be injected for you.
+- That starter memory only includes the highest-priority `area_to_improve` items plus active strengths.
+- If you need more memory detail, inspect it on-demand.
 - Use `read_memory` only on-demand and ONLY with specific filters (category and/or status).
 - Never call `read_memory()` with no filters unless the student explicitly asks for their full memory.
 - Memory items have IDs, categories (personal_info, area_to_improve, knowledge_strength), keys, and statuses.
@@ -245,6 +253,7 @@ to read its contents before deciding.
         history: list[ChatMessage],
         user: User,
         pre_results: list[dict] | None = None,
+        starter_memory: str = "",
         recent_side_effects: list[TeacherSideEffect] | None = None,
     ) -> tuple[str, list]:
         """Generate the final user-facing response.
@@ -270,6 +279,8 @@ to read its contents before deciding.
         # Add pre-response specialist information
         if pre_results:
             messages.append(SystemMessage(content=self._format_pre_results(pre_results)))
+        if starter_memory:
+            messages.append(SystemMessage(content=self._format_starter_memory(starter_memory)))
         if recent_side_effects:
             messages.append(SystemMessage(content=self._format_recent_side_effects(recent_side_effects)))
 
@@ -373,6 +384,16 @@ to read its contents before deciding.
             # come from info_for_teacher and recent side-effect summaries.
             lines.append(f"- {name} ({status}): " f"{truncated_info or 'no info'}")
         return "\n".join(lines)
+
+    @staticmethod
+    def _format_starter_memory(starter_memory: str) -> str:
+        return "\n".join(
+            [
+                "[STARTER_MEMORY]",
+                "This is compact learner memory automatically loaded for the first turn of the chat.",
+                starter_memory,
+            ]
+        )
 
     @staticmethod
     def _format_recent_side_effects(recent_side_effects: list[TeacherSideEffect]) -> str:

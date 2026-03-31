@@ -20,6 +20,7 @@ from runestone.agents.specialists.base import SpecialistContext
 from runestone.agents.specialists.registry import SpecialistRegistry
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.agents.specialists.word_keeper import WordKeeperSpecialist
+from runestone.agents.tools.utils import serialize_memory_items
 from runestone.config import Settings
 from runestone.core.exceptions import RunestoneError
 from runestone.core.observability import elapsed_ms_since
@@ -41,6 +42,9 @@ class AgentsManager:
     COORDINATOR_MAX_HISTORY_MESSAGES = 5
     WORD_KEEPER_MAX_HISTORY_MESSAGES = 2
     POST_TASK_TIMEOUT_SECONDS = 15
+    STARTER_MEMORY_PERSONAL_LIMIT = 50
+    STARTER_MEMORY_AREA_LIMIT = 5
+    STARTER_MEMORY_KNOWLEDGE_LIMIT = 50
 
     def __init__(
         self,
@@ -96,13 +100,14 @@ class AgentsManager:
         user: User,
         memory_item_service,
         side_effect_service: AgentSideEffectService,
-    ) -> tuple[CoordinatorPlan, list[dict], list[TeacherSideEffect]]:
+    ) -> tuple[CoordinatorPlan, list[dict], str, list[TeacherSideEffect]]:
         """
         Run pre-stage: coordinator planning, pre specialists, side effect loading.
 
         Returns:
-            (plan, pre_results, recent_side_effects)
+            (plan, pre_results, starter_memory, recent_side_effects)
         """
+        starter_memory = ""
         if not history:
             try:
                 deleted_count = await memory_item_service.cleanup_old_mastered_areas(user.id, older_than_days=90)
@@ -116,6 +121,17 @@ class AgentsManager:
                 logger.warning(
                     "[agents:manager] Failed to cleanup old mastered memory items for user %s: %s", user.id, e
                 )
+            try:
+                starter_items = await memory_item_service.list_start_student_info_items(
+                    user.id,
+                    personal_limit=self.STARTER_MEMORY_PERSONAL_LIMIT,
+                    area_limit=self.STARTER_MEMORY_AREA_LIMIT,
+                    knowledge_limit=self.STARTER_MEMORY_KNOWLEDGE_LIMIT,
+                )
+                if starter_items:
+                    starter_memory = serialize_memory_items(starter_items)
+            except (SQLAlchemyError, ValueError, RuntimeError) as e:
+                logger.warning("[agents:manager] Failed to load starter memory for user %s: %s", user.id, e)
 
         coordinator_history = history[-self.COORDINATOR_MAX_HISTORY_MESSAGES :] if history else []
         if history and len(history) > self.COORDINATOR_MAX_HISTORY_MESSAGES:
@@ -157,7 +173,7 @@ class AgentsManager:
             chat_id=chat_id,
         )
 
-        return plan, pre_results, recent_side_effects
+        return plan, pre_results, starter_memory, recent_side_effects
 
     async def generate_teacher_response(
         self,
@@ -165,6 +181,7 @@ class AgentsManager:
         history: list[ChatMessage],
         user: User,
         pre_results: list[dict],
+        starter_memory: str,
         recent_side_effects: list[TeacherSideEffect],
     ) -> tuple[str, Optional[list[dict[str, str]]]]:
         """
@@ -176,6 +193,7 @@ class AgentsManager:
                 history=history,
                 user=user,
                 pre_results=pre_results,
+                starter_memory=starter_memory,
                 recent_side_effects=recent_side_effects,
             )
         except (RunestoneError, ValueError, RuntimeError) as e:
@@ -187,7 +205,6 @@ class AgentsManager:
 
     async def process_turn(
         self,
-        *,
         message: str,
         chat_id: str,
         history: list[ChatMessage],
@@ -214,7 +231,7 @@ class AgentsManager:
                 side_effect_service=side_effect_service,
             )
 
-        _plan, pre_results, recent_side_effects = await self.prepare_pre_turn(
+        _plan, pre_results, starter_memory, recent_side_effects = await self.prepare_pre_turn(
             message=message,
             chat_id=chat_id,
             history=history,
@@ -228,6 +245,7 @@ class AgentsManager:
             history=history,
             user=user,
             pre_results=pre_results,
+            starter_memory=starter_memory,
             recent_side_effects=recent_side_effects,
         )
 

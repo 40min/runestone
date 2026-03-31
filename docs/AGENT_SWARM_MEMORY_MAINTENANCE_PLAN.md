@@ -14,9 +14,9 @@ Rationale:
 
 - memory reading is not complex enough to justify a separate specialist today
 - the teacher may need to inspect memory directly and intentionally during a turn
-- keeping `start_student_info` and filtered `read_memory` on `TeacherAgent` preserves flexibility
+- keeping starter-memory loading and filtered `read_memory` on the teacher side preserves flexibility
 
-### 2. Keep `start_student_info` Compact
+### 2. Keep Starter Memory Compact
 
 The start-of-chat memory load should remain intentionally small:
 
@@ -65,7 +65,7 @@ Create a post-stage memory maintenance specialist, likely still named `MemoryKee
 Out of scope for this extraction:
 
 - replacing `TeacherAgent` as the normal reader of memory
-- moving `start_student_info` away from the teacher
+- moving starter-memory ownership away from the teacher side
 - running memory maintenance synchronously before the response
 
 ## Triggering Principle
@@ -121,9 +121,9 @@ These rules should be applied only when the turn contains a meaningful signal, n
 
 ## Implementation Phases
 
-### Phase 1: Retrieval Tightening
+### Phase 1: Retrieval Tightening (Done)
 
-- keep `start_student_info` compact
+- keep starter-memory injection compact
 - document that larger memory review remains on-demand via filtered reads
 
 ### Phase 2: Contract and Routing
