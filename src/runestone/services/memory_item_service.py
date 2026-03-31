@@ -79,6 +79,22 @@ class MemoryItemService:
         items = await self.repo.list_items(user_id, category_value, status, limit, offset)
         return [MemoryItemResponse.model_validate(item) for item in items]
 
+    async def list_start_student_info_items(
+        self,
+        user_id: int,
+        personal_limit: int,
+        area_limit: int,
+        knowledge_limit: int,
+    ) -> list[MemoryItemResponse]:
+        """Return the compact starter memory bundle used at the start of a chat."""
+        items = await self.repo.list_start_student_info_items(
+            user_id,
+            personal_limit=personal_limit,
+            area_limit=area_limit,
+            knowledge_limit=knowledge_limit,
+        )
+        return [MemoryItemResponse.model_validate(item) for item in items]
+
     async def upsert_memory_item(
         self,
         user_id: int,

@@ -102,25 +102,25 @@ The async-post follow-up corrections have now been implemented:
 
 The items below are exploratory roadmap ideas, not part of the accepted async-post commitment.
 
-### MemoryReader and MemoryKeeper Extraction
+### Memory Maintenance Extraction
 
 Deliverables:
 
-- isolate memory responsibilities from teacher prompt
-- split pre-response retrieval from post-response persistence
+- keep memory reading with `TeacherAgent`
+- extract post-response memory maintenance into a dedicated plan and implementation track
 
 Tasks:
 
-- create `MemoryReader`
-- create `MemoryKeeper`
-- move memory read policy into `MemoryReader`
-- move memory write policy into `MemoryKeeper`
-- add tests for read relevance, create/update/delete/promote/no-action
+- narrow `start_student_info` to a compact top-priority subset
+- keep `read_memory` available for on-demand teacher inspection
+- plan post-stage `MemoryKeeper` review rules for create/update/status/priority/promote/no-action
+- capture the design in [`AGENT_SWARM_MEMORY_MAINTENANCE_PLAN.md`](AGENT_SWARM_MEMORY_MAINTENANCE_PLAN.md)
 
 Success criteria:
 
-- teacher no longer owns memory tool rules directly
-- memory retrieval and memory persistence are independently testable
+- teacher retains direct memory access when needed
+- memory maintenance becomes independently testable
+- `area_to_improve` can reflect progress and regression after post-stage review
 
 ### NewsAgent Extraction
 
@@ -182,11 +182,10 @@ All agent log lines use `[agents:<component>]` prefix.
 
 | Agent              | Tools                                         |
 | ------------------ | --------------------------------------------- |
-| `TeacherAgent`     | grammar tools + read_url                      |
+| `TeacherAgent`     | grammar tools + `read_url` + memory tools     |
 | `CoordinatorAgent` | none (planning only)                          |
 | `WordKeeper`       | `prioritize_words_for_learning`               |
-| `MemoryReader`     | `start_student_info`, `read_memory` (future)  |
-| `MemoryKeeper`     | memory write tools (future)                   |
+| `MemoryKeeper`     | memory maintenance tools (future, post phase) |
 | `NewsAgent`        | `search_news_with_dates`, `read_url` (future) |
 
 ## Non-Goals (Unchanged)

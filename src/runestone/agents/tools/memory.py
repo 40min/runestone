@@ -18,6 +18,10 @@ from runestone.api.memory_item_schemas import MemoryCategory, MemoryItemCreate, 
 
 logger = logging.getLogger(__name__)
 
+START_STUDENT_INFO_PERSONAL_LIMIT = 50
+START_STUDENT_INFO_MAX_AREAS_TO_IMPROVE = 5
+START_STUDENT_INFO_KNOWLEDGE_STRENGTH_LIMIT = 50
+
 
 class MemoryStatusUpdate(BaseModel):
     """Input for updating memory item status."""
@@ -128,42 +132,23 @@ async def start_student_info(runtime: ToolRuntime[AgentContext]) -> str:
 
     Returns structured memory items for:
     - personal_info (active)
-    - area_to_improve (struggling + improving), ordered by priority
+    - top 5 area_to_improve items across struggling + improving, ordered by priority
+    - knowledge_strength (active)
 
     Prefer this tool at the start of a new chat to reduce prompt bloat.
+    Use `read_memory` with category/status filters when the teacher needs to inspect
+    more than the compact subset.
     """
     logger.info("Agent tool call: start_student_info")
     user = runtime.context.user
 
     # Use fresh service with its own session for concurrency safety
     async with provide_memory_item_service() as service:
-        items: list[MemoryItemResponse] = []
-        items.extend(
-            await service.list_memory_items(
-                user_id=user.id,
-                category=MemoryCategory.PERSONAL_INFO,
-                status="active",
-                limit=50,
-                offset=0,
-            )
-        )
-        items.extend(
-            await service.list_memory_items(
-                user_id=user.id,
-                category=MemoryCategory.AREA_TO_IMPROVE,
-                status="struggling",
-                limit=75,
-                offset=0,
-            )
-        )
-        items.extend(
-            await service.list_memory_items(
-                user_id=user.id,
-                category=MemoryCategory.AREA_TO_IMPROVE,
-                status="improving",
-                limit=75,
-                offset=0,
-            )
+        items = await service.list_start_student_info_items(
+            user_id=user.id,
+            personal_limit=START_STUDENT_INFO_PERSONAL_LIMIT,
+            area_limit=START_STUDENT_INFO_MAX_AREAS_TO_IMPROVE,
+            knowledge_limit=START_STUDENT_INFO_KNOWLEDGE_STRENGTH_LIMIT,
         )
 
     if not items:

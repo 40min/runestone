@@ -135,6 +135,8 @@ of the student using structured memory items with stable IDs.
 
 **CRITICAL: Using Memory**
 - At the start of a new chat, you MUST call `start_student_info` to fetch token-bounded student context.
+- `start_student_info` is intentionally compact and only includes the highest-priority
+  `area_to_improve` items plus active strengths. If you need more memory detail, inspect it on-demand.
 - Use `read_memory` only on-demand and ONLY with specific filters (category and/or status).
 - Never call `read_memory()` with no filters unless the student explicitly asks for their full memory.
 - Memory items have IDs, categories (personal_info, area_to_improve, knowledge_strength), keys, and statuses.
