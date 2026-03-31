@@ -70,8 +70,9 @@ def test_build_agent(mock_settings, mock_chat_model):
             call_kwargs = mock_create_agent.call_args[1]
             assert call_kwargs["model"] == mock_chat_model
             tools = mock_create_agent.call_args[1]["tools"]
-            assert len(tools) == 11
+            assert len(tools) == 10
             assert all(getattr(tool, "name", None) != "prioritize_words_for_learning" for tool in tools)
+            assert all(getattr(tool, "name", None) != "start_student_info" for tool in tools)
             assert "MEMORY PROTOCOL" in call_kwargs["system_prompt"]
             assert "TOOL TRUTHFULNESS (MANDATORY)" in call_kwargs["system_prompt"]
             assert "only say words were definitely saved" in call_kwargs["system_prompt"].lower()
@@ -204,6 +205,22 @@ async def test_run_with_mother_tongue(teacher_agent, mock_user):
     assert any(isinstance(m, SystemMessage) and "Spanish" in m.content for m in messages)
 
 
+@pytest.mark.anyio
+async def test_run_with_starter_memory(teacher_agent, mock_user):
+    teacher_agent.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
+
+    await teacher_agent.generate_response(
+        message="msg",
+        history=[],
+        user=mock_user,
+        starter_memory="UNTRUSTED_MEMORY_DATA (JSON).\n<memory_items_json>{}</memory_items_json>",
+    )
+
+    invoke_args = teacher_agent.agent.ainvoke.call_args[0][0]
+    messages = invoke_args["messages"]
+    assert any(isinstance(m, SystemMessage) and "[STARTER_MEMORY]" in m.content for m in messages)
+
+
 def test_format_recent_side_effects_prefers_info_for_teacher():
     formatted = TeacherAgent._format_recent_side_effects(
         [
@@ -300,6 +317,7 @@ async def test_generate_response_logs_timing_metadata(teacher_agent, mock_user, 
             history=[ChatMessage(role="user", content="Tidigare")],
             user=mock_user,
             pre_results=[{"name": "memory_reader", "result": {"status": "action_taken"}}],
+            starter_memory="starter",
             recent_side_effects=[
                 TeacherSideEffect(
                     name="word_keeper",
@@ -317,6 +335,7 @@ async def test_generate_response_logs_timing_metadata(teacher_agent, mock_user, 
     assert "user_id=1" in caplog.text
     assert "history_messages=1" in caplog.text
     assert "pre_results=1" in caplog.text
+    assert "starter_memory_chars=7" in caplog.text
     assert "recent_side_effects=1" in caplog.text
     assert "outcome=success" in caplog.text
 

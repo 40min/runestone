@@ -21,7 +21,6 @@ Implemented now:
 
 Still planned, but not implemented:
 
-- `MemoryReader`
 - `MemoryKeeper`
 - `NewsAgent`
 
@@ -83,12 +82,15 @@ Owns:
 
 - final user-facing response
 - grammar tools
+- memory tools
 - `read_url`
 
 Responsibilities:
 
 - pedagogical quality
 - tone and conversational flow
+- compact memory retrieval at the start of a chat
+- on-demand memory inspection when more detail is needed
 - natural use of pre-specialist outputs and recent side effects
 
 ### CoordinatorAgent
@@ -124,17 +126,12 @@ Runs in `post_response` when:
 
 - the teacher reply explicitly highlights words worth learning
 
-### MemoryReader (planned)
-
-Intended role:
-
-- pre-stage memory retrieval for teacher context
-
 ### MemoryKeeper (planned)
 
 Intended role:
 
-- post-stage memory persistence when the final teacher reply provides the signal
+- post-stage memory maintenance when the final teacher reply provides the signal
+- review and update `area_to_improve` status and priority when the turn shows progress or regression
 
 ### NewsAgent (planned)
 
@@ -416,7 +413,6 @@ Prefix conventions:
 
 Possible future extraction work:
 
-- `MemoryReader`
 - `MemoryKeeper`
 - `NewsAgent`
 

@@ -94,7 +94,7 @@ async def test_process_turn_returns_teacher_reply_and_starts_background_post(
 ):
     manager = AgentsManager(mock_settings)
     manager.handle_stale_post_task = AsyncMock()
-    manager.prepare_pre_turn = AsyncMock(return_value=(_make_plan(), [{"name": "pre"}], []))
+    manager.prepare_pre_turn = AsyncMock(return_value=(_make_plan(), [{"name": "pre"}], "", []))
     manager.generate_teacher_response = AsyncMock(return_value=("Teacher says hi", [{"title": "Src"}]))
     manager.start_background_post_turn = AsyncMock()
 
@@ -135,7 +135,7 @@ async def test_process_turn_skips_stale_check_on_first_turn(
 ):
     manager = AgentsManager(mock_settings)
     manager.handle_stale_post_task = AsyncMock()
-    manager.prepare_pre_turn = AsyncMock(return_value=(_make_plan(), [], []))
+    manager.prepare_pre_turn = AsyncMock(return_value=(_make_plan(), [], "", []))
     manager.generate_teacher_response = AsyncMock(return_value=("Teacher says hi", None))
     manager.start_background_post_turn = AsyncMock()
 
@@ -163,8 +163,9 @@ async def test_prepare_pre_turn_delegates_to_coordinator(
     manager = AgentsManager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
     manager.teacher = AsyncMock()
+    mock_memory_item_service.list_start_student_info_items.return_value = []
 
-    plan, pre_results, recent_effects = await manager.prepare_pre_turn(
+    plan, pre_results, starter_memory, recent_effects = await manager.prepare_pre_turn(
         message="Hello",
         chat_id="chat-1",
         history=[],
@@ -175,6 +176,7 @@ async def test_prepare_pre_turn_delegates_to_coordinator(
 
     manager.coordinator.plan_pre_turn.assert_awaited_once()
     assert pre_results == []
+    assert starter_memory == ""
     assert recent_effects is not None
 
 
@@ -276,6 +278,7 @@ async def test_generate_teacher_response_returns_text_and_sources(mock_settings,
         history=[],
         user=mock_user,
         pre_results=[],
+        starter_memory="",
         recent_side_effects=[],
     )
 
@@ -306,6 +309,7 @@ async def test_generate_teacher_response_extracts_news_sources(mock_settings, mo
         history=[],
         user=mock_user,
         pre_results=[],
+        starter_memory="",
         recent_side_effects=[],
     )
 
@@ -333,7 +337,7 @@ async def test_generate_teacher_response_filters_unsafe_urls(mock_settings, mock
     )
 
     _response, sources = await manager.generate_teacher_response(
-        message="Nyheter", history=[], user=mock_user, pre_results=[], recent_side_effects=[]
+        message="Nyheter", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
     )
 
     assert sources == [{"title": "Safe", "url": "https://example.com", "date": "2026-02-05"}]
@@ -362,7 +366,7 @@ async def test_generate_teacher_response_does_not_cap_grammar_sources(mock_setti
     )
 
     _response, sources = await manager.generate_teacher_response(
-        message="Grammatik", history=[], user=mock_user, pre_results=[], recent_side_effects=[]
+        message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
     )
 
     assert sources == [
@@ -386,11 +390,13 @@ async def test_generate_teacher_response_passes_pre_results(mock_settings, mock_
         history=[],
         user=mock_user,
         pre_results=pre_results,
+        starter_memory="starter",
         recent_side_effects=[],
     )
 
     _args, kwargs = manager.teacher.generate_response.call_args
     assert kwargs["pre_results"] == pre_results
+    assert kwargs["starter_memory"] == "starter"
 
 
 # ---------------------------------------------------------------------------
@@ -842,7 +848,7 @@ async def test_recent_side_effects_loaded_in_pre_turn(
     ]
     mock_side_effect_service.load_recent_for_teacher.return_value = side_effects
 
-    _plan, _pre, recent = await manager.prepare_pre_turn(
+    _plan, _pre, _starter_memory, recent = await manager.prepare_pre_turn(
         message="Hello",
         chat_id="chat-1",
         history=[],
@@ -853,6 +859,65 @@ async def test_recent_side_effects_loaded_in_pre_turn(
 
     assert recent == side_effects
     mock_side_effect_service.load_recent_for_teacher.assert_awaited_once_with(user_id=mock_user.id, chat_id="chat-1")
+
+
+@pytest.mark.anyio
+async def test_prepare_pre_turn_loads_starter_memory_on_first_turn(
+    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+):
+    manager = AgentsManager(mock_settings)
+    manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
+    starter_items = [
+        MagicMock(
+            id=1,
+            category="personal_info",
+            key="goal",
+            content="Practice",
+            status="active",
+            priority=None,
+            created_at=MagicMock(isoformat=lambda: "2026-02-11T00:00:00+00:00"),
+            updated_at=MagicMock(isoformat=lambda: "2026-02-11T00:00:00+00:00"),
+            status_changed_at=None,
+        )
+    ]
+    mock_memory_item_service.list_start_student_info_items.return_value = starter_items
+
+    _plan, _pre_results, starter_memory, _recent = await manager.prepare_pre_turn(
+        message="Hello",
+        chat_id="chat-1",
+        history=[],
+        user=mock_user,
+        memory_item_service=mock_memory_item_service,
+        side_effect_service=mock_side_effect_service,
+    )
+
+    mock_memory_item_service.list_start_student_info_items.assert_awaited_once_with(
+        mock_user.id,
+        personal_limit=manager.STARTER_MEMORY_PERSONAL_LIMIT,
+        area_limit=manager.STARTER_MEMORY_AREA_LIMIT,
+        knowledge_limit=manager.STARTER_MEMORY_KNOWLEDGE_LIMIT,
+    )
+    assert "<memory_items_json>" in starter_memory
+
+
+@pytest.mark.anyio
+async def test_prepare_pre_turn_skips_starter_memory_with_history(
+    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+):
+    manager = AgentsManager(mock_settings)
+    manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
+
+    _plan, _pre_results, starter_memory, _recent = await manager.prepare_pre_turn(
+        message="Hello",
+        chat_id="chat-1",
+        history=[ChatMessage(role="user", content="prev")],
+        user=mock_user,
+        memory_item_service=mock_memory_item_service,
+        side_effect_service=mock_side_effect_service,
+    )
+
+    mock_memory_item_service.list_start_student_info_items.assert_not_called()
+    assert starter_memory == ""
 
 
 # ---------------------------------------------------------------------------
