@@ -129,7 +129,7 @@ class MemoryKeeperSpecialist(BaseSpecialist):
             context_schema=AgentContext,
         )
 
-    async def run(self, context) -> SpecialistResult:
+    async def run(self, context: SpecialistContext) -> SpecialistResult:
         payload = {
             "message": context.message,
             "history": [msg.model_dump(mode="json") for msg in context.history],
