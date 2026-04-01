@@ -18,6 +18,7 @@ from runestone.api.memory_item_schemas import (
     MemorySortBy,
     SortDirection,
 )
+from runestone.constants import MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY
 from runestone.core.exceptions import PermissionDeniedError, UserNotFoundError
 from runestone.core.logging_config import get_logger
 from runestone.db.memory_item_repository import MemoryItemRepository
@@ -32,7 +33,6 @@ class MemoryItemService:
     # Re-exported for local use; the canonical definitions live in memory_item_schemas.
     DEFAULT_STATUS = DEFAULT_STATUS_BY_CATEGORY
     VALID_STATUSES = VALID_STATUSES_BY_CATEGORY
-    DEFAULT_AREA_TO_IMPROVE_PRIORITY = 9
 
     def __init__(self, memory_item_repository: MemoryItemRepository):
         """Initialize service with memory item repository."""
@@ -171,7 +171,7 @@ class MemoryItemService:
             # Create new item
             create_priority = priority
             if category == MemoryCategory.AREA_TO_IMPROVE and create_priority is None:
-                create_priority = self.DEFAULT_AREA_TO_IMPROVE_PRIORITY
+                create_priority = MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY
             new_item = MemoryItem(
                 user_id=user_id,
                 category=category.value,
@@ -252,7 +252,7 @@ class MemoryItemService:
             raise ValueError("priority is only applicable to category 'area_to_improve'")
 
         if priority is None:
-            priority = self.DEFAULT_AREA_TO_IMPROVE_PRIORITY
+            priority = MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY
 
         if not (0 <= priority <= 9):
             raise ValueError(f"priority must be between 0 and 9, got {priority}")

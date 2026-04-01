@@ -4,9 +4,8 @@ from typing import Optional
 from sqlalchemy import and_, case, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from runestone.constants import MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY
 from runestone.db.models import MemoryItem
-
-DEFAULT_AREA_TO_IMPROVE_PRIORITY = 9
 
 
 class MemoryItemRepository:
@@ -128,7 +127,7 @@ class MemoryItemRepository:
                         case(
                             (
                                 MemoryItem.category == "area_to_improve",
-                                func.coalesce(MemoryItem.priority, DEFAULT_AREA_TO_IMPROVE_PRIORITY),
+                                func.coalesce(MemoryItem.priority, MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY),
                             ),
                             else_=99,
                         ).asc(),
@@ -162,7 +161,7 @@ class MemoryItemRepository:
                 case(
                     (
                         ranked.c.bucket == "area_to_improve",
-                        func.coalesce(MemoryItem.priority, DEFAULT_AREA_TO_IMPROVE_PRIORITY),
+                        func.coalesce(MemoryItem.priority, MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY),
                     ),
                     else_=99,
                 ).asc(),
