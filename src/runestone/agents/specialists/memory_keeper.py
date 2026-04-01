@@ -11,7 +11,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import ValidationError
 
 from runestone.agents.llm import build_chat_model
-from runestone.agents.specialists.base import BaseSpecialist, SpecialistResult
+from runestone.agents.specialists.base import BaseSpecialist, SpecialistContext, SpecialistResult
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.memory import (
     delete_memory_item,

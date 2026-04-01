@@ -70,11 +70,24 @@ def test_build_agent(mock_settings, mock_chat_model):
             call_kwargs = mock_create_agent.call_args[1]
             assert call_kwargs["model"] == mock_chat_model
             tools = mock_create_agent.call_args[1]["tools"]
-            assert len(tools) == 10
+            assert len(tools) == 5
             assert all(getattr(tool, "name", None) != "prioritize_words_for_learning" for tool in tools)
             assert all(getattr(tool, "name", None) != "start_student_info" for tool in tools)
+            assert all(
+                getattr(tool, "name", None)
+                not in {
+                    "upsert_memory_item",
+                    "update_memory_status",
+                    "update_memory_priority",
+                    "promote_to_strength",
+                    "delete_memory_item",
+                }
+                for tool in tools
+            )
             assert "MEMORY PROTOCOL" in call_kwargs["system_prompt"]
-            assert "TOOL TRUTHFULNESS (MANDATORY)" in call_kwargs["system_prompt"]
+            assert "TOOL TRUTHFULNESS (MANDATORY)" not in call_kwargs["system_prompt"]
+            assert "Memory Writes" in call_kwargs["system_prompt"]
+            assert "read-only in this phase" in call_kwargs["system_prompt"]
             assert "only say words were definitely saved" in call_kwargs["system_prompt"].lower()
             assert "WORDKEEPER SPECIALIST" in call_kwargs["system_prompt"]
             assert "The key words here are" in call_kwargs["system_prompt"]
