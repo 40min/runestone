@@ -3,7 +3,13 @@ from typing import Optional
 
 import pytest
 
-from runestone.api.memory_item_schemas import AreaToImproveStatus, MemoryCategory, PersonalInfoStatus
+from runestone.api.memory_item_schemas import (
+    AreaToImproveStatus,
+    MemoryCategory,
+    MemorySortBy,
+    PersonalInfoStatus,
+    SortDirection,
+)
 from runestone.core.exceptions import PermissionDeniedError
 from runestone.db.memory_item_repository import MemoryItemRepository
 from runestone.db.models import MemoryItem
@@ -47,6 +53,98 @@ async def test_priority_ordering_area_to_improve(db_with_test_user):
     keys = [i.key for i in items]
     # Prioritised items first (ascending), NULLs last
     assert keys == ["p1", "p3", "p5", "null_prio"]
+
+
+async def test_priority_ordering_area_to_improve_desc(db_with_test_user):
+    db, user = db_with_test_user
+    db.add_all(
+        [
+            _area_item(user.id, "p5", priority=5),
+            _area_item(user.id, "p1", priority=1),
+            _area_item(user.id, "null_prio", priority=None),
+            _area_item(user.id, "p3", priority=3),
+        ]
+    )
+    await db.commit()
+
+    repo = MemoryItemRepository(db)
+    items = await repo.list_items(user.id, category="area_to_improve", sort_by="priority", sort_direction="desc")
+    keys = [i.key for i in items]
+    # Descending by coalesced priority (NULL -> 9) keeps missing priority as lowest urgency.
+    assert keys == ["null_prio", "p5", "p3", "p1"]
+
+
+async def test_updated_at_ordering_asc(db_with_test_user):
+    db, user = db_with_test_user
+    base = datetime(2026, 3, 10, tzinfo=timezone.utc)
+    db.add_all(
+        [
+            MemoryItem(
+                user_id=user.id,
+                category=MemoryCategory.PERSONAL_INFO.value,
+                key="newer",
+                content="newer",
+                status=PersonalInfoStatus.ACTIVE.value,
+                updated_at=base.replace(minute=10),
+            ),
+            MemoryItem(
+                user_id=user.id,
+                category=MemoryCategory.PERSONAL_INFO.value,
+                key="older",
+                content="older",
+                status=PersonalInfoStatus.ACTIVE.value,
+                updated_at=base.replace(minute=1),
+            ),
+        ]
+    )
+    await db.commit()
+
+    repo = MemoryItemRepository(db)
+    items = await repo.list_items(user.id, category="personal_info", sort_by="updated_at", sort_direction="asc")
+    assert [i.key for i in items] == ["older", "newer"]
+
+
+async def test_updated_at_ordering_desc(db_with_test_user):
+    db, user = db_with_test_user
+    base = datetime(2026, 3, 10, tzinfo=timezone.utc)
+    db.add_all(
+        [
+            MemoryItem(
+                user_id=user.id,
+                category=MemoryCategory.KNOWLEDGE_STRENGTH.value,
+                key="older",
+                content="older",
+                status="active",
+                updated_at=base.replace(minute=1),
+            ),
+            MemoryItem(
+                user_id=user.id,
+                category=MemoryCategory.KNOWLEDGE_STRENGTH.value,
+                key="newer",
+                content="newer",
+                status="active",
+                updated_at=base.replace(minute=10),
+            ),
+        ]
+    )
+    await db.commit()
+
+    repo = MemoryItemRepository(db)
+    items = await repo.list_items(user.id, category="knowledge_strength", sort_by="updated_at", sort_direction="desc")
+    assert [i.key for i in items] == ["newer", "older"]
+
+
+async def test_service_rejects_priority_sort_for_non_area_category(db_with_test_user):
+    db, user = db_with_test_user
+    service = _service(db)
+
+    with pytest.raises(ValueError, match="priority sorting is only supported"):
+        await service.list_memory_items(
+            user_id=user.id,
+            category=MemoryCategory.PERSONAL_INFO,
+            sort_by=MemorySortBy.PRIORITY,
+            sort_direction=SortDirection.ASC,
+        )
 
 
 # ---------------------------------------------------------------------------

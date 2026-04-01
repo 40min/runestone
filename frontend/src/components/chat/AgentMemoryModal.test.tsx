@@ -40,7 +40,7 @@ describe('AgentMemoryModal', () => {
 
   it('fetches items on mount when open', () => {
     render(<AgentMemoryModal open={true} onClose={() => {}} />);
-    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledWith('personal_info', undefined, true);
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledWith('personal_info', undefined, true, 'updated_at', 'desc');
   });
 
   it('changes category when tab is clicked', () => {
@@ -49,7 +49,44 @@ describe('AgentMemoryModal', () => {
     const areasTab = screen.getByText('Areas to Improve');
     fireEvent.click(areasTab);
 
-    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledWith('area_to_improve', undefined, true);
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledWith('area_to_improve', undefined, true, 'updated_at', 'desc');
+  });
+
+  it('keeps updated_at desc default on Areas to Improve tab', () => {
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+    fireEvent.click(screen.getByText('Areas to Improve'));
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenLastCalledWith('area_to_improve', undefined, true, 'updated_at', 'desc');
+  });
+
+  it('allows selecting Priority + Ascending sort on Areas to Improve tab', () => {
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+    fireEvent.click(screen.getByText('Areas to Improve'));
+
+    const sortBySelect = document.querySelector('[aria-labelledby="sort-by-label"]') as HTMLElement;
+    fireEvent.mouseDown(sortBySelect);
+    fireEvent.click(screen.getByText('Priority'));
+
+    const directionSelect = document.querySelector('[aria-labelledby="sort-direction-label"]') as HTMLElement;
+    fireEvent.mouseDown(directionSelect);
+    fireEvent.click(screen.getByText('Ascending'));
+
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenLastCalledWith('area_to_improve', undefined, true, 'priority', 'asc');
+  });
+
+  it('resets sort to updated_at desc and hides Priority option when leaving Areas to Improve', () => {
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+    fireEvent.click(screen.getByText('Areas to Improve'));
+
+    const sortBySelect = document.querySelector('[aria-labelledby="sort-by-label"]') as HTMLElement;
+    fireEvent.mouseDown(sortBySelect);
+    fireEvent.click(screen.getByText('Priority'));
+
+    fireEvent.click(screen.getByText('Personal Info'));
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenLastCalledWith('personal_info', undefined, true, 'updated_at', 'desc');
+
+    const personalSortBySelect = document.querySelector('[aria-labelledby="sort-by-label"]') as HTMLElement;
+    fireEvent.mouseDown(personalSortBySelect);
+    expect(screen.queryByText('Priority')).not.toBeInTheDocument();
   });
 
   it('opens add form when "Add Item" is clicked', () => {

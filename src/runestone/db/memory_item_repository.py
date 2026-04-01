@@ -49,6 +49,8 @@ class MemoryItemRepository:
         status: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
+        sort_by: Optional[str] = None,
+        sort_direction: str = "desc",
     ) -> list[MemoryItem]:
         """
         List memory items with optional filters.
@@ -59,6 +61,8 @@ class MemoryItemRepository:
             status: Optional status filter
             limit: Maximum number of items to return
             offset: Number of items to skip
+            sort_by: Optional explicit sort field (`updated_at` or `priority`)
+            sort_direction: Optional sort direction (`asc` or `desc`)
 
         Returns:
             List of MemoryItem objects
@@ -71,10 +75,20 @@ class MemoryItemRepository:
         if status:
             stmt = stmt.filter(MemoryItem.status == status)
 
-        if category == "area_to_improve":
-            stmt = stmt.order_by(MemoryItem.priority.asc().nulls_last(), MemoryItem.updated_at.desc())
+        direction_desc = sort_direction == "desc"
+        if sort_by == "priority":
+            priority_expr = func.coalesce(MemoryItem.priority, 9)
+            priority_order = priority_expr.desc() if direction_desc else priority_expr.asc()
+            stmt = stmt.order_by(priority_order, MemoryItem.updated_at.desc(), MemoryItem.id.asc())
+        elif sort_by == "updated_at":
+            updated_order = MemoryItem.updated_at.desc() if direction_desc else MemoryItem.updated_at.asc()
+            stmt = stmt.order_by(updated_order, MemoryItem.id.asc())
+        elif category == "area_to_improve":
+            stmt = stmt.order_by(
+                MemoryItem.priority.asc().nulls_last(), MemoryItem.updated_at.desc(), MemoryItem.id.asc()
+            )
         else:
-            stmt = stmt.order_by(MemoryItem.updated_at.desc())
+            stmt = stmt.order_by(MemoryItem.updated_at.desc(), MemoryItem.id.asc())
 
         stmt = stmt.limit(limit).offset(offset)
         result = await self.db.execute(stmt)

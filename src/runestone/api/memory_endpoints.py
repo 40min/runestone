@@ -14,6 +14,8 @@ from runestone.api.memory_item_schemas import (
     MemoryItemPriorityUpdate,
     MemoryItemResponse,
     MemoryItemStatusUpdate,
+    MemorySortBy,
+    SortDirection,
 )
 from runestone.auth.dependencies import get_current_user
 from runestone.core.exceptions import PermissionDeniedError, UserNotFoundError
@@ -39,6 +41,8 @@ async def list_memory_items(
     service: Annotated[MemoryItemService, Depends(get_memory_item_service)],
     category: Optional[MemoryCategory] = Query(None, description="Filter by category"),
     status: Optional[str] = Query(None, description="Filter by status"),
+    sort_by: Optional[MemorySortBy] = Query(None, description="Sort field (updated_at or priority)"),
+    sort_direction: SortDirection = Query(SortDirection.DESC, description="Sort direction (asc or desc)"),
     limit: int = Query(100, ge=1, le=200, description="Number of items to return"),
     offset: int = Query(0, ge=0, description="Number of items to skip"),
 ) -> list[MemoryItemResponse]:
@@ -48,7 +52,17 @@ async def list_memory_items(
     Supports infinite scroll with limit/offset pagination.
     """
     try:
-        return await service.list_memory_items(current_user.id, category, status, limit, offset)
+        return await service.list_memory_items(
+            current_user.id,
+            category,
+            status,
+            sort_by=sort_by,
+            sort_direction=sort_direction,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to list memory items for user {current_user.id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve memory items")
