@@ -17,6 +17,7 @@ from runestone.agents.coordinator import CoordinatorAgent
 from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem, TeacherSideEffect
 from runestone.agents.service_providers import provide_agent_side_effect_service
 from runestone.agents.specialists.base import SpecialistContext
+from runestone.agents.specialists.memory_keeper import MemoryKeeperSpecialist
 from runestone.agents.specialists.registry import SpecialistRegistry
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.agents.specialists.word_keeper import WordKeeperSpecialist
@@ -64,9 +65,7 @@ class AgentsManager:
             grammar_service=grammar_service,
         )
         self.registry = SpecialistRegistry()
-        # todo: enable memory reader after we finish memory tools
-        # migrations to agents
-        # self.registry.register(MemoryReaderSpecialist())
+        self.registry.register(MemoryKeeperSpecialist(settings))
         self.registry.register(WordKeeperSpecialist(settings))
 
         self._post_task_registry = BackgroundTaskRegistry(logger=logger, key_name="chat_id")

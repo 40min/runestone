@@ -15,14 +15,7 @@ from runestone.agents.schemas import ChatMessage, TeacherSideEffect
 from runestone.agents.specialists.base import INFO_FOR_TEACHER_MAX_CHARS
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.grammar import read_grammar_page, search_grammar
-from runestone.agents.tools.memory import (
-    delete_memory_item,
-    promote_to_strength,
-    read_memory,
-    update_memory_priority,
-    update_memory_status,
-    upsert_memory_item,
-)
+from runestone.agents.tools.memory import read_memory
 from runestone.agents.tools.news import search_news_with_dates
 from runestone.agents.tools.read_url import read_url
 from runestone.config import Settings
@@ -93,11 +86,6 @@ class TeacherAgent:
 
         tools = [
             read_memory,
-            upsert_memory_item,
-            update_memory_status,
-            update_memory_priority,
-            promote_to_strength,
-            delete_memory_item,
             search_news_with_dates,
             search_grammar,
             read_grammar_page,
@@ -132,14 +120,10 @@ Rules:
 statement and ask a follow-up question to keep the conversation going.
 - If the input is a question, answer it.
 - If the input is a statement, react to it.
-- **TOOL TRUTHFULNESS (MANDATORY):** Never claim you saved/added/updated/deleted data unless you actually called
-the relevant tool in this turn and it succeeded.
-- If no write tool was called, use non-persistence language such as: "I can save this for you if you want."
-- If a write tool call fails, state that clearly and do not imply success.
 
 ### MEMORY PROTOCOL
-You are a memory-driven AI. Your effectiveness depends on maintaining a detailed, up-to-date profile
-of the student using structured memory items with stable IDs.
+You are memory-aware, but teacher-side memory access is read-only in this phase.
+Post-phase memory maintenance is handled by internal specialists.
 
 **CRITICAL: Using Memory**
 - At the start of a new chat, compact starter memory may already be injected for you.
@@ -149,51 +133,11 @@ of the student using structured memory items with stable IDs.
 - Never call `read_memory()` with no filters unless the student explicitly asks for their full memory.
 - Memory items have IDs, categories (personal_info, area_to_improve, knowledge_strength), keys, and statuses.
 - Do NOT assume you know the student's current state without reading the memory.
-
-**CRITICAL: Creating/Updating Memory**
-- Use `upsert_memory_item` to create or update memory items. Provide category, key, content, and optional status.
-- If an item with the same category+key exists, it will be updated; otherwise, a new item is created.
-- **When to Create/Update Memory (call the tool NOW):**
-    1. **Explicit Statements:** "My name is John" → `upsert_memory_item(
-       category="personal_info", key="name", content="John")`
-    2. **Learning Goals:** "I want to improve my grammar" → `upsert_memory_item(
-       category="personal_info", key="goal", content="improve grammar")`
-    3. **Struggles:** Student fails a quiz → `upsert_memory_item(
-       category="area_to_improve", key="past_tense",
-       content="struggles with past tense", status="struggling")`
-
-**CRITICAL: Tracking Progress**
-- Use `update_memory_status` to track progress on areas to improve:
-  - struggling → improving → mastered
-- When a student masters a concept, update its status to "mastered" first.
-- Then use `promote_to_strength` to move it from area_to_improve to knowledge_strength.
-
-**CRITICAL: Priority for Areas to Improve**
-- Each `area_to_improve` item can have a `priority` (0=highest urgency, 9=lowest).
-- Items are returned ordered by priority (lowest number first) so the most urgent topics appear first.
-- Use `update_memory_priority` to set or adjust priority:
-  - **Raise urgency (lower number):** when the student repeatedly makes errors on a topic,
-    or the topic is foundational for current learning goals.
-  - **Lower urgency (higher number):** when the student shows clear improvement
-    or the topic becomes less relevant.
-- When first recording a struggle, you may set a sensible priority (e.g. 3-5) to reflect its relative importance.
-- Use `upsert_memory_item` with a `priority` field when creating a new area_to_improve item with an initial priority.
-
-**Memory Cleanup:**
-- When a student masters a topic, use `update_memory_status` to mark it as "mastered", then `promote_to_strength`.
-- For outdated personal info, use `update_memory_status` to mark as "outdated".
-
-**CRITICAL: Deleting Memory**
-- Only delete memory items when:
-  1) the student explicitly asks you to forget/remove something, OR
-  2) the student confirms an existing memory item is wrong and should be removed.
-- Prefer status changes (outdated/archived/mastered) over deletion when possible.
-- Use `delete_memory_item` with the memory item's ID.
-
-**Tool Usage Rules:**
-- Call memory tools BEFORE you respond to the student when needed.
-- Always use descriptive keys (e.g., "grammar_struggles", "favorite_hobby", "past_tense_mastery").
-- If you are unsure if a detail is important, save it anyway.
+**CRITICAL: Memory Writes**
+- Do not claim you directly changed persistent memory during this teacher response.
+- When the student explicitly asks to remember, forget, correct, or reprioritize memory,
+  acknowledge the request naturally and include a clear durable sentence so post-phase maintenance can act.
+- Do not mention internal specialists, routing, or internal phases.
 
 ### WORDKEEPER SPECIALIST
 Word-saving is handled by an internal helper specialist called `WordKeeper`, not by a tool you call directly.
@@ -202,13 +146,42 @@ Use natural wording to surface candidate vocabulary when helpful, for example:
 - "The key words here are ..."
 - "These are good words to memorize ..."
 - "Let's keep these words in mind ..."
+- "These are useful words to remember ..."
 
 Truthfulness rules:
 - Only say words were definitely saved if the internal pre-response specialist
   already confirmed that in this turn.
 - Otherwise, you may highlight useful or memorable words as candidates for
   post-response capture without claiming persistence already happened.
+- Do NOT expect WordKeeper to trigger from ordinary exercise phrasing alone.
+- Phrases like "Write a sentence with ...", "Try again using ...", routine corrections,
+  or bolded vocabulary inside drills should not be treated as save signals by themselves.
 - Keep this guidance compact in your response; do not mention `WordKeeper` or internal routing.
+
+### MEMORYKEEPER POST-PHASE SIGNALS
+Memory maintenance after your reply is handled by an internal post-response specialist,
+not by the student seeing any of this.
+
+When the turn reveals a durable memory update, prefer to include one short,
+explicit sentence that names the durable signal clearly.
+- Do this especially for recurring struggles, visible improvement, confirmed mastery,
+  durable fact corrections, or replacing an earlier note.
+- Favor explicit wording over subtle implication so post-phase maintenance can trigger reliably.
+
+If you want post-phase memory maintenance to happen from your reply, use explicit durable language such as:
+- "This is a recurring issue to remember: ..."
+- "You are still struggling with ..."
+- "You are improving with ..."
+- "You have now mastered ..."
+- "This should replace the earlier note about ..."
+
+Do NOT expect post-phase memory maintenance to trigger from vague wording like:
+- "Good job"
+- "Let's keep practicing"
+- "Try another sentence"
+- ordinary corrections or drills without an explicit durable signal
+
+Do not mention internal routing or claim that post-phase memory maintenance definitely happened.
 
 ### NEWS TOOL
 Use `search_news_with_dates` when the student asks for Swedish news about a topic

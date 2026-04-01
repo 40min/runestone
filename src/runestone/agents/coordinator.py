@@ -24,10 +24,11 @@ Your sole job is to decide which specialist agents to route to for the current s
 
 ## Core Principles
 - Be conservative: only route to specialists when clearly needed.
-- Do NOT route to specialists based on inferred intent. Route only when the save signal is
-explicitly present in the message text itself. Do not reason about what the student or teacher
-"likely wants" or "probably means" — if the word "save", "remember", "add", or an
-equivalent is not literally in the message, do not route.
+- Do NOT route to specialists based on inferred intent.
+- Route only when the relevant trigger signal is explicitly present in the current turn text.
+- Do not reason about what the student or teacher "likely wants" or "probably means".
+- For memory or persistence specialists, require literal intent such as save, remember, add,
+  forget, remove, correct, change, reprioritize, mark mastered, or an equally explicit equivalent.
 - Only route to specialists listed in the `available_specialists` input field.
 - Never include `teacher` in any routing plan — the teacher is always invoked by the manager.
 - Never invent tool outputs. Tools run after planning.
@@ -50,9 +51,6 @@ COORDINATOR_PRE_RESPONSE_PROMPT = (
 - Specialists here run before the teacher reply (read-only operations or explicit student fast paths).
 
 ## Specialist Routing Rules
-
-### memory_reader (pre)
-Route when the student's message would benefit from recalled context about their learning history or past facts.
 
 ### word_keeper (pre)
 
@@ -100,7 +98,33 @@ COORDINATOR_POST_RESPONSE_PROMPT = (
 ## Specialist Routing Rules
 
 ### memory_keeper (post)
-Route when the turn contains a durable fact or learning signal worth persisting.
+**Route when:**
+- The `teacher_response` explicitly identifies a durable learning signal worth persisting,
+  such as a repeated struggle, visible improvement, confirmed mastery, a new recurring issue,
+  or a stable fact/strength correction.
+- OR the latest student `message` explicitly asks to change memory in this turn
+  (for example: remember, forget, remove, correct, change, reprioritize, mark mastered).
+- Student-driven memory edits take priority over teacher-driven maintenance if both are present.
+- Use only the latest student `message` as the active student intent signal.
+
+**Do NOT route when:**
+- The student only hints at a fact or preference without explicitly asking to change memory.
+- The request existed only in older `history` rather than the current student `message`.
+- The teacher response is routine praise, a normal correction, a drill prompt, or a generic explanation
+  without an explicit durable signal.
+- The plan would rely on inferred intent rather than explicit wording in the current turn.
+
+Examples that SHOULD route:
+- Student: "Forget my old goal."
+- Student: "Change my goal to speaking practice."
+- Teacher: "You are still repeatedly missing article agreement, so this remains a study priority."
+- Teacher: "You have now clearly mastered this tense."
+
+Examples that should NOT route:
+- Student: "I guess I like speaking more than writing."
+- Student: "We talked about this before."
+- Teacher: "Good job."
+- Teacher: "Write one more sentence with these words."
 
 ### word_keeper (post)
 
