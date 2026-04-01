@@ -78,6 +78,17 @@ def test_word_keeper_prompt_eligibility():
     assert "For all normal word_keeper cases, set `chat_history_size` to `2`." in COORDINATOR_POST_RESPONSE_PROMPT
 
 
+def test_memory_reader_is_absent_from_pre_prompt():
+    assert "### memory_reader (pre)" not in COORDINATOR_PRE_RESPONSE_PROMPT
+
+
+def test_memory_keeper_prompt_mentions_student_driven_memory_requests():
+    assert "latest student `message` explicitly asks to change memory" in COORDINATOR_POST_RESPONSE_PROMPT
+    assert "older `history`" in COORDINATOR_POST_RESPONSE_PROMPT
+    assert 'Student: "Forget my old goal."' in COORDINATOR_POST_RESPONSE_PROMPT
+    assert 'Teacher: "You have now clearly mastered this tense."' in COORDINATOR_POST_RESPONSE_PROMPT
+
+
 def test_news_prompt_requires_known_topic():
     assert "**Route when:** The student's current message names a clear, specific topic" in (
         COORDINATOR_PRE_RESPONSE_PROMPT
@@ -121,7 +132,7 @@ def test_word_keeper_prompt_limits_pre_stage_to_explicit_save_requests():
 async def test_plan_success(coordinator_agent, mock_chat_model):
     """Test successful plan generation."""
     raw_plan = CoordinatorPlan(
-        pre_response=[RoutingItem(name="memory_reader", reason="Test", chat_history_size=2)],
+        pre_response=[RoutingItem(name="word_keeper", reason="Test", chat_history_size=2)],
         post_response=[RoutingItem(name="memory_keeper", reason="Test", chat_history_size=2)],
         audit={"trace": "ok"},
     )
@@ -133,11 +144,11 @@ async def test_plan_success(coordinator_agent, mock_chat_model):
         message="I am John",
         history=history,
         current_stage="pre_response",
-        available_specialists=["memory_reader", "memory_keeper"],
+        available_specialists=["word_keeper", "memory_keeper"],
     )
 
     assert plan == CoordinatorPlan(
-        pre_response=[RoutingItem(name="memory_reader", reason="Test", chat_history_size=2)],
+        pre_response=[RoutingItem(name="word_keeper", reason="Test", chat_history_size=2)],
         post_response=[],
         audit={"trace": "ok"},
     )
@@ -152,13 +163,13 @@ async def test_plan_success(coordinator_agent, mock_chat_model):
     assert payload["history"][0]["content"] == "Hello"
     assert payload["current_stage"] == "pre_response"
     assert payload["teacher_response"] is None
-    assert payload["available_specialists"] == ["memory_reader", "memory_keeper"]
+    assert payload["available_specialists"] == ["word_keeper", "memory_keeper"]
 
 
 @pytest.mark.anyio
 async def test_plan_pre_turn_only_returns_pre_items(coordinator_agent, mock_chat_model):
     expected_plan = CoordinatorPlan(
-        pre_response=[RoutingItem(name="memory_reader", reason="Test", chat_history_size=2)],
+        pre_response=[RoutingItem(name="word_keeper", reason="Test", chat_history_size=2)],
         post_response=[RoutingItem(name="word_keeper", reason="Should be dropped", chat_history_size=2)],
         audit={"trace": "ok"},
     )
@@ -168,18 +179,18 @@ async def test_plan_pre_turn_only_returns_pre_items(coordinator_agent, mock_chat
     plan = await coordinator_agent.plan_pre_turn(
         message="I am John",
         history=[],
-        available_specialists=["memory_reader", "word_keeper"],
+        available_specialists=["word_keeper"],
     )
 
-    assert [item.name for item in plan.pre_response] == ["memory_reader"]
+    assert [item.name for item in plan.pre_response] == ["word_keeper"]
     assert plan.post_response == []
 
 
 @pytest.mark.anyio
 async def test_plan_post_turn_only_returns_post_items_and_passes_teacher_response(coordinator_agent, mock_chat_model):
     expected_plan = CoordinatorPlan(
-        pre_response=[RoutingItem(name="memory_reader", reason="Should be dropped", chat_history_size=2)],
-        post_response=[RoutingItem(name="word_keeper", reason="Teacher highlighted words", chat_history_size=2)],
+        pre_response=[RoutingItem(name="word_keeper", reason="Should be dropped", chat_history_size=2)],
+        post_response=[RoutingItem(name="memory_keeper", reason="Teacher confirmed mastery", chat_history_size=2)],
         audit={"trace": "ok"},
     )
     mock_llm = mock_chat_model.with_structured_output.return_value
@@ -189,11 +200,11 @@ async def test_plan_post_turn_only_returns_post_items_and_passes_teacher_respons
         message="What does hejda mean?",
         history=[],
         teacher_response="Useful words to remember: hejda",
-        available_specialists=["word_keeper"],
+        available_specialists=["word_keeper", "memory_keeper"],
     )
 
     assert plan.pre_response == []
-    assert [item.name for item in plan.post_response] == ["word_keeper"]
+    assert [item.name for item in plan.post_response] == ["memory_keeper"]
 
     call_args = mock_llm.ainvoke.call_args[0][0]
     assert call_args[0].content == COORDINATOR_POST_RESPONSE_PROMPT
@@ -252,7 +263,7 @@ async def test_plan_output_parser_exception(coordinator_agent, mock_chat_model):
         message="msg",
         history=[],
         current_stage="pre_response",
-        available_specialists=["memory_reader"],
+        available_specialists=["word_keeper"],
     )
 
     assert plan.pre_response == []
@@ -270,10 +281,31 @@ async def test_plan_generic_exception(coordinator_agent, mock_chat_model):
         message="msg",
         history=[],
         current_stage="pre_response",
-        available_specialists=["memory_reader"],
+        available_specialists=["word_keeper"],
     )
 
     assert plan.pre_response == []
     assert plan.post_response == []
     assert plan.audit["error"] == "generic_error"
     assert "Network error" in plan.audit["details"]
+
+
+@pytest.mark.anyio
+async def test_plan_post_turn_passes_student_message_for_memory_change_request(coordinator_agent, mock_chat_model):
+    mock_llm = mock_chat_model.with_structured_output.return_value
+    mock_llm.ainvoke.return_value = CoordinatorPlan(
+        pre_response=[],
+        post_response=[RoutingItem(name="memory_keeper", reason="Student asked to forget memory", chat_history_size=2)],
+        audit={"trace": "ok"},
+    )
+
+    await coordinator_agent.plan_post_turn(
+        message="Forget my old goal.",
+        history=[ChatMessage(role="user", content="Earlier memory request")],
+        teacher_response="Let's continue with another exercise.",
+        available_specialists=["memory_keeper"],
+    )
+
+    payload = json.loads(mock_llm.ainvoke.call_args[0][0][1].content)
+    assert payload["message"] == "Forget my old goal."
+    assert payload["teacher_response"] == "Let's continue with another exercise."

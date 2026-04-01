@@ -99,6 +99,11 @@ class Settings(BaseSettings):
     word_keeper_temperature: float = 0.0
     word_keeper_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
 
+    memory_keeper_provider: Optional[Literal["openrouter", "openai"]] = None
+    memory_keeper_model: Optional[str] = None
+    memory_keeper_temperature: float = 0.0
+    memory_keeper_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
+
     agent_persona: str = "default"
 
     # Chat History Configuration
@@ -125,9 +130,15 @@ class Settings(BaseSettings):
             self.word_keeper_provider = self.teacher_provider
         if self.word_keeper_model is None:
             self.word_keeper_model = self.teacher_model
+        if self.memory_keeper_provider is None:
+            self.memory_keeper_provider = self.teacher_provider
+        if self.memory_keeper_model is None:
+            self.memory_keeper_model = self.teacher_model
         return self
 
-    def get_agent_llm_settings(self, agent_name: Literal["teacher", "coordinator", "word_keeper"]) -> AgentLLMSettings:
+    def get_agent_llm_settings(
+        self, agent_name: Literal["teacher", "coordinator", "word_keeper", "memory_keeper"]
+    ) -> AgentLLMSettings:
         """Return resolved model settings for the requested agent."""
         if agent_name == "teacher":
             return AgentLLMSettings(
@@ -151,6 +162,14 @@ class Settings(BaseSettings):
                 model=self.word_keeper_model,
                 temperature=self.word_keeper_temperature,
                 reasoning_level=self.word_keeper_reasoning_level,
+            )
+
+        if agent_name == "memory_keeper":
+            return AgentLLMSettings(
+                provider=self.memory_keeper_provider,
+                model=self.memory_keeper_model,
+                temperature=self.memory_keeper_temperature,
+                reasoning_level=self.memory_keeper_reasoning_level,
             )
 
         raise ValueError(f"Unsupported agent name: {agent_name}")

@@ -25,6 +25,8 @@ def mock_settings():
     settings.coordinator_provider = "openrouter"
     settings.word_keeper_provider = "openrouter"
     settings.word_keeper_model = "test-model"
+    settings.memory_keeper_provider = "openrouter"
+    settings.memory_keeper_model = "test-model"
     settings.agent_persona = "default"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
@@ -43,6 +45,12 @@ def mock_settings():
             reasoning_level=ReasoningLevel.NONE,
         ),
         "word_keeper": AgentLLMSettings(
+            provider="openrouter",
+            model="test-model",
+            temperature=0.0,
+            reasoning_level=ReasoningLevel.NONE,
+        ),
+        "memory_keeper": AgentLLMSettings(
             provider="openrouter",
             model="test-model",
             temperature=0.0,
@@ -940,4 +948,4 @@ def test_is_safe_url(mock_settings):
 
 def test_manager_registers_default_specialists(mock_settings):
     manager = AgentsManager(mock_settings)
-    assert manager.registry.list_names() == ["word_keeper"]
+    assert manager.registry.list_names() == ["memory_keeper", "word_keeper"]

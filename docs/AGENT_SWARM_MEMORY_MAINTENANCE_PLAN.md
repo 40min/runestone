@@ -6,7 +6,7 @@ Define the follow-up extraction for memory maintenance without moving routine me
 
 ## Accepted Design Changes
 
-### 1. Keep Memory Reading on the Teacher Side
+### 1. Keep Memory Reading on the Teacher Side (Done)
 
 `MemoryReader` is no longer the target extraction.
 
@@ -16,7 +16,7 @@ Rationale:
 - the teacher may need to inspect memory directly and intentionally during a turn
 - keeping starter-memory loading and filtered `read_memory` on the teacher side preserves flexibility
 
-### 2. Keep Starter Memory Compact
+### 2. Keep Starter Memory Compact (Done)
 
 The start-of-chat memory load should remain intentionally small:
 
@@ -96,6 +96,7 @@ For `area_to_improve`, the post-stage reviewer should be able to choose among:
 - `update_priority`
 - `update_status_and_priority`
 - `promote_to_strength`
+- `delete_memory_item`
 
 For `personal_info` and `knowledge_strength`, changes should stay conservative and mostly follow explicit facts or explicit corrections.
 

@@ -78,6 +78,11 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "only say words were definitely saved" in call_kwargs["system_prompt"].lower()
             assert "WORDKEEPER SPECIALIST" in call_kwargs["system_prompt"]
             assert "The key words here are" in call_kwargs["system_prompt"]
+            assert "Write a sentence with" in call_kwargs["system_prompt"]
+            assert "MEMORYKEEPER POST-PHASE SIGNALS" in call_kwargs["system_prompt"]
+            assert "prefer to include one short" in call_kwargs["system_prompt"]
+            assert "explicit sentence" in call_kwargs["system_prompt"]
+            assert "This is a recurring issue to remember" in call_kwargs["system_prompt"]
             assert "not by a tool you call directly" in call_kwargs["system_prompt"]
 
 
@@ -114,13 +119,13 @@ def test_format_pre_results_uses_no_info_fallback():
     formatted = TeacherAgent._format_pre_results(
         [
             {
-                "name": "memory_reader",
+                "name": "memory_keeper",
                 "result": {"status": "action_taken", "info_for_teacher": "", "artifacts": {"items": ["goal"]}},
             }
         ]
     )
 
-    assert "- memory_reader (action_taken): no info" in formatted
+    assert "- memory_keeper (action_taken): no info" in formatted
     assert "items" not in formatted
 
 
@@ -316,7 +321,7 @@ async def test_generate_response_logs_timing_metadata(teacher_agent, mock_user, 
             message="Hej",
             history=[ChatMessage(role="user", content="Tidigare")],
             user=mock_user,
-            pre_results=[{"name": "memory_reader", "result": {"status": "action_taken"}}],
+            pre_results=[{"name": "memory_keeper", "result": {"status": "action_taken"}}],
             starter_memory="starter",
             recent_side_effects=[
                 TeacherSideEffect(
