@@ -4,6 +4,7 @@ from typing import Optional
 from sqlalchemy import and_, case, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from runestone.constants import MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY
 from runestone.db.models import MemoryItem
 
 
@@ -49,6 +50,8 @@ class MemoryItemRepository:
         status: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
+        sort_by: Optional[str] = None,
+        sort_direction: str = "desc",
     ) -> list[MemoryItem]:
         """
         List memory items with optional filters.
@@ -59,6 +62,8 @@ class MemoryItemRepository:
             status: Optional status filter
             limit: Maximum number of items to return
             offset: Number of items to skip
+            sort_by: Optional explicit sort field (`updated_at` or `priority`)
+            sort_direction: Sort direction (`asc` or `desc`), defaults to `desc`
 
         Returns:
             List of MemoryItem objects
@@ -71,10 +76,19 @@ class MemoryItemRepository:
         if status:
             stmt = stmt.filter(MemoryItem.status == status)
 
-        if category == "area_to_improve":
-            stmt = stmt.order_by(MemoryItem.priority.asc().nulls_last(), MemoryItem.updated_at.desc())
+        direction_desc = sort_direction == "desc"
+        if sort_by == "priority":
+            priority_order = MemoryItem.priority.desc() if direction_desc else MemoryItem.priority.asc()
+            stmt = stmt.order_by(priority_order.nulls_last(), MemoryItem.updated_at.desc(), MemoryItem.id.asc())
+        elif sort_by == "updated_at":
+            updated_order = MemoryItem.updated_at.desc() if direction_desc else MemoryItem.updated_at.asc()
+            stmt = stmt.order_by(updated_order, MemoryItem.id.asc())
+        elif category == "area_to_improve":
+            stmt = stmt.order_by(
+                MemoryItem.priority.asc().nulls_last(), MemoryItem.updated_at.desc(), MemoryItem.id.asc()
+            )
         else:
-            stmt = stmt.order_by(MemoryItem.updated_at.desc())
+            stmt = stmt.order_by(MemoryItem.updated_at.desc(), MemoryItem.id.asc())
 
         stmt = stmt.limit(limit).offset(offset)
         result = await self.db.execute(stmt)
@@ -113,7 +127,7 @@ class MemoryItemRepository:
                         case(
                             (
                                 MemoryItem.category == "area_to_improve",
-                                func.coalesce(MemoryItem.priority, 9),
+                                func.coalesce(MemoryItem.priority, MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY),
                             ),
                             else_=99,
                         ).asc(),
@@ -147,7 +161,7 @@ class MemoryItemRepository:
                 case(
                     (
                         ranked.c.bucket == "area_to_improve",
-                        func.coalesce(MemoryItem.priority, 9),
+                        func.coalesce(MemoryItem.priority, MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY),
                     ),
                     else_=99,
                 ).asc(),

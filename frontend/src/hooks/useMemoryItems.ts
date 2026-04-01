@@ -2,6 +2,8 @@ import { useState, useCallback, useRef } from "react";
 import { useApi } from "../utils/api";
 
 export type MemoryCategory = "personal_info" | "area_to_improve" | "knowledge_strength";
+export type MemorySortBy = "updated_at" | "priority";
+export type SortDirection = "asc" | "desc";
 
 export interface MemoryItem {
   id: number;
@@ -30,11 +32,23 @@ interface UseMemoryItemsReturn {
   loading: boolean;
   error: string | null;
   hasMore: boolean;
-  fetchItems: (category?: MemoryCategory, status?: string, reset?: boolean) => Promise<void>;
+  fetchItems: (
+    category?: MemoryCategory,
+    status?: string,
+    reset?: boolean,
+    sortBy?: MemorySortBy,
+    sortDirection?: SortDirection
+  ) => Promise<void>;
   createItem: (data: MemoryItemCreate) => Promise<MemoryItem>;
   updateStatus: (id: number, status: string) => Promise<MemoryItem>;
   updatePriority: (id: number, priority: number | null) => Promise<MemoryItem>;
-  promoteItem: (id: number, category: MemoryCategory, status?: string) => Promise<MemoryItem>;
+  promoteItem: (
+    id: number,
+    category: MemoryCategory,
+    status?: string,
+    sortBy?: MemorySortBy,
+    sortDirection?: SortDirection
+  ) => Promise<MemoryItem>;
   deleteItem: (id: number) => Promise<void>;
   clearCategory: (category: MemoryCategory) => Promise<void>;
 }
@@ -50,7 +64,13 @@ const useMemoryItems = (): UseMemoryItemsReturn => {
   const LIMIT = 100;
 
   const fetchItems = useCallback(
-    async (category?: MemoryCategory, status?: string, reset = false) => {
+    async (
+      category?: MemoryCategory,
+      status?: string,
+      reset = false,
+      sortBy?: MemorySortBy,
+      sortDirection: SortDirection = "desc"
+    ) => {
       setLoading(true);
       setError(null);
 
@@ -60,6 +80,10 @@ const useMemoryItems = (): UseMemoryItemsReturn => {
         const params = new URLSearchParams();
         if (category) params.append("category", category);
         if (status) params.append("status", status);
+        if (sortBy) {
+          params.append("sort_by", sortBy);
+          params.append("sort_direction", sortDirection);
+        }
         params.append("limit", LIMIT.toString());
         params.append("offset", currentOffset.toString());
 
@@ -131,10 +155,16 @@ const useMemoryItems = (): UseMemoryItemsReturn => {
   );
 
   const promoteItem = useCallback(
-    async (id: number, category: MemoryCategory, status?: string) => {
+    async (
+      id: number,
+      category: MemoryCategory,
+      status?: string,
+      sortBy?: MemorySortBy,
+      sortDirection: SortDirection = "desc"
+    ) => {
       try {
         const promotedItem = await post<MemoryItem>(`/api/memory/${id}/promote`, {});
-        await fetchItems(category, status, true);
+        await fetchItems(category, status, true, sortBy, sortDirection);
         return promotedItem;
       } catch (err) {
         throw err instanceof Error ? err : new Error("Failed to promote item");

@@ -15,7 +15,10 @@ from runestone.api.memory_item_schemas import (
     KnowledgeStrengthStatus,
     MemoryCategory,
     MemoryItemResponse,
+    MemorySortBy,
+    SortDirection,
 )
+from runestone.constants import MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY
 from runestone.core.exceptions import PermissionDeniedError, UserNotFoundError
 from runestone.core.logging_config import get_logger
 from runestone.db.memory_item_repository import MemoryItemRepository
@@ -30,7 +33,6 @@ class MemoryItemService:
     # Re-exported for local use; the canonical definitions live in memory_item_schemas.
     DEFAULT_STATUS = DEFAULT_STATUS_BY_CATEGORY
     VALID_STATUSES = VALID_STATUSES_BY_CATEGORY
-    DEFAULT_AREA_TO_IMPROVE_PRIORITY = 9
 
     def __init__(self, memory_item_repository: MemoryItemRepository):
         """Initialize service with memory item repository."""
@@ -59,6 +61,8 @@ class MemoryItemService:
         user_id: int,
         category: Optional[MemoryCategory] = None,
         status: Optional[str] = None,
+        sort_by: Optional[MemorySortBy] = None,
+        sort_direction: SortDirection = SortDirection.DESC,
         limit: int = 100,
         offset: int = 0,
     ) -> list[MemoryItemResponse]:
@@ -69,14 +73,28 @@ class MemoryItemService:
             user_id: User ID
             category: Optional category filter
             status: Optional status filter
+            sort_by: Optional explicit sort field
+            sort_direction: Sort direction for explicit sort field
             limit: Maximum number of items (default 100 for initial load)
             offset: Number of items to skip (for infinite scroll)
 
         Returns:
             List of MemoryItemResponse objects
         """
+        if sort_by == MemorySortBy.PRIORITY and category != MemoryCategory.AREA_TO_IMPROVE:
+            raise ValueError("priority sorting is only supported for category 'area_to_improve'")
+
         category_value = category.value if category is not None else None
-        items = await self.repo.list_items(user_id, category_value, status, limit, offset)
+        sort_by_value = sort_by.value if sort_by is not None else None
+        items = await self.repo.list_items(
+            user_id,
+            category_value,
+            status,
+            limit,
+            offset,
+            sort_by=sort_by_value,
+            sort_direction=sort_direction.value,
+        )
         return [MemoryItemResponse.model_validate(item) for item in items]
 
     async def list_start_student_info_items(
@@ -153,7 +171,7 @@ class MemoryItemService:
             # Create new item
             create_priority = priority
             if category == MemoryCategory.AREA_TO_IMPROVE and create_priority is None:
-                create_priority = self.DEFAULT_AREA_TO_IMPROVE_PRIORITY
+                create_priority = MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY
             new_item = MemoryItem(
                 user_id=user_id,
                 category=category.value,
@@ -234,7 +252,7 @@ class MemoryItemService:
             raise ValueError("priority is only applicable to category 'area_to_improve'")
 
         if priority is None:
-            priority = self.DEFAULT_AREA_TO_IMPROVE_PRIORITY
+            priority = MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY
 
         if not (0 <= priority <= 9):
             raise ValueError(f"priority must be between 0 and 9, got {priority}")

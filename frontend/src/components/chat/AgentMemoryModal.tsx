@@ -32,6 +32,8 @@ import useMemoryItems, {
   type MemoryItem,
   type MemoryCategory,
   type MemoryItemCreate,
+  type MemorySortBy,
+  type SortDirection,
 } from "../../hooks/useMemoryItems";
 
 interface AgentMemoryModalProps {
@@ -122,6 +124,8 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<MemoryCategory>("personal_info");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<MemorySortBy>("updated_at");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const {
     items,
     loading,
@@ -178,9 +182,11 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
         activeTab,
         statusFilter === "all" ? undefined : statusFilter,
         true,
+        sortBy,
+        sortDirection,
       );
     }
-  }, [open, activeTab, statusFilter, fetchItems]);
+  }, [open, activeTab, statusFilter, sortBy, sortDirection, fetchItems]);
 
   useEffect(() => {
     if (!open) {
@@ -200,13 +206,17 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
         activeTab,
         statusFilter === "all" ? undefined : statusFilter,
         false,
+        sortBy,
+        sortDirection,
       );
     }
-  }, [loading, hasMore, fetchItems, activeTab, statusFilter]);
+  }, [loading, hasMore, fetchItems, activeTab, statusFilter, sortBy, sortDirection]);
 
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId as MemoryCategory);
     setStatusFilter("all");
+    setSortBy("updated_at");
+    setSortDirection("desc");
     setConfirmDeleteId(null);
     setConfirmClear(false);
     setEditingPriorityId(null);
@@ -249,6 +259,8 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
       id,
       activeTab,
       statusFilter === "all" ? undefined : statusFilter,
+      sortBy,
+      sortDirection,
     );
   };
 
@@ -356,6 +368,32 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
               >
                 <MenuItem value="all">All statuses</MenuItem>
                 {renderStatusMenuItems(activeTab)}
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{ minWidth: 170, ...textFieldStyles }}>
+              <InputLabel id="sort-by-label">Sort by</InputLabel>
+              <Select
+                labelId="sort-by-label"
+                value={sortBy}
+                label="Sort by"
+                onChange={(e) => setSortBy(e.target.value as MemorySortBy)}
+              >
+                <MenuItem value="updated_at">Last updated</MenuItem>
+                {activeTab === "area_to_improve" && <MenuItem value="priority">Priority</MenuItem>}
+              </Select>
+            </FormControl>
+
+            <FormControl size="small" sx={{ minWidth: 145, ...textFieldStyles }}>
+              <InputLabel id="sort-direction-label">Direction</InputLabel>
+              <Select
+                labelId="sort-direction-label"
+                value={sortDirection}
+                label="Direction"
+                onChange={(e) => setSortDirection(e.target.value as SortDirection)}
+              >
+                <MenuItem value="asc">Ascending</MenuItem>
+                <MenuItem value="desc">Descending</MenuItem>
               </Select>
             </FormControl>
 

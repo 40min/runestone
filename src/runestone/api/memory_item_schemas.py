@@ -19,6 +19,20 @@ class MemoryCategory(str, Enum):
     KNOWLEDGE_STRENGTH = "knowledge_strength"
 
 
+class MemorySortBy(str, Enum):
+    """Supported fields for memory item ordering."""
+
+    UPDATED_AT = "updated_at"
+    PRIORITY = "priority"
+
+
+class SortDirection(str, Enum):
+    """Sort direction for list-style API responses."""
+
+    ASC = "asc"
+    DESC = "desc"
+
+
 class PersonalInfoStatus(str, Enum):
     """Status values for personal_info category."""
 
