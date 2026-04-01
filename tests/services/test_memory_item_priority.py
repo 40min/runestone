@@ -70,8 +70,24 @@ async def test_priority_ordering_area_to_improve_desc(db_with_test_user):
     repo = MemoryItemRepository(db)
     items = await repo.list_items(user.id, category="area_to_improve", sort_by="priority", sort_direction="desc")
     keys = [i.key for i in items]
-    # Descending by coalesced priority (NULL -> 9) keeps missing priority as lowest urgency.
-    assert keys == ["null_prio", "p5", "p3", "p1"]
+    # Descending by explicit priority still keeps NULL priorities at the end.
+    assert keys == ["p5", "p3", "p1", "null_prio"]
+
+
+async def test_priority_ordering_desc_keeps_null_after_explicit_nine(db_with_test_user):
+    db, user = db_with_test_user
+    db.add_all(
+        [
+            _area_item(user.id, "p9", priority=9),
+            _area_item(user.id, "p5", priority=5),
+            _area_item(user.id, "null_prio", priority=None),
+        ]
+    )
+    await db.commit()
+
+    repo = MemoryItemRepository(db)
+    items = await repo.list_items(user.id, category="area_to_improve", sort_by="priority", sort_direction="desc")
+    assert [i.key for i in items] == ["p9", "p5", "null_prio"]
 
 
 async def test_updated_at_ordering_asc(db_with_test_user):

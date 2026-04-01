@@ -80,8 +80,10 @@ const useMemoryItems = (): UseMemoryItemsReturn => {
         const params = new URLSearchParams();
         if (category) params.append("category", category);
         if (status) params.append("status", status);
-        if (sortBy) params.append("sort_by", sortBy);
-        params.append("sort_direction", sortDirection);
+        if (sortBy) {
+          params.append("sort_by", sortBy);
+          params.append("sort_direction", sortDirection);
+        }
         params.append("limit", LIMIT.toString());
         params.append("offset", currentOffset.toString());
 

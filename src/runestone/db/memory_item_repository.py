@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from runestone.db.models import MemoryItem
 
+DEFAULT_AREA_TO_IMPROVE_PRIORITY = 9
+
 
 class MemoryItemRepository:
     """Repository for memory item-related database operations."""
@@ -62,7 +64,7 @@ class MemoryItemRepository:
             limit: Maximum number of items to return
             offset: Number of items to skip
             sort_by: Optional explicit sort field (`updated_at` or `priority`)
-            sort_direction: Optional sort direction (`asc` or `desc`)
+            sort_direction: Sort direction (`asc` or `desc`), defaults to `desc`
 
         Returns:
             List of MemoryItem objects
@@ -77,9 +79,8 @@ class MemoryItemRepository:
 
         direction_desc = sort_direction == "desc"
         if sort_by == "priority":
-            priority_expr = func.coalesce(MemoryItem.priority, 9)
-            priority_order = priority_expr.desc() if direction_desc else priority_expr.asc()
-            stmt = stmt.order_by(priority_order, MemoryItem.updated_at.desc(), MemoryItem.id.asc())
+            priority_order = MemoryItem.priority.desc() if direction_desc else MemoryItem.priority.asc()
+            stmt = stmt.order_by(priority_order.nulls_last(), MemoryItem.updated_at.desc(), MemoryItem.id.asc())
         elif sort_by == "updated_at":
             updated_order = MemoryItem.updated_at.desc() if direction_desc else MemoryItem.updated_at.asc()
             stmt = stmt.order_by(updated_order, MemoryItem.id.asc())
@@ -127,7 +128,7 @@ class MemoryItemRepository:
                         case(
                             (
                                 MemoryItem.category == "area_to_improve",
-                                func.coalesce(MemoryItem.priority, 9),
+                                func.coalesce(MemoryItem.priority, DEFAULT_AREA_TO_IMPROVE_PRIORITY),
                             ),
                             else_=99,
                         ).asc(),
@@ -161,7 +162,7 @@ class MemoryItemRepository:
                 case(
                     (
                         ranked.c.bucket == "area_to_improve",
-                        func.coalesce(MemoryItem.priority, 9),
+                        func.coalesce(MemoryItem.priority, DEFAULT_AREA_TO_IMPROVE_PRIORITY),
                     ),
                     else_=99,
                 ).asc(),
