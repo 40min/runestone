@@ -1,3 +1,4 @@
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -39,7 +40,7 @@ async def test_memory_keeper_returns_parsed_specialist_result(specialist, mock_u
                 content=(
                     '{"status":"action_taken","actions":[{"tool":"update_memory_status","status":"success",'
                     '"summary":"Marked topic as improving"}],"info_for_teacher":"Updated 1 memory item.",'
-                    '"artifacts":{"trigger_source":"teacher_response","summary":"updated",'
+                    '"artifacts":{"trigger_source":"teacher","summary":"updated",'
                     '"notes":["status changed"]}}'
                 )
             )
@@ -58,7 +59,7 @@ async def test_memory_keeper_returns_parsed_specialist_result(specialist, mock_u
 
     assert result.status == "action_taken"
     assert result.actions[0].tool == "update_memory_status"
-    assert result.artifacts["trigger_source"] == "teacher_response"
+    assert result.artifacts["trigger_source"] == "teacher"
 
 
 @pytest.mark.anyio
@@ -68,7 +69,7 @@ async def test_memory_keeper_uses_current_student_message_for_payload(specialist
             AIMessage(
                 content=(
                     '{"status":"no_action","actions":[],"info_for_teacher":"",'
-                    '"artifacts":{"trigger_source":"student_message","summary":"noop","notes":[]}}'
+                    '"artifacts":{"trigger_source":"student","summary":"noop","notes":[]}}'
                 )
             )
         ]
@@ -85,7 +86,10 @@ async def test_memory_keeper_uses_current_student_message_for_payload(specialist
     )
 
     args, kwargs = specialist.agent.ainvoke.call_args
-    assert "Forget my old goal." in args[0]["messages"][0].content
+    payload_json = args[0]["messages"][0].content
+    payload = json.loads(payload_json)
+    assert payload["student_message"] == "Forget my old goal."
+    assert "message" not in payload
     assert kwargs["context"].user == mock_user
 
 
@@ -105,3 +109,32 @@ async def test_memory_keeper_returns_error_when_agent_output_is_invalid(speciali
 
     assert result.status == "error"
     assert result.artifacts["summary"] == "invalid_agent_output"
+
+
+@pytest.mark.anyio
+async def test_memory_keeper_parses_fenced_json_output(specialist, mock_user):
+    specialist.agent.ainvoke.return_value = {
+        "messages": [
+            AIMessage(
+                content=(
+                    "```json\n"
+                    '{"status":"no_action","actions":[],"info_for_teacher":"",'
+                    '"artifacts":{"trigger_source":"none","summary":"noop","notes":[]}}'
+                    "\n```"
+                )
+            )
+        ]
+    }
+
+    result = await specialist.run(
+        SpecialistContext(
+            message="Ok",
+            history=[],
+            user=mock_user,
+            teacher_response="Good effort.",
+            routing_reason="no durable signal",
+        )
+    )
+
+    assert result.status == "no_action"
+    assert result.artifacts["trigger_source"] == "none"

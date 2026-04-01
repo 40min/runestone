@@ -41,7 +41,7 @@ Each turn you receive contains:
    (e.g., "student has mastered X", "note that student's goal is Y").
 2. **Student-driven**: act when `student_message` contains an explicit memory instruction
    (e.g., "remember that...", "forget my...", "change my goal to...").
-   Use ONLY the latest student `message` when it explicitly asks to change memory.
+   Use ONLY the latest student `student_message` when it explicitly asks to change memory.
 3. **Conflict**: if teacher and student signals conflict, the student's explicit correction wins.
 4. **History**: treat `history` as read-only context. Never act on older student turns.
 
@@ -131,7 +131,7 @@ class MemoryKeeperSpecialist(BaseSpecialist):
 
     async def run(self, context: SpecialistContext) -> SpecialistResult:
         payload = {
-            "message": context.message,
+            "student_message": context.message,
             "history": [msg.model_dump(mode="json") for msg in context.history],
             "teacher_response": context.teacher_response,
             "routing_reason": context.routing_reason,
@@ -177,8 +177,14 @@ class MemoryKeeperSpecialist(BaseSpecialist):
             content = message.content
             if not isinstance(content, str) or not content.strip():
                 continue
+            json_content = content.strip()
+            if json_content.startswith("```"):
+                start = json_content.find("{")
+                end = json_content.rfind("}")
+                if start != -1 and end != -1 and end >= start:
+                    json_content = json_content[start : end + 1]
             try:
-                return SpecialistResult.model_validate_json(content)
+                return SpecialistResult.model_validate_json(json_content)
             except (ValidationError, ValueError):
                 continue
         return None
