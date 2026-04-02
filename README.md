@@ -420,15 +420,16 @@ tests/
 
 LangGraph tools may execute concurrently. To keep DB operations safe, use async context-manager DI providers for tools.
 
-- Pattern and Implementation: [`TOOL_DB_DI.md`](docs/TOOL_DB_DI.md:1)
+- Pattern and Implementation: [`tool-db-di.md`](docs/tool-db-di.md:1)
 
 
 ### Agent Swarm (Coordinator + Specialists)
 
 Design docs:
 
-- Contracts + orchestration flow: [`AGENT_SWARM_CONTRACT.md`](docs/AGENT_SWARM_CONTRACT.md:1)
-- Implementation milestones: [`AGENT_SWARM_PLAN.md`](docs/AGENT_SWARM_PLAN.md:1)
+- Contracts + orchestration flow: [`agent-swarm-architecture.md`](docs/agent-swarm-architecture.md:1)
+- Implementation milestones: [`agent-swarm-plan.md`](docs/agent-swarm-plan.md:1)
+- Documentation naming convention: [`docs/README.md`](docs/README.md:1)
 
 ## 📋 Requirements
 
