@@ -516,7 +516,7 @@ The entries below capture accepted decisions from implementation planning docume
 
 ### 2026-03-26: Async Post Architecture Is the Default Runtime Contract
 
-Source: [`agent-swarm-async-post-implementation-plan.md`](agent-swarm-async-post-implementation-plan.md)
+Source: consolidated into [`agent-swarm-plan.md`](agent-swarm-plan.md)
 
 Decisions:
 
@@ -530,7 +530,7 @@ Decisions:
 
 ### 2026-04-01: Memory Ownership Split (Teacher Reads, MemoryKeeper Maintains)
 
-Source: [`agent-swarm-memory-maintenance-plan.md`](agent-swarm-memory-maintenance-plan.md)
+Source: consolidated into [`agent-swarm-plan.md`](agent-swarm-plan.md)
 
 Decisions:
 
