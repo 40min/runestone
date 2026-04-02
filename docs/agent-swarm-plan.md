@@ -25,7 +25,7 @@ After MS4 the team rethought the synchronous post-stage execution. The new direc
 
 Full design rationale: [`AGENT_SWARM_ASYNC_POST_DESIGN.md`](AGENT_SWARM_ASYNC_POST_DESIGN.md)
 
-Implementation plan: [`AGENT_SWARM_ASYNC_POST_IMPLEMENTATION_PLAN.md`](AGENT_SWARM_ASYNC_POST_IMPLEMENTATION_PLAN.md)
+Implementation details are now consolidated into this document and [`agent-swarm-architecture.md`](agent-swarm-architecture.md).
 
 ## Active Milestones (Async Post Redesign)
 
@@ -33,7 +33,7 @@ Implementation plan: [`AGENT_SWARM_ASYNC_POST_IMPLEMENTATION_PLAN.md`](AGENT_SWA
 
 - [x] Design doc accepted as current direction
 - [x] Implementation plan accepted
-- [x] Docs renewed (this file + `AGENT_SWARM_CONTRACT.md`)
+- [x] Docs renewed (this file + `agent-swarm-architecture.md`)
 
 ### Milestone 2: Split Manager Into Sync and Async Phases
 
@@ -114,7 +114,7 @@ Tasks:
 - inject compact starter memory from the service layer on first turn
 - keep `read_memory` available for on-demand teacher inspection
 - plan post-stage `MemoryKeeper` review rules for create/update/status/priority/promote/no-action
-- capture the design in [`AGENT_SWARM_MEMORY_MAINTENANCE_PLAN.md`](AGENT_SWARM_MEMORY_MAINTENANCE_PLAN.md)
+- capture the design in the architecture and plan docs
 
 Success criteria:
 
