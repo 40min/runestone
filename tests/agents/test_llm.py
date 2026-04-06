@@ -86,6 +86,14 @@ def test_build_chat_model_does_not_send_reasoning_when_disabled(mock_settings):
         assert "extra_body" not in call_kwargs
 
 
+def test_build_chat_model_supports_news_agent(mock_settings):
+    """Test news_agent uses the standard per-agent config path."""
+    with patch("runestone.agents.llm.ChatOpenAI"):
+        build_chat_model(mock_settings, "news_agent")
+
+    mock_settings.get_agent_llm_settings.assert_called_once_with("news_agent")
+
+
 def test_build_chat_model_unsupported_provider(mock_settings):
     """Test that unsupported provider raises ValueError."""
     mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings.model_construct(

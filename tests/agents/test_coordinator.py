@@ -90,10 +90,12 @@ def test_memory_keeper_prompt_mentions_student_driven_memory_requests():
 
 
 def test_news_prompt_requires_known_topic():
+    assert "### news_agent (pre)" in COORDINATOR_PRE_RESPONSE_PROMPT
     assert "**Route when:** The student's current message names a clear, specific topic" in (
         COORDINATOR_PRE_RESPONSE_PROMPT
     )
     assert "**Do NOT route when:** The topic is vague or unspecified" in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "For all normal news_agent cases, set `chat_history_size` to `2`." in COORDINATOR_PRE_RESPONSE_PROMPT
 
 
 def test_grammar_is_absent_from_coordinator_prompt():

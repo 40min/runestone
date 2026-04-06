@@ -126,34 +126,34 @@ Success criteria:
 
 Deliverables:
 
-- reference and retrieval domains become specialists
+- [x] reference and retrieval domains become specialists
 
 Tasks:
 
-- create `NewsAgent`
-- ensure `NewsAgent` can read selected sources via `read_url` when needed
-- add source/result schemas
+- [x] create `NewsAgent`
+- [x] ensure `NewsAgent` can read selected sources via `read_url` when needed
+- [x] add source/result schemas
 
 Success criteria:
 
-- teacher only routes and composes
+- [x] teacher only routes and composes
 
 ### Teacher Prompt Reduction
 
 Deliverables:
 
-- slim teacher prompt
-- improve reliability through narrower responsibilities
+- [x] slim teacher prompt
+- [x] improve reliability through narrower responsibilities
 
 Tasks:
 
-- strip memory and vocabulary tool details out of main teacher prompt
-- keep only routing and composition instructions
-- keep persona, tone, and truthfulness requirements
+- [x] strip direct news-tool ownership out of the main teacher prompt
+- [x] keep memory and vocabulary specialist guidance already landed
+- [x] trim stale specialist instructions while keeping persona, tone, and truthfulness requirements
 
 Success criteria:
 
-- teacher prompt is substantially shorter and easier to maintain
+- [x] teacher prompt is shorter and aligned with current specialist ownership
 
 ## Architecture Summary
 
@@ -186,7 +186,7 @@ All agent log lines use `[agents:<component>]` prefix.
 | `CoordinatorAgent` | none (planning only)                          |
 | `WordKeeper`       | `prioritize_words_for_learning`               |
 | `MemoryKeeper`     | memory maintenance tools (future, post phase) |
-| `NewsAgent`        | `search_news_with_dates`, `read_url` (future) |
+| `NewsAgent`        | `search_news_with_dates`, selective `read_url` |
 
 ## Non-Goals (Unchanged)
 

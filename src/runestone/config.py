@@ -99,6 +99,11 @@ class Settings(BaseSettings):
     word_keeper_temperature: float = 0.0
     word_keeper_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
 
+    news_agent_provider: Optional[Literal["openrouter", "openai"]] = None
+    news_agent_model: Optional[str] = None
+    news_agent_temperature: float = 0.0
+    news_agent_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
+
     memory_keeper_provider: Optional[Literal["openrouter", "openai"]] = None
     memory_keeper_model: Optional[str] = None
     memory_keeper_temperature: float = 0.0
@@ -130,6 +135,10 @@ class Settings(BaseSettings):
             self.word_keeper_provider = self.teacher_provider
         if self.word_keeper_model is None:
             self.word_keeper_model = self.teacher_model
+        if self.news_agent_provider is None:
+            self.news_agent_provider = self.teacher_provider
+        if self.news_agent_model is None:
+            self.news_agent_model = self.teacher_model
         if self.memory_keeper_provider is None:
             self.memory_keeper_provider = self.teacher_provider
         if self.memory_keeper_model is None:
@@ -137,7 +146,7 @@ class Settings(BaseSettings):
         return self
 
     def get_agent_llm_settings(
-        self, agent_name: Literal["teacher", "coordinator", "word_keeper", "memory_keeper"]
+        self, agent_name: Literal["teacher", "coordinator", "word_keeper", "news_agent", "memory_keeper"]
     ) -> AgentLLMSettings:
         """Return resolved model settings for the requested agent."""
         if agent_name == "teacher":
@@ -162,6 +171,14 @@ class Settings(BaseSettings):
                 model=self.word_keeper_model,
                 temperature=self.word_keeper_temperature,
                 reasoning_level=self.word_keeper_reasoning_level,
+            )
+
+        if agent_name == "news_agent":
+            return AgentLLMSettings(
+                provider=self.news_agent_provider,
+                model=self.news_agent_model,
+                temperature=self.news_agent_temperature,
+                reasoning_level=self.news_agent_reasoning_level,
             )
 
         if agent_name == "memory_keeper":

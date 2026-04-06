@@ -30,12 +30,9 @@ Implemented now:
 - in-memory post-task registry with stale next-turn cancellation
 - image flow using the same async-post pattern
 - `MemoryKeeper` specialist running in post stage for durable memory maintenance
+- `NewsAgent` specialist running in pre stage for topic-based news retrieval
 - teacher-side memory model narrowed to read-only lookup (`read_memory`) during response generation
 - compact first-turn starter memory injection (`personal_info` active, top-priority `area_to_improve` struggling/improving, active `knowledge_strength`)
-
-Still planned, but not implemented:
-
-- `NewsAgent`
 
 Explicit non-goals for the current design:
 
@@ -111,7 +108,6 @@ Owns:
 - grammar tools
 - memory read tool (`read_memory`) for on-demand inspection
 - `read_url`
-- direct news lookup tool (`search_news_with_dates`) until `NewsAgent` is extracted
 
 Responsibilities:
 
@@ -171,11 +167,13 @@ Owns:
 - review and update `area_to_improve` status and priority when the turn shows progress or regression
 - promotion from `area_to_improve` to `knowledge_strength`
 
-#### NewsAgent (planned)
+#### NewsAgent
 
-Intended role:
+Owns:
 
 - pre-stage news lookup when the user already provided a clear topic
+- topical `search_news_with_dates` retrieval before the teacher responds
+- selective `read_url` article reads when snippets are too thin for teacher composition
 
 ### Memory Architecture
 
@@ -504,11 +502,8 @@ Specialist result rows use:
 
 ## Future Work
 
-Possible future extraction work:
-
-- `NewsAgent`
-
-These are roadmap ideas, not part of the current async-post commitment.
+Possible future extraction work remains outside the current async-post commitment, but `NewsAgent`
+is now part of the implemented pre-stage specialist set.
 
 ## Decision Log
 

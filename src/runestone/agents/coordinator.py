@@ -74,12 +74,14 @@ COORDINATOR_PRE_RESPONSE_PROMPT = (
 
 For all normal word_keeper cases, set `chat_history_size` to `2`.
 
-### news (pre)
+### news_agent (pre)
 **Route when:** The student's current message names a clear, specific topic
 (e.g. "show me Swedish news about sports", "let's read news about the economy").
 
 **Do NOT route when:** The topic is vague or unspecified
 (e.g. "give me some news", "any news?"). Let the teacher clarify on the next turn.
+
+For all normal news_agent cases, set `chat_history_size` to `2`.
 """
 )
 

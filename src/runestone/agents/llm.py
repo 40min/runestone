@@ -12,7 +12,7 @@ from runestone.config import ReasoningLevel, Settings
 
 logger = logging.getLogger(__name__)
 
-AgentName = Literal["teacher", "coordinator", "word_keeper", "memory_keeper"]
+AgentName = Literal["teacher", "coordinator", "word_keeper", "news_agent", "memory_keeper"]
 
 
 def build_chat_model(settings: Settings, agent_name: AgentName) -> ChatOpenAI:

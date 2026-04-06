@@ -25,6 +25,8 @@ def mock_settings():
     settings.coordinator_provider = "openrouter"
     settings.word_keeper_provider = "openrouter"
     settings.word_keeper_model = "test-model"
+    settings.news_agent_provider = "openrouter"
+    settings.news_agent_model = "test-model"
     settings.memory_keeper_provider = "openrouter"
     settings.memory_keeper_model = "test-model"
     settings.agent_persona = "default"
@@ -45,6 +47,12 @@ def mock_settings():
             reasoning_level=ReasoningLevel.NONE,
         ),
         "word_keeper": AgentLLMSettings(
+            provider="openrouter",
+            model="test-model",
+            temperature=0.0,
+            reasoning_level=ReasoningLevel.NONE,
+        ),
+        "news_agent": AgentLLMSettings(
             provider="openrouter",
             model="test-model",
             temperature=0.0,
@@ -270,6 +278,47 @@ async def test_coordinator_history_truncation_logs_warning(
     assert "Truncated coordinator history" in caplog.text
 
 
+@pytest.mark.anyio
+async def test_prepare_pre_turn_passes_bounded_history_into_news_agent(
+    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+):
+    manager = AgentsManager(mock_settings)
+    manager.coordinator.plan_pre_turn = AsyncMock(
+        return_value=_make_plan(pre=[RoutingItem(name="news_agent", reason="topic", chat_history_size=2)])
+    )
+
+    class _CaptureSpecialist(BaseSpecialist):
+        def __init__(self):
+            super().__init__(name="news_agent")
+            self.context = None
+
+        async def run(self, context: SpecialistContext) -> SpecialistResult:
+            self.context = context
+            return SpecialistResult(status="action_taken", info_for_teacher="Prepared news.")
+
+    capture = _CaptureSpecialist()
+    manager.registry.register(capture, overwrite=True)
+
+    history = [
+        ChatMessage(role="user", content="old1"),
+        ChatMessage(role="assistant", content="old2"),
+        ChatMessage(role="user", content="old3"),
+    ]
+    mock_memory_item_service.list_start_student_info_items.return_value = []
+
+    await manager.prepare_pre_turn(
+        message="Show me sports news",
+        chat_id="chat-1",
+        history=history,
+        user=mock_user,
+        memory_item_service=mock_memory_item_service,
+        side_effect_service=mock_side_effect_service,
+    )
+
+    assert capture.context is not None
+    assert [msg.content for msg in capture.context.history] == ["old2", "old3"]
+
+
 # ---------------------------------------------------------------------------
 # generate_teacher_response tests
 # ---------------------------------------------------------------------------
@@ -323,6 +372,35 @@ async def test_generate_teacher_response_extracts_news_sources(mock_settings, mo
 
     assert response == "Svar med källor"
     assert sources == [{"title": "Nyhet", "url": "https://example.com", "date": "2026-02-05"}]
+
+
+@pytest.mark.anyio
+async def test_generate_teacher_response_prefers_news_sources_from_pre_results(mock_settings, mock_user):
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = ("Svar med specialistkällor", [AIMessage(content="Svar")])
+
+    response, sources = await manager.generate_teacher_response(
+        message="Nyheter",
+        history=[],
+        user=mock_user,
+        pre_results=[
+            {
+                "name": "news_agent",
+                "result": {
+                    "status": "action_taken",
+                    "artifacts": {
+                        "sources": [{"title": "Nyhet", "url": "https://example.com/article", "date": "2026-02-05"}]
+                    },
+                },
+            }
+        ],
+        starter_memory="",
+        recent_side_effects=[],
+    )
+
+    assert response == "Svar med specialistkällor"
+    assert sources == [{"title": "Nyhet", "url": "https://example.com/article", "date": "2026-02-05"}]
 
 
 @pytest.mark.anyio
@@ -948,4 +1026,4 @@ def test_is_safe_url(mock_settings):
 
 def test_manager_registers_default_specialists(mock_settings):
     manager = AgentsManager(mock_settings)
-    assert manager.registry.list_names() == ["memory_keeper", "word_keeper"]
+    assert manager.registry.list_names() == ["memory_keeper", "news_agent", "word_keeper"]
