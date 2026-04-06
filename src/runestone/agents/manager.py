@@ -18,6 +18,7 @@ from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem, 
 from runestone.agents.service_providers import provide_agent_side_effect_service
 from runestone.agents.specialists.base import SpecialistContext
 from runestone.agents.specialists.memory_keeper import MemoryKeeperSpecialist
+from runestone.agents.specialists.news_agent import NewsAgentSpecialist
 from runestone.agents.specialists.registry import SpecialistRegistry
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.agents.specialists.word_keeper import WordKeeperSpecialist
@@ -66,6 +67,7 @@ class AgentsManager:
         )
         self.registry = SpecialistRegistry()
         self.registry.register(MemoryKeeperSpecialist(settings))
+        self.registry.register(NewsAgentSpecialist(settings))
         self.registry.register(WordKeeperSpecialist(settings))
 
         self._post_task_registry = BackgroundTaskRegistry(logger=logger, key_name="chat_id")
@@ -199,7 +201,7 @@ class AgentsManager:
             logger.error("[agents:manager] Error generating response: %s", e)
             raise
 
-        sources = self._extract_sources(final_messages)
+        sources = self._extract_sources(pre_results=pre_results, messages=final_messages)
         return teacher_response, sources
 
     async def process_turn(
@@ -556,9 +558,14 @@ class AgentsManager:
         except json.JSONDecodeError:
             return None
 
-    def _extract_sources(self, messages) -> Optional[list[dict[str, str]]]:
+    def _extract_sources(
+        self, *, pre_results: list[dict] | None = None, messages=None
+    ) -> Optional[list[dict[str, str]]]:
+        specialist_sources = self._extract_pre_result_sources(pre_results or [])
+        merged_sources: list[dict[str, str]] = specialist_sources[:] if specialist_sources else []
+        seen_urls = {source["url"] for source in merged_sources}
 
-        for msg in reversed(messages):
+        for msg in reversed(messages or []):
             if not isinstance(msg, ToolMessage):
                 continue
             payload = self._safe_json_loads(msg.content)
@@ -572,7 +579,6 @@ class AgentsManager:
                 return None
 
             sources: list[dict[str, str]] = []
-            seen_urls = set()
             for item in results:
                 if not isinstance(item, dict):
                     continue
@@ -588,9 +594,38 @@ class AgentsManager:
                 sources.append({"title": title, "url": url, "date": date})
                 seen_urls.add(url)
 
-            return sources or None
+            merged_sources.extend(sources)
+            return merged_sources or None
 
-        return None
+        return merged_sources or None
+
+    def _extract_pre_result_sources(self, pre_results: list[dict]) -> Optional[list[dict[str, str]]]:
+        sources: list[dict[str, str]] = []
+        seen_urls = set()
+        for item in pre_results:
+            if not isinstance(item, dict) or item.get("name") != "news_agent":
+                continue
+            result = item.get("result")
+            if not isinstance(result, dict):
+                continue
+            artifacts = result.get("artifacts")
+            if not isinstance(artifacts, dict):
+                continue
+            artifact_sources = artifacts.get("sources")
+            if not isinstance(artifact_sources, list):
+                continue
+            for source in artifact_sources:
+                if not isinstance(source, dict):
+                    continue
+                title = source.get("title")
+                raw_url = source.get("url")
+                url = str(raw_url) if raw_url else None
+                date = source.get("date", "")
+                if not title or not url or not self._is_safe_url(url) or url in seen_urls:
+                    continue
+                sources.append({"title": title, "url": url, "date": date})
+                seen_urls.add(url)
+        return sources or None
 
     def _is_safe_url(self, url: str) -> bool:
         try:

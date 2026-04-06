@@ -164,3 +164,25 @@ class TestSettings:
 
         assert test_settings.teacher_provider == "openrouter"
         assert test_settings.teacher_model == "legacy-chat-model"
+
+    def test_news_agent_defaults_to_teacher_model_settings(self):
+        """Test news_agent inherits teacher provider/model when not configured explicitly."""
+        test_settings = Settings.model_construct(
+            llm_provider="openai",
+            openai_api_key="test-key",
+            openrouter_api_key="test-openrouter-key",
+            allowed_origins="http://localhost:3000",
+            database_url="sqlite:///./test.db",
+            telegram_bot_token="test-token",
+            frontend_url="http://localhost:5173",
+            jwt_secret_key="secret",
+            teacher_provider="openrouter",
+            teacher_model="teacher-model",
+            coordinator_model="coordinator-model",
+            news_agent_provider=None,
+            news_agent_model=None,
+        )
+        test_settings = test_settings._apply_agent_defaults()
+
+        assert test_settings.news_agent_provider == "openrouter"
+        assert test_settings.news_agent_model == "teacher-model"

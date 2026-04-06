@@ -74,12 +74,19 @@ COORDINATOR_PRE_RESPONSE_PROMPT = (
 
 For all normal word_keeper cases, set `chat_history_size` to `2`.
 
-### news (pre)
-**Route when:** The student's current message names a clear, specific topic
-(e.g. "show me Swedish news about sports", "let's read news about the economy").
+### news_agent (pre)
+**Route when:** The student's current message asks about a clear, specific real-time or current-events topic.
+This includes:
+- News about a specific subject (e.g. "show me Swedish news about sports", "let's read news about the economy").
+- Current weather for a named city or region
+  (e.g. "what's the weather in Helsinki tomorrow?", "hur är vädret i Stockholm?").
+- Any other specific real-time factual query that requires live search (e.g. "what happened in the election?").
 
-**Do NOT route when:** The topic is vague or unspecified
-(e.g. "give me some news", "any news?"). Let the teacher clarify on the next turn.
+**Do NOT route when:**
+- The topic is vague or unspecified (e.g. "give me some news", "any news?"). Let the teacher clarify on the next turn.
+- The student is asking a grammar or vocabulary question with no real-time component.
+
+For all normal news_agent cases, set `chat_history_size` to `2`.
 """
 )
 

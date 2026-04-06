@@ -70,9 +70,12 @@ def test_build_agent(mock_settings, mock_chat_model):
             call_kwargs = mock_create_agent.call_args[1]
             assert call_kwargs["model"] == mock_chat_model
             tools = mock_create_agent.call_args[1]["tools"]
-            assert len(tools) == 5
+            assert len(tools) == 4
+            tool_names = {getattr(tool, "name", None) for tool in tools}
+            assert {"read_memory", "search_grammar", "read_grammar_page", "read_url"} <= tool_names
             assert all(getattr(tool, "name", None) != "prioritize_words_for_learning" for tool in tools)
             assert all(getattr(tool, "name", None) != "start_student_info" for tool in tools)
+            assert all(getattr(tool, "name", None) != "search_news_with_dates" for tool in tools)
             assert all(
                 getattr(tool, "name", None)
                 not in {
@@ -97,6 +100,8 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "explicit sentence" in call_kwargs["system_prompt"]
             assert "This is a recurring issue to remember" in call_kwargs["system_prompt"]
             assert "not by a tool you call directly" in call_kwargs["system_prompt"]
+            assert "Topical news retrieval is handled by a pre-response specialist" in call_kwargs["system_prompt"]
+            assert "Use `search_news_with_dates`" not in call_kwargs["system_prompt"]
 
 
 def test_build_agent_uses_teacher_purpose(mock_settings, mock_chat_model):
