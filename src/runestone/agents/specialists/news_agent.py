@@ -36,11 +36,18 @@ bounded context for the teacher.
 ## Act when
 - The student clearly names a topic or domain for news.
 - The student asks to read, discuss, or summarize news about that topic.
+- The student asks about current weather for a specific city or region.
+- The student asks any other specific real-time factual question (e.g. what happened in an election, current events).
 
 ## Return `no_action` when
 - The student asks for generic news with no topic.
 - The student asks about an arbitrary page URL instead of topic news retrieval.
-- The request is grammar-only or general factual tutoring without a news intent.
+- The request is grammar-only or general factual tutoring without a real-time search intent.
+
+## Search guidance
+- For weather queries, search for current weather conditions in the named location (e.g. "väder Helsinki imorgon").
+- For news topics, search in the appropriate language; prefer Swedish for Swedish-language context.
+- Keep retrieval bounded: max 5 search results and max 2 `read_url` calls.
 
 ## Output Contract
 Return valid JSON with this exact shape and no extra text:
