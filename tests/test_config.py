@@ -167,22 +167,22 @@ class TestSettings:
 
     def test_news_agent_defaults_to_teacher_model_settings(self):
         """Test news_agent inherits teacher provider/model when not configured explicitly."""
-        env_vars = {
-            "LLM_PROVIDER": "openai",
-            "OPENAI_API_KEY": "test-key",
-            "OPENROUTER_API_KEY": "test-openrouter-key",
-            "ALLOWED_ORIGINS": "http://localhost:3000",
-            "DATABASE_URL": "sqlite:///./test.db",
-            "TELEGRAM_BOT_TOKEN": "test-token",
-            "FRONTEND_URL": "http://localhost:5173",
-            "JWT_SECRET_KEY": "secret",
-            "TEACHER_PROVIDER": "openrouter",
-            "TEACHER_MODEL": "teacher-model",
-            "COORDINATOR_MODEL": "coordinator-model",
-        }
-
-        with patch.dict(os.environ, env_vars, clear=True):
-            test_settings = Settings()
+        test_settings = Settings.model_construct(
+            llm_provider="openai",
+            openai_api_key="test-key",
+            openrouter_api_key="test-openrouter-key",
+            allowed_origins="http://localhost:3000",
+            database_url="sqlite:///./test.db",
+            telegram_bot_token="test-token",
+            frontend_url="http://localhost:5173",
+            jwt_secret_key="secret",
+            teacher_provider="openrouter",
+            teacher_model="teacher-model",
+            coordinator_model="coordinator-model",
+            news_agent_provider=None,
+            news_agent_model=None,
+        )
+        test_settings = test_settings._apply_agent_defaults()
 
         assert test_settings.news_agent_provider == "openrouter"
         assert test_settings.news_agent_model == "teacher-model"
