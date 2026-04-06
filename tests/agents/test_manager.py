@@ -375,10 +375,23 @@ async def test_generate_teacher_response_extracts_news_sources(mock_settings, mo
 
 
 @pytest.mark.anyio
-async def test_generate_teacher_response_prefers_news_sources_from_pre_results(mock_settings, mock_user):
+async def test_generate_teacher_response_combines_news_sources_from_pre_results(mock_settings, mock_user):
     manager = AgentsManager(mock_settings)
     manager.teacher = AsyncMock()
-    manager.teacher.generate_response.return_value = ("Svar med specialistkällor", [AIMessage(content="Svar")])
+    manager.teacher.generate_response.return_value = (
+        "Svar med specialistkällor",
+        [
+            ToolMessage(
+                content=(
+                    '{"tool":"search_news_with_dates","results":['
+                    '{"title":"Nyhet 2","url":"https://example.com/teacher",'
+                    '"date":"2026-02-06"}]}'
+                ),
+                tool_call_id="tool-call-4",
+            ),
+            AIMessage(content="Svar"),
+        ],
+    )
 
     response, sources = await manager.generate_teacher_response(
         message="Nyheter",
@@ -400,7 +413,55 @@ async def test_generate_teacher_response_prefers_news_sources_from_pre_results(m
     )
 
     assert response == "Svar med specialistkällor"
-    assert sources == [{"title": "Nyhet", "url": "https://example.com/article", "date": "2026-02-05"}]
+    assert sources == [
+        {"title": "Nyhet", "url": "https://example.com/article", "date": "2026-02-05"},
+        {"title": "Nyhet 2", "url": "https://example.com/teacher", "date": "2026-02-06"},
+    ]
+
+
+@pytest.mark.anyio
+async def test_generate_teacher_response_deduplicates_sources_across_pre_results_and_teacher(mock_settings, mock_user):
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = (
+        "Svar med specialistkällor",
+        [
+            ToolMessage(
+                content=(
+                    '{"tool":"search_news_with_dates","results":['
+                    '{"title":"Duplicat","url":"https://example.com/shared","date":"2026-02-06"},'
+                    '{"title":"Nyhet 3","url":"https://example.com/teacher-only","date":"2026-02-06"}'
+                    "]}"
+                ),
+                tool_call_id="tool-call-5",
+            ),
+            AIMessage(content="Svar"),
+        ],
+    )
+
+    _response, sources = await manager.generate_teacher_response(
+        message="Nyheter",
+        history=[],
+        user=mock_user,
+        pre_results=[
+            {
+                "name": "news_agent",
+                "result": {
+                    "status": "action_taken",
+                    "artifacts": {
+                        "sources": [{"title": "Nyhet", "url": "https://example.com/shared", "date": "2026-02-05"}]
+                    },
+                },
+            }
+        ],
+        starter_memory="",
+        recent_side_effects=[],
+    )
+
+    assert sources == [
+        {"title": "Nyhet", "url": "https://example.com/shared", "date": "2026-02-05"},
+        {"title": "Nyhet 3", "url": "https://example.com/teacher-only", "date": "2026-02-06"},
+    ]
 
 
 @pytest.mark.anyio

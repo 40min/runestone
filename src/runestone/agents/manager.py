@@ -562,8 +562,8 @@ class AgentsManager:
         self, *, pre_results: list[dict] | None = None, messages=None
     ) -> Optional[list[dict[str, str]]]:
         specialist_sources = self._extract_pre_result_sources(pre_results or [])
-        if specialist_sources:
-            return specialist_sources
+        merged_sources: list[dict[str, str]] = specialist_sources[:] if specialist_sources else []
+        seen_urls = {source["url"] for source in merged_sources}
 
         for msg in reversed(messages or []):
             if not isinstance(msg, ToolMessage):
@@ -579,7 +579,6 @@ class AgentsManager:
                 return None
 
             sources: list[dict[str, str]] = []
-            seen_urls = set()
             for item in results:
                 if not isinstance(item, dict):
                     continue
@@ -595,9 +594,10 @@ class AgentsManager:
                 sources.append({"title": title, "url": url, "date": date})
                 seen_urls.add(url)
 
-            return sources or None
+            merged_sources.extend(sources)
+            return merged_sources or None
 
-        return None
+        return merged_sources or None
 
     def _extract_pre_result_sources(self, pre_results: list[dict]) -> Optional[list[dict[str, str]]]:
         sources: list[dict[str, str]] = []
@@ -618,7 +618,8 @@ class AgentsManager:
                 if not isinstance(source, dict):
                     continue
                 title = source.get("title")
-                url = source.get("url")
+                raw_url = source.get("url")
+                url = str(raw_url) if raw_url else None
                 date = source.get("date", "")
                 if not title or not url or not self._is_safe_url(url) or url in seen_urls:
                     continue

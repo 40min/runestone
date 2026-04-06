@@ -178,3 +178,30 @@ async def test_news_agent_parses_fenced_json_output(specialist, mock_user):
     )
 
     assert result.status == "no_action"
+
+
+@pytest.mark.anyio
+async def test_news_agent_parses_json_with_prefixed_text(specialist, mock_user):
+    specialist.agent.ainvoke.return_value = {
+        "messages": [
+            AIMessage(
+                content=(
+                    "Here is the result:\n\n```json\n"
+                    '{"status":"no_action","actions":[],"info_for_teacher":"",'
+                    '"artifacts":{"topic":"","query":"","timelimit":"m","results":[],"sources":[]}}'
+                    "\n```"
+                )
+            )
+        ]
+    }
+
+    result = await specialist.run(
+        SpecialistContext(
+            message="Any news?",
+            history=[],
+            user=mock_user,
+            routing_reason="vague request",
+        )
+    )
+
+    assert result.status == "no_action"

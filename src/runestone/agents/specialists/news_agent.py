@@ -143,11 +143,10 @@ class NewsAgentSpecialist(BaseSpecialist):
             if not isinstance(content, str) or not content.strip():
                 continue
             json_content = content.strip()
-            if json_content.startswith("```"):
-                start = json_content.find("{")
-                end = json_content.rfind("}")
-                if start != -1 and end != -1 and end >= start:
-                    json_content = json_content[start : end + 1]
+            start = json_content.find("{")
+            end = json_content.rfind("}")
+            if start != -1 and end != -1 and end >= start:
+                json_content = json_content[start : end + 1]
             try:
                 return SpecialistResult.model_validate_json(json_content)
             except (ValidationError, ValueError):
