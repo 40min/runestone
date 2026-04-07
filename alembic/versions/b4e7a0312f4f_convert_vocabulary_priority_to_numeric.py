@@ -25,8 +25,9 @@ VOCABULARY_PRIORITY_LOW = 9
 
 def upgrade() -> None:
     """Convert boolean priority_learn to numeric 0..9."""
+    bind = op.get_bind()
     op.execute("ALTER TABLE vocabulary ALTER COLUMN priority_learn DROP DEFAULT")
-    op.execute(
+    bind.execute(
         sa.text(
             """
             ALTER TABLE vocabulary
@@ -42,7 +43,7 @@ def upgrade() -> None:
             "low_priority": VOCABULARY_PRIORITY_LOW,
         },
     )
-    op.execute(
+    bind.execute(
         sa.text("UPDATE vocabulary SET priority_learn = COALESCE(priority_learn, :low_priority)"),
         {"low_priority": VOCABULARY_PRIORITY_LOW},
     )
@@ -62,9 +63,10 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Convert numeric priority_learn back to boolean."""
+    bind = op.get_bind()
     op.drop_constraint("ck_vocabulary_priority_learn_range", "vocabulary", type_="check")
     op.execute("ALTER TABLE vocabulary ALTER COLUMN priority_learn DROP DEFAULT")
-    op.execute(
+    bind.execute(
         sa.text(
             """
             ALTER TABLE vocabulary
