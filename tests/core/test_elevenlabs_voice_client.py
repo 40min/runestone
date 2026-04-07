@@ -41,6 +41,21 @@ class TestElevenLabsVoiceClient:
                 use_speaker_boost=True,
             )
 
+    @patch("runestone.core.clients.voice.elevenlabs_voice_client.AsyncElevenLabs")
+    def test_instantiation_rejects_non_mp3_output_format(self, mock_client_class):
+        """Client should fail fast on formats the browser playback path cannot decode."""
+        with pytest.raises(RunestoneError, match="output format must be an MP3 variant"):
+            ElevenLabsVoiceClient(
+                api_key="test-key",
+                model_id="eleven_multilingual_v2",
+                voice_id="voice-id",
+                output_format="opus_48000_128",
+                stability=0.5,
+                similarity_boost=0.75,
+                style=0.0,
+                use_speaker_boost=True,
+            )
+
     @patch("runestone.core.clients.voice.elevenlabs_voice_client.VoiceSettings")
     @patch("runestone.core.clients.voice.elevenlabs_voice_client.AsyncElevenLabs")
     async def test_synthesize_speech_stream(self, mock_client_class, mock_voice_settings):

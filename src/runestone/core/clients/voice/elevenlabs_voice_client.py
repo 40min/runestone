@@ -43,6 +43,11 @@ class ElevenLabsVoiceClient:
             raise RunestoneError(
                 "ElevenLabs voice ID is required for TTS. Set ELEVENLABS_TTS_VOICE_ID when TTS_PROVIDER=elevenlabs."
             )
+        if not output_format.startswith("mp3_"):
+            raise RunestoneError(
+                "ElevenLabs TTS output format must be an MP3 variant for browser playback. "
+                "Set ELEVENLABS_TTS_OUTPUT_FORMAT to an mp3_* value."
+            )
 
         self._client = AsyncElevenLabs(api_key=api_key)
         self._model_id = model_id
