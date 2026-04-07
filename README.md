@@ -481,6 +481,24 @@ Design docs:
 **Gemini Configuration:**
 - `GEMINI_API_KEY`: Your Google Gemini API key (required for Gemini provider)
 
+**Voice Configuration:**
+- `VOICE_TRANSCRIPTION_PROVIDER`: Voice transcription provider (`openai` or `elevenlabs`, default: `openai`)
+- `VOICE_TRANSCRIPTION_MODEL`: Transcription model name (default: `whisper-1`)
+- `VOICE_ENHANCEMENT_MODEL`: Post-transcription cleanup model (default: `gpt-4o-mini`)
+- `TTS_PROVIDER`: Text-to-speech provider (`openai` or `elevenlabs`, default: `openai`)
+- `TTS_MODEL`: OpenAI text-to-speech model (default: `gpt-4o-mini-tts`)
+- `TTS_VOICE`: OpenAI voice name (default: `onyx`)
+
+**ElevenLabs Voice Configuration:**
+- `ELEVENLABS_API_KEY`: ElevenLabs API key (required when a voice provider is `elevenlabs`)
+- `ELEVENLABS_TTS_MODEL`: ElevenLabs TTS model name (default: `eleven_multilingual_v2`)
+- `ELEVENLABS_TTS_VOICE_ID`: ElevenLabs voice ID
+- `ELEVENLABS_TTS_OUTPUT_FORMAT`: Output format (default: `mp3_44100_128`)
+- `ELEVENLABS_TTS_STABILITY`: Voice stability tuning (default: `0.5`)
+- `ELEVENLABS_TTS_SIMILARITY_BOOST`: Similarity boost tuning (default: `0.75`)
+- `ELEVENLABS_TTS_STYLE`: Style tuning (default: `0.0`)
+- `ELEVENLABS_TTS_USE_SPEAKER_BOOST`: Enable speaker boost (`true` or `false`, default: `true`)
+
 **Database Configuration:**
 - `DATABASE_URL`: Database connection URL (default: `sqlite:///./state/runestone.db`)
 
@@ -510,6 +528,18 @@ OPENAI_MODEL=gpt-4o-mini
 
 # Gemini settings (if using Gemini)
 GEMINI_API_KEY=your_gemini_api_key_here
+
+# Voice settings
+VOICE_TRANSCRIPTION_PROVIDER=openai
+VOICE_TRANSCRIPTION_MODEL=whisper-1
+TTS_PROVIDER=openai
+TTS_MODEL=gpt-4o-mini-tts
+TTS_VOICE=onyx
+
+# ElevenLabs settings (if using ElevenLabs for voice)
+ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
+ELEVENLABS_TTS_MODEL=eleven_multilingual_v2
+ELEVENLABS_TTS_VOICE_ID=your_elevenlabs_voice_id_here
 
 # Database settings
 DATABASE_URL=sqlite:///./state/runestone.db

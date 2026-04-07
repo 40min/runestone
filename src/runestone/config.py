@@ -118,14 +118,26 @@ class Settings(BaseSettings):
     chat_image_max_size_mb: int = 10
 
     # Voice Transcription Configuration
+    voice_transcription_provider: Literal["openai", "elevenlabs"] = "openai"
     voice_transcription_model: str = "whisper-1"
     voice_enhancement_model: str = "gpt-4o-mini"
     voice_max_duration_seconds: int = 300
     voice_max_file_size_mb: int = 25
 
     # TTS (Text-to-Speech) Configuration
+    tts_provider: Literal["openai", "elevenlabs"] = "openai"
     tts_model: str = "gpt-4o-mini-tts"
     tts_voice: str = "onyx"
+
+    # ElevenLabs Voice Configuration
+    elevenlabs_api_key: Optional[str] = None
+    elevenlabs_tts_model: str = "eleven_multilingual_v2"
+    elevenlabs_tts_voice_id: Optional[str] = None
+    elevenlabs_tts_output_format: str = "mp3_44100_128"
+    elevenlabs_tts_stability: float = 0.5
+    elevenlabs_tts_similarity_boost: float = 0.75
+    elevenlabs_tts_style: float = 0.0
+    elevenlabs_tts_use_speaker_boost: bool = True
 
     @model_validator(mode="after")
     def _apply_agent_defaults(self) -> "Settings":
