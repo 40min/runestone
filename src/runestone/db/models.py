@@ -22,6 +22,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 from sqlalchemy.sql.expression import false
 
+from runestone.constants import VOCABULARY_PRIORITY_DEFAULT, VOCABULARY_PRIORITY_HIGH, VOCABULARY_PRIORITY_LOW
+
 from .database import Base
 
 
@@ -86,13 +88,24 @@ class Vocabulary(Base):
     example_phrase = Column(Text, nullable=True)
     extra_info = Column(Text, nullable=True, default=None)
     in_learn = Column(Boolean, default=True)
-    priority_learn = Column(Boolean, default=False, server_default="0")
+    priority_learn = Column(
+        Integer,
+        default=VOCABULARY_PRIORITY_DEFAULT,
+        server_default=str(VOCABULARY_PRIORITY_DEFAULT),
+        nullable=False,
+    )
     last_learned = Column(DateTime(timezone=True), nullable=True)
     learned_times = Column(Integer, default=0, server_default="0", nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    __table_args__ = (UniqueConstraint("user_id", "word_phrase", name="uq_user_word_phrase"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "word_phrase", name="uq_user_word_phrase"),
+        CheckConstraint(
+            f"priority_learn >= {VOCABULARY_PRIORITY_HIGH} AND priority_learn <= {VOCABULARY_PRIORITY_LOW}",
+            name="ck_vocabulary_priority_learn_range",
+        ),
+    )
 
 
 class ChatMessage(Base):

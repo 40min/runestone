@@ -10,8 +10,9 @@ import json
 from typing import Any, Optional
 
 # This provides a stable API contract and encapsulates internal schema organization
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
+from runestone.constants import VOCABULARY_PRIORITY_DEFAULT, VOCABULARY_PRIORITY_HIGH, VOCABULARY_PRIORITY_LOW
 from runestone.core.prompt_builder.types import ImprovementMode
 from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, VocabularyItem
 from runestone.schemas.ocr import OCRResult, RecognitionStatistics
@@ -70,7 +71,9 @@ class VocabularyItemCreate(BaseModel):
     example_phrase: Optional[str] = None
     extra_info: Optional[str] = None
     in_learn: bool = True
-    priority_learn: bool = False
+    priority_learn: int = Field(
+        default=VOCABULARY_PRIORITY_DEFAULT, ge=VOCABULARY_PRIORITY_HIGH, le=VOCABULARY_PRIORITY_LOW
+    )
 
 
 class VocabularyUpdate(BaseModel):
@@ -81,7 +84,7 @@ class VocabularyUpdate(BaseModel):
     example_phrase: Optional[str] = None
     extra_info: Optional[str] = None
     in_learn: Optional[bool] = None
-    priority_learn: Optional[bool] = None
+    priority_learn: Optional[int] = Field(default=None, ge=VOCABULARY_PRIORITY_HIGH, le=VOCABULARY_PRIORITY_LOW)
 
 
 class VocabularySaveRequest(BaseModel):
@@ -101,7 +104,9 @@ class Vocabulary(BaseModel):
     example_phrase: Optional[str] = None
     extra_info: Optional[str] = None
     in_learn: bool = True
-    priority_learn: bool = False
+    priority_learn: int = Field(
+        default=VOCABULARY_PRIORITY_DEFAULT, ge=VOCABULARY_PRIORITY_HIGH, le=VOCABULARY_PRIORITY_LOW
+    )
     last_learned: Optional[str] = None
     learned_times: int = 0
     created_at: str

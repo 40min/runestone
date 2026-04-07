@@ -160,6 +160,14 @@ class TestVocabularySchemas:
         )
         assert item.word_phrase == "ett äpple"
         assert item.translation == "an apple"
+        assert item.priority_learn == 9
+
+    def test_vocabulary_item_create_priority_range_validation(self):
+        """Test VocabularyItemCreate validates numeric priority range."""
+        with pytest.raises(ValidationError):
+            VocabularyItemCreate(word_phrase="hej", translation="hello", priority_learn=-1)
+        with pytest.raises(ValidationError):
+            VocabularyItemCreate(word_phrase="hej", translation="hello", priority_learn=10)
 
     def test_vocabulary_save_request(self):
         """Test VocabularySaveRequest schema."""

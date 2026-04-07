@@ -162,7 +162,7 @@ class TestVocabularyService:
                     word_phrase="learned-priority",
                     translation="x",
                     in_learn=True,
-                    priority_learn=True,
+                    priority_learn=2,
                     last_learned=datetime.now(timezone.utc),
                 ),
                 VocabularyModel(
@@ -170,7 +170,7 @@ class TestVocabularyService:
                     word_phrase="active-unlearned",
                     translation="x",
                     in_learn=True,
-                    priority_learn=False,
+                    priority_learn=9,
                     last_learned=None,
                 ),
                 VocabularyModel(
@@ -178,7 +178,7 @@ class TestVocabularyService:
                     word_phrase="deleted-priority",
                     translation="x",
                     in_learn=False,
-                    priority_learn=True,
+                    priority_learn=1,
                     last_learned=None,
                 ),
             ]
@@ -928,7 +928,7 @@ class TestVocabularyService:
 
         vocab = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.word_phrase == "nytt ord"))
         assert vocab is not None
-        assert vocab.priority_learn is True
+        assert vocab.priority_learn == 4
         assert vocab.translation == "new word"
         assert vocab.in_learn is True
 
@@ -936,7 +936,7 @@ class TestVocabularyService:
         """Test upserting an existing word to prioritize it."""
         # Pre-add a regular word
         vocab = VocabularyModel(
-            user_id=1, word_phrase="befintligt", translation="existing", priority_learn=False, in_learn=True
+            user_id=1, word_phrase="befintligt", translation="existing", priority_learn=9, in_learn=True
         )
         db_session.add(vocab)
         await db_session.commit()
@@ -948,7 +948,7 @@ class TestVocabularyService:
 
         # Refresh from DB
         vocab_db = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == vocab.id))
-        assert vocab_db.priority_learn is True
+        assert vocab_db.priority_learn == 8
         assert (
             vocab_db.translation == "existing"
         )  # Upsert of existing word doesn't change translation in current implementation
@@ -957,7 +957,7 @@ class TestVocabularyService:
         """Test that upserting a priority word restores it if it was soft-deleted."""
         # Pre-add a soft-deleted word
         vocab = VocabularyModel(
-            user_id=1, word_phrase="raderat", translation="deleted", priority_learn=False, in_learn=False
+            user_id=1, word_phrase="raderat", translation="deleted", priority_learn=9, in_learn=False
         )
         db_session.add(vocab)
         await db_session.commit()
@@ -968,7 +968,7 @@ class TestVocabularyService:
         # Refresh from DB
         vocab_db = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == vocab.id))
         assert vocab_db.in_learn is True
-        assert vocab_db.priority_learn is True
+        assert vocab_db.priority_learn == 8
 
     async def test_upsert_priority_word_already_prioritized(self, service, db_session):
         """Test upserting an already prioritized word returns explicit no-op action."""
@@ -976,7 +976,7 @@ class TestVocabularyService:
             user_id=1,
             word_phrase="prioriterad",
             translation="prioritized",
-            priority_learn=True,
+            priority_learn=0,
             in_learn=True,
         )
         db_session.add(vocab)
@@ -1048,7 +1048,7 @@ class TestVocabularyService:
             )
 
         assert len(rows) == 1
-        assert rows[0].priority_learn is True
+        assert 0 <= rows[0].priority_learn <= 4
         actions = {result1["action"], result2["action"]}
         assert "created" in actions
         assert actions.issubset({"created", "already_prioritized", "prioritized", "restored"})

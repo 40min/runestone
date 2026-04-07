@@ -755,8 +755,8 @@ async def test_remove_word_completely_success(rune_recall_service, state_manager
         # Success case - no exception raised
         await rune_recall_service.remove_word_completely("active_user", "kontanter")
 
-        # Verify priority flag was reset
-        assert mock_word.priority_learn is False
+        # Verify priority was reset to the default-lowest value.
+        assert mock_word.priority_learn == 9
 
         # Verify repository calls
         rune_recall_service.vocabulary_repository.get_vocabulary_item_by_word_phrase.assert_called_once_with(
@@ -870,13 +870,13 @@ async def test_postpone_word_success(rune_recall_service, state_manager):
         ) as mock_update,
     ):
         mock_vocab = mock_get.return_value
-        mock_vocab.priority_learn = True
+        mock_vocab.priority_learn = 2
 
         # Success case - no exception raised
         await rune_recall_service.postpone_word("active_user", "kontanter")
 
-        # Verify priority flag was reset
-        assert mock_vocab.priority_learn is False
+        # Verify priority was incremented toward 9.
+        assert mock_vocab.priority_learn == 3
         mock_update.assert_called_once_with(mock_vocab)
 
 

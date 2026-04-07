@@ -10,6 +10,7 @@ from datetime import datetime
 
 import httpx
 
+from runestone.constants import VOCABULARY_PRIORITY_LOW
 from runestone.core.exceptions import VocabularyOperationError, WordNotFoundError, WordNotInSelectionError
 from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.state.state_manager import StateManager
@@ -408,8 +409,8 @@ class RuneRecallService:
         if not matching_word:
             raise WordNotFoundError(word_phrase, username)
 
-        # Reset priority flag before deletion
-        matching_word.priority_learn = False
+        # Reset to the default-lowest priority before soft deletion.
+        matching_word.priority_learn = VOCABULARY_PRIORITY_LOW
 
         # Remove from database
         if not await self.vocabulary_repository.delete_vocabulary_item_by_word_phrase(
@@ -441,12 +442,12 @@ class RuneRecallService:
         if not self.remove_word_from_daily_selection(user_data, word_phrase):
             raise WordNotInSelectionError(word_phrase)
 
-        # Reset priority flag when postponing
+        # Lower urgency when postponing by increasing priority value toward low priority.
         vocab_item = await self.vocabulary_repository.get_vocabulary_item_by_word_phrase(
             word_phrase, user_data.db_user_id
         )
         if vocab_item:
-            vocab_item.priority_learn = False
+            vocab_item.priority_learn = min(vocab_item.priority_learn + 1, VOCABULARY_PRIORITY_LOW)
             await self.vocabulary_repository.update_vocabulary_item(vocab_item)
 
         await self.maintain_daily_selection(username, user_data)

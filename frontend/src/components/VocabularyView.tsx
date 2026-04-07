@@ -233,13 +233,7 @@ const VocabularyView: React.FC = () => {
               {
                 key: "priority_learn",
                 label: "Priority",
-                render: (value) => (
-                  <StyledCheckbox
-                    checked={value as boolean}
-                    onChange={() => {}}
-                    sx={{ pointerEvents: "none" }}
-                  />
-                ),
+                render: (value) => <Typography sx={{ color: "white", textAlign: "center" }}>{value as number}</Typography>,
               },
               {
                 key: "last_learned",

@@ -568,7 +568,7 @@ describe("VocabularyView", () => {
         example_phrase: null,
         extra_info: null,
         in_learn: false,
-        priority_learn: false,
+        priority_learn: 9,
         last_learned: null,
         learned_times: 0,
         created_at: "2023-10-27T10:00:00Z",
