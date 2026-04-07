@@ -27,20 +27,25 @@ def upgrade() -> None:
     """Convert boolean priority_learn to numeric 0..9."""
     op.execute("ALTER TABLE vocabulary ALTER COLUMN priority_learn DROP DEFAULT")
     op.execute(
-        """
-        ALTER TABLE vocabulary
-        ALTER COLUMN priority_learn TYPE INTEGER
-        USING CASE
-            WHEN priority_learn THEN %(legacy_true_backfill)s
-            ELSE %(low_priority)s
-        END
-        """
-        % {
+        sa.text(
+            """
+            ALTER TABLE vocabulary
+            ALTER COLUMN priority_learn TYPE INTEGER
+            USING CASE
+                WHEN priority_learn THEN :legacy_true_backfill
+                ELSE :low_priority
+            END
+            """
+        ),
+        {
             "legacy_true_backfill": VOCABULARY_PRIORITY_LEGACY_TRUE_BACKFILL,
             "low_priority": VOCABULARY_PRIORITY_LOW,
-        }
+        },
     )
-    op.execute(f"UPDATE vocabulary SET priority_learn = COALESCE(priority_learn, {VOCABULARY_PRIORITY_LOW})")
+    op.execute(
+        sa.text("UPDATE vocabulary SET priority_learn = COALESCE(priority_learn, :low_priority)"),
+        {"low_priority": VOCABULARY_PRIORITY_LOW},
+    )
     op.alter_column(
         "vocabulary",
         "priority_learn",
@@ -60,12 +65,14 @@ def downgrade() -> None:
     op.drop_constraint("ck_vocabulary_priority_learn_range", "vocabulary", type_="check")
     op.execute("ALTER TABLE vocabulary ALTER COLUMN priority_learn DROP DEFAULT")
     op.execute(
-        """
-        ALTER TABLE vocabulary
-        ALTER COLUMN priority_learn TYPE BOOLEAN
-        USING CASE WHEN priority_learn < %(low_priority)s THEN TRUE ELSE FALSE END
-        """
-        % {"low_priority": VOCABULARY_PRIORITY_LOW}
+        sa.text(
+            """
+            ALTER TABLE vocabulary
+            ALTER COLUMN priority_learn TYPE BOOLEAN
+            USING CASE WHEN priority_learn < :low_priority THEN TRUE ELSE FALSE END
+            """
+        ),
+        {"low_priority": VOCABULARY_PRIORITY_LOW},
     )
     op.alter_column(
         "vocabulary",
