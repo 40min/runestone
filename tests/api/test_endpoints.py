@@ -306,6 +306,17 @@ class TestVocabularyEndpoints:
         response = await client.post("/api/vocabulary/item", json=payload)
         assert response.status_code == 422
 
+    async def test_save_vocabulary_item_boolean_priority_rejected(self, client):
+        """Test vocabulary create validation rejects legacy boolean priority payloads."""
+        payload = {
+            "word_phrase": "en mugg",
+            "translation": "a mug",
+            "priority_learn": False,
+        }
+
+        response = await client.post("/api/vocabulary/item", json=payload)
+        assert response.status_code == 422
+
     async def test_save_vocabulary_item_duplicate(self, client):
         """Test saving a duplicate vocabulary item raises an error."""
         # First save
@@ -489,6 +500,25 @@ class TestSettingsDependency:
         item_id = response.json()[0]["id"]
 
         update_payload = {"priority_learn": -1}
+        response = await client.put(f"/api/vocabulary/{item_id}", json=update_payload)
+        assert response.status_code == 422
+
+    async def test_update_vocabulary_priority_boolean_rejected(self, client):
+        """Test vocabulary update validation rejects legacy boolean priority payloads."""
+        payload = {
+            "items": [
+                {
+                    "word_phrase": "en lampa",
+                    "translation": "a lamp",
+                }
+            ]
+        }
+        await client.post("/api/vocabulary", json=payload)
+
+        response = await client.get("/api/vocabulary")
+        item_id = response.json()[0]["id"]
+
+        update_payload = {"priority_learn": True}
         response = await client.put(f"/api/vocabulary/{item_id}", json=update_payload)
         assert response.status_code == 422
 

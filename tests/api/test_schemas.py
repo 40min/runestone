@@ -20,6 +20,7 @@ from runestone.api.schemas import (
     VocabularyItem,
     VocabularyItemCreate,
     VocabularySaveRequest,
+    VocabularyUpdate,
 )
 from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 
@@ -168,6 +169,20 @@ class TestVocabularySchemas:
             VocabularyItemCreate(word_phrase="hej", translation="hello", priority_learn=-1)
         with pytest.raises(ValidationError):
             VocabularyItemCreate(word_phrase="hej", translation="hello", priority_learn=10)
+
+    def test_vocabulary_item_create_priority_rejects_boolean(self):
+        """Test VocabularyItemCreate rejects legacy boolean priority payloads."""
+        with pytest.raises(ValidationError):
+            VocabularyItemCreate(word_phrase="hej", translation="hello", priority_learn=False)
+        with pytest.raises(ValidationError):
+            VocabularyItemCreate(word_phrase="hej", translation="hello", priority_learn=True)
+
+    def test_vocabulary_update_priority_rejects_boolean(self):
+        """Test VocabularyUpdate rejects legacy boolean priority payloads."""
+        with pytest.raises(ValidationError):
+            VocabularyUpdate(priority_learn=False)
+        with pytest.raises(ValidationError):
+            VocabularyUpdate(priority_learn=True)
 
     def test_vocabulary_save_request(self):
         """Test VocabularySaveRequest schema."""

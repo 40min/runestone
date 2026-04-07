@@ -75,6 +75,14 @@ class VocabularyItemCreate(BaseModel):
         default=VOCABULARY_PRIORITY_DEFAULT, ge=VOCABULARY_PRIORITY_HIGH, le=VOCABULARY_PRIORITY_LOW
     )
 
+    @field_validator("priority_learn", mode="before")
+    @classmethod
+    def reject_boolean_priority_learn(cls, v: Any) -> Any:
+        """Reject legacy boolean payloads to avoid silent bool->int coercion."""
+        if isinstance(v, bool):
+            raise ValueError("priority_learn must be an integer between 0 and 9")
+        return v
+
 
 class VocabularyUpdate(BaseModel):
     """Schema for updating vocabulary items."""
@@ -85,6 +93,14 @@ class VocabularyUpdate(BaseModel):
     extra_info: Optional[str] = None
     in_learn: Optional[bool] = None
     priority_learn: Optional[int] = Field(default=None, ge=VOCABULARY_PRIORITY_HIGH, le=VOCABULARY_PRIORITY_LOW)
+
+    @field_validator("priority_learn", mode="before")
+    @classmethod
+    def reject_boolean_priority_learn(cls, v: Any) -> Any:
+        """Reject legacy boolean payloads to avoid silent bool->int coercion."""
+        if isinstance(v, bool):
+            raise ValueError("priority_learn must be an integer between 0 and 9")
+        return v
 
 
 class VocabularySaveRequest(BaseModel):
