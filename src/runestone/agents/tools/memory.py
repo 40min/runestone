@@ -15,6 +15,7 @@ from runestone.agents.service_providers import provide_memory_item_service
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.utils import serialize_memory_items
 from runestone.api.memory_item_schemas import MemoryCategory, MemoryItemCreate
+from runestone.core.exceptions import PermissionDeniedError, UserNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,12 @@ class MemoryDeleteInput(BaseModel):
     """Input for deleting a memory item."""
 
     item_id: int = Field(..., description="ID of the memory item to delete")
+
+
+def _format_tool_error(tool_name: str, exc: Exception) -> str:
+    """Return agent-readable tool errors for expected memory business rule failures."""
+    logger.warning("Agent tool call failed: %s: %s", tool_name, exc)
+    return f"Tool error in {tool_name}: {exc}"
 
 
 @tool
@@ -160,8 +167,11 @@ async def update_memory_status(
     user = runtime.context.user
 
     # Use fresh service with its own session for concurrency safety
-    async with provide_memory_item_service() as service:
-        result = await service.update_item_status(update.item_id, update.new_status, user.id)
+    try:
+        async with provide_memory_item_service() as service:
+            result = await service.update_item_status(update.item_id, update.new_status, user.id)
+    except (PermissionDeniedError, UserNotFoundError, ValueError) as exc:
+        return _format_tool_error("update_memory_status", exc)
 
     return f"Status updated: [ID:{result.id}] {result.key} is now '{result.status}'"
 
@@ -190,8 +200,11 @@ async def update_memory_priority(
     logger.info("Agent tool call: update_memory_priority (item_id=%s, priority=%s)", update.item_id, update.priority)
     user = runtime.context.user
 
-    async with provide_memory_item_service() as service:
-        result = await service.update_item_priority(update.item_id, update.priority, user.id)
+    try:
+        async with provide_memory_item_service() as service:
+            result = await service.update_item_priority(update.item_id, update.priority, user.id)
+    except (PermissionDeniedError, UserNotFoundError, ValueError) as exc:
+        return _format_tool_error("update_memory_priority", exc)
 
     return f"Priority updated: [ID:{result.id}] {result.key} priority is now {result.priority}"
 
@@ -218,8 +231,11 @@ async def promote_to_strength(
     user = runtime.context.user
 
     # Use fresh service with its own session for concurrency safety
-    async with provide_memory_item_service() as service:
-        result = await service.promote_to_strength(promote.item_id, user.id)
+    try:
+        async with provide_memory_item_service() as service:
+            result = await service.promote_to_strength(promote.item_id, user.id)
+    except (PermissionDeniedError, UserNotFoundError, ValueError) as exc:
+        return _format_tool_error("promote_to_strength", exc)
 
     return f"Promoted to knowledge_strength: [ID:{result.id}] {result.key}"
 
@@ -239,7 +255,10 @@ async def delete_memory_item(
     user = runtime.context.user
 
     # Use fresh service with its own session for concurrency safety
-    async with provide_memory_item_service() as service:
-        await service.delete_item(delete.item_id, user.id)
+    try:
+        async with provide_memory_item_service() as service:
+            await service.delete_item(delete.item_id, user.id)
+    except (PermissionDeniedError, UserNotFoundError, ValueError) as exc:
+        return _format_tool_error("delete_memory_item", exc)
 
     return f"Deleted memory item: [ID:{delete.item_id}]"

@@ -5,7 +5,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from runestone.agents.specialists.base import SpecialistContext
-from runestone.agents.specialists.memory_keeper import MemoryKeeperSpecialist
+from runestone.agents.specialists.memory_keeper import MEMORY_KEEPER_SYSTEM_PROMPT, MemoryKeeperSpecialist
 
 
 @pytest.fixture
@@ -138,3 +138,8 @@ async def test_memory_keeper_parses_fenced_json_output(specialist, mock_user):
 
     assert result.status == "no_action"
     assert result.artifacts["trigger_source"] == "none"
+
+
+def test_memory_keeper_prompt_requires_mastered_state_before_promotion():
+    assert "confirm via `read_memory` that the target item is already" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "first call `update_memory_status` to set it to `mastered`" in MEMORY_KEEPER_SYSTEM_PROMPT

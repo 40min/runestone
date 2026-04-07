@@ -70,6 +70,10 @@ If no trigger is detected → return `no_action` immediately. Do not call any to
 
 **Promotion**: use `promote_to_strength` to graduate an item from `area_to_improve` →
 `knowledge_strength`. Do not manually delete and recreate.
+Before calling it, confirm via `read_memory` that the target item is already in
+`area_to_improve` with status `mastered`.
+If the signal is "now mastered" but the existing item is still `struggling` or `improving`,
+first call `update_memory_status` to set it to `mastered`. Promote only after that state exists.
 
 ## Allowed Tools
 `read_memory`, `upsert_memory_item`, `update_memory_status`,
