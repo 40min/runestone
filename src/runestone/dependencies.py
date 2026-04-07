@@ -351,16 +351,14 @@ def get_chat_service(
     )
 
 
-def get_voice_service(
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> VoiceService:
+def get_voice_service(request: Request) -> VoiceService:
     """
-    Get voice service instance.
+    Get voice service singleton instance.
 
     Args:
-        settings: Application settings from dependency injection
+        request: FastAPI request object
 
     Returns:
-        VoiceService: Service instance for voice transcription operations
+        VoiceService: Cached singleton service instance for voice transcription operations
     """
-    return VoiceService(settings)
+    return request.app.state.voice_service
