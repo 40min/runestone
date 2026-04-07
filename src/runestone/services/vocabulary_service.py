@@ -309,7 +309,7 @@ class VocabularyService:
         return list(await self.repo.get_existing_word_phrases_for_batch(word_phrases, user_id))
 
     async def upsert_priority_word(self, word_phrase: str, translation: str, example_phrase: str, user_id: int) -> dict:
-        """Upsert a word with priority_learn=True. Restores deleted words.
+        """Upsert a word with elevated numeric priority. Restores deleted words.
 
         Returns:
             dict: action metadata for observability and caller summaries.

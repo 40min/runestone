@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.schemas import VocabularyItemCreate, VocabularyStatsResponse
+from ..constants import VOCABULARY_PRIORITY_AGENT_NEW, VOCABULARY_PRIORITY_HIGH, VOCABULARY_PRIORITY_LOW
 from ..utils.search import parse_search_query_with_wildcards
 from .models import Vocabulary
 
@@ -67,6 +68,9 @@ class VocabularyRepository:
         """Atomically upsert a priority word and return action metadata.
 
         Uses a single PostgreSQL statement with ON CONFLICT DO UPDATE.
+        Existing and restored words are reprioritized by decrementing
+        `priority_learn` toward the minimum, while new words start from
+        the agent-default priority.
         """
         stmt = text(
             """
@@ -77,25 +81,25 @@ class VocabularyRepository:
             ),
             upserted AS (
                 INSERT INTO vocabulary (user_id, word_phrase, translation, example_phrase, in_learn, priority_learn)
-                VALUES (:user_id, :word_phrase, :translation, :example_phrase, TRUE, TRUE)
+                VALUES (:user_id, :word_phrase, :translation, :example_phrase, TRUE, :new_word_priority)
                 ON CONFLICT (user_id, word_phrase) DO UPDATE
                 SET
                     in_learn = TRUE,
-                    priority_learn = TRUE,
+                    priority_learn = GREATEST(vocabulary.priority_learn - 1, :min_priority),
                     updated_at = NOW()
-                RETURNING id, (xmax = 0) AS inserted
+                RETURNING id, priority_learn, (xmax = 0) AS inserted
             )
             SELECT
                 u.id AS word_id,
                 CASE
                     WHEN u.inserted THEN 'created'
                     WHEN e.in_learn IS FALSE THEN 'restored'
-                    WHEN e.priority_learn IS FALSE THEN 'prioritized'
+                    WHEN u.priority_learn < e.priority_learn THEN 'prioritized'
                     ELSE 'already_prioritized'
                 END AS action,
                 CASE
                     WHEN u.inserted THEN TRUE
-                    WHEN e.in_learn IS FALSE OR e.priority_learn IS FALSE THEN TRUE
+                    WHEN e.in_learn IS FALSE OR u.priority_learn < e.priority_learn THEN TRUE
                     ELSE FALSE
                 END AS changed
             FROM upserted u
@@ -109,6 +113,8 @@ class VocabularyRepository:
                 "word_phrase": word_phrase,
                 "translation": translation,
                 "example_phrase": example_phrase,
+                "new_word_priority": VOCABULARY_PRIORITY_AGENT_NEW,
+                "min_priority": VOCABULARY_PRIORITY_HIGH,
             },
         )
         row = result.mappings().one()
@@ -136,6 +142,7 @@ class VocabularyRepository:
                 "example_phrase": item.example_phrase,
                 "extra_info": item.extra_info,
                 "in_learn": item.in_learn,
+                "priority_learn": item.priority_learn,
                 "last_learned": None,
             }
             for item in items
@@ -233,7 +240,7 @@ class VocabularyRepository:
     async def select_new_daily_words(
         self, user_id: int, cooldown_days: int = 7, limit: int = 100, excluded_word_ids: Optional[List[int]] = None
     ) -> List[Vocabulary]:
-        """Select new daily words for a user, prioritizing words marked for priority learning."""
+        """Select eligible daily words in deterministic priority/age order."""
         cutoff_date = datetime.now() - timedelta(days=cooldown_days)
 
         # Build base filter conditions
@@ -246,34 +253,14 @@ class VocabularyRepository:
         if excluded_word_ids:
             base_filter.append(~Vocabulary.id.in_(excluded_word_ids))
 
-        # First: select priority words
-        stmt_prioritized = (
+        stmt = (
             select(Vocabulary)
-            .filter(*base_filter, Vocabulary.priority_learn.is_(True))
-            .order_by(func.random())
+            .filter(*base_filter)
+            .order_by(Vocabulary.priority_learn.asc(), Vocabulary.updated_at.asc(), Vocabulary.id.asc())
             .limit(limit)
         )
-        result_prioritized = await self.db.execute(stmt_prioritized)
-        prioritized = list(result_prioritized.scalars().all())
-
-        # If we have enough priority words, return them
-        if len(prioritized) >= limit:
-            return prioritized
-
-        # Fill remaining slots with non-priority words
-        remaining = limit - len(prioritized)
-        prioritized_ids = [w.id for w in prioritized]
-
-        # Build filter for regular words (excluding already selected priority words)
-        regular_filter = base_filter + [Vocabulary.priority_learn.is_(False)]
-        if prioritized_ids:
-            regular_filter.append(~Vocabulary.id.in_(prioritized_ids))
-
-        stmt_regular = select(Vocabulary).filter(*regular_filter).order_by(func.random()).limit(remaining)
-        result_regular = await self.db.execute(stmt_regular)
-        regular = list(result_regular.scalars().all())
-
-        return prioritized + regular
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
 
     async def get_vocabulary_item_for_recall(self, item_id: int, user_id: int) -> Vocabulary:
         """Get a vocabulary item by ID and user_id, ensuring it's in learning."""
@@ -372,11 +359,11 @@ class VocabularyRepository:
         return result.scalar() or 0
 
     async def get_words_prioritized_count(self, user_id: int) -> int:
-        """Get count of active vocabulary items flagged for priority learning."""
+        """Get count of active vocabulary items with elevated priority."""
         stmt = select(func.count(Vocabulary.id)).filter(
             Vocabulary.user_id == user_id,
             Vocabulary.in_learn.is_(True),
-            Vocabulary.priority_learn.is_(True),
+            Vocabulary.priority_learn < VOCABULARY_PRIORITY_LOW,
         )
         result = await self.db.execute(stmt)
         return result.scalar() or 0
@@ -410,7 +397,7 @@ class VocabularyRepository:
                         (
                             and_(
                                 Vocabulary.in_learn.is_(True),
-                                Vocabulary.priority_learn.is_(True),
+                                Vocabulary.priority_learn < VOCABULARY_PRIORITY_LOW,
                             ),
                             1,
                         ),

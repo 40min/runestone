@@ -468,6 +468,12 @@ Output artifacts:
 - skipped words
 - tool action summary
 
+Priority behavior:
+
+- normal/manual vocabulary defaults to `priority_learn=9`
+- WordKeeper/`prioritize_words_for_learning` decrements existing/restored words (`max(priority-1, 0)`)
+- brand-new agent-created words start at `priority_learn=4`
+
 ### MemoryKeeper Contract
 
 Input:

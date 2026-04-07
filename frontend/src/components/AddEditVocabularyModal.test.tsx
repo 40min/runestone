@@ -63,7 +63,8 @@ describe("AddEditVocabularyModal", () => {
       screen.getByLabelText("Example Phrase (Optional)")
     ).toBeInTheDocument();
     expect(screen.getByText("In Learning")).toBeInTheDocument();
-    expect(screen.getByText("Priority Learn")).toBeInTheDocument();
+    expect(screen.getByLabelText("Priority (0-9)")).toBeInTheDocument();
+    expect(screen.getByText("0 = highest, 9 = lowest/default")).toBeInTheDocument();
   });
 
   it("renders the modal for editing an existing item", () => {
@@ -73,7 +74,9 @@ describe("AddEditVocabularyModal", () => {
       word_phrase: "hej",
       translation: "hello",
       example_phrase: "Hej, hur mår du?",
+      extra_info: null,
       in_learn: true,
+      priority_learn: 9,
       last_learned: null,
       created_at: "2023-10-27T10:00:00Z",
     };
@@ -222,7 +225,7 @@ describe("AddEditVocabularyModal", () => {
       example_phrase: "Hej, hur mår du?",
       extra_info: null,
       in_learn: true,
-      priority_learn: false,
+      priority_learn: 9,
     });
   });
   it("calls onSave with in_learn: false when checkbox is unchecked", async () => {
@@ -246,21 +249,22 @@ describe("AddEditVocabularyModal", () => {
       example_phrase: null,
       extra_info: null,
       in_learn: false,
-      priority_learn: false,
+      priority_learn: 9,
     });
   });
 
-  it("calls onSave with priority_learn: true when Priority Learn checkbox is checked", async () => {
+  it("calls onSave with selected numeric priority", async () => {
     const user = userEvent.setup();
     renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
     const wordInput = screen.getByLabelText("Swedish Word/Phrase");
     const translationInput = screen.getByLabelText("English Translation");
-    const checkbox = screen.getByRole("checkbox", { name: "Priority Learn" });
+    const prioritySelect = screen.getByLabelText("Priority (0-9)");
 
     await user.type(wordInput, "hej");
     await user.type(translationInput, "hello");
-    await user.click(checkbox); // Check the checkbox
+    await user.click(prioritySelect);
+    await user.click(screen.getByRole("option", { name: "2" }));
 
     const saveButton = screen.getByRole("button", { name: "Add Item" });
     await user.click(saveButton);
@@ -271,7 +275,7 @@ describe("AddEditVocabularyModal", () => {
       example_phrase: null,
       extra_info: null,
       in_learn: true,
-      priority_learn: true,
+      priority_learn: 2,
     });
   });
 
@@ -329,7 +333,9 @@ describe("AddEditVocabularyModal", () => {
       word_phrase: "hej",
       translation: "hello",
       example_phrase: null,
+      extra_info: null,
       in_learn: false,
+      priority_learn: 9,
       last_learned: null,
       created_at: "2023-10-27T10:00:00Z",
     };
@@ -347,7 +353,9 @@ describe("AddEditVocabularyModal", () => {
       word_phrase: "hej",
       translation: "hello",
       example_phrase: null,
+      extra_info: null,
       in_learn: false,
+      priority_learn: 9,
       last_learned: null,
       created_at: "2023-10-27T10:00:00Z",
     };

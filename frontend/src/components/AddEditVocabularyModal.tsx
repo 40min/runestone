@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Modal, Box, TextField, Typography, IconButton } from "@mui/material";
+import { Modal, Box, TextField, Typography, IconButton, FormControl, InputLabel, Select, MenuItem } from "@mui/material";
 import AutoFixNormal from "@mui/icons-material/AutoFixNormal";
 import AutoFixHigh from "@mui/icons-material/AutoFixHigh";
 import { CustomButton, StyledCheckbox } from "./ui";
@@ -15,7 +15,7 @@ interface SavedVocabularyItem {
   example_phrase: string | null;
   extra_info: string | null;
   in_learn: boolean;
-  priority_learn: boolean;
+  priority_learn: number;
   last_learned: string | null;
   created_at: string;
 }
@@ -61,7 +61,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   const [examplePhrase, setExamplePhrase] = useState("");
   const [extraInfo, setExtraInfo] = useState("");
   const [inLearn, setInLearn] = useState(false);
-  const [priorityLearn, setPriorityLearn] = useState(false);
+  const [priorityLearn, setPriorityLearn] = useState(9);
   const [isImproving, setIsImproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,7 +83,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
       setExamplePhrase("");
       setExtraInfo("");
       setInLearn(true);
-      setPriorityLearn(false);
+      setPriorityLearn(9);
     }
   }, [item, open]);
 
@@ -276,11 +276,42 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
                 onChange={setInLearn}
                 label="In Learning"
               />
-              <StyledCheckbox
-                checked={priorityLearn}
-                onChange={setPriorityLearn}
-                label="Priority Learn"
-              />
+              <FormControl size="small" sx={{ minWidth: 220 }}>
+                <InputLabel id="priority-learn-select-label" sx={{ color: "#9ca3af" }}>
+                  Priority (0-9)
+                </InputLabel>
+                <Select
+                  labelId="priority-learn-select-label"
+                  id="priority-learn-select"
+                  value={priorityLearn}
+                  label="Priority (0-9)"
+                  onChange={(event) => setPriorityLearn(Number(event.target.value))}
+                  sx={{
+                    color: "white",
+                    "& .MuiOutlinedInput-notchedOutline": {
+                      borderColor: "#374151",
+                    },
+                    "&:hover .MuiOutlinedInput-notchedOutline": {
+                      borderColor: "#6b7280",
+                    },
+                    "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                      borderColor: "var(--primary-color)",
+                    },
+                    "& .MuiSvgIcon-root": {
+                      color: "#9ca3af",
+                    },
+                  }}
+                >
+                  {Array.from({ length: 10 }, (_, priority) => (
+                    <MenuItem key={priority} value={priority}>
+                      {priority}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Typography sx={{ color: "#9ca3af", fontSize: "0.75rem" }}>
+                0 = highest, 9 = lowest/default
+              </Typography>
             </Box>
             <IconButton
               onClick={handleFillAll}

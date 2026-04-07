@@ -45,14 +45,14 @@ async def prioritize_words_for_learning(
     runtime: ToolRuntime[AgentContext],
 ) -> str:
     """
-    Save useful/interesting words for future learning and mark them for priority recall.
+    Save useful/interesting words for future learning and raise recall priority.
     Use during normal conversation whenever the student asks to save vocabulary
     or when a word is clearly worth practicing later.
 
     For each word:
-    - If deleted: restores it and marks for priority
-    - If exists: marks for priority (or confirms already prioritized)
-    - If new: creates it with priority flag
+    - If deleted: restores it and decrements priority toward 0
+    - If exists: decrements priority toward 0 (or confirms already at 0)
+    - If new: creates it at priority 4
 
     Args:
         words: List of words to save and prioritize for learning

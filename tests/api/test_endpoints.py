@@ -275,10 +275,47 @@ class TestVocabularyEndpoints:
         assert data["example_phrase"] == "Jag äter ett äpple varje dag."
         assert data["user_id"] == 1
         assert data["in_learn"] is True
+        assert data["priority_learn"] == 9
         assert data["last_learned"] is None
         assert "id" in data
         assert "created_at" in data
         assert "updated_at" in data
+
+    async def test_save_vocabulary_item_custom_priority(self, client):
+        """Test saving a vocabulary item with explicit numeric priority."""
+        payload = {
+            "word_phrase": "en stol",
+            "translation": "a chair",
+            "priority_learn": 2,
+        }
+
+        response = await client.post("/api/vocabulary/item", json=payload)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["priority_learn"] == 2
+
+    async def test_save_vocabulary_item_invalid_priority(self, client):
+        """Test vocabulary create validation for out-of-range priority."""
+        payload = {
+            "word_phrase": "ett bord",
+            "translation": "a table",
+            "priority_learn": 10,
+        }
+
+        response = await client.post("/api/vocabulary/item", json=payload)
+        assert response.status_code == 422
+
+    async def test_save_vocabulary_item_boolean_priority_rejected(self, client):
+        """Test vocabulary create validation rejects legacy boolean priority payloads."""
+        payload = {
+            "word_phrase": "en mugg",
+            "translation": "a mug",
+            "priority_learn": False,
+        }
+
+        response = await client.post("/api/vocabulary/item", json=payload)
+        assert response.status_code == 422
 
     async def test_save_vocabulary_item_duplicate(self, client):
         """Test saving a duplicate vocabulary item raises an error."""
@@ -446,6 +483,44 @@ class TestSettingsDependency:
         assert updated_data["translation"] == "a red apple"
         assert updated_data["example_phrase"] == "Jag äter ett äpple varje dag."  # Unchanged
         assert updated_data["in_learn"] is False
+
+    async def test_update_vocabulary_priority_validation(self, client):
+        """Test vocabulary update validation for out-of-range priority."""
+        payload = {
+            "items": [
+                {
+                    "word_phrase": "ett hus",
+                    "translation": "a house",
+                }
+            ]
+        }
+        await client.post("/api/vocabulary", json=payload)
+
+        response = await client.get("/api/vocabulary")
+        item_id = response.json()[0]["id"]
+
+        update_payload = {"priority_learn": -1}
+        response = await client.put(f"/api/vocabulary/{item_id}", json=update_payload)
+        assert response.status_code == 422
+
+    async def test_update_vocabulary_priority_boolean_rejected(self, client):
+        """Test vocabulary update validation rejects legacy boolean priority payloads."""
+        payload = {
+            "items": [
+                {
+                    "word_phrase": "en lampa",
+                    "translation": "a lamp",
+                }
+            ]
+        }
+        await client.post("/api/vocabulary", json=payload)
+
+        response = await client.get("/api/vocabulary")
+        item_id = response.json()[0]["id"]
+
+        update_payload = {"priority_learn": True}
+        response = await client.put(f"/api/vocabulary/{item_id}", json=update_payload)
+        assert response.status_code == 422
 
     async def test_update_vocabulary_partial(self, client):
         """Test updating vocabulary with partial fields."""

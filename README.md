@@ -179,6 +179,32 @@ The bot will:
 - Send vocabulary recall words at configured intervals (default: every 60 minutes)
 - Process user interactions via Telegram
 
+### Vocabulary Priority Model
+
+Vocabulary items use a numeric `priority_learn` scale:
+
+- `0` = highest recall priority
+- `9` = lowest priority (default for normal/manual saves)
+
+Daily recall selection is deterministic and ordered by:
+
+1. `priority_learn` ascending
+2. `updated_at` ascending (oldest first)
+3. `id` ascending
+
+Cooldown and exclusion filters are applied before this ordering.
+
+Agent-driven saves (`prioritize_words_for_learning` / WordKeeper) use `priority--` behavior:
+
+- Existing/restored words: `priority_learn = max(priority_learn - 1, 0)`
+- Brand-new agent-created words: start at `4`
+
+Telegram `/postpone` lowers urgency:
+
+- Removes the word from today’s selection
+- Persists `priority_learn = min(priority_learn + 1, 9)`
+- Refills the daily gap using the same deterministic ordering
+
 **Prerequisites:**
 - Set `TELEGRAM_BOT_TOKEN` environment variable with your bot token from @BotFather
 - Ensure vocabulary data is available in the database
