@@ -46,10 +46,15 @@ def test_create_voice_synthesis_client_openai(mock_create_openai):
     mock_create_openai.assert_called_once_with(settings)
 
 
-def test_create_voice_synthesis_client_elevenlabs_not_implemented():
-    """ElevenLabs TTS provider is intentionally not available in phase 1."""
+@patch("runestone.core.clients.voice.voice_factory._create_elevenlabs_voice_client")
+def test_create_voice_synthesis_client_elevenlabs(mock_create_elevenlabs):
+    """ElevenLabs TTS provider should resolve to ElevenLabs voice client."""
     settings = Mock(spec=Settings)
     settings.tts_provider = "elevenlabs"
+    expected = Mock()
+    mock_create_elevenlabs.return_value = expected
 
-    with pytest.raises(RunestoneError, match="TTS_PROVIDER=elevenlabs is not implemented yet"):
-        create_voice_synthesis_client(settings)
+    result = create_voice_synthesis_client(settings)
+
+    assert result is expected
+    mock_create_elevenlabs.assert_called_once_with(settings)
