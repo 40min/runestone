@@ -117,8 +117,7 @@ const ChatView: React.FC = () => {
   const isAnyProcessing =
     isLoading || isUploading || isTranscribing || isSyncingHistory;
   const lastAssistantMessageId =
-    [...messages].reverse().find((message) => message.role === "assistant")?.id ??
-    null;
+    messages.findLast((message) => message.role === "assistant")?.id ?? null;
 
   const scrollToLastMessage = (
     behavior: ScrollBehavior,
