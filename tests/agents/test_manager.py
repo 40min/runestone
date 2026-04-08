@@ -29,6 +29,7 @@ def mock_settings():
     settings.news_agent_model = "test-model"
     settings.memory_keeper_provider = "openrouter"
     settings.memory_keeper_model = "test-model"
+    settings.memory_mastered_cleanup_days = 7
     settings.agent_persona = "default"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
@@ -213,7 +214,31 @@ async def test_prepare_pre_turn_runs_cleanup_on_first_turn(
         side_effect_service=mock_side_effect_service,
     )
 
-    mock_memory_item_service.cleanup_old_mastered_areas.assert_called_once_with(mock_user.id, older_than_days=90)
+    mock_memory_item_service.cleanup_old_mastered_areas.assert_called_once_with(
+        mock_user.id,
+        older_than_days=mock_settings.memory_mastered_cleanup_days,
+    )
+
+
+@pytest.mark.anyio
+async def test_prepare_pre_turn_uses_configured_cleanup_days(
+    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+):
+    mock_settings.memory_mastered_cleanup_days = 3
+    manager = AgentsManager(mock_settings)
+    manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
+    manager.teacher = AsyncMock()
+
+    await manager.prepare_pre_turn(
+        message="Hello",
+        chat_id="chat-1",
+        history=[],
+        user=mock_user,
+        memory_item_service=mock_memory_item_service,
+        side_effect_service=mock_side_effect_service,
+    )
+
+    mock_memory_item_service.cleanup_old_mastered_areas.assert_called_once_with(mock_user.id, older_than_days=3)
 
 
 @pytest.mark.anyio
