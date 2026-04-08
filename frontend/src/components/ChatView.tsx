@@ -92,7 +92,17 @@ const ChatView: React.FC = () => {
     clearError: clearVoiceError,
   } = useVoiceRecording(improveTranscription);
 
-  const { isPlaying: isAudioPlaying } = useAudioPlayback(voiceEnabled);
+  const {
+    isPlaying: isAudioPlaying,
+    canReplay,
+    playbackMessageId,
+    pendingMessageId,
+    play,
+    pause,
+    replayLast,
+    setExpectedMessageId,
+    clearPlayback,
+  } = useAudioPlayback(voiceEnabled);
 
   const canUseMicrophone =
     typeof window !== "undefined" &&
@@ -106,6 +116,8 @@ const ChatView: React.FC = () => {
   // reacts on every poll cycle even when no new messages arrived.
   const isAnyProcessing =
     isLoading || isUploading || isTranscribing || isSyncingHistory;
+  const lastAssistantMessageId =
+    messages.findLast((message) => message.role === "assistant")?.id ?? null;
 
   const scrollToLastMessage = (
     behavior: ScrollBehavior,
@@ -206,7 +218,14 @@ const ChatView: React.FC = () => {
 
     const messageToSend = inputMessage.trim();
     setInputMessage("");
-    await sendMessage(messageToSend, voiceEnabled, speechSpeed);
+    const assistantMessageId = await sendMessage(
+      messageToSend,
+      voiceEnabled,
+      speechSpeed,
+    );
+    if (voiceEnabled && assistantMessageId) {
+      setExpectedMessageId(assistantMessageId);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -231,6 +250,7 @@ const ChatView: React.FC = () => {
   const handleNewChat = async () => {
     clearImages();
     await startNewChat();
+    clearPlayback();
   };
 
   const handleStartRecording = async () => {
@@ -241,7 +261,14 @@ const ChatView: React.FC = () => {
     const transcribedText = await stopRecording();
     if (transcribedText) {
       if (autoSend) {
-        await sendMessage(transcribedText, voiceEnabled, speechSpeed);
+        const assistantMessageId = await sendMessage(
+          transcribedText,
+          voiceEnabled,
+          speechSpeed,
+        );
+        if (voiceEnabled && assistantMessageId) {
+          setExpectedMessageId(assistantMessageId);
+        }
       } else {
         setInputMessage(transcribedText);
       }
@@ -295,6 +322,20 @@ const ChatView: React.FC = () => {
                   sources={msg.sources}
                   responseTimeMs={msg.responseTimeMs}
                   isLast={index === messages.length - 1}
+                  showAudioControls={
+                    msg.role === "assistant" &&
+                    msg.id === lastAssistantMessageId &&
+                    (msg.id === playbackMessageId || msg.id === pendingMessageId)
+                  }
+                  isAudioPlaying={msg.id === playbackMessageId && isAudioPlaying}
+                  canReplayAudio={msg.id === playbackMessageId && canReplay}
+                  onPlayAudio={() => {
+                    void play();
+                  }}
+                  onPauseAudio={pause}
+                  onReplayAudio={() => {
+                    void replayLast();
+                  }}
                 />
               </div>
             ))

@@ -156,6 +156,61 @@ describe('useChat', () => {
     });
   });
 
+  it('should preserve optimistic assistant message id after history synchronization', async () => {
+    mockNow.mockReturnValueOnce(1000).mockReturnValueOnce(1500);
+    let historyCallCount = 0;
+
+    mockFetch.mockImplementation((url, options) => {
+      if (options?.method === 'GET' || !options?.method) {
+        historyCallCount++;
+        if (historyCallCount === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(buildHistoryPayload([], 'chat-1', 0)),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve(
+              buildHistoryPayload(
+                [{ id: 99, role: 'assistant', content: 'Hej! Jag mår bra, tack!' }],
+                'chat-1',
+                99
+              )
+            ),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Hej! Jag mår bra, tack!' }),
+      });
+    });
+
+    const { result } = renderHook(() => useChat());
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.sendMessage('Hej! Hur mår du?', true, 1.1);
+    });
+
+    const optimisticAssistant = result.current.messages.find((m) => m.role === 'assistant');
+    expect(optimisticAssistant).toBeTruthy();
+    const optimisticId = optimisticAssistant!.id;
+
+    await waitFor(() => {
+      const assistant = result.current.messages.find((m) => m.role === 'assistant');
+      expect(assistant?.serverId).toBe(99);
+    });
+
+    const syncedAssistant = result.current.messages.find((m) => m.role === 'assistant');
+    expect(syncedAssistant?.id).toBe(optimisticId);
+  });
+
   it('should send message with conversation history', async () => {
     let callCount = 0;
     mockFetch.mockImplementation((url) => {

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { Box, IconButton, Link, Typography } from "@mui/material";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { Box, Button, IconButton, Link, Typography } from "@mui/material";
+import { ChevronDown, ChevronUp, Pause, Play, RotateCcw } from "lucide-react";
 import { formatResponseTime } from "./ChatMessageBubble.utils";
 
 interface ChatMessageBubbleProps {
@@ -9,6 +9,12 @@ interface ChatMessageBubbleProps {
   sources?: { title: string; url: string; date: string }[] | null;
   responseTimeMs?: number;
   isLast?: boolean;
+  showAudioControls?: boolean;
+  isAudioPlaying?: boolean;
+  canReplayAudio?: boolean;
+  onPlayAudio?: () => void;
+  onPauseAudio?: () => void;
+  onReplayAudio?: () => void;
 }
 
 export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
@@ -17,6 +23,12 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   sources,
   responseTimeMs,
   isLast,
+  showAudioControls = false,
+  isAudioPlaying = false,
+  canReplayAudio = false,
+  onPlayAudio,
+  onPauseAudio,
+  onReplayAudio,
 }) => {
   const maxCollapsedChars = 200;
   const isLongMessage = content.length > maxCollapsedChars;
@@ -159,6 +171,63 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
             >
               {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
             </IconButton>
+          </Box>
+        )}
+        {role === "assistant" && showAudioControls && (
+          <Box
+            sx={{
+              display: "flex",
+              gap: 1,
+              flexWrap: "wrap",
+              mt: 1.25,
+              pt: 1,
+              borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+            }}
+          >
+            {isAudioPlaying ? (
+              <Button
+                size="small"
+                variant="text"
+                onClick={onPauseAudio}
+                startIcon={<Pause size={14} />}
+                sx={{
+                  color: "var(--primary-color)",
+                  minWidth: "auto",
+                  px: 1,
+                }}
+              >
+                Pause
+              </Button>
+            ) : (
+              <Button
+                size="small"
+                variant="text"
+                onClick={onPlayAudio}
+                disabled={!canReplayAudio}
+                startIcon={<Play size={14} />}
+                sx={{
+                  color: "var(--primary-color)",
+                  minWidth: "auto",
+                  px: 1,
+                }}
+              >
+                Play
+              </Button>
+            )}
+            <Button
+              size="small"
+              variant="text"
+              onClick={onReplayAudio}
+              disabled={!canReplayAudio}
+              startIcon={<RotateCcw size={14} />}
+              sx={{
+                color: "var(--primary-color)",
+                minWidth: "auto",
+                px: 1,
+              }}
+            >
+              Replay
+            </Button>
           </Box>
         )}
         {role === "assistant" && typeof responseTimeMs === "number" && (
