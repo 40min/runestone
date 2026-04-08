@@ -111,7 +111,10 @@ class AgentsManager:
         starter_memory = ""
         if not history:
             try:
-                deleted_count = await memory_item_service.cleanup_old_mastered_areas(user.id, older_than_days=90)
+                deleted_count = await memory_item_service.cleanup_old_mastered_areas(
+                    user.id,
+                    older_than_days=self.settings.memory_mastered_cleanup_days,
+                )
                 if deleted_count:
                     logger.info(
                         "[agents:manager] Cleaned up %s old mastered memory items for user %s",
