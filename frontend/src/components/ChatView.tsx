@@ -116,8 +116,15 @@ const ChatView: React.FC = () => {
   // reacts on every poll cycle even when no new messages arrived.
   const isAnyProcessing =
     isLoading || isUploading || isTranscribing || isSyncingHistory;
-  const lastAssistantMessageId =
-    messages.findLast((message) => message.role === "assistant")?.id ?? null;
+  const lastAssistantMessageId = (() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.role === "assistant") {
+        return message.id;
+      }
+    }
+    return null;
+  })();
 
   const scrollToLastMessage = (
     behavior: ScrollBehavior,
