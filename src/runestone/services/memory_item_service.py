@@ -346,7 +346,7 @@ class MemoryItemService:
 
         await self.repo.delete(item_id)
 
-    async def cleanup_old_mastered_areas(self, user_id: int, older_than_days) -> int:
+    async def cleanup_old_mastered_areas(self, user_id: int, older_than_days: int) -> int:
         """
         Delete old mastered area_to_improve items.
 
