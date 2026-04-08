@@ -5,7 +5,7 @@ OpenAI-backed voice client for transcription, text enhancement, and TTS.
 import io
 from typing import AsyncIterator
 
-from openai import AsyncOpenAI, OpenAI
+from openai import AsyncOpenAI
 
 from runestone.core.exceptions import APIKeyError
 
@@ -34,7 +34,6 @@ class OpenAIVoiceClient:
         if not api_key:
             raise APIKeyError("OpenAI API key is required for voice features. Set OPENAI_API_KEY.")
 
-        self._sync_client = OpenAI(api_key=api_key)
         self._async_client = AsyncOpenAI(api_key=api_key)
         self._transcription_model = transcription_model
         self._enhancement_model = enhancement_model
@@ -62,7 +61,7 @@ class OpenAIVoiceClient:
         if language:
             params["language"] = language
 
-        response = self._sync_client.audio.transcriptions.create(**params)
+        response = await self._async_client.audio.transcriptions.create(**params)
         return (response.text or "").strip()
 
     async def enhance_text(self, text: str, system_prompt: str) -> str:
@@ -76,7 +75,7 @@ class OpenAIVoiceClient:
         Returns:
             Enhanced text or an empty string when provider returns no content
         """
-        response = self._sync_client.chat.completions.create(
+        response = await self._async_client.chat.completions.create(
             model=self._enhancement_model,
             messages=[
                 {"role": "system", "content": system_prompt},
