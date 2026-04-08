@@ -51,12 +51,13 @@ async def client_no_db():
     from fastapi import HTTPException, status
     from httpx import ASGITransport, AsyncClient
 
-    from runestone.dependencies import get_chat_service, get_user_service, get_vocabulary_service
+    from runestone.dependencies import get_chat_service, get_user_service, get_vocabulary_service, get_voice_service
 
     # Mock services to avoid database calls for unauthorized tests
     mock_chat_service = Mock()
     mock_user_service = Mock()
     mock_vocab_service = Mock()
+    mock_voice_service = Mock()
 
     def override_get_current_user():
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authenticated")
@@ -70,11 +71,15 @@ async def client_no_db():
     def override_get_vocabulary_service():
         return mock_vocab_service
 
+    def override_get_voice_service():
+        return mock_voice_service
+
     # Apply overrides for authentication
     app.dependency_overrides[get_current_user] = override_get_current_user
     app.dependency_overrides[get_chat_service] = override_get_chat_service
     app.dependency_overrides[get_user_service] = override_get_user_service
     app.dependency_overrides[get_vocabulary_service] = override_get_vocabulary_service
+    app.dependency_overrides[get_voice_service] = override_get_voice_service
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         # Some tests reach into the underlying FastAPI app to tweak dependency overrides.
@@ -103,6 +108,7 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
         current_user=None,
         agent_service=None,
         tts_service=None,
+        voice_service=None,
         db_override=None,
     ):
         db, test_user = db_with_test_user
@@ -151,10 +157,12 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
             agent_service_instance = Mock()
 
         # Always mock TTSService
-        from runestone.dependencies import get_tts_service
+        from runestone.dependencies import get_tts_service, get_voice_service
 
         tts_service_instance = tts_service or Mock()
         overrides[get_tts_service] = lambda: tts_service_instance
+        voice_service_instance = voice_service or Mock()
+        overrides[get_voice_service] = lambda: voice_service_instance
 
         # Always provide AgentsManager via dependency + app.state so callers that
         # access request.app.state.* directly don't explode.
@@ -165,6 +173,7 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
         # Also inject into app.state to avoid attribute errors
         app.state.agent_service = agent_service_instance
         app.state.tts_service = tts_service_instance
+        app.state.voice_service = voice_service_instance
 
         for dep, override in overrides.items():
             app.dependency_overrides[dep] = override
@@ -195,6 +204,7 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
                 "current_user": current_user or test_user,
                 "agent_service": agent_service_instance,
                 "tts_service": tts_service_instance,
+                "voice_service": voice_service_instance,
             }
 
             yield client, mocks

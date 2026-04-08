@@ -2,15 +2,14 @@
 Voice transcription service.
 
 This module provides voice-to-text transcription functionality
-using OpenAI's Whisper API with optional text enhancement via GPT-4o-mini.
+with optional transcript cleanup. Provider-specific API calls live
+in voice clients.
 """
 
-import io
 import logging
 
-from openai import OpenAI
-
 from runestone.config import Settings
+from runestone.core.clients.voice.voice_factory import VoiceTranscriptionClient
 from runestone.core.constants import LANGUAGE_CODE_MAP
 from runestone.core.exceptions import RunestoneError
 
@@ -20,19 +19,20 @@ logger = logging.getLogger(__name__)
 class VoiceService:
     """Service for voice transcription and text enhancement."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, transcription_client: VoiceTranscriptionClient):
         """
         Initialize the voice service.
 
         Args:
             settings: Application settings containing model configuration
+            transcription_client: Provider client handling transcription and enhancement
         """
         self.settings = settings
-        self._client = OpenAI(api_key=settings.openai_api_key)
+        self._transcription_client = transcription_client
 
     async def transcribe_audio(self, audio_content: bytes, language: str | None = None) -> str:
         """
-        Transcribe audio to text using OpenAI Whisper API.
+        Transcribe audio to text using the configured transcription provider.
 
         Args:
             audio_content: Raw audio bytes (WebM, WAV, MP3, etc. supported by Whisper)
@@ -45,20 +45,10 @@ class VoiceService:
             RunestoneError: If transcription fails
         """
         try:
-            # Create a file-like object from bytes for the API
-            audio_file = io.BytesIO(audio_content)
-            audio_file.name = "recording.webm"
-
-            params = {
-                "model": self.settings.voice_transcription_model,
-                "file": audio_file,
-            }
-            if language:
-                params["language"] = language
-
-            response = self._client.audio.transcriptions.create(**params)
-
-            transcribed_text = response.text
+            transcribed_text = await self._transcription_client.transcribe_audio(
+                audio_content=audio_content,
+                language=language,
+            )
             if not transcribed_text:
                 raise RunestoneError("Transcription returned empty result")
 
@@ -85,25 +75,15 @@ class VoiceService:
             RunestoneError: If enhancement fails
         """
         try:
-            response = self._client.chat.completions.create(
-                model=self.settings.voice_enhancement_model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Fix grammar, punctuation, and clarity while preserving "
-                            "the original meaning and tone. Return only the corrected text."
-                            "The text is transcribed so could have some mistakes, please correct them."
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": text,
-                    },
-                ],
+            system_prompt = (
+                "Fix grammar, punctuation, and clarity while preserving "
+                "the original meaning and tone. Return only the corrected text."
+                "The text is transcribed so could have some mistakes, please correct them."
             )
-
-            enhanced_text = response.choices[0].message.content
+            enhanced_text = await self._transcription_client.enhance_text(
+                text=text,
+                system_prompt=system_prompt,
+            )
             if not enhanced_text:
                 logger.warning("Enhancement returned empty result, using original text")
                 return text

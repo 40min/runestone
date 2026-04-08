@@ -186,3 +186,26 @@ class TestSettings:
 
         assert test_settings.news_agent_provider == "openrouter"
         assert test_settings.news_agent_model == "teacher-model"
+
+    def test_voice_settings_defaults_include_elevenlabs_configuration(self):
+        """Test new voice provider settings keep OpenAI defaults while exposing ElevenLabs config."""
+        env_vars = {
+            "LLM_PROVIDER": "openai",
+            "OPENAI_API_KEY": "test-key",
+            "OPENROUTER_API_KEY": "test-openrouter-key",
+            "ALLOWED_ORIGINS": "http://localhost:3000",
+            "DATABASE_URL": "sqlite:///./test.db",
+            "TELEGRAM_BOT_TOKEN": "test-token",
+            "FRONTEND_URL": "http://localhost:5173",
+            "JWT_SECRET_KEY": "secret",
+            "TEACHER_MODEL": "teacher-model",
+            "COORDINATOR_MODEL": "coordinator-model",
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            test_settings = Settings()
+
+        assert test_settings.voice_transcription_provider == "openai"
+        assert test_settings.tts_provider == "openai"
+        assert test_settings.elevenlabs_tts_model == "eleven_multilingual_v2"
+        assert test_settings.elevenlabs_tts_output_format == "mp3_44100_128"

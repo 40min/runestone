@@ -21,11 +21,13 @@ from runestone.api.memory_endpoints import router as memory_router
 from runestone.api.user_endpoints import router as user_router
 from runestone.config import settings
 from runestone.core.clients.factory import create_llm_client
+from runestone.core.clients.voice.voice_factory import create_voice_synthesis_client, create_voice_transcription_client
 from runestone.core.logging_config import setup_logging
 from runestone.db.database import setup_database
 from runestone.rag.index import GrammarIndex
 from runestone.services.grammar_service import GrammarService
 from runestone.services.tts_service import TTSService
+from runestone.services.voice_service import VoiceService
 
 
 @asynccontextmanager
@@ -54,7 +56,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         grammar_index=app.state.grammar_index,
         grammar_service=app.state.grammar_service,
     )
-    app.state.tts_service = TTSService(settings)
+    app.state.tts_service = TTSService(
+        settings=settings,
+        synthesis_client=create_voice_synthesis_client(settings),
+    )
+    app.state.voice_service = VoiceService(
+        settings=settings,
+        transcription_client=create_voice_transcription_client(settings),
+    )
     yield
     # Shutdown
 

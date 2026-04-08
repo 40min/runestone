@@ -98,24 +98,33 @@ Only move transcription after we compare real user recordings for:
 
 ### Goal
 
-Introduce a voice provider boundary so voice services are not hard-wired to OpenAI.
+Move vendor-specific API code out of `VoiceService` and `TTSService` without adding a new generic provider layer under `services/`.
 
-### Recommended service split
+### Recommended split
 
-- Keep `VoiceService` as the orchestration layer for transcription plus optional cleanup.
+- Keep `VoiceService` as the orchestration layer for transcription, language mapping, errors, and optional transcript cleanup.
+- Keep `TTSService` as the orchestration layer for concurrency limits, task cancellation, and WebSocket streaming to the browser.
 - Keep `ChatService` unchanged at the workflow level.
-- Replace direct vendor usage inside TTS/STT implementations with provider-specific adapters.
+- Move raw OpenAI and ElevenLabs API calls into a dedicated voice client package under `src/runestone/core/clients/voice/`.
 
 Suggested structure:
 
-- `src/runestone/services/providers/voice_transcription_provider.py`
-- `src/runestone/services/providers/openai_transcription_provider.py`
-- `src/runestone/services/providers/elevenlabs_transcription_provider.py`
-- `src/runestone/services/providers/tts_provider.py`
-- `src/runestone/services/providers/openai_tts_provider.py`
-- `src/runestone/services/providers/elevenlabs_tts_provider.py`
+- `src/runestone/core/clients/voice/__init__.py`
+- `src/runestone/core/clients/voice/openai_voice_client.py`
+- `src/runestone/core/clients/voice/elevenlabs_voice_client.py`
+- `src/runestone/core/clients/voice/voice_factory.py`
 
-This lets us choose providers via config instead of editing orchestration code.
+Optional, only if it helps readability:
+
+- small `Protocol` contracts for speech synthesis and transcription
+
+Why this is a better fit for Runestone:
+
+- The repo already keeps third-party integration details in `core/clients/`.
+- A dedicated `voice/` package keeps speech integrations grouped together without mixing them into the generic LLM client files.
+- `runestone.core.clients.base` is LLM-specific, so voice clients should not be forced into that inheritance tree.
+- The current services already own orchestration concerns, so adding `services/providers/*` would split one feature across too many layers.
+- A client seam is enough to switch vendors through config while keeping the current service responsibilities intact.
 
 ## Implementation Plan
 
@@ -137,12 +146,19 @@ Update:
 - `README.md`
 - dependency list in `pyproject.toml`
 
-### Phase 1: Add provider abstraction
+### Phase 1: Add voice client seam
 
-Refactor so vendor clients live behind small interfaces:
+Refactor so vendor clients live behind a small voice-specific boundary:
 
-- transcription provider returns plain transcript text
-- TTS provider yields audio chunks as `AsyncIterator[bytes]`
+- transcription client returns plain transcript text
+- synthesis client yields audio chunks as `AsyncIterator[bytes]`
+- service classes depend on those capabilities, not on a specific SDK
+
+Recommended approach:
+
+- extract the current OpenAI voice API calls out of `VoiceService` and `TTSService`
+- create a small `voice_factory` inside the `voice/` package that selects OpenAI or ElevenLabs from config
+- avoid a shared abstract base class for now; if we want a contract, prefer `typing.Protocol`
 
 Update dependency wiring in:
 
@@ -153,9 +169,9 @@ Success criteria:
 - Existing OpenAI behavior still works without product changes
 - Unit tests still pass against the OpenAI path
 
-### Phase 2: Implement ElevenLabs TTS
+### Phase 2: Implement ElevenLabs TTS client
 
-Create an ElevenLabs TTS provider that:
+Create an ElevenLabs voice client that:
 
 - uses the configured voice ID
 - returns MP3 chunks
@@ -169,8 +185,9 @@ Important compatibility note:
 
 Files most likely touched:
 
+- `src/runestone/core/clients/voice/elevenlabs_voice_client.py`
+- `src/runestone/core/clients/voice/voice_factory.py`
 - `src/runestone/services/tts_service.py`
-- new provider module(s)
 - `src/runestone/dependencies.py`
 - `src/runestone/config.py`
 
@@ -193,12 +210,14 @@ Also verify:
 
 ### Phase 4: Optional ElevenLabs STT spike
 
-If we want a single vendor for voice, build a limited STT spike behind the provider abstraction.
+If we want a single vendor for voice, build a limited STT spike behind the same client seam.
 
 Files most likely touched:
 
+- `src/runestone/core/clients/voice/elevenlabs_voice_client.py`
+- `src/runestone/core/clients/voice/openai_voice_client.py`
+- `src/runestone/core/clients/voice/voice_factory.py`
 - `src/runestone/services/voice_service.py`
-- new transcription provider module(s)
 - `src/runestone/api/chat_endpoints.py`
 - tests for transcription behavior
 
@@ -252,7 +271,7 @@ Decision:
 
 ### Option A: safest rollout
 
-1. Add abstraction layer.
+1. Add voice client seam.
 2. Keep OpenAI as default.
 3. Enable ElevenLabs TTS in development.
 4. Add a config flag for staging or selected users.

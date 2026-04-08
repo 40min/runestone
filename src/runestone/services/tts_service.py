@@ -1,36 +1,36 @@
 """
-Text-to-Speech service using OpenAI TTS API.
+Text-to-Speech orchestration service.
 
-This module provides TTS functionality for synthesizing speech from text
-and streaming it to clients via WebSocket.
+This module coordinates speech synthesis and streams audio to clients
+via WebSocket. Provider-specific API calls live in voice clients.
 """
 
 import asyncio
 import logging
 from typing import AsyncIterator
 
-from openai import AsyncOpenAI
-
 from runestone.config import Settings
+from runestone.core.clients.voice.voice_factory import VoiceSynthesisClient
 from runestone.core.connection_manager import connection_manager
 
 logger = logging.getLogger(__name__)
 
 
 class TTSService:
-    """Service for text-to-speech synthesis using OpenAI TTS."""
+    """Service that orchestrates text-to-speech streaming to clients."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, synthesis_client: VoiceSynthesisClient):
         """
         Initialize the TTS service.
 
         Args:
             settings: Application settings containing TTS configuration
+            synthesis_client: Provider client that performs speech synthesis
         """
         self.settings = settings
-        self._client = AsyncOpenAI(api_key=settings.openai_api_key)
+        self._synthesis_client = synthesis_client
         self._active_tasks: dict[int, asyncio.Task] = {}
-        # Global limit on concurrent synthesis requests to OpenAI to avoid overwhelming the system
+        # Global limit on concurrent synthesis requests to avoid overwhelming external providers.
         self._synthesis_semaphore = asyncio.Semaphore(5)
 
     async def synthesize_speech_stream(self, text: str, speed: float = 1.0) -> AsyncIterator[bytes]:
@@ -50,22 +50,15 @@ class TTSService:
             Exception: If TTS API call fails
         """
         try:
-            # Backpressure: limit concurrent calls to OpenAI API
+            # Backpressure: limit concurrent provider calls
             async with self._synthesis_semaphore:
-                async with self._client.audio.speech.with_streaming_response.create(
-                    model=self.settings.tts_model,
-                    voice=self.settings.tts_voice,
-                    input=text,
-                    response_format="mp3",
-                    speed=speed,
-                ) as response:
-                    chunk_count = 0
-                    total_bytes = 0
-                    async for chunk in response.iter_bytes(chunk_size=4096):
-                        chunk_count += 1
-                        total_bytes += len(chunk)
-                        yield chunk
-                    logger.debug(f"TTS synthesis finished: {chunk_count} chunks, {total_bytes} bytes yielded")
+                chunk_count = 0
+                total_bytes = 0
+                async for chunk in self._synthesis_client.synthesize_speech_stream(text=text, speed=speed):
+                    chunk_count += 1
+                    total_bytes += len(chunk)
+                    yield chunk
+                logger.debug(f"TTS synthesis finished: {chunk_count} chunks, {total_bytes} bytes yielded")
         except Exception as e:
             logger.error(f"TTS synthesis failed: {e}", exc_info=True)
             raise
