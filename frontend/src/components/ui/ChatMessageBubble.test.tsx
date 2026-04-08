@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import React from "react";
 import userEvent from "@testing-library/user-event";
 import { ChatMessageBubble } from "./ChatMessageBubble";
@@ -128,5 +128,64 @@ describe("ChatMessageBubble", () => {
     expect(formatResponseTime(420)).toBe("420 ms");
     expect(formatResponseTime(1420)).toBe("1.4 s");
     expect(formatResponseTime(10999)).toBe("11 s");
+  });
+
+  it("renders audio controls only when explicitly enabled", () => {
+    const onPlay = vi.fn();
+    const onReplay = vi.fn();
+
+    render(
+      <ChatMessageBubble
+        role="assistant"
+        content="Lyssna här"
+        showAudioControls={true}
+        canReplayAudio={true}
+        onPlayAudio={onPlay}
+        onReplayAudio={onReplay}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /^play$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^replay$/i })).toBeInTheDocument();
+  });
+
+  it("swaps play for pause when audio is playing", async () => {
+    const user = userEvent.setup();
+    const onPause = vi.fn();
+    const onReplay = vi.fn();
+
+    render(
+      <ChatMessageBubble
+        role="assistant"
+        content="Lyssna här"
+        showAudioControls={true}
+        isAudioPlaying={true}
+        canReplayAudio={true}
+        onPauseAudio={onPause}
+        onReplayAudio={onReplay}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /^play$/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^pause$/i }));
+    expect(onPause).toHaveBeenCalledOnce();
+
+    await user.click(screen.getByRole("button", { name: /^replay$/i }));
+    expect(onReplay).toHaveBeenCalledOnce();
+  });
+
+  it("does not render audio controls for user messages", () => {
+    render(
+      <ChatMessageBubble
+        role="user"
+        content="Hej!"
+        showAudioControls={true}
+        canReplayAudio={true}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /^play$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^replay$/i })).not.toBeInTheDocument();
   });
 });

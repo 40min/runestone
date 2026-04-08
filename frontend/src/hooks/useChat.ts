@@ -41,7 +41,7 @@ interface UseChatReturn {
   isSyncingHistory: boolean;
   historySyncNotice: string | null;
   error: string | null;
-  sendMessage: (message: string, ttsExpected?: boolean, speed?: number) => Promise<void>;
+  sendMessage: (message: string, ttsExpected?: boolean, speed?: number) => Promise<string | null>;
   startNewChat: () => Promise<void>;
   clearError: () => void;
   refreshHistory: () => Promise<void>;
@@ -122,6 +122,9 @@ export const useChat = (): UseChatReturn => {
       if (optimisticIndex >= 0) {
         next[optimisticIndex] = {
           ...incomingMessage,
+          // Keep the optimistic client id stable so UI bindings (e.g. playback controls)
+          // don't break when the history poll swaps in the server-backed record.
+          id: next[optimisticIndex].id,
           responseTimeMs: next[optimisticIndex].responseTimeMs,
         };
       } else {
@@ -320,7 +323,7 @@ export const useChat = (): UseChatReturn => {
 
   const sendMessage = useCallback(
     async (userMessage: string, ttsExpected: boolean = false, speed: number = 1.0) => {
-      if (!userMessage.trim() || isLoading) return;
+      if (!userMessage.trim() || isLoading) return null;
       const startedAt = performance.now();
 
       const newUserMessage: ChatMessage = {
@@ -352,12 +355,14 @@ export const useChat = (): UseChatReturn => {
         setMessages((prev) => [...prev, assistantMessage]);
         resetPollingInterval();
         broadcastChange();
-        await fetchHistory(true);
+        void fetchHistory(true);
+        return assistantMessage.id;
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : 'An error occurred';
         setError(errorMessage);
         console.error('Chat error:', err);
+        return null;
       } finally {
         setIsLoading(false);
       }
