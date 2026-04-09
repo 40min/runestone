@@ -379,4 +379,32 @@ describe("GrammarView", () => {
     // Should be in alphabetical order
     expect(categoryTexts).toEqual(["adjectives", "nouns", "verbs"]);
   });
+
+  it("copies selected cheatsheet markdown to clipboard", async () => {
+    const mockClipboard = { writeText: vi.fn().mockResolvedValue(undefined) };
+    Object.assign(navigator, { clipboard: mockClipboard });
+
+    mockUseGrammar.mockReturnValue({
+      cheatsheets: [
+        {
+          filename: "pronunciation.md",
+          title: "Pronunciation",
+          category: "General",
+        },
+      ],
+      selectedCheatsheet: { content: "# Pronunciation Guide" },
+      loading: false,
+      error: null,
+      fetchCheatsheets: vi.fn(),
+      fetchCheatsheetContent: vi.fn().mockResolvedValue(undefined),
+    });
+
+    render(<GrammarView />);
+    fireEvent.click(screen.getByText("Pronunciation"));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy markdown" }));
+
+    await waitFor(() => {
+      expect(mockClipboard.writeText).toHaveBeenCalledWith("# Pronunciation Guide");
+    });
+  });
 });

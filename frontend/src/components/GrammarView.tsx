@@ -151,21 +151,37 @@ const GrammarView: React.FC = () => {
     if (!link) return;
 
     try {
-      if (!navigator.clipboard) {
-        const textArea = document.createElement("textarea");
-        textArea.value = link;
-        document.body.appendChild(textArea);
-        textArea.select();
-        const successful = document.execCommand("copy");
-        document.body.removeChild(textArea);
-        if (!successful) throw new Error("Fallback copy failed");
-      } else {
-        await navigator.clipboard.writeText(link);
-      }
+      await copyToClipboard(link);
       setSnackbar({ open: true, message: "Link copied to clipboard.", severity: "success" });
     } catch (err) {
       console.error("Failed to copy link: ", err);
       setSnackbar({ open: true, message: "Failed to copy link. Please try again.", severity: "error" });
+    }
+  };
+
+  const copyToClipboard = async (text: string) => {
+    if (!navigator.clipboard) {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.select();
+      const successful = document.execCommand("copy");
+      document.body.removeChild(textArea);
+      if (!successful) throw new Error("Fallback copy failed");
+      return;
+    }
+    await navigator.clipboard.writeText(text);
+  };
+
+  const handleCopyMarkdown = async () => {
+    if (!selectedCheatsheet?.content) return;
+
+    try {
+      await copyToClipboard(selectedCheatsheet.content);
+      setSnackbar({ open: true, message: "Markdown copied to clipboard.", severity: "success" });
+    } catch (err) {
+      console.error("Failed to copy markdown: ", err);
+      setSnackbar({ open: true, message: "Failed to copy markdown. Please try again.", severity: "error" });
     }
   };
 
@@ -302,15 +318,26 @@ const GrammarView: React.FC = () => {
                   <Typography sx={{ color: "#9ca3af", fontSize: "0.875rem" }}>
                     {paramFromFilepath(selectedFilename)}
                   </Typography>
-                  <CustomButton
-                    variant="secondary"
-                    size="small"
-                    onClick={() => {
-                      void handleCopyLink();
-                    }}
-                  >
-                    Copy link
-                  </CustomButton>
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <CustomButton
+                      variant="secondary"
+                      size="small"
+                      onClick={() => {
+                        void handleCopyMarkdown();
+                      }}
+                    >
+                      Copy markdown
+                    </CustomButton>
+                    <CustomButton
+                      variant="secondary"
+                      size="small"
+                      onClick={() => {
+                        void handleCopyLink();
+                      }}
+                    >
+                      Copy link
+                    </CustomButton>
+                  </Box>
                 </Box>
                 {loading ? (
                   <LoadingSpinner />
