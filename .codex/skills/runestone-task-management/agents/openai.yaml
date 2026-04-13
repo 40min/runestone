@@ -1,0 +1,13 @@
+interface:
+  display_name: "Runestone Task Management"
+  short_description: "Manage Runestone tasks through Dart MCP"
+  default_prompt: "Use $runestone-task-management to manage Runestone project tasks in Dart."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "dart"
+      description: "Dart MCP server for Runestone project task CRUD"
+
+policy:
+  allow_implicit_invocation: true
