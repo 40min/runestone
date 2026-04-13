@@ -149,7 +149,7 @@ async def test_search_news_with_dates_clamps_k(monkeypatch):
 
 @pytest.mark.anyio
 async def test_search_news_with_dates_rate_limited(monkeypatch):
-    from duckduckgo_search.exceptions import RatelimitException
+    from ddgs.exceptions import RatelimitException
 
     call_count = {"count": 0}
 

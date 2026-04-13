@@ -5,8 +5,8 @@ import logging
 from typing import Literal
 from urllib.parse import urlparse
 
-from duckduckgo_search import DDGS
-from duckduckgo_search.exceptions import DuckDuckGoSearchException, RatelimitException
+from ddgs import DDGS
+from ddgs.exceptions import DDGSException, RatelimitException
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
@@ -107,7 +107,7 @@ async def search_news_with_dates(
                 }
             delay = DDGS_RETRY_DELAYS[min(attempt, len(DDGS_RETRY_DELAYS) - 1)]
             await asyncio.sleep(delay)
-        except DuckDuckGoSearchException as e:
+        except DDGSException as e:
             logger.exception("News search failed for query='%s'", query)
             return {"error": f"Error searching news: {str(e)}"}
 
@@ -151,6 +151,6 @@ async def search_news_with_dates(
             results=results,
         )
         return payload.model_dump()
-    except DuckDuckGoSearchException as e:
+    except DDGSException as e:
         logger.exception("News search failed for query='%s'", query)
         return {"error": f"Error searching news: {str(e)}"}
