@@ -91,10 +91,18 @@ def test_memory_keeper_prompt_mentions_student_driven_memory_requests():
 
 def test_news_prompt_requires_known_topic():
     assert "### news_agent (pre)" in COORDINATOR_PRE_RESPONSE_PROMPT
-    assert "The student's current message asks about a clear, specific real-time or current-events topic" in (
+    assert "The student's current message asks about a specific real-time or current-events topic" in (
         COORDINATOR_PRE_RESPONSE_PROMPT
     )
-    assert "Current weather for a named city or region" in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "requires" in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "live data" in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "news about a subject, place, or event" in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "current weather" in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "cannot" in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "be answered from static knowledge" in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "Hard trigger" in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "asks for `news`/`nyheter`" in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "Ska vi lasa nyheter om Sverige?" in COORDINATOR_PRE_RESPONSE_PROMPT
     assert "The topic is vague or unspecified" in COORDINATOR_PRE_RESPONSE_PROMPT
     assert "For all normal news_agent cases, set `chat_history_size` to `2`." in COORDINATOR_PRE_RESPONSE_PROMPT
 

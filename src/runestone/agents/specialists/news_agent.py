@@ -36,6 +36,8 @@ bounded context for the teacher.
 ## Act when
 - The student clearly names a topic or domain for news.
 - The student asks to read, discuss, or summarize news about that topic.
+- The student asks for news about a concrete place (country, city, or region), even if no
+  narrower domain is given (for example: "nyheter om Sverige").
 - The student asks about current weather for a specific city or region.
 - The student asks any other specific real-time factual question (e.g. what happened in an election, current events).
 
@@ -47,6 +49,10 @@ bounded context for the teacher.
 ## Search guidance
 - For weather queries, search for current weather conditions in the named location (e.g. "väder Helsinki imorgon").
 - For news topics, search in the appropriate language; prefer Swedish for Swedish-language context.
+- For place-only requests like "nyheter om Sverige", treat the place itself as specific enough
+  and generate a non-empty Swedish query (for example: "senaste nyheterna i Sverige").
+- If coordinator already routed this turn to NewsAgent for news retrieval, do not downgrade to
+  `no_action` unless the request is clearly unrelated to real-time information.
 - Keep retrieval bounded: max 5 search results and max 2 `read_url` calls.
 
 ## Output Contract

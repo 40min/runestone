@@ -75,12 +75,13 @@ COORDINATOR_PRE_RESPONSE_PROMPT = (
 For all normal word_keeper cases, set `chat_history_size` to `2`.
 
 ### news_agent (pre)
-**Route when:** The student's current message asks about a clear, specific real-time or current-events topic.
-This includes:
-- News about a specific subject (e.g. "show me Swedish news about sports", "let's read news about the economy").
-- Current weather for a named city or region
-  (e.g. "what's the weather in Helsinki tomorrow?", "hur är vädret i Stockholm?").
-- Any other specific real-time factual query that requires live search (e.g. "what happened in the election?").
+**Route when:** The student's current message asks about a specific real-time or current-events topic that requires
+live data — such as news about a subject, place, or event, current weather, or any other factual query that cannot
+be answered from static knowledge.
+- **Hard trigger:** if the current student message explicitly asks for `news`/`nyheter` and names a concrete topic,
+  place, or event in the same message, route `news_agent`.
+  This includes invitation phrasing like "Ska vi lasa nyheter om Sverige?" and follow-ups like
+  "Ja, teknik ar bra" when the immediate context is already a live news fetch request.
 
 **Do NOT route when:**
 - The topic is vague or unspecified (e.g. "give me some news", "any news?"). Let the teacher clarify on the next turn.

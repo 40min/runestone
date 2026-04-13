@@ -101,6 +101,11 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "This is a recurring issue to remember" in call_kwargs["system_prompt"]
             assert "not by a tool you call directly" in call_kwargs["system_prompt"]
             assert "Topical news retrieval is handled by a pre-response specialist" in call_kwargs["system_prompt"]
+            assert "no prepared news context is available" in call_kwargs["system_prompt"]
+            assert "OUTPUT CONTRACT (MANDATORY)" in call_kwargs["system_prompt"]
+            assert "[/PRE_RESPONSE_SPECIALISTS]" in call_kwargs["system_prompt"]
+            assert "raw internal JSON objects" in call_kwargs["system_prompt"]
+            assert "summarize it naturally in plain prose" in call_kwargs["system_prompt"]
             assert "Use `search_news_with_dates`" not in call_kwargs["system_prompt"]
 
 

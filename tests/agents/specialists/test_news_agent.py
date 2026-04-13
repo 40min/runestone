@@ -42,6 +42,9 @@ def test_news_agent_prompt_is_conservative():
     assert "## Return `no_action` when" in NEWS_AGENT_SYSTEM_PROMPT
     assert "Use `read_url` only for selected article URLs" in NEWS_AGENT_SYSTEM_PROMPT
     assert "max 5 search results and max 2 `read_url` calls" in NEWS_AGENT_SYSTEM_PROMPT
+    assert "nyheter om Sverige" in NEWS_AGENT_SYSTEM_PROMPT
+    assert "senaste nyheterna i Sverige" in NEWS_AGENT_SYSTEM_PROMPT
+    assert "do not downgrade to" in NEWS_AGENT_SYSTEM_PROMPT
 
 
 def test_news_agent_uses_news_agent_model_profile(mock_settings):
