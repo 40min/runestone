@@ -19,6 +19,7 @@ from runestone.agents.schemas import (
 )
 from runestone.auth.dependencies import get_current_user
 from runestone.config import settings
+from runestone.core.constants import LANGUAGE_CODE_MAP
 from runestone.core.exceptions import RunestoneError
 from runestone.db.models import User
 from runestone.dependencies import get_chat_service, get_voice_service
@@ -28,6 +29,23 @@ from runestone.services.voice_service import VoiceService
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+SUPPORTED_TRANSCRIPTION_LANGUAGES = set(LANGUAGE_CODE_MAP) | set(LANGUAGE_CODE_MAP.values())
+
+
+def _validate_transcription_language(language: str | None) -> str | None:
+    """Validate explicit speech-to-text language form values."""
+    if language is None:
+        return None
+
+    selected_language = language.strip()
+    if not selected_language or selected_language not in SUPPORTED_TRANSCRIPTION_LANGUAGES:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported speech language.",
+        )
+
+    return selected_language
 
 
 @router.post("/message", response_model=ChatResponse)
@@ -181,6 +199,9 @@ async def start_new_chat(
 async def transcribe_voice(
     file: Annotated[UploadFile, File(description="Audio file to transcribe (WebM format)")],
     improve: Annotated[bool, Form(description="Whether to enhance the transcription")] = True,
+    language: Annotated[
+        str | None, Form(description="Speech language as a supported full name or ISO-639-1 code")
+    ] = None,
     voice_service: Annotated[VoiceService, Depends(get_voice_service)] = None,
     current_user: Annotated[User, Depends(get_current_user)] = None,
 ) -> VoiceTranscriptionResponse:
@@ -215,11 +236,17 @@ async def transcribe_voice(
             detail="Empty audio file.",
         )
 
+    transcription_language = _validate_transcription_language(language)
+    if transcription_language is None:
+        profile_language = current_user.mother_tongue.strip() if current_user.mother_tongue else None
+        transcription_language = (
+            profile_language if profile_language in SUPPORTED_TRANSCRIPTION_LANGUAGES else "Swedish"
+        )
+
     try:
         logger.info(f"User {current_user.email} requested voice transcription (improve={improve})")
-
         transcribed_text = await voice_service.process_voice_input(
-            content, improve=improve, language=current_user.mother_tongue
+            content, improve=improve, language=transcription_language
         )
 
         logger.info(f"Voice transcription completed for user {current_user.email}")

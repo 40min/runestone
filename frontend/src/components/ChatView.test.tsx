@@ -73,15 +73,15 @@ const getSendButton = () => {
 };
 
 describe('ChatView', () => {
-  const resetLocalStorage = () => {
+  const resetLocalStorage = (userData: Record<string, unknown> = {
+    id: '1',
+    email: 'test@example.com',
+    username: 'testuser',
+  }) => {
     mockLocalStorage.getItem.mockImplementation((key) => {
       if (key === 'runestone_token') return 'test-token';
       if (key === 'runestone_user_data') {
-        return JSON.stringify({
-          id: '1',
-          email: 'test@example.com',
-          username: 'testuser',
-        });
+        return JSON.stringify(userData);
       }
       return null;
     });
@@ -106,6 +106,188 @@ describe('ChatView', () => {
       screen.getByText(/Ask questions about Swedish vocabulary, grammar/i)
     ).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Type your message...')).toBeInTheDocument();
+  });
+
+  it('defaults speech language from the user profile', () => {
+    resetLocalStorage({
+      id: '1',
+      email: 'test@example.com',
+      username: 'testuser',
+      mother_tongue: 'Finnish',
+    });
+
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('Finnish');
+  });
+
+  it('uses stored speech language before profile language', () => {
+    mockLocalStorage.getItem.mockImplementation((key) => {
+      if (key === 'runestone_token') return 'test-token';
+      if (key === 'runestone_stt_language') return 'German';
+      if (key === 'runestone_user_data') {
+        return JSON.stringify({
+          id: '1',
+          email: 'test@example.com',
+          username: 'testuser',
+          mother_tongue: 'Finnish',
+        });
+      }
+      return null;
+    });
+
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('German');
+  });
+
+  it('falls back to profile language when stored speech language is unsupported', () => {
+    mockLocalStorage.getItem.mockImplementation((key) => {
+      if (key === 'runestone_token') return 'test-token';
+      if (key === 'runestone_stt_language') return 'Klingon';
+      if (key === 'runestone_user_data') {
+        return JSON.stringify({
+          id: '1',
+          email: 'test@example.com',
+          username: 'testuser',
+          mother_tongue: 'Finnish',
+        });
+      }
+      return null;
+    });
+
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('Finnish');
+  });
+
+  it('persists speech language changes', async () => {
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /speech language/i }));
+    fireEvent.click(screen.getByRole('option', { name: 'Finnish' }));
+
+    await waitFor(() => {
+      expect(mockLocalStorage.setItem).toHaveBeenCalledWith('runestone_stt_language', 'Finnish');
+    });
+  });
+
+  it('syncs speech language from profile when user data updates later', async () => {
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('Swedish');
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'runestone_user_data',
+          newValue: JSON.stringify({
+            id: '1',
+            email: 'test@example.com',
+            username: 'testuser',
+            mother_tongue: 'Finnish',
+          }),
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('Finnish');
+    });
+  });
+
+  it('does not override stored speech language when profile updates later', async () => {
+    mockLocalStorage.getItem.mockImplementation((key) => {
+      if (key === 'runestone_token') return 'test-token';
+      if (key === 'runestone_stt_language') return 'German';
+      if (key === 'runestone_user_data') {
+        return JSON.stringify({
+          id: '1',
+          email: 'test@example.com',
+          username: 'testuser',
+        });
+      }
+      return null;
+    });
+
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('German');
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'runestone_user_data',
+          newValue: JSON.stringify({
+            id: '1',
+            email: 'test@example.com',
+            username: 'testuser',
+            mother_tongue: 'Finnish',
+          }),
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('German');
+    });
+  });
+
+  it('does not override manual speech language selection when profile updates later', async () => {
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /speech language/i }));
+    fireEvent.click(screen.getByRole('option', { name: 'German' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('German');
+    });
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'runestone_user_data',
+          newValue: JSON.stringify({
+            id: '1',
+            email: 'test@example.com',
+            username: 'testuser',
+            mother_tongue: 'Finnish',
+          }),
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('German');
+    });
   });
 
   it('shows empty state when no messages', () => {
