@@ -20,6 +20,7 @@ Load those files when this skill triggers. Do not copy their rules into this ski
 
 - Repository: `/Users/40min/www/runestone`.
 - Task wrapper skill: `runestone-task-management`.
+- Branch names: use `feat/<slug>` for new functionality and `fix/<slug>` for bug fixes. Do not use the generic `codex/` branch prefix for Runestone work.
 
 ## Adapter Map
 
