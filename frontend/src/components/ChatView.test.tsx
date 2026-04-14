@@ -188,6 +188,108 @@ describe('ChatView', () => {
     });
   });
 
+  it('syncs speech language from profile when user data updates later', async () => {
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('Swedish');
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'runestone_user_data',
+          newValue: JSON.stringify({
+            id: '1',
+            email: 'test@example.com',
+            username: 'testuser',
+            mother_tongue: 'Finnish',
+          }),
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('Finnish');
+    });
+  });
+
+  it('does not override stored speech language when profile updates later', async () => {
+    mockLocalStorage.getItem.mockImplementation((key) => {
+      if (key === 'runestone_token') return 'test-token';
+      if (key === 'runestone_stt_language') return 'German';
+      if (key === 'runestone_user_data') {
+        return JSON.stringify({
+          id: '1',
+          email: 'test@example.com',
+          username: 'testuser',
+        });
+      }
+      return null;
+    });
+
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('German');
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'runestone_user_data',
+          newValue: JSON.stringify({
+            id: '1',
+            email: 'test@example.com',
+            username: 'testuser',
+            mother_tongue: 'Finnish',
+          }),
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('German');
+    });
+  });
+
+  it('does not override manual speech language selection when profile updates later', async () => {
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /speech language/i }));
+    fireEvent.click(screen.getByRole('option', { name: 'German' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('German');
+    });
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'runestone_user_data',
+          newValue: JSON.stringify({
+            id: '1',
+            email: 'test@example.com',
+            username: 'testuser',
+            mother_tongue: 'Finnish',
+          }),
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('German');
+    });
+  });
+
   it('shows empty state when no messages', () => {
     render(
       <AuthProvider>

@@ -98,6 +98,9 @@ const ChatView: React.FC = () => {
     const profileLanguage = getSupportedSpeechLanguage(userData?.mother_tongue);
     return stored ?? profileLanguage ?? "Swedish";
   });
+  const [hasSpeechLanguageOverride, setHasSpeechLanguageOverride] = useState(
+    () => getSupportedSpeechLanguage(localStorage.getItem(STT_LANGUAGE_KEY)) !== null,
+  );
 
   const {
     isRecording,
@@ -177,6 +180,17 @@ const ChatView: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(STT_LANGUAGE_KEY, speechLanguage);
   }, [speechLanguage]);
+
+  useEffect(() => {
+    if (hasSpeechLanguageOverride) {
+      return;
+    }
+
+    const profileLanguage = getSupportedSpeechLanguage(userData?.mother_tongue);
+    if (profileLanguage && profileLanguage !== speechLanguage) {
+      setSpeechLanguage(profileLanguage);
+    }
+  }, [userData?.mother_tongue, speechLanguage, hasSpeechLanguageOverride]);
 
   // Show voice errors in snackbar
   useEffect(() => {
@@ -535,7 +549,10 @@ const ChatView: React.FC = () => {
                 </Typography>
                 <Select
                   value={speechLanguage}
-                  onChange={(e) => setSpeechLanguage(e.target.value)}
+                  onChange={(e) => {
+                    setHasSpeechLanguageOverride(true);
+                    setSpeechLanguage(e.target.value);
+                  }}
                   size="small"
                   variant="standard"
                   inputProps={{ "aria-label": "Speech language" }}
