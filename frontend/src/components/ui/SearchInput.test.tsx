@@ -71,4 +71,28 @@ describe("SearchInput", () => {
 
     expect(mockOnSearch).toHaveBeenCalledTimes(1);
   });
+
+  it("renders clear button when onClear is provided and value is not empty", () => {
+    render(<SearchInput value="test" onChange={vi.fn()} onClear={vi.fn()} />);
+
+    const button = screen.getByRole("button", { name: /clear search/i });
+    expect(button).toBeInTheDocument();
+  });
+
+  it("does not render clear button when value is empty", () => {
+    render(<SearchInput value="" onChange={vi.fn()} onClear={vi.fn()} />);
+
+    const button = screen.queryByRole("button", { name: /clear search/i });
+    expect(button).not.toBeInTheDocument();
+  });
+
+  it("calls onClear when clear button is clicked", () => {
+    const mockOnClear = vi.fn();
+    render(<SearchInput value="test" onChange={vi.fn()} onClear={mockOnClear} />);
+
+    const button = screen.getByRole("button", { name: /clear search/i });
+    fireEvent.click(button);
+
+    expect(mockOnClear).toHaveBeenCalledTimes(1);
+  });
 });

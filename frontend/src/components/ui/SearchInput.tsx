@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, TextField } from '@mui/material';
+import ClearIcon from '@mui/icons-material/Clear';
+import { Box, IconButton, InputAdornment, TextField } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
 import CustomButton from './CustomButton';
 
@@ -10,6 +11,8 @@ interface SearchInputProps {
   fullWidth?: boolean;
   sx?: SxProps<Theme>;
   onSearch?: () => void;
+  onClear?: () => void;
+  clearLabel?: string;
 }
 
 const SearchInput: React.FC<SearchInputProps> = ({
@@ -19,7 +22,11 @@ const SearchInput: React.FC<SearchInputProps> = ({
   fullWidth = true,
   sx = {},
   onSearch,
+  onClear,
+  clearLabel = "Clear search",
 }) => {
+  const showClearButton = Boolean(onClear && value);
+
   return (
     <Box sx={{ mb: 4, maxWidth: 400, display: 'flex', alignItems: 'center', ...sx }}>
       <TextField
@@ -28,6 +35,23 @@ const SearchInput: React.FC<SearchInputProps> = ({
         placeholder={placeholder}
         value={value}
         onChange={onChange}
+        slotProps={{
+          input: {
+            endAdornment: showClearButton ? (
+              <InputAdornment position="end">
+                <IconButton
+                  aria-label={clearLabel}
+                  edge="end"
+                  onClick={onClear}
+                  size="small"
+                  sx={{ color: "#9ca3af" }}
+                >
+                  <ClearIcon fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            ) : undefined,
+          },
+        }}
         sx={{
           "& .MuiOutlinedInput-root": {
             backgroundColor: "#1f2937",

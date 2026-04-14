@@ -400,6 +400,38 @@ describe("VocabularyView", () => {
     });
   });
 
+  it("clears visible and active vocabulary search", async () => {
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+    });
+
+    renderWithAuthProvider(<VocabularyView />);
+
+    const searchInput = screen.getByPlaceholderText("Search vocabulary...");
+    fireEvent.change(searchInput, { target: { value: 'hello' } });
+
+    await waitFor(() => {
+      expect(mockUseRecentVocabulary).toHaveBeenCalledWith('hello', false);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /clear search/i }));
+
+    await waitFor(() => {
+      expect(searchInput).toHaveValue("");
+      expect(mockUseRecentVocabulary).toHaveBeenLastCalledWith("", false);
+    });
+  });
+
   it("renders empty search state when search returns no results", async () => {
     mockUseRecentVocabulary.mockReturnValue({
       recentVocabulary: [],

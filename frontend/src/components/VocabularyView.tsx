@@ -61,6 +61,11 @@ const VocabularyView: React.FC = () => {
     setActiveSearchTerm(searchTerm);
   };
 
+  const handleClearSearch = () => {
+    setSearchTerm("");
+    setActiveSearchTerm("");
+  };
+
   const handleRowClick = (row: unknown) => {
     const item = row as (typeof recentVocabulary)[0];
     openEditModal(item);
@@ -174,7 +179,9 @@ const VocabularyView: React.FC = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search vocabulary..."
-            onSearch={handleSearch} sx={{ mb: 0 }}
+            onSearch={handleSearch}
+            onClear={handleClearSearch}
+            sx={{ mb: 0 }}
           />
           <StyledCheckbox
             id="precise-search-checkbox"
