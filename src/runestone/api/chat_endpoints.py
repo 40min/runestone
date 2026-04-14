@@ -236,7 +236,12 @@ async def transcribe_voice(
             detail="Empty audio file.",
         )
 
-    transcription_language = _validate_transcription_language(language) or current_user.mother_tongue
+    transcription_language = _validate_transcription_language(language)
+    if transcription_language is None:
+        profile_language = current_user.mother_tongue.strip() if current_user.mother_tongue else None
+        transcription_language = (
+            profile_language if profile_language in SUPPORTED_TRANSCRIPTION_LANGUAGES else "Swedish"
+        )
 
     try:
         logger.info(f"User {current_user.email} requested voice transcription (improve={improve})")

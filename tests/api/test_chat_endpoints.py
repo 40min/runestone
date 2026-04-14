@@ -441,3 +441,57 @@ async def test_transcribe_voice_rejects_unsupported_explicit_language(client_wit
         assert response.status_code == 400
         assert response.json()["detail"] == "Unsupported speech language."
         mock_voice_service.process_voice_input.assert_not_called()
+
+
+async def test_transcribe_voice_defaults_to_swedish_for_unsupported_profile_language(client_with_overrides):
+    """Test unsupported profile language falls back to Swedish."""
+    import io
+    from unittest.mock import AsyncMock, Mock
+
+    mock_voice_service = Mock()
+    mock_voice_service.process_voice_input = AsyncMock(return_value="Hej varlden")
+
+    async for client, mocks in client_with_overrides(voice_service=mock_voice_service):
+        mocks["current_user"].mother_tongue = "Klingon"
+        files = {"file": ("recording.webm", io.BytesIO(b"audio"), "audio/webm")}
+
+        response = await client.post(
+            "/api/chat/transcribe-voice",
+            files=files,
+            data={"improve": "true"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"text": "Hej varlden"}
+        mock_voice_service.process_voice_input.assert_awaited_once_with(
+            b"audio",
+            improve=True,
+            language="Swedish",
+        )
+
+
+async def test_transcribe_voice_defaults_to_swedish_for_missing_profile_language(client_with_overrides):
+    """Test missing profile language falls back to Swedish."""
+    import io
+    from unittest.mock import AsyncMock, Mock
+
+    mock_voice_service = Mock()
+    mock_voice_service.process_voice_input = AsyncMock(return_value="Hej igen")
+
+    async for client, mocks in client_with_overrides(voice_service=mock_voice_service):
+        mocks["current_user"].mother_tongue = None
+        files = {"file": ("recording.webm", io.BytesIO(b"audio"), "audio/webm")}
+
+        response = await client.post(
+            "/api/chat/transcribe-voice",
+            files=files,
+            data={"improve": "true"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"text": "Hej igen"}
+        mock_voice_service.process_voice_input.assert_awaited_once_with(
+            b"audio",
+            improve=True,
+            language="Swedish",
+        )
