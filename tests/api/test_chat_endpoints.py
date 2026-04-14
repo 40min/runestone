@@ -365,3 +365,79 @@ async def test_send_image_whitespace_only_ocr(client_with_mock_agent_service, mo
 
     assert response.status_code == 400
     assert "Could not recognize text from image" in response.json()["detail"]
+
+
+async def test_transcribe_voice_uses_explicit_language(client_with_overrides):
+    """Test voice transcription prefers explicit form language over profile language."""
+    import io
+    from unittest.mock import AsyncMock, Mock
+
+    mock_voice_service = Mock()
+    mock_voice_service.process_voice_input = AsyncMock(return_value="Hei maailma")
+
+    async for client, mocks in client_with_overrides(voice_service=mock_voice_service):
+        mocks["current_user"].mother_tongue = "Spanish"
+        files = {"file": ("recording.webm", io.BytesIO(b"audio"), "audio/webm")}
+
+        response = await client.post(
+            "/api/chat/transcribe-voice",
+            files=files,
+            data={"improve": "true", "language": "Finnish"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"text": "Hei maailma"}
+        mock_voice_service.process_voice_input.assert_awaited_once_with(
+            b"audio",
+            improve=True,
+            language="Finnish",
+        )
+
+
+async def test_transcribe_voice_falls_back_to_profile_language(client_with_overrides):
+    """Test omitted voice language keeps the existing profile-language behavior."""
+    import io
+    from unittest.mock import AsyncMock, Mock
+
+    mock_voice_service = Mock()
+    mock_voice_service.process_voice_input = AsyncMock(return_value="Hola mundo")
+
+    async for client, mocks in client_with_overrides(voice_service=mock_voice_service):
+        mocks["current_user"].mother_tongue = "Spanish"
+        files = {"file": ("recording.webm", io.BytesIO(b"audio"), "audio/webm")}
+
+        response = await client.post(
+            "/api/chat/transcribe-voice",
+            files=files,
+            data={"improve": "true"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"text": "Hola mundo"}
+        mock_voice_service.process_voice_input.assert_awaited_once_with(
+            b"audio",
+            improve=True,
+            language="Spanish",
+        )
+
+
+async def test_transcribe_voice_rejects_unsupported_explicit_language(client_with_overrides):
+    """Test unsupported explicit voice languages are rejected before transcription."""
+    import io
+    from unittest.mock import AsyncMock, Mock
+
+    mock_voice_service = Mock()
+    mock_voice_service.process_voice_input = AsyncMock(return_value="ignored")
+
+    async for client, _mocks in client_with_overrides(voice_service=mock_voice_service):
+        files = {"file": ("recording.webm", io.BytesIO(b"audio"), "audio/webm")}
+
+        response = await client.post(
+            "/api/chat/transcribe-voice",
+            files=files,
+            data={"improve": "true", "language": "Klingon"},
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Unsupported speech language."
+        mock_voice_service.process_voice_input.assert_not_called()

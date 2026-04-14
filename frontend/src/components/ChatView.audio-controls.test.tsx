@@ -70,6 +70,14 @@ vi.mock("../hooks/useVoiceRecording", () => ({
   useVoiceRecording: () => mockVoiceRecordingState,
 }));
 
+vi.mock("../context/AuthContext", () => ({
+  useAuth: () => ({
+    userData: {
+      mother_tongue: "Finnish",
+    },
+  }),
+}));
+
 vi.mock("./chat/AgentMemoryModal", () => ({
   default: () => null,
 }));

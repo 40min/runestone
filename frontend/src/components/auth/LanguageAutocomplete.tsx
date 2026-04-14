@@ -1,5 +1,6 @@
 import React from "react";
 import { Autocomplete, TextField, Box } from "@mui/material";
+import { LANGUAGES } from "../../constants";
 
 interface LanguageAutocompleteProps {
   label: string;
@@ -8,48 +9,6 @@ interface LanguageAutocompleteProps {
   error?: boolean;
   helperText?: string;
 }
-
-const LANGUAGES = [
-  "English",
-  "Russian",
-  "Spanish",
-  "French",
-  "German",
-  "Italian",
-  "Chinese",
-  "Japanese",
-  "Korean",
-  "Portuguese",
-  "Arabic",
-  "Dutch",
-  "Swedish",
-  "Finnish",
-  "Norwegian",
-  "Danish",
-  "Polish",
-  "Turkish",
-  "Vietnamese",
-  "Hindi",
-  "Bengali",
-  "Urdu",
-  "Czech",
-  "Slovak",
-  "Hungarian",
-  "Romanian",
-  "Greek",
-  "Hebrew",
-  "Indonesian",
-  "Thai",
-  "Malay",
-  "Persian",
-  "Bulgarian",
-  "Croatian",
-  "Serbian",
-  "Slovenian",
-  "Lithuanian",
-  "Latvian",
-  "Estonian",
-];
 
 const LanguageAutocomplete: React.FC<LanguageAutocompleteProps> = ({
   label,

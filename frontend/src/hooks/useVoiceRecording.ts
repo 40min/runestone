@@ -15,7 +15,10 @@ interface UseVoiceRecordingReturn {
 
 const MAX_DURATION_SECONDS = 300;
 
-export const useVoiceRecording = (improve: boolean = true): UseVoiceRecordingReturn => {
+export const useVoiceRecording = (
+  improve: boolean = true,
+  language?: string,
+): UseVoiceRecordingReturn => {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [recordedDuration, setRecordedDuration] = useState(0);
@@ -157,6 +160,9 @@ export const useVoiceRecording = (improve: boolean = true): UseVoiceRecordingRet
           const formData = new FormData();
           formData.append('file', audioBlob, 'recording.webm');
           formData.append('improve', String(improve));
+          if (language) {
+            formData.append('language', language);
+          }
 
           const data = await post<{ text: string }>('/api/chat/transcribe-voice', formData);
 
@@ -172,7 +178,7 @@ export const useVoiceRecording = (improve: boolean = true): UseVoiceRecordingRet
 
       mediaRecorder.stop();
     });
-  }, [isRecording, improve, post, cleanup]);
+  }, [isRecording, improve, language, post, cleanup]);
 
   const cancelRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {

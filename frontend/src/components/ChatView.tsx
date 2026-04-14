@@ -28,14 +28,23 @@ import { useChat } from "../hooks/useChat";
 import { useChatImageUpload } from "../hooks/useChatImageUpload";
 import { useVoiceRecording } from "../hooks/useVoiceRecording";
 import { useAudioPlayback } from "../hooks/useAudioPlayback";
+import { useAuth } from "../context/AuthContext";
+import { LANGUAGES } from "../constants";
 
 const IMPROVE_TRANSCRIPTION_KEY = "runestone_improve_transcription";
 const VOICE_ENABLED_KEY = "runestone_voice_enabled";
 const SPEECH_SPEED_KEY = "runestone_speech_speed";
 const AUTOSEND_KEY = "runestone_autosend";
+const STT_LANGUAGE_KEY = "runestone_stt_language";
+
+const getSupportedSpeechLanguage = (language?: string | null) =>
+  language && LANGUAGES.includes(language as (typeof LANGUAGES)[number])
+    ? language
+    : null;
 
 const ChatView: React.FC = () => {
   const [inputMessage, setInputMessage] = useState("");
+  const { userData } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastMessageRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -82,6 +91,14 @@ const ChatView: React.FC = () => {
     return stored === null ? false : stored === "true";
   });
 
+  const [speechLanguage, setSpeechLanguage] = useState(() => {
+    const stored = getSupportedSpeechLanguage(
+      localStorage.getItem(STT_LANGUAGE_KEY),
+    );
+    const profileLanguage = getSupportedSpeechLanguage(userData?.mother_tongue);
+    return stored ?? profileLanguage ?? "Swedish";
+  });
+
   const {
     isRecording,
     isProcessing: isTranscribing,
@@ -90,7 +107,7 @@ const ChatView: React.FC = () => {
     stopRecording,
     error: voiceError,
     clearError: clearVoiceError,
-  } = useVoiceRecording(improveTranscription);
+  } = useVoiceRecording(improveTranscription, speechLanguage);
 
   const {
     isPlaying: isAudioPlaying,
@@ -156,6 +173,10 @@ const ChatView: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(AUTOSEND_KEY, String(autoSend));
   }, [autoSend]);
+
+  useEffect(() => {
+    localStorage.setItem(STT_LANGUAGE_KEY, speechLanguage);
+  }, [speechLanguage]);
 
   // Show voice errors in snackbar
   useEffect(() => {
@@ -507,6 +528,35 @@ const ChatView: React.FC = () => {
                   },
                 }}
               />
+
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Typography variant="caption" sx={{ color: "#9ca3af" }}>
+                  Speech language:
+                </Typography>
+                <Select
+                  value={speechLanguage}
+                  onChange={(e) => setSpeechLanguage(e.target.value)}
+                  size="small"
+                  variant="standard"
+                  inputProps={{ "aria-label": "Speech language" }}
+                  sx={{
+                    color: "#9ca3af",
+                    fontSize: "0.8rem",
+                    minWidth: 120,
+                    "& .MuiSelect-select": { py: 0, pr: 3 },
+                    "&:before": { borderColor: "#4b5563" },
+                    "&:hover:not(.Mui-disabled):before": {
+                      borderColor: "#9ca3af",
+                    },
+                  }}
+                >
+                  {LANGUAGES.map((language) => (
+                    <MenuItem key={language} value={language}>
+                      {language}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </Box>
             </Box>
           </Box>
 
