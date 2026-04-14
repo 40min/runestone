@@ -61,6 +61,12 @@ class Settings(BaseSettings):
 
     # Database Configuration
     database_url: str
+    database_pool_size: int = 8
+    database_max_overflow: int = 8
+    database_pool_timeout: int = 30
+    database_pool_recycle_seconds: int = 1800
+    database_pool_pre_ping: bool = True
+    startup_db_check: bool = True
 
     # State Management Configuration
     state_file_path: str = "state/state.json"

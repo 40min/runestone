@@ -25,16 +25,18 @@ db_url_params = {}
 settings_url = make_url(settings.database_url)
 # QueuePool kwargs are valid for PostgreSQL (asyncpg, psycopg) drivers
 if settings_url.get_dialect().name == "postgresql":
-    # Create SQLAlchemy async engine with connection pooling for parallel tool execution
-    # Increased pool_size and max_overflow to handle concurrent LangGraph tool calls
+    # Keep the pool configurable because each backend process owns its own pool.
+    # Small NAS deployments need lower defaults than a workstation, while bursts
+    # from parallel agent tool calls can still use max_overflow headroom.
     db_url_params = {
-        "pool_size": 20,
-        "max_overflow": 10,
-        "pool_pre_ping": True,
-        "pool_recycle": 3600,
+        "pool_size": settings.database_pool_size,
+        "max_overflow": settings.database_max_overflow,
+        "pool_timeout": settings.database_pool_timeout,
+        "pool_pre_ping": settings.database_pool_pre_ping,
+        "pool_recycle": settings.database_pool_recycle_seconds,
     }
 
-logger.error("DB connection params: %s", db_url_params)
+logger.info("DB connection params: %s", db_url_params)
 
 engine = create_async_engine(settings.database_url, **db_url_params)
 
@@ -101,6 +103,10 @@ def run_migrations() -> None:
 
 async def setup_database() -> None:
     """Check if required tables exist, create them if missing."""
+    if not settings.startup_db_check:
+        logger.info("Skipping startup database verification because STARTUP_DB_CHECK is disabled.")
+        return
+
     from sqlalchemy import inspect
 
     def check_tables(connection):

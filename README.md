@@ -360,6 +360,12 @@ docker compose restart
 
 This will rebuild the backend and frontend images with your latest code changes and restart the containers.
 
+### Postgres Resource Profile
+
+The Compose deployment uses a low-resource Postgres and application pool profile to reduce idle memory/connection pressure while preserving burst capacity for parallel backend database work.
+
+See [Postgres Container Tuning](docs/postgres-container-tuning.md) for the current defaults, connection-budget guidance, and the startup-readiness rationale.
+
 ### Database Permissions (SQLite)
 
 The Docker setup automatically handles SQLite database permissions to prevent "attempt to write a readonly database" errors:
@@ -501,6 +507,9 @@ Design docs:
 
 **Database Configuration:**
 - `DATABASE_URL`: Database connection URL (default: `sqlite:///./state/runestone.db`)
+- `DATABASE_POOL_SIZE`, `DATABASE_MAX_OVERFLOW`: Application connection pool sizing for Postgres deployments.
+- `STARTUP_DB_CHECK`: Enable or disable the application startup table check. Compose disables this because migrations run before backend startup.
+- `POSTGRES_MAX_CONNECTIONS`, `POSTGRES_SHARED_BUFFERS`, `POSTGRES_EFFECTIVE_CACHE_SIZE`: Postgres container resource settings. See [Postgres Container Tuning](docs/postgres-container-tuning.md).
 
 **General Settings:**
 - `VERBOSE`: Enable verbose logging (`true` or `false`, default: `false`)
