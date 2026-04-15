@@ -1,22 +1,64 @@
 """
-ElevenLabs-backed voice client for text-to-speech synthesis.
+ElevenLabs-backed voice clients for STT and TTS.
 """
 
+import io
 from typing import AsyncIterator
 
 from elevenlabs import VoiceSettings
 from elevenlabs.client import AsyncElevenLabs
 
-from runestone.core.exceptions import APIKeyError, RunestoneError
 
-
-class ElevenLabsVoiceClient:
-    """Voice client that wraps ElevenLabs TTS streaming for Runestone."""
+class ElevenLabsSTTClient:
+    """ElevenLabs Scribe client for speech-to-text."""
 
     def __init__(
         self,
         api_key: str,
-        model_id: str,
+        transcription_model: str,
+    ):
+        """
+        Initialize the ElevenLabs STT client.
+
+        Args:
+            api_key: ElevenLabs API key
+            transcription_model: ElevenLabs speech-to-text model identifier
+        """
+        self._client = AsyncElevenLabs(api_key=api_key)
+        self._transcription_model = transcription_model
+
+    async def transcribe_audio(self, audio_content: bytes, language: str | None = None) -> str:
+        """
+        Transcribe raw audio bytes with ElevenLabs Scribe.
+
+        Args:
+            audio_content: Raw audio bytes from the browser recorder
+            language: Optional ISO-639-1 language code
+
+        Returns:
+            Transcribed text or an empty string when provider returns no text
+        """
+        audio_file = io.BytesIO(audio_content)
+        audio_file.name = "recording.webm"
+
+        params = {
+            "model_id": self._transcription_model,
+            "file": ("recording.webm", audio_file, "audio/webm"),
+        }
+        if language:
+            params["language_code"] = language
+
+        response = await self._client.speech_to_text.convert(**params)
+        return (getattr(response, "text", None) or "").strip()
+
+
+class ElevenLabsTTSClient:
+    """ElevenLabs client for streaming text-to-speech synthesis."""
+
+    def __init__(
+        self,
+        api_key: str,
+        tts_model_id: str,
         voice_id: str,
         output_format: str,
         stability: float,
@@ -25,11 +67,11 @@ class ElevenLabsVoiceClient:
         use_speaker_boost: bool,
     ):
         """
-        Initialize the ElevenLabs voice client.
+        Initialize the ElevenLabs TTS client.
 
         Args:
             api_key: ElevenLabs API key
-            model_id: ElevenLabs model identifier
+            tts_model_id: ElevenLabs text-to-speech model identifier
             voice_id: ElevenLabs voice identifier
             output_format: Requested audio format for generated speech
             stability: ElevenLabs stability tuning
@@ -37,20 +79,8 @@ class ElevenLabsVoiceClient:
             style: ElevenLabs style tuning
             use_speaker_boost: Whether to enable speaker boost
         """
-        if not api_key:
-            raise APIKeyError("ElevenLabs API key is required for voice features. Set ELEVENLABS_API_KEY.")
-        if not voice_id:
-            raise RunestoneError(
-                "ElevenLabs voice ID is required for TTS. Set ELEVENLABS_TTS_VOICE_ID when TTS_PROVIDER=elevenlabs."
-            )
-        if not output_format.startswith("mp3_"):
-            raise RunestoneError(
-                "ElevenLabs TTS output format must be an MP3 variant for browser playback. "
-                "Set ELEVENLABS_TTS_OUTPUT_FORMAT to an mp3_* value."
-            )
-
         self._client = AsyncElevenLabs(api_key=api_key)
-        self._model_id = model_id
+        self._tts_model_id = tts_model_id
         self._voice_id = voice_id
         self._output_format = output_format
         self._stability = stability
@@ -88,7 +118,7 @@ class ElevenLabsVoiceClient:
         async for chunk in self._client.text_to_speech.stream(
             voice_id=self._voice_id,
             text=text,
-            model_id=self._model_id,
+            model_id=self._tts_model_id,
             output_format=self._output_format,
             voice_settings=voice_settings,
         ):

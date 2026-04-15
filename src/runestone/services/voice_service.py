@@ -9,7 +9,7 @@ in voice clients.
 import logging
 
 from runestone.config import Settings
-from runestone.core.clients.voice.voice_factory import VoiceTranscriptionClient
+from runestone.core.clients.voice.voice_factory import VoiceEnhancementClient, VoiceTranscriptionClient
 from runestone.core.constants import LANGUAGE_CODE_MAP
 from runestone.core.exceptions import RunestoneError
 
@@ -17,18 +17,25 @@ logger = logging.getLogger(__name__)
 
 
 class VoiceService:
-    """Service for voice transcription and text enhancement."""
+    """Service coordinating speech-to-text and optional transcript cleanup."""
 
-    def __init__(self, settings: Settings, transcription_client: VoiceTranscriptionClient):
+    def __init__(
+        self,
+        settings: Settings,
+        transcription_client: VoiceTranscriptionClient,
+        enhancement_client: VoiceEnhancementClient,
+    ):
         """
         Initialize the voice service.
 
         Args:
             settings: Application settings containing model configuration
-            transcription_client: Provider client handling transcription and enhancement
+            transcription_client: Provider client handling raw transcription
+            enhancement_client: Provider client handling transcript cleanup
         """
         self.settings = settings
         self._transcription_client = transcription_client
+        self._enhancement_client = enhancement_client
 
     async def transcribe_audio(self, audio_content: bytes, language: str | None = None) -> str:
         """
@@ -80,7 +87,7 @@ class VoiceService:
                 "the original meaning and tone. Return only the corrected text."
                 "The text is transcribed so could have some mistakes, please correct them."
             )
-            enhanced_text = await self._transcription_client.enhance_text(
+            enhanced_text = await self._enhancement_client.enhance_text(
                 text=text,
                 system_prompt=system_prompt,
             )

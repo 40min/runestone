@@ -489,7 +489,7 @@ Design docs:
 
 **Voice Configuration:**
 - `VOICE_TRANSCRIPTION_PROVIDER`: Voice transcription provider (`openai` or `elevenlabs`, default: `openai`)
-- `VOICE_TRANSCRIPTION_MODEL`: Transcription model name (default: `whisper-1`)
+- `VOICE_TRANSCRIPTION_MODEL`: Provider-specific transcription model name (`whisper-1` for OpenAI, `scribe_v2` for ElevenLabs; default: `whisper-1`)
 - `VOICE_ENHANCEMENT_MODEL`: Post-transcription cleanup model (default: `gpt-4o-mini`)
 - `TTS_PROVIDER`: Text-to-speech provider (`openai` or `elevenlabs`, default: `openai`)
 - `TTS_MODEL`: OpenAI text-to-speech model (default: `gpt-4o-mini-tts`)
@@ -544,6 +544,10 @@ VOICE_TRANSCRIPTION_MODEL=whisper-1
 TTS_PROVIDER=openai
 TTS_MODEL=gpt-4o-mini-tts
 TTS_VOICE=onyx
+
+# ElevenLabs STT option
+# VOICE_TRANSCRIPTION_PROVIDER=elevenlabs
+# VOICE_TRANSCRIPTION_MODEL=scribe_v2
 
 # ElevenLabs settings (if using ElevenLabs for voice)
 ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
