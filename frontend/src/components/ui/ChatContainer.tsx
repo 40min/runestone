@@ -14,8 +14,9 @@ export const ChatContainer = React.forwardRef<HTMLDivElement, ChatContainerProps
         sx={{
           flex: 1,
           overflowY: 'auto',
-          mb: 2,
-          px: { xs: 1, md: 2 },
+          mb: 0,
+          px: { xs: 2, md: 4 },
+          py: { xs: 2, md: 3 },
           '&::-webkit-scrollbar': {
             width: '8px',
           },
