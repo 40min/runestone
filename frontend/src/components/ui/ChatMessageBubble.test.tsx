@@ -126,10 +126,10 @@ describe("ChatMessageBubble", () => {
 
   it("collapses long messages and toggles via button", async () => {
     const user = userEvent.setup();
-    const longText = "a".repeat(201);
+    const longText = "a".repeat(301);
     render(<ChatMessageBubble role="user" content={longText} />);
 
-    expect(screen.getByText("a".repeat(200))).toBeInTheDocument();
+    expect(screen.getByText("a".repeat(300))).toBeInTheDocument();
     expect(screen.getByText("...")).toBeInTheDocument();
     expect(screen.queryByText(longText)).not.toBeInTheDocument();
 
@@ -142,12 +142,12 @@ describe("ChatMessageBubble", () => {
     const showLessBtn = screen.getByRole("button", { name: /show less/i });
     await user.click(showLessBtn);
 
-    expect(screen.getByText("a".repeat(200))).toBeInTheDocument();
+    expect(screen.getByText("a".repeat(300))).toBeInTheDocument();
     expect(screen.getByText("...")).toBeInTheDocument();
   });
 
   it("does not collapse long messages if isLast is true", () => {
-    const longText = "a".repeat(201);
+    const longText = "a".repeat(301);
     render(
       <ChatMessageBubble role="user" content={longText} isLast={true} />,
     );
@@ -156,11 +156,21 @@ describe("ChatMessageBubble", () => {
     expect(screen.queryByText("...")).not.toBeInTheDocument();
   });
 
-  it("does not collapse assistant teaching messages", () => {
-    const longText = `**${"a".repeat(220)}**`;
+  it("collapses long assistant teaching messages", () => {
+    const longText = "a".repeat(320);
     render(<ChatMessageBubble role="assistant" content={longText} />);
 
-    expect(screen.getByText("a".repeat(220))).toBeInTheDocument();
+    expect(screen.getByText("a".repeat(300))).toBeInTheDocument();
+    expect(screen.getByText("...")).toBeInTheDocument();
+  });
+
+  it("does not collapse long messages when latest by role", () => {
+    const longText = "a".repeat(301);
+    render(
+      <ChatMessageBubble role="assistant" content={longText} isLatestByRole={true} />,
+    );
+
+    expect(screen.getByText("a".repeat(301))).toBeInTheDocument();
     expect(screen.queryByText("...")).not.toBeInTheDocument();
   });
 

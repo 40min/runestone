@@ -136,6 +136,15 @@ const ChatView: React.FC = () => {
     }
     return null;
   })();
+  const lastUserMessageId = (() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.role === "user") {
+        return message.id;
+      }
+    }
+    return null;
+  })();
 
   const scrollToLastMessage = (
     behavior: ScrollBehavior,
@@ -356,6 +365,10 @@ const ChatView: React.FC = () => {
                   responseTimeMs={msg.responseTimeMs}
                   createdAt={msg.createdAt}
                   isLast={index === messages.length - 1}
+                  isLatestByRole={
+                    (msg.role === "assistant" && msg.id === lastAssistantMessageId) ||
+                    (msg.role === "user" && msg.id === lastUserMessageId)
+                  }
                   showAudioControls={
                     msg.role === "assistant" &&
                     msg.id === lastAssistantMessageId &&

@@ -54,7 +54,7 @@ export const ChatComposerInputRow: React.FC<ChatComposerInputRowProps> = ({
         }}
       >
         <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
-          SKICKA
+          Send
         </Box>
         <Box component="span" sx={{ display: { xs: "inline-flex", sm: "none" } }}>
           <Send size={18} />

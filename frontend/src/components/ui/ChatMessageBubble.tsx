@@ -17,6 +17,7 @@ interface ChatMessageBubbleProps {
   responseTimeMs?: number;
   createdAt?: string;
   isLast?: boolean;
+  isLatestByRole?: boolean;
   showAudioControls?: boolean;
   isAudioPlaying?: boolean;
   canReplayAudio?: boolean;
@@ -41,6 +42,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   sources,
   createdAt,
   isLast,
+  isLatestByRole = false,
   showAudioControls = false,
   isAudioPlaying = false,
   canReplayAudio = false,
@@ -48,10 +50,11 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   onPauseAudio,
   onReplayAudio,
 }) => {
-  const maxCollapsedChars = 200;
-  const isLongMessage = role === "user" && content.length > maxCollapsedChars;
+  const maxCollapsedChars = 300;
+  const isLongMessage = content.length > maxCollapsedChars;
   const [isExpanded, setIsExpanded] = useState(false);
-  const isCollapsed = !isLast && isLongMessage && !isExpanded;
+  const shouldKeepExpanded = isLast || isLatestByRole;
+  const isCollapsed = !shouldKeepExpanded && isLongMessage && !isExpanded;
   const hasSources = role === "assistant" && sources && sources.length > 0;
   const messageTime = formatMessageTime(createdAt);
   const resolveSafeUrl = (url: string) => {
@@ -216,7 +219,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           </Typography>
         )}
 
-        {!isLast && isLongMessage && (
+        {!shouldKeepExpanded && isLongMessage && (
           <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
             <IconButton
               onClick={() => setIsExpanded(!isExpanded)}
