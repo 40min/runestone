@@ -3,6 +3,8 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from runestone.core.clients.voice.elevenlabs_voice_client import ElevenLabsSTTClient, ElevenLabsTTSClient
 
 
@@ -19,6 +21,7 @@ class TestElevenLabsSTTClient:
         mock_client_class.assert_called_once_with(api_key="test-key")
 
     @patch("runestone.core.clients.voice.elevenlabs_voice_client.AsyncElevenLabs")
+    @pytest.mark.anyio
     async def test_transcribe_audio_uses_speech_to_text_convert(self, mock_client_class):
         """Client should send WebM bytes to ElevenLabs Scribe with optional language."""
         mock_client = mock_client_class.return_value
@@ -43,6 +46,7 @@ class TestElevenLabsSTTClient:
         assert content_type == "audio/webm"
 
     @patch("runestone.core.clients.voice.elevenlabs_voice_client.AsyncElevenLabs")
+    @pytest.mark.anyio
     async def test_transcribe_audio_omits_language_when_not_provided(self, mock_client_class):
         """Client should let ElevenLabs auto-detect language when none is supplied."""
         mock_client = mock_client_class.return_value
@@ -60,6 +64,7 @@ class TestElevenLabsSTTClient:
         assert "language_code" not in call_kwargs
 
     @patch("runestone.core.clients.voice.elevenlabs_voice_client.AsyncElevenLabs")
+    @pytest.mark.anyio
     async def test_transcribe_audio_returns_empty_string_for_blank_response(self, mock_client_class):
         """Client should normalize empty provider text to an empty string."""
         mock_client = mock_client_class.return_value
@@ -80,6 +85,7 @@ class TestElevenLabsTTSClient:
 
     @patch("runestone.core.clients.voice.elevenlabs_voice_client.VoiceSettings")
     @patch("runestone.core.clients.voice.elevenlabs_voice_client.AsyncElevenLabs")
+    @pytest.mark.anyio
     async def test_synthesize_speech_stream(self, mock_client_class, mock_voice_settings):
         """Client should stream raw bytes from ElevenLabs SDK."""
         mock_client = mock_client_class.return_value
