@@ -140,7 +140,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         sx={{
           maxWidth:
             role === "user"
-              ? { xs: "86%", sm: "62%", md: "38%" }
+              ? { xs: "86%", sm: "62%", md: "65%" }
               : { xs: "calc(100% - 46px)", sm: "78%", md: "70%" },
           padding: role === "user" ? "10px 15px" : "12px 18px",
           borderRadius:
