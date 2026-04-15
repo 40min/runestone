@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ChatView from "./ChatView";
+import { appendTranscribedTextToInput } from "./chatInputText";
 
 const mockUseChatState = {
   messages: [] as Array<{
@@ -160,6 +161,12 @@ describe("ChatView audio controls", () => {
     rerender(<ChatView />);
 
     expect(screen.queryByRole("button", { name: /^play$/i })).not.toBeInTheDocument();
+  });
+
+  it("appends transcribed text to an existing draft", () => {
+    expect(appendTranscribedTextToInput("Hej", "hur mar du?")).toBe("Hej hur mar du?");
+    expect(appendTranscribedTextToInput("Hej ", "hur mar du?")).toBe("Hej hur mar du?");
+    expect(appendTranscribedTextToInput("", "hur mar du?")).toBe("hur mar du?");
   });
 });
 

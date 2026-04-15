@@ -3,8 +3,10 @@ TeacherAgent specialist responsible for composing the final user response.
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -116,7 +118,7 @@ Rules:
 - **OUTPUT CONTRACT (MANDATORY):** Your final student-facing reply must never include
   internal markers or wrappers such as
   `[PRE_RESPONSE_SPECIALISTS]`, `[/PRE_RESPONSE_SPECIALISTS]`, `[STARTER_MEMORY]`, `[RECENT_SIDE_EFFECTS]`,
-  `info_for_teacher`, or raw internal JSON objects copied from internal context blocks.
+  `[CURRENT_DATETIME]`, `info_for_teacher`, or raw internal JSON objects copied from internal context blocks.
 - Before finalizing your answer, run a quick self-check and remove any internal tags/JSON wrappers if present.
 
 ### RESPONSE GUIDELINES
@@ -252,7 +254,7 @@ to read its contents before deciding.
         """
 
         # Build conversation messages
-        messages = []
+        messages = [SystemMessage(content=self._format_current_datetime(user))]
 
         # Add user's mother tongue if available
         if user.mother_tongue:
@@ -308,6 +310,24 @@ to read its contents before deciding.
                 return msg.content, final_messages
 
         return "I'm sorry, I couldn't generate a response.", final_messages
+
+    @staticmethod
+    def _format_current_datetime(user: User) -> str:
+        timezone_name = getattr(user, "timezone", None) or "UTC"
+        try:
+            user_timezone = ZoneInfo(timezone_name)
+        except (TypeError, ZoneInfoNotFoundError, ValueError):
+            user_timezone = timezone.utc
+            timezone_name = "UTC"
+        current_datetime = datetime.now(user_timezone).replace(microsecond=0)
+        return "\n".join(
+            [
+                "[CURRENT_DATETIME]",
+                f"Current datetime: {current_datetime.isoformat()}",
+                f"Timezone: {timezone_name}",
+                "Use this for time-sensitive answers, but do not mention this internal context unless relevant.",
+            ]
+        )
 
     @staticmethod
     def _format_sources(sources: list[dict[str, str]]) -> str:
