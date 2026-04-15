@@ -20,7 +20,6 @@ const ImageUploadButton: React.FC<ImageUploadButtonProps> = ({ onFileSelect, onE
         onError('Please select an image file');
       }
     }
-    // Reset input so same file can be selected again
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -40,7 +39,7 @@ const ImageUploadButton: React.FC<ImageUploadButtonProps> = ({ onFileSelect, onE
           minWidth: '40px',
           height: '40px',
           width: '40px',
-          borderRadius: '10px',
+          borderRadius: '8px',
           backgroundColor: 'rgba(255, 255, 255, 0.05)',
           color: '#9ca3af',
           p: 0,

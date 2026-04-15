@@ -12,7 +12,6 @@ interface VoiceRecordButtonProps {
   disabled?: boolean;
 }
 
-// Pulsing animation for recording state
 const pulse = keyframes`
   0% {
     box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
@@ -47,7 +46,6 @@ const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
     }
   };
 
-  // Show processing spinner
   if (isProcessing) {
     return (
       <Box
@@ -82,7 +80,7 @@ const VoiceRecordButton: React.FC<VoiceRecordButtonProps> = ({
           minWidth: '40px',
           height: '40px',
           width: '40px',
-          borderRadius: '10px',
+          borderRadius: '8px',
           backgroundColor: isRecording ? '#ef4444' : 'rgba(255, 255, 255, 0.05)',
           color: isRecording ? 'white' : '#9ca3af',
           p: 0,

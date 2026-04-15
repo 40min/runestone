@@ -14,6 +14,7 @@ interface ServerChatMessage {
   role: 'user' | 'assistant';
   content: string;
   sources?: NewsSource[] | null;
+  created_at?: string | null;
 }
 
 interface ChatHistoryResponse {
@@ -32,6 +33,7 @@ interface ChatMessage {
   content: string;
   sources?: NewsSource[] | null;
   responseTimeMs?: number;
+  createdAt?: string;
 }
 
 interface UseChatReturn {
@@ -92,6 +94,7 @@ export const useChat = (): UseChatReturn => {
       role: message.role,
       content: message.content,
       sources: message.sources ?? undefined,
+      createdAt: message.created_at ?? undefined,
     };
   }, []);
 
@@ -330,6 +333,7 @@ export const useChat = (): UseChatReturn => {
         id: uuidv4(),
         role: 'user',
         content: userMessage.trim(),
+        createdAt: new Date().toISOString(),
       };
 
       // Add user message to chat immediately for UI responsiveness
@@ -350,6 +354,7 @@ export const useChat = (): UseChatReturn => {
           content: data.message,
           sources: data.sources ?? undefined,
           responseTimeMs: Math.max(0, Math.round(performance.now() - startedAt)),
+          createdAt: new Date().toISOString(),
         };
 
         setMessages((prev) => [...prev, assistantMessage]);

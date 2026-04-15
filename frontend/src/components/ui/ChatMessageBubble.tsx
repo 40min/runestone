@@ -1,13 +1,22 @@
 import React, { useState } from "react";
 import { Box, Button, IconButton, Link, Typography } from "@mui/material";
-import { ChevronDown, ChevronUp, Pause, Play, RotateCcw } from "lucide-react";
-import { formatResponseTime } from "./ChatMessageBubble.utils";
+import {
+  ChevronDown,
+  ChevronUp,
+  Lightbulb,
+  Pause,
+  Play,
+  RotateCcw,
+} from "lucide-react";
+import { TeacherAvatar } from "../chat/TeacherAvatar";
+import MarkdownDisplay from "./MarkdownDisplay";
 
 interface ChatMessageBubbleProps {
   role: "user" | "assistant";
   content: string;
   sources?: { title: string; url: string; date: string }[] | null;
   responseTimeMs?: number;
+  createdAt?: string;
   isLast?: boolean;
   showAudioControls?: boolean;
   isAudioPlaying?: boolean;
@@ -17,11 +26,73 @@ interface ChatMessageBubbleProps {
   onReplayAudio?: () => void;
 }
 
+const formatMessageTime = (value?: string) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+const isTeachingCallout = (block: string) => {
+  const trimmed = block.trim();
+  return (
+    trimmed.startsWith("💡") ||
+    /^(\*\*)?["“][^"”\n]+["”](\*\*)?[.:]?/.test(trimmed)
+  );
+};
+
+const stripCalloutMarker = (block: string) => block.trim().replace(/^💡\s*/, "");
+
+const renderAssistantContent = (content: string) => {
+  const blocks = content.split(/\n{2,}/);
+  return blocks.map((block, index) => {
+    const trimmed = block.trim();
+    if (!trimmed) return null;
+
+    if (isTeachingCallout(trimmed)) {
+      return (
+        <Box
+          key={`callout-${index}`}
+          data-testid="teaching-callout"
+          sx={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 1,
+            my: 1.25,
+            px: 1.5,
+            py: 1,
+            borderRadius: "8px",
+            backgroundColor: "rgba(255, 255, 255, 0.05)",
+            border: "1px solid rgba(255, 255, 255, 0.04)",
+          }}
+        >
+          <Lightbulb
+            size={16}
+            style={{
+              flexShrink: 0,
+              marginTop: 4,
+              color: "#facc15",
+            }}
+          />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <MarkdownDisplay markdownContent={stripCalloutMarker(trimmed)} />
+          </Box>
+        </Box>
+      );
+    }
+
+    return <MarkdownDisplay key={`content-${index}`} markdownContent={trimmed} />;
+  });
+};
+
 export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   role,
   content,
   sources,
-  responseTimeMs,
+  createdAt,
   isLast,
   showAudioControls = false,
   isAudioPlaying = false,
@@ -31,10 +102,11 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   onReplayAudio,
 }) => {
   const maxCollapsedChars = 200;
-  const isLongMessage = content.length > maxCollapsedChars;
+  const isLongMessage = role === "user" && content.length > maxCollapsedChars;
   const [isExpanded, setIsExpanded] = useState(false);
   const isCollapsed = !isLast && isLongMessage && !isExpanded;
   const hasSources = role === "assistant" && sources && sources.length > 0;
+  const messageTime = formatMessageTime(createdAt);
   const resolveSafeUrl = (url: string) => {
     try {
       const parsed = new URL(url);
@@ -111,47 +183,91 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       sx={{
         display: "flex",
         justifyContent: role === "user" ? "flex-end" : "flex-start",
-        mb: 2,
+        alignItems: "flex-end",
+        gap: 1.25,
+        mb: { xs: 1.75, md: 2 },
       }}
     >
+      {role === "assistant" && <TeacherAvatar size={34} showStatus={false} />}
       <Box
         sx={{
-          maxWidth: { xs: "100%", sm: "98%", md: "92%" },
-          padding: "12px 16px",
-          borderRadius: "12px",
+          maxWidth:
+            role === "user"
+              ? { xs: "86%", sm: "62%", md: "38%" }
+              : { xs: "calc(100% - 46px)", sm: "78%", md: "70%" },
+          padding: role === "user" ? "10px 15px" : "12px 18px",
+          borderRadius:
+            role === "user" ? "8px 8px 2px 8px" : "8px 8px 8px 2px",
           backgroundColor:
             role === "user"
-              ? "rgba(147, 51, 234, 0.2)"
-              : "rgba(58, 45, 74, 0.6)",
+              ? "rgba(58, 30, 104, 0.92)"
+              : "rgba(43, 31, 65, 0.88)",
           border:
             role === "user"
-              ? "1px solid rgba(147, 51, 234, 0.3)"
-              : "1px solid rgba(147, 51, 234, 0.1)",
+              ? "1px solid rgba(147, 51, 234, 0.32)"
+              : "1px solid rgba(255, 255, 255, 0.04)",
+          boxShadow:
+            role === "assistant"
+              ? "0 18px 44px rgba(0, 0, 0, 0.12)"
+              : "none",
         }}
       >
-        <Typography
-          component="div"
-          sx={{
-            color: "white",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-          }}
-        >
-          {renderContentWithLinks(displayedContent)}
-          {isCollapsed && (
-            <Box
-              component="span"
-              sx={{
-                color: "var(--primary-color)",
-                fontWeight: 800,
-                letterSpacing: "0.12em",
-                ml: 0.5,
-              }}
-            >
-              ...
-            </Box>
-          )}
-        </Typography>
+        {role === "assistant" ? (
+          <Box
+            sx={{
+              color: "#f4efff",
+              "& .markdown-content": {
+                lineHeight: 1.65,
+              },
+              "& .markdown-content p:first-of-type": {
+                marginTop: 0,
+              },
+              "& .markdown-content p:last-child": {
+                marginBottom: 0,
+              },
+            }}
+          >
+            {renderAssistantContent(displayedContent)}
+            {isCollapsed && (
+              <Box
+                component="span"
+                sx={{
+                  color: "var(--primary-color)",
+                  fontWeight: 800,
+                  letterSpacing: "0.12em",
+                  ml: 0.5,
+                }}
+              >
+                ...
+              </Box>
+            )}
+          </Box>
+        ) : (
+          <Typography
+            component="div"
+            sx={{
+              color: "white",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              lineHeight: 1.55,
+            }}
+          >
+            {renderContentWithLinks(displayedContent)}
+            {isCollapsed && (
+              <Box
+                component="span"
+                sx={{
+                  color: "var(--primary-color)",
+                  fontWeight: 800,
+                  letterSpacing: "0.12em",
+                  ml: 0.5,
+                }}
+              >
+                ...
+              </Box>
+            )}
+          </Typography>
+        )}
 
         {!isLast && isLongMessage && (
           <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
@@ -162,10 +278,10 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               sx={{
                 color: "var(--primary-color)",
                 mt: 0.5,
-                backgroundColor: "rgba(147, 51, 234, 0.1)",
+                backgroundColor: "rgba(56, 224, 123, 0.08)",
                 borderRadius: "6px",
                 "&:hover": {
-                  backgroundColor: "rgba(147, 51, 234, 0.2)",
+                  backgroundColor: "rgba(56, 224, 123, 0.14)",
                 },
               }}
             >
@@ -229,17 +345,6 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               Replay
             </Button>
           </Box>
-        )}
-        {role === "assistant" && typeof responseTimeMs === "number" && (
-          <Typography
-            sx={(theme) => ({
-              color: theme.palette.grey[400],
-              fontSize: "0.72rem",
-              mt: 1,
-            })}
-          >
-            Teacher responded in {formatResponseTime(responseTimeMs)}
-          </Typography>
         )}
         {hasSources && (
           <Box sx={{ mt: 1.5 }}>
@@ -311,6 +416,19 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               ))}
             </Box>
           </Box>
+        )}
+        {messageTime && (
+          <Typography
+            sx={{
+              color: "rgba(255, 255, 255, 0.42)",
+              fontSize: "0.72rem",
+              mt: 1,
+              textAlign: "right",
+              lineHeight: 1,
+            }}
+          >
+            {messageTime}
+          </Typography>
         )}
       </Box>
     </Box>

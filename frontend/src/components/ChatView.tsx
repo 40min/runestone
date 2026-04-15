@@ -343,8 +343,6 @@ const ChatView: React.FC = () => {
       >
         {/* Header */}
         <ChatHeader
-          title="Chat with Your Swedish Teacher"
-          subtitle="Ask questions about Swedish vocabulary, grammar, or practice conversation"
           onNewChat={handleNewChat}
           onOpenMemory={() => setIsMemoryModalOpen(true)}
           isLoading={isAnyProcessing}
@@ -366,6 +364,7 @@ const ChatView: React.FC = () => {
                   content={msg.content}
                   sources={msg.sources}
                   responseTimeMs={msg.responseTimeMs}
+                  createdAt={msg.createdAt}
                   isLast={index === messages.length - 1}
                   showAudioControls={
                     msg.role === "assistant" &&
@@ -422,14 +421,18 @@ const ChatView: React.FC = () => {
           sx={{
             display: "flex",
             flexDirection: "column",
-            gap: 1.5,
-            pb: { xs: "calc(8px + env(safe-area-inset-bottom))", md: 0 },
+            gap: 1,
+            px: { xs: 2, md: 4 },
+            pt: { xs: 1.5, md: 2 },
+            pb: { xs: "calc(12px + env(safe-area-inset-bottom))", md: 2 },
+            borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+            backgroundColor: "rgba(26, 16, 43, 0.96)",
           }}
         >
           <Box
             sx={{
               display: "flex",
-              gap: { xs: 1, md: 2 },
+              gap: { xs: 1, md: 1.5 },
               alignItems: "center",
             }}
           >
@@ -437,7 +440,7 @@ const ChatView: React.FC = () => {
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type your message..."
+              placeholder="Skriv ditt svar här..."
               disabled={isAnyProcessing || isRecording}
             />
             <CustomButton
@@ -445,12 +448,25 @@ const ChatView: React.FC = () => {
               disabled={!inputMessage.trim() || isAnyProcessing || isRecording}
               aria-label="Send message"
               sx={{
-                minWidth: { xs: "48px", md: "56px" },
-                height: { xs: "48px", md: "56px" },
-                borderRadius: "12px",
+                minWidth: { xs: "48px", sm: "96px" },
+                height: "46px",
+                borderRadius: "8px",
+                px: { xs: 0, sm: 3 },
+                fontWeight: 700,
+                letterSpacing: 0,
+                "&.Mui-disabled": {
+                  backgroundColor: "rgba(56, 224, 123, 0.34)",
+                  color: "rgba(17, 23, 20, 0.7)",
+                  opacity: 1,
+                },
               }}
             >
-              <Send size={20} />
+              <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
+                SKICKA
+              </Box>
+              <Box component="span" sx={{ display: { xs: "inline-flex", sm: "none" } }}>
+                <Send size={18} />
+              </Box>
             </CustomButton>
           </Box>
 
@@ -458,12 +474,13 @@ const ChatView: React.FC = () => {
             sx={{
               display: "flex",
               flexWrap: "wrap",
-              gap: 2,
+              gap: { xs: 1, md: 1.5 },
               alignItems: "center",
-              pl: 0.5,
+              justifyContent: "space-between",
+              py: 0.5,
             }}
           >
-            <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+            <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
               <ImageUploadButton
                 onFileSelect={handleImageUpload}
                 onError={handleImageError}
@@ -499,7 +516,14 @@ const ChatView: React.FC = () => {
               </Box>
             </Box>
 
-            <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+            <Box
+              sx={{
+                display: "flex",
+                gap: { xs: 1, md: 1.5 },
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
               <FormControlLabel
                 control={
                   <Checkbox
@@ -517,6 +541,10 @@ const ChatView: React.FC = () => {
                 sx={{
                   color: "#9ca3af",
                   m: 0,
+                  px: 1,
+                  py: 0.25,
+                  borderRadius: "8px",
+                  backgroundColor: "rgba(255, 255, 255, 0.04)",
                   "& .MuiFormControlLabel-label": { fontSize: "0.75rem" },
                 }}
               />
@@ -540,6 +568,10 @@ const ChatView: React.FC = () => {
                 sx={{
                   color: "#9ca3af",
                   m: 0,
+                  px: 1,
+                  py: 0.25,
+                  borderRadius: "8px",
+                  backgroundColor: "rgba(255, 255, 255, 0.04)",
                   "& .MuiFormControlLabel-label": {
                     fontSize: "0.75rem",
                   },
@@ -548,7 +580,7 @@ const ChatView: React.FC = () => {
 
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <Typography variant="caption" sx={{ color: "#9ca3af" }}>
-                  Speech language:
+                  Speech:
                 </Typography>
                 <Select
                   value={speechLanguage}
@@ -562,7 +594,7 @@ const ChatView: React.FC = () => {
                   sx={{
                     color: "#9ca3af",
                     fontSize: "0.8rem",
-                    minWidth: 120,
+                    minWidth: 100,
                     "& .MuiSelect-select": { py: 0, pr: 3 },
                     "&:before": { borderColor: "#4b5563" },
                     "&:hover:not(.Mui-disabled):before": {
@@ -583,12 +615,10 @@ const ChatView: React.FC = () => {
           <Box
             sx={{
               display: "flex",
-              gap: 3,
+              gap: { xs: 1.5, md: 2.5 },
               alignItems: "center",
-              pl: 0.5,
-              mt: 0.5,
-              pt: 1,
-              borderTop: "1px solid rgba(255, 255, 255, 0.05)",
+              pl: 0.25,
+              pt: 0.5,
             }}
           >
             <VoiceToggle

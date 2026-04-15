@@ -101,11 +101,10 @@ describe('ChatView', () => {
       </AuthProvider>
     );
 
-    expect(screen.getByText('Chat with Your Swedish Teacher')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Ask questions about Swedish vocabulary, grammar/i)
-    ).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Type your message...')).toBeInTheDocument();
+    expect(screen.getByText('Björn')).toBeInTheDocument();
+    expect(screen.getByText('Your Swedish Teacher')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Skriv ditt svar här...')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /send message/i })).toHaveTextContent('SKICKA');
   });
 
   it('defaults speech language from the user profile', () => {
@@ -315,7 +314,7 @@ describe('ChatView', () => {
       expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
     });
 
-    const input = screen.getByPlaceholderText('Type your message...');
+    const input = screen.getByPlaceholderText('Skriv ditt svar här...');
     const sendButton = getSendButton();
 
     fireEvent.change(input, { target: { value: 'Hej! Hur mår du?' } });
@@ -348,7 +347,7 @@ describe('ChatView', () => {
       expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
     });
 
-    const input = screen.getByPlaceholderText('Type your message...');
+    const input = screen.getByPlaceholderText('Skriv ditt svar här...');
     fireEvent.change(input, { target: { value: 'Hej! Hur mår du?' } });
     fireEvent.click(getSendButton());
 
@@ -395,7 +394,7 @@ describe('ChatView', () => {
       expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
     });
 
-    const input = screen.getByPlaceholderText('Type your message...');
+    const input = screen.getByPlaceholderText('Skriv ditt svar här...');
     fireEvent.change(input, { target: { value: 'Test message' } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
 
@@ -429,7 +428,7 @@ describe('ChatView', () => {
       expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
     });
 
-    const input = screen.getByPlaceholderText('Type your message...');
+    const input = screen.getByPlaceholderText('Skriv ditt svar här...');
     fireEvent.change(input, { target: { value: 'Test message' } });
     fireEvent.click(getSendButton());
 
@@ -469,7 +468,7 @@ describe('ChatView', () => {
       expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
     });
 
-    const input = screen.getByPlaceholderText('Type your message...');
+    const input = screen.getByPlaceholderText('Skriv ditt svar här...');
     fireEvent.change(input, { target: { value: 'Test message' } });
     fireEvent.click(getSendButton());
 
@@ -491,7 +490,7 @@ describe('ChatView', () => {
     });
 
     const input = screen.getByPlaceholderText(
-      'Type your message...'
+      'Skriv ditt svar här...'
     ) as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'Test message' } });
     fireEvent.click(getSendButton());
@@ -744,7 +743,7 @@ describe('ChatView', () => {
       expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
     });
 
-    const input = screen.getByPlaceholderText('Type your message...') as HTMLInputElement;
+    const input = screen.getByPlaceholderText('Skriv ditt svar här...') as HTMLInputElement;
     const sendButton = getSendButton();
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
 
@@ -813,7 +812,7 @@ describe('ChatView', () => {
       expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
     });
 
-    const input = screen.getByPlaceholderText('Type your message...');
+    const input = screen.getByPlaceholderText('Skriv ditt svar här...');
     fireEvent.change(input, { target: { value: 'Test message' } });
     fireEvent.click(getSendButton());
 
@@ -883,7 +882,7 @@ describe('ChatView', () => {
 
     (window.HTMLElement.prototype.scrollIntoView as ReturnType<typeof vi.fn>).mockClear();
 
-    const input = screen.getByPlaceholderText('Type your message...');
+    const input = screen.getByPlaceholderText('Skriv ditt svar här...');
     fireEvent.change(input, { target: { value: 'Test message' } });
     fireEvent.click(getSendButton());
 

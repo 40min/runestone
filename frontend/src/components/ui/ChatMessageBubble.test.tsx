@@ -29,6 +29,58 @@ describe("ChatMessageBubble", () => {
     expect(screen.getByText("2026-02-05")).toBeInTheDocument();
   });
 
+  it("renders the teacher avatar for assistant messages", () => {
+    render(<ChatMessageBubble role="assistant" content="Hej!" />);
+
+    expect(
+      screen.getByRole("img", { name: /björn, your swedish teacher/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not render the teacher avatar for user messages", () => {
+    render(<ChatMessageBubble role="user" content="Hej!" />);
+
+    expect(
+      screen.queryByRole("img", { name: /björn, your swedish teacher/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders assistant markdown formatting", () => {
+    render(
+      <ChatMessageBubble
+        role="assistant"
+        content='Det var **"en vanlig dag"**, alltså!'
+      />,
+    );
+
+    expect(screen.getByText('"en vanlig dag"').tagName).toBe("STRONG");
+    expect(screen.queryByText(/\*\*/)).not.toBeInTheDocument();
+  });
+
+  it("renders teaching callouts for correction snippets", () => {
+    render(
+      <ChatMessageBubble
+        role="assistant"
+        content={'Bra jobbat.\n\n💡 **"Den sjätte januari"**.'}
+      />,
+    );
+
+    expect(screen.getByTestId("teaching-callout")).toBeInTheDocument();
+    expect(screen.getByText('"Den sjätte januari"').tagName).toBe("STRONG");
+  });
+
+  it("renders a subtle message timestamp when createdAt is provided", () => {
+    render(
+      <ChatMessageBubble
+        role="assistant"
+        content="Hej!"
+        createdAt="2026-04-15T10:22:00Z"
+      />,
+    );
+
+    expect(screen.getByText(/\d{1,2}:\d{2}/)).toBeInTheDocument();
+  });
+
   it("does not render sources for user messages", () => {
     render(
       <ChatMessageBubble
@@ -75,7 +127,7 @@ describe("ChatMessageBubble", () => {
   it("collapses long messages and toggles via button", async () => {
     const user = userEvent.setup();
     const longText = "a".repeat(201);
-    render(<ChatMessageBubble role="assistant" content={longText} />);
+    render(<ChatMessageBubble role="user" content={longText} />);
 
     expect(screen.getByText("a".repeat(200))).toBeInTheDocument();
     expect(screen.getByText("...")).toBeInTheDocument();
@@ -97,14 +149,22 @@ describe("ChatMessageBubble", () => {
   it("does not collapse long messages if isLast is true", () => {
     const longText = "a".repeat(201);
     render(
-      <ChatMessageBubble role="assistant" content={longText} isLast={true} />,
+      <ChatMessageBubble role="user" content={longText} isLast={true} />,
     );
 
     expect(screen.getByText(longText)).toBeInTheDocument();
     expect(screen.queryByText("...")).not.toBeInTheDocument();
   });
 
-  it("renders assistant response time when present", () => {
+  it("does not collapse assistant teaching messages", () => {
+    const longText = `**${"a".repeat(220)}**`;
+    render(<ChatMessageBubble role="assistant" content={longText} />);
+
+    expect(screen.getByText("a".repeat(220))).toBeInTheDocument();
+    expect(screen.queryByText("...")).not.toBeInTheDocument();
+  });
+
+  it("does not render assistant response time as visible copy", () => {
     render(
       <ChatMessageBubble
         role="assistant"
@@ -113,7 +173,7 @@ describe("ChatMessageBubble", () => {
       />,
     );
 
-    expect(screen.getByText("Teacher responded in 1.4 s")).toBeInTheDocument();
+    expect(screen.queryByText(/Teacher responded in/i)).not.toBeInTheDocument();
   });
 
   it("does not render response time for user messages", () => {
