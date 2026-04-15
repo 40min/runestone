@@ -42,7 +42,7 @@ class VoiceService:
         Transcribe audio to text using the configured transcription provider.
 
         Args:
-            audio_content: Raw audio bytes (WebM, WAV, MP3, etc. supported by Whisper)
+            audio_content: Raw audio bytes from the browser recorder (currently WebM Opus)
             language: Optional ISO-639-1 language code
 
         Returns:
@@ -107,8 +107,8 @@ class VoiceService:
     async def process_voice_input(self, audio_content: bytes, improve: bool = True, language: str | None = None) -> str:
         """
         Process voice input:
-        1. Transcribe audio (Whisper handles auto-detection if language is None)
-        2. Optionally enhance text with GPT
+        1. Transcribe audio with the configured STT provider
+        2. Optionally enhance text with the configured cleanup model
 
         Args:
             audio_content: Raw audio bytes

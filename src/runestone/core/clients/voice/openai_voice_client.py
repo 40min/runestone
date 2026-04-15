@@ -31,7 +31,7 @@ class OpenAISTTClient:
         Transcribe raw audio bytes into text.
 
         Args:
-            audio_content: Raw audio bytes (e.g., WebM, WAV, MP3)
+            audio_content: Raw audio bytes from the browser recorder (currently WebM Opus)
             language: Optional ISO-639-1 language code
 
         Returns:
