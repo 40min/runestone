@@ -49,6 +49,8 @@ const textFieldStyles = {
   },
 };
 
+const DEFAULT_PRIORITY_LEARN = 5;
+
 const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   open,
   item,
@@ -61,7 +63,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   const [examplePhrase, setExamplePhrase] = useState("");
   const [extraInfo, setExtraInfo] = useState("");
   const [inLearn, setInLearn] = useState(false);
-  const [priorityLearn, setPriorityLearn] = useState(9);
+  const [priorityLearn, setPriorityLearn] = useState(DEFAULT_PRIORITY_LEARN);
   const [isImproving, setIsImproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,7 +85,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
       setExamplePhrase("");
       setExtraInfo("");
       setInLearn(true);
-      setPriorityLearn(9);
+      setPriorityLearn(DEFAULT_PRIORITY_LEARN);
     }
   }, [item, open]);
 
@@ -310,7 +312,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
                 </Select>
               </FormControl>
               <Typography sx={{ color: "#9ca3af", fontSize: "0.75rem" }}>
-                0 = highest, 9 = lowest/default
+                0 = highest, 9 = lowest (new words default to 5)
               </Typography>
             </Box>
             <IconButton

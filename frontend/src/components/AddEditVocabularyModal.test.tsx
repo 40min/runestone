@@ -64,7 +64,7 @@ describe("AddEditVocabularyModal", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("In Learning")).toBeInTheDocument();
     expect(screen.getByLabelText("Priority (0-9)")).toBeInTheDocument();
-    expect(screen.getByText("0 = highest, 9 = lowest/default")).toBeInTheDocument();
+    expect(screen.getByText("0 = highest, 9 = lowest (new words default to 5)")).toBeInTheDocument();
   });
 
   it("renders the modal for editing an existing item", () => {
@@ -76,7 +76,7 @@ describe("AddEditVocabularyModal", () => {
       example_phrase: "Hej, hur mår du?",
       extra_info: null,
       in_learn: true,
-      priority_learn: 9,
+      priority_learn: 5,
       last_learned: null,
       created_at: "2023-10-27T10:00:00Z",
     };
@@ -225,7 +225,7 @@ describe("AddEditVocabularyModal", () => {
       example_phrase: "Hej, hur mår du?",
       extra_info: null,
       in_learn: true,
-      priority_learn: 9,
+      priority_learn: 5,
     });
   });
   it("calls onSave with in_learn: false when checkbox is unchecked", async () => {
@@ -249,7 +249,7 @@ describe("AddEditVocabularyModal", () => {
       example_phrase: null,
       extra_info: null,
       in_learn: false,
-      priority_learn: 9,
+      priority_learn: 5,
     });
   });
 
