@@ -1,5 +1,5 @@
 """
-OpenAI-backed voice client for transcription, text enhancement, and TTS.
+OpenAI-backed voice clients for STT, transcript enhancement, and TTS.
 """
 
 import io
@@ -7,45 +7,31 @@ from typing import AsyncIterator
 
 from openai import AsyncOpenAI
 
-from runestone.core.exceptions import APIKeyError
 
-
-class OpenAIVoiceClient:
-    """Voice client that wraps OpenAI APIs used by Runestone voice services."""
+class OpenAISTTClient:
+    """OpenAI client for speech-to-text transcription."""
 
     def __init__(
         self,
         api_key: str,
         transcription_model: str,
-        enhancement_model: str,
-        tts_model: str,
-        tts_voice: str,
     ):
         """
-        Initialize OpenAI voice clients.
+        Initialize OpenAI STT client.
 
         Args:
             api_key: OpenAI API key
             transcription_model: Model used for speech-to-text
-            enhancement_model: Model used for transcript cleanup
-            tts_model: Model used for speech synthesis
-            tts_voice: OpenAI voice identifier
         """
-        if not api_key:
-            raise APIKeyError("OpenAI API key is required for voice features. Set OPENAI_API_KEY.")
-
         self._async_client = AsyncOpenAI(api_key=api_key)
         self._transcription_model = transcription_model
-        self._enhancement_model = enhancement_model
-        self._tts_model = tts_model
-        self._tts_voice = tts_voice
 
     async def transcribe_audio(self, audio_content: bytes, language: str | None = None) -> str:
         """
         Transcribe raw audio bytes into text.
 
         Args:
-            audio_content: Raw audio bytes (e.g., WebM, WAV, MP3)
+            audio_content: Raw audio bytes from the browser recorder (currently WebM Opus)
             language: Optional ISO-639-1 language code
 
         Returns:
@@ -63,6 +49,25 @@ class OpenAIVoiceClient:
 
         response = await self._async_client.audio.transcriptions.create(**params)
         return (response.text or "").strip()
+
+
+class OpenAIVoiceEnhancementClient:
+    """OpenAI client for transcript cleanup."""
+
+    def __init__(
+        self,
+        api_key: str,
+        enhancement_model: str,
+    ):
+        """
+        Initialize OpenAI transcript enhancement client.
+
+        Args:
+            api_key: OpenAI API key
+            enhancement_model: Model used for transcript cleanup
+        """
+        self._async_client = AsyncOpenAI(api_key=api_key)
+        self._enhancement_model = enhancement_model
 
     async def enhance_text(self, text: str, system_prompt: str) -> str:
         """
@@ -83,6 +88,28 @@ class OpenAIVoiceClient:
             ],
         )
         return (response.choices[0].message.content or "").strip()
+
+
+class OpenAITTSClient:
+    """OpenAI client for streaming text-to-speech synthesis."""
+
+    def __init__(
+        self,
+        api_key: str,
+        tts_model: str,
+        tts_voice: str,
+    ):
+        """
+        Initialize OpenAI TTS client.
+
+        Args:
+            api_key: OpenAI API key
+            tts_model: Model used for speech synthesis
+            tts_voice: OpenAI voice identifier
+        """
+        self._async_client = AsyncOpenAI(api_key=api_key)
+        self._tts_model = tts_model
+        self._tts_voice = tts_voice
 
     async def synthesize_speech_stream(self, text: str, speed: float = 1.0) -> AsyncIterator[bytes]:
         """

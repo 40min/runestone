@@ -19,13 +19,19 @@ def mock_settings():
 def mock_transcription_client():
     client = MagicMock()
     client.transcribe_audio = AsyncMock(return_value="Hello world")
+    return client
+
+
+@pytest.fixture
+def mock_enhancement_client():
+    client = MagicMock()
     client.enhance_text = AsyncMock(return_value="Hello world.")
     return client
 
 
 @pytest.fixture
-def voice_service(mock_settings, mock_transcription_client):
-    return VoiceService(mock_settings, mock_transcription_client)
+def voice_service(mock_settings, mock_transcription_client, mock_enhancement_client):
+    return VoiceService(mock_settings, mock_transcription_client, mock_enhancement_client)
 
 
 @pytest.mark.anyio
@@ -67,31 +73,31 @@ async def test_transcribe_audio_api_error(voice_service, mock_transcription_clie
 
 
 @pytest.mark.anyio
-async def test_enhance_text_success(voice_service, mock_transcription_client):
+async def test_enhance_text_success(voice_service, mock_enhancement_client):
     """Test successful text enhancement."""
     original_text = "hello world"
     result = await voice_service.enhance_text(original_text)
 
     assert result == "Hello world."
-    assert mock_transcription_client.enhance_text.await_count == 1
-    call_kwargs = mock_transcription_client.enhance_text.call_args.kwargs
+    assert mock_enhancement_client.enhance_text.await_count == 1
+    call_kwargs = mock_enhancement_client.enhance_text.call_args.kwargs
     assert call_kwargs["text"] == original_text
     assert "Fix grammar, punctuation, and clarity" in call_kwargs["system_prompt"]
 
 
 @pytest.mark.anyio
-async def test_enhance_text_empty_response(voice_service, mock_transcription_client):
+async def test_enhance_text_empty_response(voice_service, mock_enhancement_client):
     """Test enhancement returning empty result (should return original)."""
-    mock_transcription_client.enhance_text.return_value = ""
+    mock_enhancement_client.enhance_text.return_value = ""
 
     result = await voice_service.enhance_text("original")
     assert result == "original"
 
 
 @pytest.mark.anyio
-async def test_enhance_text_api_error(voice_service, mock_transcription_client):
+async def test_enhance_text_api_error(voice_service, mock_enhancement_client):
     """Test enhancement API error (should return original)."""
-    mock_transcription_client.enhance_text.side_effect = Exception("API Error")
+    mock_enhancement_client.enhance_text.side_effect = Exception("API Error")
 
     result = await voice_service.enhance_text("original")
     assert result == "original"

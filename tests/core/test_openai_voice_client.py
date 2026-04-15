@@ -1,27 +1,25 @@
-"""Tests for the OpenAI voice client."""
+"""Tests for OpenAI voice capability clients."""
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from runestone.core.clients.voice.openai_voice_client import OpenAIVoiceClient
-from runestone.core.exceptions import APIKeyError
+from runestone.core.clients.voice.openai_voice_client import (
+    OpenAISTTClient,
+    OpenAITTSClient,
+    OpenAIVoiceEnhancementClient,
+)
 
 
 @patch("runestone.core.clients.voice.openai_voice_client.AsyncOpenAI")
-def test_instantiation_requires_api_key(mock_async_openai):
-    """Client should reject missing API key."""
-    with pytest.raises(APIKeyError, match="OpenAI API key is required"):
-        OpenAIVoiceClient(
-            api_key="",
-            transcription_model="whisper-1",
-            enhancement_model="gpt-4o-mini",
-            tts_model="gpt-4o-mini-tts",
-            tts_voice="alloy",
-        )
-
-    mock_async_openai.assert_not_called()
+def test_stt_instantiation_wires_api_key(mock_async_openai):
+    """STT client should pass API key into OpenAI async SDK."""
+    OpenAISTTClient(
+        api_key="test-key",
+        transcription_model="whisper-1",
+    )
+    mock_async_openai.assert_called_once_with(api_key="test-key")
 
 
 @pytest.mark.anyio
@@ -31,12 +29,9 @@ async def test_transcribe_audio_uses_async_client(mock_async_openai):
     mock_client = mock_async_openai.return_value
     mock_client.audio.transcriptions.create = AsyncMock(return_value=SimpleNamespace(text=" hello "))
 
-    client = OpenAIVoiceClient(
+    client = OpenAISTTClient(
         api_key="test-key",
         transcription_model="whisper-1",
-        enhancement_model="gpt-4o-mini",
-        tts_model="gpt-4o-mini-tts",
-        tts_voice="alloy",
     )
 
     result = await client.transcribe_audio(b"audio-bytes", language="sv")
@@ -51,18 +46,26 @@ async def test_transcribe_audio_uses_async_client(mock_async_openai):
 
 @pytest.mark.anyio
 @patch("runestone.core.clients.voice.openai_voice_client.AsyncOpenAI")
-async def test_enhance_text_uses_async_client(mock_async_openai):
+def test_enhancement_instantiation_wires_api_key(mock_async_openai):
+    """Enhancement client should pass API key into OpenAI async SDK."""
+    OpenAIVoiceEnhancementClient(
+        api_key="test-key",
+        enhancement_model="gpt-4o-mini",
+    )
+    mock_async_openai.assert_called_once_with(api_key="test-key")
+
+
+@pytest.mark.anyio
+@patch("runestone.core.clients.voice.openai_voice_client.AsyncOpenAI")
+async def test_enhancement_client_uses_async_chat_client(mock_async_openai):
     """Enhancement should call the async OpenAI chat client."""
     mock_client = mock_async_openai.return_value
     mock_response = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=" enhanced text "))])
     mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-    client = OpenAIVoiceClient(
+    client = OpenAIVoiceEnhancementClient(
         api_key="test-key",
-        transcription_model="whisper-1",
         enhancement_model="gpt-4o-mini",
-        tts_model="gpt-4o-mini-tts",
-        tts_voice="alloy",
     )
 
     result = await client.enhance_text("raw text", "fix grammar")
@@ -75,3 +78,14 @@ async def test_enhance_text_uses_async_client(mock_async_openai):
             {"role": "user", "content": "raw text"},
         ],
     )
+
+
+@patch("runestone.core.clients.voice.openai_voice_client.AsyncOpenAI")
+def test_tts_instantiation_wires_api_key(mock_async_openai):
+    """TTS client should pass API key into OpenAI async SDK."""
+    OpenAITTSClient(
+        api_key="test-key",
+        tts_model="gpt-4o-mini-tts",
+        tts_voice="alloy",
+    )
+    mock_async_openai.assert_called_once_with(api_key="test-key")

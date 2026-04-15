@@ -9,7 +9,7 @@ in voice clients.
 import logging
 
 from runestone.config import Settings
-from runestone.core.clients.voice.voice_factory import VoiceTranscriptionClient
+from runestone.core.clients.voice.voice_factory import VoiceEnhancementClient, VoiceTranscriptionClient
 from runestone.core.constants import LANGUAGE_CODE_MAP
 from runestone.core.exceptions import RunestoneError
 
@@ -17,25 +17,32 @@ logger = logging.getLogger(__name__)
 
 
 class VoiceService:
-    """Service for voice transcription and text enhancement."""
+    """Service coordinating speech-to-text and optional transcript cleanup."""
 
-    def __init__(self, settings: Settings, transcription_client: VoiceTranscriptionClient):
+    def __init__(
+        self,
+        settings: Settings,
+        transcription_client: VoiceTranscriptionClient,
+        enhancement_client: VoiceEnhancementClient,
+    ):
         """
         Initialize the voice service.
 
         Args:
             settings: Application settings containing model configuration
-            transcription_client: Provider client handling transcription and enhancement
+            transcription_client: Provider client handling raw transcription
+            enhancement_client: Provider client handling transcript cleanup
         """
         self.settings = settings
         self._transcription_client = transcription_client
+        self._enhancement_client = enhancement_client
 
     async def transcribe_audio(self, audio_content: bytes, language: str | None = None) -> str:
         """
         Transcribe audio to text using the configured transcription provider.
 
         Args:
-            audio_content: Raw audio bytes (WebM, WAV, MP3, etc. supported by Whisper)
+            audio_content: Raw audio bytes from the browser recorder (currently WebM Opus)
             language: Optional ISO-639-1 language code
 
         Returns:
@@ -80,7 +87,7 @@ class VoiceService:
                 "the original meaning and tone. Return only the corrected text."
                 "The text is transcribed so could have some mistakes, please correct them."
             )
-            enhanced_text = await self._transcription_client.enhance_text(
+            enhanced_text = await self._enhancement_client.enhance_text(
                 text=text,
                 system_prompt=system_prompt,
             )
@@ -100,8 +107,8 @@ class VoiceService:
     async def process_voice_input(self, audio_content: bytes, improve: bool = True, language: str | None = None) -> str:
         """
         Process voice input:
-        1. Transcribe audio (Whisper handles auto-detection if language is None)
-        2. Optionally enhance text with GPT
+        1. Transcribe audio with the configured STT provider
+        2. Optionally enhance text with the configured cleanup model
 
         Args:
             audio_content: Raw audio bytes

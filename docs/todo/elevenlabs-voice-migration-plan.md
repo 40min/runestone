@@ -4,29 +4,31 @@
 
 Runestone does **not** use Whisper for both speech directions today.
 
-- Speech-to-text (voice recognition) currently uses OpenAI `whisper-1`.
-- Text-to-speech currently uses OpenAI `gpt-4o-mini-tts`.
+- Speech-to-text (voice recognition) defaults to OpenAI `whisper-1`, with ElevenLabs Scribe available through `VOICE_TRANSCRIPTION_PROVIDER=elevenlabs`.
+- Text-to-speech defaults to OpenAI `gpt-4o-mini-tts`, with ElevenLabs available through `TTS_PROVIDER=elevenlabs`.
 - The chat LLM flow itself is separate and does not depend on the voice provider.
 
-Because of that, the safest migration path is:
+The migration path is now:
 
 1. Switch **TTS first** to ElevenLabs.
-2. Keep transcription on OpenAI initially.
-3. Evaluate whether moving STT to ElevenLabs is worth the added scope.
+2. Add ElevenLabs STT behind the existing chat upload endpoint.
+3. Compare OpenAI Whisper and ElevenLabs Scribe on real recordings before changing global defaults.
 
-This gives us the user-facing quality win with the smallest architecture change.
+This keeps global defaults conservative while allowing local/provider-level trials.
 
 ## Verified Current State
 
 ### Backend
 
 - `src/runestone/config.py`
+  - `voice_transcription_provider = "openai"`
   - `voice_transcription_model = "whisper-1"`
+  - use `voice_transcription_model = "scribe_v2"` when `VOICE_TRANSCRIPTION_PROVIDER=elevenlabs`
   - `tts_model = "gpt-4o-mini-tts"`
   - `tts_voice = "onyx"`
 - `src/runestone/services/voice_service.py`
-  - Uses `OpenAI.audio.transcriptions.create(...)`
-  - Optionally runs a second OpenAI chat completion to clean up the transcript
+  - Uses the configured transcription client for raw STT
+  - Optionally runs an OpenAI chat completion to clean up the transcript
 - `src/runestone/services/tts_service.py`
   - Uses `AsyncOpenAI.audio.speech.with_streaming_response.create(...)`
   - Streams MP3 chunks to the client over WebSocket
@@ -72,20 +74,20 @@ Useful docs:
 
 ## Recommendation
 
-### Recommended path: TTS-first migration
+### Recommended path: provider-level trials
 
-Move assistant speech generation to ElevenLabs first and leave transcription on OpenAI for now.
+Move assistant speech generation and speech recognition to ElevenLabs behind independent provider switches, while keeping OpenAI as the global default until real chat recordings prove the migration is better.
 
-Why this is the best first step:
+Why this is the safest path:
 
 - It targets the part users hear directly, where ElevenLabs is likely to matter most.
-- It avoids changing both upload transcription and reply playback at the same time.
+- It allows STT and TTS to be enabled independently.
 - It preserves the current frontend contract if we keep sending MP3 chunks over the existing `/api/ws/audio` socket.
 - It keeps rollback simple.
 
-### Optional later path: STT migration
+### STT comparison path
 
-Only move transcription after we compare real user recordings for:
+Before changing production defaults, compare OpenAI Whisper and ElevenLabs Scribe on:
 
 - Swedish accuracy
 - mixed-language handling
@@ -181,7 +183,7 @@ Create an ElevenLabs voice client that:
 Important compatibility note:
 
 - The current frontend expects MP3 chunks over `/api/ws/audio`.
-- Preserve that contract in phase 1 of the migration to avoid unnecessary frontend changes.
+- Preserve that contract to avoid unnecessary frontend changes.
 
 Files most likely touched:
 
@@ -208,9 +210,9 @@ Also verify:
 - end-of-stream signaling
 - reconnect behavior remains acceptable with the existing frontend hook
 
-### Phase 4: Optional ElevenLabs STT spike
+### Phase 4: ElevenLabs STT opt-in
 
-If we want a single vendor for voice, build a limited STT spike behind the same client seam.
+Build ElevenLabs STT behind the same client seam and keep it opt-in until comparison data supports changing defaults.
 
 Files most likely touched:
 
@@ -322,19 +324,21 @@ Check in the browser:
 3. Move existing OpenAI TTS/STT behind those interfaces.
 4. Implement ElevenLabs TTS.
 5. Validate streaming contract end to end.
-6. Decide whether STT should remain on OpenAI or move later.
+6. Add ElevenLabs STT as an opt-in provider.
+7. Decide whether OpenAI or ElevenLabs should become the production STT default after comparison.
 
 ## Bottom Line
 
 Today:
 
-- Whisper/OpenAI is used for **recognition**
-- OpenAI TTS is used for **speech output**
-- not Whisper for both
+- OpenAI Whisper is the default for **recognition**
+- ElevenLabs Scribe is available as an opt-in **recognition** provider
+- OpenAI TTS is the default for **speech output**
+- ElevenLabs TTS is available as an opt-in **speech output** provider
 
 Best next move:
 
-- migrate **assistant TTS to ElevenLabs first**
-- keep **voice transcription on OpenAI** until we run a focused STT comparison
+- compare OpenAI STT and ElevenLabs STT on real chat recordings
+- keep global defaults unchanged until that comparison is convincing
 
 That gives the cleanest path to better voice quality without taking on unnecessary migration risk all at once.
