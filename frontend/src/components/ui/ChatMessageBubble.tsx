@@ -3,13 +3,12 @@ import { Box, Button, IconButton, Link, Typography } from "@mui/material";
 import {
   ChevronDown,
   ChevronUp,
-  Lightbulb,
   Pause,
   Play,
   RotateCcw,
 } from "lucide-react";
 import { TeacherAvatar } from "../chat/TeacherAvatar";
-import MarkdownDisplay from "./MarkdownDisplay";
+import { AssistantMessageContent } from "./AssistantMessageContent";
 
 interface ChatMessageBubbleProps {
   role: "user" | "assistant";
@@ -33,58 +32,6 @@ const formatMessageTime = (value?: string) => {
   return date.toLocaleTimeString(undefined, {
     hour: "numeric",
     minute: "2-digit",
-  });
-};
-
-const isTeachingCallout = (block: string) => {
-  const trimmed = block.trim();
-  return (
-    trimmed.startsWith("💡") ||
-    /^(\*\*)?["“][^"”\n]+["”](\*\*)?[.:]?/.test(trimmed)
-  );
-};
-
-const stripCalloutMarker = (block: string) => block.trim().replace(/^💡\s*/, "");
-
-const renderAssistantContent = (content: string) => {
-  const blocks = content.split(/\n{2,}/);
-  return blocks.map((block, index) => {
-    const trimmed = block.trim();
-    if (!trimmed) return null;
-
-    if (isTeachingCallout(trimmed)) {
-      return (
-        <Box
-          key={`callout-${index}`}
-          data-testid="teaching-callout"
-          sx={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 1,
-            my: 1.25,
-            px: 1.5,
-            py: 1,
-            borderRadius: "8px",
-            backgroundColor: "rgba(255, 255, 255, 0.05)",
-            border: "1px solid rgba(255, 255, 255, 0.04)",
-          }}
-        >
-          <Lightbulb
-            size={16}
-            style={{
-              flexShrink: 0,
-              marginTop: 4,
-              color: "#facc15",
-            }}
-          />
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <MarkdownDisplay markdownContent={stripCalloutMarker(trimmed)} />
-          </Box>
-        </Box>
-      );
-    }
-
-    return <MarkdownDisplay key={`content-${index}`} markdownContent={trimmed} />;
   });
 };
 
@@ -227,7 +174,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               },
             }}
           >
-            {renderAssistantContent(displayedContent)}
+            <AssistantMessageContent content={displayedContent} />
             {isCollapsed && (
               <Box
                 component="span"
