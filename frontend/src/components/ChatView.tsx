@@ -30,7 +30,7 @@ import { useVoiceRecording } from "../hooks/useVoiceRecording";
 import { useAudioPlayback } from "../hooks/useAudioPlayback";
 import { useAuth } from "../context/AuthContext";
 import { LANGUAGES } from "../constants";
-import { appendTranscribedTextToInput } from "./chatInputText";
+import { appendTranscribedTextToInput } from "../utils/chatInputText";
 
 const IMPROVE_TRANSCRIPTION_KEY = "runestone_improve_transcription";
 const VOICE_ENABLED_KEY = "runestone_voice_enabled";
