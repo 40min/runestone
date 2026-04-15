@@ -2,6 +2,7 @@
 Tests for the TeacherAgent specialist.
 """
 
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -56,7 +57,15 @@ def mock_user():
     user = MagicMock()
     user.id = 1
     user.mother_tongue = None
+    user.timezone = "UTC"
     return user
+
+
+class FrozenDatetime:
+    @classmethod
+    def now(cls, tz=None):
+        value = datetime(2026, 4, 15, 12, 34, 56, tzinfo=timezone.utc)
+        return value.astimezone(tz) if tz else value
 
 
 def test_build_agent(mock_settings, mock_chat_model):
@@ -189,9 +198,11 @@ async def test_run_orchestration(teacher_agent, mock_user):
 
     invoke_args = teacher_agent.agent.ainvoke.call_args[0][0]
     messages = invoke_args["messages"]
-    assert len(messages) == 1
-    assert isinstance(messages[0], HumanMessage)
-    assert messages[0].content == "Hello"
+    assert len(messages) == 2
+    assert isinstance(messages[0], SystemMessage)
+    assert "[CURRENT_DATETIME]" in messages[0].content
+    assert isinstance(messages[1], HumanMessage)
+    assert messages[1].content == "Hello"
 
 
 @pytest.mark.anyio
@@ -212,11 +223,28 @@ async def test_run_with_history(teacher_agent, mock_user):
 
     invoke_args = teacher_agent.agent.ainvoke.call_args[0][0]
     messages = invoke_args["messages"]
-    assert len(messages) == 3
-    assert messages[0].content == "Old user msg"
-    assert "[NEWS_SOURCES]" in messages[1].content
-    assert "Old bot msg" in messages[1].content
-    assert messages[2].content == "Current msg"
+    assert len(messages) == 4
+    assert "[CURRENT_DATETIME]" in messages[0].content
+    assert messages[1].content == "Old user msg"
+    assert "[NEWS_SOURCES]" in messages[2].content
+    assert "Old bot msg" in messages[2].content
+    assert messages[3].content == "Current msg"
+
+
+@pytest.mark.anyio
+async def test_run_injects_current_datetime_in_user_timezone(teacher_agent, mock_user, monkeypatch):
+    mock_user.timezone = "Europe/Helsinki"
+    monkeypatch.setattr("runestone.agents.specialists.teacher.datetime", FrozenDatetime)
+    teacher_agent.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
+
+    await teacher_agent.generate_response(message="msg", history=[], user=mock_user)
+
+    invoke_args = teacher_agent.agent.ainvoke.call_args[0][0]
+    messages = invoke_args["messages"]
+    assert isinstance(messages[0], SystemMessage)
+    assert messages[0].content.startswith("[CURRENT_DATETIME]")
+    assert "Current datetime: 2026-04-15T15:34:56+03:00" in messages[0].content
+    assert "Timezone: Europe/Helsinki" in messages[0].content
 
 
 @pytest.mark.anyio
@@ -369,8 +397,10 @@ async def test_generate_response_logs_timing_metadata(teacher_agent, mock_user, 
 
 
 @pytest.mark.anyio
-async def test_generate_response_prompt_matches_fixture(teacher_agent, mock_user):
+async def test_generate_response_prompt_matches_fixture(teacher_agent, mock_user, monkeypatch):
+    monkeypatch.setattr("runestone.agents.specialists.teacher.datetime", FrozenDatetime)
     mock_user.mother_tongue = "Spanish"
+    mock_user.timezone = "Europe/Helsinki"
     history = [
         ChatMessage(role="user", content="Old user msg"),
         ChatMessage(
