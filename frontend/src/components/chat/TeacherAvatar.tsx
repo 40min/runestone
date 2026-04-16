@@ -92,13 +92,15 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
   alt = "Björn, your Swedish teacher",
   showStatus = false,
 }) => {
-  const CROSSFADE_MS = 220;
+  const CROSSFADE_MS = 1800;
+  const CROSSFADE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
   const normalizedEmotion = normalizeTeacherEmotion(emotion);
   const avatarSrc = src ?? emotionAvatars[normalizedEmotion];
   const avatarChrome = avatarChromeByEmotion[normalizedEmotion];
   const [activeSrc, setActiveSrc] = useState<string | null>(avatarSrc ?? null);
   const [previousSrc, setPreviousSrc] = useState<string | null>(null);
   const [isCrossfading, setIsCrossfading] = useState(false);
+  const activeSrcRef = useRef<string | null>(avatarSrc ?? null);
   const clearPreviousTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -107,38 +109,44 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
       clearPreviousTimerRef.current = null;
     }
 
+    const currentActiveSrc = activeSrcRef.current;
     if (!avatarSrc) {
       setActiveSrc(null);
       setPreviousSrc(null);
       setIsCrossfading(false);
+      activeSrcRef.current = null;
       return;
     }
 
-    if (!activeSrc) {
+    if (!currentActiveSrc) {
       setActiveSrc(avatarSrc);
+      activeSrcRef.current = avatarSrc;
       return;
     }
 
-    if (avatarSrc === activeSrc) {
+    if (avatarSrc === currentActiveSrc) {
       return;
     }
 
-    setPreviousSrc(activeSrc);
+    setPreviousSrc(currentActiveSrc);
     setActiveSrc(avatarSrc);
+    activeSrcRef.current = avatarSrc;
     setIsCrossfading(true);
     clearPreviousTimerRef.current = window.setTimeout(() => {
       setPreviousSrc(null);
       setIsCrossfading(false);
       clearPreviousTimerRef.current = null;
     }, CROSSFADE_MS);
+  }, [avatarSrc]);
 
+  useEffect(() => {
     return () => {
       if (clearPreviousTimerRef.current !== null) {
         window.clearTimeout(clearPreviousTimerRef.current);
         clearPreviousTimerRef.current = null;
       }
     };
-  }, [avatarSrc, activeSrc]);
+  }, []);
 
   const avatarStyles = {
     width: "100%",
@@ -152,6 +160,7 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
     background: avatarChrome.background,
     border: `1px solid ${avatarChrome.border}`,
     boxShadow: avatarChrome.shadow,
+    transition: `background-color ${Math.round(CROSSFADE_MS * 0.65)}ms ${CROSSFADE_EASING}, border-color ${Math.round(CROSSFADE_MS * 0.65)}ms ${CROSSFADE_EASING}, box-shadow ${Math.round(CROSSFADE_MS * 0.65)}ms ${CROSSFADE_EASING}`,
     color: "#101713",
     fontSize: Math.max(14, Math.floor(size * 0.42)),
     fontWeight: 800,
@@ -168,6 +177,7 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
     objectPosition: "center",
     userSelect: "none",
     pointerEvents: "none",
+    willChange: "opacity, transform",
   };
 
   return (
@@ -185,12 +195,18 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
             ...avatarStyles,
             position: "relative",
             "@keyframes teacher-avatar-fade-in": {
-              from: { opacity: 0 },
-              to: { opacity: 1 },
+              "0%": { opacity: 0, transform: "scale(1.035)", filter: "blur(1.2px)" },
+              "35%": { opacity: 0.62, transform: "scale(1.018)", filter: "blur(0.6px)" },
+              "100%": { opacity: 1, transform: "scale(1)", filter: "blur(0)" },
             },
             "@keyframes teacher-avatar-fade-out": {
-              from: { opacity: 1 },
-              to: { opacity: 0 },
+              "0%": { opacity: 1, transform: "scale(1)", filter: "blur(0)" },
+              "100%": { opacity: 0, transform: "scale(0.985)", filter: "blur(1.4px)" },
+            },
+            "@keyframes teacher-avatar-veil": {
+              "0%": { opacity: 0 },
+              "30%": { opacity: 0.42 },
+              "100%": { opacity: 0 },
             },
           }}
         >
@@ -202,7 +218,7 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
               aria-hidden="true"
               sx={{
                 ...avatarLayerStyles,
-                animation: `teacher-avatar-fade-out ${CROSSFADE_MS}ms ease-out forwards`,
+                animation: `teacher-avatar-fade-out ${CROSSFADE_MS}ms ${CROSSFADE_EASING} forwards`,
               }}
             />
           )}
@@ -213,10 +229,25 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
             sx={{
               ...avatarLayerStyles,
               animation: isCrossfading
-                ? `teacher-avatar-fade-in ${CROSSFADE_MS}ms ease-out forwards`
+                ? `teacher-avatar-fade-in ${CROSSFADE_MS}ms ${CROSSFADE_EASING} forwards`
                 : "none",
             }}
           />
+          {isCrossfading && (
+            <Box
+              aria-hidden="true"
+              sx={{
+                position: "absolute",
+                inset: 0,
+                pointerEvents: "none",
+                borderRadius: "50%",
+                background:
+                  "radial-gradient(circle at 50% 40%, rgba(255, 245, 231, 0.32) 0%, rgba(255, 245, 231, 0.18) 44%, rgba(186, 143, 97, 0.1) 72%, rgba(0, 0, 0, 0) 100%)",
+                mixBlendMode: "soft-light",
+                animation: `teacher-avatar-veil ${CROSSFADE_MS}ms ${CROSSFADE_EASING} forwards`,
+              }}
+            />
+          )}
         </Box>
       ) : (
         <Box aria-label={alt} role="img" sx={avatarStyles}>
