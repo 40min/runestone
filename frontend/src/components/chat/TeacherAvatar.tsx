@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Box } from "@mui/material";
 import bjornConcerned from "../../assets/emotions/bjorn_concerned.png";
 import bjornHappy from "../../assets/emotions/bjorn_happy.png";
@@ -92,9 +92,62 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
   alt = "Björn, your Swedish teacher",
   showStatus = false,
 }) => {
+  const CROSSFADE_MS = 1800;
+  const CROSSFADE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
   const normalizedEmotion = normalizeTeacherEmotion(emotion);
   const avatarSrc = src ?? emotionAvatars[normalizedEmotion];
   const avatarChrome = avatarChromeByEmotion[normalizedEmotion];
+  const [activeSrc, setActiveSrc] = useState<string | null>(avatarSrc ?? null);
+  const [previousSrc, setPreviousSrc] = useState<string | null>(null);
+  const [isCrossfading, setIsCrossfading] = useState(false);
+  const activeSrcRef = useRef<string | null>(avatarSrc ?? null);
+  const clearPreviousTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (clearPreviousTimerRef.current !== null) {
+      window.clearTimeout(clearPreviousTimerRef.current);
+      clearPreviousTimerRef.current = null;
+    }
+
+    const currentActiveSrc = activeSrcRef.current;
+    if (!avatarSrc) {
+      setActiveSrc(null);
+      setPreviousSrc(null);
+      setIsCrossfading(false);
+      activeSrcRef.current = null;
+      return;
+    }
+
+    if (!currentActiveSrc) {
+      setActiveSrc(avatarSrc);
+      activeSrcRef.current = avatarSrc;
+      return;
+    }
+
+    if (avatarSrc === currentActiveSrc) {
+      return;
+    }
+
+    setPreviousSrc(currentActiveSrc);
+    setActiveSrc(avatarSrc);
+    activeSrcRef.current = avatarSrc;
+    setIsCrossfading(true);
+    clearPreviousTimerRef.current = window.setTimeout(() => {
+      setPreviousSrc(null);
+      setIsCrossfading(false);
+      clearPreviousTimerRef.current = null;
+    }, CROSSFADE_MS);
+  }, [avatarSrc]);
+
+  useEffect(() => {
+    return () => {
+      if (clearPreviousTimerRef.current !== null) {
+        window.clearTimeout(clearPreviousTimerRef.current);
+        clearPreviousTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const avatarStyles = {
     width: "100%",
     height: "100%",
@@ -107,12 +160,24 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
     background: avatarChrome.background,
     border: `1px solid ${avatarChrome.border}`,
     boxShadow: avatarChrome.shadow,
+    transition: `background-color ${Math.round(CROSSFADE_MS * 0.65)}ms ${CROSSFADE_EASING}, border-color ${Math.round(CROSSFADE_MS * 0.65)}ms ${CROSSFADE_EASING}, box-shadow ${Math.round(CROSSFADE_MS * 0.65)}ms ${CROSSFADE_EASING}`,
     color: "#101713",
     fontSize: Math.max(14, Math.floor(size * 0.42)),
     fontWeight: 800,
     objectFit: "cover",
     objectPosition: "center",
     userSelect: "none",
+  };
+  const avatarLayerStyles = {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    objectPosition: "center",
+    userSelect: "none",
+    pointerEvents: "none",
+    willChange: "opacity, transform",
   };
 
   return (
@@ -124,8 +189,66 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
         flex: `0 0 ${size}px`,
       }}
     >
-      {avatarSrc ? (
-        <Box component="img" src={avatarSrc} alt={alt} sx={avatarStyles} />
+      {activeSrc ? (
+        <Box
+          sx={{
+            ...avatarStyles,
+            position: "relative",
+            "@keyframes teacher-avatar-fade-in": {
+              "0%": { opacity: 0, transform: "scale(1.035)", filter: "blur(1.2px)" },
+              "35%": { opacity: 0.62, transform: "scale(1.018)", filter: "blur(0.6px)" },
+              "100%": { opacity: 1, transform: "scale(1)", filter: "blur(0)" },
+            },
+            "@keyframes teacher-avatar-fade-out": {
+              "0%": { opacity: 1, transform: "scale(1)", filter: "blur(0)" },
+              "100%": { opacity: 0, transform: "scale(0.985)", filter: "blur(1.4px)" },
+            },
+            "@keyframes teacher-avatar-veil": {
+              "0%": { opacity: 0 },
+              "30%": { opacity: 0.42 },
+              "100%": { opacity: 0 },
+            },
+          }}
+        >
+          {previousSrc && (
+            <Box
+              component="img"
+              src={previousSrc}
+              alt=""
+              aria-hidden="true"
+              sx={{
+                ...avatarLayerStyles,
+                animation: `teacher-avatar-fade-out ${CROSSFADE_MS}ms ${CROSSFADE_EASING} forwards`,
+              }}
+            />
+          )}
+          <Box
+            component="img"
+            src={activeSrc}
+            alt={alt}
+            sx={{
+              ...avatarLayerStyles,
+              animation: isCrossfading
+                ? `teacher-avatar-fade-in ${CROSSFADE_MS}ms ${CROSSFADE_EASING} forwards`
+                : "none",
+            }}
+          />
+          {isCrossfading && (
+            <Box
+              aria-hidden="true"
+              sx={{
+                position: "absolute",
+                inset: 0,
+                pointerEvents: "none",
+                borderRadius: "50%",
+                background:
+                  "radial-gradient(circle at 50% 40%, rgba(255, 245, 231, 0.32) 0%, rgba(255, 245, 231, 0.18) 44%, rgba(186, 143, 97, 0.1) 72%, rgba(0, 0, 0, 0) 100%)",
+                mixBlendMode: "soft-light",
+                animation: `teacher-avatar-veil ${CROSSFADE_MS}ms ${CROSSFADE_EASING} forwards`,
+              }}
+            />
+          )}
+        </Box>
       ) : (
         <Box aria-label={alt} role="img" sx={avatarStyles}>
           B
