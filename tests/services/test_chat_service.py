@@ -16,7 +16,7 @@ from runestone.services.chat_service import ChatService
 def mock_agent_service():
     """Create a mock AgentsManager."""
     mock = AsyncMock()
-    mock.process_turn_result = ("Björn's reply", None)
+    mock.process_turn_result = ("Björn's reply", None, "neutral")
     mock.process_turn.side_effect = lambda **_kwargs: mock.process_turn_result
     return mock
 
@@ -115,10 +115,11 @@ async def test_process_message_orchestration(chat_service, db_with_test_user, mo
     mock_user_service.get_user_by_id.return_value = user
     mock_user_service.get_or_create_current_chat_id.return_value = user.current_chat_id
 
-    response, sources = await chat_service.process_message(user.id, "Hej Björn")
+    response, sources, teacher_emotion = await chat_service.process_message(user.id, "Hej Björn")
 
     assert response == "Björn's reply"
     assert sources is None
+    assert teacher_emotion == "neutral"
 
     # Verify persistence
     history = await chat_service.get_history(user.id, user.current_chat_id)
@@ -127,6 +128,7 @@ async def test_process_message_orchestration(chat_service, db_with_test_user, mo
     assert history[0].content == "Hej Björn"
     assert history[1].role == "assistant"
     assert history[1].content == "Björn's reply"
+    assert history[1].teacher_emotion == "neutral"
 
     # Verify new 3-stage orchestration
     mock_agent_service.process_turn.assert_called_once()
@@ -195,9 +197,10 @@ async def test_process_image_message_success(
     mock_processor.run_ocr.return_value = ocr_result
 
     # Process image
-    response = await chat_service.process_image_message(user.id, b"fake_image_bytes")
+    response, teacher_emotion = await chat_service.process_image_message(user.id, b"fake_image_bytes")
 
     assert response == "Björn's reply"
+    assert teacher_emotion == "neutral"
     mock_processor.run_ocr.assert_called_once_with(b"fake_image_bytes")
 
     # Verify orchestration
@@ -275,6 +278,7 @@ async def test_process_message_persists_sources(chat_service, db_with_test_user,
     mock_agent_service.process_turn_result = (
         "Svar med källor",
         [{"title": "Nyhet", "url": "https://example.com", "date": "2026-02-05"}],
+        "neutral",
     )
 
     await chat_service.process_message(user.id, "Nyheter tack")
@@ -296,12 +300,33 @@ async def test_process_message_pushes_tts_from_chat_service(
     user.current_chat_id = str(uuid4())
     mock_user_service.get_user_by_id.return_value = user
     mock_user_service.get_or_create_current_chat_id.return_value = user.current_chat_id
-    mock_agent_service.process_turn_result = ("Ljudsvar", None)
+    mock_agent_service.process_turn_result = ("Ljudsvar", None, "neutral")
 
-    response, _sources = await chat_service.process_message(user.id, "Säg det högt", tts_expected=True, speed=1.25)
+    response, _sources, _teacher_emotion = await chat_service.process_message(
+        user.id, "Säg det högt", tts_expected=True, speed=1.25
+    )
 
     assert response == "Ljudsvar"
     mock_tts_service.push_audio_to_client.assert_awaited_once_with(user.id, "Ljudsvar", speed=1.25)
+
+
+@pytest.mark.anyio
+async def test_process_message_persists_teacher_emotion(
+    chat_service, db_with_test_user, mock_agent_service, mock_user_service
+):
+    db, user = db_with_test_user
+    user.current_chat_id = str(uuid4())
+    mock_user_service.get_user_by_id.return_value = user
+    mock_user_service.get_or_create_current_chat_id.return_value = user.current_chat_id
+    mock_agent_service.process_turn_result = ("Bra jobbat!", None, "happy")
+
+    response, _sources, teacher_emotion = await chat_service.process_message(user.id, "Jag klarade det")
+
+    history = await chat_service.get_history(user.id, user.current_chat_id)
+    assistant_messages = [msg for msg in history if msg.role == "assistant"]
+    assert response == "Bra jobbat!"
+    assert teacher_emotion == "happy"
+    assert assistant_messages[0].teacher_emotion == "happy"
 
 
 @pytest.mark.anyio

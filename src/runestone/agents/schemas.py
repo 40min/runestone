@@ -5,10 +5,25 @@ This module defines the data models for chat requests and responses.
 """
 
 import json
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
+
+from runestone.constants import DEFAULT_TEACHER_EMOTION, TeacherEmotion
+
+
+def normalize_teacher_emotion(value: Any) -> TeacherEmotion:
+    """Return a safe Teacher avatar emotion for API and persistence boundaries."""
+    if isinstance(value, str):
+        try:
+            return TeacherEmotion(value.strip().lower())
+        except ValueError:
+            pass
+    if isinstance(value, TeacherEmotion):
+        return value
+    return DEFAULT_TEACHER_EMOTION
 
 
 class NewsSource(BaseModel):
@@ -36,6 +51,10 @@ class ChatMessage(BaseModel):
     role: Literal["user", "assistant"] = Field(..., description="The role of the message sender")
     content: str = Field(..., description="The message content")
     sources: Optional[list[NewsSource]] = Field(None, description="Optional list of cited news sources")
+    teacher_emotion: TeacherEmotion = Field(
+        DEFAULT_TEACHER_EMOTION,
+        description="Internal UI metadata selecting the Teacher avatar for assistant messages",
+    )
     created_at: Optional[datetime] = Field(None, description="Message creation timestamp")
 
     @field_validator("sources", mode="before")
@@ -48,6 +67,11 @@ class ChatMessage(BaseModel):
                 return None
             return data if isinstance(data, list) else None
         return value
+
+    @field_validator("teacher_emotion", mode="before")
+    @classmethod
+    def deserialize_teacher_emotion(cls, value):
+        return normalize_teacher_emotion(value)
 
     class Config:
         from_attributes = True
@@ -66,6 +90,10 @@ class ChatResponse(BaseModel):
 
     message: str = Field(..., description="The assistant's response")
     sources: Optional[list[NewsSource]] = Field(None, description="Optional list of cited news sources")
+    teacher_emotion: TeacherEmotion = Field(
+        DEFAULT_TEACHER_EMOTION,
+        description="Internal UI metadata selecting the Teacher avatar for this response",
+    )
 
 
 class ChatHistoryResponse(BaseModel):
@@ -85,6 +113,34 @@ class ImageChatResponse(BaseModel):
     """Response from image OCR + translation."""
 
     message: str = Field(..., description="The assistant's translation response")
+    teacher_emotion: TeacherEmotion = Field(
+        DEFAULT_TEACHER_EMOTION,
+        description="Internal UI metadata selecting the Teacher avatar for this response",
+    )
+
+
+class TeacherOutput(BaseModel):
+    """Structured Teacher response envelope; only `message` is visible to students."""
+
+    message: str = Field(..., description="Student-facing assistant reply")
+    emotion: TeacherEmotion = Field(
+        DEFAULT_TEACHER_EMOTION,
+        description="Teacher avatar emotion metadata; never include this in the student-facing message",
+    )
+
+    @field_validator("emotion", mode="before")
+    @classmethod
+    def normalize_emotion(cls, value):
+        return normalize_teacher_emotion(value)
+
+
+@dataclass(slots=True)
+class TeacherGenerationResult:
+    """Internal teacher response payload shared across orchestration layers."""
+
+    message: str
+    emotion: TeacherEmotion = DEFAULT_TEACHER_EMOTION
+    final_messages: list[Any] = field(default_factory=list)
 
 
 class VoiceTranscriptionResponse(BaseModel):

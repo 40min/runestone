@@ -10,7 +10,13 @@ import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
 from runestone.agents.manager import AgentsManager
-from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem, TeacherSideEffect
+from runestone.agents.schemas import (
+    ChatMessage,
+    CoordinatorPlan,
+    RoutingItem,
+    TeacherGenerationResult,
+    TeacherSideEffect,
+)
 from runestone.agents.specialists.base import BaseSpecialist, SpecialistContext, SpecialistResult
 from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
 from runestone.services.agent_side_effect_service import AgentSideEffectService
@@ -112,10 +118,10 @@ async def test_process_turn_returns_teacher_reply_and_starts_background_post(
     manager = AgentsManager(mock_settings)
     manager.handle_stale_post_task = AsyncMock()
     manager.prepare_pre_turn = AsyncMock(return_value=(_make_plan(), [{"name": "pre"}], "", []))
-    manager.generate_teacher_response = AsyncMock(return_value=("Teacher says hi", [{"title": "Src"}]))
+    manager.generate_teacher_response = AsyncMock(return_value=("Teacher says hi", [{"title": "Src"}], "happy"))
     manager.start_background_post_turn = AsyncMock()
 
-    response, sources = await manager.process_turn(
+    response, sources, teacher_emotion = await manager.process_turn(
         message="Hello",
         chat_id="chat-1",
         history=[ChatMessage(role="assistant", content="Earlier")],
@@ -126,6 +132,7 @@ async def test_process_turn_returns_teacher_reply_and_starts_background_post(
 
     assert response == "Teacher says hi"
     assert sources == [{"title": "Src"}]
+    assert teacher_emotion == "happy"
     manager.handle_stale_post_task.assert_awaited_once_with(
         user_id=mock_user.id,
         chat_id="chat-1",
@@ -153,7 +160,7 @@ async def test_process_turn_skips_stale_check_on_first_turn(
     manager = AgentsManager(mock_settings)
     manager.handle_stale_post_task = AsyncMock()
     manager.prepare_pre_turn = AsyncMock(return_value=(_make_plan(), [], "", []))
-    manager.generate_teacher_response = AsyncMock(return_value=("Teacher says hi", None))
+    manager.generate_teacher_response = AsyncMock(return_value=("Teacher says hi", None, "neutral"))
     manager.start_background_post_turn = AsyncMock()
 
     await manager.process_turn(
@@ -353,9 +360,9 @@ async def test_prepare_pre_turn_passes_bounded_history_into_news_agent(
 async def test_generate_teacher_response_returns_text_and_sources(mock_settings, mock_user):
     manager = AgentsManager(mock_settings)
     manager.teacher = AsyncMock()
-    manager.teacher.generate_response.return_value = ("Hi there!", [])
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(message="Hi there!", final_messages=[])
 
-    response, sources = await manager.generate_teacher_response(
+    response, sources, teacher_emotion = await manager.generate_teacher_response(
         message="Hello",
         history=[],
         user=mock_user,
@@ -366,15 +373,38 @@ async def test_generate_teacher_response_returns_text_and_sources(mock_settings,
 
     assert response == "Hi there!"
     assert sources is None
+    assert teacher_emotion == "neutral"
+
+
+@pytest.mark.anyio
+async def test_generate_teacher_response_returns_teacher_emotion(mock_settings, mock_user):
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(
+        message="Great work!", emotion="happy", final_messages=[]
+    )
+
+    response, sources, teacher_emotion = await manager.generate_teacher_response(
+        message="Hello",
+        history=[],
+        user=mock_user,
+        pre_results=[],
+        starter_memory="",
+        recent_side_effects=[],
+    )
+
+    assert response == "Great work!"
+    assert sources is None
+    assert teacher_emotion == "happy"
 
 
 @pytest.mark.anyio
 async def test_generate_teacher_response_extracts_news_sources(mock_settings, mock_user):
     manager = AgentsManager(mock_settings)
     manager.teacher = AsyncMock()
-    manager.teacher.generate_response.return_value = (
-        "Svar med källor",
-        [
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(
+        message="Svar med källor",
+        final_messages=[
             ToolMessage(
                 content=(
                     '{"tool":"search_news_with_dates","results":[{"title":"Nyhet","url":"https://example.com",'
@@ -386,7 +416,7 @@ async def test_generate_teacher_response_extracts_news_sources(mock_settings, mo
         ],
     )
 
-    response, sources = await manager.generate_teacher_response(
+    response, sources, _teacher_emotion = await manager.generate_teacher_response(
         message="Nyheter",
         history=[],
         user=mock_user,
@@ -403,9 +433,9 @@ async def test_generate_teacher_response_extracts_news_sources(mock_settings, mo
 async def test_generate_teacher_response_combines_news_sources_from_pre_results(mock_settings, mock_user):
     manager = AgentsManager(mock_settings)
     manager.teacher = AsyncMock()
-    manager.teacher.generate_response.return_value = (
-        "Svar med specialistkällor",
-        [
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(
+        message="Svar med specialistkällor",
+        final_messages=[
             ToolMessage(
                 content=(
                     '{"tool":"search_news_with_dates","results":['
@@ -418,7 +448,7 @@ async def test_generate_teacher_response_combines_news_sources_from_pre_results(
         ],
     )
 
-    response, sources = await manager.generate_teacher_response(
+    response, sources, _teacher_emotion = await manager.generate_teacher_response(
         message="Nyheter",
         history=[],
         user=mock_user,
@@ -448,9 +478,9 @@ async def test_generate_teacher_response_combines_news_sources_from_pre_results(
 async def test_generate_teacher_response_deduplicates_sources_across_pre_results_and_teacher(mock_settings, mock_user):
     manager = AgentsManager(mock_settings)
     manager.teacher = AsyncMock()
-    manager.teacher.generate_response.return_value = (
-        "Svar med specialistkällor",
-        [
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(
+        message="Svar med specialistkällor",
+        final_messages=[
             ToolMessage(
                 content=(
                     '{"tool":"search_news_with_dates","results":['
@@ -464,7 +494,7 @@ async def test_generate_teacher_response_deduplicates_sources_across_pre_results
         ],
     )
 
-    _response, sources = await manager.generate_teacher_response(
+    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
         message="Nyheter",
         history=[],
         user=mock_user,
@@ -493,9 +523,9 @@ async def test_generate_teacher_response_deduplicates_sources_across_pre_results
 async def test_generate_teacher_response_filters_unsafe_urls(mock_settings, mock_user):
     manager = AgentsManager(mock_settings)
     manager.teacher = AsyncMock()
-    manager.teacher.generate_response.return_value = (
-        "Svar",
-        [
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(
+        message="Svar",
+        final_messages=[
             ToolMessage(
                 content=(
                     '{"tool":"search_news_with_dates","results":['
@@ -508,7 +538,7 @@ async def test_generate_teacher_response_filters_unsafe_urls(mock_settings, mock
         ],
     )
 
-    _response, sources = await manager.generate_teacher_response(
+    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
         message="Nyheter", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
     )
 
@@ -519,9 +549,9 @@ async def test_generate_teacher_response_filters_unsafe_urls(mock_settings, mock
 async def test_generate_teacher_response_does_not_cap_grammar_sources(mock_settings, mock_user):
     manager = AgentsManager(mock_settings)
     manager.teacher = AsyncMock()
-    manager.teacher.generate_response.return_value = (
-        "Grammatik",
-        [
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(
+        message="Grammatik",
+        final_messages=[
             ToolMessage(
                 content=(
                     '{"tool":"search_grammar","results":['
@@ -537,7 +567,7 @@ async def test_generate_teacher_response_does_not_cap_grammar_sources(mock_setti
         ],
     )
 
-    _response, sources = await manager.generate_teacher_response(
+    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
         message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
     )
 
@@ -554,7 +584,7 @@ async def test_generate_teacher_response_does_not_cap_grammar_sources(mock_setti
 async def test_generate_teacher_response_passes_pre_results(mock_settings, mock_user):
     manager = AgentsManager(mock_settings)
     manager.teacher = AsyncMock()
-    manager.teacher.generate_response.return_value = ("Hi!", [])
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(message="Hi!", final_messages=[])
 
     pre_results = [{"name": "word_keeper", "result": {"status": "action_taken"}}]
     await manager.generate_teacher_response(

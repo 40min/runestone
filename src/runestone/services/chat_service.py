@@ -8,6 +8,7 @@ from typing import List
 from runestone.agents.manager import AgentsManager
 from runestone.agents.schemas import ChatHistoryResponse
 from runestone.agents.schemas import ChatMessage as ChatMessageSchema
+from runestone.agents.schemas import TeacherEmotion
 from runestone.config import Settings
 from runestone.core.exceptions import RunestoneError
 from runestone.core.observability import timed_operation
@@ -77,7 +78,7 @@ class ChatService:
         message_text: str,
         tts_expected: bool = False,
         speed: float = 1.0,
-    ) -> tuple[str, list[dict] | None]:
+    ) -> tuple[str, list[dict] | None, TeacherEmotion]:
         """
         Process one text chat turn end to end.
 
@@ -113,6 +114,7 @@ class ChatService:
                 role=m.role,
                 content=m.content,
                 sources=m.sources,
+                teacher_emotion=m.teacher_emotion,
                 created_at=m.created_at,
             )
             for m in context_models
@@ -124,7 +126,7 @@ class ChatService:
             raise ValueError(f"User {user_id} not found")
 
         # 5. Generate response using agents
-        assistant_text, sources = await self.agent_service.process_turn(
+        assistant_text, sources, teacher_emotion = await self.agent_service.process_turn(
             message=message_text,
             chat_id=chat_id,
             history=history[:-1],
@@ -134,15 +136,22 @@ class ChatService:
         )
 
         # 6. Save assistant message
-        await self.repository.add_message(user_id, chat_id, "assistant", assistant_text, sources=sources)
+        await self.repository.add_message(
+            user_id,
+            chat_id,
+            "assistant",
+            assistant_text,
+            sources=sources,
+            teacher_emotion=teacher_emotion,
+        )
 
         # 7. Push TTS audio if client expects it (non-blocking)
         if tts_expected:
             await self.tts_service.push_audio_to_client(user_id, assistant_text, speed=speed)
 
-        return assistant_text, sources
+        return assistant_text, sources, teacher_emotion
 
-    async def process_image_message(self, user_id: int, image_content: bytes) -> str:
+    async def process_image_message(self, user_id: int, image_content: bytes) -> tuple[str, TeacherEmotion]:
         """
         OCR an uploaded image and route the extracted text through the teacher flow.
 
@@ -175,7 +184,14 @@ class ChatService:
 
         # Convert models to schemas for the agent service
         history = [
-            ChatMessageSchema(id=m.id, role=m.role, content=m.content, created_at=m.created_at) for m in context_models
+            ChatMessageSchema(
+                id=m.id,
+                role=m.role,
+                content=m.content,
+                teacher_emotion=m.teacher_emotion,
+                created_at=m.created_at,
+            )
+            for m in context_models
         ]
 
         # 4. Get user and build memory context
@@ -195,7 +211,7 @@ Instructions:
 2. Then provide phrase-by-phrase translation in format: "Swedish phrase (translation). Next phrase (translation)."
 3. Use {mother_tongue} for all translations."""
 
-        assistant_text, _sources = await self.agent_service.process_turn(
+        assistant_text, _sources, teacher_emotion = await self.agent_service.process_turn(
             message=translation_prompt,
             chat_id=chat_id,
             history=history,
@@ -204,9 +220,15 @@ Instructions:
             side_effect_service=self.side_effect_service,
         )
 
-        await self.repository.add_message(user_id, chat_id, "assistant", assistant_text)
+        await self.repository.add_message(
+            user_id,
+            chat_id,
+            "assistant",
+            assistant_text,
+            teacher_emotion=teacher_emotion,
+        )
 
-        return assistant_text
+        return assistant_text, teacher_emotion
 
     # ------------------------------------------------------------------
     # Chat session management

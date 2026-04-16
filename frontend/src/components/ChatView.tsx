@@ -136,6 +136,15 @@ const ChatView: React.FC = () => {
     }
     return null;
   })();
+  const latestTeacherEmotion = (() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.role === "assistant") {
+        return message.teacherEmotion;
+      }
+    }
+    return undefined;
+  })();
   const lastUserMessageId = (() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages[index];
@@ -346,6 +355,7 @@ const ChatView: React.FC = () => {
           onOpenMemory={() => setIsMemoryModalOpen(true)}
           isLoading={isAnyProcessing}
           hasMessages={messages.length > 0}
+          teacherEmotion={latestTeacherEmotion}
         />
 
         {/* Messages Container */}
@@ -362,6 +372,7 @@ const ChatView: React.FC = () => {
                   role={msg.role}
                   content={msg.content}
                   sources={msg.sources}
+                  teacherEmotion={msg.teacherEmotion}
                   responseTimeMs={msg.responseTimeMs}
                   createdAt={msg.createdAt}
                   isLast={index === messages.length - 1}

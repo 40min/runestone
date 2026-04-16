@@ -14,7 +14,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from runestone.agents.background_task_registry import BackgroundTaskRegistry
 from runestone.agents.coordinator import CoordinatorAgent
-from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem, TeacherSideEffect
+from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem, TeacherEmotion, TeacherSideEffect
 from runestone.agents.service_providers import provide_agent_side_effect_service
 from runestone.agents.specialists.base import SpecialistContext
 from runestone.agents.specialists.memory_keeper import MemoryKeeperSpecialist
@@ -187,12 +187,12 @@ class AgentsManager:
         pre_results: list[dict],
         starter_memory: str,
         recent_side_effects: list[TeacherSideEffect],
-    ) -> tuple[str, Optional[list[dict[str, str]]]]:
+    ) -> tuple[str, Optional[list[dict[str, str]]], TeacherEmotion]:
         """
-        Run teacher agent synchronously and return (response_text, sources).
+        Run teacher agent synchronously and return (response_text, sources, teacher_emotion).
         """
         try:
-            teacher_response, final_messages = await self.teacher.generate_response(
+            generated = await self.teacher.generate_response(
                 message=message,
                 history=history,
                 user=user,
@@ -204,8 +204,8 @@ class AgentsManager:
             logger.error("[agents:manager] Error generating response: %s", e)
             raise
 
-        sources = self._extract_sources(pre_results=pre_results, messages=final_messages)
-        return teacher_response, sources
+        sources = self._extract_sources(pre_results=pre_results, messages=generated.final_messages)
+        return generated.message, sources, generated.emotion
 
     async def process_turn(
         self,
@@ -215,7 +215,7 @@ class AgentsManager:
         user: User,
         memory_item_service,
         side_effect_service: AgentSideEffectService,
-    ) -> tuple[str, Optional[list[dict[str, str]]]]:
+    ) -> tuple[str, Optional[list[dict[str, str]]], TeacherEmotion]:
         """
         Run the agent-owned portion of a prepared chat turn.
 
@@ -244,7 +244,7 @@ class AgentsManager:
             side_effect_service=side_effect_service,
         )
 
-        assistant_text, sources = await self.generate_teacher_response(
+        assistant_text, sources, teacher_emotion = await self.generate_teacher_response(
             message=message,
             history=history,
             user=user,
@@ -268,7 +268,7 @@ class AgentsManager:
             coordinator_row_id=coordinator_row_id,
         )
 
-        return assistant_text, sources
+        return assistant_text, sources, teacher_emotion
 
     async def run_post_turn(
         self,

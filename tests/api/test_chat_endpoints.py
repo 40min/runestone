@@ -12,6 +12,7 @@ async def test_send_message_success(client_with_mock_agent_service, db_session):
     mock_agent_service.process_turn_result = (
         "Hej! Jag mår bra, tack!",
         [{"title": "Nyhet", "url": "https://example.com/news", "date": "2026-02-05"}],
+        "happy",
     )
     # Send a chat message - history is now managed by the backend
     chat_response = await client.post(
@@ -24,6 +25,7 @@ async def test_send_message_success(client_with_mock_agent_service, db_session):
     assert "message" in data
     assert data["message"] == "Hej! Jag mår bra, tack!"
     assert data["sources"] == [{"title": "Nyhet", "url": "https://example.com/news", "date": "2026-02-05"}]
+    assert data["teacher_emotion"] == "happy"
     mock_agent_service.process_turn.assert_called_once()
 
 
@@ -33,6 +35,7 @@ async def test_history_includes_sources(client_with_mock_agent_service, db_sessi
     mock_agent_service.process_turn_result = (
         "Svar med källor",
         [{"title": "Nyhet", "url": "https://example.com/news", "date": "2026-02-05"}],
+        "thinking",
     )
 
     await client.post("/api/chat/message", json={"message": "Hej!"})
@@ -51,6 +54,7 @@ async def test_history_includes_sources(client_with_mock_agent_service, db_sessi
     assert assistant_messages[0]["sources"] == [
         {"title": "Nyhet", "url": "https://example.com/news", "date": "2026-02-05"}
     ]
+    assert assistant_messages[0]["teacher_emotion"] == "thinking"
 
 
 async def test_send_message_service_error(client_with_mock_agent_service, db_session):
@@ -101,7 +105,7 @@ async def test_clear_history(client):
 async def test_get_history_after_id_returns_only_new_messages(client_with_mock_agent_service, db_session):
     """Test delta history with after_id query parameter."""
     client, mock_agent_service = client_with_mock_agent_service
-    mock_agent_service.process_turn_result = ("Svar", None)
+    mock_agent_service.process_turn_result = ("Svar", None, "neutral")
 
     await client.post("/api/chat/message", json={"message": "One"})
     await client.post("/api/chat/message", json={"message": "Two"})
@@ -122,7 +126,7 @@ async def test_get_history_after_id_returns_only_new_messages(client_with_mock_a
 async def test_get_history_has_more_when_page_is_partial(client_with_mock_agent_service, db_session):
     """Test has_more flag when response is limited."""
     client, mock_agent_service = client_with_mock_agent_service
-    mock_agent_service.process_turn_result = ("Svar", None)
+    mock_agent_service.process_turn_result = ("Svar", None, "neutral")
 
     await client.post("/api/chat/message", json={"message": "One"})
     await client.post("/api/chat/message", json={"message": "Two"})
@@ -137,7 +141,7 @@ async def test_get_history_has_more_when_page_is_partial(client_with_mock_agent_
 async def test_get_history_reports_chat_mismatch(client_with_mock_agent_service, db_session):
     """Test mismatch signal when client provides stale chat id."""
     client, mock_agent_service = client_with_mock_agent_service
-    mock_agent_service.process_turn_result = ("Svar", None)
+    mock_agent_service.process_turn_result = ("Svar", None, "neutral")
 
     await client.post("/api/chat/message", json={"message": "Hello"})
     before_clear_response = await client.get("/api/chat/history")
@@ -155,7 +159,7 @@ async def test_get_history_reports_chat_mismatch(client_with_mock_agent_service,
 async def test_clear_history_rotates_chat_id(client_with_mock_agent_service, db_session):
     """Test that clearing history rotates chat session ID."""
     client, mock_agent_service = client_with_mock_agent_service
-    mock_agent_service.process_turn_result = ("Svar", None)
+    mock_agent_service.process_turn_result = ("Svar", None, "neutral")
 
     await client.post("/api/chat/message", json={"message": "Hello"})
     before_clear_response = await client.get("/api/chat/history")
@@ -211,6 +215,7 @@ async def test_send_image_success(client_with_mock_agent_service, db_session, mo
     mock_agent_service.process_turn_result = (
         "Here's the translated text: Hej (Hello). Hur mår du? (How are you?)",
         None,
+        "thinking",
     )
 
     # Mock the processor dependency
@@ -240,6 +245,7 @@ async def test_send_image_success(client_with_mock_agent_service, db_session, mo
     data = response.json()
     assert "message" in data
     assert "translated text" in data["message"].lower()
+    assert data["teacher_emotion"] == "thinking"
     # mock_processor.run_ocr is called inside ChatService now, but since we mock
     # the processor injected into ChatService, this assertion still holds.
     mock_processor.run_ocr.assert_called_once()

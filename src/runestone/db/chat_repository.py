@@ -27,6 +27,7 @@ class ChatRepository:
         role: str,
         content: str,
         sources: list[dict] | None = None,
+        teacher_emotion: str | None = None,
     ) -> ChatMessage:
         """
         Add a new chat message to the database.
@@ -36,6 +37,7 @@ class ChatRepository:
             chat_id: Chat session identifier
             role: Role of the message sender ("user" or "assistant")
             content: Message content
+            teacher_emotion: Optional assistant avatar emotion metadata
 
         Returns:
             The created ChatMessage object
@@ -46,6 +48,7 @@ class ChatRepository:
             role=role,
             content=content,
             sources=json.dumps(sources) if sources else None,
+            teacher_emotion=teacher_emotion if role == "assistant" else None,
         )
         self.db.add(message)
         await self.db.commit()
