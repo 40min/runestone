@@ -62,13 +62,13 @@ async def send_message(
         logger.info(f"User {current_user.email} sent message: {request.message[:50]}...")
 
         # Generate response using the chat service which handles persistence
-        response_message, sources = await chat_service.process_message(
+        response_message, sources, teacher_emotion = await chat_service.process_message(
             current_user.id, request.message, tts_expected=request.tts_expected, speed=request.speed
         )
 
         logger.info(f"Generated response for user {current_user.email}")
 
-        return ChatResponse(message=response_message, sources=sources)
+        return ChatResponse(message=response_message, sources=sources, teacher_emotion=teacher_emotion)
 
     except Exception as e:
         logger.error(f"Error generating chat response: {e}", exc_info=True)
@@ -136,12 +136,12 @@ async def send_image(
         logger.info(f"[IMAGE_UPLOAD] User {current_user.email} uploaded image ({file_size} bytes), starting OCR")
 
         # Process OCR text through agent for translation
-        response_message = await chat_service.process_image_message(current_user.id, content)
+        response_message, teacher_emotion = await chat_service.process_image_message(current_user.id, content)
 
         elapsed = time.time() - start_time
         logger.info(f"[IMAGE_UPLOAD] Image processing completed for user {current_user.email} in {elapsed:.3f}s")
 
-        return ImageChatResponse(message=response_message)
+        return ImageChatResponse(message=response_message, teacher_emotion=teacher_emotion)
 
     except HTTPException:
         # Re-raise HTTP exceptions as-is

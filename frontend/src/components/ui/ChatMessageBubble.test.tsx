@@ -37,6 +37,20 @@ describe("ChatMessageBubble", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders the requested teacher emotion avatar", () => {
+    render(
+      <ChatMessageBubble
+        role="assistant"
+        content="Bra jobbat!"
+        teacherEmotion="happy"
+      />,
+    );
+
+    expect(
+      screen.getByRole("img", { name: /björn, your swedish teacher/i }),
+    ).toHaveAttribute("src", expect.stringContaining("bjorn_happy"));
+  });
+
   it("does not render the teacher avatar for user messages", () => {
     render(<ChatMessageBubble role="user" content="Hej!" />);
 

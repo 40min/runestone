@@ -119,6 +119,7 @@ class ChatMessage(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     chat_id: Mapped[str] = mapped_column(String, nullable=False)
     sources: Mapped[str | None] = mapped_column(Text, nullable=True)
+    teacher_emotion: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     __table_args__ = (Index("ix_chat_messages_user_id_chat_id_id", "user_id", "chat_id", "id"),)

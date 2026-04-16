@@ -9,11 +9,13 @@ import {
 } from "lucide-react";
 import { TeacherAvatar } from "../chat/TeacherAvatar";
 import { AssistantMessageContent } from "./AssistantMessageContent";
+import type { TeacherEmotion } from "../../types/teacherEmotion";
 
 interface ChatMessageBubbleProps {
   role: "user" | "assistant";
   content: string;
   sources?: { title: string; url: string; date: string }[] | null;
+  teacherEmotion?: TeacherEmotion | string | null;
   responseTimeMs?: number;
   createdAt?: string;
   isLast?: boolean;
@@ -40,6 +42,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   role,
   content,
   sources,
+  teacherEmotion,
   createdAt,
   isLast,
   isLatestByRole = false,
@@ -138,7 +141,9 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         mb: { xs: 1.75, md: 2 },
       }}
     >
-      {role === "assistant" && <TeacherAvatar size={34} showStatus={false} />}
+      {role === "assistant" && (
+        <TeacherAvatar size={34} showStatus={false} emotion={teacherEmotion} />
+      )}
       <Box
         sx={{
           maxWidth:

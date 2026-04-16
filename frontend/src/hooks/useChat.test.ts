@@ -103,7 +103,7 @@ describe('useChat', () => {
       }
       return Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ message: 'Hej! Jag mår bra, tack!' }),
+        json: () => Promise.resolve({ message: 'Hej! Jag mår bra, tack!', teacher_emotion: 'happy' }),
       });
     });
 
@@ -148,11 +148,45 @@ describe('useChat', () => {
         expect.objectContaining({
           role: 'assistant',
           content: 'Hej! Jag mår bra, tack!',
+          teacherEmotion: 'happy',
           responseTimeMs: 1500,
         })
       );
       expect(result.current.isLoading).toBe(false);
       expect(result.current.error).toBeNull();
+    });
+  });
+
+  it('should map teacher emotion from history', async () => {
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/api/chat/history')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve(
+              buildHistoryPayload(
+                [{ id: 7, role: 'assistant', content: 'Fundera på detta.', teacher_emotion: 'thinking' }],
+                'chat-1',
+                7
+              )
+            ),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+
+    const { result } = renderHook(() => useChat());
+
+    await waitFor(() => {
+      expect(result.current.messages[0]).toEqual(
+        expect.objectContaining({
+          role: 'assistant',
+          teacherEmotion: 'thinking',
+        })
+      );
     });
   });
 

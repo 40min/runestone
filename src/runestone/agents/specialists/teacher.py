@@ -13,7 +13,14 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from runestone.agents.llm import build_chat_model
 from runestone.agents.prompts import load_persona
-from runestone.agents.schemas import ChatMessage, TeacherSideEffect
+from runestone.agents.schemas import (
+    DEFAULT_TEACHER_EMOTION,
+    ChatMessage,
+    TeacherGenerationResult,
+    TeacherOutput,
+    TeacherSideEffect,
+    normalize_teacher_emotion,
+)
 from runestone.agents.specialists.base import INFO_FOR_TEACHER_MAX_CHARS
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.grammar import read_grammar_page, search_grammar
@@ -136,6 +143,23 @@ statement and ask a follow-up question to keep the conversation going.
 - You can use light Markdown (for example, **bold** or short bullet lists)
   when it improves readability; this is optional, not required.
 
+### AVATAR EMOTION METADATA
+For every final response, choose exactly one `emotion` value for Björn's avatar.
+Allowed values: `neutral`, `happy`, `sad`, `worried`, `concerned`, `thinking`, `hopeful`, `surprised`, `serious`.
+
+Rules:
+- The `message` field is the only student-facing text.
+- Never write the emotion label, JSON envelope, or any avatar instructions inside the student-facing `message`.
+- Pick the emotion that best matches the teaching moment:
+  - `happy` for praise, celebration, and warm encouragement.
+  - `hopeful` for gentle encouragement after mistakes or progress-in-progress.
+  - `thinking` for analysis, grammar reasoning, or reflective explanations.
+  - `serious` for direct correction, focused instruction, or important warnings.
+  - `concerned` or `worried` for frustration, confusion, or repeated struggle.
+  - `sad` for empathy with disappointment.
+  - `surprised` for unexpected success, discoveries, or playful surprise.
+  - `neutral` for ordinary transitions or low-emotion factual replies.
+
 ### MEMORY PROTOCOL
 You are memory-aware, but teacher-side memory access is read-only in this phase.
 Post-phase memory maintenance is handled by internal specialists.
@@ -232,6 +256,7 @@ to read its contents before deciding.
             model=chat_model,
             tools=tools,
             system_prompt=system_prompt,
+            response_format=TeacherOutput,
             context_schema=AgentContext,
         )
 
@@ -246,11 +271,8 @@ to read its contents before deciding.
         pre_results: list[dict] | None = None,
         starter_memory: str = "",
         recent_side_effects: list[TeacherSideEffect] | None = None,
-    ) -> tuple[str, list]:
+    ) -> TeacherGenerationResult:
         """Generate the final user-facing response.
-
-        Returns:
-            (response_text, final_messages)
 
         Note: source extraction is done by `AgentsManager`, not here.
         """
@@ -305,13 +327,42 @@ to read its contents before deciding.
         )
 
         final_messages = result.get("messages", [])
+        structured_response = self._parse_structured_response(result.get("structured_response"))
+        if structured_response is not None:
+            return TeacherGenerationResult(
+                message=structured_response.message,
+                emotion=structured_response.emotion,
+                final_messages=final_messages,
+            )
+
         for msg in reversed(final_messages):
             if hasattr(msg, "content") and msg.content:
                 if hasattr(msg, "tool_call_id") or (hasattr(msg, "tool_calls") and msg.tool_calls):
                     continue
-                return msg.content, final_messages
+                return TeacherGenerationResult(
+                    message=msg.content,
+                    emotion=DEFAULT_TEACHER_EMOTION,
+                    final_messages=final_messages,
+                )
 
-        return "I'm sorry, I couldn't generate a response.", final_messages
+        return TeacherGenerationResult(
+            message="I'm sorry, I couldn't generate a response.",
+            emotion=DEFAULT_TEACHER_EMOTION,
+            final_messages=final_messages,
+        )
+
+    @staticmethod
+    def _parse_structured_response(value: Any) -> TeacherOutput | None:
+        if isinstance(value, TeacherOutput):
+            return value
+        if isinstance(value, dict):
+            try:
+                return TeacherOutput.model_validate(value)
+            except ValueError:
+                message = value.get("message")
+                if isinstance(message, str) and message.strip():
+                    return TeacherOutput(message=message, emotion=normalize_teacher_emotion(value.get("emotion")))
+        return None
 
     @staticmethod
     def _format_current_datetime(user: User) -> str:

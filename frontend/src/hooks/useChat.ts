@@ -2,6 +2,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useApi } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import {
+  normalizeTeacherEmotion,
+  type TeacherEmotion,
+} from '../types/teacherEmotion';
 
 interface NewsSource {
   title: string;
@@ -14,6 +18,7 @@ interface ServerChatMessage {
   role: 'user' | 'assistant';
   content: string;
   sources?: NewsSource[] | null;
+  teacher_emotion?: string | null;
   created_at?: string | null;
 }
 
@@ -32,6 +37,7 @@ interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   sources?: NewsSource[] | null;
+  teacherEmotion?: TeacherEmotion;
   responseTimeMs?: number;
   createdAt?: string;
 }
@@ -94,6 +100,7 @@ export const useChat = (): UseChatReturn => {
       role: message.role,
       content: message.content,
       sources: message.sources ?? undefined,
+      teacherEmotion: normalizeTeacherEmotion(message.teacher_emotion),
       createdAt: message.created_at ?? undefined,
     };
   }, []);
@@ -342,7 +349,11 @@ export const useChat = (): UseChatReturn => {
       setError(null);
 
       try {
-        const data = await post<{ message: string; sources?: NewsSource[] | null }>('/api/chat/message', {
+        const data = await post<{
+          message: string;
+          sources?: NewsSource[] | null;
+          teacher_emotion?: string | null;
+        }>('/api/chat/message', {
           message: userMessage.trim(),
           tts_expected: ttsExpected,
           speed: speed,
@@ -353,6 +364,7 @@ export const useChat = (): UseChatReturn => {
           role: 'assistant',
           content: data.message,
           sources: data.sources ?? undefined,
+          teacherEmotion: normalizeTeacherEmotion(data.teacher_emotion),
           responseTimeMs: Math.max(0, Math.round(performance.now() - startedAt)),
           createdAt: new Date().toISOString(),
         };

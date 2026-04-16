@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from runestone.agents.schemas import ChatMessage, TeacherSideEffect
+from runestone.agents.schemas import ChatMessage, TeacherOutput, TeacherSideEffect
 from runestone.agents.specialists.base import INFO_FOR_TEACHER_MAX_CHARS
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
@@ -116,6 +116,9 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "raw internal JSON objects" in call_kwargs["system_prompt"]
             assert "summarize it naturally in plain prose" in call_kwargs["system_prompt"]
             assert "Use `search_news_with_dates`" not in call_kwargs["system_prompt"]
+            assert call_kwargs["response_format"] == TeacherOutput
+            assert "AVATAR EMOTION METADATA" in call_kwargs["system_prompt"]
+            assert "Never write the emotion label" in call_kwargs["system_prompt"]
 
 
 def test_build_agent_uses_teacher_purpose(mock_settings, mock_chat_model):
@@ -190,10 +193,11 @@ async def test_run_orchestration(teacher_agent, mock_user):
         "messages": [HumanMessage(content="Hello"), AIMessage(content="Hi there!")]
     }
 
-    response, final_messages = await teacher_agent.generate_response(message="Hello", history=[], user=mock_user)
+    generated = await teacher_agent.generate_response(message="Hello", history=[], user=mock_user)
 
-    assert response == "Hi there!"
-    assert isinstance(final_messages, list)
+    assert generated.message == "Hi there!"
+    assert generated.emotion == "neutral"
+    assert isinstance(generated.final_messages, list)
     teacher_agent.agent.ainvoke.assert_called_once()
 
     invoke_args = teacher_agent.agent.ainvoke.call_args[0][0]
@@ -229,6 +233,33 @@ async def test_run_with_history(teacher_agent, mock_user):
     assert "[NEWS_SOURCES]" in messages[2].content
     assert "Old bot msg" in messages[2].content
     assert messages[3].content == "Current msg"
+
+
+@pytest.mark.anyio
+async def test_run_returns_structured_teacher_emotion(teacher_agent, mock_user):
+    teacher_agent.agent.ainvoke.return_value = {
+        "messages": [AIMessage(content="Bra jobbat!")],
+        "structured_response": TeacherOutput(message="Bra jobbat!", emotion="happy"),
+    }
+
+    generated = await teacher_agent.generate_response(message="Hello", history=[], user=mock_user)
+
+    assert generated.message == "Bra jobbat!"
+    assert generated.emotion == "happy"
+    assert isinstance(generated.final_messages, list)
+
+
+@pytest.mark.anyio
+async def test_run_normalizes_invalid_structured_teacher_emotion(teacher_agent, mock_user):
+    teacher_agent.agent.ainvoke.return_value = {
+        "messages": [AIMessage(content="Let's inspect this.")],
+        "structured_response": {"message": "Let's inspect this.", "emotion": "laser-focus"},
+    }
+
+    generated = await teacher_agent.generate_response(message="Hello", history=[], user=mock_user)
+
+    assert generated.message == "Let's inspect this."
+    assert generated.emotion == "neutral"
 
 
 @pytest.mark.anyio

@@ -3,12 +3,14 @@ import PsychologyIcon from "@mui/icons-material/Psychology";
 import { MessageCircle } from "lucide-react";
 import { NewChatButton } from "../ui";
 import { TeacherAvatar } from "./TeacherAvatar";
+import type { TeacherEmotion } from "../../types/teacherEmotion";
 
 interface ChatHeaderProps {
   onNewChat: () => void;
   onOpenMemory: () => void;
   isLoading: boolean;
   hasMessages: boolean;
+  teacherEmotion?: TeacherEmotion | string | null;
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -16,6 +18,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onOpenMemory,
   isLoading,
   hasMessages,
+  teacherEmotion,
 }) => {
   return (
     <Box
@@ -32,7 +35,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
       }}
     >
       <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-        <TeacherAvatar size={56} showStatus />
+        <TeacherAvatar
+          size={56}
+          showStatus
+          emotion={isLoading ? "thinking" : teacherEmotion}
+        />
         <Box>
           <Typography
             variant="h5"
