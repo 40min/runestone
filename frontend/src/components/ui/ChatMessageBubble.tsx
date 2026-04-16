@@ -142,14 +142,14 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       }}
     >
       {role === "assistant" && (
-        <TeacherAvatar size={34} showStatus={false} emotion={teacherEmotion} />
+        <TeacherAvatar size={44} showStatus={false} emotion={teacherEmotion} />
       )}
       <Box
         sx={{
           maxWidth:
             role === "user"
               ? { xs: "86%", sm: "62%", md: "65%" }
-              : { xs: "calc(100% - 46px)", sm: "78%", md: "70%" },
+              : { xs: "calc(100% - 56px)", sm: "78%", md: "70%" },
           padding: role === "user" ? "10px 15px" : "12px 18px",
           borderRadius:
             role === "user" ? "8px 8px 2px 8px" : "8px 8px 8px 2px",
