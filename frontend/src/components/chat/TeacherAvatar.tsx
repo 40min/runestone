@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Box } from "@mui/material";
 import bjornConcerned from "../../assets/emotions/bjorn_concerned.png";
 import bjornHappy from "../../assets/emotions/bjorn_happy.png";
@@ -92,9 +92,54 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
   alt = "Björn, your Swedish teacher",
   showStatus = false,
 }) => {
+  const CROSSFADE_MS = 220;
   const normalizedEmotion = normalizeTeacherEmotion(emotion);
   const avatarSrc = src ?? emotionAvatars[normalizedEmotion];
   const avatarChrome = avatarChromeByEmotion[normalizedEmotion];
+  const [activeSrc, setActiveSrc] = useState<string | null>(avatarSrc ?? null);
+  const [previousSrc, setPreviousSrc] = useState<string | null>(null);
+  const [isCrossfading, setIsCrossfading] = useState(false);
+  const clearPreviousTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (clearPreviousTimerRef.current !== null) {
+      window.clearTimeout(clearPreviousTimerRef.current);
+      clearPreviousTimerRef.current = null;
+    }
+
+    if (!avatarSrc) {
+      setActiveSrc(null);
+      setPreviousSrc(null);
+      setIsCrossfading(false);
+      return;
+    }
+
+    if (!activeSrc) {
+      setActiveSrc(avatarSrc);
+      return;
+    }
+
+    if (avatarSrc === activeSrc) {
+      return;
+    }
+
+    setPreviousSrc(activeSrc);
+    setActiveSrc(avatarSrc);
+    setIsCrossfading(true);
+    clearPreviousTimerRef.current = window.setTimeout(() => {
+      setPreviousSrc(null);
+      setIsCrossfading(false);
+      clearPreviousTimerRef.current = null;
+    }, CROSSFADE_MS);
+
+    return () => {
+      if (clearPreviousTimerRef.current !== null) {
+        window.clearTimeout(clearPreviousTimerRef.current);
+        clearPreviousTimerRef.current = null;
+      }
+    };
+  }, [avatarSrc, activeSrc]);
+
   const avatarStyles = {
     width: "100%",
     height: "100%",
@@ -114,6 +159,16 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
     objectPosition: "center",
     userSelect: "none",
   };
+  const avatarLayerStyles = {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    objectPosition: "center",
+    userSelect: "none",
+    pointerEvents: "none",
+  };
 
   return (
     <Box
@@ -124,8 +179,45 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
         flex: `0 0 ${size}px`,
       }}
     >
-      {avatarSrc ? (
-        <Box component="img" src={avatarSrc} alt={alt} sx={avatarStyles} />
+      {activeSrc ? (
+        <Box
+          sx={{
+            ...avatarStyles,
+            position: "relative",
+            "@keyframes teacher-avatar-fade-in": {
+              from: { opacity: 0 },
+              to: { opacity: 1 },
+            },
+            "@keyframes teacher-avatar-fade-out": {
+              from: { opacity: 1 },
+              to: { opacity: 0 },
+            },
+          }}
+        >
+          {previousSrc && (
+            <Box
+              component="img"
+              src={previousSrc}
+              alt=""
+              aria-hidden="true"
+              sx={{
+                ...avatarLayerStyles,
+                animation: `teacher-avatar-fade-out ${CROSSFADE_MS}ms ease-out forwards`,
+              }}
+            />
+          )}
+          <Box
+            component="img"
+            src={activeSrc}
+            alt={alt}
+            sx={{
+              ...avatarLayerStyles,
+              animation: isCrossfading
+                ? `teacher-avatar-fade-in ${CROSSFADE_MS}ms ease-out forwards`
+                : "none",
+            }}
+          />
+        </Box>
       ) : (
         <Box aria-label={alt} role="img" sx={avatarStyles}>
           B
