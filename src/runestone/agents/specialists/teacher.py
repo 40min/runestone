@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from pydantic import ValidationError
 
 from runestone.agents.llm import build_chat_model
 from runestone.agents.prompts import load_persona
@@ -358,7 +359,7 @@ to read its contents before deciding.
         if isinstance(value, dict):
             try:
                 return TeacherOutput.model_validate(value)
-            except ValueError:
+            except ValidationError:
                 message = value.get("message")
                 if isinstance(message, str) and message.strip():
                     return TeacherOutput(message=message, emotion=normalize_teacher_emotion(value.get("emotion")))
