@@ -4,6 +4,18 @@
 
 Keep package `__init__.py` files empty unless there is an explicit, reviewed reason to add code.
 
+## Development Workflows
+
+Prefer the Makefile targets over spelling out raw tool commands; the Makefile also keeps the `uv` cache inside the repo for reproducible local and CI runs.
+
+- Use `make check-readiness` before commit-sized changes. It runs lint checks, backend and frontend tests, then a frontend build dry-run.
+- Use scoped checks while iterating: `make backend-test`, `make frontend-test`, `make lint-check`, or targeted `uv run pytest tests/path -v` for backend tests.
+- Start services with `make run-backend` (applies Alembic migrations, serves FastAPI on port 8010), `make run-frontend` (Vite on port 5173), or `make run-dev` for both.
+- Manage schema changes through Alembic targets: `make db-migrate MESSAGE="..."`, `make db-upgrade`, `make db-current`, and `make db-history`.
+- Use prompt and RAG smoke targets when touching prompt construction or grammar retrieval: `make test-prompts-ocr`, `make test-prompts-analysis TEXT="..."`, `make test-prompts-vocabulary WORD="..."`, and `make test-grammar-search QUERY="..."`.
+
+For LangChain `@tool` tests, use `.ainvoke()` for tools without `ToolRuntime`; use `.coroutine(runtime, ...)` with a manually constructed runtime for tools that depend on `ToolRuntime` context.
+
 ## Docstrings And Comments
 
 Write docstrings and comments to explain intent, invariants, and business rules, not to narrate obvious code.
