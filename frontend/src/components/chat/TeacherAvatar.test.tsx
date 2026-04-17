@@ -1,15 +1,20 @@
 import { act, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TeacherAvatar } from "./TeacherAvatar";
 
 describe("TeacherAvatar", () => {
+  const CROSSFADE_MS = 1800;
+  const HALF_CROSSFADE_MS = CROSSFADE_MS / 2;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
   afterEach(() => {
     vi.useRealTimers();
   });
 
   it("keeps the previous emotion image during crossfade and clears it after the transition", () => {
-    vi.useFakeTimers();
-
     const { container, rerender } = render(<TeacherAvatar emotion="neutral" />);
 
     expect(
@@ -29,7 +34,7 @@ describe("TeacherAvatar", () => {
     );
 
     act(() => {
-      vi.advanceTimersByTime(1799);
+      vi.advanceTimersByTime(CROSSFADE_MS - 1);
     });
     expect(container.querySelectorAll("img")).toHaveLength(2);
 
@@ -43,13 +48,11 @@ describe("TeacherAvatar", () => {
   });
 
   it("resets the cleanup timer when the emotion changes again mid-crossfade", () => {
-    vi.useFakeTimers();
-
     const { container, rerender } = render(<TeacherAvatar emotion="neutral" />);
 
     rerender(<TeacherAvatar emotion="happy" />);
     act(() => {
-      vi.advanceTimersByTime(900);
+      vi.advanceTimersByTime(HALF_CROSSFADE_MS);
     });
 
     rerender(<TeacherAvatar emotion="sad" />);
@@ -64,12 +67,12 @@ describe("TeacherAvatar", () => {
     );
 
     act(() => {
-      vi.advanceTimersByTime(900);
+      vi.advanceTimersByTime(HALF_CROSSFADE_MS);
     });
     expect(container.querySelectorAll("img")).toHaveLength(2);
 
     act(() => {
-      vi.advanceTimersByTime(900);
+      vi.advanceTimersByTime(HALF_CROSSFADE_MS);
     });
     expect(container.querySelectorAll("img")).toHaveLength(1);
     expect(
