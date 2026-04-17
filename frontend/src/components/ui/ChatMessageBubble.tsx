@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { TeacherAvatar } from "../chat/TeacherAvatar";
 import { AssistantMessageContent } from "./AssistantMessageContent";
+import { formatResponseTime } from "./ChatMessageBubble.utils";
 import type { TeacherEmotion } from "../../types/teacherEmotion";
 
 interface ChatMessageBubbleProps {
@@ -43,6 +44,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   content,
   sources,
   teacherEmotion,
+  responseTimeMs,
   createdAt,
   isLast,
   isLatestByRole = false,
@@ -60,6 +62,14 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   const isCollapsed = !shouldKeepExpanded && isLongMessage && !isExpanded;
   const hasSources = role === "assistant" && sources && sources.length > 0;
   const messageTime = formatMessageTime(createdAt);
+  const showResponseTime =
+    role === "assistant" &&
+    typeof responseTimeMs === "number" &&
+    Number.isFinite(responseTimeMs) &&
+    responseTimeMs >= 0;
+  const responseTimeLabel = showResponseTime
+    ? `Teacher responded in ${formatResponseTime(responseTimeMs)}`
+    : null;
   const resolveSafeUrl = (url: string) => {
     try {
       const parsed = new URL(url);
@@ -372,18 +382,39 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
             </Box>
           </Box>
         )}
-        {messageTime && (
-          <Typography
+        {(responseTimeLabel || messageTime) && (
+          <Box
             sx={{
-              color: "rgba(255, 255, 255, 0.42)",
-              fontSize: "0.72rem",
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
               mt: 1,
-              textAlign: "right",
-              lineHeight: 1,
             }}
           >
-            {messageTime}
-          </Typography>
+            {responseTimeLabel && (
+              <Typography
+                sx={{
+                  color: "rgba(255, 255, 255, 0.42)",
+                  fontSize: "0.72rem",
+                  lineHeight: 1,
+                }}
+              >
+                {responseTimeLabel}
+              </Typography>
+            )}
+            {messageTime && (
+              <Typography
+                sx={{
+                  color: "rgba(255, 255, 255, 0.42)",
+                  fontSize: "0.72rem",
+                  lineHeight: 1,
+                  ml: "auto",
+                }}
+              >
+                {messageTime}
+              </Typography>
+            )}
+          </Box>
         )}
       </Box>
     </Box>
