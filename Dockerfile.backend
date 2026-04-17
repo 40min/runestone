@@ -50,6 +50,11 @@ ENV PYTHONUNBUFFERED=1 \
 # Set work directory
 WORKDIR /app
 
+# Install runtime tools used by container health checks
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create non-root user and state directory
 RUN groupadd -r runestone \
     && useradd -r -g runestone -d /home/runestone -m runestone \
