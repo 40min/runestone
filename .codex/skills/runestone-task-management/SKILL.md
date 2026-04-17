@@ -5,7 +5,7 @@ description: Manage Runestone project tasks through the Dart MCP server. Use whe
 
 # Runestone Task Management
 
-This is a Runestone-specific wrapper around the global `/Users/40min/.codex/skills/project-task-management` workflow. Use the global skill's Dart CRUD rules, with the defaults below.
+This is a Runestone-specific wrapper around the global `/Users/40min/.codex/skills/dev-project-task-management` workflow. Use the global skill's Dart CRUD rules, with the defaults below.
 
 ## Defaults
 
@@ -17,7 +17,7 @@ This is a Runestone-specific wrapper around the global `/Users/40min/.codex/skil
 
 ## Workflow
 
-1. Apply the global `project-task-management` workflow.
+1. Apply the global `dev-project-task-management` workflow.
 2. Scope list/search/create operations to the `General/runestone` dartboard by default.
 3. For new tasks, include repo context in the description when useful: `Repository: /Users/40min/www/runestone`.
 4. Preserve any existing task fields unless the user explicitly asks to change them.

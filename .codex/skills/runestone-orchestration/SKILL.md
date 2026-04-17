@@ -1,16 +1,16 @@
 ---
 name: runestone-orchestration
-description: Thin Runestone adapter for the global work-item-orchestration lifecycle. Use when working in /Users/40min/www/runestone and the user says "let's do ...", "start ...", "implement ...", "take this through PR", or otherwise wants a Runestone change carried through branch, Dart task management, implementation, checks, commit, and final task completion.
+description: Thin Runestone adapter for the global dev-work-item-orchestration lifecycle. Use when working in /Users/40min/www/runestone and the user says "let's do ...", "start ...", "implement ...", "take this through PR", or otherwise wants a Runestone change carried through branch, Dart task management, implementation, checks, commit, and final task completion.
 ---
 
 # Runestone Orchestration
 
-Use this skill as the Runestone adapter for `/Users/40min/.codex/skills/work-item-orchestration`.
+Use this skill as the Runestone adapter for `/Users/40min/.codex/skills/dev-work-item-orchestration`.
 
 ## Sources Of Truth
 
-- Lifecycle sequence and gates: `/Users/40min/.codex/skills/work-item-orchestration/SKILL.md`.
-- Dart task CRUD and generic task safety: `/Users/40min/.codex/skills/project-task-management/SKILL.md`.
+- Lifecycle sequence and gates: `/Users/40min/.codex/skills/dev-work-item-orchestration/SKILL.md`.
+- Dart task CRUD and generic task safety: `/Users/40min/.codex/skills/dev-project-task-management/SKILL.md`.
 - Runestone Dart defaults: `/Users/40min/www/runestone/.codex/skills/runestone-task-management/SKILL.md`.
 - Repository conventions: `/Users/40min/www/runestone/AGENTS.md`.
 
