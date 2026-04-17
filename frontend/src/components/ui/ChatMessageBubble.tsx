@@ -386,31 +386,34 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           <Box
             sx={{
               display: "flex",
-              justifyContent: "space-between",
               alignItems: "center",
               gap: 1,
               mt: 1,
             }}
           >
-            <Typography
-              sx={{
-                color: "rgba(255, 255, 255, 0.42)",
-                fontSize: "0.72rem",
-                lineHeight: 1,
-              }}
-            >
-              {responseTimeLabel}
-            </Typography>
-            <Typography
-              sx={{
-                color: "rgba(255, 255, 255, 0.42)",
-                fontSize: "0.72rem",
-                lineHeight: 1,
-                textAlign: "right",
-              }}
-            >
-              {messageTime}
-            </Typography>
+            {responseTimeLabel && (
+              <Typography
+                sx={{
+                  color: "rgba(255, 255, 255, 0.42)",
+                  fontSize: "0.72rem",
+                  lineHeight: 1,
+                }}
+              >
+                {responseTimeLabel}
+              </Typography>
+            )}
+            {messageTime && (
+              <Typography
+                sx={{
+                  color: "rgba(255, 255, 255, 0.42)",
+                  fontSize: "0.72rem",
+                  lineHeight: 1,
+                  ml: "auto",
+                }}
+              >
+                {messageTime}
+              </Typography>
+            )}
           </Box>
         )}
       </Box>
