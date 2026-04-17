@@ -188,7 +188,7 @@ describe("ChatMessageBubble", () => {
     expect(screen.queryByText("...")).not.toBeInTheDocument();
   });
 
-  it("does not render assistant response time as visible copy", () => {
+  it("renders assistant response time as visible copy", () => {
     render(
       <ChatMessageBubble
         role="assistant"
@@ -197,7 +197,7 @@ describe("ChatMessageBubble", () => {
       />,
     );
 
-    expect(screen.queryByText(/Teacher responded in/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Teacher responded in 1.4 s")).toBeInTheDocument();
   });
 
   it("does not render response time for user messages", () => {
