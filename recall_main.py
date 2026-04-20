@@ -21,6 +21,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from runestone.config import settings
 from runestone.core.logging_config import setup_logging
 from runestone.db.database import SessionLocal, setup_database
+from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.services.rune_recall_service import RuneRecallService
 from runestone.services.telegram_command_service import TelegramCommandService
@@ -32,8 +33,9 @@ async def process_updates_job(state_manager: StateManager) -> None:
     async with SessionLocal() as db:
         try:
             vocabulary_repository = VocabularyRepository(db)
+            user_repository = UserRepository(db)
             recall_service = RuneRecallService(vocabulary_repository, state_manager, settings)
-            telegram_service = TelegramCommandService(state_manager, recall_service)
+            telegram_service = TelegramCommandService(state_manager, recall_service, user_repository)
             await telegram_service.process_updates()
         except Exception:
             logging.getLogger(__name__).exception("Error in process_updates_job")

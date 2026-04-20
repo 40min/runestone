@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 
 from src.runestone.core.exceptions import UserNotAuthorised
 
+from ..utils.telegram import normalize_telegram_username
 from .state_config import StateManagerConfig
 from .state_exceptions import StateAccessError, StateCorruptionError
 from .state_types import StateData, UserData
@@ -139,6 +140,24 @@ class StateManager:
             raise
 
     @with_lock
+    def get_user_by_normalized_telegram_username(self, username: str) -> tuple[str, Optional[UserData]]:
+        """Get user data whose stored state key normalizes to the given Telegram username."""
+        try:
+            normalized_username = normalize_telegram_username(username)
+            if not normalized_username:
+                return username, None
+
+            state = self._get_state()
+            for state_username, user_data in state.users.items():
+                if normalize_telegram_username(state_username) == normalized_username:
+                    return state_username, user_data
+
+            return normalized_username, None
+        except Exception as e:
+            logger.error(f"Failed to get user by normalized Telegram username '{username}': {e}")
+            raise
+
+    @with_lock
     def update_user(self, username: str, user_data: UserData):
         """Update existing user data."""
         try:
@@ -161,6 +180,23 @@ class StateManager:
             raise
         except Exception as e:
             logger.error(f"Failed to update user '{username}': {e}")
+            raise
+
+    @with_lock
+    def create_user(self, username: str, user_data: UserData):
+        """Create a new user state entry for an already authorized account."""
+        try:
+            state = self._get_state()
+
+            if username in state.users:
+                raise ValueError(f"User '{username}' already exists.")
+
+            state.users[username] = user_data
+            self.save_state_to_file()
+            logger.debug(f"Created user state for '{username}'")
+
+        except Exception as e:
+            logger.error(f"Failed to create user state for '{username}': {e}")
             raise
 
     def get_active_users(self) -> Dict[str, UserData]:

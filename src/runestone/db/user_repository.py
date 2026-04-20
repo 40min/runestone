@@ -28,6 +28,15 @@ class UserRepository:
         result = await self.db.execute(stmt)
         return result.scalars().first()
 
+    async def find_by_telegram_username(self, username: str | None) -> list[User]:
+        """Find users linked to a canonical Telegram username."""
+        if username is None:
+            return []
+
+        stmt = select(User).filter(User.telegram_username == username)
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
     async def create(self, user: User) -> User:
         """Create a new user."""
         self.db.add(user)

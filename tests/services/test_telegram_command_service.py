@@ -7,16 +7,20 @@ import httpx
 import pytest
 
 from runestone.core.exceptions import WordNotFoundError, WordNotInSelectionError
+from runestone.db.models import User
 from runestone.services.rune_recall_service import RuneRecallService
 from runestone.services.telegram_command_service import TelegramCommandService
 from runestone.state.state_manager import StateManager
-from runestone.state.state_types import WordOfDay
+from runestone.state.state_types import UserData, WordOfDay
 from runestone.utils.markdown import escape_markdown
 
 
 @pytest.fixture
 def temp_state_file():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        offset_file = os.path.join(os.path.dirname(f.name), "offset.txt")
+        if os.path.exists(offset_file):
+            os.unlink(offset_file)
         default_state = {
             "users": {"authorized_user": {"db_user_id": 1, "chat_id": None, "is_active": False, "daily_selection": []}},
         }
@@ -24,6 +28,8 @@ def temp_state_file():
         f.flush()
         yield f.name
     os.unlink(f.name)
+    if os.path.exists(offset_file):
+        os.unlink(offset_file)
 
 
 @pytest.fixture
@@ -45,6 +51,13 @@ def mock_rune_recall_service():
 
 
 @pytest.fixture
+def mock_user_repository():
+    repo = MagicMock()
+    repo.find_by_telegram_username = AsyncMock(return_value=[])
+    return repo
+
+
+@pytest.fixture
 def telegram_service(state_manager, mock_rune_recall_service):
     with patch("runestone.services.telegram_command_service.settings") as mock_settings:
         mock_settings.telegram_bot_token = "test_token"
@@ -58,6 +71,17 @@ def telegram_service_with_deps(state_manager, mock_rune_recall_service):
         return TelegramCommandService(
             state_manager,
             rune_recall_service=mock_rune_recall_service,
+        )
+
+
+@pytest.fixture
+def telegram_service_with_user_repo(state_manager, mock_rune_recall_service, mock_user_repository):
+    with patch("runestone.services.telegram_command_service.settings") as mock_settings:
+        mock_settings.telegram_bot_token = "test_token"
+        return TelegramCommandService(
+            state_manager,
+            rune_recall_service=mock_rune_recall_service,
+            user_repository=mock_user_repository,
         )
 
 
@@ -245,6 +269,255 @@ async def test_process_updates_unauthorized(mock_client_class, telegram_service)
     mock_client.post.assert_called_once_with(
         "https://api.telegram.org/bottest_token/sendMessage",
         json={"chat_id": 456, "text": "Sorry, you are not authorized to use this bot."},
+    )
+
+
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_unknown_start_links_active_profile_user(
+    mock_client_class, telegram_service_with_user_repo, state_manager, mock_user_repository
+):
+    db_user = User(id=7, email="linked@example.com", hashed_password="hash", name="Linked", active=True)
+    mock_user_repository.find_by_telegram_username.return_value = [db_user]
+    mock_client = MagicMock()
+
+    mock_get_response = MagicMock()
+    mock_get_response.json.return_value = {
+        "ok": True,
+        "result": [
+            {
+                "update_id": 4,
+                "message": {
+                    "message_id": 4,
+                    "from": {"username": "SomeUser"},
+                    "chat": {"id": 789},
+                    "text": "/start",
+                    "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
+                },
+            }
+        ],
+    }
+    mock_get_response.raise_for_status.return_value = None
+    mock_client.get = AsyncMock(return_value=mock_get_response)
+    mock_post_response = MagicMock()
+    mock_post_response.raise_for_status.return_value = None
+    mock_client.post = AsyncMock(return_value=mock_post_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
+
+    await telegram_service_with_user_repo.process_updates()
+
+    user_data = state_manager.get_user("someuser")
+    assert user_data.db_user_id == 7
+    assert user_data.chat_id == 789
+    assert user_data.is_active is True
+    mock_user_repository.find_by_telegram_username.assert_awaited_once_with("someuser")
+    mock_client.post.assert_called_once_with(
+        "https://api.telegram.org/bottest_token/sendMessage",
+        json={"chat_id": 789, "text": "Bot started! You will receive daily vocabulary words."},
+    )
+
+
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_uses_legacy_mixed_case_state_key(
+    mock_client_class, telegram_service_with_user_repo, state_manager, mock_user_repository
+):
+    state_manager.create_user(
+        "SomeUser",
+        UserData(db_user_id=7, chat_id=None, is_active=False, daily_selection=[]),
+    )
+    mock_client = MagicMock()
+
+    mock_get_response = MagicMock()
+    mock_get_response.json.return_value = {
+        "ok": True,
+        "result": [
+            {
+                "update_id": 4,
+                "message": {
+                    "message_id": 4,
+                    "from": {"username": "someuser"},
+                    "chat": {"id": 789},
+                    "text": "/start",
+                    "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
+                },
+            }
+        ],
+    }
+    mock_get_response.raise_for_status.return_value = None
+    mock_client.get = AsyncMock(return_value=mock_get_response)
+    mock_post_response = MagicMock()
+    mock_post_response.raise_for_status.return_value = None
+    mock_client.post = AsyncMock(return_value=mock_post_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
+
+    await telegram_service_with_user_repo.process_updates()
+
+    user_data = state_manager.get_user("SomeUser")
+    assert user_data.chat_id == 789
+    assert user_data.is_active is True
+    assert state_manager.get_user("someuser") is None
+    mock_user_repository.find_by_telegram_username.assert_not_awaited()
+    mock_client.post.assert_called_once_with(
+        "https://api.telegram.org/bottest_token/sendMessage",
+        json={"chat_id": 789, "text": "Bot started! You will receive daily vocabulary words."},
+    )
+
+
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_unknown_start_without_profile_link(
+    mock_client_class, telegram_service_with_user_repo, mock_user_repository
+):
+    mock_user_repository.find_by_telegram_username.return_value = []
+    mock_client = MagicMock()
+
+    mock_get_response = MagicMock()
+    mock_get_response.json.return_value = {
+        "ok": True,
+        "result": [
+            {
+                "update_id": 5,
+                "message": {
+                    "message_id": 5,
+                    "from": {"username": "missing_user"},
+                    "chat": {"id": 790},
+                    "text": "/start",
+                    "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
+                },
+            }
+        ],
+    }
+    mock_get_response.raise_for_status.return_value = None
+    mock_client.get = AsyncMock(return_value=mock_get_response)
+    mock_post_response = MagicMock()
+    mock_post_response.raise_for_status.return_value = None
+    mock_client.post = AsyncMock(return_value=mock_post_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
+
+    await telegram_service_with_user_repo.process_updates()
+
+    call_args = mock_client.post.call_args[1]["json"]
+    assert call_args["chat_id"] == 790
+    assert "Add your Telegram username in Profile" in call_args["text"]
+
+
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_unknown_start_inactive_profile_user(
+    mock_client_class, telegram_service_with_user_repo, mock_user_repository
+):
+    db_user = User(id=8, email="inactive@example.com", hashed_password="hash", name="Inactive", active=False)
+    mock_user_repository.find_by_telegram_username.return_value = [db_user]
+    mock_client = MagicMock()
+
+    mock_get_response = MagicMock()
+    mock_get_response.json.return_value = {
+        "ok": True,
+        "result": [
+            {
+                "update_id": 6,
+                "message": {
+                    "message_id": 6,
+                    "from": {"username": "inactive_user"},
+                    "chat": {"id": 791},
+                    "text": "/start",
+                    "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
+                },
+            }
+        ],
+    }
+    mock_get_response.raise_for_status.return_value = None
+    mock_client.get = AsyncMock(return_value=mock_get_response)
+    mock_post_response = MagicMock()
+    mock_post_response.raise_for_status.return_value = None
+    mock_client.post = AsyncMock(return_value=mock_post_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
+
+    await telegram_service_with_user_repo.process_updates()
+
+    mock_client.post.assert_called_once_with(
+        "https://api.telegram.org/bottest_token/sendMessage",
+        json={"chat_id": 791, "text": "Your Runestone account is not active. Please contact an administrator."},
+    )
+
+
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_unknown_start_duplicate_profile_link(
+    mock_client_class, telegram_service_with_user_repo, mock_user_repository
+):
+    users = [
+        User(id=9, email="first@example.com", hashed_password="hash", name="First", active=True),
+        User(id=10, email="second@example.com", hashed_password="hash", name="Second", active=True),
+    ]
+    mock_user_repository.find_by_telegram_username.return_value = users
+    mock_client = MagicMock()
+
+    mock_get_response = MagicMock()
+    mock_get_response.json.return_value = {
+        "ok": True,
+        "result": [
+            {
+                "update_id": 8,
+                "message": {
+                    "message_id": 8,
+                    "from": {"username": "duplicate_user"},
+                    "chat": {"id": 793},
+                    "text": "/start",
+                    "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
+                },
+            }
+        ],
+    }
+    mock_get_response.raise_for_status.return_value = None
+    mock_client.get = AsyncMock(return_value=mock_get_response)
+    mock_post_response = MagicMock()
+    mock_post_response.raise_for_status.return_value = None
+    mock_client.post = AsyncMock(return_value=mock_post_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
+
+    await telegram_service_with_user_repo.process_updates()
+
+    mock_client.post.assert_called_once_with(
+        "https://api.telegram.org/bottest_token/sendMessage",
+        json={
+            "chat_id": 793,
+            "text": "This Telegram username is linked to multiple Runestone accounts. "
+            "Please contact an administrator.",
+        },
+    )
+
+
+@patch("runestone.services.telegram_command_service.httpx.AsyncClient")
+async def test_process_updates_unknown_command_does_not_run_profile_fallback(
+    mock_client_class, telegram_service_with_user_repo, mock_user_repository
+):
+    mock_client = MagicMock()
+    mock_get_response = MagicMock()
+    mock_get_response.json.return_value = {
+        "ok": True,
+        "result": [
+            {
+                "update_id": 7,
+                "message": {
+                    "message_id": 7,
+                    "from": {"username": "unknown_user"},
+                    "chat": {"id": 792},
+                    "text": "/state",
+                    "entities": [{"offset": 0, "length": 6, "type": "bot_command"}],
+                },
+            }
+        ],
+    }
+    mock_get_response.raise_for_status.return_value = None
+    mock_client.get = AsyncMock(return_value=mock_get_response)
+    mock_post_response = MagicMock()
+    mock_post_response.raise_for_status.return_value = None
+    mock_client.post = AsyncMock(return_value=mock_post_response)
+    mock_client_class.return_value.__aenter__.return_value = mock_client
+
+    await telegram_service_with_user_repo.process_updates()
+
+    mock_user_repository.find_by_telegram_username.assert_not_awaited()
+    mock_client.post.assert_called_once_with(
+        "https://api.telegram.org/bottest_token/sendMessage",
+        json={"chat_id": 792, "text": "Sorry, you are not authorized to use this bot."},
     )
 
 

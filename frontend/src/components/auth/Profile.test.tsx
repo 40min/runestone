@@ -49,6 +49,7 @@ describe("Profile", () => {
     email: "test@example.com",
     name: "Test",
     surname: "User",
+    telegram_username: "someuser",
     mother_tongue: "English",
     timezone: "UTC",
     pages_recognised_count: 10,
@@ -94,6 +95,7 @@ describe("Profile", () => {
 
     expect(screen.getByDisplayValue("Test")).toBeInTheDocument(); // name
     expect(screen.getByDisplayValue("User")).toBeInTheDocument(); // surname
+    expect(screen.getByDisplayValue("someuser")).toBeInTheDocument(); // telegram_username
     expect(screen.getByDisplayValue("English")).toBeInTheDocument(); // mother_tongue
     expect(screen.getByDisplayValue("UTC")).toBeInTheDocument(); // timezone
   });
@@ -201,9 +203,57 @@ describe("Profile", () => {
         expect.objectContaining({
           name: "Test",
           surname: "User",
+          telegram_username: "someuser",
           timezone: "UTC",
         })
       );
+    });
+  });
+
+  it("submits changed Telegram username", async () => {
+    const updateProfileMock = vi.fn().mockResolvedValue({
+      ...mockUserData,
+      telegram_username: "newuser",
+    });
+
+    setupAuthActionsMock({
+      updateProfile: updateProfileMock,
+    });
+
+    render(<Profile />, { wrapper });
+
+    const telegramInput = screen.getByLabelText("Telegram Username");
+    const updateButton = screen.getByRole("button", { name: "Update Profile" });
+
+    await userEvent.clear(telegramInput);
+    await userEvent.type(telegramInput, "@NewUser");
+    await userEvent.click(updateButton);
+
+    await waitFor(() => {
+      expect(updateProfileMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          telegram_username: "@NewUser",
+        })
+      );
+    });
+  });
+
+  it("shows error when updating to duplicate Telegram username", async () => {
+    setupAuthActionsMock({
+      updateProfile: vi.fn().mockRejectedValue(new Error("Telegram username is already linked to another account")),
+    });
+
+    render(<Profile />, { wrapper });
+
+    const telegramInput = screen.getByLabelText("Telegram Username");
+    const updateButton = screen.getByRole("button", { name: "Update Profile" });
+
+    await userEvent.clear(telegramInput);
+    await userEvent.type(telegramInput, "@TakenUser");
+    await userEvent.click(updateButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("Telegram username is already linked to another account")).toBeInTheDocument();
     });
   });
 

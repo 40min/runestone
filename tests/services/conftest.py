@@ -20,6 +20,7 @@ def mock_user_repo():
     mock = Mock()
     mock.get_by_id = AsyncMock()
     mock.get_by_email = AsyncMock()
+    mock.find_by_telegram_username = AsyncMock(return_value=[])
     mock.update = AsyncMock()
     mock.increment_pages_recognised_count = AsyncMock()
     mock.clear_user_memory = AsyncMock()
@@ -61,6 +62,7 @@ def user():
         hashed_password="hashedpassword",
         name="Test User",
         surname="Testsson",
+        telegram_username=None,
         timezone="UTC",
         pages_recognised_count=0,
         created_at=datetime.utcnow(),
@@ -79,6 +81,9 @@ def temp_state_file():
     import json
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        offset_file = os.path.join(os.path.dirname(f.name), "offset.txt")
+        if os.path.exists(offset_file):
+            os.unlink(offset_file)
         default_state = {
             "update_offset": 0,
             "users": {
@@ -90,3 +95,5 @@ def temp_state_file():
         f.flush()
         yield f.name
     os.unlink(f.name)
+    if os.path.exists(offset_file):
+        os.unlink(offset_file)

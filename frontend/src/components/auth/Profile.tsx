@@ -14,6 +14,7 @@ const Profile: React.FC = () => {
   const [formData, setFormData] = useState<{
     name: string;
     surname: string;
+    telegram_username: string;
     mother_tongue: string;
     timezone: string;
     password: string;
@@ -22,6 +23,7 @@ const Profile: React.FC = () => {
   }>({
     name: "",
     surname: "",
+    telegram_username: "",
     mother_tongue: "",
     timezone: "UTC",
     password: "",
@@ -43,6 +45,7 @@ const Profile: React.FC = () => {
       setFormData({
         name: userData.name || "",
         surname: userData.surname || "",
+        telegram_username: userData.telegram_username || "",
         mother_tongue: userData.mother_tongue || "",
         timezone: userData.timezone || "UTC",
         password: "",
@@ -80,6 +83,7 @@ const Profile: React.FC = () => {
       const updateData: Record<string, string | null> = {
         name: formData.name || null,
         surname: formData.surname || null,
+        telegram_username: formData.telegram_username || null,
         mother_tongue: formData.mother_tongue || null,
         timezone: formData.timezone,
       };
@@ -173,6 +177,14 @@ const Profile: React.FC = () => {
         name="surname"
         value={formData.surname}
         onChange={(e) => handleChange("surname", e.target.value)}
+      />
+
+      <AuthTextField
+        label="Telegram Username"
+        name="telegram_username"
+        value={formData.telegram_username}
+        onChange={(e) => handleChange("telegram_username", e.target.value)}
+        helperText="Use your Telegram @username so RuneRecall can link /start to your account."
       />
 
       <LanguageAutocomplete
