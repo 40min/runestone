@@ -295,7 +295,7 @@ class TestUserService:
         mock_user_repo.find_by_telegram_username.return_value = []
         mock_user_repo.update.return_value = user
 
-        update_data = UserProfileUpdate(telegram_username=" @SomeUser ")
+        update_data = UserProfileUpdate(telegram_username=" @@SomeUser ")
         await user_service.update_user_profile(user, update_data)
 
         assert user.telegram_username == "someuser"

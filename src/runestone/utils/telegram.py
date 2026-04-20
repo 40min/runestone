@@ -6,8 +6,5 @@ def normalize_telegram_username(username: str | None) -> str | None:
     if username is None:
         return None
 
-    normalized = username.strip()
-    if normalized.startswith("@"):
-        normalized = normalized[1:]
-    normalized = normalized.strip().lower()
+    normalized = username.strip().lstrip("@").strip().lower()
     return normalized or None
