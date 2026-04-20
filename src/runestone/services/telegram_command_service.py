@@ -187,13 +187,7 @@ class TelegramCommandService:
         if user_data:
             return username, user_data
 
-        normalized_username = normalize_telegram_username(username)
-        if normalized_username and normalized_username != username:
-            user_data = self.state_manager.get_user(normalized_username)
-            if user_data:
-                return normalized_username, user_data
-
-        return normalized_username or username, None
+        return self.state_manager.get_user_by_normalized_telegram_username(username)
 
     async def _try_link_user_from_profile(self, username: str, chat_id: int) -> bool:
         """Link an active DB user into state.json when /start arrives first."""

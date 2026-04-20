@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 
 from src.runestone.core.exceptions import UserNotAuthorised
 
+from ..utils.telegram import normalize_telegram_username
 from .state_config import StateManagerConfig
 from .state_exceptions import StateAccessError, StateCorruptionError
 from .state_types import StateData, UserData
@@ -136,6 +137,24 @@ class StateManager:
             return state.users.get(username)
         except Exception as e:
             logger.error(f"Failed to get user '{username}': {e}")
+            raise
+
+    @with_lock
+    def get_user_by_normalized_telegram_username(self, username: str) -> tuple[str, Optional[UserData]]:
+        """Get user data whose stored state key normalizes to the given Telegram username."""
+        try:
+            normalized_username = normalize_telegram_username(username)
+            if not normalized_username:
+                return username, None
+
+            state = self._get_state()
+            for state_username, user_data in state.users.items():
+                if normalize_telegram_username(state_username) == normalized_username:
+                    return state_username, user_data
+
+            return normalized_username, None
+        except Exception as e:
+            logger.error(f"Failed to get user by normalized Telegram username '{username}': {e}")
             raise
 
     @with_lock

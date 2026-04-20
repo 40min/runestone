@@ -10,7 +10,7 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 
-from alembic import op
+from alembic import context, op
 
 # revision identifiers, used by Alembic.
 revision: str = "6b7c2e1a9d4f"
@@ -21,13 +21,19 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    with op.batch_alter_table("users", schema=None) as batch_op:
-        batch_op.add_column(sa.Column("telegram_username", sa.String(), nullable=True))
-        batch_op.create_index("ix_users_telegram_username", ["telegram_username"], unique=True)
+    op.add_column("users", sa.Column("telegram_username", sa.String(), nullable=True))
+    with context.get_context().autocommit_block():
+        op.create_index(
+            "ix_users_telegram_username",
+            "users",
+            ["telegram_username"],
+            unique=True,
+            postgresql_concurrently=True,
+        )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    with op.batch_alter_table("users", schema=None) as batch_op:
-        batch_op.drop_index("ix_users_telegram_username")
-        batch_op.drop_column("telegram_username")
+    with context.get_context().autocommit_block():
+        op.drop_index("ix_users_telegram_username", table_name="users", postgresql_concurrently=True)
+    op.drop_column("users", "telegram_username")
