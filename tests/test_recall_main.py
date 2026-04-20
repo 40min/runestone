@@ -208,6 +208,7 @@ class TestRecallMain:
         mock_conn.run_sync.assert_called_once()
 
     @patch("recall_main.SessionLocal")
+    @patch("recall_main.UserRepository")
     @patch("recall_main.VocabularyRepository")
     @patch("recall_main.RuneRecallService")
     @patch("recall_main.TelegramCommandService")
@@ -217,6 +218,7 @@ class TestRecallMain:
         mock_telegram_service,
         mock_recall_service,
         mock_vocabulary_repository,
+        mock_user_repository,
         mock_session_local,
     ):
         """Test process_updates_job wrapper function."""
@@ -238,6 +240,7 @@ class TestRecallMain:
 
         # Verify services were created with fresh session
         mock_vocabulary_repository.assert_called_once_with(mock_db)
+        mock_user_repository.assert_called_once_with(mock_db)
         mock_recall_service.assert_called_once()
         mock_telegram_service.assert_called_once()
 

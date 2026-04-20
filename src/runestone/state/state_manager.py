@@ -163,6 +163,23 @@ class StateManager:
             logger.error(f"Failed to update user '{username}': {e}")
             raise
 
+    @with_lock
+    def create_user(self, username: str, user_data: UserData):
+        """Create a new user state entry for an already authorized account."""
+        try:
+            state = self._get_state()
+
+            if username in state.users:
+                raise ValueError(f"User '{username}' already exists.")
+
+            state.users[username] = user_data
+            self.save_state_to_file()
+            logger.debug(f"Created user state for '{username}'")
+
+        except Exception as e:
+            logger.error(f"Failed to create user state for '{username}': {e}")
+            raise
+
     def get_active_users(self) -> Dict[str, UserData]:
         """Get dictionary of active users (username -> UserData)."""
         try:

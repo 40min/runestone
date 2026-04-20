@@ -6,16 +6,25 @@ import httpx
 
 from runestone.config import settings
 from runestone.core.exceptions import VocabularyOperationError, WordNotFoundError, WordNotInSelectionError
+from runestone.db.user_repository import UserRepository
 from runestone.services.rune_recall_service import RuneRecallService
 from runestone.state.state_manager import StateManager
+from runestone.state.state_types import UserData
+from runestone.utils.telegram import normalize_telegram_username
 
 logger = logging.getLogger(__name__)
 
 
 class TelegramCommandService:
-    def __init__(self, state_manager: StateManager, rune_recall_service: RuneRecallService):
+    def __init__(
+        self,
+        state_manager: StateManager,
+        rune_recall_service: RuneRecallService,
+        user_repository: UserRepository | None = None,
+    ):
         self.state_manager = state_manager
         self.rune_recall_service = rune_recall_service
+        self.user_repository = user_repository
         self.bot_token = settings.telegram_bot_token
         if not self.bot_token:
             raise ValueError("Telegram bot token is required")
@@ -145,7 +154,7 @@ class TelegramCommandService:
         logger.info(f"Processing bot command '{text}' from {username} in chat {chat_id}")
 
         try:
-            user_data = self.state_manager.get_user(username)
+            state_username, user_data = self._get_state_user(username)
         except Exception as e:
             logger.error(f"Failed to get user data for {username}: {e}")
             return
@@ -153,7 +162,7 @@ class TelegramCommandService:
         if user_data:
             # Authorized user - process commands
             try:
-                await self._handle_authorized_user_command(text, message, username, user_data, chat_id)
+                await self._handle_authorized_user_command(text, message, state_username, user_data, chat_id)
             except Exception as e:
                 logger.error(f"Error processing command '{text}' for user {username}: {e}")
                 # Attempt to notify user of the error
@@ -162,12 +171,68 @@ class TelegramCommandService:
                 except Exception as send_error:
                     logger.error(f"Failed to send error message to user {username}: {send_error}")
         else:
+            if text == "/start" and await self._try_link_user_from_profile(username, chat_id):
+                return
+
             # Unauthorized user
             logger.warning(f"Unauthorized user {username} tried to access the bot")
             try:
                 await self._send_message(chat_id, "Sorry, you are not authorized to use this bot.")
             except Exception as e:
                 logger.error(f"Failed to send unauthorized message to {username}: {e}")
+
+    def _get_state_user(self, username: str) -> tuple[str, UserData | None]:
+        """Return user state by exact key, then by normalized Telegram username."""
+        user_data = self.state_manager.get_user(username)
+        if user_data:
+            return username, user_data
+
+        normalized_username = normalize_telegram_username(username)
+        if normalized_username and normalized_username != username:
+            user_data = self.state_manager.get_user(normalized_username)
+            if user_data:
+                return normalized_username, user_data
+
+        return normalized_username or username, None
+
+    async def _try_link_user_from_profile(self, username: str, chat_id: int) -> bool:
+        """Link an active DB user into state.json when /start arrives first."""
+        normalized_username = normalize_telegram_username(username)
+        if not normalized_username:
+            logger.warning("Cannot link Telegram user %s because no username was found in message", username)
+            return False
+
+        if self.user_repository is None:
+            logger.warning("Cannot link Telegram user %s because no user repository is configured", username)
+            return False
+
+        users = await self.user_repository.find_by_telegram_username(normalized_username)
+        if not users:
+            await self._send_message(
+                chat_id,
+                "I couldn't find a Runestone account linked to this Telegram username. "
+                "Add your Telegram username in Profile, then send /start again.",
+            )
+            return True
+
+        if len(users) > 1:
+            await self._send_message(
+                chat_id,
+                "This Telegram username is linked to multiple Runestone accounts. Please contact an administrator.",
+            )
+            logger.error("Telegram username %s matched multiple DB users", normalized_username)
+            return True
+
+        user = users[0]
+        if not user.active:
+            await self._send_message(chat_id, "Your Runestone account is not active. Please contact an administrator.")
+            return True
+
+        user_data = UserData(db_user_id=user.id, chat_id=chat_id, is_active=True, daily_selection=[], next_word_index=0)
+        self.state_manager.create_user(normalized_username, user_data)
+        await self._send_message(chat_id, "Bot started! You will receive daily vocabulary words.")
+        logger.info("Linked Telegram user %s to Runestone user %s", normalized_username, user.id)
+        return True
 
     async def _handle_authorized_user_command(
         self, text: str, message: dict, username: str, user_data, chat_id: int

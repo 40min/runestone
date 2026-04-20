@@ -16,6 +16,7 @@ interface RegisterData extends LoginCredentials {
 interface UpdateProfileData {
   name?: string | null;
   surname?: string | null;
+  telegram_username?: string | null;
   timezone?: string;
   password?: string;
   email?: string;

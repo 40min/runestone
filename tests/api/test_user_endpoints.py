@@ -24,6 +24,7 @@ class TestUserProfileEndpoints:
         assert "test-" in data["email"] and "@example.com" in data["email"]
         assert data["name"] == "Test User"
         assert data["surname"] == "Testsson"
+        assert data["telegram_username"] is None
         assert data["timezone"] == "UTC"
         assert data["pages_recognised_count"] == 0
         assert "created_at" in data
@@ -226,6 +227,32 @@ class TestUserProfileEndpoints:
 
         # Verify email remains the same
         assert data["email"] == current_email
+
+    async def test_update_user_profile_telegram_username_success(self, client):
+        """Test successful normalized Telegram username update."""
+        update_payload = {
+            "telegram_username": " @SomeUser ",
+        }
+
+        response = await client.put("/api/me", json=update_payload)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["telegram_username"] == "someuser"
+
+    async def test_update_user_profile_telegram_username_duplicate(self, client, user_factory):
+        """Test user Telegram username update with duplicate username should fail."""
+        await user_factory(telegram_username="someuser")
+
+        update_payload = {
+            "telegram_username": "@SomeUser",
+        }
+
+        response = await client.put("/api/me", json=update_payload)
+
+        assert response.status_code == 400
+        data = response.json()
+        assert "Telegram username is already linked to another account" in data["detail"]
 
 
 class TestPageRecognitionCounter:

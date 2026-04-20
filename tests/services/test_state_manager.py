@@ -13,6 +13,9 @@ from src.runestone.state.state_types import UserData, WordOfDay
 @pytest.fixture
 def temp_state_file():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        offset_file = os.path.join(os.path.dirname(f.name), "offset.txt")
+        if os.path.exists(offset_file):
+            os.unlink(offset_file)
         default_state = {
             "users": {
                 "user1": {"db_user_id": 1, "chat_id": 123, "is_active": True, "daily_selection": [[1, "test"]]},
@@ -23,6 +26,8 @@ def temp_state_file():
         f.flush()
         yield f.name
     os.unlink(f.name)
+    if os.path.exists(offset_file):
+        os.unlink(offset_file)
 
 
 @pytest.fixture

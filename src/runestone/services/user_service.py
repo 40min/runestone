@@ -78,6 +78,7 @@ class UserService:
             email=user.email,
             name=user.name,
             surname=user.surname,
+            telegram_username=user.telegram_username,
             mother_tongue=user.mother_tongue,
             timezone=user.timezone,
             pages_recognised_count=user.pages_recognised_count,
@@ -101,6 +102,11 @@ class UserService:
             if existing_user is not None and existing_user.id != user.id:
                 raise ValueError("Email address is already registered by another user")
 
+        if update_data.telegram_username is not None and update_data.telegram_username != user.telegram_username:
+            existing_users = await self.user_repo.find_by_telegram_username(update_data.telegram_username)
+            if any(existing_user.id != user.id for existing_user in existing_users):
+                raise ValueError("Telegram username is already linked to another account")
+
         # Update user fields
         update_dict = update_data.model_dump(exclude_unset=True)
 
@@ -120,6 +126,12 @@ class UserService:
             error_str = str(e)
             if "users_email_key" in error_str or "UNIQUE constraint failed: users.email" in error_str:
                 raise ValueError("Email address is already registered by another user") from e
+            if (
+                "users_telegram_username_key" in error_str
+                or "ix_users_telegram_username" in error_str
+                or "UNIQUE constraint failed: users.telegram_username" in error_str
+            ):
+                raise ValueError("Telegram username is already linked to another account") from e
             raise
 
         return await self.get_user_profile(updated_user)

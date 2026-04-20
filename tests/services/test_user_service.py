@@ -284,3 +284,74 @@ class TestUserService:
         # Verify user attribute was updated
         assert user.mother_tongue == "Spanish"
         mock_user_repo.update.assert_called()
+
+    @pytest.mark.anyio
+    async def test_update_user_profile_normalizes_telegram_username(
+        self, user_service, mock_user_repo, mock_vocab_repo, user
+    ):
+        """Test updating Telegram username stores the canonical format."""
+        from runestone.api.schemas import UserProfileUpdate
+
+        mock_user_repo.find_by_telegram_username.return_value = []
+        mock_user_repo.update.return_value = user
+
+        update_data = UserProfileUpdate(telegram_username=" @SomeUser ")
+        await user_service.update_user_profile(user, update_data)
+
+        assert user.telegram_username == "someuser"
+        mock_user_repo.find_by_telegram_username.assert_called_once_with("someuser")
+        mock_user_repo.update.assert_called()
+
+    @pytest.mark.anyio
+    async def test_update_user_profile_clears_telegram_username(
+        self, user_service, mock_user_repo, mock_vocab_repo, user
+    ):
+        """Test clearing Telegram username."""
+        from runestone.api.schemas import UserProfileUpdate
+
+        user.telegram_username = "someuser"
+        mock_user_repo.update.return_value = user
+
+        update_data = UserProfileUpdate(telegram_username="")
+        await user_service.update_user_profile(user, update_data)
+
+        assert user.telegram_username is None
+        mock_user_repo.find_by_telegram_username.assert_not_called()
+        mock_user_repo.update.assert_called()
+
+    @pytest.mark.anyio
+    async def test_update_user_profile_duplicate_telegram_username(
+        self, user_service, mock_user_repo, mock_vocab_repo, user
+    ):
+        """Test duplicate Telegram username validation."""
+        from datetime import datetime
+
+        from runestone.api.schemas import UserProfileUpdate
+        from runestone.db.models import User
+
+        existing_user = User(
+            id=2,
+            email="existing@example.com",
+            hashed_password="hash",
+            name="Existing User",
+            surname="Test",
+            telegram_username="someuser",
+            timezone="UTC",
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        mock_user_repo.find_by_telegram_username.return_value = [existing_user]
+
+        update_data = UserProfileUpdate(telegram_username="@SomeUser")
+
+        with pytest.raises(ValueError, match="Telegram username is already linked to another account"):
+            await user_service.update_user_profile(user, update_data)
+
+    @pytest.mark.anyio
+    async def test_get_user_profile_includes_telegram_username(self, user_service, mock_user_repo, user):
+        """Test user profile response includes Telegram username."""
+        user.telegram_username = "someuser"
+
+        profile = await user_service.get_user_profile(user)
+
+        assert profile.telegram_username == "someuser"

@@ -16,6 +16,7 @@ from runestone.constants import VOCABULARY_PRIORITY_DEFAULT, VOCABULARY_PRIORITY
 from runestone.core.prompt_builder.types import ImprovementMode
 from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, VocabularyItem
 from runestone.schemas.ocr import OCRResult, RecognitionStatistics
+from runestone.utils.telegram import normalize_telegram_username
 
 # Define the public API contract
 __all__ = [
@@ -174,6 +175,7 @@ class UserProfileResponse(BaseModel):
     email: str
     name: str
     surname: Optional[str] = None
+    telegram_username: Optional[str] = None
     mother_tongue: Optional[str] = None
     timezone: str
     pages_recognised_count: int
@@ -190,6 +192,7 @@ class UserProfileUpdate(BaseModel):
 
     name: Optional[str] = None
     surname: Optional[str] = None
+    telegram_username: Optional[str] = None
     mother_tongue: Optional[str] = None
     timezone: Optional[str] = None
     password: Optional[str] = None
@@ -198,6 +201,12 @@ class UserProfileUpdate(BaseModel):
     personal_info: Optional[dict[str, Any] | str] = None
     areas_to_improve: Optional[dict[str, Any] | str] = None
     knowledge_strengths: Optional[dict[str, Any] | str] = None
+
+    @field_validator("telegram_username", mode="before")
+    @classmethod
+    def normalize_telegram_username_field(cls, v: Optional[str]) -> Optional[str]:
+        """Store Telegram usernames in the canonical lookup format."""
+        return normalize_telegram_username(v)
 
     @field_validator("personal_info", "areas_to_improve", "knowledge_strengths", mode="before")
     @classmethod

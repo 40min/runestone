@@ -37,6 +37,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     name = Column(String, nullable=False)
     surname = Column(String, nullable=True)
+    telegram_username = Column(String, unique=True, nullable=True, index=True)
     timezone = Column(String, default="UTC", nullable=False)
     pages_recognised_count = Column(Integer, default=0, nullable=False)
     mother_tongue = Column(String, nullable=True)  # User's preferred language
