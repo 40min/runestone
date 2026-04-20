@@ -148,6 +148,16 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _apply_agent_defaults(self) -> "Settings":
+        # Preserve the migration alias when a live CHAT_* env var is set and
+        # only the env file supplies the newer TEACHER_* name.
+        if "TEACHER_PROVIDER" not in os.environ and "CHAT_PROVIDER" in os.environ:
+            chat_provider = os.environ["CHAT_PROVIDER"]
+            if chat_provider not in ("openrouter", "openai"):
+                raise ValueError("CHAT_PROVIDER must be 'openrouter' or 'openai'")
+            self.teacher_provider = chat_provider
+        if "TEACHER_MODEL" not in os.environ and "CHAT_MODEL" in os.environ:
+            self.teacher_model = os.environ["CHAT_MODEL"]
+
         if self.coordinator_provider is None:
             self.coordinator_provider = self.teacher_provider
         if self.word_keeper_provider is None:
