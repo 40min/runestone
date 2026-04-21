@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import GrammarView from "./GrammarView";
 
@@ -29,6 +29,43 @@ describe("GrammarView", () => {
 
     expect(screen.getByText("Grammar Cheatsheets")).toBeInTheDocument();
     expect(screen.getByText("Available Cheatsheets")).toBeInTheDocument();
+  });
+
+  it("navigates to grammar start when clicking Available Cheatsheets", async () => {
+    const mockFetchCheatsheetContent = vi.fn().mockResolvedValue(undefined);
+    mockUseGrammar.mockReturnValue({
+      cheatsheets: [
+        {
+          filename: "pronunciation.md",
+          title: "Pronunciation",
+          category: "General",
+        },
+      ],
+      selectedCheatsheet: { content: "# Pronunciation Guide" },
+      searchResults: [],
+      loading: false,
+      error: null,
+      searchLoading: false,
+      searchError: null,
+      fetchCheatsheets: vi.fn(),
+      fetchCheatsheetContent: mockFetchCheatsheetContent,
+      searchGrammar: vi.fn(),
+      clearSearch: vi.fn(),
+    });
+
+    render(<GrammarView />);
+    fireEvent.click(screen.getByText("Pronunciation"));
+    await waitFor(() => {
+      expect(window.location.search).toContain("cheatsheet=pronunciation");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Available Cheatsheets" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Search grammar cheatsheets")).toBeInTheDocument();
+    });
+    expect(window.location.search).toContain("view=grammar");
+    expect(window.location.search).not.toContain("cheatsheet=");
   });
 
   it("should render General category cheatsheets at root level", () => {
@@ -457,6 +494,36 @@ describe("GrammarView", () => {
     });
   });
 
+  it("submits grammar search when Enter is pressed in the search input", async () => {
+    const mockSearchGrammar = vi.fn().mockResolvedValue(undefined);
+
+    mockUseGrammar.mockReturnValue({
+      cheatsheets: [],
+      selectedCheatsheet: null,
+      searchResults: [],
+      loading: false,
+      error: null,
+      searchLoading: false,
+      searchError: null,
+      fetchCheatsheets: vi.fn(),
+      fetchCheatsheetContent: vi.fn(),
+      searchGrammar: mockSearchGrammar,
+      clearSearch: vi.fn(),
+    });
+
+    render(<GrammarView />);
+
+    const searchInput = screen.getByPlaceholderText("Search grammar topics...");
+    fireEvent.change(searchInput, {
+      target: { value: "word order" },
+    });
+    fireEvent.keyDown(searchInput, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(mockSearchGrammar).toHaveBeenCalledWith("word order");
+    });
+  });
+
   it("renders grammar search results", () => {
     mockUseGrammar.mockReturnValue({
       cheatsheets: [],
@@ -515,6 +582,82 @@ describe("GrammarView", () => {
     });
     expect(window.location.search).toContain("view=grammar");
     expect(window.location.search).toContain("cheatsheet=verbs%2Fverb-forms");
+  });
+
+  it("reacts to browser back by returning to grammar start page", async () => {
+    const mockFetchCheatsheetContent = vi.fn().mockResolvedValue(undefined);
+    window.history.replaceState({}, "", "/?view=grammar");
+
+    mockUseGrammar.mockReturnValue({
+      cheatsheets: [
+        {
+          filename: "pronunciation.md",
+          title: "Pronunciation",
+          category: "General",
+        },
+      ],
+      selectedCheatsheet: { content: "# Pronunciation Guide" },
+      searchResults: [],
+      loading: false,
+      error: null,
+      searchLoading: false,
+      searchError: null,
+      fetchCheatsheets: vi.fn(),
+      fetchCheatsheetContent: mockFetchCheatsheetContent,
+      searchGrammar: vi.fn(),
+      clearSearch: vi.fn(),
+    });
+
+    render(<GrammarView />);
+    fireEvent.click(screen.getByText("Pronunciation"));
+    await waitFor(() => {
+      expect(window.location.search).toContain("cheatsheet=pronunciation");
+    });
+
+    window.history.back();
+    window.dispatchEvent(new PopStateEvent("popstate"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Search grammar cheatsheets")).toBeInTheDocument();
+    });
+    expect(window.location.search).toContain("view=grammar");
+    expect(window.location.search).not.toContain("cheatsheet=");
+  });
+
+  it("handles rejected browser navigation loads without an unhandled rejection", async () => {
+    const mockFetchCheatsheetContent = vi.fn().mockRejectedValue(new Error("boom"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    window.history.replaceState({}, "", "/?view=grammar");
+
+    mockUseGrammar.mockReturnValue({
+      cheatsheets: [
+        {
+          filename: "pronunciation.md",
+          title: "Pronunciation",
+          category: "General",
+        },
+      ],
+      selectedCheatsheet: null,
+      searchResults: [],
+      loading: false,
+      error: null,
+      searchLoading: false,
+      searchError: null,
+      fetchCheatsheets: vi.fn(),
+      fetchCheatsheetContent: mockFetchCheatsheetContent,
+      searchGrammar: vi.fn(),
+      clearSearch: vi.fn(),
+    });
+
+    render(<GrammarView />);
+
+    act(() => {
+      window.history.pushState({}, "", "/?view=grammar&cheatsheet=pronunciation");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+
+    expect(await screen.findByText("Failed to load cheatsheet. Please try again.")).toBeInTheDocument();
+    consoleError.mockRestore();
   });
 
   it("renders no-result message after an empty grammar search", async () => {
