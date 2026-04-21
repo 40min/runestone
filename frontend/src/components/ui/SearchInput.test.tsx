@@ -72,6 +72,25 @@ describe("SearchInput", () => {
     expect(mockOnSearch).toHaveBeenCalledTimes(1);
   });
 
+  it("calls onSearch when Enter is pressed in the input", () => {
+    const mockOnSearch = vi.fn();
+    render(<SearchInput value="test" onChange={vi.fn()} onSearch={mockOnSearch} />);
+
+    const input = screen.getByDisplayValue("test");
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(mockOnSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not handle Enter when onSearch is not provided", () => {
+    render(<SearchInput value="test" onChange={vi.fn()} />);
+
+    const input = screen.getByDisplayValue("test");
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(input).toBeInTheDocument();
+  });
+
   it("renders clear button when onClear is provided and value is not empty", () => {
     render(<SearchInput value="test" onChange={vi.fn()} onClear={vi.fn()} />);
 

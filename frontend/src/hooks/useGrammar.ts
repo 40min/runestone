@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { API_BASE_URL } from '../config';
 
-interface CheatsheetInfo {
+export interface CheatsheetInfo {
   filename: string;
   title: string;
   category: string;
