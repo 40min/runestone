@@ -1,18 +1,16 @@
-import React, { useEffect, useRef, useState } from "react";
-import {
-  Box,
-  Typography,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemText,
-  Collapse,
-} from "@mui/material";
-import { ExpandMore, ExpandLess } from "@mui/icons-material";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Box, Typography } from "@mui/material";
 import { ContentCard, LoadingSpinner, ErrorAlert, SectionTitle, CustomButton, Snackbar } from "./ui";
 import MarkdownDisplay from "./ui/MarkdownDisplay";
 import useGrammar from "../hooks/useGrammar";
-import SearchInput from "./ui/SearchInput";
+import GrammarSidebar from "./grammar/GrammarSidebar";
+import GrammarStartPanel from "./grammar/GrammarStartPanel";
+
+type SnackbarState = {
+  open: boolean;
+  message: string;
+  severity: "success" | "error" | "warning" | "info";
+};
 
 function getCheatsheetFromUrl(): string | null {
   if (typeof window === "undefined") return null;
@@ -61,13 +59,51 @@ const GrammarView: React.FC = () => {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set()
   );
-  const [snackbar, setSnackbar] = useState<{
-    open: boolean;
-    message: string;
-    severity: "success" | "error" | "warning" | "info";
-  }>({ open: false, message: "", severity: "info" });
+  const [snackbar, setSnackbar] = useState<SnackbarState>({ open: false, message: "", severity: "info" });
   const didInitFromUrlRef = useRef(false);
   const initialCheatsheetParamRef = useRef<string | null>(getCheatsheetFromUrl());
+
+  const handleSelectionError = useCallback((err: unknown) => {
+    console.error("Failed to load cheatsheet: ", err);
+    setSnackbar({
+      open: true,
+      message: "Failed to load cheatsheet. Please try again.",
+      severity: "error",
+    });
+  }, []);
+
+  const syncSelectionFromUrl = useCallback(
+    async (options?: { notifyOnInvalid?: boolean; cleanupInvalidUrl?: boolean }) => {
+      const param = getCheatsheetFromUrl();
+      if (!param) {
+        setSelectedFilename(null);
+        return;
+      }
+
+      const filepath = filepathFromParam(param);
+      const hasCheatsheetList = cheatsheets.length > 0;
+      const isValid = !hasCheatsheetList || cheatsheets.some((cs) => cs.filename === filepath);
+
+      if (!isValid) {
+        if (options?.cleanupInvalidUrl) {
+          setCheatsheetInUrl(null, "replace");
+        }
+        setSelectedFilename(null);
+        if (options?.notifyOnInvalid) {
+          setSnackbar({
+            open: true,
+            message: "Unknown cheatsheet link.",
+            severity: "error",
+          });
+        }
+        return;
+      }
+
+      setSelectedFilename(filepath);
+      await fetchCheatsheetContent(filepath);
+    },
+    [cheatsheets, fetchCheatsheetContent]
+  );
 
   const handleCheatsheetClick = async (filename: string, options?: { pushUrl?: boolean }) => {
     setSelectedFilename(filename);
@@ -106,25 +142,19 @@ const GrammarView: React.FC = () => {
 
     if (cheatsheets.length === 0) return;
 
-    const filepath = filepathFromParam(initial);
-    const isValid = cheatsheets.some((cs) => cs.filename === filepath);
-    if (!isValid) {
-      didInitFromUrlRef.current = true;
-      setCheatsheetInUrl(null, "replace");
-      setSelectedFilename(null);
-      setSnackbar({
-        open: true,
-        message: "Unknown cheatsheet link.",
-        severity: "error",
-      });
-      return;
-    }
-
     didInitFromUrlRef.current = true;
-    setSelectedFilename(filepath);
-    setCheatsheetInUrl(filepath, "replace");
-    void fetchCheatsheetContent(filepath);
-  }, [cheatsheets, fetchCheatsheetContent]);
+    syncSelectionFromUrl({ notifyOnInvalid: true, cleanupInvalidUrl: true }).catch(handleSelectionError);
+  }, [cheatsheets, handleSelectionError, syncSelectionFromUrl]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      syncSelectionFromUrl({ notifyOnInvalid: false, cleanupInvalidUrl: true }).catch(handleSelectionError);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [handleSelectionError, syncSelectionFromUrl]);
 
   useEffect(() => {
     if (!selectedFilename || cheatsheets.length === 0) return;
@@ -132,25 +162,6 @@ const GrammarView: React.FC = () => {
     if (!match || match.category === "General") return;
     setExpandedCategories((prev) => (prev.has(match.category) ? prev : new Set([...prev, match.category])));
   }, [cheatsheets, selectedFilename]);
-
-  // Group cheatsheets by category
-  const { generalCheatsheets, categorizedCheatsheets } = cheatsheets.reduce<{
-    generalCheatsheets: typeof cheatsheets;
-    categorizedCheatsheets: Record<string, typeof cheatsheets>;
-  }>(
-    (acc, cheatsheet) => {
-      if (cheatsheet.category === "General") {
-        acc.generalCheatsheets.push(cheatsheet);
-      } else {
-        if (!acc.categorizedCheatsheets[cheatsheet.category]) {
-          acc.categorizedCheatsheets[cheatsheet.category] = [];
-        }
-        acc.categorizedCheatsheets[cheatsheet.category].push(cheatsheet);
-      }
-      return acc;
-    },
-    { generalCheatsheets: [], categorizedCheatsheets: {} }
-  );
 
   const toggleCategory = (category: string) => {
     setExpandedCategories((prev) => {
@@ -211,6 +222,11 @@ const GrammarView: React.FC = () => {
     }
   };
 
+  const handleBackToStart = () => {
+    setSelectedFilename(null);
+    setCheatsheetInUrl(null, "push");
+  };
+
   return (
     <Box sx={{ py: 8 }}>
       <SectionTitle>Grammar Cheatsheets</SectionTitle>
@@ -224,115 +240,17 @@ const GrammarView: React.FC = () => {
       <Box sx={{ display: "flex", gap: 2, mt: 6 }}>
         {/* Left Pane: Cheatsheet List */}
         <Box sx={{ flexShrink: 0, width: "220px" }}>
-          <ContentCard>
-            <Typography
-              variant="h6"
-              sx={{ color: "var(--primary-color)", mb: 2 }}
-            >
-              Available Cheatsheets
-            </Typography>
-            {loading && cheatsheets.length === 0 ? (
-              <LoadingSpinner />
-            ) : (
-              <List>
-                {/* Render General cheatsheets at root level */}
-                {generalCheatsheets.map((cheatsheet) => (
-                  <ListItem key={cheatsheet.filename} disablePadding>
-                    <ListItemButton
-                      onClick={() => handleCheatsheetClick(cheatsheet.filename)}
-                      selected={selectedFilename === cheatsheet.filename}
-                      sx={{
-                        "&.Mui-selected": {
-                          backgroundColor: "rgba(147, 51, 234, 0.1)",
-                          "&:hover": {
-                            backgroundColor: "rgba(147, 51, 234, 0.2)",
-                          },
-                        },
-                      }}
-                    >
-                      <ListItemText
-                        primary={cheatsheet.title}
-                        sx={{
-                          "& .MuiListItemText-primary": {
-                            color: "white",
-                          },
-                        }}
-                      />
-                    </ListItemButton>
-                  </ListItem>
-                ))}
-
-                {/* Render categorized cheatsheets with collapsible categories */}
-                {Object.keys(categorizedCheatsheets)
-                  .sort()
-                  .map((category) => (
-                    <React.Fragment key={category}>
-                      <ListItem disablePadding>
-                        <ListItemButton
-                          onClick={() => toggleCategory(category)}
-                        >
-                          <ListItemText
-                            primary={category}
-                            primaryTypographyProps={{ fontWeight: "bold" }}
-                            sx={{
-                              "& .MuiListItemText-primary": {
-                                color: "white",
-                              },
-                            }}
-                          />
-                          {expandedCategories.has(category) ? (
-                            <ExpandLess />
-                          ) : (
-                            <ExpandMore />
-                          )}
-                        </ListItemButton>
-                      </ListItem>
-                      <Collapse in={expandedCategories.has(category)}>
-                        <List component="div" disablePadding>
-                          {categorizedCheatsheets[category].map(
-                            (cheatsheet) => (
-                              <ListItem
-                                key={cheatsheet.filename}
-                                disablePadding
-                              >
-                                <ListItemButton
-                                  onClick={() =>
-                                    handleCheatsheetClick(cheatsheet.filename)
-                                  }
-                                  selected={
-                                    selectedFilename === cheatsheet.filename
-                                  }
-                                  sx={{
-                                    pl: 4,
-                                    "&.Mui-selected": {
-                                      backgroundColor:
-                                        "rgba(147, 51, 234, 0.1)",
-                                      "&:hover": {
-                                        backgroundColor:
-                                          "rgba(147, 51, 234, 0.2)",
-                                      },
-                                    },
-                                  }}
-                                >
-                                  <ListItemText
-                                    primary={cheatsheet.title}
-                                    sx={{
-                                      "& .MuiListItemText-primary": {
-                                        color: "white",
-                                      },
-                                    }}
-                                  />
-                                </ListItemButton>
-                              </ListItem>
-                            )
-                          )}
-                        </List>
-                      </Collapse>
-                    </React.Fragment>
-                  ))}
-              </List>
-            )}
-          </ContentCard>
+          <GrammarSidebar
+            cheatsheets={cheatsheets}
+            loading={loading}
+            selectedFilename={selectedFilename}
+            expandedCategories={expandedCategories}
+            onBackToStart={handleBackToStart}
+            onSelectCheatsheet={(filename) => {
+              handleCheatsheetClick(filename).catch(handleSelectionError);
+            }}
+            onToggleCategory={toggleCategory}
+          />
         </Box>
 
         {/* Right Pane: Content Display */}
@@ -380,71 +298,23 @@ const GrammarView: React.FC = () => {
                 )}
               </>
             ) : (
-              <Box>
-                <Typography variant="h6" sx={{ color: "white", mb: 1 }}>
-                  Search grammar cheatsheets
-                </Typography>
-                <Typography sx={{ color: "#9ca3af", mb: 3 }}>
-                  Search for a grammar topic, or select a cheatsheet from the list.
-                </Typography>
-                <SearchInput
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  onSearch={() => {
-                    void handleSearch();
-                  }}
-                  onClear={handleClearSearch}
-                  placeholder="Search grammar topics..."
-                  sx={{ mb: 3, maxWidth: 560 }}
-                />
-
-                {searchError && (
-                  <Box sx={{ mb: 3 }}>
-                    <ErrorAlert message={searchError} />
-                  </Box>
-                )}
-
-                {searchLoading ? (
-                  <LoadingSpinner />
-                ) : hasSearched && searchResults.length === 0 && !searchError ? (
-                  <Typography sx={{ color: "#9ca3af" }}>
-                    No matching grammar pages found.
-                  </Typography>
-                ) : searchResults.length > 0 ? (
-                  <List disablePadding aria-label="Grammar search results">
-                    {searchResults.map((result) => (
-                      <ListItem key={result.path || result.url} disablePadding sx={{ mb: 1 }}>
-                        <ListItemButton
-                          onClick={() => {
-                            void handleCheatsheetClick(result.path);
-                          }}
-                          sx={{
-                            border: "1px solid #374151",
-                            borderRadius: "0.5rem",
-                            backgroundColor: "#1f2937",
-                            "&:hover": {
-                              backgroundColor: "#243244",
-                            },
-                          }}
-                        >
-                          <ListItemText
-                            primary={result.title || result.path}
-                            secondary={result.path}
-                            sx={{
-                              "& .MuiListItemText-primary": {
-                                color: "white",
-                              },
-                              "& .MuiListItemText-secondary": {
-                                color: "#9ca3af",
-                              },
-                            }}
-                          />
-                        </ListItemButton>
-                      </ListItem>
-                    ))}
-                  </List>
-                ) : null}
-              </Box>
+              <GrammarStartPanel
+                searchQuery={searchQuery}
+                searchResults={searchResults}
+                searchLoading={searchLoading}
+                searchError={searchError}
+                hasSearched={hasSearched}
+                onSearchQueryChange={setSearchQuery}
+                onSearch={() => {
+                  handleSearch().catch((err) => {
+                    console.error("Failed to search grammar: ", err);
+                  });
+                }}
+                onClearSearch={handleClearSearch}
+                onSelectSearchResult={(filename) => {
+                  handleCheatsheetClick(filename).catch(handleSelectionError);
+                }}
+              />
             )}
           </ContentCard>
         </Box>

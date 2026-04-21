@@ -26,6 +26,12 @@ const SearchInput: React.FC<SearchInputProps> = ({
   clearLabel = "Clear search",
 }) => {
   const showClearButton = Boolean(onClear && value);
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter" && onSearch) {
+      event.preventDefault();
+      onSearch();
+    }
+  };
 
   return (
     <Box sx={{ mb: 4, maxWidth: 400, display: 'flex', alignItems: 'center', ...sx }}>
@@ -35,6 +41,7 @@ const SearchInput: React.FC<SearchInputProps> = ({
         placeholder={placeholder}
         value={value}
         onChange={onChange}
+        onKeyDown={handleKeyDown}
         slotProps={{
           input: {
             endAdornment: showClearButton ? (
