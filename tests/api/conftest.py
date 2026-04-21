@@ -98,11 +98,12 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
     from httpx import ASGITransport, AsyncClient
 
     from runestone.db.database import get_db
-    from runestone.dependencies import get_grammar_service, get_vocabulary_service
+    from runestone.dependencies import get_grammar_index, get_grammar_service, get_vocabulary_service
 
     async def _create_client(
         vocabulary_service=None,
         grammar_service=None,
+        grammar_index=None,
         processor=None,
         llm_client=None,
         current_user=None,
@@ -142,6 +143,8 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
             overrides[get_vocabulary_service] = lambda: vocabulary_service
         if grammar_service:
             overrides[get_grammar_service] = lambda: grammar_service
+        if grammar_index:
+            overrides[get_grammar_index] = lambda: grammar_index
 
         # Always mock RunestoneProcessor
         from unittest.mock import Mock
@@ -199,6 +202,7 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
             mocks = {
                 "vocabulary_service": vocabulary_service,
                 "grammar_service": grammar_service,
+                "grammar_index": grammar_index,
                 "processor": processor,
                 "llm_client": llm_client or mock_llm_client,
                 "current_user": current_user or test_user,
