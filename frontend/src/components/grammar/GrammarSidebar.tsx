@@ -92,7 +92,14 @@ function GrammarSidebar({
   onSelectCheatsheet,
   onToggleCategory,
 }: GrammarSidebarProps) {
-  const { generalCheatsheets, categorizedCheatsheets } = groupCheatsheets(cheatsheets);
+  const { generalCheatsheets, categorizedCheatsheets, sortedCategoryKeys } =
+    React.useMemo(() => {
+      const grouped = groupCheatsheets(cheatsheets);
+      return {
+        ...grouped,
+        sortedCategoryKeys: Object.keys(grouped.categorizedCheatsheets).sort(),
+      };
+    }, [cheatsheets]);
 
   return (
     <ContentCard>
@@ -131,39 +138,37 @@ function GrammarSidebar({
             />
           ))}
 
-          {Object.keys(categorizedCheatsheets)
-            .sort()
-            .map((category) => (
-              <React.Fragment key={category}>
-                <ListItem disablePadding>
-                  <ListItemButton onClick={() => onToggleCategory(category)}>
-                    <ListItemText
-                      primary={category}
-                      primaryTypographyProps={{ fontWeight: "bold" }}
-                      sx={cheatsheetTextSx}
+          {sortedCategoryKeys.map((category) => (
+            <React.Fragment key={category}>
+              <ListItem disablePadding>
+                <ListItemButton onClick={() => onToggleCategory(category)}>
+                  <ListItemText
+                    primary={category}
+                    primaryTypographyProps={{ fontWeight: "bold" }}
+                    sx={cheatsheetTextSx}
+                  />
+                  {expandedCategories.has(category) ? (
+                    <ExpandLess />
+                  ) : (
+                    <ExpandMore />
+                  )}
+                </ListItemButton>
+              </ListItem>
+              <Collapse in={expandedCategories.has(category)}>
+                <List component="div" disablePadding>
+                  {categorizedCheatsheets[category].map((cheatsheet) => (
+                    <CheatsheetListItem
+                      key={cheatsheet.filename}
+                      cheatsheet={cheatsheet}
+                      selectedFilename={selectedFilename}
+                      onSelect={onSelectCheatsheet}
+                      nested
                     />
-                    {expandedCategories.has(category) ? (
-                      <ExpandLess />
-                    ) : (
-                      <ExpandMore />
-                    )}
-                  </ListItemButton>
-                </ListItem>
-                <Collapse in={expandedCategories.has(category)}>
-                  <List component="div" disablePadding>
-                    {categorizedCheatsheets[category].map((cheatsheet) => (
-                      <CheatsheetListItem
-                        key={cheatsheet.filename}
-                        cheatsheet={cheatsheet}
-                        selectedFilename={selectedFilename}
-                        onSelect={onSelectCheatsheet}
-                        nested
-                      />
-                    ))}
-                  </List>
-                </Collapse>
-              </React.Fragment>
-            ))}
+                  ))}
+                </List>
+              </Collapse>
+            </React.Fragment>
+          ))}
         </List>
       )}
     </ContentCard>
