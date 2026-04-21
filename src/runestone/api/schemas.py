@@ -38,6 +38,8 @@ __all__ = [
     "VocabularyImproveResponse",
     "CheatsheetInfo",
     "CheatsheetContent",
+    "GrammarSearchResult",
+    "GrammarSearchResponse",
     "VocabularyStatsResponse",
     "UserProfileResponse",
     "UserProfileUpdate",
@@ -157,6 +159,20 @@ class CheatsheetContent(BaseModel):
     """Schema for cheatsheet content."""
 
     content: str
+
+
+class GrammarSearchResult(BaseModel):
+    """Schema for one grammar search result."""
+
+    title: str
+    url: str
+    path: str
+
+
+class GrammarSearchResponse(BaseModel):
+    """Schema for grammar search results."""
+
+    results: list[GrammarSearchResult]
 
 
 class VocabularyStatsResponse(BaseModel):

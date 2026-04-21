@@ -7,7 +7,7 @@ and returning structured analysis results.
 
 from typing import Annotated, List
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 from runestone.api.schemas import (
     AnalysisRequest,
@@ -15,6 +15,8 @@ from runestone.api.schemas import (
     CheatsheetInfo,
     ContentAnalysis,
     ErrorResponse,
+    GrammarSearchResponse,
+    GrammarSearchResult,
     OCRResult,
     Vocabulary,
     VocabularyImproveRequest,
@@ -29,7 +31,13 @@ from runestone.core.exceptions import RunestoneError, VocabularyItemExists
 from runestone.core.logging_config import get_logger
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.models import User
-from runestone.dependencies import get_grammar_service, get_runestone_processor, get_vocabulary_service
+from runestone.dependencies import (
+    get_grammar_index,
+    get_grammar_service,
+    get_runestone_processor,
+    get_vocabulary_service,
+)
+from runestone.rag.index import GrammarIndex
 from runestone.services.grammar_service import GrammarService
 from runestone.services.vocabulary_service import VocabularyService
 
@@ -517,6 +525,43 @@ async def health_check() -> dict:
 
 # Grammar endpoints
 grammar_router = APIRouter(prefix="/grammar", tags=["grammar"])
+
+
+@grammar_router.get(
+    "/search",
+    response_model=GrammarSearchResponse,
+    responses={
+        200: {"description": "Grammar search completed successfully"},
+        500: {"model": ErrorResponse, "description": "Server error"},
+    },
+)
+async def search_grammar_cheatsheets(
+    service: Annotated[GrammarService, Depends(get_grammar_service)],
+    grammar_index: Annotated[GrammarIndex, Depends(get_grammar_index)],
+    query: str = Query(default="", description="Search query for grammar topics"),
+    top_k: int = Query(default=3, ge=1, le=5, description="Maximum number of results to return"),
+) -> GrammarSearchResponse:
+    """
+    Search grammar cheatsheets with the shared grammar index.
+
+    Args:
+        service: Grammar service
+        grammar_index: Grammar search index
+        query: Search query for grammar topics
+        top_k: Maximum number of results to return
+
+    Returns:
+        GrammarSearchResponse: Matching grammar cheatsheet references
+    """
+    try:
+        result_items = await service.search_cheatsheets_async(grammar_index, query, top_k)
+        return GrammarSearchResponse(results=[GrammarSearchResult(**item) for item in result_items])
+    except Exception:
+        logger.exception("Failed to search grammar cheatsheets")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to search grammar cheatsheets",
+        )
 
 
 @grammar_router.get(

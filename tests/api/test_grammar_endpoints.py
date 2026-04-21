@@ -4,9 +4,65 @@ Tests for grammar API endpoints.
 This module tests the grammar API endpoints defined in endpoints.py.
 """
 
+from unittest.mock import AsyncMock, MagicMock
+
 
 class TestGrammarEndpoints:
     """Test cases for grammar endpoints."""
+
+    async def test_search_grammar_success(self, client_with_overrides):
+        """Test successful grammar cheatsheet search."""
+        mock_service = MagicMock()
+        mock_service.search_cheatsheets_async = AsyncMock(
+            return_value=[
+                {
+                    "title": "Adjective comparison rules",
+                    "url": "http://test/?view=grammar&cheatsheet=adjectives/komparation",
+                    "path": "adjectives/komparation.md",
+                }
+            ]
+        )
+        mock_index = MagicMock()
+
+        async for client, _ in client_with_overrides(grammar_service=mock_service, grammar_index=mock_index):
+            response = await client.get("/api/grammar/search?query=comparison&top_k=4")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "results": [
+                {
+                    "title": "Adjective comparison rules",
+                    "url": "http://test/?view=grammar&cheatsheet=adjectives/komparation",
+                    "path": "adjectives/komparation.md",
+                }
+            ]
+        }
+        mock_service.search_cheatsheets_async.assert_awaited_once_with(mock_index, "comparison", 4)
+
+    async def test_search_grammar_empty_query(self, client_with_overrides):
+        """Test empty grammar searches return no results."""
+        mock_service = MagicMock()
+        mock_service.search_cheatsheets_async = AsyncMock(return_value=[])
+        mock_index = MagicMock()
+
+        async for client, _ in client_with_overrides(grammar_service=mock_service, grammar_index=mock_index):
+            response = await client.get("/api/grammar/search?query=%20%20%20")
+
+        assert response.status_code == 200
+        assert response.json() == {"results": []}
+        mock_service.search_cheatsheets_async.assert_awaited_once_with(mock_index, "   ", 3)
+
+    async def test_search_grammar_service_error(self, client_with_overrides):
+        """Test unexpected grammar search failures return 500."""
+        mock_service = MagicMock()
+        mock_service.search_cheatsheets_async = AsyncMock(side_effect=Exception("Search exploded"))
+        mock_index = MagicMock()
+
+        async for client, _ in client_with_overrides(grammar_service=mock_service, grammar_index=mock_index):
+            response = await client.get("/api/grammar/search?query=verbs")
+
+        assert response.status_code == 500
+        assert response.json()["detail"] == "Failed to search grammar cheatsheets"
 
     async def test_list_cheatsheets_success(self, client_with_mock_grammar_service, temp_cheatsheets_dir):
         """Test successful listing of cheatsheets."""

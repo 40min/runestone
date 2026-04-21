@@ -5,13 +5,17 @@ This module contains service classes that handle business logic
 for grammar-related operations.
 """
 
+import asyncio
 import os
 import re
 from pathlib import Path
-from typing import List
+from typing import TYPE_CHECKING, List
 from urllib.parse import unquote
 
 from ..core.logging_config import get_logger
+
+if TYPE_CHECKING:
+    from runestone.rag.index import GrammarIndex
 
 
 class GrammarService:
@@ -49,6 +53,37 @@ class GrammarService:
         # Sort by title
         files.sort(key=lambda x: x["title"])
         return files
+
+    def search_cheatsheets(self, grammar_index: "GrammarIndex", query: str, top_k: int) -> list[dict[str, str]]:
+        """
+        Search grammar cheatsheets and normalize documents into API-friendly dictionaries.
+
+        Args:
+            grammar_index: Shared grammar search index.
+            query: Search query for grammar topics.
+            top_k: Maximum number of results to return.
+
+        Returns:
+            List of normalized search result dictionaries.
+        """
+        if not query.strip():
+            return []
+
+        docs = grammar_index.search(query, top_k=top_k)
+        return [
+            {
+                "title": doc.metadata.get("annotation", ""),
+                "url": doc.metadata.get("url", ""),
+                "path": doc.metadata.get("path", ""),
+            }
+            for doc in docs
+        ]
+
+    async def search_cheatsheets_async(
+        self, grammar_index: "GrammarIndex", query: str, top_k: int
+    ) -> list[dict[str, str]]:
+        """Run blocking grammar search work off the event loop."""
+        return await asyncio.to_thread(self.search_cheatsheets, grammar_index, query, top_k)
 
     def _is_suitable_cheatsheet(self, file_item: Path) -> bool:
         return file_item.is_file() and file_item.name.endswith(".md")

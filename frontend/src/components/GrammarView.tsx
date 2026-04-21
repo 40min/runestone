@@ -12,6 +12,7 @@ import { ExpandMore, ExpandLess } from "@mui/icons-material";
 import { ContentCard, LoadingSpinner, ErrorAlert, SectionTitle, CustomButton, Snackbar } from "./ui";
 import MarkdownDisplay from "./ui/MarkdownDisplay";
 import useGrammar from "../hooks/useGrammar";
+import SearchInput from "./ui/SearchInput";
 
 function getCheatsheetFromUrl(): string | null {
   if (typeof window === "undefined") return null;
@@ -45,11 +46,18 @@ const GrammarView: React.FC = () => {
   const {
     cheatsheets,
     selectedCheatsheet,
+    searchResults = [],
     loading,
     error,
+    searchLoading = false,
+    searchError = null,
     fetchCheatsheetContent,
+    searchGrammar = async () => undefined,
+    clearSearch = () => undefined,
   } = useGrammar();
   const [selectedFilename, setSelectedFilename] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set()
   );
@@ -67,6 +75,24 @@ const GrammarView: React.FC = () => {
       setCheatsheetInUrl(filename, "push");
     }
     await fetchCheatsheetContent(filename);
+  };
+
+  const handleSearch = async () => {
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery) {
+      setHasSearched(false);
+      clearSearch();
+      return;
+    }
+
+    setHasSearched(true);
+    await searchGrammar(trimmedQuery);
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery("");
+    setHasSearched(false);
+    clearSearch();
   };
 
   useEffect(() => {
@@ -354,9 +380,71 @@ const GrammarView: React.FC = () => {
                 )}
               </>
             ) : (
-              <Typography sx={{ color: "#9ca3af" }}>
-                Select a cheatsheet from the list to view its content.
-              </Typography>
+              <Box>
+                <Typography variant="h6" sx={{ color: "white", mb: 1 }}>
+                  Search grammar cheatsheets
+                </Typography>
+                <Typography sx={{ color: "#9ca3af", mb: 3 }}>
+                  Search for a grammar topic, or select a cheatsheet from the list.
+                </Typography>
+                <SearchInput
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onSearch={() => {
+                    void handleSearch();
+                  }}
+                  onClear={handleClearSearch}
+                  placeholder="Search grammar topics..."
+                  sx={{ mb: 3, maxWidth: 560 }}
+                />
+
+                {searchError && (
+                  <Box sx={{ mb: 3 }}>
+                    <ErrorAlert message={searchError} />
+                  </Box>
+                )}
+
+                {searchLoading ? (
+                  <LoadingSpinner />
+                ) : hasSearched && searchResults.length === 0 && !searchError ? (
+                  <Typography sx={{ color: "#9ca3af" }}>
+                    No matching grammar pages found.
+                  </Typography>
+                ) : searchResults.length > 0 ? (
+                  <List disablePadding aria-label="Grammar search results">
+                    {searchResults.map((result) => (
+                      <ListItem key={result.path || result.url} disablePadding sx={{ mb: 1 }}>
+                        <ListItemButton
+                          onClick={() => {
+                            void handleCheatsheetClick(result.path);
+                          }}
+                          sx={{
+                            border: "1px solid #374151",
+                            borderRadius: "0.5rem",
+                            backgroundColor: "#1f2937",
+                            "&:hover": {
+                              backgroundColor: "#243244",
+                            },
+                          }}
+                        >
+                          <ListItemText
+                            primary={result.title || result.path}
+                            secondary={result.path}
+                            sx={{
+                              "& .MuiListItemText-primary": {
+                                color: "white",
+                              },
+                              "& .MuiListItemText-secondary": {
+                                color: "#9ca3af",
+                              },
+                            }}
+                          />
+                        </ListItemButton>
+                      </ListItem>
+                    ))}
+                  </List>
+                ) : null}
+              </Box>
             )}
           </ContentCard>
         </Box>
