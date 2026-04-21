@@ -6,9 +6,10 @@ This module contains tests for the grammar service.
 
 import os
 import tempfile
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.documents import Document
 
 from runestone.services.grammar_service import GrammarService
 
@@ -263,3 +264,50 @@ class TestGrammarService:
             # Try to escape from verbs directory
             with pytest.raises(ValueError, match="Invalid file path"):
                 service.get_cheatsheet_content("verbs/../../../etc/passwd.md")
+
+    def test_search_cheatsheets_returns_normalized_results(self, service):
+        """Search should return normalized dictionaries from GrammarIndex documents."""
+        grammar_index = MagicMock()
+        grammar_index.search.return_value = [
+            Document(
+                page_content="Adjective comparison",
+                metadata={
+                    "annotation": "Adjective comparison rules",
+                    "url": "http://test/?view=grammar&cheatsheet=adjectives/komparation",
+                    "path": "adjectives/komparation.md",
+                },
+            )
+        ]
+
+        result = service.search_cheatsheets(grammar_index, "comparison", 3)
+
+        assert result == [
+            {
+                "title": "Adjective comparison rules",
+                "url": "http://test/?view=grammar&cheatsheet=adjectives/komparation",
+                "path": "adjectives/komparation.md",
+            }
+        ]
+        grammar_index.search.assert_called_once_with("comparison", top_k=3)
+
+    def test_search_cheatsheets_empty_query_skips_index_call(self, service):
+        """Blank queries should return no results without calling the index."""
+        grammar_index = MagicMock()
+
+        result = service.search_cheatsheets(grammar_index, "   ", 3)
+
+        assert result == []
+        grammar_index.search.assert_not_called()
+
+    async def test_search_cheatsheets_async_runs_search_in_thread(self, service):
+        """Async search should keep blocking index work off the event loop."""
+        grammar_index = MagicMock()
+        expected_results = [{"title": "Title", "url": "http://test", "path": "grammar/page.md"}]
+
+        with patch(
+            "runestone.services.grammar_service.asyncio.to_thread", new=AsyncMock(return_value=expected_results)
+        ) as to_thread:
+            result = await service.search_cheatsheets_async(grammar_index, "comparison", 3)
+
+        assert result == expected_results
+        to_thread.assert_awaited_once_with(service.search_cheatsheets, grammar_index, "comparison", 3)

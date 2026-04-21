@@ -5,7 +5,6 @@ This module defines the FastAPI routes for processing Swedish textbook images
 and returning structured analysis results.
 """
 
-import asyncio
 from typing import Annotated, List
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -537,6 +536,7 @@ grammar_router = APIRouter(prefix="/grammar", tags=["grammar"])
     },
 )
 async def search_grammar_cheatsheets(
+    service: Annotated[GrammarService, Depends(get_grammar_service)],
     grammar_index: Annotated[GrammarIndex, Depends(get_grammar_index)],
     query: str = Query(default="", description="Search query for grammar topics"),
     top_k: int = Query(default=3, ge=1, le=5, description="Maximum number of results to return"),
@@ -545,6 +545,7 @@ async def search_grammar_cheatsheets(
     Search grammar cheatsheets with the shared grammar index.
 
     Args:
+        service: Grammar service
         grammar_index: Grammar search index
         query: Search query for grammar topics
         top_k: Maximum number of results to return
@@ -552,20 +553,9 @@ async def search_grammar_cheatsheets(
     Returns:
         GrammarSearchResponse: Matching grammar cheatsheet references
     """
-    if not query.strip():
-        return GrammarSearchResponse(results=[])
-
     try:
-        docs = await asyncio.to_thread(grammar_index.search, query, top_k=top_k)
-        results = [
-            GrammarSearchResult(
-                title=doc.metadata.get("annotation", ""),
-                url=doc.metadata.get("url", ""),
-                path=doc.metadata.get("path", ""),
-            )
-            for doc in docs
-        ]
-        return GrammarSearchResponse(results=results)
+        result_items = await service.search_cheatsheets_async(grammar_index, query, top_k)
+        return GrammarSearchResponse(results=[GrammarSearchResult(**item) for item in result_items])
     except Exception:
         logger.exception("Failed to search grammar cheatsheets")
         raise HTTPException(
