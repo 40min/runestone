@@ -40,6 +40,7 @@ const useGrammar = (): UseGrammarReturn => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const hasFetchedRef = useRef(false);
+  const latestSearchRequestRef = useRef(0);
 
   const fetchCheatsheets = useCallback(async () => {
     setLoading(true);
@@ -78,6 +79,8 @@ const useGrammar = (): UseGrammarReturn => {
   }, []);
 
   const searchGrammar = useCallback(async (query: string, topK = 3) => {
+    const requestId = latestSearchRequestRef.current + 1;
+    latestSearchRequestRef.current = requestId;
     const trimmedQuery = query.trim();
     setSearchError(null);
 
@@ -97,16 +100,24 @@ const useGrammar = (): UseGrammarReturn => {
         throw new Error(`Failed to search grammar cheatsheets: HTTP ${response.status}`);
       }
       const data: { results: GrammarSearchResult[] } = await response.json();
-      setSearchResults(data.results);
+      if (requestId === latestSearchRequestRef.current) {
+        setSearchResults(data.results);
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to search grammar cheatsheets';
-      setSearchError(errorMessage);
+      if (requestId === latestSearchRequestRef.current) {
+        setSearchResults([]);
+        setSearchError(errorMessage);
+      }
     } finally {
-      setSearchLoading(false);
+      if (requestId === latestSearchRequestRef.current) {
+        setSearchLoading(false);
+      }
     }
   }, []);
 
   const clearSearch = useCallback(() => {
+    latestSearchRequestRef.current += 1;
     setSearchResults([]);
     setSearchError(null);
     setSearchLoading(false);

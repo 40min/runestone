@@ -215,4 +215,77 @@ describe('useGrammar', () => {
     expect(result.current.searchError).toBe('Network error');
     expect(result.current.searchResults).toEqual([]);
   });
+
+  it('should ignore stale grammar search responses', async () => {
+    const latestResults = [
+      {
+        title: 'Second query result',
+        url: 'http://localhost:5173/?view=grammar&cheatsheet=verbs/latest',
+        path: 'verbs/latest.md',
+      },
+    ];
+    const staleResults = [
+      {
+        title: 'First query result',
+        url: 'http://localhost:5173/?view=grammar&cheatsheet=verbs/stale',
+        path: 'verbs/stale.md',
+      },
+    ];
+
+    let resolveFirstSearch: ((value: { ok: boolean; json: () => Promise<{ results: typeof staleResults }> }) => void) | null = null;
+    let resolveSecondSearch: ((value: { ok: boolean; json: () => Promise<{ results: typeof latestResults }> }) => void) | null = null;
+
+    const firstSearchPromise = new Promise<{ ok: boolean; json: () => Promise<{ results: typeof staleResults }> }>(
+      (resolve) => {
+        resolveFirstSearch = resolve;
+      }
+    );
+    const secondSearchPromise = new Promise<{ ok: boolean; json: () => Promise<{ results: typeof latestResults }> }>(
+      (resolve) => {
+        resolveSecondSearch = resolve;
+      }
+    );
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      })
+      .mockImplementationOnce(() => firstSearchPromise)
+      .mockImplementationOnce(() => secondSearchPromise);
+
+    const { result } = renderHook(() => useGrammar());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    act(() => {
+      void result.current.searchGrammar('first query');
+      void result.current.searchGrammar('second query');
+    });
+
+    await act(async () => {
+      resolveSecondSearch?.({
+        ok: true,
+        json: () => Promise.resolve({ results: latestResults }),
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(result.current.searchResults).toEqual(latestResults);
+    });
+
+    await act(async () => {
+      resolveFirstSearch?.({
+        ok: true,
+        json: () => Promise.resolve({ results: staleResults }),
+      });
+      await Promise.resolve();
+    });
+
+    expect(result.current.searchResults).toEqual(latestResults);
+    expect(result.current.searchError).toBeNull();
+  });
 });
