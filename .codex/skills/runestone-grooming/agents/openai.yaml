@@ -1,3 +1,4 @@
 interface:
   display_name: "Runestone Grooming"
-  short_description: "Help with Runestone Grooming tasks"
+  short_description: "Groom Runestone Dart tasks"
+  default_prompt: "Groom the Runestone Dart board step by step. Use General/runestone, include Dart task links, propose task-detail updates before applying them, and add a grooming timemark to approved updates."
