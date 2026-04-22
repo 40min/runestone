@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Literal, Optional
 
 from dotenv import load_dotenv
-from pydantic import AliasChoices, BaseModel, Field, model_validator
+from pydantic import BaseModel, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -87,11 +87,8 @@ class Settings(BaseSettings):
     cooldown_days: int = 7
 
     # Chat Agent Configuration
-    teacher_provider: Literal["openrouter", "openai"] = Field(
-        default="openrouter",
-        validation_alias=AliasChoices("TEACHER_PROVIDER", "CHAT_PROVIDER"),
-    )
-    teacher_model: str = Field(validation_alias=AliasChoices("TEACHER_MODEL", "CHAT_MODEL"))
+    teacher_provider: Literal["openrouter", "openai"] = "openrouter"
+    teacher_model: str
     teacher_temperature: float = 1.0
     teacher_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
 
@@ -148,16 +145,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _apply_agent_defaults(self) -> "Settings":
-        # Preserve the migration alias when a live CHAT_* env var is set and
-        # only the env file supplies the newer TEACHER_* name.
-        if "TEACHER_PROVIDER" not in os.environ and "CHAT_PROVIDER" in os.environ:
-            chat_provider = os.environ["CHAT_PROVIDER"]
-            if chat_provider not in ("openrouter", "openai"):
-                raise ValueError("CHAT_PROVIDER must be 'openrouter' or 'openai'")
-            self.teacher_provider = chat_provider
-        if "TEACHER_MODEL" not in os.environ and "CHAT_MODEL" in os.environ:
-            self.teacher_model = os.environ["CHAT_MODEL"]
-
         if self.coordinator_provider is None:
             self.coordinator_provider = self.teacher_provider
         if self.word_keeper_provider is None:

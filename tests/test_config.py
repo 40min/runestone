@@ -143,8 +143,8 @@ class TestSettings:
             with pytest.raises(ValidationError):
                 Settings()
 
-    def test_teacher_env_names_replace_chat_prefix_with_backward_compatible_alias(self):
-        """Test TEACHER_* env names are primary, with CHAT_* still accepted for migration."""
+    def test_teacher_env_names_configure_teacher_model_settings(self):
+        """Test TEACHER_* env names configure teacher model settings."""
         env_vars = {
             "LLM_PROVIDER": "openai",
             "OPENAI_API_KEY": "test-key",
@@ -154,16 +154,16 @@ class TestSettings:
             "TELEGRAM_BOT_TOKEN": "test-token",
             "FRONTEND_URL": "http://localhost:5173",
             "JWT_SECRET_KEY": "secret",
-            "CHAT_PROVIDER": "openrouter",
-            "CHAT_MODEL": "legacy-chat-model",
+            "TEACHER_PROVIDER": "openai",
+            "TEACHER_MODEL": "teacher-env-model",
             "COORDINATOR_MODEL": "coordinator-model",
         }
 
         with patch.dict(os.environ, env_vars, clear=True):
             test_settings = Settings()
 
-        assert test_settings.teacher_provider == "openrouter"
-        assert test_settings.teacher_model == "legacy-chat-model"
+        assert test_settings.teacher_provider == "openai"
+        assert test_settings.teacher_model == "teacher-env-model"
 
     def test_news_agent_defaults_to_teacher_model_settings(self):
         """Test news_agent inherits teacher provider/model when not configured explicitly."""
