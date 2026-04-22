@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Literal, Optional
 
 from dotenv import load_dotenv
-from pydantic import AliasChoices, BaseModel, Field, model_validator
+from pydantic import BaseModel, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -87,11 +87,8 @@ class Settings(BaseSettings):
     cooldown_days: int = 7
 
     # Chat Agent Configuration
-    teacher_provider: Literal["openrouter", "openai"] = Field(
-        default="openrouter",
-        validation_alias=AliasChoices("TEACHER_PROVIDER", "CHAT_PROVIDER"),
-    )
-    teacher_model: str = Field(validation_alias=AliasChoices("TEACHER_MODEL", "CHAT_MODEL"))
+    teacher_provider: Literal["openrouter", "openai"] = "openrouter"
+    teacher_model: str
     teacher_temperature: float = 1.0
     teacher_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
 
