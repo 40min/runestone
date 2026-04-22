@@ -138,6 +138,7 @@ describe("VocabularyView", () => {
         example_phrase: null,
         extra_info: null,
         in_learn: false,
+        priority_learn: 9,
         last_learned: null,
         learned_times: 0,
         created_at: "2023-10-27T10:00:00Z",
@@ -172,6 +173,7 @@ describe("VocabularyView", () => {
         example_phrase: null,
         extra_info: null,
         in_learn: false,
+        priority_learn: 9,
         last_learned: null,
         learned_times: 0,
         created_at: "2023-10-27T10:00:00Z",
@@ -470,6 +472,7 @@ describe("VocabularyView", () => {
         example_phrase: "Hej, hur mår du?",
         extra_info: "en-word, noun, base form: hej",
         in_learn: true,
+        priority_learn: 9,
         last_learned: null,
         learned_times: 5,
         created_at: "2023-10-27T10:00:00Z",
@@ -483,6 +486,7 @@ describe("VocabularyView", () => {
         example_phrase: null,
         extra_info: null,
         in_learn: false,
+        priority_learn: 0,
         last_learned: null,
         learned_times: 0,
         created_at: "2023-10-28T10:05:00Z",
@@ -514,6 +518,7 @@ describe("VocabularyView", () => {
     expect(screen.getByText("Example Phrase")).toBeInTheDocument();
     expect(screen.getByText("Grammar Info")).toBeInTheDocument();
     expect(screen.getByText("In Learning")).toBeInTheDocument();
+    expect(screen.getByText("Priority")).toBeInTheDocument();
     expect(screen.getByText("Last Learned")).toBeInTheDocument();
     expect(screen.getByText("Saved")).toBeInTheDocument();
 
@@ -522,9 +527,11 @@ describe("VocabularyView", () => {
     expect(screen.getByText("hello")).toBeInTheDocument();
     expect(screen.getByText("Hej, hur mår du?")).toBeInTheDocument();
     expect(screen.getByText("en-word, noun, base form: hej")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Boost priority for hej" })).toBeEnabled();
 
     expect(screen.getByText("bra")).toBeInTheDocument();
     expect(screen.getByText("good")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Boost priority for bra" })).toBeDisabled();
     expect(screen.getAllByText("—")).toHaveLength(2); // null example_phrase and null extra_info should show dash
 
     // Check dates are formatted
@@ -542,6 +549,7 @@ describe("VocabularyView", () => {
         example_phrase: null,
         extra_info: null,
         in_learn: true,
+        priority_learn: 9,
         last_learned: null,
         learned_times: 2,
         created_at: "2023-10-27T10:00:00Z",
@@ -567,6 +575,223 @@ describe("VocabularyView", () => {
 
     // Should display dash for null example_phrase and null extra_info
     expect(screen.getAllByText("—")).toHaveLength(2);
+  });
+
+  it("boosts vocabulary priority by one step and refetches stats", async () => {
+    const refetchStats = vi.fn().mockResolvedValue(undefined);
+    const openEditModal = vi.fn();
+    const updateVocabularyItem = vi.fn().mockResolvedValue(undefined);
+
+    mockUseVocabularyStats.mockReturnValue({
+      stats: {
+        words_in_learn_count: 3,
+        words_skipped_count: 2,
+        overall_words_count: 5,
+        words_prioritized_count: 1,
+      },
+      loading: false,
+      error: null,
+      refetch: refetchStats,
+    });
+
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [
+        {
+          id: 7,
+          user_id: 1,
+          word_phrase: "snabb",
+          translation: "fast",
+          example_phrase: null,
+          extra_info: null,
+          in_learn: false,
+          priority_learn: 9,
+          last_learned: null,
+          learned_times: 0,
+          created_at: "2023-10-27T10:00:00Z",
+          updated_at: "2023-10-27T10:00:00Z",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal,
+      closeEditModal: vi.fn(),
+      updateVocabularyItem,
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+    });
+
+    renderWithAuthProvider(<VocabularyView />);
+    fireEvent.click(screen.getByRole("button", { name: "Boost priority for snabb" }));
+
+    await waitFor(() => {
+      expect(updateVocabularyItem).toHaveBeenCalledWith(7, { priority_learn: 8 });
+      expect(refetchStats).toHaveBeenCalledTimes(1);
+    });
+    expect(openEditModal).not.toHaveBeenCalled();
+  });
+
+  it("does not boost words that are already highest priority", () => {
+    const updateVocabularyItem = vi.fn().mockResolvedValue(undefined);
+
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [
+        {
+          id: 8,
+          user_id: 1,
+          word_phrase: "viktig",
+          translation: "important",
+          example_phrase: null,
+          extra_info: null,
+          in_learn: true,
+          priority_learn: 0,
+          last_learned: null,
+          learned_times: 0,
+          created_at: "2023-10-27T10:00:00Z",
+          updated_at: "2023-10-27T10:00:00Z",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem,
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+    });
+
+    renderWithAuthProvider(<VocabularyView />);
+
+    expect(screen.getByRole("button", { name: "Boost priority for viktig" })).toBeDisabled();
+    expect(updateVocabularyItem).not.toHaveBeenCalled();
+  });
+
+  it("prevents duplicate boost requests while an update is in flight", async () => {
+    const refetchStats = vi.fn().mockResolvedValue(undefined);
+    let resolveUpdate: (() => void) | null = null;
+    const updateVocabularyItem = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveUpdate = resolve;
+        })
+    );
+
+    mockUseVocabularyStats.mockReturnValue({
+      stats: {
+        words_in_learn_count: 3,
+        words_skipped_count: 2,
+        overall_words_count: 5,
+        words_prioritized_count: 1,
+      },
+      loading: false,
+      error: null,
+      refetch: refetchStats,
+    });
+
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [
+        {
+          id: 9,
+          user_id: 1,
+          word_phrase: "klar",
+          translation: "ready",
+          example_phrase: null,
+          extra_info: null,
+          in_learn: false,
+          priority_learn: 5,
+          last_learned: null,
+          learned_times: 0,
+          created_at: "2023-10-27T10:00:00Z",
+          updated_at: "2023-10-27T10:00:00Z",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem,
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+    });
+
+    renderWithAuthProvider(<VocabularyView />);
+    const boostButton = screen.getByRole("button", { name: "Boost priority for klar" });
+
+    fireEvent.click(boostButton);
+    await waitFor(() => {
+      expect(boostButton).toBeDisabled();
+    });
+
+    fireEvent.click(boostButton);
+    expect(updateVocabularyItem).toHaveBeenCalledTimes(1);
+
+    resolveUpdate?.();
+    await waitFor(() => {
+      expect(boostButton).toBeEnabled();
+      expect(refetchStats).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("shows an error message when boost update fails", async () => {
+    const refetchStats = vi.fn().mockResolvedValue(undefined);
+    const updateVocabularyItem = vi.fn().mockRejectedValue(new Error("Network timeout"));
+
+    mockUseVocabularyStats.mockReturnValue({
+      stats: {
+        words_in_learn_count: 3,
+        words_skipped_count: 2,
+        overall_words_count: 5,
+        words_prioritized_count: 1,
+      },
+      loading: false,
+      error: null,
+      refetch: refetchStats,
+    });
+
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [
+        {
+          id: 10,
+          user_id: 1,
+          word_phrase: "fel",
+          translation: "wrong",
+          example_phrase: null,
+          extra_info: null,
+          in_learn: false,
+          priority_learn: 3,
+          last_learned: null,
+          learned_times: 0,
+          created_at: "2023-10-27T10:00:00Z",
+          updated_at: "2023-10-27T10:00:00Z",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem,
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+    });
+
+    renderWithAuthProvider(<VocabularyView />);
+    fireEvent.click(screen.getByRole("button", { name: "Boost priority for fel" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Failed to boost priority: Network timeout")).toBeInTheDocument();
+    });
+    expect(refetchStats).not.toHaveBeenCalled();
   });
 
   const setupStatsRefetchOnEdit = () => {

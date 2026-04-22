@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { Box, Typography } from "@mui/material";
+import React, { useState, useEffect, useRef } from "react";
+import { Box, IconButton, Tooltip, Typography } from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import { useRecentVocabulary, useVocabularyStats } from "../hooks/useVocabulary";
 import {
   LoadingSpinner,
@@ -20,10 +22,14 @@ const statCards = [
 ] as const;
 
 const VocabularyView: React.FC = () => {
+  const theme = useTheme();
   const [searchTerm, setSearchTerm] = useState("");
   const [activeSearchTerm, setActiveSearchTerm] = useState("");
   const [preciseSearch, setPreciseSearch] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [boostingItemIds, setBoostingItemIds] = useState<Set<number>>(new Set());
+  const [boostError, setBoostError] = useState<string | null>(null);
+  const boostingItemIdsRef = useRef<Set<number>>(new Set());
   const {
     stats,
     loading: statsLoading,
@@ -86,6 +92,37 @@ const VocabularyView: React.FC = () => {
     if (editingItem) {
       await deleteVocabularyItem(editingItem.id);
       await refetchStats();
+    }
+  };
+
+  const handleBoostPriority = async (
+    event: React.MouseEvent,
+    item: (typeof recentVocabulary)[0]
+  ) => {
+    event.stopPropagation();
+    setBoostError(null);
+
+    const nextPriority = Math.max(item.priority_learn - 1, 0);
+    if (nextPriority === item.priority_learn) {
+      return;
+    }
+
+    if (boostingItemIdsRef.current.has(item.id)) {
+      return;
+    }
+    boostingItemIdsRef.current.add(item.id);
+    setBoostingItemIds(new Set(boostingItemIdsRef.current));
+
+    try {
+      await updateVocabularyItem(item.id, { priority_learn: nextPriority });
+      await refetchStats();
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      setBoostError(`Failed to boost priority: ${errorMessage}`);
+    } finally {
+      boostingItemIdsRef.current.delete(item.id);
+      setBoostingItemIds(new Set(boostingItemIdsRef.current));
     }
   };
 
@@ -194,6 +231,9 @@ const VocabularyView: React.FC = () => {
           Add New Word
         </CustomButton>
       </Box>
+      {boostError && (
+        <Typography sx={{ color: "#f87171", mb: 2 }}>{boostError}</Typography>
+      )}
 
       {loading && !isInitialLoad && (
         <Box sx={{ display: "flex", justifyContent: "center", my: 2 }}>
@@ -240,7 +280,61 @@ const VocabularyView: React.FC = () => {
               {
                 key: "priority_learn",
                 label: "Priority",
-                render: (value) => <Typography sx={{ color: "white", textAlign: "center" }}>{value as number}</Typography>,
+                render: (value, row) => {
+                  const priority = value as number;
+                  const item = row as unknown as (typeof recentVocabulary)[0];
+                  const isHighestPriority = priority <= 0;
+                  const isBoosting = boostingItemIds.has(item.id);
+
+                  return (
+                    <Box
+                      onClick={(event) => event.stopPropagation()}
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 0.75,
+                      }}
+                    >
+                      <Typography sx={{ color: "white", minWidth: 18, textAlign: "center" }}>
+                        {priority}
+                      </Typography>
+                      <Tooltip
+                        title={
+                          isBoosting
+                            ? "Updating priority..."
+                            : isHighestPriority
+                              ? "Already highest priority"
+                              : "Boost priority"
+                        }
+                      >
+                        <span>
+                          <IconButton
+                            aria-label={`Boost priority for ${item.word_phrase}`}
+                            size="small"
+                            disabled={isHighestPriority || isBoosting}
+                            onClick={(event) => handleBoostPriority(event, item)}
+                            sx={{
+                              color: theme.palette.primary.main,
+                              border: `1px solid ${alpha(theme.palette.primary.main, 0.35)}`,
+                              width: 30,
+                              height: 30,
+                              "&:hover": {
+                                backgroundColor: alpha(theme.palette.primary.main, 0.12),
+                              },
+                              "&.Mui-disabled": {
+                                color: theme.palette.action.disabled,
+                                borderColor: alpha(theme.palette.action.disabled, 0.35),
+                              },
+                            }}
+                          >
+                            <TrendingUpIcon fontSize="inherit" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </Box>
+                  );
+                },
               },
               {
                 key: "last_learned",

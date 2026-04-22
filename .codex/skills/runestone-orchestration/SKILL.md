@@ -1,6 +1,6 @@
 ---
 name: runestone-orchestration
-description: Thin Runestone adapter for the global dev-work-item-orchestration lifecycle. Use when working in /Users/40min/www/runestone and the user says "let's do ...", "start ...", "implement ...", "take this through PR", or otherwise wants a Runestone change carried through branch, Dart task management, implementation, checks, commit, and final task completion.
+description: Thin Runestone adapter for the global dev-work-item-orchestration lifecycle. Use by default for any implementation command while working in /Users/40min/www/runestone, including "let's do ...", "start ...", "implement ...", "apply this plan", "fix this", or "take this through PR", unless the user explicitly says not to use orchestration. Do not use for creating or modifying skills; use skill-creator for skill work instead.
 ---
 
 # Runestone Orchestration
@@ -24,7 +24,7 @@ Load those files when this skill triggers. Do not copy their rules into this ski
 
 ## Trigger Coverage
 
-Treat this adapter as the default entrypoint for implementation work in `/Users/40min/www/runestone`, not only for exact phrase matches.
+Treat this adapter as the default entrypoint for implementation work in `/Users/40min/www/runestone`, not only for exact phrase matches. If the user gives any implementation command, use this lifecycle unless they explicitly opt out of orchestration.
 
 Trigger this skill when the user:
 
@@ -32,7 +32,11 @@ Trigger this skill when the user:
 - asks to carry work through checks/commit/PR
 - asks to continue or finish an in-flight Runestone change that already has code edits
 
-Do not wait for literal phrases like "let's do", "start", or "take this through PR" if the implementation intent is already clear.
+Do not wait for literal phrases like "let's do", "start", or "take this through PR" if the implementation intent is already clear. Do not skip this skill merely because the request looks small, frontend-only, backend-only, docs-only, or test-only.
+
+Do not trigger this lifecycle for creating or modifying skills, including skill trigger text, skill workflows, bundled skill scripts, or skill metadata. Use `skill-creator` for those requests unless the user explicitly asks to run Runestone orchestration for the skill work.
+
+Only skip this lifecycle for other Runestone implementation work when the user explicitly says not to use orchestration, such as "do not use orchestration", "skip orchestration", or "just patch it without the lifecycle".
 
 If implementation work started without lifecycle tracking, switch into this lifecycle at the next user turn and continue from the correct current step.
 
