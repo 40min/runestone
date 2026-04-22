@@ -584,6 +584,72 @@ describe("GrammarView", () => {
     expect(window.location.search).toContain("cheatsheet=verbs%2Fverb-forms");
   });
 
+  it("loads a direct categorized cheatsheet link after cheatsheets arrive", async () => {
+    const mockFetchCheatsheetContent = vi.fn().mockResolvedValue(undefined);
+    window.history.replaceState(
+      {},
+      "",
+      "/?view=grammar&cheatsheet=adjectives/adjectiv-komparation"
+    );
+
+    mockUseGrammar
+      .mockReturnValueOnce({
+        cheatsheets: [],
+        selectedCheatsheet: null,
+        searchResults: [],
+        loading: true,
+        error: null,
+        searchLoading: false,
+        searchError: null,
+        fetchCheatsheets: vi.fn(),
+        fetchCheatsheetContent: mockFetchCheatsheetContent,
+        searchGrammar: vi.fn(),
+        clearSearch: vi.fn(),
+      })
+      .mockReturnValue({
+        cheatsheets: [
+          {
+            filename: "adjectives/adjectiv-komparation.md",
+            title: "Adjectiv Komparation",
+            category: "adjectives",
+          },
+        ],
+        selectedCheatsheet: { content: "# Adjectiv Komparation" },
+        searchResults: [],
+        loading: false,
+        error: null,
+        searchLoading: false,
+        searchError: null,
+        fetchCheatsheets: vi.fn(),
+        fetchCheatsheetContent: mockFetchCheatsheetContent,
+        searchGrammar: vi.fn(),
+        clearSearch: vi.fn(),
+      });
+
+    const { rerender } = render(<GrammarView />);
+    expect(mockFetchCheatsheetContent).not.toHaveBeenCalled();
+
+    rerender(<GrammarView />);
+
+    await waitFor(() => {
+      expect(mockFetchCheatsheetContent).toHaveBeenCalledWith(
+        "adjectives/adjectiv-komparation.md"
+      );
+    });
+
+    await waitFor(() => {
+      const selectedCheatsheet = screen.getByRole("button", {
+        name: "Adjectiv Komparation",
+      });
+      expect(selectedCheatsheet.closest(".MuiCollapse-root")).not.toHaveStyle({
+        height: "0px",
+      });
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Adjectiv Komparation" })
+    ).toBeInTheDocument();
+  });
+
   it("reacts to browser back by returning to grammar start page", async () => {
     const mockFetchCheatsheetContent = vi.fn().mockResolvedValue(undefined);
     window.history.replaceState({}, "", "/?view=grammar");
