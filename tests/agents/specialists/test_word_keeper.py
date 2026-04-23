@@ -81,6 +81,29 @@ def test_word_keeper_prompt_rejects_exercise_wording_as_save_signal():
     )
 
 
+def test_word_keeper_prompt_standardizes_saved_vocabulary_payloads():
+    assert "`word_phrase` — the canonical Swedish learning item" in WORDKEEPER_SYSTEM_PROMPT
+    assert "No leading articles: save `hund`, not `en hund`; save `äpple`, not `ett äpple`." in (
+        WORDKEEPER_SYSTEM_PROMPT
+    )
+    assert "Use smart lowercase" in WORDKEEPER_SYSTEM_PROMPT
+    assert "Prefer lemma or base form unless the inflected form matters." in WORDKEEPER_SYSTEM_PROMPT
+    assert "Do not save bare `att` for verbs" in WORDKEEPER_SYSTEM_PROMPT
+    assert "Preserve particles, prepositions, and reflexives that change meaning" in WORDKEEPER_SYSTEM_PROMPT
+    assert "Keep Swedish characters; never ASCII-fold `å`, `ä`, or `ö`." in WORDKEEPER_SYSTEM_PROMPT
+    assert "Keep translations concise; put morphology and usage in `extra_info`, not `translation`." in (
+        WORDKEEPER_SYSTEM_PROMPT
+    )
+
+
+def test_word_keeper_prompt_includes_extra_info_guidance():
+    assert "`extra_info` — an optional compact learner note with grammar or usage details." in WORDKEEPER_SYSTEM_PROMPT
+    assert "`en-word noun; plural: hundar; definite: hunden`" in WORDKEEPER_SYSTEM_PROMPT
+    assert "`verb; infinitive: förstå; present: förstår; past: förstod; supine: förstått`" in (WORDKEEPER_SYSTEM_PROMPT)
+    assert 'particle verb; "tycka om" means "to like"' in WORDKEEPER_SYSTEM_PROMPT
+    assert "If unsure, leave `extra_info` empty rather than guess." in WORDKEEPER_SYSTEM_PROMPT
+
+
 def _service_provider(service):
     @asynccontextmanager
     async def _provider():
@@ -99,6 +122,7 @@ async def test_word_keeper_saves_explicit_request(specialist, mock_chat_model, m
                 word_phrase="avgorande",
                 translation="decisive",
                 example_phrase="Det var ett avgorande beslut.",
+                extra_info="adjective; common/neuter/plural: avgörande",
                 reason="explicit save request",
             )
         ],
@@ -128,8 +152,10 @@ async def test_word_keeper_saves_explicit_request(specialist, mock_chat_model, m
         word_phrase="avgorande",
         translation="decisive",
         example_phrase="Det var ett avgorande beslut.",
+        extra_info="adjective; common/neuter/plural: avgörande",
         user_id=12,
     )
+    assert result.artifacts["save_candidates"][0]["extra_info"] == "adjective; common/neuter/plural: avgörande"
 
 
 @pytest.mark.anyio
@@ -142,6 +168,7 @@ async def test_word_keeper_prefers_chat_fields_for_save_candidate(specialist, mo
                 word_phrase="noggrann",
                 translation="careful",
                 example_phrase="Var noggrann med detaljerna.",
+                extra_info="adjective; common: noggrann; neuter: noggrant; plural/definite: noggranna",
                 reason="teacher highlighted key words",
             )
         ],
@@ -168,6 +195,10 @@ async def test_word_keeper_prefers_chat_fields_for_save_candidate(specialist, mo
     assert result.status == "action_taken"
     assert result.artifacts["save_candidates"][0]["translation"] == "careful"
     assert result.artifacts["save_candidates"][0]["example_phrase"] == "Var noggrann med detaljerna."
+    assert (
+        result.artifacts["save_candidates"][0]["extra_info"]
+        == "adjective; common: noggrann; neuter: noggrant; plural/definite: noggranna"
+    )
 
 
 @pytest.mark.anyio
@@ -208,6 +239,7 @@ async def test_word_keeper_saves_post_response_candidate(specialist, mock_chat_m
         word_phrase="forutsattning",
         translation="condition",
         example_phrase="En viktig forutsattning ar tid.",
+        extra_info=None,
         user_id=12,
     )
 
@@ -323,6 +355,7 @@ async def test_word_keeper_reports_partial_save_when_later_candidate_fails(speci
             RuntimeError("db exploded"),
         ]
     )
+    vocabulary_service.repo.db.rollback = AsyncMock()
 
     with patch(
         "runestone.agents.specialists.word_keeper.provide_vocabulary_service",
@@ -347,6 +380,7 @@ async def test_word_keeper_reports_partial_save_when_later_candidate_fails(speci
         result.info_for_teacher
         == "Saved 1 vocabulary item(s) for future recall. Skipped 1 item(s) due to internal errors."
     )
+    vocabulary_service.repo.db.rollback.assert_awaited_once()
 
 
 @pytest.mark.anyio

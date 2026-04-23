@@ -308,7 +308,14 @@ class VocabularyService:
         """Get existing word phrases from the repository."""
         return list(await self.repo.get_existing_word_phrases_for_batch(word_phrases, user_id))
 
-    async def upsert_priority_word(self, word_phrase: str, translation: str, example_phrase: str, user_id: int) -> dict:
+    async def upsert_priority_word(
+        self,
+        word_phrase: str,
+        translation: str,
+        example_phrase: str,
+        user_id: int,
+        extra_info: str | None = None,
+    ) -> dict:
         """Upsert a word with elevated numeric priority. Restores deleted words.
 
         Returns:
@@ -320,6 +327,7 @@ class VocabularyService:
             translation=translation,
             example_phrase=example_phrase,
             user_id=user_id,
+            extra_info=extra_info,
         )
         action = str(result["action"])
         if action == "created":
