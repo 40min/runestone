@@ -53,13 +53,45 @@ Never invent candidates simply because a Swedish word appears in the conversatio
 - Words that are only mentioned as options in a practice prompt or writing exercise.
 - Bolded words that are emphasized for an exercise but not presented as vocabulary to memorize.
 
+## Candidate Field Rules
+- `word_phrase` — the canonical Swedish learning item, not a noisy slice of the surrounding sentence.
+- `translation` — a concise target-language translation, not a grammar explanation.
+- `example_phrase` — a natural Swedish sentence that demonstrates the saved item or full phrase.
+- `extra_info` — an optional compact learner note with grammar or usage details.
+- `reason` — a short internal reason why the word should be saved or prioritized.
+
+## Normalization Rules
+- No leading articles: save `hund`, not `en hund`; save `äpple`, not `ett äpple`.
+- Allow definite or bestämd forms when the form itself is the learning target.
+- Use smart lowercase: lowercase ordinary words, but preserve acronyms, personal names, proper nouns, and fixed casing.
+- Prefer lemma or base form unless the inflected form matters.
+- Do not save bare `att` for verbs; keep `att` inside real constructions such as
+  `ha svårt att`, `komma att`, or `se till att`.
+- Preserve particles, prepositions, and reflexives that change meaning, such as
+  `tycka om`, `hälsa på`, `höra av sig`, and `se fram emot`.
+- Preserve fixed phrases exactly, minus surrounding punctuation and extra whitespace.
+- Keep Swedish characters; never ASCII-fold `å`, `ä`, or `ö`.
+- Use canonical duplicate handling so casing, articles, and punctuation do not create near-duplicates.
+- Do not save grammar-only tokens as vocabulary unless explicitly presented as learning items.
+- Ensure examples naturally demonstrate the saved item or full phrase.
+- Keep translations concise; put morphology and usage in `extra_info`, not `translation`.
+
+## Extra Info Guidance
+`extra_info` is a compact learner note, not a second translation and not a full grammar lesson.
+Use it for high-value morphology or usage details, for example:
+- `en-word noun; plural: hundar; definite: hunden`
+- `verb; infinitive: förstå; present: förstår; past: förstod; supine: förstått`
+- `adjective; common: vacker; neuter: vackert; plural/definite: vackra`
+- `particle verb; "tycka om" means "to like"`
+- `fixed phrase; common in spoken Swedish`
+If a saved item is canonicalized from a context form, mention the relation when useful,
+for example `en-word noun; context form "hunden" is definite singular`.
+If unsure, leave `extra_info` empty rather than guess.
+
 ## Extraction Rules (apply to every candidate)
-- `word_phrase` — the Swedish word or phrase, copied exactly as it appears.
-- `translation` — prefer a translation already present in the chat; otherwise infer
-  a concise one in `target_translation_language`.
-- `example_phrase` — prefer a natural Swedish sentence already in the teacher
-  response or recent chat; otherwise generate a short, natural one.
-- Always return both `translation` and `example_phrase` for every candidate.
+- Prefer translations and examples already present in the chat when they fit the candidate rules.
+- Otherwise infer a concise translation in `target_translation_language` and generate a short, natural Swedish example.
+- Always return `translation` and `example_phrase` for every candidate; include `extra_info` when useful.
 
 ## Output
 Return valid JSON matching the provided schema. If there are no candidates, return an empty list.
@@ -72,6 +104,7 @@ class SaveCandidate(BaseModel):
     word_phrase: str = Field(..., description="Swedish word or phrase to save")
     translation: str | None = Field(None, description="Concise translation from the chat if available")
     example_phrase: str | None = Field(None, description="Swedish example sentence from the chat if available")
+    extra_info: str | None = Field(None, description="Compact grammar or usage note when useful")
     reason: str = Field("", description="Brief reason why this word should be saved")
 
 
@@ -109,7 +142,7 @@ class WordKeeperSpecialist(BaseSpecialist):
         unique_candidates = self._dedupe_candidates(extraction.candidates)
         saved_words: list[str] = []
         skipped_words: list[dict[str, str]] = []
-        save_candidates: list[dict[str, str]] = []
+        save_candidates: list[dict[str, str | None]] = []
         action_counts = {"created": 0, "restored": 0, "prioritized": 0, "already_prioritized": 0}
         service_error_count = 0
 
@@ -122,6 +155,7 @@ class WordKeeperSpecialist(BaseSpecialist):
                             "word_phrase": completed["word_phrase"],
                             "translation": completed["translation"],
                             "example_phrase": completed["example_phrase"],
+                            "extra_info": completed["extra_info"],
                             "reason": candidate.reason,
                         }
                     )
@@ -140,6 +174,7 @@ class WordKeeperSpecialist(BaseSpecialist):
                             word_phrase=completed["word_phrase"],
                             translation=completed["translation"],
                             example_phrase=completed["example_phrase"],
+                            extra_info=completed["extra_info"],
                             user_id=context.user.id,
                         )
                     except Exception as exc:
@@ -287,11 +322,13 @@ class WordKeeperSpecialist(BaseSpecialist):
         return deduped
 
     @staticmethod
-    def _normalize_candidate(candidate: SaveCandidate) -> dict[str, str]:
+    def _normalize_candidate(candidate: SaveCandidate) -> dict[str, str | None]:
+        extra_info = (candidate.extra_info or "").strip()
         return {
             "word_phrase": candidate.word_phrase.strip(),
             "translation": (candidate.translation or "").strip(),
             "example_phrase": (candidate.example_phrase or "").strip(),
+            "extra_info": extra_info or None,
         }
 
     @staticmethod

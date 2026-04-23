@@ -922,7 +922,11 @@ class TestVocabularyService:
     async def test_upsert_priority_word_new(self, service, db_session):
         """Test upserting a new priority word."""
         await service.upsert_priority_word(
-            word_phrase="nytt ord", translation="new word", example_phrase="Ett nytt ord.", user_id=1
+            word_phrase="nytt ord",
+            translation="new word",
+            example_phrase="Ett nytt ord.",
+            user_id=1,
+            extra_info="fixed phrase; useful for vocabulary practice",
         )
         await db_session.commit()
 
@@ -930,19 +934,29 @@ class TestVocabularyService:
         assert vocab is not None
         assert vocab.priority_learn == 4
         assert vocab.translation == "new word"
+        assert vocab.extra_info == "fixed phrase; useful for vocabulary practice"
         assert vocab.in_learn is True
 
     async def test_upsert_priority_word_existing(self, service, db_session):
         """Test upserting an existing word to prioritize it."""
         # Pre-add a regular word
         vocab = VocabularyModel(
-            user_id=1, word_phrase="befintligt", translation="existing", priority_learn=9, in_learn=True
+            user_id=1,
+            word_phrase="befintligt",
+            translation="existing",
+            extra_info="existing note",
+            priority_learn=9,
+            in_learn=True,
         )
         db_session.add(vocab)
         await db_session.commit()
 
         await service.upsert_priority_word(
-            word_phrase="befintligt", translation="ignored", example_phrase="ignored", user_id=1
+            word_phrase="befintligt",
+            translation="ignored",
+            example_phrase="ignored",
+            user_id=1,
+            extra_info="ignored note",
         )
         await db_session.commit()
 
@@ -952,23 +966,36 @@ class TestVocabularyService:
         assert (
             vocab_db.translation == "existing"
         )  # Upsert of existing word doesn't change translation in current implementation
+        assert vocab_db.extra_info == "existing note"
 
     async def test_upsert_priority_word_restore(self, service, db_session):
         """Test that upserting a priority word restores it if it was soft-deleted."""
         # Pre-add a soft-deleted word
         vocab = VocabularyModel(
-            user_id=1, word_phrase="raderat", translation="deleted", priority_learn=9, in_learn=False
+            user_id=1,
+            word_phrase="raderat",
+            translation="deleted",
+            extra_info="deleted note",
+            priority_learn=9,
+            in_learn=False,
         )
         db_session.add(vocab)
         await db_session.commit()
 
-        await service.upsert_priority_word(word_phrase="raderat", translation="...", example_phrase="...", user_id=1)
+        await service.upsert_priority_word(
+            word_phrase="raderat",
+            translation="...",
+            example_phrase="...",
+            user_id=1,
+            extra_info="ignored restored note",
+        )
         await db_session.commit()
 
         # Refresh from DB
         vocab_db = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == vocab.id))
         assert vocab_db.in_learn is True
         assert vocab_db.priority_learn == 8
+        assert vocab_db.extra_info == "deleted note"
 
     async def test_upsert_priority_word_already_prioritized(self, service, db_session):
         """Test upserting an already prioritized word returns explicit no-op action."""
@@ -1025,12 +1052,14 @@ class TestVocabularyService:
                     translation="concurrent",
                     example_phrase="Detta ar ett konkurrent test.",
                     user_id=race_user_id,
+                    extra_info="noun; race condition test note",
                 ),
                 service2.upsert_priority_word(
                     word_phrase="konkurrent",
                     translation="concurrent",
                     example_phrase="Detta ar ett konkurrent test.",
                     user_id=race_user_id,
+                    extra_info="noun; race condition test note",
                 ),
             )
 
@@ -1049,6 +1078,7 @@ class TestVocabularyService:
 
         assert len(rows) == 1
         assert 0 <= rows[0].priority_learn <= 4
+        assert rows[0].extra_info == "noun; race condition test note"
         actions = {result1["action"], result2["action"]}
         assert "created" in actions
         assert actions.issubset({"created", "already_prioritized", "prioritized", "restored"})

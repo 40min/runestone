@@ -64,7 +64,14 @@ class VocabularyRepository:
         await self.db.refresh(vocab)
         return vocab
 
-    async def upsert_priority_word(self, word_phrase: str, translation: str, example_phrase: str, user_id: int) -> dict:
+    async def upsert_priority_word(
+        self,
+        word_phrase: str,
+        translation: str,
+        example_phrase: str,
+        user_id: int,
+        extra_info: str | None = None,
+    ) -> dict:
         """Atomically upsert a priority word and return action metadata.
 
         Uses a single PostgreSQL statement with ON CONFLICT DO UPDATE.
@@ -80,8 +87,10 @@ class VocabularyRepository:
                 WHERE user_id = :user_id AND word_phrase = :word_phrase
             ),
             upserted AS (
-                INSERT INTO vocabulary (user_id, word_phrase, translation, example_phrase, in_learn, priority_learn)
-                VALUES (:user_id, :word_phrase, :translation, :example_phrase, TRUE, :new_word_priority)
+                INSERT INTO vocabulary
+                    (user_id, word_phrase, translation, example_phrase, extra_info, in_learn, priority_learn)
+                VALUES
+                    (:user_id, :word_phrase, :translation, :example_phrase, :extra_info, TRUE, :new_word_priority)
                 ON CONFLICT (user_id, word_phrase) DO UPDATE
                 SET
                     in_learn = TRUE,
@@ -113,6 +122,7 @@ class VocabularyRepository:
                 "word_phrase": word_phrase,
                 "translation": translation,
                 "example_phrase": example_phrase,
+                "extra_info": extra_info,
                 "new_word_priority": VOCABULARY_PRIORITY_AGENT_NEW,
                 "min_priority": VOCABULARY_PRIORITY_HIGH,
             },
