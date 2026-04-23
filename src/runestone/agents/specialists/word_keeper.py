@@ -179,6 +179,8 @@ class WordKeeperSpecialist(BaseSpecialist):
                         )
                     except Exception as exc:
                         service_error_count += 1
+                        # Keep partial-save behavior: reset aborted transaction and continue.
+                        await vocabulary_service.repo.db.rollback()
                         logger.warning(
                             "[agents:wordkeeper] Failed to save word '%s': %s",
                             completed["word_phrase"],

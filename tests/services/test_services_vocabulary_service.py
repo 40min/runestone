@@ -997,6 +997,58 @@ class TestVocabularyService:
         assert vocab_db.priority_learn == 8
         assert vocab_db.extra_info == "deleted note"
 
+    async def test_upsert_priority_word_fills_missing_extra_info_on_existing_word(self, service, db_session):
+        """Existing words should backfill extra_info when it is currently NULL."""
+        vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="saknar-info",
+            translation="missing info",
+            extra_info=None,
+            priority_learn=9,
+            in_learn=True,
+        )
+        db_session.add(vocab)
+        await db_session.commit()
+
+        await service.upsert_priority_word(
+            word_phrase="saknar-info",
+            translation="ignored",
+            example_phrase="ignored",
+            user_id=1,
+            extra_info="noun; common gender",
+        )
+        await db_session.commit()
+
+        vocab_db = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == vocab.id))
+        assert vocab_db.priority_learn == 8
+        assert vocab_db.extra_info == "noun; common gender"
+
+    async def test_upsert_priority_word_fills_empty_extra_info_on_existing_word(self, service, db_session):
+        """Existing words should backfill extra_info when it is currently an empty string."""
+        vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="tom-info",
+            translation="empty info",
+            extra_info="",
+            priority_learn=9,
+            in_learn=True,
+        )
+        db_session.add(vocab)
+        await db_session.commit()
+
+        await service.upsert_priority_word(
+            word_phrase="tom-info",
+            translation="ignored",
+            example_phrase="ignored",
+            user_id=1,
+            extra_info="verb; imperative form",
+        )
+        await db_session.commit()
+
+        vocab_db = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == vocab.id))
+        assert vocab_db.priority_learn == 8
+        assert vocab_db.extra_info == "verb; imperative form"
+
     async def test_upsert_priority_word_already_prioritized(self, service, db_session):
         """Test upserting an already prioritized word returns explicit no-op action."""
         vocab = VocabularyModel(

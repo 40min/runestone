@@ -355,6 +355,7 @@ async def test_word_keeper_reports_partial_save_when_later_candidate_fails(speci
             RuntimeError("db exploded"),
         ]
     )
+    vocabulary_service.repo.db.rollback = AsyncMock()
 
     with patch(
         "runestone.agents.specialists.word_keeper.provide_vocabulary_service",
@@ -379,6 +380,7 @@ async def test_word_keeper_reports_partial_save_when_later_candidate_fails(speci
         result.info_for_teacher
         == "Saved 1 vocabulary item(s) for future recall. Skipped 1 item(s) due to internal errors."
     )
+    vocabulary_service.repo.db.rollback.assert_awaited_once()
 
 
 @pytest.mark.anyio

@@ -95,6 +95,7 @@ class VocabularyRepository:
                 SET
                     in_learn = TRUE,
                     priority_learn = GREATEST(vocabulary.priority_learn - 1, :min_priority),
+                    extra_info = COALESCE(NULLIF(vocabulary.extra_info, ''), EXCLUDED.extra_info),
                     updated_at = NOW()
                 RETURNING id, priority_learn, (xmax = 0) AS inserted
             )
