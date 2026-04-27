@@ -19,6 +19,7 @@ from runestone.core.exceptions import VocabularyItemExists
 from runestone.db.models import User as UserModel
 from runestone.db.models import Vocabulary as VocabularyModel
 from runestone.db.vocabulary_repository import VocabularyRepository
+from runestone.schemas.vocabulary_save import WordSaveCandidate
 from runestone.services.vocabulary_service import VocabularyService
 
 
@@ -918,6 +919,81 @@ class TestVocabularyService:
             # Verify repo called with precise=False (default)
             mock_repo.assert_awaited_once_with(1, 20, "apple", False)
             assert len(result) == 2
+
+    async def test_prepare_priority_word_save_mixed_batch(self, service, db_session):
+        """Existing words are prioritized/restored while missing words are reported for enrichment."""
+        active = VocabularyModel(
+            user_id=1,
+            word_phrase="befintligt",
+            translation="existing",
+            example_phrase="Existing example.",
+            extra_info="existing note",
+            priority_learn=9,
+            in_learn=True,
+        )
+        deleted = VocabularyModel(
+            user_id=1,
+            word_phrase="raderat",
+            translation="deleted",
+            example_phrase="Deleted example.",
+            extra_info="deleted note",
+            priority_learn=9,
+            in_learn=False,
+        )
+        top_priority = VocabularyModel(
+            user_id=1,
+            word_phrase="prioriterad",
+            translation="prioritized",
+            priority_learn=0,
+            in_learn=True,
+        )
+        db_session.add_all([active, deleted, top_priority])
+        await db_session.commit()
+
+        result = await service.prepare_priority_word_save(
+            [
+                WordSaveCandidate(word_phrase="befintligt"),
+                WordSaveCandidate(word_phrase="nytt", source_form="nytt"),
+                WordSaveCandidate(word_phrase="raderat"),
+                WordSaveCandidate(word_phrase="prioriterad"),
+                WordSaveCandidate(word_phrase="befintligt"),
+            ],
+            user_id=1,
+        )
+
+        assert [action.word_phrase for action in result] == [
+            "befintligt",
+            "nytt",
+            "raderat",
+            "prioriterad",
+        ]
+        assert [action.action for action in result] == [
+            "prioritized",
+            "missing",
+            "restored",
+            "already_prioritized",
+        ]
+        missing_actions = [action for action in result if action.action == "missing"]
+        assert [action.word_phrase for action in missing_actions] == ["nytt"]
+        assert missing_actions[0].candidate_id == "1"
+        assert missing_actions[0].source_form == "nytt"
+
+        active_db = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == active.id))
+        deleted_db = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == deleted.id))
+        top_priority_db = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == top_priority.id))
+        missing_db = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.word_phrase == "nytt"))
+
+        assert active_db.priority_learn == 8
+        assert active_db.translation == "existing"
+        assert active_db.example_phrase == "Existing example."
+        assert active_db.extra_info == "existing note"
+        assert deleted_db.in_learn is True
+        assert deleted_db.priority_learn == 8
+        assert deleted_db.translation == "deleted"
+        assert deleted_db.extra_info == "deleted note"
+        assert top_priority_db.priority_learn == 0
+        assert result[3].changed is False
+        assert missing_db is None
 
     async def test_upsert_priority_word_new(self, service, db_session):
         """Test upserting a new priority word."""

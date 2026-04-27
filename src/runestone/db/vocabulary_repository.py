@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.schemas import VocabularyItemCreate, VocabularyStatsResponse
 from ..constants import VOCABULARY_PRIORITY_AGENT_NEW, VOCABULARY_PRIORITY_HIGH, VOCABULARY_PRIORITY_LOW
+from ..schemas.vocabulary_save import RepositoryPriorityAction, RepositoryPriorityResult, priority_word_action_name
 from ..utils.search import parse_search_query_with_wildcards
 from .models import Vocabulary
 
@@ -28,6 +29,83 @@ class VocabularyRepository:
         )
         result = await self.db.execute(stmt)
         return {row[0] for row in result.all()}
+
+    async def prioritize_existing_word_phrases(self, word_phrases: List[str], user_id: int) -> RepositoryPriorityResult:
+        """Prioritize existing vocabulary rows and report missing phrases without inserting them."""
+        if not word_phrases:
+            return RepositoryPriorityResult(actions=[], missing_word_phrases=[])
+
+        stmt = text(
+            """
+            WITH existing AS (
+                SELECT id, in_learn, priority_learn
+                FROM vocabulary
+                WHERE user_id = :user_id AND word_phrase = :word_phrase
+            ),
+            updated AS (
+                UPDATE vocabulary AS v
+                SET
+                    in_learn = TRUE,
+                    priority_learn = GREATEST(v.priority_learn - 1, :min_priority),
+                    updated_at = NOW()
+                FROM existing e
+                WHERE v.id = e.id
+                RETURNING v.id, v.priority_learn
+            )
+            SELECT
+                e.id AS word_id,
+                CASE
+                    WHEN e.id IS NULL THEN 'missing'
+                    WHEN e.in_learn IS FALSE THEN 'restored'
+                    WHEN u.priority_learn < e.priority_learn THEN 'prioritized'
+                    ELSE 'already_prioritized'
+                END AS action,
+                CASE
+                    WHEN e.id IS NULL THEN FALSE
+                    WHEN e.in_learn IS FALSE OR u.priority_learn < e.priority_learn THEN TRUE
+                    ELSE FALSE
+                END AS changed
+            FROM (SELECT 1) seed
+            LEFT JOIN existing e ON TRUE
+            LEFT JOIN updated u ON TRUE
+            """
+        )
+
+        actions: list[RepositoryPriorityAction] = []
+        missing_word_phrases: list[str] = []
+        updated_word_ids: list[int] = []
+        for word_phrase in word_phrases:
+            result = await self.db.execute(
+                stmt,
+                {
+                    "user_id": user_id,
+                    "word_phrase": word_phrase,
+                    "min_priority": VOCABULARY_PRIORITY_HIGH,
+                },
+            )
+            row = result.mappings().one()
+            action = priority_word_action_name(row["action"], default="missing")
+            word_id = row["word_id"]
+            if action == "missing":
+                missing_word_phrases.append(word_phrase)
+            elif word_id is not None:
+                updated_word_ids.append(int(word_id))
+
+            actions.append(
+                RepositoryPriorityAction(
+                    word_phrase=word_phrase,
+                    action=action,
+                    word_id=int(word_id) if word_id is not None else None,
+                    changed=bool(row["changed"]),
+                )
+            )
+
+        await self.db.commit()
+        if updated_word_ids:
+            await self.db.execute(
+                select(Vocabulary).where(Vocabulary.id.in_(updated_word_ids)).execution_options(populate_existing=True)
+            )
+        return RepositoryPriorityResult(actions=actions, missing_word_phrases=missing_word_phrases)
 
     async def batch_insert_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int):
         """Batch insert vocabulary items (assumes duplicates are already filtered)."""

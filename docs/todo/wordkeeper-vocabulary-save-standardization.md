@@ -67,18 +67,19 @@ for example `en-word noun; context form "hunden" is definite singular`.
 
 If WordKeeper is unsure, it should leave `extra_info` empty rather than guess.
 
-## Follow-Up Refactoring Note
+## Two-Phase Save Flow
 
-The current standardization allows WordKeeper to generate complete candidate payloads
-before knowing whether the word already exists. A follow-up refactor should split
-prioritization from addition:
+WordKeeper now splits prioritization from addition so it does not generate complete
+candidate payloads before knowing whether the word already exists:
 
-1. Normalize candidate word keys and prioritize existing vocabulary rows.
-2. Only for genuinely new words, ask the LLM to generate full add payload fields:
-   `translation`, `example_phrase`, and optional `extra_info`.
+1. WordKeeper extracts raw candidate word keys from the current turn.
+2. `VocabularyService` normalizes and deduplicates the candidate list, assigns
+   stable candidate IDs, and prioritizes existing vocabulary rows.
+3. Only for genuinely new candidate IDs, ask the LLM to generate full add payload
+   fields: `translation`, `example_phrase`, and optional `extra_info`.
 
 Existing prioritized rows should not get blank `translation`, `example_phrase`, or
 `extra_info` fields auto-filled by that follow-up prioritization flow. Those fields
 should remain manual and user-owned unless a future explicit enrichment flow is built.
 
-Tracked follow-up task: `lcG7KhIjLo0W`.
+Implemented under task: `lcG7KhIjLo0W`.

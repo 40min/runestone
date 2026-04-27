@@ -5,6 +5,7 @@ WordKeeper specialist responsible for vocabulary capture and prioritization.
 import json
 import logging
 import time
+from dataclasses import dataclass, field
 from typing import Literal
 
 from langchain_core.exceptions import OutputParserException
@@ -16,6 +17,7 @@ from runestone.agents.service_providers import provide_vocabulary_service
 from runestone.agents.specialists.base import BaseSpecialist, SpecialistAction, SpecialistContext, SpecialistResult
 from runestone.config import Settings
 from runestone.core.observability import elapsed_ms_since
+from runestone.schemas.vocabulary_save import VocabularyPrioritizationAction, WordSaveCandidate
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +57,7 @@ Never invent candidates simply because a Swedish word appears in the conversatio
 
 ## Candidate Field Rules
 - `word_phrase` — the canonical Swedish learning item, not a noisy slice of the surrounding sentence.
-- `translation` — a concise target-language translation, not a grammar explanation.
-- `example_phrase` — a natural Swedish sentence that demonstrates the saved item or full phrase.
-- `extra_info` — an optional compact learner note with grammar or usage details.
-- `reason` — a short internal reason why the word should be saved or prioritized.
+- `source_form` — optional original form from the current context when it differs from `word_phrase`.
 
 ## Normalization Rules
 - No leading articles: save `hund`, not `en hund`; save `äpple`, not `ett äpple`.
@@ -73,8 +72,33 @@ Never invent candidates simply because a Swedish word appears in the conversatio
 - Keep Swedish characters; never ASCII-fold `å`, `ä`, or `ö`.
 - Use canonical duplicate handling so casing, articles, and punctuation do not create near-duplicates.
 - Do not save grammar-only tokens as vocabulary unless explicitly presented as learning items.
-- Ensure examples naturally demonstrate the saved item or full phrase.
-- Keep translations concise; put morphology and usage in `extra_info`, not `translation`.
+
+## Extraction Rules (apply to every candidate)
+- Return only canonical word keys and optional context source forms.
+- Do not generate translations, examples, grammar notes, or reasons.
+
+## Output
+Return valid JSON matching the provided schema. If there are no candidates, return an empty list.
+"""
+
+
+WORDKEEPER_ENRICHMENT_PROMPT = """
+You are WordKeeper, an internal vocabulary enrichment specialist for a Swedish tutoring app.
+You do not interact with the student.
+
+Generate full save fields only for the requested new vocabulary items.
+
+## Field Rules
+- `candidate_id` — copy the requested candidate id exactly.
+- `word_phrase` — copy the requested canonical Swedish learning item exactly.
+- `translation` — a concise translation in `target_translation_language`, not a grammar explanation.
+- `example_phrase` — a natural Swedish sentence that demonstrates the saved item or full phrase.
+- `extra_info` — an optional compact learner note with grammar or usage details.
+
+## Context Rules
+- Prefer translations and examples already present in `teacher_response` when they fit the requested word.
+- Otherwise infer a concise translation and generate a short, natural Swedish example.
+- If `source_form` differs from `word_phrase`, use it only when useful for `extra_info`.
 
 ## Extra Info Guidance
 `extra_info` is a compact learner note, not a second translation and not a full grammar lesson.
@@ -88,31 +112,58 @@ If a saved item is canonicalized from a context form, mention the relation when 
 for example `en-word noun; context form "hunden" is definite singular`.
 If unsure, leave `extra_info` empty rather than guess.
 
-## Extraction Rules (apply to every candidate)
-- Prefer translations and examples already present in the chat when they fit the candidate rules.
-- Otherwise infer a concise translation in `target_translation_language` and generate a short, natural Swedish example.
-- Always return `translation` and `example_phrase` for every candidate; include `extra_info` when useful.
-
 ## Output
-Return valid JSON matching the provided schema. If there are no candidates, return an empty list.
+Return valid JSON matching the provided schema. Include one item for each requested word you can complete.
 """
-
-
-class SaveCandidate(BaseModel):
-    """Candidate vocabulary item extracted from the current turn."""
-
-    word_phrase: str = Field(..., description="Swedish word or phrase to save")
-    translation: str | None = Field(None, description="Concise translation from the chat if available")
-    example_phrase: str | None = Field(None, description="Swedish example sentence from the chat if available")
-    extra_info: str | None = Field(None, description="Compact grammar or usage note when useful")
-    reason: str = Field("", description="Brief reason why this word should be saved")
 
 
 class WordKeeperExtraction(BaseModel):
     """Structured result for WordKeeper extraction."""
 
     decision: Literal["no_action", "save_words"] = Field(..., description="Whether any words should be saved")
-    candidates: list[SaveCandidate] = Field(default_factory=list, description="Words selected for saving")
+    candidates: list[WordSaveCandidate] = Field(default_factory=list, description="Words selected for saving")
+
+
+class WordEnrichmentItem(BaseModel):
+    """Full vocabulary payload for a new word that will be inserted."""
+
+    candidate_id: str = Field(..., description="The requested candidate id")
+    word_phrase: str = Field(..., description="The requested Swedish word or phrase")
+    translation: str | None = Field(None, description="Concise translation of the word_phrase")
+    example_phrase: str | None = Field(None, description="Natural Swedish example sentence")
+    extra_info: str | None = Field(None, description="Compact grammar or usage note when useful")
+
+
+class WordKeeperEnrichment(BaseModel):
+    """Structured result for new-word enrichment."""
+
+    items: list[WordEnrichmentItem] = Field(default_factory=list, description="Completed new vocabulary items")
+
+
+@dataclass
+class SaveRunState:
+    """Mutable save bookkeeping for one WordKeeper run."""
+
+    save_candidates: list[WordSaveCandidate] = field(default_factory=list)
+    priority_actions: list[VocabularyPrioritizationAction] = field(default_factory=list)
+    saved_words: list[str] = field(default_factory=list)
+    skipped_words: list[dict[str, str]] = field(default_factory=list)
+    action_counts: dict[str, int] = field(
+        default_factory=lambda: {"created": 0, "restored": 0, "prioritized": 0, "already_prioritized": 0}
+    )
+    service_error_count: int = 0
+
+    def artifacts(self, *, include_action_counts: bool = False) -> dict[str, object]:
+        artifacts = {
+            "saved_words": self.saved_words,
+            "skipped_words": self.skipped_words,
+            "save_candidates": [candidate.model_dump() for candidate in self.save_candidates],
+            "priority_actions": [action.as_artifact() for action in self.priority_actions],
+            "new_word_phrases": [action.word_phrase for action in self.priority_actions if action.action == "missing"],
+        }
+        if include_action_counts:
+            artifacts["action_counts"] = self.action_counts
+        return artifacts
 
 
 class WordKeeperSpecialist(BaseSpecialist):
@@ -132,81 +183,25 @@ class WordKeeperSpecialist(BaseSpecialist):
         started = time.monotonic()
         extraction = await self._extract_candidates(context)
         if extraction.decision == "no_action" or not extraction.candidates:
-            return SpecialistResult(
-                status="no_action",
-                actions=[],
-                info_for_teacher="",
-                artifacts={"saved_words": [], "skipped_words": [], "save_candidates": []},
-            )
+            return self._no_action_result(SaveRunState())
 
-        unique_candidates = self._dedupe_candidates(extraction.candidates)
-        saved_words: list[str] = []
-        skipped_words: list[dict[str, str]] = []
-        save_candidates: list[dict[str, str | None]] = []
-        action_counts = {"created": 0, "restored": 0, "prioritized": 0, "already_prioritized": 0}
-        service_error_count = 0
+        state = SaveRunState(save_candidates=extraction.candidates)
 
         try:
             async with provide_vocabulary_service() as vocabulary_service:
-                for candidate in unique_candidates:
-                    completed = self._normalize_candidate(candidate)
-                    save_candidates.append(
-                        {
-                            "word_phrase": completed["word_phrase"],
-                            "translation": completed["translation"],
-                            "example_phrase": completed["example_phrase"],
-                            "extra_info": completed["extra_info"],
-                            "reason": candidate.reason,
-                        }
-                    )
-
-                    if not completed["translation"] or not completed["example_phrase"]:
-                        skipped_words.append(
-                            {
-                                "word_phrase": candidate.word_phrase,
-                                "reason": "missing_required_fields_after_completion",
-                            }
-                        )
-                        continue
-
-                    try:
-                        result = await vocabulary_service.upsert_priority_word(
-                            word_phrase=completed["word_phrase"],
-                            translation=completed["translation"],
-                            example_phrase=completed["example_phrase"],
-                            extra_info=completed["extra_info"],
-                            user_id=context.user.id,
-                        )
-                    except Exception as exc:
-                        service_error_count += 1
-                        # Keep partial-save behavior: reset aborted transaction and continue.
-                        await vocabulary_service.repo.db.rollback()
-                        logger.warning(
-                            "[agents:wordkeeper] Failed to save word '%s': %s",
-                            completed["word_phrase"],
-                            exc,
-                            exc_info=True,
-                        )
-                        skipped_words.append(
-                            {
-                                "word_phrase": completed["word_phrase"],
-                                "reason": f"vocabulary_service_error: {type(exc).__name__}",
-                            }
-                        )
-                        continue
-
-                    action = str(result.get("action", "prioritized"))
-                    if action not in action_counts:
-                        action = "prioritized"
-                    action_counts[action] += 1
-                    saved_words.append(completed["word_phrase"])
+                priority_actions = await vocabulary_service.prepare_priority_word_save(
+                    extraction.candidates,
+                    user_id=context.user.id,
+                )
+                self._record_priority_actions(priority_actions, state)
+                await self._enrich_and_save_new_words(context, vocabulary_service, priority_actions, state)
 
         except Exception as exc:
             latency_ms = elapsed_ms_since(started)
             logger.warning("[agents:wordkeeper] Failed to save words after %sms: %s", latency_ms, exc, exc_info=True)
             info_for_teacher = (
-                f"Partially saved {len(saved_words)} vocabulary item(s) before an internal error."
-                if saved_words
+                f"Partially saved {len(state.saved_words)} vocabulary item(s) before an internal error."
+                if state.saved_words
                 else ""
             )
             return SpecialistResult(
@@ -219,56 +214,29 @@ class WordKeeperSpecialist(BaseSpecialist):
                     )
                 ],
                 info_for_teacher=info_for_teacher,
-                artifacts={
-                    "saved_words": saved_words,
-                    "skipped_words": skipped_words,
-                    "save_candidates": save_candidates,
-                },
+                artifacts=state.artifacts(),
             )
 
-        if not saved_words and service_error_count > 0:
-            return SpecialistResult(
-                status="error",
-                actions=[
-                    SpecialistAction(
-                        tool="prioritize_words_for_learning",
-                        status="error",
-                        summary="Failed to save vocabulary candidates",
-                    )
-                ],
-                info_for_teacher="",
-                artifacts={
-                    "saved_words": [],
-                    "skipped_words": skipped_words,
-                    "save_candidates": save_candidates,
-                },
-            )
+        if not state.saved_words and state.service_error_count > 0:
+            return self._error_result(state)
 
-        if not saved_words:
-            return SpecialistResult(
-                status="no_action",
-                actions=[],
-                info_for_teacher="",
-                artifacts={
-                    "saved_words": [],
-                    "skipped_words": skipped_words,
-                    "save_candidates": save_candidates,
-                },
-            )
+        if not state.saved_words:
+            return self._no_action_result(state)
 
         summary = (
-            f"created={action_counts['created']}, restored={action_counts['restored']}, "
-            f"prioritized={action_counts['prioritized']}, already_prioritized={action_counts['already_prioritized']}"
+            f"created={state.action_counts['created']}, restored={state.action_counts['restored']}, "
+            f"prioritized={state.action_counts['prioritized']}, "
+            f"already_prioritized={state.action_counts['already_prioritized']}"
         )
         logger.info(
             "[agents:wordkeeper] Saved %s word(s) in %sms: %s",
-            len(saved_words),
+            len(state.saved_words),
             elapsed_ms_since(started),
             summary,
         )
-        info_for_teacher = f"Saved {len(saved_words)} vocabulary item(s) for future recall."
-        if service_error_count:
-            info_for_teacher += f" Skipped {service_error_count} item(s) due to internal errors."
+        info_for_teacher = f"Saved {len(state.saved_words)} vocabulary item(s) for future recall."
+        if state.service_error_count:
+            info_for_teacher += f" Skipped {state.service_error_count} item(s) due to internal errors."
         return SpecialistResult(
             status="action_taken",
             actions=[
@@ -279,12 +247,113 @@ class WordKeeperSpecialist(BaseSpecialist):
                 )
             ],
             info_for_teacher=info_for_teacher,
-            artifacts={
-                "saved_words": saved_words,
-                "skipped_words": skipped_words,
-                "save_candidates": save_candidates,
-                "action_counts": action_counts,
-            },
+            artifacts=state.artifacts(include_action_counts=True),
+        )
+
+    @staticmethod
+    def _record_priority_actions(priority_actions: list[VocabularyPrioritizationAction], state: SaveRunState) -> None:
+        state.priority_actions = priority_actions
+        for action_result in priority_actions:
+            if action_result.action == "missing":
+                continue
+            state.action_counts[action_result.action] += 1
+            state.saved_words.append(action_result.word_phrase)
+
+    async def _enrich_and_save_new_words(
+        self,
+        context: SpecialistContext,
+        vocabulary_service,
+        priority_actions: list[VocabularyPrioritizationAction],
+        state: SaveRunState,
+    ) -> None:
+        new_candidates = [action for action in priority_actions if action.action == "missing"]
+        if not new_candidates:
+            return
+
+        enrichment = await self._enrich_new_words(context, new_candidates)
+        if enrichment is None:
+            state.skipped_words.extend(
+                {"word_phrase": candidate.word_phrase, "reason": "enrichment_failed"} for candidate in new_candidates
+            )
+            return
+
+        enriched_by_id = {item.candidate_id.strip(): item for item in enrichment.items if item.candidate_id.strip()}
+        for action in new_candidates:
+            item = enriched_by_id.get(action.candidate_id)
+            if item is None:
+                state.skipped_words.append({"word_phrase": action.word_phrase, "reason": "missing_enrichment"})
+                continue
+
+            completed = self._normalize_enrichment_item(item, action)
+            if not completed["translation"] or not completed["example_phrase"]:
+                state.skipped_words.append(
+                    {"word_phrase": action.word_phrase, "reason": "missing_required_fields_after_enrichment"}
+                )
+                continue
+
+            await self._save_enriched_word(context, vocabulary_service, completed, state)
+
+    async def _save_enriched_word(
+        self,
+        context: SpecialistContext,
+        vocabulary_service,
+        completed: dict[str, str | None],
+        state: SaveRunState,
+    ) -> None:
+        try:
+            result = await vocabulary_service.upsert_priority_word(
+                word_phrase=completed["word_phrase"],
+                translation=completed["translation"],
+                example_phrase=completed["example_phrase"],
+                extra_info=completed["extra_info"],
+                user_id=context.user.id,
+            )
+        except Exception as exc:
+            state.service_error_count += 1
+            # Keep partial-save behavior: reset aborted transaction and continue.
+            await vocabulary_service.repo.db.rollback()
+            logger.warning(
+                "[agents:wordkeeper] Failed to save word '%s': %s",
+                completed["word_phrase"],
+                exc,
+                exc_info=True,
+            )
+            state.skipped_words.append(
+                {
+                    "word_phrase": str(completed["word_phrase"]),
+                    "reason": f"vocabulary_service_error: {type(exc).__name__}",
+                }
+            )
+            return
+
+        action = str(result.get("action", "prioritized"))
+        if action not in state.action_counts:
+            action = "prioritized"
+        state.action_counts[action] += 1
+        state.saved_words.append(str(completed["word_phrase"]))
+
+    @staticmethod
+    def _error_result(state: SaveRunState) -> SpecialistResult:
+        return SpecialistResult(
+            status="error",
+            actions=[
+                SpecialistAction(
+                    tool="prioritize_words_for_learning",
+                    status="error",
+                    summary="Failed to save vocabulary candidates",
+                )
+            ],
+            info_for_teacher="",
+            artifacts={**state.artifacts(), "saved_words": []},
+        )
+
+    @staticmethod
+    def _no_action_result(state: SaveRunState) -> SpecialistResult:
+        return SpecialistResult(
+            status="no_action",
+            actions=[],
+            info_for_teacher="",
+            artifacts={**state.artifacts(), "saved_words": []},
         )
 
     async def _extract_candidates(self, context: SpecialistContext) -> WordKeeperExtraction:
@@ -311,25 +380,43 @@ class WordKeeperSpecialist(BaseSpecialist):
             logger.warning("[agents:wordkeeper] Extraction failed: %s", exc, exc_info=True)
             return WordKeeperExtraction(decision="no_action", candidates=[])
 
-    @staticmethod
-    def _dedupe_candidates(candidates: list[SaveCandidate]) -> list[SaveCandidate]:
-        deduped: list[SaveCandidate] = []
-        seen: set[str] = set()
-        for candidate in candidates:
-            normalized = candidate.word_phrase.strip().casefold()
-            if not normalized or normalized in seen:
-                continue
-            seen.add(normalized)
-            deduped.append(candidate)
-        return deduped
+    async def _enrich_new_words(
+        self,
+        context: SpecialistContext,
+        new_candidates: list[VocabularyPrioritizationAction],
+    ) -> WordKeeperEnrichment | None:
+        model = self.model.with_structured_output(WordKeeperEnrichment)
+        payload = {
+            "new_words": [candidate.as_artifact() for candidate in new_candidates],
+            "message": context.message,
+            "history": [msg.model_dump(mode="json") for msg in context.history],
+            "teacher_response": context.teacher_response,
+            "phase": "post_response" if context.teacher_response else "pre_response",
+            "target_translation_language": self._target_translation_language(context),
+        }
+        try:
+            return await model.ainvoke(
+                [
+                    SystemMessage(content=WORDKEEPER_ENRICHMENT_PROMPT),
+                    HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
+                ]
+            )
+        except OutputParserException as exc:
+            logger.warning("[agents:wordkeeper] Enrichment schema validation failed: %s", exc)
+            return None
+        except Exception as exc:
+            logger.warning("[agents:wordkeeper] Enrichment failed: %s", exc, exc_info=True)
+            return None
 
     @staticmethod
-    def _normalize_candidate(candidate: SaveCandidate) -> dict[str, str | None]:
-        extra_info = (candidate.extra_info or "").strip()
+    def _normalize_enrichment_item(
+        item: WordEnrichmentItem, action: VocabularyPrioritizationAction
+    ) -> dict[str, str | None]:
+        extra_info = (item.extra_info or "").strip()
         return {
-            "word_phrase": candidate.word_phrase.strip(),
-            "translation": (candidate.translation or "").strip(),
-            "example_phrase": (candidate.example_phrase or "").strip(),
+            "word_phrase": action.word_phrase,
+            "translation": (item.translation or "").strip(),
+            "example_phrase": (item.example_phrase or "").strip(),
             "extra_info": extra_info or None,
         }
 

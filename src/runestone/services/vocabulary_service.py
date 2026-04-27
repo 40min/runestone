@@ -26,6 +26,7 @@ from ..core.prompt_builder.parsers import ResponseParser
 from ..db.models import Vocabulary
 from ..db.vocabulary_repository import VocabularyRepository
 from ..schemas.vocabulary import VocabularyResponse
+from ..schemas.vocabulary_save import VocabularyPrioritizationAction, WordSaveCandidate
 
 
 class VocabularyService:
@@ -308,6 +309,45 @@ class VocabularyService:
         """Get existing word phrases from the repository."""
         return list(await self.repo.get_existing_word_phrases_for_batch(word_phrases, user_id))
 
+    async def prepare_priority_word_save(
+        self, candidates: list[WordSaveCandidate], user_id: int
+    ) -> list[VocabularyPrioritizationAction]:
+        """Prioritize existing rows and identify candidates that need enrichment before insertion."""
+        normalized_candidates = self._normalize_priority_candidates(candidates)
+        word_phrases = [candidate.word_phrase for candidate in normalized_candidates]
+
+        result = await self.repo.prioritize_existing_word_phrases(word_phrases, user_id)
+        actions = [
+            VocabularyPrioritizationAction(
+                candidate_id=str(index),
+                word_phrase=candidate.word_phrase,
+                source_form=candidate.source_form,
+                action=action_result.action,
+                word_id=action_result.word_id,
+                changed=action_result.changed,
+            )
+            for index, (candidate, action_result) in enumerate(zip(normalized_candidates, result.actions, strict=True))
+        ]
+        return actions
+
+    @staticmethod
+    def _normalize_priority_candidates(candidates: list[WordSaveCandidate]) -> list[WordSaveCandidate]:
+        normalized_candidates = []
+        seen = set()
+        for candidate in candidates:
+            normalized_word_phrase = candidate.word_phrase.strip()
+            dedupe_key = normalized_word_phrase.casefold()
+            if not normalized_word_phrase or dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            normalized_candidates.append(
+                WordSaveCandidate(
+                    word_phrase=normalized_word_phrase,
+                    source_form=(candidate.source_form or "").strip() or None,
+                )
+            )
+        return normalized_candidates
+
     async def upsert_priority_word(
         self,
         word_phrase: str,
@@ -329,23 +369,6 @@ class VocabularyService:
             user_id=user_id,
             extra_info=extra_info,
         )
-        action = str(result["action"])
-        if action == "created":
-            self.logger.info(
-                "Priority upsert created new word: word='%s', user_id=%s, word_id=%s",
-                word_phrase,
-                user_id,
-                result["word_id"],
-            )
-        else:
-            if action == "restored":
-                self.logger.info(f"Restored deleted word for priority learning: {word_phrase}")
-            self.logger.info(
-                "Priority upsert existing word result: word='%s', user_id=%s, action=%s",
-                word_phrase,
-                user_id,
-                action,
-            )
         return result
 
     async def delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:

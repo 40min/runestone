@@ -1586,6 +1586,64 @@ class TestVocabularyRepositoryStats:
         count = await repo.get_overall_words_count(user.id)
         assert count == 3
 
+    async def test_prioritize_existing_word_phrases_reports_missing_without_insert(self, repo, db_session):
+        """Existing rows are reprioritized and missing phrases are returned without placeholder rows."""
+        active = VocabularyModel(
+            user_id=1,
+            word_phrase="befintligt",
+            translation="existing",
+            example_phrase="Existing example.",
+            extra_info="existing note",
+            priority_learn=9,
+            in_learn=True,
+        )
+        deleted = VocabularyModel(
+            user_id=1,
+            word_phrase="raderat",
+            translation="deleted",
+            extra_info="deleted note",
+            priority_learn=9,
+            in_learn=False,
+        )
+        top_priority = VocabularyModel(
+            user_id=1,
+            word_phrase="prioriterad",
+            translation="prioritized",
+            priority_learn=0,
+            in_learn=True,
+        )
+        db_session.add_all([active, deleted, top_priority])
+        await db_session.commit()
+
+        result = await repo.prioritize_existing_word_phrases(
+            ["befintligt", "nytt", "raderat", "prioriterad"],
+            user_id=1,
+        )
+
+        assert [action.action for action in result.actions] == [
+            "prioritized",
+            "missing",
+            "restored",
+            "already_prioritized",
+        ]
+        assert result.missing_word_phrases == ["nytt"]
+
+        active_db = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == active.id))
+        deleted_db = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == deleted.id))
+        top_priority_db = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == top_priority.id))
+        missing_db = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.word_phrase == "nytt"))
+
+        assert active_db.priority_learn == 8
+        assert active_db.translation == "existing"
+        assert active_db.extra_info == "existing note"
+        assert deleted_db.in_learn is True
+        assert deleted_db.priority_learn == 8
+        assert deleted_db.translation == "deleted"
+        assert deleted_db.extra_info == "deleted note"
+        assert top_priority_db.priority_learn == 0
+        assert result.actions[3].changed is False
+        assert missing_db is None
+
     async def test_get_words_prioritized_count(self, repo, db_session):
         """Test counting active priority words only."""
 
