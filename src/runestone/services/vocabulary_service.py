@@ -26,6 +26,7 @@ from ..core.prompt_builder.parsers import ResponseParser
 from ..db.models import Vocabulary
 from ..db.vocabulary_repository import VocabularyRepository
 from ..schemas.vocabulary import VocabularyResponse
+from ..schemas.vocabulary_save import PriorityWordSaveItem, VocabularyPrioritizationAction, WordSaveCandidate
 
 
 class VocabularyService:
@@ -308,45 +309,48 @@ class VocabularyService:
         """Get existing word phrases from the repository."""
         return list(await self.repo.get_existing_word_phrases_for_batch(word_phrases, user_id))
 
-    async def upsert_priority_word(
-        self,
-        word_phrase: str,
-        translation: str,
-        example_phrase: str,
-        user_id: int,
-        extra_info: str | None = None,
-    ) -> dict:
-        """Upsert a word with elevated numeric priority. Restores deleted words.
+    async def prepare_priority_word_save(
+        self, candidates: list[WordSaveCandidate], user_id: int
+    ) -> list[VocabularyPrioritizationAction]:
+        """Prioritize existing rows and identify candidates that need enrichment before insertion."""
+        normalized_candidates = self._normalize_priority_candidates(candidates)
+        word_phrases = [candidate.word_phrase for candidate in normalized_candidates]
 
-        Returns:
-            dict: action metadata for observability and caller summaries.
-                action values: created, restored, prioritized, already_prioritized
-        """
-        result = await self.repo.upsert_priority_word(
-            word_phrase=word_phrase,
-            translation=translation,
-            example_phrase=example_phrase,
-            user_id=user_id,
-            extra_info=extra_info,
-        )
-        action = str(result["action"])
-        if action == "created":
-            self.logger.info(
-                "Priority upsert created new word: word='%s', user_id=%s, word_id=%s",
-                word_phrase,
-                user_id,
-                result["word_id"],
+        result = await self.repo.prioritize_existing_word_phrases(word_phrases, user_id)
+        actions = [
+            VocabularyPrioritizationAction(
+                candidate_id=str(index),
+                word_phrase=candidate.word_phrase,
+                source_form=candidate.source_form,
+                action=action_result.action,
+                word_id=action_result.word_id,
+                changed=action_result.changed,
             )
-        else:
-            if action == "restored":
-                self.logger.info(f"Restored deleted word for priority learning: {word_phrase}")
-            self.logger.info(
-                "Priority upsert existing word result: word='%s', user_id=%s, action=%s",
-                word_phrase,
-                user_id,
-                action,
+            for index, (candidate, action_result) in enumerate(zip(normalized_candidates, result.actions, strict=True))
+        ]
+        return actions
+
+    @staticmethod
+    def _normalize_priority_candidates(candidates: list[WordSaveCandidate]) -> list[WordSaveCandidate]:
+        normalized_candidates = []
+        seen = set()
+        for candidate in candidates:
+            normalized_word_phrase = candidate.word_phrase.strip()
+            dedupe_key = normalized_word_phrase.casefold()
+            if not normalized_word_phrase or dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            normalized_candidates.append(
+                WordSaveCandidate(
+                    word_phrase=normalized_word_phrase,
+                    source_form=(candidate.source_form or "").strip() or None,
+                )
             )
-        return result
+        return normalized_candidates
+
+    async def insert_or_prioritize_words(self, items: list[PriorityWordSaveItem], user_id: int) -> list[dict]:
+        """Insert missing words and prioritize existing ones in one transaction."""
+        return await self.repo.insert_or_prioritize_words(items, user_id)
 
     async def delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
         """Completely delete a vocabulary item from the database."""

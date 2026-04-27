@@ -7,6 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.schemas import VocabularyItemCreate, VocabularyStatsResponse
 from ..constants import VOCABULARY_PRIORITY_AGENT_NEW, VOCABULARY_PRIORITY_HIGH, VOCABULARY_PRIORITY_LOW
+from ..schemas.vocabulary_save import (
+    PriorityWordSaveItem,
+    RepositoryPriorityAction,
+    RepositoryPriorityResult,
+    priority_word_action_name,
+)
 from ..utils.search import parse_search_query_with_wildcards
 from .models import Vocabulary
 
@@ -28,6 +34,93 @@ class VocabularyRepository:
         )
         result = await self.db.execute(stmt)
         return {row[0] for row in result.all()}
+
+    async def prioritize_existing_word_phrases(self, word_phrases: List[str], user_id: int) -> RepositoryPriorityResult:
+        """Prioritize existing vocabulary rows and report missing phrases without inserting them."""
+        if not word_phrases:
+            return RepositoryPriorityResult(actions=[], missing_word_phrases=[])
+
+        requested_values = ", ".join(f"(:word_phrase_{index}, {index})" for index, _ in enumerate(word_phrases))
+        params = {
+            "user_id": user_id,
+            "min_priority": VOCABULARY_PRIORITY_HIGH,
+            **{f"word_phrase_{index}": word_phrase for index, word_phrase in enumerate(word_phrases)},
+        }
+        stmt = text(
+            f"""
+            WITH requested(word_phrase, ordinal) AS (
+                VALUES {requested_values}
+            ),
+            requested_distinct AS (
+                SELECT word_phrase, MIN(ordinal) AS first_ordinal
+                FROM requested
+                GROUP BY word_phrase
+            ),
+            existing AS (
+                SELECT rd.word_phrase, rd.first_ordinal, v.id, v.in_learn, v.priority_learn
+                FROM requested_distinct rd
+                JOIN vocabulary v ON v.user_id = :user_id AND v.word_phrase = rd.word_phrase
+            ),
+            updated AS (
+                UPDATE vocabulary AS v
+                SET
+                    in_learn = TRUE,
+                    priority_learn = GREATEST(v.priority_learn - 1, :min_priority),
+                    updated_at = NOW()
+                FROM existing e
+                WHERE v.id = e.id
+                RETURNING v.id, v.priority_learn
+            )
+            SELECT
+                r.word_phrase,
+                e.id AS word_id,
+                CASE
+                    WHEN e.id IS NULL THEN 'missing'
+                    WHEN e.in_learn IS FALSE THEN 'restored'
+                    WHEN u.priority_learn < e.priority_learn THEN 'prioritized'
+                    ELSE 'already_prioritized'
+                END AS action,
+                CASE
+                    WHEN e.id IS NULL THEN FALSE
+                    WHEN e.in_learn IS FALSE OR u.priority_learn < e.priority_learn THEN TRUE
+                    ELSE FALSE
+                END AS changed
+            FROM requested r
+            LEFT JOIN existing e ON e.word_phrase = r.word_phrase
+            LEFT JOIN updated u ON u.id = e.id
+            ORDER BY r.ordinal
+            """
+        )
+
+        result = await self.db.execute(stmt, params)
+        rows = result.mappings().all()
+        actions: list[RepositoryPriorityAction] = []
+        missing_word_phrases: list[str] = []
+        updated_word_ids: list[int] = []
+        for row in rows:
+            action = priority_word_action_name(row["action"], default="missing")
+            word_id = row["word_id"]
+            word_phrase = str(row["word_phrase"])
+            if action == "missing":
+                missing_word_phrases.append(word_phrase)
+            elif word_id is not None:
+                updated_word_ids.append(int(word_id))
+
+            actions.append(
+                RepositoryPriorityAction(
+                    word_phrase=word_phrase,
+                    action=action,
+                    word_id=int(word_id) if word_id is not None else None,
+                    changed=bool(row["changed"]),
+                )
+            )
+
+        await self.db.commit()
+        if updated_word_ids:
+            await self.db.execute(
+                select(Vocabulary).where(Vocabulary.id.in_(updated_word_ids)).execution_options(populate_existing=True)
+            )
+        return RepositoryPriorityResult(actions=actions, missing_word_phrases=missing_word_phrases)
 
     async def batch_insert_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int):
         """Batch insert vocabulary items (assumes duplicates are already filtered)."""
@@ -64,42 +157,61 @@ class VocabularyRepository:
         await self.db.refresh(vocab)
         return vocab
 
-    async def upsert_priority_word(
-        self,
-        word_phrase: str,
-        translation: str,
-        example_phrase: str,
-        user_id: int,
-        extra_info: str | None = None,
-    ) -> dict:
-        """Atomically upsert a priority word and return action metadata.
+    async def insert_or_prioritize_words(self, items: List[PriorityWordSaveItem], user_id: int) -> list[dict]:
+        """Atomically insert missing words and prioritize existing ones in one batch."""
+        if not items:
+            return []
 
-        Uses a single PostgreSQL statement with ON CONFLICT DO UPDATE.
-        Existing and restored words are reprioritized by decrementing
-        `priority_learn` toward the minimum, while new words start from
-        the agent-default priority.
-        """
+        requested_values = ", ".join(
+            (f"(:word_phrase_{index}, :translation_{index}, :example_phrase_{index}, " f":extra_info_{index}, {index})")
+            for index, _ in enumerate(items)
+        )
+        params = {
+            "user_id": user_id,
+            "new_word_priority": VOCABULARY_PRIORITY_AGENT_NEW,
+            "min_priority": VOCABULARY_PRIORITY_HIGH,
+        }
+        for index, item in enumerate(items):
+            params.update(
+                {
+                    f"word_phrase_{index}": item.word_phrase,
+                    f"translation_{index}": item.translation,
+                    f"example_phrase_{index}": item.example_phrase,
+                    f"extra_info_{index}": item.extra_info,
+                }
+            )
+
         stmt = text(
-            """
-            WITH existing AS (
-                SELECT id, in_learn, priority_learn
-                FROM vocabulary
-                WHERE user_id = :user_id AND word_phrase = :word_phrase
+            f"""
+            WITH requested(word_phrase, translation, example_phrase, extra_info, ordinal) AS (
+                VALUES {requested_values}
+            ),
+            requested_distinct AS (
+                SELECT DISTINCT ON (word_phrase) word_phrase, translation, example_phrase, extra_info, ordinal
+                FROM requested
+                ORDER BY word_phrase, ordinal
+            ),
+            existing AS (
+                SELECT rd.word_phrase, v.id, v.in_learn, v.priority_learn
+                FROM requested_distinct rd
+                JOIN vocabulary v ON v.user_id = :user_id AND v.word_phrase = rd.word_phrase
             ),
             upserted AS (
                 INSERT INTO vocabulary
                     (user_id, word_phrase, translation, example_phrase, extra_info, in_learn, priority_learn)
-                VALUES
-                    (:user_id, :word_phrase, :translation, :example_phrase, :extra_info, TRUE, :new_word_priority)
+                SELECT
+                    :user_id, word_phrase, translation, example_phrase, extra_info, TRUE, :new_word_priority
+                FROM requested_distinct
                 ON CONFLICT (user_id, word_phrase) DO UPDATE
                 SET
                     in_learn = TRUE,
                     priority_learn = GREATEST(vocabulary.priority_learn - 1, :min_priority),
                     extra_info = COALESCE(NULLIF(vocabulary.extra_info, ''), EXCLUDED.extra_info),
                     updated_at = NOW()
-                RETURNING id, priority_learn, (xmax = 0) AS inserted
+                RETURNING id, word_phrase, priority_learn, (xmax = 0) AS inserted
             )
             SELECT
+                r.word_phrase,
                 u.id AS word_id,
                 CASE
                     WHEN u.inserted THEN 'created'
@@ -112,33 +224,30 @@ class VocabularyRepository:
                     WHEN e.in_learn IS FALSE OR u.priority_learn < e.priority_learn THEN TRUE
                     ELSE FALSE
                 END AS changed
-            FROM upserted u
-            LEFT JOIN existing e ON e.id = u.id
+            FROM requested r
+            JOIN upserted u ON u.word_phrase = r.word_phrase
+            LEFT JOIN existing e ON e.word_phrase = r.word_phrase
+            ORDER BY r.ordinal
             """
         )
-        result = await self.db.execute(
-            stmt,
-            {
-                "user_id": user_id,
-                "word_phrase": word_phrase,
-                "translation": translation,
-                "example_phrase": example_phrase,
-                "extra_info": extra_info,
-                "new_word_priority": VOCABULARY_PRIORITY_AGENT_NEW,
-                "min_priority": VOCABULARY_PRIORITY_HIGH,
-            },
-        )
-        row = result.mappings().one()
+        result = await self.db.execute(stmt, params)
+        rows = result.mappings().all()
         await self.db.commit()
         # Keep identity map in sync for sessions that already loaded this row.
-        await self.db.execute(
-            select(Vocabulary).where(Vocabulary.id == int(row["word_id"])).execution_options(populate_existing=True)
-        )
-        return {
-            "action": str(row["action"]),
-            "word_id": int(row["word_id"]),
-            "changed": bool(row["changed"]),
-        }
+        word_ids = [int(row["word_id"]) for row in rows]
+        if word_ids:
+            await self.db.execute(
+                select(Vocabulary).where(Vocabulary.id.in_(word_ids)).execution_options(populate_existing=True)
+            )
+        return [
+            {
+                "word_phrase": str(row["word_phrase"]),
+                "action": str(row["action"]),
+                "word_id": int(row["word_id"]),
+                "changed": bool(row["changed"]),
+            }
+            for row in rows
+        ]
 
     async def upsert_vocabulary_items(self, items: List[VocabularyItemCreate], user_id: int):
         """Upsert vocabulary items: update if exists, insert if not."""

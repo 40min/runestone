@@ -6,12 +6,15 @@ import pytest
 from runestone.agents.schemas import ChatMessage
 from runestone.agents.specialists.base import SpecialistContext
 from runestone.agents.specialists.word_keeper import (
+    WORDKEEPER_ENRICHMENT_PROMPT,
     WORDKEEPER_SYSTEM_PROMPT,
-    SaveCandidate,
+    WordEnrichmentItem,
+    WordKeeperEnrichment,
     WordKeeperExtraction,
     WordKeeperSpecialist,
 )
 from runestone.config import Settings
+from runestone.schemas.vocabulary_save import VocabularyPrioritizationAction, WordSaveCandidate
 
 
 @pytest.fixture
@@ -27,7 +30,17 @@ def mock_settings():
 @pytest.fixture
 def mock_chat_model():
     model = MagicMock()
-    model.with_structured_output.return_value = AsyncMock()
+    model.extraction_model = AsyncMock()
+    model.enrichment_model = AsyncMock()
+
+    def _structured_model(schema):
+        if schema is WordKeeperExtraction:
+            return model.extraction_model
+        if schema is WordKeeperEnrichment:
+            return model.enrichment_model
+        raise AssertionError(f"Unexpected schema: {schema}")
+
+    model.with_structured_output.side_effect = _structured_model
     return model
 
 
@@ -45,6 +58,48 @@ def specialist(mock_settings, mock_chat_model):
         return WordKeeperSpecialist(mock_settings)
 
 
+def _service_provider(service):
+    @asynccontextmanager
+    async def _provider():
+        yield service
+
+    return _provider
+
+
+def _mock_vocabulary_service(priority_actions=None, upsert_return=None, upsert_side_effect=None):
+    service = MagicMock()
+    service.prepare_priority_word_save = AsyncMock(return_value=priority_actions or [])
+    if upsert_return is None:
+        batch_return = [{"action": "created", "word_id": 1}]
+    elif isinstance(upsert_return, dict):
+        batch_return = [upsert_return]
+    else:
+        batch_return = upsert_return
+    service.insert_or_prioritize_words = AsyncMock(return_value=batch_return)
+    if upsert_side_effect is not None:
+        service.insert_or_prioritize_words.side_effect = upsert_side_effect
+    service.repo.db.rollback = AsyncMock()
+    return service
+
+
+def _priority_actions(*entries):
+    return [
+        VocabularyPrioritizationAction(
+            candidate_id=str(index),
+            word_phrase=word_phrase,
+            source_form=source_form,
+            action=action,
+            word_id=word_id,
+            changed=changed,
+        )
+        for index, (word_phrase, action, word_id, changed, source_form) in enumerate(entries)
+    ]
+
+
+def _priority_entry(word_phrase, action, word_id=1, changed=True, source_form=None):
+    return word_phrase, action, word_id, changed, source_form
+
+
 def test_word_keeper_uses_structured_specialist_purpose(mock_settings, mock_chat_model):
     with patch("runestone.agents.specialists.word_keeper.build_chat_model", return_value=mock_chat_model) as mock_build:
         WordKeeperSpecialist(mock_settings)
@@ -54,128 +109,51 @@ def test_word_keeper_uses_structured_specialist_purpose(mock_settings, mock_chat
 
 def test_word_keeper_prompt_limits_pre_stage_to_explicit_save_requests():
     assert "### Pre-response phase" in WORDKEEPER_SYSTEM_PROMPT
-    assert "Save ONLY when the student explicitly requests it" in (WORDKEEPER_SYSTEM_PROMPT)
-    assert (
-        "Do NOT save words just because an earlier assistant message in `history` highlighted or introduced them."
-        in (WORDKEEPER_SYSTEM_PROMPT)
+    assert "Save ONLY when the student explicitly requests it" in WORDKEEPER_SYSTEM_PROMPT
+    assert "Do NOT save words just because an earlier assistant message in `history` highlighted" in (
+        WORDKEEPER_SYSTEM_PROMPT
     )
 
 
 def test_word_keeper_prompt_uses_teacher_response_as_current_post_stage_signal():
     assert "### Post-response phase" in WORDKEEPER_SYSTEM_PROMPT
-    assert "Treat `teacher_response` as the authoritative current teacher message." in (WORDKEEPER_SYSTEM_PROMPT)
+    assert "Treat `teacher_response` as the authoritative current teacher message." in WORDKEEPER_SYSTEM_PROMPT
     assert "By default, ignore older assistant messages in `history` when deciding what to save." in (
         WORDKEEPER_SYSTEM_PROMPT
     )
-    assert "Use older history ONLY when the student explicitly asks to revisit it." in (WORDKEEPER_SYSTEM_PROMPT)
 
 
 def test_word_keeper_prompt_rejects_exercise_wording_as_save_signal():
     assert "Do NOT treat ordinary exercise wording as a save signal" in WORDKEEPER_SYSTEM_PROMPT
     assert 'Do NOT save words from prompts like "use X or Y in a sentence"' in WORDKEEPER_SYSTEM_PROMPT
-    assert "Words that are only mentioned as options in a practice prompt or writing exercise." in (
-        WORDKEEPER_SYSTEM_PROMPT
-    )
     assert "Bolded words that are emphasized for an exercise but not presented as vocabulary to memorize." in (
         WORDKEEPER_SYSTEM_PROMPT
     )
 
 
-def test_word_keeper_prompt_standardizes_saved_vocabulary_payloads():
-    assert "`word_phrase` — the canonical Swedish learning item" in WORDKEEPER_SYSTEM_PROMPT
-    assert "No leading articles: save `hund`, not `en hund`; save `äpple`, not `ett äpple`." in (
-        WORDKEEPER_SYSTEM_PROMPT
-    )
-    assert "Use smart lowercase" in WORDKEEPER_SYSTEM_PROMPT
-    assert "Prefer lemma or base form unless the inflected form matters." in WORDKEEPER_SYSTEM_PROMPT
-    assert "Do not save bare `att` for verbs" in WORDKEEPER_SYSTEM_PROMPT
-    assert "Preserve particles, prepositions, and reflexives that change meaning" in WORDKEEPER_SYSTEM_PROMPT
-    assert "Keep Swedish characters; never ASCII-fold `å`, `ä`, or `ö`." in WORDKEEPER_SYSTEM_PROMPT
-    assert "Keep translations concise; put morphology and usage in `extra_info`, not `translation`." in (
-        WORDKEEPER_SYSTEM_PROMPT
-    )
+def test_word_keeper_extraction_schema_is_key_only():
+    fields = WordSaveCandidate.model_fields
+    assert set(fields) == {"word_phrase", "source_form"}
+    assert "Do not generate translations, examples, grammar notes, or reasons." in WORDKEEPER_SYSTEM_PROMPT
 
 
-def test_word_keeper_prompt_includes_extra_info_guidance():
-    assert "`extra_info` — an optional compact learner note with grammar or usage details." in WORDKEEPER_SYSTEM_PROMPT
-    assert "`en-word noun; plural: hundar; definite: hunden`" in WORDKEEPER_SYSTEM_PROMPT
-    assert "`verb; infinitive: förstå; present: förstår; past: förstod; supine: förstått`" in (WORDKEEPER_SYSTEM_PROMPT)
-    assert 'particle verb; "tycka om" means "to like"' in WORDKEEPER_SYSTEM_PROMPT
-    assert "If unsure, leave `extra_info` empty rather than guess." in WORDKEEPER_SYSTEM_PROMPT
-
-
-def _service_provider(service):
-    @asynccontextmanager
-    async def _provider():
-        yield service
-
-    return _provider
+def test_word_keeper_enrichment_prompt_owns_full_save_fields():
+    assert "`candidate_id`" in WORDKEEPER_ENRICHMENT_PROMPT
+    assert "`translation`" in WORDKEEPER_ENRICHMENT_PROMPT
+    assert "`example_phrase`" in WORDKEEPER_ENRICHMENT_PROMPT
+    assert "`extra_info`" in WORDKEEPER_ENRICHMENT_PROMPT
+    assert "`en-word noun; plural: hundar; definite: hunden`" in WORDKEEPER_ENRICHMENT_PROMPT
+    assert "If unsure, leave `extra_info` empty rather than guess." in WORDKEEPER_ENRICHMENT_PROMPT
 
 
 @pytest.mark.anyio
-async def test_word_keeper_saves_explicit_request(specialist, mock_chat_model, mock_user):
-    mock_llm = mock_chat_model.with_structured_output.return_value
-    mock_llm.ainvoke.return_value = WordKeeperExtraction(
+async def test_word_keeper_prioritizes_existing_without_enrichment(specialist, mock_chat_model, mock_user):
+    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(
         decision="save_words",
-        candidates=[
-            SaveCandidate(
-                word_phrase="avgorande",
-                translation="decisive",
-                example_phrase="Det var ett avgorande beslut.",
-                extra_info="adjective; common/neuter/plural: avgörande",
-                reason="explicit save request",
-            )
-        ],
+        candidates=[WordSaveCandidate(word_phrase="noggrann")],
     )
-    vocabulary_service = MagicMock()
-    vocabulary_service.upsert_priority_word = AsyncMock(
-        return_value={"action": "created", "word_id": 1, "changed": True}
-    )
-
-    with patch(
-        "runestone.agents.specialists.word_keeper.provide_vocabulary_service",
-        _service_provider(vocabulary_service),
-    ):
-        result = await specialist.run(
-            SpecialistContext(
-                message="Save this word for me: avgorande",
-                history=[],
-                user=mock_user,
-                routing_reason="explicit save request",
-            )
-        )
-
-    assert result.status == "action_taken"
-    assert result.actions[0].tool == "prioritize_words_for_learning"
-    assert result.artifacts["saved_words"] == ["avgorande"]
-    vocabulary_service.upsert_priority_word.assert_awaited_once_with(
-        word_phrase="avgorande",
-        translation="decisive",
-        example_phrase="Det var ett avgorande beslut.",
-        extra_info="adjective; common/neuter/plural: avgörande",
-        user_id=12,
-    )
-    assert result.artifacts["save_candidates"][0]["extra_info"] == "adjective; common/neuter/plural: avgörande"
-
-
-@pytest.mark.anyio
-async def test_word_keeper_prefers_chat_fields_for_save_candidate(specialist, mock_chat_model, mock_user):
-    mock_llm = mock_chat_model.with_structured_output.return_value
-    mock_llm.ainvoke.return_value = WordKeeperExtraction(
-        decision="save_words",
-        candidates=[
-            SaveCandidate(
-                word_phrase="noggrann",
-                translation="careful",
-                example_phrase="Var noggrann med detaljerna.",
-                extra_info="adjective; common: noggrann; neuter: noggrant; plural/definite: noggranna",
-                reason="teacher highlighted key words",
-            )
-        ],
-    )
-    vocabulary_service = MagicMock()
-    vocabulary_service.upsert_priority_word = AsyncMock(
-        return_value={"action": "prioritized", "word_id": 2, "changed": True}
+    vocabulary_service = _mock_vocabulary_service(
+        priority_actions=_priority_actions(_priority_entry("noggrann", "prioritized", word_id=2))
     )
 
     with patch(
@@ -187,37 +165,42 @@ async def test_word_keeper_prefers_chat_fields_for_save_candidate(specialist, mo
                 message="What does noggrann mean?",
                 history=[ChatMessage(role="assistant", content="Noggrann means careful.")],
                 user=mock_user,
-                teacher_response="The key words here are noggrann. Var noggrann med detaljerna.",
+                teacher_response="The key words here are noggrann.",
                 routing_reason="teacher highlighted key words",
             )
         )
 
     assert result.status == "action_taken"
-    assert result.artifacts["save_candidates"][0]["translation"] == "careful"
-    assert result.artifacts["save_candidates"][0]["example_phrase"] == "Var noggrann med detaljerna."
-    assert (
-        result.artifacts["save_candidates"][0]["extra_info"]
-        == "adjective; common: noggrann; neuter: noggrant; plural/definite: noggranna"
-    )
+    assert result.artifacts["saved_words"] == ["noggrann"]
+    assert result.artifacts["action_counts"]["prioritized"] == 1
+    assert result.artifacts["priority_actions"][0]["action"] == "prioritized"
+    priority_candidates = vocabulary_service.prepare_priority_word_save.call_args[0][0]
+    assert [candidate.word_phrase for candidate in priority_candidates] == ["noggrann"]
+    vocabulary_service.prepare_priority_word_save.assert_awaited_once()
+    vocabulary_service.insert_or_prioritize_words.assert_not_awaited()
+    mock_chat_model.enrichment_model.ainvoke.assert_not_awaited()
 
 
 @pytest.mark.anyio
-async def test_word_keeper_saves_post_response_candidate(specialist, mock_chat_model, mock_user):
-    mock_llm = mock_chat_model.with_structured_output.return_value
-    mock_llm.ainvoke.return_value = WordKeeperExtraction(
+async def test_word_keeper_enriches_and_saves_new_word(specialist, mock_chat_model, mock_user):
+    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(
         decision="save_words",
-        candidates=[
-            SaveCandidate(
-                word_phrase="forutsattning",
-                translation="condition",
-                example_phrase="En viktig forutsattning ar tid.",
-                reason="teacher highlighted key words",
-            )
-        ],
+        candidates=[WordSaveCandidate(word_phrase="avgörande")],
     )
-    vocabulary_service = MagicMock()
-    vocabulary_service.upsert_priority_word = AsyncMock(
-        return_value={"action": "created", "word_id": 3, "changed": True}
+    mock_chat_model.enrichment_model.ainvoke.return_value = WordKeeperEnrichment(
+        items=[
+            WordEnrichmentItem(
+                candidate_id="0",
+                word_phrase="avgörande",
+                translation="decisive",
+                example_phrase="Det var ett avgörande beslut.",
+                extra_info="adjective; common/neuter/plural: avgörande",
+            )
+        ]
+    )
+    vocabulary_service = _mock_vocabulary_service(
+        priority_actions=_priority_actions(_priority_entry("avgörande", "missing", word_id=None, changed=False)),
+        upsert_return={"action": "created", "word_id": 3, "changed": True},
     )
 
     with patch(
@@ -226,40 +209,184 @@ async def test_word_keeper_saves_post_response_candidate(specialist, mock_chat_m
     ):
         result = await specialist.run(
             SpecialistContext(
-                message="Explain this word",
+                message="Save this word for me: avgörande",
                 history=[],
                 user=mock_user,
-                teacher_response="These are good words to memorize: forutsattning.",
+                routing_reason="explicit save request",
+            )
+        )
+
+    assert result.status == "action_taken"
+    assert result.artifacts["saved_words"] == ["avgörande"]
+    assert result.artifacts["action_counts"]["created"] == 1
+    vocabulary_service.insert_or_prioritize_words.assert_awaited_once()
+    items = vocabulary_service.insert_or_prioritize_words.call_args.args[0]
+    assert [item.model_dump() for item in items] == [
+        {
+            "word_phrase": "avgörande",
+            "translation": "decisive",
+            "example_phrase": "Det var ett avgörande beslut.",
+            "extra_info": "adjective; common/neuter/plural: avgörande",
+            "in_learn": True,
+            "priority_learn": 9,
+        }
+    ]
+    assert vocabulary_service.insert_or_prioritize_words.call_args.kwargs == {"user_id": 12}
+
+
+@pytest.mark.anyio
+async def test_word_keeper_mixed_existing_and_new_enriches_only_new_word(specialist, mock_chat_model, mock_user):
+    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(
+        decision="save_words",
+        candidates=[
+            WordSaveCandidate(word_phrase="noggrann"),
+            WordSaveCandidate(word_phrase="begripa", source_form="begriper"),
+        ],
+    )
+    mock_chat_model.enrichment_model.ainvoke.return_value = WordKeeperEnrichment(
+        items=[
+            WordEnrichmentItem(
+                candidate_id="1",
+                word_phrase="begripa",
+                translation="understand",
+                example_phrase="Jag begriper inte frågan.",
+                extra_info='verb; infinitive: begripa; context form "begriper" is present tense',
+            )
+        ]
+    )
+    vocabulary_service = _mock_vocabulary_service(
+        priority_actions=_priority_actions(
+            _priority_entry("noggrann", "prioritized", word_id=2),
+            _priority_entry("begripa", "missing", word_id=None, changed=False, source_form="begriper"),
+        ),
+        upsert_return={"action": "created", "word_id": 3, "changed": True},
+    )
+
+    with patch(
+        "runestone.agents.specialists.word_keeper.provide_vocabulary_service",
+        _service_provider(vocabulary_service),
+    ):
+        result = await specialist.run(
+            SpecialistContext(
+                message="Jag begriper inte.",
+                history=[],
+                user=mock_user,
+                teacher_response="Let's keep this new word in mind: begripa.",
                 routing_reason="teacher highlighted words to memorize",
             )
         )
 
     assert result.status == "action_taken"
-    vocabulary_service.upsert_priority_word.assert_awaited_once_with(
-        word_phrase="forutsattning",
-        translation="condition",
-        example_phrase="En viktig forutsattning ar tid.",
-        extra_info=None,
-        user_id=12,
-    )
+    assert result.artifacts["saved_words"] == ["noggrann", "begripa"]
+    assert result.artifacts["action_counts"] == {
+        "created": 1,
+        "restored": 0,
+        "prioritized": 1,
+        "already_prioritized": 0,
+    }
+    enrichment_payload = mock_chat_model.enrichment_model.ainvoke.call_args[0][0][1].content
+    assert '"candidate_id": "1"' in enrichment_payload
+    assert '"word_phrase": "begripa"' in enrichment_payload
+    assert '"source_form": "begriper"' in enrichment_payload
+    assert '"word_phrase": "noggrann"' not in enrichment_payload
 
 
 @pytest.mark.anyio
-async def test_word_keeper_skips_candidate_with_missing_required_fields(specialist, mock_chat_model, mock_user):
-    mock_llm = mock_chat_model.with_structured_output.return_value
-    mock_llm.ainvoke.return_value = WordKeeperExtraction(
+async def test_word_keeper_matches_enrichment_by_candidate_id(specialist, mock_chat_model, mock_user):
+    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(
         decision="save_words",
-        candidates=[
-            SaveCandidate(
-                word_phrase="forutsattning",
-                translation=None,
-                example_phrase="En viktig forutsattning ar tid.",
-                reason="teacher highlighted key words",
-            )
-        ],
+        candidates=[WordSaveCandidate(word_phrase="avgörande")],
     )
-    vocabulary_service = MagicMock()
-    vocabulary_service.upsert_priority_word = AsyncMock()
+    mock_chat_model.enrichment_model.ainvoke.return_value = WordKeeperEnrichment(
+        items=[
+            WordEnrichmentItem(
+                candidate_id="0",
+                word_phrase="avgorande",
+                translation="decisive",
+                example_phrase="Det var ett avgörande beslut.",
+            )
+        ]
+    )
+    vocabulary_service = _mock_vocabulary_service(
+        priority_actions=_priority_actions(_priority_entry("avgörande", "missing", word_id=None, changed=False)),
+        upsert_return={"action": "created", "word_id": 3, "changed": True},
+    )
+
+    with patch(
+        "runestone.agents.specialists.word_keeper.provide_vocabulary_service",
+        _service_provider(vocabulary_service),
+    ):
+        result = await specialist.run(
+            SpecialistContext(
+                message="Save this word for me: avgörande",
+                history=[],
+                user=mock_user,
+                routing_reason="explicit save request",
+            )
+        )
+
+    assert result.status == "action_taken"
+    vocabulary_service.insert_or_prioritize_words.assert_awaited_once()
+    items = vocabulary_service.insert_or_prioritize_words.call_args.args[0]
+    assert items[0].word_phrase == "avgörande"
+    assert items[0].translation == "decisive"
+    assert items[0].example_phrase == "Det var ett avgörande beslut."
+    assert items[0].extra_info is None
+    assert vocabulary_service.insert_or_prioritize_words.call_args.kwargs == {"user_id": 12}
+
+
+@pytest.mark.anyio
+async def test_word_keeper_skips_new_words_when_enrichment_fails(specialist, mock_chat_model, mock_user):
+    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(
+        decision="save_words",
+        candidates=[WordSaveCandidate(word_phrase="noggrann"), WordSaveCandidate(word_phrase="begripa")],
+    )
+    mock_chat_model.enrichment_model.ainvoke.side_effect = RuntimeError("llm exploded")
+    vocabulary_service = _mock_vocabulary_service(
+        priority_actions=_priority_actions(
+            _priority_entry("noggrann", "prioritized", word_id=2),
+            _priority_entry("begripa", "missing", word_id=None, changed=False),
+        ),
+    )
+
+    with patch(
+        "runestone.agents.specialists.word_keeper.provide_vocabulary_service",
+        _service_provider(vocabulary_service),
+    ):
+        result = await specialist.run(
+            SpecialistContext(
+                message="Save these words.",
+                history=[],
+                user=mock_user,
+                routing_reason="explicit save request",
+            )
+        )
+
+    assert result.status == "action_taken"
+    assert result.artifacts["saved_words"] == ["noggrann"]
+    assert result.artifacts["skipped_words"] == [{"word_phrase": "begripa", "reason": "enrichment_failed"}]
+    vocabulary_service.insert_or_prioritize_words.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_word_keeper_skips_new_word_with_incomplete_enrichment(specialist, mock_chat_model, mock_user):
+    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(
+        decision="save_words",
+        candidates=[WordSaveCandidate(word_phrase="förutsättning")],
+    )
+    mock_chat_model.enrichment_model.ainvoke.return_value = WordKeeperEnrichment(
+        items=[
+            WordEnrichmentItem(
+                candidate_id="0",
+                word_phrase="förutsättning",
+                translation=None,
+                example_phrase="En viktig förutsättning är tid.",
+            )
+        ]
+    )
+    vocabulary_service = _mock_vocabulary_service(
+        priority_actions=_priority_actions(_priority_entry("förutsättning", "missing", word_id=None, changed=False)),
+    )
 
     with patch(
         "runestone.agents.specialists.word_keeper.provide_vocabulary_service",
@@ -270,7 +397,7 @@ async def test_word_keeper_skips_candidate_with_missing_required_fields(speciali
                 message="Explain this word",
                 history=[],
                 user=mock_user,
-                teacher_response="These are good words to memorize: forutsattning.",
+                teacher_response="These are good words to memorize: förutsättning.",
                 routing_reason="teacher highlighted words to memorize",
             )
         )
@@ -278,38 +405,30 @@ async def test_word_keeper_skips_candidate_with_missing_required_fields(speciali
     assert result.status == "no_action"
     assert result.artifacts["saved_words"] == []
     assert result.artifacts["skipped_words"] == [
-        {"word_phrase": "forutsattning", "reason": "missing_required_fields_after_completion"}
+        {"word_phrase": "förutsättning", "reason": "missing_required_fields_after_enrichment"}
     ]
-    vocabulary_service.upsert_priority_word.assert_not_awaited()
+    vocabulary_service.insert_or_prioritize_words.assert_not_awaited()
 
 
 @pytest.mark.anyio
 async def test_word_keeper_returns_no_action_when_extractor_finds_none(specialist, mock_chat_model, mock_user):
-    mock_llm = mock_chat_model.with_structured_output.return_value
-    mock_llm.ainvoke.return_value = WordKeeperExtraction(decision="no_action", candidates=[])
+    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(decision="no_action", candidates=[])
 
     result = await specialist.run(SpecialistContext(message="Hello", history=[], user=mock_user, routing_reason="none"))
 
     assert result.status == "no_action"
     assert result.artifacts["saved_words"] == []
+    mock_chat_model.enrichment_model.ainvoke.assert_not_awaited()
 
 
 @pytest.mark.anyio
-async def test_word_keeper_returns_error_on_tool_failure(specialist, mock_chat_model, mock_user):
-    mock_llm = mock_chat_model.with_structured_output.return_value
-    mock_llm.ainvoke.return_value = WordKeeperExtraction(
+async def test_word_keeper_returns_error_on_priority_failure(specialist, mock_chat_model, mock_user):
+    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(
         decision="save_words",
-        candidates=[
-            SaveCandidate(
-                word_phrase="avgorande",
-                translation="decisive",
-                example_phrase="Det var ett avgorande beslut.",
-                reason="explicit save request",
-            )
-        ],
+        candidates=[WordSaveCandidate(word_phrase="avgörande")],
     )
-    vocabulary_service = MagicMock()
-    vocabulary_service.upsert_priority_word = AsyncMock(side_effect=RuntimeError("db exploded"))
+    vocabulary_service = _mock_vocabulary_service()
+    vocabulary_service.prepare_priority_word_save.side_effect = RuntimeError("db exploded")
 
     with patch(
         "runestone.agents.specialists.word_keeper.provide_vocabulary_service",
@@ -317,7 +436,7 @@ async def test_word_keeper_returns_error_on_tool_failure(specialist, mock_chat_m
     ):
         result = await specialist.run(
             SpecialistContext(
-                message="Save this word for me: avgorande",
+                message="Save this word for me: avgörande",
                 history=[],
                 user=mock_user,
                 routing_reason="explicit save request",
@@ -329,33 +448,36 @@ async def test_word_keeper_returns_error_on_tool_failure(specialist, mock_chat_m
 
 
 @pytest.mark.anyio
-async def test_word_keeper_reports_partial_save_when_later_candidate_fails(specialist, mock_chat_model, mock_user):
-    mock_llm = mock_chat_model.with_structured_output.return_value
-    mock_llm.ainvoke.return_value = WordKeeperExtraction(
+async def test_word_keeper_reports_batch_save_failure_when_new_word_insert_fails(
+    specialist, mock_chat_model, mock_user
+):
+    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(
         decision="save_words",
-        candidates=[
-            SaveCandidate(
-                word_phrase="avgorande",
+        candidates=[WordSaveCandidate(word_phrase="avgörande"), WordSaveCandidate(word_phrase="noggrann")],
+    )
+    mock_chat_model.enrichment_model.ainvoke.return_value = WordKeeperEnrichment(
+        items=[
+            WordEnrichmentItem(
+                candidate_id="0",
+                word_phrase="avgörande",
                 translation="decisive",
-                example_phrase="Det var ett avgorande beslut.",
-                reason="explicit save request",
+                example_phrase="Det var ett avgörande beslut.",
             ),
-            SaveCandidate(
+            WordEnrichmentItem(
+                candidate_id="1",
                 word_phrase="noggrann",
                 translation="careful",
                 example_phrase="Var noggrann med detaljerna.",
-                reason="explicit save request",
             ),
-        ],
-    )
-    vocabulary_service = MagicMock()
-    vocabulary_service.upsert_priority_word = AsyncMock(
-        side_effect=[
-            {"action": "created", "word_id": 1, "changed": True},
-            RuntimeError("db exploded"),
         ]
     )
-    vocabulary_service.repo.db.rollback = AsyncMock()
+    vocabulary_service = _mock_vocabulary_service(
+        priority_actions=_priority_actions(
+            _priority_entry("avgörande", "missing", word_id=None, changed=False),
+            _priority_entry("noggrann", "missing", word_id=None, changed=False),
+        ),
+        upsert_side_effect=RuntimeError("db exploded"),
+    )
 
     with patch(
         "runestone.agents.specialists.word_keeper.provide_vocabulary_service",
@@ -363,61 +485,55 @@ async def test_word_keeper_reports_partial_save_when_later_candidate_fails(speci
     ):
         result = await specialist.run(
             SpecialistContext(
-                message="Save these words for me: avgorande, noggrann",
+                message="Save these words for me: avgörande, noggrann",
                 history=[],
                 user=mock_user,
                 routing_reason="explicit save request",
             )
         )
 
-    assert result.status == "action_taken"
-    assert result.actions[0].status == "success"
-    assert result.artifacts["saved_words"] == ["avgorande"]
-    assert len(result.artifacts["skipped_words"]) == 1
-    assert result.artifacts["skipped_words"][0]["word_phrase"] == "noggrann"
-    assert result.artifacts["skipped_words"][0]["reason"].startswith("vocabulary_service_error:")
-    assert (
-        result.info_for_teacher
-        == "Saved 1 vocabulary item(s) for future recall. Skipped 1 item(s) due to internal errors."
-    )
+    assert result.status == "error"
+    assert result.actions[0].status == "error"
+    assert result.artifacts["saved_words"] == []
+    assert len(result.artifacts["skipped_words"]) == 2
+    assert [item["word_phrase"] for item in result.artifacts["skipped_words"]] == ["avgörande", "noggrann"]
+    assert all(item["reason"].startswith("vocabulary_service_error:") for item in result.artifacts["skipped_words"])
     vocabulary_service.repo.db.rollback.assert_awaited_once()
 
 
 @pytest.mark.anyio
 async def test_word_keeper_payload_uses_user_mother_tongue(specialist, mock_chat_model, mock_user):
     mock_user.mother_tongue = "Finnish"
-    mock_llm = mock_chat_model.with_structured_output.return_value
-    mock_llm.ainvoke.return_value = WordKeeperExtraction(decision="no_action", candidates=[])
+    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(decision="no_action", candidates=[])
 
     await specialist.run(
         SpecialistContext(
-            message="Save this word for me: avgorande",
+            message="Save this word for me: avgörande",
             history=[],
             user=mock_user,
             routing_reason="explicit save request",
         )
     )
 
-    call_args = mock_llm.ainvoke.call_args[0][0]
+    call_args = mock_chat_model.extraction_model.ainvoke.call_args[0][0]
     payload = call_args[1].content
     assert '"target_translation_language": "Finnish"' in payload
 
 
 @pytest.mark.anyio
 async def test_word_keeper_payload_defaults_translation_language_to_english(specialist, mock_chat_model, mock_user):
-    mock_llm = mock_chat_model.with_structured_output.return_value
-    mock_llm.ainvoke.return_value = WordKeeperExtraction(decision="no_action", candidates=[])
+    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(decision="no_action", candidates=[])
 
     await specialist.run(
         SpecialistContext(
-            message="Save this word for me: avgorande",
+            message="Save this word for me: avgörande",
             history=[],
             user=mock_user,
             routing_reason="explicit save request",
         )
     )
 
-    call_args = mock_llm.ainvoke.call_args[0][0]
+    call_args = mock_chat_model.extraction_model.ainvoke.call_args[0][0]
     payload = call_args[1].content
     assert '"target_translation_language": "English"' in payload
 
@@ -426,8 +542,7 @@ async def test_word_keeper_payload_defaults_translation_language_to_english(spec
 async def test_word_keeper_post_response_payload_keeps_previous_teacher_message_in_history_but_marks_post_phase(
     specialist, mock_chat_model, mock_user
 ):
-    mock_llm = mock_chat_model.with_structured_output.return_value
-    mock_llm.ainvoke.return_value = WordKeeperExtraction(decision="no_action", candidates=[])
+    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(decision="no_action", candidates=[])
 
     await specialist.run(
         SpecialistContext(
@@ -442,7 +557,7 @@ async def test_word_keeper_post_response_payload_keeps_previous_teacher_message_
         )
     )
 
-    call_args = mock_llm.ainvoke.call_args[0][0]
+    call_args = mock_chat_model.extraction_model.ainvoke.call_args[0][0]
     payload = call_args[1].content
     assert '"phase": "post_response"' in payload
     assert '"teacher_response": "Let\'s keep this new word in mind: begripa."' in payload
@@ -453,8 +568,7 @@ async def test_word_keeper_post_response_payload_keeps_previous_teacher_message_
 async def test_word_keeper_payload_preserves_earlier_history_for_explicit_revisit_request(
     specialist, mock_chat_model, mock_user
 ):
-    mock_llm = mock_chat_model.with_structured_output.return_value
-    mock_llm.ainvoke.return_value = WordKeeperExtraction(decision="no_action", candidates=[])
+    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(decision="no_action", candidates=[])
 
     await specialist.run(
         SpecialistContext(
@@ -470,7 +584,7 @@ async def test_word_keeper_payload_preserves_earlier_history_for_explicit_revisi
         )
     )
 
-    call_args = mock_llm.ainvoke.call_args[0][0]
+    call_args = mock_chat_model.extraction_model.ainvoke.call_args[0][0]
     payload = call_args[1].content
     assert '"phase": "pre_response"' in payload
     assert '"message": "Ok, save the words you mentioned before."' in payload
