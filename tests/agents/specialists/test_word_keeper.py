@@ -69,9 +69,15 @@ def _service_provider(service):
 def _mock_vocabulary_service(priority_actions=None, upsert_return=None, upsert_side_effect=None):
     service = MagicMock()
     service.prepare_priority_word_save = AsyncMock(return_value=priority_actions or [])
-    service.upsert_priority_word = AsyncMock(return_value=upsert_return or {"action": "created", "word_id": 1})
+    if upsert_return is None:
+        batch_return = [{"action": "created", "word_id": 1}]
+    elif isinstance(upsert_return, dict):
+        batch_return = [upsert_return]
+    else:
+        batch_return = upsert_return
+    service.insert_or_prioritize_words = AsyncMock(return_value=batch_return)
     if upsert_side_effect is not None:
-        service.upsert_priority_word.side_effect = upsert_side_effect
+        service.insert_or_prioritize_words.side_effect = upsert_side_effect
     service.repo.db.rollback = AsyncMock()
     return service
 
@@ -171,7 +177,7 @@ async def test_word_keeper_prioritizes_existing_without_enrichment(specialist, m
     priority_candidates = vocabulary_service.prepare_priority_word_save.call_args[0][0]
     assert [candidate.word_phrase for candidate in priority_candidates] == ["noggrann"]
     vocabulary_service.prepare_priority_word_save.assert_awaited_once()
-    vocabulary_service.upsert_priority_word.assert_not_awaited()
+    vocabulary_service.insert_or_prioritize_words.assert_not_awaited()
     mock_chat_model.enrichment_model.ainvoke.assert_not_awaited()
 
 
@@ -213,13 +219,19 @@ async def test_word_keeper_enriches_and_saves_new_word(specialist, mock_chat_mod
     assert result.status == "action_taken"
     assert result.artifacts["saved_words"] == ["avgörande"]
     assert result.artifacts["action_counts"]["created"] == 1
-    vocabulary_service.upsert_priority_word.assert_awaited_once_with(
-        word_phrase="avgörande",
-        translation="decisive",
-        example_phrase="Det var ett avgörande beslut.",
-        extra_info="adjective; common/neuter/plural: avgörande",
-        user_id=12,
-    )
+    vocabulary_service.insert_or_prioritize_words.assert_awaited_once()
+    items = vocabulary_service.insert_or_prioritize_words.call_args.args[0]
+    assert [item.model_dump() for item in items] == [
+        {
+            "word_phrase": "avgörande",
+            "translation": "decisive",
+            "example_phrase": "Det var ett avgörande beslut.",
+            "extra_info": "adjective; common/neuter/plural: avgörande",
+            "in_learn": True,
+            "priority_learn": 9,
+        }
+    ]
+    assert vocabulary_service.insert_or_prioritize_words.call_args.kwargs == {"user_id": 12}
 
 
 @pytest.mark.anyio
@@ -314,13 +326,13 @@ async def test_word_keeper_matches_enrichment_by_candidate_id(specialist, mock_c
         )
 
     assert result.status == "action_taken"
-    vocabulary_service.upsert_priority_word.assert_awaited_once_with(
-        word_phrase="avgörande",
-        translation="decisive",
-        example_phrase="Det var ett avgörande beslut.",
-        extra_info=None,
-        user_id=12,
-    )
+    vocabulary_service.insert_or_prioritize_words.assert_awaited_once()
+    items = vocabulary_service.insert_or_prioritize_words.call_args.args[0]
+    assert items[0].word_phrase == "avgörande"
+    assert items[0].translation == "decisive"
+    assert items[0].example_phrase == "Det var ett avgörande beslut."
+    assert items[0].extra_info is None
+    assert vocabulary_service.insert_or_prioritize_words.call_args.kwargs == {"user_id": 12}
 
 
 @pytest.mark.anyio
@@ -353,7 +365,7 @@ async def test_word_keeper_skips_new_words_when_enrichment_fails(specialist, moc
     assert result.status == "action_taken"
     assert result.artifacts["saved_words"] == ["noggrann"]
     assert result.artifacts["skipped_words"] == [{"word_phrase": "begripa", "reason": "enrichment_failed"}]
-    vocabulary_service.upsert_priority_word.assert_not_awaited()
+    vocabulary_service.insert_or_prioritize_words.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -395,7 +407,7 @@ async def test_word_keeper_skips_new_word_with_incomplete_enrichment(specialist,
     assert result.artifacts["skipped_words"] == [
         {"word_phrase": "förutsättning", "reason": "missing_required_fields_after_enrichment"}
     ]
-    vocabulary_service.upsert_priority_word.assert_not_awaited()
+    vocabulary_service.insert_or_prioritize_words.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -436,7 +448,9 @@ async def test_word_keeper_returns_error_on_priority_failure(specialist, mock_ch
 
 
 @pytest.mark.anyio
-async def test_word_keeper_reports_partial_save_when_new_word_insert_fails(specialist, mock_chat_model, mock_user):
+async def test_word_keeper_reports_batch_save_failure_when_new_word_insert_fails(
+    specialist, mock_chat_model, mock_user
+):
     mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(
         decision="save_words",
         candidates=[WordSaveCandidate(word_phrase="avgörande"), WordSaveCandidate(word_phrase="noggrann")],
@@ -462,10 +476,7 @@ async def test_word_keeper_reports_partial_save_when_new_word_insert_fails(speci
             _priority_entry("avgörande", "missing", word_id=None, changed=False),
             _priority_entry("noggrann", "missing", word_id=None, changed=False),
         ),
-        upsert_side_effect=[
-            {"action": "created", "word_id": 1, "changed": True},
-            RuntimeError("db exploded"),
-        ],
+        upsert_side_effect=RuntimeError("db exploded"),
     )
 
     with patch(
@@ -481,16 +492,12 @@ async def test_word_keeper_reports_partial_save_when_new_word_insert_fails(speci
             )
         )
 
-    assert result.status == "action_taken"
-    assert result.actions[0].status == "success"
-    assert result.artifacts["saved_words"] == ["avgörande"]
-    assert len(result.artifacts["skipped_words"]) == 1
-    assert result.artifacts["skipped_words"][0]["word_phrase"] == "noggrann"
-    assert result.artifacts["skipped_words"][0]["reason"].startswith("vocabulary_service_error:")
-    assert (
-        result.info_for_teacher
-        == "Saved 1 vocabulary item(s) for future recall. Skipped 1 item(s) due to internal errors."
-    )
+    assert result.status == "error"
+    assert result.actions[0].status == "error"
+    assert result.artifacts["saved_words"] == []
+    assert len(result.artifacts["skipped_words"]) == 2
+    assert [item["word_phrase"] for item in result.artifacts["skipped_words"]] == ["avgörande", "noggrann"]
+    assert all(item["reason"].startswith("vocabulary_service_error:") for item in result.artifacts["skipped_words"])
     vocabulary_service.repo.db.rollback.assert_awaited_once()
 
 

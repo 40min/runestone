@@ -51,7 +51,7 @@ async def provide_vocabulary_service() -> AsyncIterator[VocabularyService]:
 
     Usage:
         async with provide_vocabulary_service() as service:
-            await service.upsert_priority_word(...)
+            await service.insert_or_prioritize_words(...)
 
     Yields:
         VocabularyService: A service instance with its own database session

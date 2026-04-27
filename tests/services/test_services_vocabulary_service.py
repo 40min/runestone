@@ -19,7 +19,7 @@ from runestone.core.exceptions import VocabularyItemExists
 from runestone.db.models import User as UserModel
 from runestone.db.models import Vocabulary as VocabularyModel
 from runestone.db.vocabulary_repository import VocabularyRepository
-from runestone.schemas.vocabulary_save import WordSaveCandidate
+from runestone.schemas.vocabulary_save import PriorityWordSaveItem, WordSaveCandidate
 from runestone.services.vocabulary_service import VocabularyService
 
 
@@ -995,14 +995,108 @@ class TestVocabularyService:
         assert result[3].changed is False
         assert missing_db is None
 
-    async def test_upsert_priority_word_new(self, service, db_session):
-        """Test upserting a new priority word."""
-        await service.upsert_priority_word(
-            word_phrase="nytt ord",
-            translation="new word",
-            example_phrase="Ett nytt ord.",
+    async def test_insert_or_prioritize_words_batch(self, service, db_session):
+        """Batch priority upsert creates new words and reprioritizes existing words together."""
+        active = VocabularyModel(
             user_id=1,
-            extra_info="fixed phrase; useful for vocabulary practice",
+            word_phrase="befintligt",
+            translation="existing",
+            example_phrase="Existing example.",
+            extra_info="existing note",
+            priority_learn=9,
+            in_learn=True,
+        )
+        deleted = VocabularyModel(
+            user_id=1,
+            word_phrase="raderat",
+            translation="deleted",
+            example_phrase="Deleted example.",
+            extra_info="",
+            priority_learn=9,
+            in_learn=False,
+        )
+        top_priority = VocabularyModel(
+            user_id=1,
+            word_phrase="prioriterad",
+            translation="prioritized",
+            priority_learn=0,
+            in_learn=True,
+        )
+        db_session.add_all([active, deleted, top_priority])
+        await db_session.commit()
+
+        result = await service.insert_or_prioritize_words(
+            [
+                PriorityWordSaveItem(
+                    word_phrase="nytt ord",
+                    translation="new word",
+                    example_phrase="Ett nytt ord.",
+                    extra_info="noun; test note",
+                ),
+                PriorityWordSaveItem(
+                    word_phrase="befintligt",
+                    translation="ignored",
+                    example_phrase="ignored",
+                    extra_info="ignored note",
+                ),
+                PriorityWordSaveItem(
+                    word_phrase="raderat",
+                    translation="ignored",
+                    example_phrase="ignored",
+                    extra_info="restored note",
+                ),
+                PriorityWordSaveItem(
+                    word_phrase="prioriterad",
+                    translation="ignored",
+                    example_phrase="ignored",
+                ),
+            ],
+            user_id=1,
+        )
+
+        assert [item["word_phrase"] for item in result] == ["nytt ord", "befintligt", "raderat", "prioriterad"]
+        assert [item["action"] for item in result] == [
+            "created",
+            "prioritized",
+            "restored",
+            "already_prioritized",
+        ]
+
+        rows = (
+            (
+                await db_session.execute(
+                    select(VocabularyModel)
+                    .where(VocabularyModel.word_phrase.in_(["nytt ord", "befintligt", "raderat", "prioriterad"]))
+                    .order_by(VocabularyModel.word_phrase)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        by_phrase = {row.word_phrase: row for row in rows}
+        assert by_phrase["nytt ord"].priority_learn == 4
+        assert by_phrase["nytt ord"].translation == "new word"
+        assert by_phrase["befintligt"].priority_learn == 8
+        assert by_phrase["befintligt"].translation == "existing"
+        assert by_phrase["befintligt"].extra_info == "existing note"
+        assert by_phrase["raderat"].in_learn is True
+        assert by_phrase["raderat"].priority_learn == 8
+        assert by_phrase["raderat"].extra_info == "restored note"
+        assert by_phrase["prioriterad"].priority_learn == 0
+        assert result[3]["changed"] is False
+
+    async def test_insert_or_prioritize_words_new(self, service, db_session):
+        """Test upserting a new priority word."""
+        await service.insert_or_prioritize_words(
+            [
+                PriorityWordSaveItem(
+                    word_phrase="nytt ord",
+                    translation="new word",
+                    example_phrase="Ett nytt ord.",
+                    extra_info="fixed phrase; useful for vocabulary practice",
+                )
+            ],
+            user_id=1,
         )
         await db_session.commit()
 
@@ -1013,7 +1107,7 @@ class TestVocabularyService:
         assert vocab.extra_info == "fixed phrase; useful for vocabulary practice"
         assert vocab.in_learn is True
 
-    async def test_upsert_priority_word_existing(self, service, db_session):
+    async def test_insert_or_prioritize_words_existing(self, service, db_session):
         """Test upserting an existing word to prioritize it."""
         # Pre-add a regular word
         vocab = VocabularyModel(
@@ -1027,12 +1121,16 @@ class TestVocabularyService:
         db_session.add(vocab)
         await db_session.commit()
 
-        await service.upsert_priority_word(
-            word_phrase="befintligt",
-            translation="ignored",
-            example_phrase="ignored",
+        await service.insert_or_prioritize_words(
+            [
+                PriorityWordSaveItem(
+                    word_phrase="befintligt",
+                    translation="ignored",
+                    example_phrase="ignored",
+                    extra_info="ignored note",
+                )
+            ],
             user_id=1,
-            extra_info="ignored note",
         )
         await db_session.commit()
 
@@ -1044,7 +1142,7 @@ class TestVocabularyService:
         )  # Upsert of existing word doesn't change translation in current implementation
         assert vocab_db.extra_info == "existing note"
 
-    async def test_upsert_priority_word_restore(self, service, db_session):
+    async def test_insert_or_prioritize_words_restore(self, service, db_session):
         """Test that upserting a priority word restores it if it was soft-deleted."""
         # Pre-add a soft-deleted word
         vocab = VocabularyModel(
@@ -1058,12 +1156,16 @@ class TestVocabularyService:
         db_session.add(vocab)
         await db_session.commit()
 
-        await service.upsert_priority_word(
-            word_phrase="raderat",
-            translation="...",
-            example_phrase="...",
+        await service.insert_or_prioritize_words(
+            [
+                PriorityWordSaveItem(
+                    word_phrase="raderat",
+                    translation="...",
+                    example_phrase="...",
+                    extra_info="ignored restored note",
+                )
+            ],
             user_id=1,
-            extra_info="ignored restored note",
         )
         await db_session.commit()
 
@@ -1073,7 +1175,7 @@ class TestVocabularyService:
         assert vocab_db.priority_learn == 8
         assert vocab_db.extra_info == "deleted note"
 
-    async def test_upsert_priority_word_fills_missing_extra_info_on_existing_word(self, service, db_session):
+    async def test_insert_or_prioritize_words_fill_missing_extra_info_on_existing_word(self, service, db_session):
         """Existing words should backfill extra_info when it is currently NULL."""
         vocab = VocabularyModel(
             user_id=1,
@@ -1086,12 +1188,16 @@ class TestVocabularyService:
         db_session.add(vocab)
         await db_session.commit()
 
-        await service.upsert_priority_word(
-            word_phrase="saknar-info",
-            translation="ignored",
-            example_phrase="ignored",
+        await service.insert_or_prioritize_words(
+            [
+                PriorityWordSaveItem(
+                    word_phrase="saknar-info",
+                    translation="ignored",
+                    example_phrase="ignored",
+                    extra_info="noun; common gender",
+                )
+            ],
             user_id=1,
-            extra_info="noun; common gender",
         )
         await db_session.commit()
 
@@ -1099,7 +1205,7 @@ class TestVocabularyService:
         assert vocab_db.priority_learn == 8
         assert vocab_db.extra_info == "noun; common gender"
 
-    async def test_upsert_priority_word_fills_empty_extra_info_on_existing_word(self, service, db_session):
+    async def test_insert_or_prioritize_words_fill_empty_extra_info_on_existing_word(self, service, db_session):
         """Existing words should backfill extra_info when it is currently an empty string."""
         vocab = VocabularyModel(
             user_id=1,
@@ -1112,12 +1218,16 @@ class TestVocabularyService:
         db_session.add(vocab)
         await db_session.commit()
 
-        await service.upsert_priority_word(
-            word_phrase="tom-info",
-            translation="ignored",
-            example_phrase="ignored",
+        await service.insert_or_prioritize_words(
+            [
+                PriorityWordSaveItem(
+                    word_phrase="tom-info",
+                    translation="ignored",
+                    example_phrase="ignored",
+                    extra_info="verb; imperative form",
+                )
+            ],
             user_id=1,
-            extra_info="verb; imperative form",
         )
         await db_session.commit()
 
@@ -1125,7 +1235,7 @@ class TestVocabularyService:
         assert vocab_db.priority_learn == 8
         assert vocab_db.extra_info == "verb; imperative form"
 
-    async def test_upsert_priority_word_already_prioritized(self, service, db_session):
+    async def test_insert_or_prioritize_words_already_prioritized(self, service, db_session):
         """Test upserting an already prioritized word returns explicit no-op action."""
         vocab = VocabularyModel(
             user_id=1,
@@ -1137,18 +1247,22 @@ class TestVocabularyService:
         db_session.add(vocab)
         await db_session.commit()
 
-        result = await service.upsert_priority_word(
-            word_phrase="prioriterad",
-            translation="ignored",
-            example_phrase="ignored",
+        result = await service.insert_or_prioritize_words(
+            [
+                PriorityWordSaveItem(
+                    word_phrase="prioriterad",
+                    translation="ignored",
+                    example_phrase="ignored",
+                )
+            ],
             user_id=1,
         )
         await db_session.commit()
 
-        assert result["action"] == "already_prioritized"
-        assert result["changed"] is False
+        assert result[0]["action"] == "already_prioritized"
+        assert result[0]["changed"] is False
 
-    async def test_upsert_priority_word_handles_concurrent_insert_race(self, db_session_factory):
+    async def test_insert_or_prioritize_words_handle_concurrent_insert_race(self, db_session_factory):
         """Concurrent upserts for same word should not surface integrity errors or duplicate rows."""
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "openai"
@@ -1175,19 +1289,27 @@ class TestVocabularyService:
             service2 = VocabularyService(VocabularyRepository(db2), mock_settings, mock_llm_client)
 
             result1, result2 = await asyncio.gather(
-                service1.upsert_priority_word(
-                    word_phrase="konkurrent",
-                    translation="concurrent",
-                    example_phrase="Detta ar ett konkurrent test.",
+                service1.insert_or_prioritize_words(
+                    [
+                        PriorityWordSaveItem(
+                            word_phrase="konkurrent",
+                            translation="concurrent",
+                            example_phrase="Detta ar ett konkurrent test.",
+                            extra_info="noun; race condition test note",
+                        )
+                    ],
                     user_id=race_user_id,
-                    extra_info="noun; race condition test note",
                 ),
-                service2.upsert_priority_word(
-                    word_phrase="konkurrent",
-                    translation="concurrent",
-                    example_phrase="Detta ar ett konkurrent test.",
+                service2.insert_or_prioritize_words(
+                    [
+                        PriorityWordSaveItem(
+                            word_phrase="konkurrent",
+                            translation="concurrent",
+                            example_phrase="Detta ar ett konkurrent test.",
+                            extra_info="noun; race condition test note",
+                        )
+                    ],
                     user_id=race_user_id,
-                    extra_info="noun; race condition test note",
                 ),
             )
 
@@ -1207,6 +1329,6 @@ class TestVocabularyService:
         assert len(rows) == 1
         assert 0 <= rows[0].priority_learn <= 4
         assert rows[0].extra_info == "noun; race condition test note"
-        actions = {result1["action"], result2["action"]}
+        actions = {result1[0]["action"], result2[0]["action"]}
         assert "created" in actions
         assert actions.issubset({"created", "already_prioritized", "prioritized", "restored"})

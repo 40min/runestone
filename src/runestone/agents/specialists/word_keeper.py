@@ -17,7 +17,7 @@ from runestone.agents.service_providers import provide_vocabulary_service
 from runestone.agents.specialists.base import BaseSpecialist, SpecialistAction, SpecialistContext, SpecialistResult
 from runestone.config import Settings
 from runestone.core.observability import elapsed_ms_since
-from runestone.schemas.vocabulary_save import VocabularyPrioritizationAction, WordSaveCandidate
+from runestone.schemas.vocabulary_save import PriorityWordSaveItem, VocabularyPrioritizationAction, WordSaveCandidate
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +208,7 @@ class WordKeeperSpecialist(BaseSpecialist):
                 status="error",
                 actions=[
                     SpecialistAction(
-                        tool="prioritize_words_for_learning",
+                        tool="word_keeper",
                         status="error",
                         summary="Failed to save vocabulary candidates",
                     )
@@ -241,7 +241,7 @@ class WordKeeperSpecialist(BaseSpecialist):
             status="action_taken",
             actions=[
                 SpecialistAction(
-                    tool="prioritize_words_for_learning",
+                    tool="word_keeper",
                     status="success",
                     summary=summary,
                 )
@@ -278,6 +278,7 @@ class WordKeeperSpecialist(BaseSpecialist):
             return
 
         enriched_by_id = {item.candidate_id.strip(): item for item in enrichment.items if item.candidate_id.strip()}
+        completed_words: list[PriorityWordSaveItem] = []
         for action in new_candidates:
             item = enriched_by_id.get(action.candidate_id)
             if item is None:
@@ -291,46 +292,48 @@ class WordKeeperSpecialist(BaseSpecialist):
                 )
                 continue
 
-            await self._save_enriched_word(context, vocabulary_service, completed, state)
+            completed_words.append(
+                PriorityWordSaveItem(
+                    word_phrase=str(completed["word_phrase"]),
+                    translation=str(completed["translation"]),
+                    example_phrase=str(completed["example_phrase"]),
+                    extra_info=completed["extra_info"],
+                )
+            )
 
-    async def _save_enriched_word(
+        if completed_words:
+            await self._save_enriched_words(context, vocabulary_service, completed_words, state)
+
+    async def _save_enriched_words(
         self,
         context: SpecialistContext,
         vocabulary_service,
-        completed: dict[str, str | None],
+        completed_words: list[PriorityWordSaveItem],
         state: SaveRunState,
     ) -> None:
         try:
-            result = await vocabulary_service.upsert_priority_word(
-                word_phrase=completed["word_phrase"],
-                translation=completed["translation"],
-                example_phrase=completed["example_phrase"],
-                extra_info=completed["extra_info"],
-                user_id=context.user.id,
-            )
+            results = await vocabulary_service.insert_or_prioritize_words(completed_words, user_id=context.user.id)
         except Exception as exc:
-            state.service_error_count += 1
-            # Keep partial-save behavior: reset aborted transaction and continue.
+            state.service_error_count += len(completed_words)
             await vocabulary_service.repo.db.rollback()
             logger.warning(
-                "[agents:wordkeeper] Failed to save word '%s': %s",
-                completed["word_phrase"],
+                "[agents:wordkeeper] Failed to save %s enriched word(s): %s",
+                len(completed_words),
                 exc,
                 exc_info=True,
             )
-            state.skipped_words.append(
-                {
-                    "word_phrase": str(completed["word_phrase"]),
-                    "reason": f"vocabulary_service_error: {type(exc).__name__}",
-                }
+            state.skipped_words.extend(
+                {"word_phrase": item.word_phrase, "reason": f"vocabulary_service_error: {type(exc).__name__}"}
+                for item in completed_words
             )
             return
 
-        action = str(result.get("action", "prioritized"))
-        if action not in state.action_counts:
-            action = "prioritized"
-        state.action_counts[action] += 1
-        state.saved_words.append(str(completed["word_phrase"]))
+        for item, result in zip(completed_words, results, strict=True):
+            action = str(result.get("action", "prioritized"))
+            if action not in state.action_counts:
+                action = "prioritized"
+            state.action_counts[action] += 1
+            state.saved_words.append(item.word_phrase)
 
     @staticmethod
     def _error_result(state: SaveRunState) -> SpecialistResult:
@@ -338,13 +341,13 @@ class WordKeeperSpecialist(BaseSpecialist):
             status="error",
             actions=[
                 SpecialistAction(
-                    tool="prioritize_words_for_learning",
+                    tool="word_keeper",
                     status="error",
                     summary="Failed to save vocabulary candidates",
                 )
             ],
             info_for_teacher="",
-            artifacts={**state.artifacts(), "saved_words": []},
+            artifacts=state.artifacts(),
         )
 
     @staticmethod
@@ -353,7 +356,7 @@ class WordKeeperSpecialist(BaseSpecialist):
             status="no_action",
             actions=[],
             info_for_teacher="",
-            artifacts={**state.artifacts(), "saved_words": []},
+            artifacts=state.artifacts(),
         )
 
     async def _extract_candidates(self, context: SpecialistContext) -> WordKeeperExtraction:

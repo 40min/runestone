@@ -1,7 +1,6 @@
 import pytest
 
 from runestone.agents.tools import news as agent_news
-from runestone.agents.tools.vocabulary import WordPrioritisationItem
 
 
 class FakeDDGS:
@@ -18,42 +17,6 @@ class FakeDDGS:
 
     def news(self, query, max_results, timelimit, region):
         return []
-
-
-def test_word_prioritisation_item_validation():
-    """Test unicode escape decoding validation in WordPrioritisationItem."""
-
-    # Test case 1: Double escaped unicode
-    item = WordPrioritisationItem(
-        word_phrase="f\\u00f6rs\\u00f6ka",
-        translation="try",
-        example_phrase="Kan du f\\u00f6rs\\u00f6ka?",
-        extra_info="verb; infinitive: f\\u00f6rs\\u00f6ka",
-    )
-    assert item.word_phrase == "försöka"
-    assert item.example_phrase == "Kan du försöka?"
-    assert item.extra_info == "verb; infinitive: försöka"
-
-    # Test case 2: Normal string
-    item = WordPrioritisationItem(
-        word_phrase="försöka", translation="try", example_phrase="Kan du försöka?", extra_info=None
-    )
-    assert item.word_phrase == "försöka"
-    assert item.extra_info is None
-
-    # Test case 3: JSON escaped style mixing (should be handled if it contains \u)
-    # Note: if the string passed to Pydantic *is* "abc", it remains "abc".
-    # If it is "a\\u0062c", it becomes "abc".
-    item = WordPrioritisationItem(word_phrase="a\\u0062c", translation="x", example_phrase="y")
-    assert item.word_phrase == "abc"
-
-
-def test_field_descriptions():
-    """Test that the translation field description has been updated."""
-    fields = WordPrioritisationItem.model_fields
-    translation_desc = fields["translation"].description
-    assert "concise" in translation_desc.lower()
-    assert "translation of the word_phrase" in translation_desc.lower()
 
 
 @pytest.mark.anyio

@@ -26,7 +26,7 @@ from ..core.prompt_builder.parsers import ResponseParser
 from ..db.models import Vocabulary
 from ..db.vocabulary_repository import VocabularyRepository
 from ..schemas.vocabulary import VocabularyResponse
-from ..schemas.vocabulary_save import VocabularyPrioritizationAction, WordSaveCandidate
+from ..schemas.vocabulary_save import PriorityWordSaveItem, VocabularyPrioritizationAction, WordSaveCandidate
 
 
 class VocabularyService:
@@ -348,28 +348,9 @@ class VocabularyService:
             )
         return normalized_candidates
 
-    async def upsert_priority_word(
-        self,
-        word_phrase: str,
-        translation: str,
-        example_phrase: str,
-        user_id: int,
-        extra_info: str | None = None,
-    ) -> dict:
-        """Upsert a word with elevated numeric priority. Restores deleted words.
-
-        Returns:
-            dict: action metadata for observability and caller summaries.
-                action values: created, restored, prioritized, already_prioritized
-        """
-        result = await self.repo.upsert_priority_word(
-            word_phrase=word_phrase,
-            translation=translation,
-            example_phrase=example_phrase,
-            user_id=user_id,
-            extra_info=extra_info,
-        )
-        return result
+    async def insert_or_prioritize_words(self, items: list[PriorityWordSaveItem], user_id: int) -> list[dict]:
+        """Insert missing words and prioritize existing ones in one transaction."""
+        return await self.repo.insert_or_prioritize_words(items, user_id)
 
     async def delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
         """Completely delete a vocabulary item from the database."""
