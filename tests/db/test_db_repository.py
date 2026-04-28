@@ -327,13 +327,14 @@ class TestVocabularyRepository:
         """Test retrieving the most recent vocabulary items."""
         from datetime import datetime, timezone
 
-        # Add test data with different creation times
+        # Add test data with different update times
         vocab1 = VocabularyModel(
             user_id=1,
             word_phrase="ett äpple",
             translation="an apple",
             example_phrase="Jag äter ett äpple varje dag.",
             created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+            updated_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
             in_learn=True,
             last_learned=None,
         )
@@ -343,6 +344,7 @@ class TestVocabularyRepository:
             translation="a banana",
             example_phrase=None,
             created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+            updated_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
             in_learn=True,
             last_learned=None,
         )
@@ -351,6 +353,7 @@ class TestVocabularyRepository:
             word_phrase="ett päron",
             translation="a pear",
             created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+            updated_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
             in_learn=True,
             last_learned=None,
         )
@@ -359,6 +362,7 @@ class TestVocabularyRepository:
             word_phrase="en kiwi",
             translation="a kiwi",
             created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
+            updated_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
             in_learn=True,
             last_learned=None,
         )
@@ -369,7 +373,7 @@ class TestVocabularyRepository:
         # Get recent for user 1 (should return 3 items, most recent first)
         result = await repo.get_vocabulary(limit=20, user_id=1)
         assert len(result) == 3
-        # Should be ordered by created_at descending
+        # Should be ordered by updated_at descending
         assert result[0].word_phrase == "ett päron"  # Most recent
         assert result[1].word_phrase == "en banan"
         assert result[2].word_phrase == "ett äpple"  # Oldest

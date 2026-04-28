@@ -477,6 +477,7 @@ describe("VocabularyView", () => {
         learned_times: 5,
         created_at: "2023-10-27T10:00:00Z",
         updated_at: "2023-10-27T10:00:00Z",
+        updated: "2023-10-27T10:00:00Z",
       },
       {
         id: 2,
@@ -491,6 +492,7 @@ describe("VocabularyView", () => {
         learned_times: 0,
         created_at: "2023-10-28T10:05:00Z",
         updated_at: "2023-10-28T10:05:00Z",
+        updated: "2023-10-28T10:05:00Z",
       },
     ];
 
@@ -520,7 +522,7 @@ describe("VocabularyView", () => {
     expect(screen.getByText("In Learning")).toBeInTheDocument();
     expect(screen.getByText("Priority")).toBeInTheDocument();
     expect(screen.getByText("Last Learned")).toBeInTheDocument();
-    expect(screen.getByText("Saved")).toBeInTheDocument();
+    expect(screen.getByText("Updated")).toBeInTheDocument();
 
     // Check vocabulary data
     expect(screen.getByText("hej")).toBeInTheDocument();

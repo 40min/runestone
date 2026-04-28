@@ -321,7 +321,7 @@ class VocabularyRepository:
                 # Use ilike with escape character for case-insensitive matching
                 stmt = stmt.filter(Vocabulary.word_phrase.ilike(search_pattern, escape="\\"))
 
-        stmt = stmt.order_by(Vocabulary.created_at.desc(), Vocabulary.id.desc()).limit(limit)
+        stmt = stmt.order_by(Vocabulary.updated_at.desc(), Vocabulary.id.desc()).limit(limit)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 

@@ -15,6 +15,7 @@ interface SavedVocabularyItem {
   learned_times: number;
   created_at: string;
   updated_at: string;
+  updated?: string | null;
 }
 
 export interface VocabularyStats {
