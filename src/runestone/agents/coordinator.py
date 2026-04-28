@@ -147,6 +147,9 @@ Examples that should NOT route:
 - The teacher explicitly corrects a misspelled, invalid, or nonexistent student-written word and provides
   the corrected Swedish vocabulary item. Route so WordKeeper can prioritize the corrected item, not the error.
 
+Examples that SHOULD route:
+- Teacher: "There is no such word as 'varen'; use 'våren' for spring."
+
 **Do NOT route when:**
 - The teacher is only asking the student to practice, answer, or write another sentence using words.
 - Words are merely bolded, translated, grammatically corrected, or reused in an exercise prompt without
