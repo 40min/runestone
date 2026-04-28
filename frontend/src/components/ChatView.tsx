@@ -46,6 +46,7 @@ const ChatView: React.FC = () => {
     isLoading,
     isSyncingHistory,
     historySyncNotice,
+    isBackendAvailable,
     error,
     sendMessage,
     startNewChat,
@@ -355,6 +356,7 @@ const ChatView: React.FC = () => {
           onOpenMemory={() => setIsMemoryModalOpen(true)}
           isLoading={isAnyProcessing}
           hasMessages={messages.length > 0}
+          isBackendAvailable={isBackendAvailable}
           teacherEmotion={latestTeacherEmotion}
         />
 

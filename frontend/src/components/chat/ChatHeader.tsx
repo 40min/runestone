@@ -10,6 +10,7 @@ interface ChatHeaderProps {
   onOpenMemory: () => void;
   isLoading: boolean;
   hasMessages: boolean;
+  isBackendAvailable?: boolean;
   teacherEmotion?: TeacherEmotion | string | null;
 }
 
@@ -18,6 +19,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onOpenMemory,
   isLoading,
   hasMessages,
+  isBackendAvailable = true,
   teacherEmotion,
 }) => {
   return (
@@ -38,6 +40,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         <TeacherAvatar
           size={73}
           showStatus
+          isBackendAvailable={isBackendAvailable}
           emotion={isLoading ? "thinking" : teacherEmotion}
         />
         <Box>
