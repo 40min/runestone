@@ -48,6 +48,7 @@ interface UseChatReturn {
   isFetchingHistory: boolean;
   isSyncingHistory: boolean;
   historySyncNotice: string | null;
+  isBackendAvailable: boolean;
   error: string | null;
   sendMessage: (message: string, ttsExpected?: boolean, speed?: number) => Promise<string | null>;
   startNewChat: () => Promise<void>;
@@ -67,6 +68,7 @@ export const useChat = (): UseChatReturn => {
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
   const [isSyncingHistory, setIsSyncingHistory] = useState(false);
   const [historySyncNotice, setHistorySyncNotice] = useState<string | null>(null);
+  const [isBackendAvailable, setIsBackendAvailable] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { get, post, delete: apiDelete } = useApi();
   const { token } = useAuth();
@@ -213,14 +215,15 @@ export const useChat = (): UseChatReturn => {
 
         page += 1;
       }
-
       if (!syncingOlderPages) {
         setIsSyncingHistory(false);
       }
+      setIsBackendAvailable(true);
 
       return receivedUpdates;
     } catch (err) {
       console.error('Failed to fetch chat history:', err);
+      setIsBackendAvailable(false);
       if (!hasLoadedHistoryRef.current) {
         setError(INITIAL_HISTORY_ERROR);
         setMessages([]);
@@ -370,6 +373,7 @@ export const useChat = (): UseChatReturn => {
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
+        setIsBackendAvailable(true);
         resetPollingInterval();
         broadcastChange();
         void fetchHistory(true);
@@ -377,6 +381,7 @@ export const useChat = (): UseChatReturn => {
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : 'An error occurred';
+        setIsBackendAvailable(false);
         setError(errorMessage);
         console.error('Chat error:', err);
         return null;
@@ -392,6 +397,7 @@ export const useChat = (): UseChatReturn => {
     setError(null);
     try {
       await apiDelete('/api/chat/history');
+      setIsBackendAvailable(true);
       setMessages([]);
       setHistorySyncNotice(null);
       currentChatIdRef.current = null;
@@ -400,6 +406,7 @@ export const useChat = (): UseChatReturn => {
       broadcastChange();
     } catch (err) {
       console.error('Failed to clear chat history:', err);
+      setIsBackendAvailable(false);
       setError('Failed to start a new chat. Please try again.');
     } finally {
       setIsLoading(false);
@@ -421,6 +428,7 @@ export const useChat = (): UseChatReturn => {
     isFetchingHistory,
     isSyncingHistory,
     historySyncNotice,
+    isBackendAvailable,
     error,
     sendMessage,
     startNewChat,

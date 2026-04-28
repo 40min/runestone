@@ -20,6 +20,7 @@ interface TeacherAvatarProps {
   emotion?: TeacherEmotion | string | null;
   alt?: string;
   showStatus?: boolean;
+  isBackendAvailable?: boolean;
 }
 
 const emotionAvatars: Record<TeacherEmotion, string> = {
@@ -91,6 +92,7 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
   emotion,
   alt = "Björn, your Swedish teacher",
   showStatus = false,
+  isBackendAvailable = true,
 }) => {
   const CROSSFADE_MS = 1800;
   const CROSSFADE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
@@ -264,8 +266,11 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
             width: Math.max(9, Math.floor(size * 0.22)),
             height: Math.max(9, Math.floor(size * 0.22)),
             borderRadius: "50%",
-            backgroundColor: "var(--primary-color)",
+            backgroundColor: isBackendAvailable ? "var(--primary-color)" : "#ef4444",
             border: "2px solid #1a102b",
+            boxShadow: isBackendAvailable
+              ? "0 0 0 1px rgba(56, 224, 123, 0.28)"
+              : "0 0 0 1px rgba(239, 68, 68, 0.25)",
           }}
         />
       )}
