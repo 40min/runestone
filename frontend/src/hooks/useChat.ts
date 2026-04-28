@@ -6,7 +6,6 @@ import {
   normalizeTeacherEmotion,
   type TeacherEmotion,
 } from '../types/teacherEmotion';
-import { API_BASE_URL } from '../config';
 
 interface NewsSource {
   title: string;
@@ -62,7 +61,6 @@ const INITIAL_POLL_INTERVAL_MS = 5000;
 const MAX_POLL_INTERVAL_MS = 60000;
 const HISTORY_LIMIT = 200;
 const INITIAL_HISTORY_ERROR = 'Failed to load chat history. Starting fresh.';
-const SHOULD_POLL_BACKEND_HEALTH = import.meta.env.MODE !== 'test';
 
 export const useChat = (): UseChatReturn => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -243,16 +241,6 @@ export const useChat = (): UseChatReturn => {
     }
   }, [get, getMaxServerId, isLoading, mapServerMessage, mergeServerMessages, token]);
 
-  const checkBackendHealth = useCallback(async () => {
-    const base = API_BASE_URL.replace(/\/+$/, '');
-    try {
-      const response = await fetch(`${base}/api/health`, { method: 'GET' });
-      setIsBackendAvailable(response.ok);
-    } catch {
-      setIsBackendAvailable(false);
-    }
-  }, []);
-
   // Initial fetch
   useEffect(() => {
     void fetchHistory();
@@ -339,21 +327,6 @@ export const useChat = (): UseChatReturn => {
       channelRef.current = null;
     };
   }, [fetchHistory, resetPollingInterval]);
-
-  useEffect(() => {
-    if (!SHOULD_POLL_BACKEND_HEALTH) {
-      return;
-    }
-
-    void checkBackendHealth();
-    const intervalId = window.setInterval(() => {
-      void checkBackendHealth();
-    }, 15000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [checkBackendHealth]);
 
   const broadcastChange = useCallback(() => {
     if (channelRef.current) {
