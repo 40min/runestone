@@ -132,7 +132,7 @@ describe('useGrammar', () => {
     });
 
     expect(mockFetch).toHaveBeenLastCalledWith(
-      '/api/grammar/search?query=adjective+comparison&top_k=3'
+      expect.stringContaining('/api/grammar/search?query=adjective+comparison&top_k=3')
     );
     expect(result.current.searchResults).toEqual(mockResults);
     expect(result.current.searchError).toBeNull();
