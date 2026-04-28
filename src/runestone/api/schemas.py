@@ -130,6 +130,7 @@ class Vocabulary(BaseModel):
     learned_times: int = 0
     created_at: str
     updated_at: str
+    updated: Optional[str] = None
 
 
 class VocabularyImproveRequest(BaseModel):

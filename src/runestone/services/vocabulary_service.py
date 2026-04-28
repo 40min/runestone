@@ -91,6 +91,7 @@ class VocabularyService:
             last_learned=vocab.last_learned.isoformat() if vocab.last_learned else None,
             created_at=vocab.created_at.isoformat() if vocab.created_at else None,
             updated_at=vocab.updated_at.isoformat() if vocab.updated_at else None,
+            updated=vocab.updated_at.isoformat() if vocab.updated_at else None,
         )
 
     async def get_vocabulary(
@@ -114,6 +115,7 @@ class VocabularyService:
                     learned_times=vocab.learned_times or 0,
                     created_at=vocab.created_at.isoformat() if vocab.created_at else None,
                     updated_at=vocab.updated_at.isoformat() if vocab.updated_at else None,
+                    updated=vocab.updated_at.isoformat() if vocab.updated_at else None,
                 )
             )
         return result
@@ -153,6 +155,7 @@ class VocabularyService:
             learned_times=updated_vocab.learned_times or 0,
             created_at=updated_vocab.created_at.isoformat() if updated_vocab.created_at else None,
             updated_at=updated_vocab.updated_at.isoformat() if updated_vocab.updated_at else None,
+            updated=updated_vocab.updated_at.isoformat() if updated_vocab.updated_at else None,
         )
 
     async def load_vocab_from_csv(

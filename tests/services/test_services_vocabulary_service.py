@@ -194,14 +194,15 @@ class TestVocabularyService:
         assert stats.words_prioritized_count == 1
 
     async def test_get_vocabulary_recent(self, service, db_session):
-        """Test retrieving vocabulary items sorted by creation date (most recent first)."""
-        # Add test data with specific creation dates
+        """Test retrieving vocabulary items sorted by update date (most recent first)."""
+        # Add test data with specific update dates
         vocab1 = VocabularyModel(
             user_id=1,
             word_phrase="ett äpple",
             translation="an apple",
             example_phrase="Jag äter ett äpple varje dag.",
             created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
+            updated_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
             in_learn=True,
             last_learned=None,
         )
@@ -211,6 +212,7 @@ class TestVocabularyService:
             translation="a banana",
             example_phrase=None,
             created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
+            updated_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
             in_learn=True,
             last_learned=None,
         )
@@ -219,6 +221,7 @@ class TestVocabularyService:
             word_phrase="ett päron",
             translation="a pear",
             created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
+            updated_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
             in_learn=True,
             last_learned=None,
         )
@@ -227,6 +230,7 @@ class TestVocabularyService:
             word_phrase="en kiwi",
             translation="a kiwi",
             created_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
+            updated_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
             in_learn=True,
             last_learned=None,
         )
@@ -238,10 +242,11 @@ class TestVocabularyService:
         result = await service.get_vocabulary(limit=20, user_id=1)
         assert len(result) == 3
         assert isinstance(result[0], VocabularySchema)
-        # Should be ordered by created_at descending
+        # Should be ordered by updated_at descending
         assert result[0].word_phrase == "ett päron"  # Most recent
         assert result[1].word_phrase == "en banan"
         assert result[2].word_phrase == "ett äpple"  # Oldest
+        assert result[0].updated == result[0].updated_at
 
         # Test with limit
         result_limited = await service.get_vocabulary(limit=2, user_id=1)

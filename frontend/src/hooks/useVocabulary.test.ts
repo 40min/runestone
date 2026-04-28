@@ -573,6 +573,11 @@ describe('useRecentVocabulary', () => {
       ok: true,
       json: () => Promise.resolve(updatedItem),
     });
+    // Mock refetch response after update
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([updatedItem]),
+    });
 
     const { result } = renderHook(() => useRecentVocabulary());
 
@@ -605,7 +610,7 @@ describe('useRecentVocabulary', () => {
       })
     );
 
-    // Verify state was updated directly with the updated item
+    // Verify state was updated from refetched list after update
     await waitFor(() => {
       expect(result.current.recentVocabulary).toEqual([updatedItem]);
     });

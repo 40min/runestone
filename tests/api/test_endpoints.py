@@ -257,6 +257,7 @@ class TestVocabularyEndpoints:
         assert "id" in vocab
         assert "created_at" in vocab
         assert "updated_at" in vocab
+        assert vocab["updated"] == vocab["updated_at"]
 
     async def test_save_vocabulary_item_success(self, client):
         """Test successful saving of a single vocabulary item."""
@@ -402,7 +403,7 @@ class TestVocabularyEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 2
-        # Should be ordered by created_at descending
+        # Should be ordered by updated_at descending, with id as a tie-breaker
         assert data[0]["word_phrase"] == "ett päron"  # Most recent
         assert data[1]["word_phrase"] == "ett äpple"
 

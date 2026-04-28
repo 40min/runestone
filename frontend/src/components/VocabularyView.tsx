@@ -357,10 +357,13 @@ const VocabularyView: React.FC = () => {
                 ),
               },
               {
-                key: "created_at",
-                label: "Saved",
-                render: (value) =>
-                  new Date(value as string).toLocaleDateString(),
+                key: "updated",
+                label: "Updated",
+                render: (value, row) => {
+                  const item = row as unknown as (typeof recentVocabulary)[0];
+                  const updated = value || item.updated_at;
+                  return updated ? new Date(updated as string).toLocaleDateString() : "—";
+                },
               },
             ]}
             data={

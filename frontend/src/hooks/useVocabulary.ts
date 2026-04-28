@@ -15,6 +15,7 @@ interface SavedVocabularyItem {
   learned_times: number;
   created_at: string;
   updated_at: string;
+  updated?: string | null;
 }
 
 export interface VocabularyStats {
@@ -187,16 +188,11 @@ export const useRecentVocabulary = (
 
   const updateVocabularyItem = useCallback(
     async (id: number, updates: Partial<SavedVocabularyItem>) => {
-      const updatedItem: SavedVocabularyItem = await put<SavedVocabularyItem>(
-        `/api/vocabulary/${id}`,
-        updates
-      );
-      setRecentVocabulary((prev) =>
-        prev.map((item) => (item.id === id ? updatedItem : item))
-      );
+      await put<SavedVocabularyItem>(`/api/vocabulary/${id}`, updates);
+      await fetchRecentVocabulary();
       closeEditModal();
     },
-    [closeEditModal, put]
+    [closeEditModal, fetchRecentVocabulary, put]
   );
 
   const createVocabularyItem = useCallback(
