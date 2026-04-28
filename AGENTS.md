@@ -10,7 +10,9 @@ Prefer the Makefile targets over spelling out raw tool commands; the Makefile al
 
 - Use `make check-readiness` before commit-sized changes. It runs lint checks, backend and frontend tests, then a frontend build dry-run.
 - Use scoped checks while iterating: `make backend-test`, `make frontend-test`, `make lint-check`, or targeted `uv run pytest tests/path -v` for backend tests.
+- Bootstrap a fresh worktree with `make setup` or `make install-dev`; use `make install-backend` and `make install-frontend` when only one side of the stack needs dependency refreshes.
 - Start services with `make run-backend` (applies Alembic migrations, serves FastAPI on port 8010), `make run-frontend` (Vite on port 5173), or `make run-dev` for both.
+- When touching the Telegram recall worker or containerized dev stack, use `make run-recall`, `make docker-up`, `make docker-down`, and `make docker-build` instead of ad hoc commands.
 - Manage schema changes through Alembic targets: `make db-migrate MESSAGE="..."`, `make db-upgrade`, `make db-current`, and `make db-history`.
 - Use prompt and RAG smoke targets when touching prompt construction or grammar retrieval: `make test-prompts-ocr`, `make test-prompts-analysis TEXT="..."`, `make test-prompts-vocabulary WORD="..."`, and `make test-grammar-search QUERY="..."`.
 
