@@ -143,3 +143,9 @@ async def test_memory_keeper_parses_fenced_json_output(specialist, mock_user):
 def test_memory_keeper_prompt_requires_mastered_state_before_promotion():
     assert "confirm via `read_memory` that the target item is already" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "first call `update_memory_status` to set it to `mastered`" in MEMORY_KEEPER_SYSTEM_PROMPT
+
+
+def test_memory_keeper_prompt_rejects_misspelled_word_pollution():
+    assert "Treat spelling corrections, nonexistent-word feedback" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "Do not create `area_to_improve` items for misspelled" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "leave it to WordKeeper unless a recurring durable pattern is named" in MEMORY_KEEPER_SYSTEM_PROMPT

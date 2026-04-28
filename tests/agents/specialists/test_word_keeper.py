@@ -131,6 +131,12 @@ def test_word_keeper_prompt_rejects_exercise_wording_as_save_signal():
     )
 
 
+def test_word_keeper_prompt_saves_corrected_word_not_misspelling():
+    assert "Save the corrected Swedish vocabulary item" in WORDKEEPER_SYSTEM_PROMPT
+    assert "Never save the student's erroneous form in this case." in WORDKEEPER_SYSTEM_PROMPT
+    assert "save only the corrected Swedish item supplied by the teacher" in WORDKEEPER_SYSTEM_PROMPT
+
+
 def test_word_keeper_extraction_schema_is_key_only():
     fields = WordSaveCandidate.model_fields
     assert set(fields) == {"word_phrase", "source_form"}

@@ -87,6 +87,8 @@ def test_memory_keeper_prompt_mentions_student_driven_memory_requests():
     assert "older `history`" in COORDINATOR_POST_RESPONSE_PROMPT
     assert 'Student: "Forget my old goal."' in COORDINATOR_POST_RESPONSE_PROMPT
     assert 'Teacher: "You have now clearly mastered this tense."' in COORDINATOR_POST_RESPONSE_PROMPT
+    assert "misspelled, invalid, nonexistent" in COORDINATOR_POST_RESPONSE_PROMPT
+    assert "That is a vocabulary correction, not a durable memory update." in COORDINATOR_POST_RESPONSE_PROMPT
 
 
 def test_news_prompt_requires_known_topic():
@@ -124,6 +126,7 @@ def test_word_keeper_prompt_does_not_allow_anticipatory_post_routing():
     assert "The teacher is only asking the student to practice, answer, or write another sentence using words." in (
         COORDINATOR_POST_RESPONSE_PROMPT
     )
+    assert "provides\n  the corrected Swedish vocabulary item" in COORDINATOR_POST_RESPONSE_PROMPT
 
 
 def test_word_keeper_prompt_limits_pre_stage_to_explicit_save_requests():
