@@ -27,6 +27,7 @@ interface ChatMessageBubbleProps {
   onPlayAudio?: () => void;
   onPauseAudio?: () => void;
   onReplayAudio?: () => void;
+  studentAvatarLabel?: string;
 }
 
 const formatMessageTime = (value?: string) => {
@@ -54,6 +55,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   onPlayAudio,
   onPauseAudio,
   onReplayAudio,
+  studentAvatarLabel = "You",
 }) => {
   const maxCollapsedChars = 300;
   const isLongMessage = content.length > maxCollapsedChars;
@@ -140,6 +142,33 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   const displayedContent = isCollapsed
     ? content.slice(0, maxCollapsedChars)
     : content;
+  const userAvatar = (
+    <Box
+      aria-label={`${studentAvatarLabel}, student`}
+      role="img"
+      sx={{
+        width: 32,
+        height: 32,
+        borderRadius: "50%",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        alignSelf: "flex-end",
+        background:
+          "radial-gradient(circle at 30% 25%, rgba(110, 231, 183, 0.9), rgba(16, 185, 129, 0.85))",
+        border: "1px solid rgba(110, 231, 183, 0.45)",
+        boxShadow: "0 10px 20px rgba(6, 78, 59, 0.35)",
+        color: "#022c22",
+        fontSize: "0.58rem",
+        fontWeight: 800,
+        letterSpacing: "0.04em",
+        textTransform: "uppercase",
+      }}
+    >
+      {studentAvatarLabel}
+    </Box>
+  );
 
   return (
     <Box
@@ -417,6 +446,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           </Box>
         )}
       </Box>
+      {role === "user" && userAvatar}
     </Box>
   );
 };

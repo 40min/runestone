@@ -51,12 +51,26 @@ describe("ChatMessageBubble", () => {
     ).toHaveAttribute("src", expect.stringContaining("bjorn_happy"));
   });
 
-  it("does not render the teacher avatar for user messages", () => {
+  it("renders a student avatar and no teacher avatar for user messages", () => {
     render(<ChatMessageBubble role="user" content="Hej!" />);
 
     expect(
       screen.queryByRole("img", { name: /björn, your swedish teacher/i }),
     ).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /you, student/i })).toBeInTheDocument();
+  });
+
+  it("renders provided student avatar initials for user messages", () => {
+    render(
+      <ChatMessageBubble
+        role="user"
+        content="Hej!"
+        studentAvatarLabel="AS"
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: /as, student/i })).toBeInTheDocument();
+    expect(screen.getByText("AS")).toBeInTheDocument();
   });
 
   it("renders assistant markdown formatting", () => {

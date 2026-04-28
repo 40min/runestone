@@ -33,6 +33,16 @@ const getSupportedSpeechLanguage = (language?: string | null) =>
     ? language
     : null;
 
+const buildStudentAvatarLabel = (
+  name?: string | null,
+  surname?: string | null,
+): string => {
+  const first = name?.trim().charAt(0) ?? "";
+  const last = surname?.trim().charAt(0) ?? "";
+  const initials = `${first}${last}`.trim().toUpperCase();
+  return initials || "You";
+};
+
 const ChatView: React.FC = () => {
   const [inputMessage, setInputMessage] = useState("");
   const { userData } = useAuth();
@@ -154,6 +164,10 @@ const ChatView: React.FC = () => {
     }
     return null;
   })();
+  const studentAvatarLabel = buildStudentAvatarLabel(
+    userData?.name,
+    userData?.surname,
+  );
 
   const scrollToLastMessage = (
     behavior: ScrollBehavior,
@@ -394,6 +408,7 @@ const ChatView: React.FC = () => {
                   onReplayAudio={() => {
                     void replayLast();
                   }}
+                  studentAvatarLabel={studentAvatarLabel}
                 />
               </div>
             ))
