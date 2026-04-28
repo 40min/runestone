@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Typography } from "@mui/material";
 import {
   ErrorAlert,
@@ -164,9 +164,9 @@ const ChatView: React.FC = () => {
     }
     return null;
   })();
-  const studentAvatarLabel = buildStudentAvatarLabel(
-    userData?.name,
-    userData?.surname,
+  const studentAvatarLabel = useMemo(
+    () => buildStudentAvatarLabel(userData?.name, userData?.surname),
+    [userData?.name, userData?.surname],
   );
 
   const scrollToLastMessage = (
