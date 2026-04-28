@@ -146,6 +146,55 @@ def test_word_keeper_enrichment_prompt_owns_full_save_fields():
     assert "If unsure, leave `extra_info` empty rather than guess." in WORDKEEPER_ENRICHMENT_PROMPT
 
 
+def test_word_keeper_models_decode_double_escaped_unicode():
+    candidate = WordSaveCandidate(word_phrase="avg\\u00f6rande", source_form="avg\\u00f6rande")
+    enrichment = WordEnrichmentItem(
+        candidate_id="0",
+        word_phrase="avg\\u00f6rande",
+        translation="decisive",
+        example_phrase="Det var ett avg\\u00f6rande beslut.",
+        extra_info="adjective; common/neuter/plural: avg\\u00f6rande",
+    )
+
+    assert candidate.word_phrase == "avgörande"
+    assert candidate.source_form == "avgörande"
+    assert enrichment.word_phrase == "avgörande"
+    assert enrichment.example_phrase == "Det var ett avgörande beslut."
+    assert enrichment.extra_info == "adjective; common/neuter/plural: avgörande"
+
+
+def test_word_keeper_models_preserve_existing_unicode_when_decoding_escapes():
+    candidate = WordSaveCandidate(word_phrase="Här \\u00f6ver", source_form="Här \\u00f6ver")
+    enrichment = WordEnrichmentItem(
+        candidate_id="0",
+        word_phrase="Här \\u00f6ver",
+        translation="over here",
+        example_phrase="Här \\u00f6ver finns svaret.",
+        extra_info="phrase; mixed decoded and escaped unicode",
+    )
+
+    assert candidate.word_phrase == "Här över"
+    assert candidate.source_form == "Här över"
+    assert enrichment.word_phrase == "Här över"
+    assert enrichment.example_phrase == "Här över finns svaret."
+
+
+def test_word_keeper_models_decode_double_escaped_non_bmp_unicode():
+    candidate = WordSaveCandidate(word_phrase="glad \\U0001f600", source_form="glad \\U0001f600")
+    enrichment = WordEnrichmentItem(
+        candidate_id="0",
+        word_phrase="glad \\U0001f600",
+        translation="happy",
+        example_phrase="Hon blev glad \\U0001f600.",
+        extra_info="adjective; handles non-BMP escapes",
+    )
+
+    assert candidate.word_phrase == "glad 😀"
+    assert candidate.source_form == "glad 😀"
+    assert enrichment.word_phrase == "glad 😀"
+    assert enrichment.example_phrase == "Hon blev glad 😀."
+
+
 @pytest.mark.anyio
 async def test_word_keeper_prioritizes_existing_without_enrichment(specialist, mock_chat_model, mock_user):
     mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(

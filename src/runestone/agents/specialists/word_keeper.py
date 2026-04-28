@@ -10,14 +10,19 @@ from typing import Literal
 
 from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from runestone.agents.llm import build_chat_model
 from runestone.agents.service_providers import provide_vocabulary_service
 from runestone.agents.specialists.base import BaseSpecialist, SpecialistAction, SpecialistContext, SpecialistResult
 from runestone.config import Settings
 from runestone.core.observability import elapsed_ms_since
-from runestone.schemas.vocabulary_save import PriorityWordSaveItem, VocabularyPrioritizationAction, WordSaveCandidate
+from runestone.schemas.vocabulary_save import (
+    PriorityWordSaveItem,
+    VocabularyPrioritizationAction,
+    WordSaveCandidate,
+    decode_unicode_escapes,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +137,12 @@ class WordEnrichmentItem(BaseModel):
     translation: str | None = Field(None, description="Concise translation of the word_phrase")
     example_phrase: str | None = Field(None, description="Natural Swedish example sentence")
     extra_info: str | None = Field(None, description="Compact grammar or usage note when useful")
+
+    @field_validator("candidate_id", "word_phrase", "translation", "example_phrase", "extra_info", mode="before")
+    @classmethod
+    def decode_enrichment_unicode_escapes(cls, value: str | None) -> str | None:
+        """Normalize double-escaped unicode before matching or saving enrichment payloads."""
+        return decode_unicode_escapes(value)
 
 
 class WordKeeperEnrichment(BaseModel):
