@@ -8,6 +8,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { TeacherAvatar } from "../chat/TeacherAvatar";
+import { StudentAvatar } from "../chat/StudentAvatar";
 import { AssistantMessageContent } from "./AssistantMessageContent";
 import { formatResponseTime } from "./ChatMessageBubble.utils";
 import type { TeacherEmotion } from "../../types/teacherEmotion";
@@ -27,6 +28,7 @@ interface ChatMessageBubbleProps {
   onPlayAudio?: () => void;
   onPauseAudio?: () => void;
   onReplayAudio?: () => void;
+  studentAvatarLabel?: string;
 }
 
 const formatMessageTime = (value?: string) => {
@@ -54,6 +56,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   onPlayAudio,
   onPauseAudio,
   onReplayAudio,
+  studentAvatarLabel = "You",
 }) => {
   const maxCollapsedChars = 300;
   const isLongMessage = content.length > maxCollapsedChars;
@@ -140,7 +143,6 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   const displayedContent = isCollapsed
     ? content.slice(0, maxCollapsedChars)
     : content;
-
   return (
     <Box
       sx={{
@@ -417,6 +419,9 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           </Box>
         )}
       </Box>
+      {role === "user" && (
+        <StudentAvatar label={studentAvatarLabel} />
+      )}
     </Box>
   );
 };
