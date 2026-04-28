@@ -18,11 +18,27 @@ def priority_word_action_name(action: object, *, default: PriorityWordAction = "
     return default
 
 
+def decode_unicode_escapes(value: str | None) -> str | None:
+    """Decode double-escaped unicode text that some model payloads still emit."""
+    if isinstance(value, str) and "\\u" in value:
+        try:
+            return value.encode("utf-8").decode("unicode_escape")
+        except Exception:
+            return value
+    return value
+
+
 class WordSaveCandidate(BaseModel):
     """Canonical vocabulary candidate extracted before enrichment or persistence."""
 
     word_phrase: str = Field(..., description="Swedish word or phrase to save")
     source_form: str | None = Field(None, description="Original context form when it differs from word_phrase")
+
+    @field_validator("word_phrase", "source_form", mode="before")
+    @classmethod
+    def decode_candidate_unicode_escapes(cls, value: str | None) -> str | None:
+        """Normalize double-escaped unicode before candidate dedupe or persistence planning."""
+        return decode_unicode_escapes(value)
 
 
 class PriorityWordSaveItem(BaseModel):

@@ -146,6 +146,23 @@ def test_word_keeper_enrichment_prompt_owns_full_save_fields():
     assert "If unsure, leave `extra_info` empty rather than guess." in WORDKEEPER_ENRICHMENT_PROMPT
 
 
+def test_word_keeper_models_decode_double_escaped_unicode():
+    candidate = WordSaveCandidate(word_phrase="avg\\u00f6rande", source_form="avg\\u00f6rande")
+    enrichment = WordEnrichmentItem(
+        candidate_id="0",
+        word_phrase="avg\\u00f6rande",
+        translation="decisive",
+        example_phrase="Det var ett avg\\u00f6rande beslut.",
+        extra_info="adjective; common/neuter/plural: avg\\u00f6rande",
+    )
+
+    assert candidate.word_phrase == "avgörande"
+    assert candidate.source_form == "avgörande"
+    assert enrichment.word_phrase == "avgörande"
+    assert enrichment.example_phrase == "Det var ett avgörande beslut."
+    assert enrichment.extra_info == "adjective; common/neuter/plural: avgörande"
+
+
 @pytest.mark.anyio
 async def test_word_keeper_prioritizes_existing_without_enrichment(specialist, mock_chat_model, mock_user):
     mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(
