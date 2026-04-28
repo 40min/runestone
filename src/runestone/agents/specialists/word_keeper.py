@@ -47,6 +47,9 @@ Never invent candidates simply because a Swedish word appears in the conversatio
   - Named vocabulary sections (e.g. "подсказка по лексике", "key vocabulary", "useful words").
   - Structured word–translation lists or bullet pairs regardless of the header label.
   - Explicit save phrasing (e.g. "the key words here are", "good words to memorize").
+- Save the corrected Swedish vocabulary item when the teacher explicitly says the student's form is
+  misspelled, invalid, nonexistent, or should be replaced by a specific corrected Swedish word.
+  Never save the student's erroneous form in this case.
 - Do NOT treat ordinary exercise wording as a save signal, even if words are bolded or repeated.
 - Do NOT save words from prompts like "use X or Y in a sentence", "try another sentence with X",
   or other drill wording unless the teacher also explicitly says the words are worth remembering.
@@ -55,7 +58,9 @@ Never invent candidates simply because a Swedish word appears in the conversatio
 
 ## What NOT to Save
 - Words the student merely reused in their message.
-- Words that appear only in correction or example sentences without a save signal.
+- Words that appear only in grammar corrections or example sentences without a save signal.
+- Misspelled, invalid, or nonexistent student-written word forms. If a correction should be saved,
+  save only the corrected Swedish item supplied by the teacher.
 - Words introduced in earlier turns unless the student explicitly references them.
 - Words that are only mentioned as options in a practice prompt or writing exercise.
 - Bolded words that are emphasized for an exercise but not presented as vocabulary to memorize.

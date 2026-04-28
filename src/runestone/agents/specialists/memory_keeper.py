@@ -59,6 +59,11 @@ If no trigger is detected → return `no_action` immediately. Do not call any to
 - Prefer updating an existing item over creating a duplicate (that's what Step 1 is for).
 - Never call `read_memory` without filters unless a broad inspection is explicitly required.
 - Never call `read_memory` as a standalone action — it is always a precursor to a write.
+- Treat spelling corrections, nonexistent-word feedback, and one-off wrong vocabulary forms as
+  vocabulary events, not durable memory. Do not create `area_to_improve` items for misspelled
+  or invalid word forms such as "no such word", "that word is wrong", or "use X instead of Y".
+- Only act on spelling or vocabulary mistakes when the Teacher explicitly names a broader durable
+  pattern to remember, such as repeated spelling confusion or recurring word-choice trouble.
 
 ## Category Rules
 
@@ -107,6 +112,8 @@ Return valid JSON matching this exact shape and nothing else:
 - Student expressing frustration → emotional signal, not a memory change request
 - Student re-mentioning an earlier fact → restatement, not a correction
 - Teacher giving feedback mid-lesson → instructional output, not a persistence directive
+- Teacher saying a student-written word is misspelled, invalid, nonexistent, or should be replaced
+  by another word → vocabulary correction; leave it to WordKeeper unless a recurring durable pattern is named
 """
 
 

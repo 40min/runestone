@@ -120,6 +120,8 @@ COORDINATOR_POST_RESPONSE_PROMPT = (
 - The request existed only in older `history` rather than the current student `message`.
 - The teacher response is routine praise, a normal correction, a drill prompt, or a generic explanation
   without an explicit durable signal.
+- The teacher only says a student-written word is misspelled, invalid, nonexistent, or should be replaced
+  by another vocabulary item. That is a vocabulary correction, not a durable memory update.
 - The plan would rely on inferred intent rather than explicit wording in the current turn.
 
 Examples that SHOULD route:
@@ -133,6 +135,7 @@ Examples that should NOT route:
 - Student: "We talked about this before."
 - Teacher: "Good job."
 - Teacher: "Write one more sentence with these words."
+- Teacher: "There is no such word as 'varen'; use 'våren' for spring."
 
 ### word_keeper (post)
 
@@ -141,11 +144,13 @@ Examples that should NOT route:
   (e.g. "the key words here are…", "good words to memorize",
   "let's keep these words in mind").
 - The teacher clearly presents a vocabulary-saving moment, not just vocabulary usage inside a drill.
+- The teacher explicitly corrects a misspelled, invalid, or nonexistent student-written word and provides
+  the corrected Swedish vocabulary item. Route so WordKeeper can prioritize the corrected item, not the error.
 
 **Do NOT route when:**
 - The teacher is only asking the student to practice, answer, or write another sentence using words.
-- Words are merely bolded, translated, corrected, or reused in an exercise prompt without an explicit
-  memory/save signal.
+- Words are merely bolded, translated, grammatically corrected, or reused in an exercise prompt without
+  an explicit memory/save signal or a corrected Swedish vocabulary item.
 - The teacher gives an example sentence using words but does not say they are important to memorize or save.
 - The response is an ordinary exercise, correction, explanation, or drill rather than a vocabulary-saving moment.
 
