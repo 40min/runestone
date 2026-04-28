@@ -20,9 +20,9 @@ def priority_word_action_name(action: object, *, default: PriorityWordAction = "
 
 def decode_unicode_escapes(value: str | None) -> str | None:
     """Decode double-escaped unicode text that some model payloads still emit."""
-    if isinstance(value, str) and "\\u" in value:
+    if isinstance(value, str) and ("\\u" in value or "\\U" in value):
         try:
-            return value.encode("utf-8").decode("unicode_escape")
+            return value.encode("latin-1", "backslashreplace").decode("unicode_escape")
         except Exception:
             return value
     return value
