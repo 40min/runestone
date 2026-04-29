@@ -523,7 +523,7 @@ def test_format_sources():
     assert "Title 21" not in formatted
 
 
-def test_teacher_output_caps_and_deduplicates_grammar_source_urls():
+def test_teacher_output_normalizes_and_deduplicates_grammar_source_urls():
     payload = TeacherOutput(
         message="Hej",
         grammar_source_urls=[
