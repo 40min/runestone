@@ -13,6 +13,7 @@ from runestone.agents.schemas import ChatMessage, TeacherOutput, TeacherSideEffe
 from runestone.agents.specialists.base import INFO_FOR_TEACHER_MAX_CHARS
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
+from runestone.constants import MAX_TEACHER_GRAMMAR_SOURCE_LINKS
 
 
 @pytest.fixture
@@ -119,6 +120,10 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert call_kwargs["response_format"] == TeacherOutput
             assert "AVATAR EMOTION METADATA" in call_kwargs["system_prompt"]
             assert "Never write the emotion label" in call_kwargs["system_prompt"]
+            assert "grammar_source_urls" in call_kwargs["system_prompt"]
+            assert f"at most {MAX_TEACHER_GRAMMAR_SOURCE_LINKS} grammar material URLs" in call_kwargs["system_prompt"]
+            assert f"top_k=1..{MAX_TEACHER_GRAMMAR_SOURCE_LINKS}" in call_kwargs["system_prompt"]
+            assert "keep `grammar_source_urls` empty" in call_kwargs["system_prompt"]
 
 
 def test_build_agent_uses_teacher_purpose(mock_settings, mock_chat_model):
@@ -239,13 +244,18 @@ async def test_run_with_history(teacher_agent, mock_user):
 async def test_run_returns_structured_teacher_emotion(teacher_agent, mock_user):
     teacher_agent.agent.ainvoke.return_value = {
         "messages": [AIMessage(content="Bra jobbat!")],
-        "structured_response": TeacherOutput(message="Bra jobbat!", emotion="happy"),
+        "structured_response": TeacherOutput(
+            message="Bra jobbat!",
+            emotion="happy",
+            grammar_source_urls=["https://example.com/grammar"],
+        ),
     }
 
     generated = await teacher_agent.generate_response(message="Hello", history=[], user=mock_user)
 
     assert generated.message == "Bra jobbat!"
     assert generated.emotion == "happy"
+    assert generated.grammar_source_urls == ["https://example.com/grammar"]
     assert isinstance(generated.final_messages, list)
 
 
@@ -511,6 +521,24 @@ def test_format_sources():
     assert "Title 1" in formatted
     assert "Title 20" in formatted
     assert "Title 21" not in formatted
+
+
+def test_teacher_output_normalizes_and_deduplicates_grammar_source_urls():
+    payload = TeacherOutput(
+        message="Hej",
+        grammar_source_urls=[
+            " https://example.com/1 ",
+            "https://example.com/1",
+            "https://example.com/2",
+            "https://example.com/3",
+        ],
+    )
+
+    assert payload.grammar_source_urls == [
+        "https://example.com/1",
+        "https://example.com/2",
+        "https://example.com/3",
+    ]
 
 
 def _serialize_messages(messages: list) -> str:

@@ -127,11 +127,37 @@ class TeacherOutput(BaseModel):
         DEFAULT_TEACHER_EMOTION,
         description="Teacher avatar emotion metadata; never include this in the student-facing message",
     )
+    grammar_source_urls: list[str] = Field(
+        default_factory=list,
+        description="Grammar reference URLs selected by Teacher to surface alongside the reply",
+    )
 
     @field_validator("emotion", mode="before")
     @classmethod
     def normalize_emotion(cls, value):
         return normalize_teacher_emotion(value)
+
+    @field_validator("grammar_source_urls", mode="before")
+    @classmethod
+    def normalize_grammar_source_urls(cls, value):
+        if value is None:
+            return []
+        if isinstance(value, str):
+            value = [value]
+        if not isinstance(value, list):
+            return []
+
+        normalized: list[str] = []
+        seen_urls: set[str] = set()
+        for item in value:
+            if not isinstance(item, str):
+                continue
+            url = item.strip()
+            if not url or url in seen_urls:
+                continue
+            normalized.append(url)
+            seen_urls.add(url)
+        return normalized
 
 
 @dataclass(slots=True)
@@ -140,6 +166,7 @@ class TeacherGenerationResult:
 
     message: str
     emotion: TeacherEmotion = DEFAULT_TEACHER_EMOTION
+    grammar_source_urls: list[str] | None = None
     final_messages: list[Any] = field(default_factory=list)
 
 
