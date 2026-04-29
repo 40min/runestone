@@ -105,6 +105,7 @@ describe('ChatView', () => {
     expect(screen.getByText('Your Swedish Teacher')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Skriv ditt svar här...')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /send message/i })).toHaveTextContent('Send');
+    expect(screen.getByRole('button', { name: /open teacher memory/i })).toBeInTheDocument();
   });
 
   it('defaults speech language from the user profile', () => {
