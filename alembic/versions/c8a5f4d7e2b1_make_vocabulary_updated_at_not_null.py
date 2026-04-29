@@ -21,7 +21,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.execute(sa.text("UPDATE vocabulary SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
+    op.execute(sa.text("UPDATE vocabulary SET updated_at = created_at WHERE updated_at IS NULL"))
 
     with op.batch_alter_table("vocabulary", schema=None) as batch_op:
         batch_op.alter_column("updated_at", nullable=False)
