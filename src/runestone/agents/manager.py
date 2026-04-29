@@ -7,7 +7,7 @@ import json
 import logging
 import time
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from langchain_core.messages import ToolMessage
 from sqlalchemy.exc import SQLAlchemyError
@@ -24,6 +24,7 @@ from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.agents.specialists.word_keeper import WordKeeperSpecialist
 from runestone.agents.tools.utils import serialize_memory_items
 from runestone.config import Settings
+from runestone.constants import MAX_TEACHER_GRAMMAR_SOURCE_LINKS
 from runestone.core.exceptions import RunestoneError
 from runestone.core.observability import elapsed_ms_since
 from runestone.db.models import User
@@ -204,7 +205,11 @@ class AgentsManager:
             logger.error("[agents:manager] Error generating response: %s", e)
             raise
 
-        sources = self._extract_sources(pre_results=pre_results, messages=generated.final_messages)
+        sources = self._extract_sources(
+            pre_results=pre_results,
+            messages=generated.final_messages,
+            grammar_source_urls=generated.grammar_source_urls,
+        )
         return generated.message, sources, generated.emotion
 
     async def process_turn(
@@ -562,18 +567,24 @@ class AgentsManager:
             return None
 
     def _extract_sources(
-        self, *, pre_results: list[dict] | None = None, messages=None
+        self,
+        *,
+        pre_results: list[dict] | None = None,
+        messages=None,
+        grammar_source_urls: list[str] | None = None,
     ) -> Optional[list[dict[str, str]]]:
         specialist_sources = self._extract_pre_result_sources(pre_results or [])
         merged_sources: list[dict[str, str]] = specialist_sources[:] if specialist_sources else []
         seen_urls = {source["url"] for source in merged_sources}
+        grammar_sources = self._extract_grammar_sources(grammar_source_urls or [], seen_urls)
+        merged_sources.extend(grammar_sources)
 
         for msg in reversed(messages or []):
             if not isinstance(msg, ToolMessage):
                 continue
             payload = self._safe_json_loads(msg.content)
             tool_name = payload.get("tool") if isinstance(payload, dict) else None
-            if not payload or tool_name not in ["search_news_with_dates", "search_grammar"]:
+            if not payload or tool_name != "search_news_with_dates":
                 continue
             if payload.get("error"):
                 return None
@@ -587,7 +598,7 @@ class AgentsManager:
                     continue
                 title = item.get("title")
                 url = item.get("url")
-                date = item.get("date", "")  # Date is optional for grammar
+                date = item.get("date", "")
                 if not title or not url:
                     continue
                 if not self._is_safe_url(url):
@@ -601,6 +612,31 @@ class AgentsManager:
             return merged_sources or None
 
         return merged_sources or None
+
+    def _extract_grammar_sources(
+        self,
+        grammar_source_urls: list[str],
+        seen_urls: set[str],
+    ) -> list[dict[str, str]]:
+        """Return grammar references explicitly selected by the Teacher response."""
+        sources: list[dict[str, str]] = []
+        for url in grammar_source_urls:
+            if not self._is_safe_url(url) or url in seen_urls:
+                continue
+            sources.append({"title": self._format_grammar_source_title(url), "url": url, "date": ""})
+            seen_urls.add(url)
+            if len(sources) == MAX_TEACHER_GRAMMAR_SOURCE_LINKS:
+                break
+        return sources
+
+    @staticmethod
+    def _format_grammar_source_title(url: str) -> str:
+        """Build a compact display title from a grammar reference URL."""
+        parsed = urlparse(url)
+        cheatsheet_paths = parse_qs(parsed.query).get("cheatsheet", [])
+        raw_title = cheatsheet_paths[0] if cheatsheet_paths else parsed.path.rsplit("/", 1)[-1]
+        title = raw_title.replace("/", " / ").replace("-", " ").replace("_", " ").strip()
+        return title.title() or parsed.netloc or url
 
     def _extract_pre_result_sources(self, pre_results: list[dict]) -> Optional[list[dict[str, str]]]:
         sources: list[dict[str, str]] = []

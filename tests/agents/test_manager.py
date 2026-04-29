@@ -546,25 +546,17 @@ async def test_generate_teacher_response_filters_unsafe_urls(mock_settings, mock
 
 
 @pytest.mark.anyio
-async def test_generate_teacher_response_does_not_cap_grammar_sources(mock_settings, mock_user):
+async def test_generate_teacher_response_caps_grammar_sources_without_selection(mock_settings, mock_user):
     manager = AgentsManager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(
         message="Grammatik",
-        final_messages=[
-            ToolMessage(
-                content=(
-                    '{"tool":"search_grammar","results":['
-                    '{"title":"Doc 1","url":"https://example.com/1"},'
-                    '{"title":"Doc 2","url":"https://example.com/2"},'
-                    '{"title":"Doc 3","url":"https://example.com/3"},'
-                    '{"title":"Doc 4","url":"https://example.com/4"},'
-                    '{"title":"Doc 5","url":"https://example.com/5"}'
-                    "]}"
-                ),
-                tool_call_id="tool-call-3",
-            ),
+        grammar_source_urls=[
+            "https://localhost:5173/?view=grammar&cheatsheet=verbs/presens",
+            "https://localhost:5173/?view=grammar&cheatsheet=adjectives/adjectiv-komparation",
+            "https://localhost:5173/?view=grammar&cheatsheet=word_order/bisatser",
         ],
+        final_messages=[],
     )
 
     _response, sources, _teacher_emotion = await manager.generate_teacher_response(
@@ -572,12 +564,65 @@ async def test_generate_teacher_response_does_not_cap_grammar_sources(mock_setti
     )
 
     assert sources == [
-        {"title": "Doc 1", "url": "https://example.com/1", "date": ""},
-        {"title": "Doc 2", "url": "https://example.com/2", "date": ""},
-        {"title": "Doc 3", "url": "https://example.com/3", "date": ""},
-        {"title": "Doc 4", "url": "https://example.com/4", "date": ""},
-        {"title": "Doc 5", "url": "https://example.com/5", "date": ""},
+        {
+            "title": "Verbs / Presens",
+            "url": "https://localhost:5173/?view=grammar&cheatsheet=verbs/presens",
+            "date": "",
+        },
+        {
+            "title": "Adjectives / Adjectiv Komparation",
+            "url": "https://localhost:5173/?view=grammar&cheatsheet=adjectives/adjectiv-komparation",
+            "date": "",
+        },
     ]
+
+
+@pytest.mark.anyio
+async def test_generate_teacher_response_uses_selected_grammar_sources(mock_settings, mock_user):
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(
+        message="Grammatik",
+        grammar_source_urls=[
+            "https://localhost:5173/?view=grammar&cheatsheet=pronouns/possessiva-pronomen",
+            "https://localhost:5173/?view=grammar&cheatsheet=word_order/huvudsats",
+        ],
+        final_messages=[],
+    )
+
+    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
+        message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
+    )
+
+    assert sources == [
+        {
+            "title": "Pronouns / Possessiva Pronomen",
+            "url": "https://localhost:5173/?view=grammar&cheatsheet=pronouns/possessiva-pronomen",
+            "date": "",
+        },
+        {
+            "title": "Word Order / Huvudsats",
+            "url": "https://localhost:5173/?view=grammar&cheatsheet=word_order/huvudsats",
+            "date": "",
+        },
+    ]
+
+
+@pytest.mark.anyio
+async def test_generate_teacher_response_can_hide_irrelevant_grammar_sources(mock_settings, mock_user):
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(
+        message="Grammatik",
+        grammar_source_urls=[],
+        final_messages=[],
+    )
+
+    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
+        message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
+    )
+
+    assert sources is None
 
 
 @pytest.mark.anyio
