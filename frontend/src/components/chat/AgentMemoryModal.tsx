@@ -30,7 +30,7 @@ import PsychologyIcon from "@mui/icons-material/Psychology";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CalendarTodayOutlinedIcon from "@mui/icons-material/CalendarTodayOutlined";
 import LightbulbOutlinedIcon from "@mui/icons-material/LightbulbOutlined";
-import { CustomButton } from "../ui";
+import { CustomButton, TabNavigation } from "../ui";
 import useMemoryItems, {
   type MemoryItem,
   type MemoryCategory,
@@ -146,6 +146,8 @@ const CATEGORY_HELP_TEXT: Record<MemoryCategory, string> = {
   knowledge_strength:
     "These are the concepts you're handling well. Lean on them when building confidence in new topics.",
 };
+
+const MEMORY_DATE_LOCALE = "en-GB";
 
 const textFieldStyles = {
   "& .MuiOutlinedInput-root": {
@@ -353,8 +355,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
             width: { xs: "calc(100vw - 16px)", sm: "calc(100vw - 48px)", lg: "1220px" },
             maxWidth: "1220px",
             maxHeight: { xs: "calc(100vh - 16px)", sm: "calc(100vh - 40px)" },
-            bgcolor:
-              "linear-gradient(180deg, rgba(15,23,42,0.96) 0%, rgba(15,23,42,0.92) 100%)",
+            bgcolor: "rgba(15, 23, 42, 0.96)",
             backgroundImage:
               "radial-gradient(circle at top left, rgba(56, 224, 123, 0.08), transparent 32%), linear-gradient(180deg, rgba(15,23,42,0.98) 0%, rgba(15,23,42,0.94) 100%)",
             color: "white",
@@ -408,50 +409,39 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
           </IconButton>
         </DialogTitle>
 
-        <Box sx={{ px: { xs: 2.25, md: 4.5 } }}>
-          <Box
-            sx={{
-              display: "flex",
-              gap: { xs: 2, md: 4.5 },
-              overflowX: "auto",
-              borderBottom: "1px solid rgba(148, 163, 184, 0.18)",
-              scrollbarWidth: "none",
-              "&::-webkit-scrollbar": { display: "none" },
-            }}
-          >
-            {CATEGORIES.map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <Box
-                  key={tab.id}
-                  component="button"
-                  type="button"
-                  onClick={() => handleTabChange(tab.id)}
-                  sx={{
-                    border: 0,
-                    borderBottom: isActive
-                      ? "2px solid var(--primary-color)"
-                      : "2px solid transparent",
-                    bgcolor: "transparent",
-                    color: isActive ? "var(--primary-color)" : "#d5dbe6",
-                    fontSize: { xs: "0.98rem", md: "1.02rem" },
-                    fontWeight: isActive ? 700 : 500,
-                    px: 0,
-                    py: 1.6,
-                    whiteSpace: "nowrap",
-                    cursor: "pointer",
-                    transition: "color 0.2s ease, border-color 0.2s ease",
-                    "&:hover": {
-                      color: isActive ? "var(--primary-color)" : "white",
-                    },
-                  }}
-                >
-                  {tab.label}
-                </Box>
-              );
-            })}
-          </Box>
-        </Box>
+        <TabNavigation
+          tabs={CATEGORIES}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          containerSx={{
+            px: { xs: 2.25, md: 4.5 },
+            borderColor: "rgba(148, 163, 184, 0.18)",
+          }}
+          tabsSx={{
+            gap: { xs: 2, md: 4.5 },
+            overflowX: "auto",
+            scrollbarWidth: "none",
+            "&::-webkit-scrollbar": { display: "none" },
+          }}
+          buttonSx={{
+            px: 0,
+            py: 1.6,
+            color: "#d5dbe6",
+            fontSize: { xs: "0.98rem", md: "1.02rem" },
+            fontWeight: 500,
+            whiteSpace: "nowrap",
+            "&:hover": {
+              color: "white",
+            },
+          }}
+          activeButtonSx={{
+            color: "var(--primary-color)",
+            fontWeight: 700,
+            "&:hover": {
+              color: "var(--primary-color)",
+            },
+          }}
+        />
 
         <DialogContent
           sx={{
@@ -859,7 +849,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                       <Box sx={{ display: "flex", alignItems: "center", gap: 0.85, color: "#94a3b8" }}>
                         <CalendarTodayOutlinedIcon sx={{ fontSize: "0.95rem" }} />
                         <Typography variant="body2" sx={{ fontSize: "0.95rem", color: "#94a3b8" }}>
-                          Updated {new Date(item.updated_at).toLocaleDateString()}
+                          Updated {new Date(item.updated_at).toLocaleDateString(MEMORY_DATE_LOCALE)}
                         </Typography>
                       </Box>
                       <CardActions sx={{ justifyContent: "flex-end", p: 0, gap: 0.25 }}>
