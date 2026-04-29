@@ -114,6 +114,19 @@
     "path": "adverbs/komparation.md"
   },
   {
+    "url": "{HOST}/?view=grammar&cheatsheet=adverbs%2Fadjektiv_vs_adverb",
+    "tags": [
+      "adverbs",
+      "adjectives",
+      "adjektiv",
+      "adverb",
+      "adverb-vs-adjective",
+      "adverb-vs-adjektiv"
+    ],
+    "annotation": "Explains how to distinguish Swedish adjectives from adverbs, including the usual adjective + t pattern, -en to -et forms, and common irregular adverbs.",
+    "path": "adverbs/adjektiv_vs_adverb.md"
+  },
+  {
     "url": "{HOST}/?view=grammar&cheatsheet=nouns%2Fbestamd_obest_plural",
     "tags": [
       "nouns",
