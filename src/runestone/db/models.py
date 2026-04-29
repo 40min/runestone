@@ -63,7 +63,7 @@ class MemoryItem(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     status_changed_at = Column(DateTime(timezone=True), nullable=True)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     priority: Mapped[int | None] = mapped_column(Integer, nullable=True)

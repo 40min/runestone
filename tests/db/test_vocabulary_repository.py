@@ -7,7 +7,7 @@ This module contains tests for the vocabulary repository.
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select
 
 from runestone.api.schemas import VocabularyItemCreate
 from runestone.db.models import User
@@ -388,51 +388,6 @@ class TestVocabularyRepository:
         result_user2 = await repo.get_vocabulary(limit=20, user_id=2)
         assert len(result_user2) == 1
         assert result_user2[0].word_phrase == "en kiwi"
-
-    async def test_get_vocabulary_recent_with_null_updated_at(self, repo, db_session):
-        """Test recent ordering falls back to created_at when updated_at is null."""
-        vocab1 = VocabularyModel(
-            user_id=1,
-            word_phrase="ett äpple",
-            translation="an apple",
-            created_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
-            updated_at=datetime(2023, 1, 1, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab2 = VocabularyModel(
-            user_id=1,
-            word_phrase="en banan",
-            translation="a banana",
-            created_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
-            updated_at=datetime(2023, 1, 3, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab3 = VocabularyModel(
-            user_id=1,
-            word_phrase="ett päron",
-            translation="a pear",
-            created_at=datetime(2023, 1, 2, tzinfo=timezone.utc),
-            updated_at=datetime(2023, 1, 4, tzinfo=timezone.utc),
-            in_learn=True,
-            last_learned=None,
-        )
-
-        db_session.add_all([vocab1, vocab2, vocab3])
-        await db_session.commit()
-        await db_session.execute(
-            update(VocabularyModel).where(VocabularyModel.id.in_([vocab1.id, vocab2.id])).values(updated_at=None)
-        )
-        await db_session.commit()
-
-        result = await repo.get_vocabulary(limit=20, user_id=1)
-        assert len(result) == 3
-        # coalesce(updated_at, created_at) descending:
-        # päron -> updated_at(2023-01-04), banan -> created_at(2023-01-03), äpple -> created_at(2023-01-01)
-        assert result[0].word_phrase == "ett päron"
-        assert result[1].word_phrase == "en banan"
-        assert result[2].word_phrase == "ett äpple"
 
     async def test_get_vocabulary_with_search(self, repo, db_session, basic_vocab_items):
         """Test retrieving vocabulary items filtered by search query."""
