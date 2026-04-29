@@ -418,18 +418,21 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
             borderColor: "rgba(148, 163, 184, 0.18)",
           }}
           tabsSx={{
-            gap: { xs: 2, md: 4.5 },
-            overflowX: "auto",
-            scrollbarWidth: "none",
-            "&::-webkit-scrollbar": { display: "none" },
+            display: "grid",
+            gridTemplateColumns: `repeat(${CATEGORIES.length}, minmax(0, 1fr))`,
+            gap: { xs: 0.5, md: 1.5 },
+            alignItems: "stretch",
           }}
           buttonSx={{
-            px: 0,
+            px: { xs: 0.5, md: 0 },
             py: 1.6,
             color: "#d5dbe6",
-            fontSize: { xs: "0.98rem", md: "1.02rem" },
+            fontSize: { xs: "0.95rem", md: "1.02rem" },
             fontWeight: 500,
-            whiteSpace: "nowrap",
+            whiteSpace: "normal",
+            textAlign: "center",
+            lineHeight: 1.35,
+            minWidth: 0,
             "&:hover": {
               color: "white",
             },
@@ -694,13 +697,13 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                   >
                     <Box
                       sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
+                        display: "grid",
+                        gridTemplateColumns: { xs: "minmax(0, 1fr)", lg: "minmax(0, 1fr) auto" },
                         gap: 1.5,
                         alignItems: "flex-start",
                       }}
                     >
-                      <Box sx={{ minWidth: 0, pr: 1 }}>
+                      <Box sx={{ minWidth: 0, pr: { lg: 1 }, width: "100%" }}>
                         <Typography
                           variant="subtitle1"
                           fontWeight="bold"
@@ -709,6 +712,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                             fontSize: { xs: "1.1rem", md: "1.18rem" },
                             lineHeight: 1.35,
                             mb: 1.25,
+                            overflowWrap: "anywhere",
                           }}
                         >
                           {getItemTitle(item)}
@@ -757,9 +761,10 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                           display: "flex",
                           alignItems: "flex-start",
                           gap: 0.75,
-                          flexShrink: 0,
                           flexWrap: "wrap",
-                          justifyContent: "flex-end",
+                          justifyContent: { xs: "flex-start", lg: "flex-end" },
+                          width: "100%",
+                          minWidth: 0,
                         }}
                       >
                         {/* Priority badge — area_to_improve only */}
