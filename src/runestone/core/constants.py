@@ -8,9 +8,6 @@ and maintainability.
 # Batch processing size for vocabulary operations
 VOCABULARY_BATCH_SIZE = 100
 
-# Agent memory fields in User model
-MEMORY_FIELDS = {"personal_info", "areas_to_improve", "knowledge_strengths"}
-
 # Language mapping: Full Name -> ISO-639-1 code
 # Based on frontend LANGUAGES list and Whisper API requirements
 LANGUAGE_CODE_MAP = {

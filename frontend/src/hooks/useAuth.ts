@@ -20,16 +20,12 @@ interface UpdateProfileData {
   timezone?: string;
   password?: string;
   email?: string;
-  personal_info?: Record<string, unknown> | null;
-  areas_to_improve?: Record<string, unknown> | null;
-  knowledge_strengths?: Record<string, unknown> | null;
 }
 
 interface UseAuthActionsReturn {
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   updateProfile: (updates: UpdateProfileData) => Promise<void>;
-  clearMemory: (category?: string) => Promise<void>;
   refreshUserData: () => Promise<void>;
   logout: () => void;
   loading: boolean;
@@ -38,7 +34,7 @@ interface UseAuthActionsReturn {
 
 export const useAuthActions = (): UseAuthActionsReturn => {
   const { login: contextLogin, logout: contextLogout, updateUserData: contextUpdateUserData, token } = useAuthContext();
-  const { post, get, put, delete: apiDelete } = useApi();
+  const { post, get, put } = useApi();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -114,33 +110,6 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     [put, contextLogin]
   );
 
-  const clearMemory = useCallback(
-    async (category?: string) => {
-      setLoading(true);
-      try {
-        const url = category
-          ? `/api/me/memory?category=${category}`
-          : `/api/me/memory`;
-
-        await apiDelete(url);
-
-        // Refresh user data
-        const updatedUserData = await get<UserData>("/api/me");
-        const currentToken = localStorage.getItem("runestone_token");
-        if (currentToken) {
-          contextLogin(currentToken, updatedUserData);
-        }
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : "Failed to clear memory";
-        setError(errorMessage);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [apiDelete, get, contextLogin]
-  );
-
   const logout = useCallback(() => {
     contextLogout();
   }, [contextLogout]);
@@ -167,7 +136,6 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     login,
     register,
     updateProfile,
-    clearMemory,
     refreshUserData,
     logout,
     loading,

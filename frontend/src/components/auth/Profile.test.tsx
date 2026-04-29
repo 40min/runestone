@@ -17,7 +17,6 @@ vi.mock("../../config", () => ({
 const defaultAuthActionsMock = {
   updateProfile: vi.fn(),
   refreshUserData: vi.fn().mockResolvedValue(undefined),
-  clearMemory: vi.fn(),
   logout: vi.fn(),
   login: vi.fn(),
   register: vi.fn(),
