@@ -334,9 +334,11 @@ async def test_word_keeper_saves_corrected_word_instead_of_student_misspelling(s
         {"word_phrase": "våren", "source_form": "varen"}
     ]
 
-    enrichment_payload = mock_chat_model.enrichment_model.ainvoke.call_args[0][0][1].content
-    assert '"word_phrase": "våren"' in enrichment_payload
-    assert '"source_form": "varen"' in enrichment_payload
+    enrichment_payload = json.loads(mock_chat_model.enrichment_model.ainvoke.call_args[0][0][1].content)
+    assert enrichment_payload["new_words"][0]["word_phrase"] == "våren"
+    assert enrichment_payload["new_words"][0]["source_form"] == "varen"
+
+    assert vocabulary_service.insert_or_prioritize_words.call_args.kwargs == {"user_id": 12}
 
     items = vocabulary_service.insert_or_prioritize_words.call_args.args[0]
     assert [item.model_dump() for item in items] == [
