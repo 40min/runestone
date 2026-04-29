@@ -419,7 +419,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
           }}
           tabsSx={{
             display: "grid",
-            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gridTemplateColumns: `repeat(${CATEGORIES.length}, minmax(0, 1fr))`,
             gap: { xs: 0.5, md: 1.5 },
             alignItems: "stretch",
           }}
