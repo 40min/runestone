@@ -713,7 +713,6 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                             lineHeight: 1.35,
                             mb: 1.25,
                             overflowWrap: "anywhere",
-                            wordBreak: "break-word",
                           }}
                         >
                           {getItemTitle(item)}
