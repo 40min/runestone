@@ -74,9 +74,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           alignItems: "center",
         }}
       >
-        <Tooltip title="Student Memory">
+        <Tooltip title="Teacher's Memory">
           <IconButton
-            aria-label="Open student memory"
+            aria-label="Open teacher memory"
             onClick={onOpenMemory}
             sx={{
               width: 38,

@@ -18,6 +18,7 @@ import {
   MenuItem,
   TextField,
   Tooltip,
+  Divider,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import AddIcon from "@mui/icons-material/Add";
@@ -27,6 +28,8 @@ import CheckIcon from "@mui/icons-material/Check";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import PsychologyIcon from "@mui/icons-material/Psychology";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import CalendarTodayOutlinedIcon from "@mui/icons-material/CalendarTodayOutlined";
+import LightbulbOutlinedIcon from "@mui/icons-material/LightbulbOutlined";
 import { CustomButton, TabNavigation } from "../ui";
 import useMemoryItems, {
   type MemoryItem,
@@ -105,16 +108,62 @@ const getPriorityChipStyles = (priority: number | null | undefined) => {
   return { bgcolor: "rgba(107,114,128,0.2)", color: "#9ca3af" };
 };
 
+const getStatusChipStyles = (status: string) => {
+  switch (status) {
+    case "struggling":
+      return {
+        bgcolor: "rgba(239, 68, 68, 0.16)",
+        color: "#ff8a80",
+        border: "1px solid rgba(239, 68, 68, 0.18)",
+      };
+    case "improving":
+      return {
+        bgcolor: "rgba(245, 158, 11, 0.14)",
+        color: "#fbbf24",
+        border: "1px solid rgba(245, 158, 11, 0.18)",
+      };
+    case "mastered":
+    case "active":
+      return {
+        bgcolor: "rgba(56, 224, 123, 0.14)",
+        color: "#7df0aa",
+        border: "1px solid rgba(56, 224, 123, 0.18)",
+      };
+    default:
+      return {
+        bgcolor: "rgba(148, 163, 184, 0.12)",
+        color: "#cbd5e1",
+        border: "1px solid rgba(148, 163, 184, 0.16)",
+      };
+  }
+};
+
+const CATEGORY_HELP_TEXT: Record<MemoryCategory, string> = {
+  personal_info:
+    "These are the personal details your teacher uses to keep guidance relevant and consistent.",
+  area_to_improve:
+    "These are areas where you've shown difficulty. Focus on them to improve faster!",
+  knowledge_strength:
+    "These are the concepts you're handling well. Lean on them when building confidence in new topics.",
+};
+
+const MEMORY_DATE_LOCALE = "en-GB";
+
 const textFieldStyles = {
   "& .MuiOutlinedInput-root": {
     color: "white",
-    "& fieldset": { borderColor: "#374151" },
-    "&:hover fieldset": { borderColor: "#6b7280" },
+    "& fieldset": { borderColor: "rgba(148, 163, 184, 0.2)" },
+    "&:hover fieldset": { borderColor: "rgba(148, 163, 184, 0.4)" },
     "&.Mui-focused fieldset": { borderColor: "var(--primary-color)" },
+    bgcolor: "rgba(15, 23, 42, 0.55)",
+    backdropFilter: "blur(10px)",
   },
   "& .MuiInputLabel-root": {
     color: "#9ca3af",
     "&.Mui-focused": { color: "var(--primary-color)" },
+  },
+  "& .MuiSelect-icon": {
+    color: "#94a3b8",
   },
 };
 
@@ -153,7 +202,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
   });
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const displayedCountLabel = `Displayed ${items.length} item${items.length === 1 ? "" : "s"}`;
+  const displayedCountLabel = `${items.length} item${items.length === 1 ? "" : "s"}`;
 
   const getItemTitle = (item: MemoryItem): string => {
     if (!item.metadata_json) return item.key;
@@ -293,14 +342,27 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
       <Dialog
         open={open}
         onClose={onClose}
-        maxWidth="md"
         fullWidth
+        maxWidth={false}
+        sx={{
+          "& .MuiBackdrop-root": {
+            bgcolor: "rgba(2, 6, 23, 0.78)",
+            backdropFilter: "blur(10px)",
+          },
+        }}
         PaperProps={{
           sx: {
-            bgcolor: "#111827",
+            width: { xs: "calc(100vw - 16px)", sm: "calc(100vw - 48px)", lg: "1220px" },
+            maxWidth: "1220px",
+            maxHeight: { xs: "calc(100vh - 16px)", sm: "calc(100vh - 40px)" },
+            bgcolor: "rgba(15, 23, 42, 0.96)",
+            backgroundImage:
+              "radial-gradient(circle at top left, rgba(56, 224, 123, 0.08), transparent 32%), linear-gradient(180deg, rgba(15,23,42,0.98) 0%, rgba(15,23,42,0.94) 100%)",
             color: "white",
-            border: "1px solid #374151",
-            borderRadius: "0.75rem",
+            border: "1px solid rgba(148, 163, 184, 0.18)",
+            borderRadius: { xs: "1rem", md: "1.25rem" },
+            boxShadow: "0 28px 80px rgba(2, 6, 23, 0.6)",
+            overflow: "hidden",
           },
         }}
       >
@@ -309,143 +371,260 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            pb: 1,
+            px: { xs: 2.25, md: 4.5 },
+            pt: { xs: 2.25, md: 4 },
+            pb: { xs: 2, md: 2.5 },
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1.5, md: 2 } }}>
             <PsychologyIcon
-              sx={{ color: "var(--primary-color)", fontSize: "2rem" }}
+              sx={{ color: "var(--primary-color)", fontSize: { xs: "2.6rem", md: "3.2rem" } }}
             />
             <Box>
-              <Typography variant="h6" fontWeight="bold">
-                Student Memory
+              <Typography
+                variant="h6"
+                fontWeight="bold"
+                sx={{ fontSize: { xs: "1.7rem", md: "2.1rem" }, lineHeight: 1.1, mb: 0.5 }}
+              >
+                Teacher&apos;s Memory
               </Typography>
-              <Typography variant="caption" sx={{ color: "#9ca3af" }}>
-                What the agent knows about you
+              <Typography
+                variant="body2"
+                sx={{ color: "#a5b4c7", fontSize: { xs: "0.95rem", md: "1rem" } }}
+              >
+                What your teacher remembers about your learning journey
               </Typography>
             </Box>
           </Box>
-          <IconButton onClick={onClose} sx={{ color: "#9ca3af" }}>
+          <IconButton
+            onClick={onClose}
+            sx={{
+              color: "#94a3b8",
+              mt: { xs: -0.5, md: -1 },
+              mr: { xs: -0.5, md: -1 },
+              "&:hover": { bgcolor: "rgba(148, 163, 184, 0.08)", color: "white" },
+            }}
+          >
             <CloseIcon />
           </IconButton>
         </DialogTitle>
 
-        <Box sx={{ borderBottom: 1, borderColor: "#374151" }}>
-          <TabNavigation
-            tabs={CATEGORIES}
-            activeTab={activeTab}
-            onTabChange={handleTabChange}
-          />
-        </Box>
+        <TabNavigation
+          tabs={CATEGORIES}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          containerSx={{
+            px: { xs: 2.25, md: 4.5 },
+            borderColor: "rgba(148, 163, 184, 0.18)",
+          }}
+          tabsSx={{
+            gap: { xs: 2, md: 4.5 },
+            overflowX: "auto",
+            scrollbarWidth: "none",
+            "&::-webkit-scrollbar": { display: "none" },
+          }}
+          buttonSx={{
+            px: 0,
+            py: 1.6,
+            color: "#d5dbe6",
+            fontSize: { xs: "0.98rem", md: "1.02rem" },
+            fontWeight: 500,
+            whiteSpace: "nowrap",
+            "&:hover": {
+              color: "white",
+            },
+          }}
+          activeButtonSx={{
+            color: "var(--primary-color)",
+            fontWeight: 700,
+            "&:hover": {
+              color: "var(--primary-color)",
+            },
+          }}
+        />
 
         <DialogContent
           sx={{
-            p: 0,
-            height: "60vh",
+            px: { xs: 2.25, md: 4.5 },
+            pt: { xs: 2.25, md: 2.5 },
+            pb: { xs: 2.25, md: 3 },
+            height: { xs: "auto", md: "68vh" },
+            minHeight: 0,
             display: "flex",
             flexDirection: "column",
           }}
         >
           <Box
             sx={{
-              p: 2,
+              p: { xs: 1.5, sm: 2, md: 2.25 },
               display: "flex",
-              gap: 2,
-              alignItems: "center",
-              borderBottom: "1px solid #1f2937",
+              flexWrap: "wrap",
+              gap: { xs: 1.25, md: 1.5 },
+              alignItems: { xs: "stretch", md: "flex-end" },
+              border: "1px solid rgba(148, 163, 184, 0.18)",
+              borderRadius: "1rem",
+              bgcolor: "rgba(30, 41, 59, 0.56)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+              mb: 2,
             }}
           >
-            <FormControl
-              size="small"
-              sx={{ minWidth: 150, ...textFieldStyles }}
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" },
+                gap: { xs: 1.25, md: 1.5 },
+                flex: "1 1 560px",
+                minWidth: 0,
+              }}
             >
-              <InputLabel id="status-filter-label">Status</InputLabel>
-              <Select
-                labelId="status-filter-label"
-                value={statusFilter}
-                label="Status"
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <MenuItem value="all">All statuses</MenuItem>
-                {renderStatusMenuItems(activeTab)}
-              </Select>
-            </FormControl>
+              <FormControl size="small" sx={{ minWidth: 0, ...textFieldStyles }}>
+                <Typography
+                  id="status-filter-label"
+                  component="label"
+                  sx={{ mb: 0.75, color: "#cbd5e1", fontSize: "0.92rem", fontWeight: 500 }}
+                >
+                  Status
+                </Typography>
+                <Select
+                  labelId="status-filter-label"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                  <MenuItem value="all">All statuses</MenuItem>
+                  {renderStatusMenuItems(activeTab)}
+                </Select>
+              </FormControl>
 
-            <FormControl size="small" sx={{ minWidth: 170, ...textFieldStyles }}>
-              <InputLabel id="sort-by-label">Sort by</InputLabel>
-              <Select
-                labelId="sort-by-label"
-                value={sortBy}
-                label="Sort by"
-                onChange={(e) => setSortBy(e.target.value as MemorySortBy)}
-              >
-                <MenuItem value="updated_at">Last updated</MenuItem>
-                {activeTab === "area_to_improve" && <MenuItem value="priority">Priority</MenuItem>}
-              </Select>
-            </FormControl>
+              <FormControl size="small" sx={{ minWidth: 0, ...textFieldStyles }}>
+                <Typography
+                  id="sort-by-label"
+                  component="label"
+                  sx={{ mb: 0.75, color: "#cbd5e1", fontSize: "0.92rem", fontWeight: 500 }}
+                >
+                  Sort by
+                </Typography>
+                <Select
+                  labelId="sort-by-label"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as MemorySortBy)}
+                >
+                  <MenuItem value="updated_at">Last updated</MenuItem>
+                  {activeTab === "area_to_improve" && (
+                    <MenuItem value="priority">Priority</MenuItem>
+                  )}
+                </Select>
+              </FormControl>
 
-            <FormControl size="small" sx={{ minWidth: 145, ...textFieldStyles }}>
-              <InputLabel id="sort-direction-label">Direction</InputLabel>
-              <Select
-                labelId="sort-direction-label"
-                value={sortDirection}
-                label="Direction"
-                onChange={(e) => setSortDirection(e.target.value as SortDirection)}
-              >
-                <MenuItem value="asc">Ascending</MenuItem>
-                <MenuItem value="desc">Descending</MenuItem>
-              </Select>
-            </FormControl>
+              <FormControl size="small" sx={{ minWidth: 0, ...textFieldStyles }}>
+                <Typography
+                  id="sort-direction-label"
+                  component="label"
+                  sx={{ mb: 0.75, color: "#cbd5e1", fontSize: "0.92rem", fontWeight: 500 }}
+                >
+                  Direction
+                </Typography>
+                <Select
+                  labelId="sort-direction-label"
+                  value={sortDirection}
+                  onChange={(e) => setSortDirection(e.target.value as SortDirection)}
+                >
+                  <MenuItem value="asc">Ascending</MenuItem>
+                  <MenuItem value="desc">Descending</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
 
-            <Typography variant="caption" sx={{ color: "#9ca3af", whiteSpace: "nowrap" }}>
-              {displayedCountLabel}
-            </Typography>
-
-            <Box sx={{ flexGrow: 1 }} />
-
-            <CustomButton
-              variant="secondary"
-              onClick={() => handleOpenForm()}
-              startIcon={<AddIcon />}
+            <Box
+              sx={{
+                display: "flex",
+                flex: "1 1 280px",
+                minWidth: 0,
+                alignItems: { xs: "stretch", lg: "center" },
+                justifyContent: "space-between",
+                gap: 1.25,
+                flexWrap: "wrap",
+              }}
             >
-              Add Item
-            </CustomButton>
-            {confirmClear ? (
-              <>
-                <CustomButton
-                  variant="secondary"
-                  onClick={async () => {
-                    await clearCategory(activeTab);
-                    setConfirmClear(false);
-                  }}
-                  disabled={items.length === 0}
-                  sx={{
-                    color: "#ef4444",
-                    "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" },
-                  }}
-                >
-                  Confirm Clear
-                </CustomButton>
-                <CustomButton
-                  variant="secondary"
-                  onClick={() => setConfirmClear(false)}
-                >
-                  Cancel
-                </CustomButton>
-              </>
-            ) : (
-              <CustomButton
-                variant="secondary"
-                onClick={handleClearCategory}
-                disabled={items.length === 0}
+              <Typography
+                variant="body2"
+                sx={{ color: "#a5b4c7", whiteSpace: "nowrap", mr: { lg: 1 } }}
+              >
+                {displayedCountLabel}
+              </Typography>
+
+              <Box
                 sx={{
-                  color: "#ef4444",
-                  "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" },
+                  display: "flex",
+                  gap: 1,
+                  flexWrap: "wrap",
+                  justifyContent: { xs: "stretch", md: "flex-end" },
+                  width: { xs: "100%", lg: "auto" },
                 }}
               >
-                Clear Category
-              </CustomButton>
-            )}
+                <CustomButton
+                  variant="secondary"
+                  onClick={() => handleOpenForm()}
+                  startIcon={<AddIcon />}
+                  sx={{
+                    border: "1px solid rgba(148, 163, 184, 0.2)",
+                    bgcolor: "rgba(15, 23, 42, 0.34)",
+                    color: "#e2e8f0",
+                    px: 2.5,
+                    width: { xs: "100%", sm: "auto" },
+                    "&:hover": {
+                      bgcolor: "rgba(15, 23, 42, 0.56)",
+                      color: "white",
+                    },
+                  }}
+                >
+                  Add Item
+                </CustomButton>
+                {confirmClear ? (
+                  <>
+                    <CustomButton
+                      variant="secondary"
+                      onClick={async () => {
+                        await clearCategory(activeTab);
+                        setConfirmClear(false);
+                      }}
+                      disabled={items.length === 0}
+                      sx={{
+                        color: "#f87171",
+                        border: "1px solid rgba(239, 68, 68, 0.18)",
+                        bgcolor: "rgba(127, 29, 29, 0.16)",
+                        width: { xs: "100%", sm: "auto" },
+                        "&:hover": { bgcolor: "rgba(127, 29, 29, 0.28)" },
+                      }}
+                    >
+                      Confirm Clear
+                    </CustomButton>
+                    <CustomButton
+                      variant="secondary"
+                      onClick={() => setConfirmClear(false)}
+                      sx={{
+                        border: "1px solid rgba(148, 163, 184, 0.2)",
+                        width: { xs: "100%", sm: "auto" },
+                      }}
+                    >
+                      Cancel
+                    </CustomButton>
+                  </>
+                ) : (
+                  <CustomButton
+                    variant="secondary"
+                    onClick={handleClearCategory}
+                    disabled={items.length === 0}
+                    sx={{
+                      color: "#f87171",
+                      width: { xs: "100%", sm: "auto" },
+                      "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" },
+                    }}
+                  >
+                    Clear Category
+                  </CustomButton>
+                )}
+              </Box>
+            </Box>
           </Box>
 
           <Box
@@ -454,7 +633,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
             sx={{
               flexGrow: 1,
               overflowY: "auto",
-              p: 2,
+              pr: { xs: 0.25, md: 0.5 },
               display: "flex",
               flexDirection: "column",
               gap: 2,
@@ -487,7 +666,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
                 gap: 2,
               }}
             >
@@ -495,25 +674,42 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                 <Card
                   key={item.id}
                   sx={{
-                    bgcolor: "#1f2937",
+                    bgcolor: "rgba(30, 41, 59, 0.7)",
                     color: "white",
-                    border: "1px solid #374151",
-                    "&:hover": { borderColor: "#4b5563" },
+                    border: "1px solid rgba(148, 163, 184, 0.18)",
+                    borderRadius: "1rem",
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+                    backdropFilter: "blur(10px)",
+                    "&:hover": { borderColor: "rgba(148, 163, 184, 0.3)" },
                   }}
                 >
-                  <CardContent sx={{ pb: 1 }}>
+                  <CardContent
+                    sx={{
+                      p: { xs: 2, md: 2.5 },
+                      pb: 1.5,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
                     <Box
                       sx={{
                         display: "flex",
                         justifyContent: "space-between",
-                        mb: 1,
+                        gap: 1.5,
+                        alignItems: "flex-start",
                       }}
                     >
                       <Box sx={{ minWidth: 0, pr: 1 }}>
                         <Typography
-                          variant="subtitle2"
+                          variant="subtitle1"
                           fontWeight="bold"
-                          sx={{ color: "var(--primary-color)" }}
+                          sx={{
+                            color: "var(--primary-color)",
+                            fontSize: { xs: "1.1rem", md: "1.18rem" },
+                            lineHeight: 1.35,
+                            mb: 1.25,
+                          }}
                         >
                           {getItemTitle(item)}
                         </Typography>
@@ -521,19 +717,20 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                           sx={{
                             display: "flex",
                             alignItems: "center",
-                            gap: 0.5,
+                            gap: 0.75,
                             minWidth: 0,
                           }}
                         >
                           <Tooltip title={item.key}>
                             <Typography
-                              variant="caption"
+                              variant="body2"
                               sx={{
-                                color: "#9ca3af",
+                                color: "#94a3b8",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
                                 minWidth: 0,
+                                fontSize: { xs: "0.88rem", md: "0.95rem" },
                               }}
                             >
                               {item.key}
@@ -543,7 +740,11 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                             <IconButton
                               size="small"
                               onClick={() => copyKeyToClipboard(item.key)}
-                              sx={{ color: "#9ca3af" }}
+                              sx={{
+                                color: "#94a3b8",
+                                p: 0.25,
+                                "&:hover": { color: "white", bgcolor: "transparent" },
+                              }}
                               aria-label="Copy memory item key"
                             >
                               <ContentCopyIcon fontSize="inherit" />
@@ -551,7 +752,16 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                           </Tooltip>
                         </Box>
                       </Box>
-                      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, flexShrink: 0 }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 0.75,
+                          flexShrink: 0,
+                          flexWrap: "wrap",
+                          justifyContent: "flex-end",
+                        }}
+                      >
                         {/* Priority badge — area_to_improve only */}
                         {item.category === "area_to_improve" && (
                           editingPriorityId === item.id ? (
@@ -564,9 +774,13 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                               aria-label="Priority selector"
                               sx={{
                                 color: "white",
-                                fontSize: "0.7rem",
-                                height: 24,
-                                ".MuiOutlinedInput-notchedOutline": { borderColor: "#6b7280" },
+                                fontSize: "0.74rem",
+                                height: 30,
+                                minWidth: 78,
+                                bgcolor: "rgba(15, 23, 42, 0.85)",
+                                ".MuiOutlinedInput-notchedOutline": {
+                                  borderColor: "rgba(148, 163, 184, 0.24)",
+                                },
                                 ".MuiSvgIcon-root": { color: "white" },
                               }}
                             >
@@ -584,10 +798,11 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                                 onClick={() => setEditingPriorityId(item.id)}
                                 aria-label="Priority badge"
                                 sx={{
-                                  height: 20,
-                                  fontSize: "0.67rem",
+                                  height: 28,
+                                  fontSize: "0.78rem",
                                   fontWeight: "bold",
                                   cursor: "pointer",
+                                  borderRadius: "999px",
                                   ...getPriorityChipStyles(item.priority),
                                   "&:hover": { opacity: 0.8 },
                                 }}
@@ -600,80 +815,123 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                             STATUS_OPTIONS[item.status]?.label || item.status
                           }
                           size="small"
-                          color={STATUS_OPTIONS[item.status]?.color || "default"}
                           sx={{
-                            height: 20,
-                            fontSize: "0.7rem",
+                            height: 28,
+                            fontSize: "0.8rem",
                             fontWeight: "bold",
+                            borderRadius: "999px",
+                            ...getStatusChipStyles(item.status),
                           }}
                         />
                       </Box>
                     </Box>
                     <Typography
-                      variant="body2"
-                      sx={{ mb: 2, whiteSpace: "pre-wrap" }}
+                      variant="body1"
+                      sx={{
+                        whiteSpace: "pre-wrap",
+                        color: "#e2e8f0",
+                        lineHeight: 1.65,
+                        minHeight: { md: 110 },
+                      }}
                     >
                       {item.content}
                     </Typography>
-                    <Typography variant="caption" sx={{ color: "#6b7280" }}>
-                      Updated: {new Date(item.updated_at).toLocaleDateString()}
-                    </Typography>
-                  </CardContent>
-                  <CardActions sx={{ justifyContent: "flex-end", pt: 0 }}>
-                    {item.category === "area_to_improve" &&
-                      item.status === "mastered" && (
-                        <Tooltip title="Promote to Strength">
-                          <IconButton
-                            size="small"
-                            onClick={() => handlePromote(item.id)}
-                            sx={{ color: "var(--primary-color)" }}
-                          >
-                            <TrendingUpIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                    <IconButton
-                      size="small"
-                      onClick={() => handleOpenForm(item)}
-                      sx={{ color: "#9ca3af" }}
+                    <Divider sx={{ borderColor: "rgba(148, 163, 184, 0.14)" }} />
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 1,
+                        flexWrap: "wrap",
+                      }}
                     >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    {confirmDeleteId === item.id ? (
-                      <>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.85, color: "#94a3b8" }}>
+                        <CalendarTodayOutlinedIcon sx={{ fontSize: "0.95rem" }} />
+                        <Typography variant="body2" sx={{ fontSize: "0.95rem", color: "#94a3b8" }}>
+                          Updated {new Date(item.updated_at).toLocaleDateString(MEMORY_DATE_LOCALE)}
+                        </Typography>
+                      </Box>
+                      <CardActions sx={{ justifyContent: "flex-end", p: 0, gap: 0.25 }}>
+                        {item.category === "area_to_improve" &&
+                          item.status === "mastered" && (
+                            <Tooltip title="Promote to Strength">
+                              <IconButton
+                                size="small"
+                                onClick={() => handlePromote(item.id)}
+                                sx={{ color: "var(--primary-color)" }}
+                              >
+                                <TrendingUpIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                         <IconButton
                           size="small"
-                          onClick={async () => {
-                            await deleteItem(item.id);
-                            setConfirmDeleteId(null);
-                          }}
-                          aria-label="Confirm delete"
-                          sx={{ color: "#ef4444" }}
-                        >
-                          <CheckIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={() => setConfirmDeleteId(null)}
-                          aria-label="Cancel delete"
+                          onClick={() => handleOpenForm(item)}
                           sx={{ color: "#9ca3af" }}
                         >
-                          <CloseIcon fontSize="small" />
+                          <EditIcon fontSize="small" />
                         </IconButton>
-                      </>
-                    ) : (
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDelete(item.id)}
-                        aria-label="Delete item"
-                        sx={{ color: "#ef4444" }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    )}
-                  </CardActions>
+                        {confirmDeleteId === item.id ? (
+                          <>
+                            <IconButton
+                              size="small"
+                              onClick={async () => {
+                                await deleteItem(item.id);
+                                setConfirmDeleteId(null);
+                              }}
+                              aria-label="Confirm delete"
+                              sx={{ color: "#ef4444" }}
+                            >
+                              <CheckIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              onClick={() => setConfirmDeleteId(null)}
+                              aria-label="Cancel delete"
+                              sx={{ color: "#9ca3af" }}
+                            >
+                              <CloseIcon fontSize="small" />
+                            </IconButton>
+                          </>
+                        ) : (
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDelete(item.id)}
+                            aria-label="Delete item"
+                            sx={{ color: "#ef4444" }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        )}
+                      </CardActions>
+                    </Box>
+                  </CardContent>
                 </Card>
               ))}
+            </Box>
+
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1.25,
+                px: { xs: 1.5, md: 2 },
+                py: 1.5,
+                borderRadius: "0.95rem",
+                border: "1px solid rgba(148, 163, 184, 0.16)",
+                bgcolor: "rgba(30, 41, 59, 0.45)",
+              }}
+            >
+              <LightbulbOutlinedIcon
+                sx={{ color: "var(--primary-color)", fontSize: "1.05rem", flexShrink: 0 }}
+              />
+              <Typography
+                variant="body2"
+                sx={{ color: "#cbd5e1", fontSize: { xs: "0.92rem", md: "0.98rem" } }}
+              >
+                {CATEGORY_HELP_TEXT[activeTab]}
+              </Typography>
             </Box>
 
             {loading && (

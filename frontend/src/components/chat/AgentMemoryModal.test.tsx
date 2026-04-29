@@ -31,8 +31,8 @@ describe('AgentMemoryModal', () => {
   it('renders correctly when open', () => {
     render(<AgentMemoryModal open={true} onClose={() => {}} />);
 
-    expect(screen.getByText('Student Memory')).toBeInTheDocument();
-    expect(screen.getByText('Displayed 0 items')).toBeInTheDocument();
+    expect(screen.getByText("Teacher's Memory")).toBeInTheDocument();
+    expect(screen.getByText('0 items')).toBeInTheDocument();
     expect(screen.getByText('Personal Info')).toBeInTheDocument();
     expect(screen.getByText('Areas to Improve')).toBeInTheDocument();
     expect(screen.getByText('Knowledge Strengths')).toBeInTheDocument();
@@ -151,7 +151,17 @@ describe('AgentMemoryModal', () => {
     expect(screen.getAllByText('test-key').length).toBeGreaterThan(0);
     expect(screen.getByText('test-content')).toBeInTheDocument();
     expect(screen.getByText('Active')).toBeInTheDocument();
-    expect(screen.getByText('Displayed 1 item')).toBeInTheDocument();
+    expect(screen.getByText('1 item')).toBeInTheDocument();
+  });
+
+  it('shows category helper text for areas to improve', () => {
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+
+    fireEvent.click(screen.getByText('Areas to Improve'));
+
+    expect(
+      screen.getByText("These are areas where you've shown difficulty. Focus on them to improve faster!")
+    ).toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------
