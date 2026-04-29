@@ -290,6 +290,68 @@ async def test_word_keeper_enriches_and_saves_new_word(specialist, mock_chat_mod
 
 
 @pytest.mark.anyio
+async def test_word_keeper_saves_corrected_word_instead_of_student_misspelling(specialist, mock_chat_model, mock_user):
+    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(
+        decision="save_words",
+        candidates=[WordSaveCandidate(word_phrase="våren", source_form="varen")],
+    )
+    mock_chat_model.enrichment_model.ainvoke.return_value = WordKeeperEnrichment(
+        items=[
+            WordEnrichmentItem(
+                candidate_id="0",
+                word_phrase="våren",
+                translation="spring",
+                example_phrase="Våren är min favoritårstid.",
+                extra_info='noun; corrected from student form "varen"',
+            )
+        ]
+    )
+    vocabulary_service = _mock_vocabulary_service(
+        priority_actions=_priority_actions(
+            _priority_entry("våren", "missing", word_id=None, changed=False, source_form="varen")
+        ),
+        upsert_return={"action": "created", "word_id": 7, "changed": True},
+    )
+
+    with patch(
+        "runestone.agents.specialists.word_keeper.provide_vocabulary_service",
+        _service_provider(vocabulary_service),
+    ):
+        result = await specialist.run(
+            SpecialistContext(
+                message="Jag gillar varen.",
+                history=[],
+                user=mock_user,
+                teacher_response="There is no such word as 'varen'; use 'våren' for spring.",
+                routing_reason="teacher corrected misspelled vocabulary item",
+            )
+        )
+
+    assert result.status == "action_taken"
+    assert result.artifacts["saved_words"] == ["våren"]
+    priority_candidates = vocabulary_service.prepare_priority_word_save.call_args[0][0]
+    assert [candidate.model_dump() for candidate in priority_candidates] == [
+        {"word_phrase": "våren", "source_form": "varen"}
+    ]
+
+    enrichment_payload = mock_chat_model.enrichment_model.ainvoke.call_args[0][0][1].content
+    assert '"word_phrase": "våren"' in enrichment_payload
+    assert '"source_form": "varen"' in enrichment_payload
+
+    items = vocabulary_service.insert_or_prioritize_words.call_args.args[0]
+    assert [item.model_dump() for item in items] == [
+        {
+            "word_phrase": "våren",
+            "translation": "spring",
+            "example_phrase": "Våren är min favoritårstid.",
+            "extra_info": 'noun; corrected from student form "varen"',
+            "in_learn": True,
+            "priority_learn": 9,
+        }
+    ]
+
+
+@pytest.mark.anyio
 async def test_word_keeper_mixed_existing_and_new_enriches_only_new_word(specialist, mock_chat_model, mock_user):
     mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(
         decision="save_words",
