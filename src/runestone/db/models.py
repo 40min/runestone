@@ -42,10 +42,6 @@ class User(Base):
     pages_recognised_count = Column(Integer, default=0, nullable=False)
     mother_tongue = Column(String, nullable=True)  # User's preferred language
     current_chat_id = Column(String, nullable=False, default=lambda: str(uuid4()))
-    # Agent memory fields (stored as JSON strings) - DEPRECATED, use memory_items table
-    personal_info = Column(Text, nullable=True)  # Student identity, preferences, goals
-    areas_to_improve = Column(Text, nullable=True)  # Recurring struggles and error patterns
-    knowledge_strengths = Column(Text, nullable=True)  # Mastered skills and concepts
     active = Column(Boolean, default=False, server_default=false(), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

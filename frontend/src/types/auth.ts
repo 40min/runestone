@@ -8,7 +8,4 @@ export interface UserData {
   mother_tongue?: string | null;
   timezone: string | null;
   pages_recognised_count: number;
-  personal_info?: Record<string, unknown> | null;
-  areas_to_improve?: Record<string, unknown> | null;
-  knowledge_strengths?: Record<string, unknown> | null;
 }

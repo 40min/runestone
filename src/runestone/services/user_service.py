@@ -5,7 +5,6 @@ This module contains service classes that handle business logic
 for user-related operations.
 """
 
-import json
 from typing import Optional
 from uuid import uuid4
 
@@ -41,38 +40,8 @@ class UserService:
         """
         return await self.user_repo.get_by_id(user_id)
 
-    def _parse_memory_field(self, field_value: Optional[str]) -> Optional[dict]:
-        """
-        Safely parse a JSON memory field.
-
-        Args:
-            field_value: JSON string or None
-
-        Returns:
-            Parsed dictionary or None
-        """
-        if not field_value:
-            return None
-
-        try:
-            return json.loads(field_value)
-        except json.JSONDecodeError as e:
-            self.logger.warning(f"Failed to parse memory field: {e}")
-            return None
-
-    def get_user_memory(self, user: User) -> dict:
-        """Get user memory."""
-        return {
-            "personal_info": self._parse_memory_field(user.personal_info),
-            "areas_to_improve": self._parse_memory_field(user.areas_to_improve),
-            "knowledge_strengths": self._parse_memory_field(user.knowledge_strengths),
-        }
-
     async def get_user_profile(self, user: User) -> UserProfileResponse:
         """Get user profile."""
-        # Parse JSON memory fields with error handling
-        memory = self.get_user_memory(user)
-
         return UserProfileResponse(
             id=user.id,
             email=user.email,
@@ -82,9 +51,6 @@ class UserService:
             mother_tongue=user.mother_tongue,
             timezone=user.timezone,
             pages_recognised_count=user.pages_recognised_count,
-            personal_info=memory["personal_info"],
-            areas_to_improve=memory["areas_to_improve"],
-            knowledge_strengths=memory["knowledge_strengths"],
             created_at=user.created_at.isoformat() if user.created_at else None,
             updated_at=user.updated_at.isoformat() if user.updated_at else None,
         )
@@ -150,40 +116,6 @@ class UserService:
         await self.user_repo.update(user)
 
         return user
-
-    async def clear_user_memory(self, user: User, category: Optional[str] = None) -> UserProfileResponse:
-        """
-        Clear one or all memory fields for a user.
-
-        Args:
-            user: User object
-            category: Specific memory category to clear, or None to clear all
-
-        Returns:
-            Updated user profile
-
-        Raises:
-            ValueError: If category is invalid
-        """
-        updated_user = await self.user_repo.clear_user_memory(user.id, category)
-        return await self.get_user_profile(updated_user)
-
-    async def update_user_memory(self, user: User, field: str, data: dict) -> None:
-        """
-        Update a specific memory field for a user.
-
-        Args:
-            user: User object
-            field: Memory field name ('personal_info', 'areas_to_improve', 'knowledge_strengths')
-            data: Dictionary to store
-
-        Returns:
-            Updated user profile
-
-        Raises:
-            ValueError: If field name is invalid
-        """
-        await self.user_repo.update_user_memory(user.id, field, data)
 
     async def get_or_create_current_chat_id(self, user_id: int) -> str:
         """
