@@ -1142,7 +1142,6 @@ async def test_prepare_pre_turn_loads_starter_memory_on_first_turn(
         mock_user.id,
         personal_limit=manager.STARTER_MEMORY_PERSONAL_LIMIT,
         area_limit=manager.STARTER_MEMORY_AREA_LIMIT,
-        knowledge_limit=manager.STARTER_MEMORY_KNOWLEDGE_LIMIT,
     )
     assert "<memory_items_json>" in starter_memory
 

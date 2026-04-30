@@ -17,7 +17,6 @@ const mockUseMemoryItems = {
   createItem: vi.fn(),
   updateStatus: vi.fn(),
   updatePriority: mockUpdatePriority,
-  promoteItem: vi.fn(),
   deleteItem: vi.fn().mockResolvedValue(undefined),
   clearCategory: vi.fn().mockResolvedValue(undefined),
 };
@@ -35,7 +34,7 @@ describe('AgentMemoryModal', () => {
     expect(screen.getByText('0 items')).toBeInTheDocument();
     expect(screen.getByText('Personal Info')).toBeInTheDocument();
     expect(screen.getByText('Areas to Improve')).toBeInTheDocument();
-    expect(screen.getByText('Knowledge Strengths')).toBeInTheDocument();
+    expect(screen.queryByText('Knowledge Strengths')).not.toBeInTheDocument();
   });
 
   it('fetches items on mount when open', () => {

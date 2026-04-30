@@ -11,8 +11,6 @@ from typing import Optional
 from runestone.api.memory_item_schemas import (
     DEFAULT_STATUS_BY_CATEGORY,
     VALID_STATUSES_BY_CATEGORY,
-    AreaToImproveStatus,
-    KnowledgeStrengthStatus,
     MemoryCategory,
     MemoryItemResponse,
     MemorySortBy,
@@ -102,14 +100,12 @@ class MemoryItemService:
         user_id: int,
         personal_limit: int,
         area_limit: int,
-        knowledge_limit: int,
     ) -> list[MemoryItemResponse]:
         """Return the compact starter memory bundle used at the start of a chat."""
         items = await self.repo.list_start_student_info_items(
             user_id,
             personal_limit=personal_limit,
             area_limit=area_limit,
-            knowledge_limit=knowledge_limit,
         )
         return [MemoryItemResponse.model_validate(item) for item in items]
 
@@ -261,69 +257,6 @@ class MemoryItemService:
         item.updated_at = self._utc_now()
         updated_item = await self.repo.update(item)
         return MemoryItemResponse.model_validate(updated_item)
-
-    async def promote_to_strength(self, item_id: int, user_id: int) -> MemoryItemResponse:
-        """
-        Promote a mastered area_to_improve item to knowledge_strength.
-
-        Args:
-            item_id: Item ID
-            user_id: User ID (for authorization)
-
-        Returns:
-            New MemoryItemResponse in knowledge_strength category
-
-        Raises:
-            UserNotFoundError: If item not found
-            ValueError: If item is not mastered or not in area_to_improve
-        """
-        item = await self.repo.get_by_id(item_id)
-        if not item:
-            raise UserNotFoundError(f"Memory item with id {item_id} not found")
-
-        if item.user_id != user_id:
-            raise PermissionDeniedError("You don't have permission to promote this item")
-
-        if item.category != MemoryCategory.AREA_TO_IMPROVE.value:
-            raise ValueError("Only area_to_improve items can be promoted")
-
-        if item.status != AreaToImproveStatus.MASTERED.value:
-            raise ValueError("Only mastered items can be promoted to knowledge_strength")
-
-        # Create + delete in a single transaction to avoid partial state.
-        async with self.repo.db.begin_nested():
-            existing_strength = await self.repo.get_by_user_category_key(
-                user_id,
-                MemoryCategory.KNOWLEDGE_STRENGTH.value,
-                item.key,
-            )
-            if existing_strength:
-                existing_strength.content = item.content
-                old_status = existing_strength.status
-                existing_strength.status = KnowledgeStrengthStatus.ACTIVE.value
-                if old_status != existing_strength.status:
-                    existing_strength.status_changed_at = self._utc_now()
-                existing_strength.updated_at = self._utc_now()
-                await self.repo.db.delete(item)
-                await self.repo.db.flush()
-                await self.repo.db.refresh(existing_strength)
-                promoted_item = existing_strength
-            else:
-                new_item = MemoryItem(
-                    user_id=user_id,
-                    category=MemoryCategory.KNOWLEDGE_STRENGTH.value,
-                    key=item.key,
-                    content=item.content,
-                    status=KnowledgeStrengthStatus.ACTIVE.value,
-                    status_changed_at=self._utc_now(),
-                )
-                self.repo.db.add(new_item)
-                await self.repo.db.delete(item)
-                await self.repo.db.flush()
-                await self.repo.db.refresh(new_item)
-                promoted_item = new_item
-
-        return MemoryItemResponse.model_validate(promoted_item)
 
     async def delete_item(self, item_id: int, user_id: int) -> None:
         """

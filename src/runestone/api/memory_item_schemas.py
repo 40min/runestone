@@ -16,7 +16,6 @@ class MemoryCategory(str, Enum):
 
     PERSONAL_INFO = "personal_info"
     AREA_TO_IMPROVE = "area_to_improve"
-    KNOWLEDGE_STRENGTH = "knowledge_strength"
 
 
 class MemorySortBy(str, Enum):
@@ -48,23 +47,14 @@ class AreaToImproveStatus(str, Enum):
     MASTERED = "mastered"
 
 
-class KnowledgeStrengthStatus(str, Enum):
-    """Status values for knowledge_strength category."""
-
-    ACTIVE = "active"
-    ARCHIVED = "archived"
-
-
 DEFAULT_STATUS_BY_CATEGORY: dict[MemoryCategory, str] = {
     MemoryCategory.PERSONAL_INFO: PersonalInfoStatus.ACTIVE.value,
     MemoryCategory.AREA_TO_IMPROVE: AreaToImproveStatus.STRUGGLING.value,
-    MemoryCategory.KNOWLEDGE_STRENGTH: KnowledgeStrengthStatus.ACTIVE.value,
 }
 
 VALID_STATUSES_BY_CATEGORY: dict[MemoryCategory, set[str]] = {
     MemoryCategory.PERSONAL_INFO: {s.value for s in PersonalInfoStatus},
     MemoryCategory.AREA_TO_IMPROVE: {s.value for s in AreaToImproveStatus},
-    MemoryCategory.KNOWLEDGE_STRENGTH: {s.value for s in KnowledgeStrengthStatus},
 }
 
 

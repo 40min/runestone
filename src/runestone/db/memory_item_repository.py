@@ -100,7 +100,6 @@ class MemoryItemRepository:
         *,
         personal_limit: int,
         area_limit: int,
-        knowledge_limit: int,
     ) -> list[MemoryItem]:
         """Fetch compact start-of-chat memory in a single query."""
         personal_match = and_(MemoryItem.category == "personal_info", MemoryItem.status == "active")
@@ -108,12 +107,10 @@ class MemoryItemRepository:
             MemoryItem.category == "area_to_improve",
             MemoryItem.status.in_(["struggling", "improving"]),
         )
-        knowledge_match = and_(MemoryItem.category == "knowledge_strength", MemoryItem.status == "active")
 
         bucket = case(
             (personal_match, "personal_info"),
             (area_match, "area_to_improve"),
-            (knowledge_match, "knowledge_strength"),
             else_=None,
         )
         ranked = (
@@ -137,7 +134,7 @@ class MemoryItemRepository:
                 )
                 .label("row_num"),
             )
-            .where(MemoryItem.user_id == user_id, or_(personal_match, area_match, knowledge_match))
+            .where(MemoryItem.user_id == user_id, or_(personal_match, area_match))
             .subquery()
         )
 
@@ -148,14 +145,12 @@ class MemoryItemRepository:
                 or_(
                     and_(ranked.c.bucket == "personal_info", ranked.c.row_num <= personal_limit),
                     and_(ranked.c.bucket == "area_to_improve", ranked.c.row_num <= area_limit),
-                    and_(ranked.c.bucket == "knowledge_strength", ranked.c.row_num <= knowledge_limit),
                 )
             )
             .order_by(
                 case(
                     (ranked.c.bucket == "personal_info", 0),
                     (ranked.c.bucket == "area_to_improve", 1),
-                    (ranked.c.bucket == "knowledge_strength", 2),
                     else_=3,
                 ),
                 case(

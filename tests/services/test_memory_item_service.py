@@ -3,12 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select
 
-from runestone.api.memory_item_schemas import (
-    AreaToImproveStatus,
-    KnowledgeStrengthStatus,
-    MemoryCategory,
-    PersonalInfoStatus,
-)
+from runestone.api.memory_item_schemas import AreaToImproveStatus, MemoryCategory, PersonalInfoStatus
 from runestone.core.exceptions import PermissionDeniedError
 from runestone.db.memory_item_repository import MemoryItemRepository
 from runestone.db.models import MemoryItem
@@ -71,9 +66,9 @@ async def test_cleanup_old_mastered_areas(db_with_test_user, monkeypatch):
             # Kept: different category entirely
             MemoryItem(
                 user_id=user.id,
-                category="knowledge_strength",
-                key="strength_old",
-                content="Strength",
+                category="personal_info",
+                key="old_goal",
+                content="Goal",
                 status="active",
                 status_changed_at=old,
                 updated_at=old,
@@ -87,7 +82,7 @@ async def test_cleanup_old_mastered_areas(db_with_test_user, monkeypatch):
 
     remaining = (await db.execute(select(MemoryItem).where(MemoryItem.user_id == user.id))).scalars().all()
     remaining_keys = {item.key for item in remaining}
-    assert remaining_keys == {"recent_mastered", "old_struggling", "strength_old"}
+    assert remaining_keys == {"recent_mastered", "old_struggling", "old_goal"}
 
 
 async def test_upsert_memory_item_creates_with_default_status(db_with_test_user, monkeypatch):
@@ -168,22 +163,6 @@ async def test_list_start_student_info_items_uses_single_query_and_applies_bucke
             ),
             MemoryItem(
                 user_id=user.id,
-                category=MemoryCategory.KNOWLEDGE_STRENGTH.value,
-                key="reading",
-                content="Good reading comprehension",
-                status=KnowledgeStrengthStatus.ACTIVE.value,
-                updated_at=base_time + timedelta(minutes=2),
-            ),
-            MemoryItem(
-                user_id=user.id,
-                category=MemoryCategory.KNOWLEDGE_STRENGTH.value,
-                key="old_strength",
-                content="Archived strength",
-                status=KnowledgeStrengthStatus.ARCHIVED.value,
-                updated_at=base_time + timedelta(minutes=3),
-            ),
-            MemoryItem(
-                user_id=user.id,
                 category=MemoryCategory.PERSONAL_INFO.value,
                 key="old_goal",
                 content="Outdated goal",
@@ -219,7 +198,6 @@ async def test_list_start_student_info_items_uses_single_query_and_applies_bucke
             user.id,
             personal_limit=50,
             area_limit=5,
-            knowledge_limit=50,
         )
     finally:
         db.execute = execute_spy
@@ -232,7 +210,6 @@ async def test_list_start_student_info_items_uses_single_query_and_applies_bucke
         MemoryCategory.AREA_TO_IMPROVE.value,
         MemoryCategory.AREA_TO_IMPROVE.value,
         MemoryCategory.AREA_TO_IMPROVE.value,
-        MemoryCategory.KNOWLEDGE_STRENGTH.value,
     ]
     assert [item.key for item in items if item.category == MemoryCategory.AREA_TO_IMPROVE.value] == [
         "topic_0",
@@ -243,7 +220,7 @@ async def test_list_start_student_info_items_uses_single_query_and_applies_bucke
     ]
 
 
-async def test_list_start_student_info_items_respects_personal_and_strength_limits(db_with_test_user):
+async def test_list_start_student_info_items_respects_personal_limit(db_with_test_user):
     db, user = db_with_test_user
     repo = MemoryItemRepository(db)
     service = MemoryItemService(repo)
@@ -258,17 +235,6 @@ async def test_list_start_student_info_items_respects_personal_and_strength_limi
                 content=f"Personal {idx}",
                 status=PersonalInfoStatus.ACTIVE.value,
                 updated_at=base_time + timedelta(minutes=idx),
-            )
-            for idx in range(3)
-        ]
-        + [
-            MemoryItem(
-                user_id=user.id,
-                category=MemoryCategory.KNOWLEDGE_STRENGTH.value,
-                key=f"strength_{idx}",
-                content=f"Strength {idx}",
-                status=KnowledgeStrengthStatus.ACTIVE.value,
-                updated_at=base_time + timedelta(minutes=10 + idx),
             )
             for idx in range(3)
         ]
@@ -290,16 +256,11 @@ async def test_list_start_student_info_items_respects_personal_and_strength_limi
         user.id,
         personal_limit=2,
         area_limit=1,
-        knowledge_limit=2,
     )
 
     assert [item.key for item in items if item.category == MemoryCategory.PERSONAL_INFO.value] == [
         "personal_2",
         "personal_1",
-    ]
-    assert [item.key for item in items if item.category == MemoryCategory.KNOWLEDGE_STRENGTH.value] == [
-        "strength_2",
-        "strength_1",
     ]
 
 
@@ -355,7 +316,6 @@ async def test_list_start_student_info_items_orders_area_items_by_priority_then_
         user.id,
         personal_limit=50,
         area_limit=4,
-        knowledge_limit=50,
     )
 
     assert [item.key for item in items if item.category == MemoryCategory.AREA_TO_IMPROVE.value] == [
@@ -418,36 +378,6 @@ async def test_update_item_status_updates_timestamp(db_with_test_user, monkeypat
     assert item.updated_at.replace(tzinfo=timezone.utc) == fixed_now
 
 
-async def test_promote_to_strength_creates_strength_and_deletes_old(db_with_test_user, monkeypatch):
-    db, user = db_with_test_user
-    repo = MemoryItemRepository(db)
-    service = MemoryItemService(repo)
-
-    fixed_now = datetime(2026, 2, 11, tzinfo=timezone.utc)
-    monkeypatch.setattr(service, "_utc_now", lambda: fixed_now)
-
-    item = MemoryItem(
-        user_id=user.id,
-        category=MemoryCategory.AREA_TO_IMPROVE.value,
-        key="verbs",
-        content="Verb conjugation",
-        status=AreaToImproveStatus.MASTERED.value,
-        status_changed_at=fixed_now,
-    )
-    db.add(item)
-    await db.commit()
-    await db.refresh(item)
-
-    response = await service.promote_to_strength(item.id, user_id=user.id)
-    assert response.category == MemoryCategory.KNOWLEDGE_STRENGTH.value
-    assert response.status == KnowledgeStrengthStatus.ACTIVE.value
-
-    assert await repo.get_by_id(item.id) is None
-    promoted = await repo.get_by_user_category_key(user.id, MemoryCategory.KNOWLEDGE_STRENGTH.value, "verbs")
-    assert promoted is not None
-    assert promoted.content == "Verb conjugation"
-
-
 async def test_delete_item_enforces_permissions(db_with_test_user):
     db, user = db_with_test_user
     repo = MemoryItemRepository(db)
@@ -494,10 +424,10 @@ async def test_clear_category_removes_only_matching_items(db_with_test_user):
             ),
             MemoryItem(
                 user_id=user.id,
-                category=MemoryCategory.KNOWLEDGE_STRENGTH.value,
-                key="vocab",
+                category=MemoryCategory.AREA_TO_IMPROVE.value,
+                key="articles",
                 content="Basic verbs",
-                status=KnowledgeStrengthStatus.ACTIVE.value,
+                status=AreaToImproveStatus.STRUGGLING.value,
             ),
         ]
     )
@@ -507,4 +437,4 @@ async def test_clear_category_removes_only_matching_items(db_with_test_user):
     assert deleted == 2
 
     remaining = await repo.list_items(user.id)
-    assert {item.category for item in remaining} == {MemoryCategory.KNOWLEDGE_STRENGTH.value}
+    assert {item.category for item in remaining} == {MemoryCategory.AREA_TO_IMPROVE.value}

@@ -25,7 +25,6 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import CheckIcon from "@mui/icons-material/Check";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import PsychologyIcon from "@mui/icons-material/Psychology";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CalendarTodayOutlinedIcon from "@mui/icons-material/CalendarTodayOutlined";
@@ -47,7 +46,6 @@ interface AgentMemoryModalProps {
 const CATEGORIES: { id: MemoryCategory; label: string }[] = [
   { id: "personal_info", label: "Personal Info" },
   { id: "area_to_improve", label: "Areas to Improve" },
-  { id: "knowledge_strength", label: "Knowledge Strengths" },
 ];
 
 const STATUS_OPTIONS: Record<
@@ -71,14 +69,11 @@ const STATUS_OPTIONS: Record<
   struggling: { label: "Struggling", color: "error" },
   improving: { label: "Improving", color: "warning" },
   mastered: { label: "Mastered", color: "success" },
-  // Knowledge Strengths
-  archived: { label: "Archived", color: "default" },
 };
 
 const STATUS_VALUES_BY_CATEGORY: Record<MemoryCategory, string[]> = {
   personal_info: ["active", "outdated"],
   area_to_improve: ["struggling", "improving", "mastered"],
-  knowledge_strength: ["active", "archived"],
 };
 
 const PRIORITY_OPTIONS = [
@@ -143,8 +138,6 @@ const CATEGORY_HELP_TEXT: Record<MemoryCategory, string> = {
     "These are the personal details your teacher uses to keep guidance relevant and consistent.",
   area_to_improve:
     "These are areas where you've shown difficulty. Focus on them to improve faster!",
-  knowledge_strength:
-    "These are the concepts you're handling well. Lean on them when building confidence in new topics.",
 };
 
 const MEMORY_DATE_LOCALE = "en-GB";
@@ -183,7 +176,6 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
     fetchItems,
     createItem,
     updatePriority,
-    promoteItem,
     deleteItem,
     clearCategory,
   } = useMemoryItems();
@@ -301,16 +293,6 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
     } catch (err) {
       console.error("Failed to save memory item", err);
     }
-  };
-
-  const handlePromote = async (id: number) => {
-    await promoteItem(
-      id,
-      activeTab,
-      statusFilter === "all" ? undefined : statusFilter,
-      sortBy,
-      sortDirection,
-    );
   };
 
   const handleDelete = async (id: number) => {
@@ -858,18 +840,6 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                         </Typography>
                       </Box>
                       <CardActions sx={{ justifyContent: "flex-end", p: 0, gap: 0.25 }}>
-                        {item.category === "area_to_improve" &&
-                          item.status === "mastered" && (
-                            <Tooltip title="Promote to Strength">
-                              <IconButton
-                                size="small"
-                                onClick={() => handlePromote(item.id)}
-                                sx={{ color: "var(--primary-color)" }}
-                              >
-                                <TrendingUpIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          )}
                         <IconButton
                           size="small"
                           onClick={() => handleOpenForm(item)}

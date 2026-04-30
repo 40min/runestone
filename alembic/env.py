@@ -22,6 +22,12 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+
+def _sync_database_url(url: str) -> str:
+    """Convert application async database URLs to Alembic-compatible sync URLs."""
+    return url.replace("+asyncpg", "+psycopg2").replace("+aiosqlite", "")
+
+
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
@@ -30,7 +36,7 @@ target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
-    url = settings.database_url.replace("+asyncpg", "+psycopg2")
+    url = _sync_database_url(settings.database_url)
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -46,7 +52,7 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
     # Alembic needs a sync URL for its internal connection management
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
+    sync_url = _sync_database_url(settings.database_url)
 
     connectable = engine_from_config(
         {"sqlalchemy.url": sync_url},
