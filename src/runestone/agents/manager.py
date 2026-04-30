@@ -574,7 +574,8 @@ class AgentsManager:
         specialist_sources = self._extract_pre_result_sources(pre_results or [])
         merged_sources: list[dict[str, str]] = specialist_sources[:] if specialist_sources else []
         seen_urls = {source["url"] for source in merged_sources}
-        grammar_sources = self._extract_grammar_sources(grammar_source_urls or [], seen_urls)
+        grammar_result_urls = self._extract_search_grammar_result_urls(messages or [])
+        grammar_sources = self._extract_grammar_sources(grammar_source_urls or [], grammar_result_urls, seen_urls)
         merged_sources.extend(grammar_sources)
 
         for msg in reversed(messages or []):
@@ -614,18 +615,47 @@ class AgentsManager:
     def _extract_grammar_sources(
         self,
         grammar_source_urls: list[str],
+        allowed_urls: set[str],
         seen_urls: set[str],
     ) -> list[dict[str, str]]:
         """Return grammar references explicitly selected by the Teacher response."""
         sources: list[dict[str, str]] = []
         for url in grammar_source_urls:
-            if not self._is_safe_url(url) or url in seen_urls:
+            if url not in allowed_urls:
+                logger.info("[agents:manager] Rejected grammar source URL (not returned by search_grammar): %s", url)
+                continue
+            if url in seen_urls:
+                logger.info("[agents:manager] Rejected grammar source URL (duplicate): %s", url)
+                continue
+            if not self._is_safe_url(url):
+                logger.info("[agents:manager] Rejected grammar source URL (unsafe): %s", url)
                 continue
             sources.append({"title": self._format_grammar_source_title(url), "url": url, "date": ""})
             seen_urls.add(url)
             if len(sources) == MAX_TEACHER_GRAMMAR_SOURCE_LINKS:
                 break
         return sources
+
+    def _extract_search_grammar_result_urls(self, messages) -> set[str]:
+        """Return exact grammar URLs produced by search_grammar during this teacher turn."""
+        urls: set[str] = set()
+        for msg in messages or []:
+            if not isinstance(msg, ToolMessage):
+                continue
+            payload = self._safe_json_loads(msg.content)
+            tool_name = payload.get("tool") if isinstance(payload, dict) else None
+            if tool_name != "search_grammar":
+                continue
+            results = payload.get("results")
+            if not isinstance(results, list):
+                continue
+            for item in results:
+                if not isinstance(item, dict):
+                    continue
+                raw_url = item.get("url")
+                if isinstance(raw_url, str) and raw_url:
+                    urls.add(raw_url)
+        return urls
 
     @staticmethod
     def _format_grammar_source_title(url: str) -> str:

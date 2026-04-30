@@ -154,6 +154,8 @@ Rules:
 - Never write the emotion label, JSON envelope, or any avatar instructions inside the student-facing `message`.
 - `grammar_source_urls` must contain at most {MAX_TEACHER_GRAMMAR_SOURCE_LINKS}
   grammar material URLs that are genuinely helpful for this reply.
+- `grammar_source_urls` may contain only exact `url` values returned by the `search_grammar` tool in this same turn.
+- Never invent, guess, reconstruct, or reuse grammar source URLs from memory, chat history, or prior turns.
 - Leave `grammar_source_urls` empty when no grammar material is clearly relevant enough to show.
 - Pick the emotion that best matches the teaching moment:
   - `happy` for praise, celebration, and warm encouragement.
@@ -257,8 +259,10 @@ when the student asks about or it is good moment to refer to it (after some erro
 
 If you are uncertain whether a document is relevant, use `read_grammar_page(path)`
 to read its contents before deciding.
-- Only include a grammar link in `grammar_source_urls` if it clearly helps this exact reply.
+- Only include a grammar link in `grammar_source_urls` if it clearly helps this exact reply and was copied
+  verbatim from the latest `search_grammar` results in this turn.
 - If the search results feel off-topic, partial, or weakly relevant, keep `grammar_source_urls` empty.
+- If you did not call `search_grammar` in this turn, `grammar_source_urls` must be empty.
 
 """
 

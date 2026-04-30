@@ -546,7 +546,26 @@ async def test_generate_teacher_response_filters_unsafe_urls(mock_settings, mock
 
 
 @pytest.mark.anyio
-async def test_generate_teacher_response_caps_grammar_sources_without_selection(mock_settings, mock_user):
+async def test_generate_teacher_response_requires_search_grammar_result_for_grammar_sources(mock_settings, mock_user):
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(
+        message="Grammatik",
+        grammar_source_urls=[
+            "https://localhost:5173/?view=grammar&cheatsheet=verbs/presens",
+        ],
+        final_messages=[],
+    )
+
+    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
+        message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
+    )
+
+    assert sources is None
+
+
+@pytest.mark.anyio
+async def test_generate_teacher_response_caps_search_grammar_selected_sources(mock_settings, mock_user):
     manager = AgentsManager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(
@@ -556,7 +575,19 @@ async def test_generate_teacher_response_caps_grammar_sources_without_selection(
             "https://localhost:5173/?view=grammar&cheatsheet=adjectives/adjectiv-komparation",
             "https://localhost:5173/?view=grammar&cheatsheet=word_order/bisatser",
         ],
-        final_messages=[],
+        final_messages=[
+            ToolMessage(
+                content=(
+                    '{"tool":"search_grammar","results":['
+                    '{"title":"Presens","url":"https://localhost:5173/?view=grammar&cheatsheet=verbs/presens"},'
+                    '{"title":"Adjectives",'
+                    '"url":"https://localhost:5173/?view=grammar&cheatsheet=adjectives/adjectiv-komparation"},'
+                    '{"title":"Bisatser","url":"https://localhost:5173/?view=grammar&cheatsheet=word_order/bisatser"}'
+                    "]}"
+                ),
+                tool_call_id="tool-call-grammar-1",
+            )
+        ],
     )
 
     _response, sources, _teacher_emotion = await manager.generate_teacher_response(
@@ -587,7 +618,18 @@ async def test_generate_teacher_response_uses_selected_grammar_sources(mock_sett
             "https://localhost:5173/?view=grammar&cheatsheet=pronouns/possessiva-pronomen",
             "https://localhost:5173/?view=grammar&cheatsheet=word_order/huvudsats",
         ],
-        final_messages=[],
+        final_messages=[
+            ToolMessage(
+                content=(
+                    '{"tool":"search_grammar","results":['
+                    '{"title":"Possessiva pronomen",'
+                    '"url":"https://localhost:5173/?view=grammar&cheatsheet=pronouns/possessiva-pronomen"},'
+                    '{"title":"Huvudsats","url":"https://localhost:5173/?view=grammar&cheatsheet=word_order/huvudsats"}'
+                    "]}"
+                ),
+                tool_call_id="tool-call-grammar-2",
+            )
+        ],
     )
 
     _response, sources, _teacher_emotion = await manager.generate_teacher_response(
@@ -606,6 +648,124 @@ async def test_generate_teacher_response_uses_selected_grammar_sources(mock_sett
             "date": "",
         },
     ]
+
+
+@pytest.mark.anyio
+async def test_generate_teacher_response_rejects_grammar_sources_not_returned_by_search(mock_settings, mock_user):
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(
+        message="Grammatik",
+        grammar_source_urls=[
+            "https://vaxxa.dyndns.org/?view=grammar&cheatsheet=tenses/futurum",
+            "https://localhost:5173/?view=grammar&cheatsheet=tenses/futurum",
+        ],
+        final_messages=[
+            ToolMessage(
+                content=(
+                    '{"tool":"search_grammar","results":['
+                    '{"title":"Futurum","url":"https://localhost:5173/?view=grammar&cheatsheet=tenses/futurum"}'
+                    "]}"
+                ),
+                tool_call_id="tool-call-grammar-3",
+            )
+        ],
+    )
+
+    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
+        message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
+    )
+
+    assert sources == [
+        {
+            "title": "Tenses / Futurum",
+            "url": "https://localhost:5173/?view=grammar&cheatsheet=tenses/futurum",
+            "date": "",
+        }
+    ]
+
+
+@pytest.mark.anyio
+async def test_generate_teacher_response_rejects_same_host_invented_grammar_sources(mock_settings, mock_user):
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(
+        message="Grammatik",
+        grammar_source_urls=[
+            "https://localhost:5173/?view=grammar&cheatsheet=tenses/futurum",
+            "https://localhost:5173/?view=grammar&cheatsheet=tenses/not-from-search",
+        ],
+        final_messages=[
+            ToolMessage(
+                content=(
+                    '{"tool":"search_grammar","results":['
+                    '{"title":"Futurum","url":"https://localhost:5173/?view=grammar&cheatsheet=tenses/futurum"}'
+                    "]}"
+                ),
+                tool_call_id="tool-call-grammar-4",
+            )
+        ],
+    )
+
+    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
+        message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
+    )
+
+    assert sources == [
+        {
+            "title": "Tenses / Futurum",
+            "url": "https://localhost:5173/?view=grammar&cheatsheet=tenses/futurum",
+            "date": "",
+        }
+    ]
+
+
+@pytest.mark.anyio
+async def test_generate_teacher_response_rejects_unsafe_search_grammar_source(mock_settings, mock_user):
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(
+        message="Grammatik",
+        grammar_source_urls=["javascript:alert(1)"],
+        final_messages=[
+            ToolMessage(
+                content='{"tool":"search_grammar","results":[{"title":"Unsafe","url":"javascript:alert(1)"}]}',
+                tool_call_id="tool-call-grammar-5",
+            )
+        ],
+    )
+
+    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
+        message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
+    )
+
+    assert sources is None
+
+
+@pytest.mark.anyio
+async def test_generate_teacher_response_rejects_disallowed_port_search_grammar_source(mock_settings, mock_user):
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(
+        message="Grammatik",
+        grammar_source_urls=["http://localhost:8080/?view=grammar&cheatsheet=tenses/futurum"],
+        final_messages=[
+            ToolMessage(
+                content=(
+                    '{"tool":"search_grammar","results":['
+                    '{"title":"Futurum","url":"http://localhost:8080/?view=grammar&cheatsheet=tenses/futurum"}'
+                    "]}"
+                ),
+                tool_call_id="tool-call-grammar-6",
+            )
+        ],
+    )
+
+    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
+        message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
+    )
+
+    assert sources is None
 
 
 @pytest.mark.anyio
