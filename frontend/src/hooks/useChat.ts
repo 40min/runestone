@@ -70,7 +70,7 @@ const deriveResponseTimesFromTimestamps = (messages: ChatMessage[]): ChatMessage
     const hasValidTimestamp = Number.isFinite(messageTimestampMs);
 
     if (message.role === 'user') {
-      latestUserTimestampMs = hasValidTimestamp ? messageTimestampMs : latestUserTimestampMs;
+      latestUserTimestampMs = hasValidTimestamp ? messageTimestampMs : null;
       return message;
     }
 
