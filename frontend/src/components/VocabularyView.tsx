@@ -40,6 +40,9 @@ const VocabularyView: React.FC = () => {
     recentVocabulary,
     loading,
     error,
+    loadingMore,
+    hasMore,
+    loadMore,
     isEditModalOpen,
     editingItem,
     openEditModal,
@@ -48,6 +51,7 @@ const VocabularyView: React.FC = () => {
     createVocabularyItem,
     deleteVocabularyItem,
   } = useRecentVocabulary(activeSearchTerm, preciseSearch);
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!loading && isInitialLoad) {
@@ -62,6 +66,27 @@ const VocabularyView: React.FC = () => {
       setActiveSearchTerm("");
     }
   }, [searchTerm]);
+
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || !hasMore || loading || loadingMore) {
+      return;
+    }
+    if (typeof IntersectionObserver === "undefined") {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          void loadMore();
+        }
+      },
+      { rootMargin: "240px 0px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loading, loadingMore, loadMore]);
 
   const handleSearch = () => {
     setActiveSearchTerm(searchTerm);
@@ -131,7 +156,7 @@ const VocabularyView: React.FC = () => {
     return <LoadingSpinner />;
   }
 
-  if (error) {
+  if (error && recentVocabulary.length === 0) {
     return <ErrorAlert message={error} />;
   }
 
@@ -256,8 +281,9 @@ const VocabularyView: React.FC = () => {
         </Box>
       ) : (
         recentVocabulary.length > 0 && (
-          <DataTable
-            columns={[
+          <>
+            <DataTable
+              columns={[
               { key: "word_phrase", label: "Swedish" },
               { key: "translation", label: "English" },
               { key: "example_phrase", label: "Example Phrase" },
@@ -365,15 +391,36 @@ const VocabularyView: React.FC = () => {
                   return updated ? new Date(updated as string).toLocaleDateString() : "—";
                 },
               },
-            ]}
-            data={
-              recentVocabulary.map((item) => ({
-                ...item,
-                id: item.id,
-              })) as unknown as ({ id: string } & Record<string, unknown>)[]
-            }
-            onRowClick={handleRowClick}
-          />
+              ]}
+              data={
+                recentVocabulary.map((item) => ({
+                  ...item,
+                  id: item.id,
+                })) as unknown as ({ id: string } & Record<string, unknown>)[]
+              }
+              onRowClick={handleRowClick}
+            />
+            <Box
+              ref={loadMoreSentinelRef}
+              data-testid="vocabulary-load-more-sentinel"
+              sx={{ height: 1 }}
+            />
+            {loadingMore && (
+              <Box sx={{ display: "flex", justifyContent: "center", my: 2 }}>
+                <Typography sx={{ color: "text.secondary" }}>Loading more...</Typography>
+              </Box>
+            )}
+            {error && !loadingMore && (
+              <Box sx={{ display: "flex", justifyContent: "center", my: 2 }}>
+                <Typography sx={{ color: "error.main" }}>{error}</Typography>
+              </Box>
+            )}
+            {!hasMore && !loadingMore && (
+              <Box sx={{ display: "flex", justifyContent: "center", my: 2 }}>
+                <Typography sx={{ color: "text.secondary" }}>All vocabulary loaded.</Typography>
+              </Box>
+            )}
+          </>
         )
       )}
 

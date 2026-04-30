@@ -172,11 +172,12 @@ describe('useRecentVocabulary', () => {
     await waitFor(() => {
       expect(result.current.recentVocabulary).toEqual(mockVocabularyResponse);
       expect(result.current.loading).toBe(false);
+      expect(result.current.hasMore).toBe(false);
       expect(result.current.error).toBeNull();
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:8010/api/vocabulary?limit=20',
+      'http://localhost:8010/api/vocabulary?limit=20&offset=0',
       expect.objectContaining({
         method: 'GET',
         headers: {
@@ -184,6 +185,139 @@ describe('useRecentVocabulary', () => {
         },
       })
     );
+  });
+
+  it('should load more recent vocabulary with the next offset and append results', async () => {
+    const firstPage = Array.from({ length: 20 }, (_, index) => ({
+      id: index + 1,
+      user_id: 1,
+      word_phrase: `word-${index + 1}`,
+      translation: `translation-${index + 1}`,
+      example_phrase: null,
+      extra_info: null,
+      in_learn: false,
+      last_learned: null,
+      learned_times: 0,
+      created_at: '2023-10-27T10:00:00Z',
+      updated_at: '2023-10-27T10:00:00Z',
+    }));
+    const secondPage = [
+      {
+        id: 21,
+        user_id: 1,
+        word_phrase: 'word-21',
+        translation: 'translation-21',
+        example_phrase: null,
+        extra_info: null,
+        in_learn: false,
+        last_learned: null,
+        learned_times: 0,
+        created_at: '2023-10-27T10:00:00Z',
+        updated_at: '2023-10-27T10:00:00Z',
+      },
+      {
+        id: 22,
+        user_id: 1,
+        word_phrase: 'word-22',
+        translation: 'translation-22',
+        example_phrase: null,
+        extra_info: null,
+        in_learn: false,
+        last_learned: null,
+        learned_times: 0,
+        created_at: '2023-10-27T10:00:00Z',
+        updated_at: '2023-10-27T10:00:00Z',
+      },
+    ];
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(firstPage),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(secondPage),
+      });
+
+    const { result } = renderHook(() => useRecentVocabulary());
+
+    await waitFor(() => {
+      expect(result.current.recentVocabulary).toEqual(firstPage);
+      expect(result.current.hasMore).toBe(true);
+    });
+
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:8010/api/vocabulary?limit=20&offset=20',
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+    );
+    expect(result.current.recentVocabulary).toEqual([...firstPage, ...secondPage]);
+    expect(result.current.hasMore).toBe(false);
+  });
+
+  it('should avoid appending duplicate items when loading more', async () => {
+    const firstPage = Array.from({ length: 20 }, (_, index) => ({
+      id: index + 1,
+      user_id: 1,
+      word_phrase: `word-${index + 1}`,
+      translation: `translation-${index + 1}`,
+      example_phrase: null,
+      extra_info: null,
+      in_learn: false,
+      last_learned: null,
+      learned_times: 0,
+      created_at: '2023-10-27T10:00:00Z',
+      updated_at: '2023-10-27T10:00:00Z',
+    }));
+    const duplicatePage = [
+      firstPage[19],
+      {
+        id: 21,
+        user_id: 1,
+        word_phrase: 'word-21',
+        translation: 'translation-21',
+        example_phrase: null,
+        extra_info: null,
+        in_learn: false,
+        last_learned: null,
+        learned_times: 0,
+        created_at: '2023-10-27T10:00:00Z',
+        updated_at: '2023-10-27T10:00:00Z',
+      },
+    ];
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(firstPage),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(duplicatePage),
+      });
+
+    const { result } = renderHook(() => useRecentVocabulary());
+
+    await waitFor(() => {
+      expect(result.current.hasMore).toBe(true);
+    });
+
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    expect(result.current.recentVocabulary).toHaveLength(21);
+    expect(result.current.recentVocabulary.at(-1)?.word_phrase).toBe('word-21');
   });
 
   it('should fetch vocabulary with search query and limit=100', async () => {
@@ -217,7 +351,7 @@ describe('useRecentVocabulary', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=false',
+      'http://localhost:8010/api/vocabulary?search_query=hej&precise=false&limit=100&offset=0',
       expect.objectContaining({
         method: 'GET',
         headers: {
@@ -257,7 +391,7 @@ describe('useRecentVocabulary', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=true',
+      'http://localhost:8010/api/vocabulary?search_query=hej&precise=true&limit=100&offset=0',
       expect.objectContaining({
         method: 'GET',
         headers: {
@@ -330,7 +464,7 @@ describe('useRecentVocabulary', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(mockFetch).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:8010/api/vocabulary?limit=20',
+      'http://localhost:8010/api/vocabulary?limit=20&offset=0',
       expect.objectContaining({
         method: 'GET',
         headers: {
@@ -340,7 +474,7 @@ describe('useRecentVocabulary', () => {
     );
     expect(mockFetch).toHaveBeenNthCalledWith(
       2,
-      'http://localhost:8010/api/vocabulary?search_query=bra&limit=100&precise=false',
+      'http://localhost:8010/api/vocabulary?search_query=bra&precise=false&limit=100&offset=0',
       expect.objectContaining({
         method: 'GET',
         headers: {
@@ -410,7 +544,7 @@ describe('useRecentVocabulary', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(mockFetch).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=false',
+      'http://localhost:8010/api/vocabulary?search_query=hej&precise=false&limit=100&offset=0',
       expect.objectContaining({
         method: 'GET',
         headers: {
@@ -420,7 +554,7 @@ describe('useRecentVocabulary', () => {
     );
     expect(mockFetch).toHaveBeenNthCalledWith(
       2,
-      'http://localhost:8010/api/vocabulary?search_query=hej&limit=100&precise=true',
+      'http://localhost:8010/api/vocabulary?search_query=hej&precise=true&limit=100&offset=0',
       expect.objectContaining({
         method: 'GET',
         headers: {
@@ -767,6 +901,62 @@ describe('useRecentVocabulary', () => {
         result.current.deleteVocabularyItem(1)
       ).rejects.toThrow('Failed to delete vocabulary item: HTTP 500');
     });
+  });
+
+  it('should decrement pagination offset after deleting a loaded item', async () => {
+    const firstPage = Array.from({ length: 20 }, (_, index) => ({
+      id: index + 1,
+      user_id: 1,
+      word_phrase: `word-${index + 1}`,
+      translation: `translation-${index + 1}`,
+      example_phrase: null,
+      extra_info: null,
+      in_learn: false,
+      last_learned: null,
+      learned_times: 0,
+      created_at: '2023-10-27T10:00:00Z',
+      updated_at: '2023-10-27T10:00:00Z',
+    }));
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(firstPage),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Vocabulary item deleted successfully' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+    const { result } = renderHook(() => useRecentVocabulary());
+
+    await waitFor(() => {
+      expect(result.current.recentVocabulary).toHaveLength(20);
+      expect(result.current.hasMore).toBe(true);
+    });
+
+    await act(async () => {
+      await result.current.deleteVocabularyItem(1);
+    });
+
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      3,
+      'http://localhost:8010/api/vocabulary?limit=20&offset=19',
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+    );
   });
 });
 

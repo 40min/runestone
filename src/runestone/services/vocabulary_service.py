@@ -95,10 +95,15 @@ class VocabularyService:
         )
 
     async def get_vocabulary(
-        self, user_id: int, limit: int, search_query: str | None = None, precise: bool = False
+        self,
+        user_id: int,
+        limit: int,
+        search_query: str | None = None,
+        precise: bool = False,
+        offset: int = 0,
     ) -> List[VocabularySchema]:
         """Retrieve vocabulary items, optionally filtered by search query, converting to Pydantic models."""
-        vocabularies = await self.repo.get_vocabulary(user_id, limit, search_query, precise)
+        vocabularies = await self.repo.get_vocabulary(user_id, limit, search_query, precise, offset)
         result = []
         for vocab in vocabularies:
             result.append(

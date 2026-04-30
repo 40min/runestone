@@ -904,7 +904,7 @@ class TestVocabularyService:
             result = await service.get_vocabulary(user_id=1, limit=20, search_query="apple", precise=False)
 
             # Verify repo called with precise=False
-            mock_repo.assert_awaited_once_with(1, 20, "apple", False)
+            mock_repo.assert_awaited_once_with(1, 20, "apple", False, 0)
             assert len(result) == 2
 
         # Test with precise=True (exact search)
@@ -913,7 +913,7 @@ class TestVocabularyService:
             result = await service.get_vocabulary(limit=20, search_query="apple", precise=True, user_id=1)
 
             # Verify repo called with precise=True
-            mock_repo.assert_awaited_once_with(1, 20, "apple", True)
+            mock_repo.assert_awaited_once_with(1, 20, "apple", True, 0)
             assert len(result) == 1
 
         # Test default precise=False when not specified
@@ -922,8 +922,15 @@ class TestVocabularyService:
             result = await service.get_vocabulary(limit=20, search_query="apple", user_id=1)
 
             # Verify repo called with precise=False (default)
-            mock_repo.assert_awaited_once_with(1, 20, "apple", False)
+            mock_repo.assert_awaited_once_with(1, 20, "apple", False, 0)
             assert len(result) == 2
+
+        with patch.object(service.repo, "get_vocabulary", new_callable=AsyncMock) as mock_repo:
+            mock_repo.return_value = [vocab2]
+            result = await service.get_vocabulary(user_id=1, limit=20, search_query="apple", precise=False, offset=1)
+
+            mock_repo.assert_awaited_once_with(1, 20, "apple", False, 1)
+            assert len(result) == 1
 
     async def test_prepare_priority_word_save_mixed_batch(self, service, db_session):
         """Existing words are prioritized/restored while missing words are reported for enrichment."""

@@ -35,8 +35,11 @@ interface UseVocabularyReturn {
 interface UseRecentVocabularyReturn {
   recentVocabulary: SavedVocabularyItem[];
   loading: boolean;
+  loadingMore: boolean;
   error: string | null;
   refetch: () => Promise<void>;
+  loadMore: () => Promise<void>;
+  hasMore: boolean;
   isEditModalOpen: boolean;
   editingItem: SavedVocabularyItem | null;
   openEditModal: (item: SavedVocabularyItem | null) => void;
@@ -142,39 +145,95 @@ export const useRecentVocabulary = (
     SavedVocabularyItem[]
   >([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<SavedVocabularyItem | null>(
     null
   );
+  const offsetRef = useRef(0);
+  const loadMoreInFlightRef = useRef(false);
+  const requestIdRef = useRef(0);
   const { get, post, put, delete: apiDelete } = useApi();
 
-  const fetchRecentVocabulary = useCallback(async () => {
-    setLoading(true);
+  const getPageSize = useCallback(() => (searchQuery ? 100 : 20), [searchQuery]);
+
+  const fetchRecentVocabularyPage = useCallback(async (reset = true) => {
+    if (!reset && loadMoreInFlightRef.current) {
+      return;
+    }
+    const requestId = reset ? requestIdRef.current + 1 : requestIdRef.current;
+    if (reset) {
+      requestIdRef.current = requestId;
+    } else {
+      loadMoreInFlightRef.current = true;
+    }
+    const pageSize = getPageSize();
+    const offset = reset ? 0 : offsetRef.current;
+
+    if (reset) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
     setError(null);
     try {
       const params = new URLSearchParams();
       if (searchQuery) {
         params.append("search_query", searchQuery);
-        params.append("limit", "100");
         params.append("precise", preciseSearch ? "true" : "false");
-      } else {
-        params.append("limit", "20");
       }
+      params.append("limit", pageSize.toString());
+      params.append("offset", offset.toString());
       const data: SavedVocabularyItem[] = await get<SavedVocabularyItem[]>(
         `/api/vocabulary?${params.toString()}`
       );
-      setRecentVocabulary(data);
+      if (requestId !== requestIdRef.current) {
+        return;
+      }
+      if (reset) {
+        setRecentVocabulary(data);
+      } else {
+        setRecentVocabulary((prev) => {
+          const seen = new Set(prev.map((item) => item.id));
+          return [...prev, ...data.filter((item) => !seen.has(item.id))];
+        });
+      }
+      offsetRef.current = offset + data.length;
+      setHasMore(data.length === pageSize);
     } catch (err) {
+      if (requestId !== requestIdRef.current) {
+        return;
+      }
       const errorMessage =
         err instanceof Error
           ? err.message
           : "Failed to fetch recent vocabulary";
       setError(errorMessage);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+      if (!reset) {
+        loadMoreInFlightRef.current = false;
+      }
     }
-  }, [searchQuery, preciseSearch, get]);
+  }, [getPageSize, searchQuery, preciseSearch, get]);
+
+  const fetchRecentVocabulary = useCallback(async () => {
+    offsetRef.current = 0;
+    setHasMore(true);
+    await fetchRecentVocabularyPage(true);
+  }, [fetchRecentVocabularyPage]);
+
+  const loadMore = useCallback(async () => {
+    if (!hasMore || loading || loadingMore) {
+      return;
+    }
+    await fetchRecentVocabularyPage(false);
+  }, [fetchRecentVocabularyPage, hasMore, loading, loadingMore]);
 
   const openEditModal = useCallback((item: SavedVocabularyItem | null) => {
     setEditingItem(item);
@@ -210,7 +269,13 @@ export const useRecentVocabulary = (
   const deleteVocabularyItem = useCallback(
     async (id: number) => {
       await apiDelete(`/api/vocabulary/${id}`);
-      setRecentVocabulary((prev) => prev.filter((item) => item.id !== id));
+      setRecentVocabulary((prev) => {
+        const next = prev.filter((item) => item.id !== id);
+        if (next.length !== prev.length) {
+          offsetRef.current = Math.max(0, offsetRef.current - 1);
+        }
+        return next;
+      });
       closeEditModal();
     },
     [closeEditModal, apiDelete]
@@ -223,8 +288,11 @@ export const useRecentVocabulary = (
   return {
     recentVocabulary,
     loading,
+    loadingMore,
     error,
     refetch: fetchRecentVocabulary,
+    loadMore,
+    hasMore,
     isEditModalOpen,
     editingItem,
     openEditModal,
