@@ -140,9 +140,10 @@ async def test_memory_keeper_parses_fenced_json_output(specialist, mock_user):
     assert result.artifacts["trigger_source"] == "none"
 
 
-def test_memory_keeper_prompt_requires_mastered_state_before_promotion():
-    assert "confirm via `read_memory` that the target item is already" in MEMORY_KEEPER_SYSTEM_PROMPT
-    assert "first call `update_memory_status` to set it to `mastered`" in MEMORY_KEEPER_SYSTEM_PROMPT
+def test_memory_keeper_prompt_uses_mastered_area_items_without_promotion():
+    assert "Use `area_to_improve` with status `mastered`" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "Do not create a separate strength item" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "promote_to_strength" not in MEMORY_KEEPER_SYSTEM_PROMPT
 
 
 def test_memory_keeper_prompt_rejects_misspelled_word_pollution():

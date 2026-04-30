@@ -47,7 +47,6 @@ class AgentsManager:
     POST_TASK_TIMEOUT_SECONDS = 15
     STARTER_MEMORY_PERSONAL_LIMIT = 50
     STARTER_MEMORY_AREA_LIMIT = 5
-    STARTER_MEMORY_KNOWLEDGE_LIMIT = 50
 
     def __init__(
         self,
@@ -131,7 +130,6 @@ class AgentsManager:
                     user.id,
                     personal_limit=self.STARTER_MEMORY_PERSONAL_LIMIT,
                     area_limit=self.STARTER_MEMORY_AREA_LIMIT,
-                    knowledge_limit=self.STARTER_MEMORY_KNOWLEDGE_LIMIT,
                 )
                 if starter_items:
                     starter_memory = serialize_memory_items(starter_items)

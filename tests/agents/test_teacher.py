@@ -92,12 +92,13 @@ def test_build_agent(mock_settings, mock_chat_model):
                     "upsert_memory_item",
                     "update_memory_status",
                     "update_memory_priority",
-                    "promote_to_strength",
                     "delete_memory_item",
                 }
                 for tool in tools
             )
             assert "MEMORY PROTOCOL" in call_kwargs["system_prompt"]
+            assert "knowledge_strength" not in call_kwargs["system_prompt"]
+            assert "active strengths" not in call_kwargs["system_prompt"]
             assert "TOOL TRUTHFULNESS (MANDATORY)" not in call_kwargs["system_prompt"]
             assert "Memory Writes" in call_kwargs["system_prompt"]
             assert "read-only in this phase" in call_kwargs["system_prompt"]
@@ -121,7 +122,8 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "AVATAR EMOTION METADATA" in call_kwargs["system_prompt"]
             assert "Never write the emotion label" in call_kwargs["system_prompt"]
             assert "grammar_source_urls" in call_kwargs["system_prompt"]
-            assert f"at most {MAX_TEACHER_GRAMMAR_SOURCE_LINKS} grammar material URLs" in call_kwargs["system_prompt"]
+            assert f"at most {MAX_TEACHER_GRAMMAR_SOURCE_LINKS}" in call_kwargs["system_prompt"]
+            assert "grammar material URLs" in call_kwargs["system_prompt"]
             assert f"top_k=1..{MAX_TEACHER_GRAMMAR_SOURCE_LINKS}" in call_kwargs["system_prompt"]
             assert "keep `grammar_source_urls` empty" in call_kwargs["system_prompt"]
 

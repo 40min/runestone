@@ -113,7 +113,7 @@ Tasks:
 
 - inject compact starter memory from the service layer on first turn
 - keep `read_memory` available for on-demand teacher inspection
-- plan post-stage `MemoryKeeper` review rules for create/update/status/priority/promote/no-action
+- plan post-stage `MemoryKeeper` review rules for create/update/status/priority/no-action
 - capture the design in the architecture and plan docs
 
 Success criteria:

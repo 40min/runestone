@@ -39,12 +39,6 @@ class MemoryPriorityUpdate(BaseModel):
     )
 
 
-class MemoryPromoteInput(BaseModel):
-    """Input for promoting an item to knowledge_strength."""
-
-    item_id: int = Field(..., description="ID of the mastered area_to_improve item to promote")
-
-
 class MemoryDeleteInput(BaseModel):
     """Input for deleting a memory item."""
 
@@ -77,7 +71,7 @@ async def read_memory(
 
     Args:
         runtime: Tool runtime context
-        category: Optional filter by category (personal_info, area_to_improve, knowledge_strength)
+        category: Optional filter by category (personal_info, area_to_improve)
         status: Optional filter by status
 
     Returns:
@@ -154,7 +148,6 @@ async def update_memory_status(
     Valid status transitions:
     - personal_info: active, outdated
     - area_to_improve: struggling, improving, mastered
-    - knowledge_strength: active, archived
 
     Args:
         runtime: Tool runtime context
@@ -207,37 +200,6 @@ async def update_memory_priority(
         return _format_tool_error("update_memory_priority", exc)
 
     return f"Priority updated: [ID:{result.id}] {result.key} priority is now {result.priority}"
-
-
-@tool
-async def promote_to_strength(
-    runtime: ToolRuntime[AgentContext],
-    promote: Annotated[MemoryPromoteInput, Field(description="Item to promote")],
-) -> str:
-    """
-    Promote a mastered area_to_improve item to knowledge_strength.
-
-    Use this when a user has fully mastered a concept that was previously a struggle.
-    The item will be moved from area_to_improve to knowledge_strength.
-
-    Args:
-        runtime: Tool runtime context
-        promote: Promotion data (item_id of mastered item)
-
-    Returns:
-        Confirmation message
-    """
-    logger.info("Agent tool call: promote_to_strength (item_id=%s)", promote.item_id)
-    user = runtime.context.user
-
-    # Use fresh service with its own session for concurrency safety
-    try:
-        async with provide_memory_item_service() as service:
-            result = await service.promote_to_strength(promote.item_id, user.id)
-    except (PermissionDeniedError, UserNotFoundError, ValueError) as exc:
-        return _format_tool_error("promote_to_strength", exc)
-
-    return f"Promoted to knowledge_strength: [ID:{result.id}] {result.key}"
 
 
 @tool

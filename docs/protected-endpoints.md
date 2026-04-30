@@ -27,7 +27,6 @@ All endpoints below require `Authorization: Bearer <jwt_token>` header:
 - `GET /api/memory` - List memory items (filters + pagination)
 - `POST /api/memory` - Create or update a memory item (upsert)
 - `PUT /api/memory/{item_id}/status` - Update item status
-- `POST /api/memory/{item_id}/promote` - Promote mastered items to knowledge strengths
 - `DELETE /api/memory/{item_id}` - Delete a memory item
 - `DELETE /api/memory?category=...` - Clear a memory category
 

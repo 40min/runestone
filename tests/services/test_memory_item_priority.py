@@ -127,18 +127,18 @@ async def test_updated_at_ordering_desc(db_with_test_user):
         [
             MemoryItem(
                 user_id=user.id,
-                category=MemoryCategory.KNOWLEDGE_STRENGTH.value,
+                category=MemoryCategory.PERSONAL_INFO.value,
                 key="older",
                 content="older",
-                status="active",
+                status=PersonalInfoStatus.ACTIVE.value,
                 updated_at=base.replace(minute=1),
             ),
             MemoryItem(
                 user_id=user.id,
-                category=MemoryCategory.KNOWLEDGE_STRENGTH.value,
+                category=MemoryCategory.PERSONAL_INFO.value,
                 key="newer",
                 content="newer",
-                status="active",
+                status=PersonalInfoStatus.ACTIVE.value,
                 updated_at=base.replace(minute=10),
             ),
         ]
@@ -146,7 +146,7 @@ async def test_updated_at_ordering_desc(db_with_test_user):
     await db.commit()
 
     repo = MemoryItemRepository(db)
-    items = await repo.list_items(user.id, category="knowledge_strength", sort_by="updated_at", sort_direction="desc")
+    items = await repo.list_items(user.id, category="personal_info", sort_by="updated_at", sort_direction="desc")
     assert [i.key for i in items] == ["newer", "older"]
 
 

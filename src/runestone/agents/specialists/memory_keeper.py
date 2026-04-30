@@ -13,13 +13,7 @@ from pydantic import ValidationError
 from runestone.agents.llm import build_chat_model
 from runestone.agents.specialists.base import BaseSpecialist, SpecialistContext, SpecialistResult
 from runestone.agents.tools.context import AgentContext
-from runestone.agents.tools.memory import (
-    promote_to_strength,
-    read_memory,
-    update_memory_priority,
-    update_memory_status,
-    upsert_memory_item,
-)
+from runestone.agents.tools.memory import read_memory, update_memory_priority, update_memory_status, upsert_memory_item
 from runestone.config import Settings
 
 logger = logging.getLogger(__name__)
@@ -49,7 +43,7 @@ Do not stop after reading.
 Step 1 — READ:   Call read_memory with a category filter scoped to the relevant category.
 Step 2 — DECIDE: Compare results against the incoming signal. Choose the correct write tool if changes are needed.
 Step 3 — WRITE:  Call the write tool (upsert_memory_item, update_memory_status,
-update_memory_priority, or promote_to_strength).
+update_memory_priority).
 
 If no trigger is detected → return `no_action` immediately. Do not call any tools.
 
@@ -71,18 +65,13 @@ If no trigger is detected → return `no_action` immediately. Do not call any to
 |----------|--------------------------|-------------------|
 | `area_to_improve` | create, update, change status/priority | explicit learning signal or student instruction |
 | `personal_info` | create, update, outdate | explicit durable fact or student correction |
-| `knowledge_strength` | create, update, archive | explicit durable strength or student correction |
 
-**Promotion**: use `promote_to_strength` to graduate an item from `area_to_improve` →
-`knowledge_strength`. Do not manually delete and recreate.
-Before calling it, confirm via `read_memory` that the target item is already in
-`area_to_improve` with status `mastered`.
-If the signal is "now mastered" but the existing item is still `struggling` or `improving`,
-first call `update_memory_status` to set it to `mastered`. Promote only after that state exists.
+Use `area_to_improve` with status `mastered` for topics the student has resolved or learned.
+Do not create a separate strength item.
 
 ## Allowed Tools
 `read_memory`, `upsert_memory_item`, `update_memory_status`,
-`update_memory_priority`, `promote_to_strength`
+`update_memory_priority`
 
 ## Output Contract
 Return valid JSON matching this exact shape and nothing else:
@@ -140,7 +129,6 @@ class MemoryKeeperSpecialist(BaseSpecialist):
                 upsert_memory_item,
                 update_memory_status,
                 update_memory_priority,
-                promote_to_strength,
             ],
             system_prompt=MEMORY_KEEPER_SYSTEM_PROMPT,
             context_schema=AgentContext,

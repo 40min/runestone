@@ -32,7 +32,7 @@ Implemented now:
 - `MemoryKeeper` specialist running in post stage for durable memory maintenance
 - `NewsAgent` specialist running in pre stage for topic-based news retrieval
 - teacher-side memory model narrowed to read-only lookup (`read_memory`) during response generation
-- compact first-turn starter memory injection (`personal_info` active, top-priority `area_to_improve` struggling/improving, active `knowledge_strength`)
+- compact first-turn starter memory injection (`personal_info` active, top-priority `area_to_improve` struggling/improving)
 
 Explicit non-goals for the current design:
 
@@ -165,7 +165,6 @@ Owns:
 - post-stage memory maintenance when the final teacher reply provides the signal
 - explicit student-requested memory edits in the current turn when routed by post coordinator
 - review and update `area_to_improve` status and priority when the turn shows progress or regression
-- promotion from `area_to_improve` to `knowledge_strength`
 
 #### NewsAgent
 
@@ -192,7 +191,7 @@ flowchart TD
     H -- No --> I["No memory change"]
     H -- Yes --> J["MemoryKeeper"]
     J --> K["Read relevant memory"]
-    K --> L["Create, update, promote, or correct durable memory"]
+    K --> L["Create, update, or correct durable memory"]
 ```
 
 #### Teacher-side memory reads
@@ -211,7 +210,6 @@ Current starter-memory shape:
 - active `personal_info`
 - top 5 `area_to_improve` items across `struggling` and `improving`
 - ranking by priority first, then recency
-- active `knowledge_strength`
 
 #### Post-phase memory maintenance
 
@@ -229,14 +227,13 @@ Scope of maintenance:
 
 - create a new durable memory item when the turn reveals a recurring issue or stable fact worth storing
 - update `area_to_improve` content, status, and priority when the turn shows progress or regression
-- promote mastered `area_to_improve` items into `knowledge_strength`
 - delete or correct memory only when the student explicitly asks or confirms an existing item is wrong
 
 Area-to-improve review rules:
 
 - repeated struggle keeps the item in `struggling` and may increase urgency by lowering numeric priority
 - visible progress moves the item toward `improving` and may reduce urgency by raising numeric priority
-- confirmed mastery marks the item `mastered` and promotes it to `knowledge_strength`
+- confirmed mastery marks the item `mastered`
 - new recurring issues create a fresh `area_to_improve` item with an explicit initial priority
 
 ### Post-Response Runtime
@@ -540,4 +537,4 @@ Decisions:
 - Move durable memory maintenance to post stage and assign it to `MemoryKeeper`.
 - Trigger memory maintenance conservatively from explicit durable teacher signals or explicit student memory-edit instructions.
 - Keep memory updates evidence-driven (`no_action` bias); avoid blind churn on status/priority without clear turn evidence.
-- Keep promotion path explicit (`area_to_improve` → `knowledge_strength`) rather than ad hoc delete/recreate behavior.
+- Keep mastered topics represented as `area_to_improve` items with status `mastered`.

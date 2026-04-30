@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { useApi } from "../utils/api";
 
-export type MemoryCategory = "personal_info" | "area_to_improve" | "knowledge_strength";
+export type MemoryCategory = "personal_info" | "area_to_improve";
 export type MemorySortBy = "updated_at" | "priority";
 export type SortDirection = "asc" | "desc";
 
@@ -42,13 +42,6 @@ interface UseMemoryItemsReturn {
   createItem: (data: MemoryItemCreate) => Promise<MemoryItem>;
   updateStatus: (id: number, status: string) => Promise<MemoryItem>;
   updatePriority: (id: number, priority: number | null) => Promise<MemoryItem>;
-  promoteItem: (
-    id: number,
-    category: MemoryCategory,
-    status?: string,
-    sortBy?: MemorySortBy,
-    sortDirection?: SortDirection
-  ) => Promise<MemoryItem>;
   deleteItem: (id: number) => Promise<void>;
   clearCategory: (category: MemoryCategory) => Promise<void>;
 }
@@ -154,25 +147,6 @@ const useMemoryItems = (): UseMemoryItemsReturn => {
     [put]
   );
 
-  const promoteItem = useCallback(
-    async (
-      id: number,
-      category: MemoryCategory,
-      status?: string,
-      sortBy?: MemorySortBy,
-      sortDirection: SortDirection = "desc"
-    ) => {
-      try {
-        const promotedItem = await post<MemoryItem>(`/api/memory/${id}/promote`, {});
-        await fetchItems(category, status, true, sortBy, sortDirection);
-        return promotedItem;
-      } catch (err) {
-        throw err instanceof Error ? err : new Error("Failed to promote item");
-      }
-    },
-    [post, fetchItems]
-  );
-
   const deleteItem = useCallback(
     async (id: number) => {
       try {
@@ -206,7 +180,6 @@ const useMemoryItems = (): UseMemoryItemsReturn => {
     createItem,
     updateStatus,
     updatePriority,
-    promoteItem,
     deleteItem,
     clearCategory,
   };

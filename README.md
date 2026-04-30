@@ -125,7 +125,6 @@ The API will be available at `http://localhost:8010` with the following endpoint
 - `GET /api/memory`: List memory items (filters + pagination)
 - `POST /api/memory`: Create or update a memory item (upsert)
 - `PUT /api/memory/{item_id}/status`: Update item status
-- `POST /api/memory/{item_id}/promote`: Promote mastered items to knowledge strengths
 - `DELETE /api/memory/{item_id}`: Delete a memory item
 - `DELETE /api/memory?category=...`: Clear a memory category
 - `GET /api/health`: Health check endpoint

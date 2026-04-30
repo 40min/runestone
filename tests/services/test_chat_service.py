@@ -50,7 +50,6 @@ def mock_user_service():
     mock_profile = Mock()
     mock_profile.personal_info = None
     mock_profile.areas_to_improve = None
-    mock_profile.knowledge_strengths = None
     mock.get_user_profile = AsyncMock(return_value=mock_profile)
     return mock
 

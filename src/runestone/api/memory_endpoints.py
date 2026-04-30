@@ -169,38 +169,6 @@ async def update_memory_item_priority(
         raise HTTPException(status_code=500, detail="Failed to update priority")
 
 
-@router.post(
-    "/memory/{item_id}/promote",
-    response_model=MemoryItemResponse,
-    responses={
-        200: {"description": "Item promoted successfully"},
-        400: {"description": "Cannot promote this item"},
-        401: {"description": "Not authenticated"},
-        403: {"description": "Not authorized"},
-        404: {"description": "Item not found"},
-    },
-)
-async def promote_memory_item(
-    item_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    service: Annotated[MemoryItemService, Depends(get_memory_item_service)],
-) -> MemoryItemResponse:
-    """
-    Promote a mastered area_to_improve item to knowledge_strength.
-    """
-    try:
-        return await service.promote_to_strength(item_id, current_user.id)
-    except UserNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except PermissionDeniedError as e:
-        raise HTTPException(status_code=403, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Failed to promote item {item_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to promote item")
-
-
 @router.delete(
     "/memory/{item_id}",
     responses={
