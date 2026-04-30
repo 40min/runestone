@@ -407,17 +407,17 @@ const VocabularyView: React.FC = () => {
             />
             {loadingMore && (
               <Box sx={{ display: "flex", justifyContent: "center", my: 2 }}>
-                <Typography sx={{ color: "#9ca3af" }}>Loading more...</Typography>
+                <Typography sx={{ color: "text.secondary" }}>Loading more...</Typography>
               </Box>
             )}
             {error && !loadingMore && (
               <Box sx={{ display: "flex", justifyContent: "center", my: 2 }}>
-                <Typography sx={{ color: "#f87171" }}>{error}</Typography>
+                <Typography sx={{ color: "error.main" }}>{error}</Typography>
               </Box>
             )}
             {!hasMore && !loadingMore && (
               <Box sx={{ display: "flex", justifyContent: "center", my: 2 }}>
-                <Typography sx={{ color: "#6b7280" }}>All vocabulary loaded.</Typography>
+                <Typography sx={{ color: "text.secondary" }}>All vocabulary loaded.</Typography>
               </Box>
             )}
           </>
