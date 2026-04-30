@@ -300,6 +300,7 @@ async def get_vocabulary(
     service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
     current_user: Annotated[User, Depends(get_current_user)],
     limit: int = 100,
+    offset: int = 0,
     search_query: str | None = None,
     precise: bool = False,
 ) -> List[Vocabulary]:
@@ -313,6 +314,7 @@ async def get_vocabulary(
 
     Args:
         limit: Maximum number of items to return (default: 100)
+        offset: Number of items to skip for endless scroll pagination
         search_query: Optional search term to filter vocabulary by word_phrase
         service: Vocabulary service
 
@@ -328,8 +330,13 @@ async def get_vocabulary(
                 status_code=400,
                 detail="Limit must be between 1 and 100",
             )
+        if offset < 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Offset must be non-negative",
+            )
 
-        result = await service.get_vocabulary(current_user.id, limit, search_query, precise)
+        result = await service.get_vocabulary(current_user.id, limit, search_query, precise, offset)
         return result
 
     except HTTPException:

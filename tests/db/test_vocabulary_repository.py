@@ -384,6 +384,12 @@ class TestVocabularyRepository:
         assert result_limited[0].word_phrase == "ett päron"
         assert result_limited[1].word_phrase == "en banan"
 
+        # Test with offset
+        result_offset = await repo.get_vocabulary(limit=2, offset=1, user_id=1)
+        assert len(result_offset) == 2
+        assert result_offset[0].word_phrase == "en banan"
+        assert result_offset[1].word_phrase == "ett äpple"
+
         # Get recent for user 2 (should return 1 item)
         result_user2 = await repo.get_vocabulary(limit=20, user_id=2)
         assert len(result_user2) == 1
@@ -429,6 +435,11 @@ class TestVocabularyRepository:
         result = await repo.get_vocabulary(limit=1, search_query="ett", user_id=1)
         assert len(result) == 1
         assert result[0].word_phrase == "ett päron"  # Most recent
+
+        # Test search with offset
+        result = await repo.get_vocabulary(limit=1, offset=1, search_query="ett", user_id=1)
+        assert len(result) == 1
+        assert result[0].word_phrase == "ett äpple"
 
     async def test_get_vocabulary_with_question_mark_wildcard(self, repo, db_session, wildcard_test_items):
         """Test retrieving vocabulary items with '?' wildcard matching exactly one character."""
@@ -1418,6 +1429,10 @@ class TestVocabularyRepository:
         # Test precise search with empty string (should return all)
         result = await repo.get_vocabulary(limit=20, search_query="", precise=True, user_id=1)
         assert len(result) == 4
+
+        # Test precise search with offset
+        result = await repo.get_vocabulary(limit=1, offset=1, search_query="apple", precise=True, user_id=1)
+        assert len(result) == 1
 
     async def test_get_vocabulary_precise_vs_partial_comparison(self, repo, db_session, vocabulary_model_factory):
         """Test that precise and partial search produce different results."""

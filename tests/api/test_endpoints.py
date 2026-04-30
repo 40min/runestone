@@ -434,6 +434,13 @@ class TestVocabularyEndpoints:
         assert len(data) == 1
         assert data[0]["word_phrase"] == "ett päron"  # Most recent
 
+        # Test search with offset
+        response = await client.get("/api/vocabulary?search_query=ett&limit=1&offset=1")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["word_phrase"] == "ett äpple"
+
 
 class TestSettingsDependency:
     """Test cases for dependency injection."""
@@ -821,6 +828,13 @@ class TestSettingsDependency:
         data = response.json()
         assert "Limit must be between 1 and 100" in data["detail"]
 
+    async def test_get_vocabulary_invalid_offset(self, client):
+        """Test get_vocabulary with invalid offset values."""
+        response = await client.get("/api/vocabulary?offset=-1")
+        assert response.status_code == 400
+        data = response.json()
+        assert "Offset must be non-negative" in data["detail"]
+
     async def test_get_vocabulary_limit_bounds(self, client):
         """Test get_vocabulary with valid limit bounds."""
         # Save multiple items
@@ -838,6 +852,13 @@ class TestSettingsDependency:
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 5  # All items
+
+        # Test offset pagination
+        response = await client.get("/api/vocabulary?limit=2&offset=2")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        assert [item["word_phrase"] for item in data] == ["word_2", "word_1"]
 
         # Test default limit (should be 100)
         response = await client.get("/api/vocabulary")

@@ -1,6 +1,6 @@
 /// <reference types="vitest/globals" />
 /// <reference types="@testing-library/jest-dom" />
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { vi } from 'vitest';
 
 // Mock the useVocabulary hook
@@ -20,8 +20,11 @@ vi.mock('../hooks/useVocabulary', () => ({
   useRecentVocabulary: vi.fn(() => ({
     recentVocabulary: [],
     loading: false,
+    loadingMore: false,
     error: null,
     refetch: vi.fn(),
+    loadMore: vi.fn(),
+    hasMore: false,
     isEditModalOpen: false,
     editingItem: null,
     openEditModal: vi.fn(),
@@ -200,6 +203,108 @@ describe("VocabularyView", () => {
     });
   });
 
+  it("shows inline loading indicator while loading more vocabulary", () => {
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [{
+        id: 1,
+        user_id: 1,
+        word_phrase: "hej",
+        translation: "hello",
+        example_phrase: null,
+        extra_info: null,
+        in_learn: false,
+        priority_learn: 9,
+        last_learned: null,
+        learned_times: 0,
+        created_at: "2023-10-27T10:00:00Z",
+        updated_at: "2023-10-27T10:00:00Z",
+      }],
+      loading: false,
+      loadingMore: true,
+      error: null,
+      refetch: vi.fn(),
+      loadMore: vi.fn(),
+      hasMore: true,
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+    });
+
+    renderWithAuthProvider(<VocabularyView />);
+
+    expect(screen.getByText("Loading more...")).toBeInTheDocument();
+  });
+
+  it("loads more vocabulary when the sentinel intersects", async () => {
+    const loadMore = vi.fn().mockResolvedValue(undefined);
+    let intersectionCallback:
+      | ((entries: IntersectionObserverEntry[]) => void)
+      | null = null;
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    const originalIntersectionObserver = globalThis.IntersectionObserver;
+
+    globalThis.IntersectionObserver = vi.fn((callback) => {
+      intersectionCallback = callback as (entries: IntersectionObserverEntry[]) => void;
+      return {
+        observe,
+        disconnect,
+        unobserve: vi.fn(),
+        root: null,
+        rootMargin: "",
+        thresholds: [],
+        takeRecords: vi.fn(() => []),
+      };
+    }) as unknown as typeof IntersectionObserver;
+
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [{
+        id: 1,
+        user_id: 1,
+        word_phrase: "hej",
+        translation: "hello",
+        example_phrase: null,
+        extra_info: null,
+        in_learn: false,
+        priority_learn: 9,
+        last_learned: null,
+        learned_times: 0,
+        created_at: "2023-10-27T10:00:00Z",
+        updated_at: "2023-10-27T10:00:00Z",
+      }],
+      loading: false,
+      loadingMore: false,
+      error: null,
+      refetch: vi.fn(),
+      loadMore,
+      hasMore: true,
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+    });
+
+    renderWithAuthProvider(<VocabularyView />);
+
+    expect(observe).toHaveBeenCalledWith(screen.getByTestId("vocabulary-load-more-sentinel"));
+
+    await act(async () => {
+      intersectionCallback?.([{ isIntersecting: true } as IntersectionObserverEntry]);
+    });
+
+    expect(loadMore).toHaveBeenCalledTimes(1);
+
+    globalThis.IntersectionObserver = originalIntersectionObserver;
+    expect(disconnect).not.toHaveBeenCalled();
+  });
+
   it("renders error state", () => {
     const errorMessage = "Failed to fetch vocabulary";
     mockUseRecentVocabulary.mockReturnValue({
@@ -218,6 +323,46 @@ describe("VocabularyView", () => {
 
     renderWithAuthProvider(<VocabularyView />);
 
+    expect(screen.getByText(errorMessage)).toBeInTheDocument();
+  });
+
+  it("keeps loaded rows visible and shows inline error for load-more failures", () => {
+    const errorMessage = "Failed to fetch recent vocabulary: HTTP 500";
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [
+        {
+          id: 1,
+          user_id: 1,
+          word_phrase: "hej",
+          translation: "hello",
+          example_phrase: null,
+          extra_info: null,
+          in_learn: false,
+          priority_learn: 9,
+          last_learned: null,
+          learned_times: 0,
+          created_at: "2023-10-27T10:00:00Z",
+          updated_at: "2023-10-27T10:00:00Z",
+        },
+      ],
+      loading: false,
+      loadingMore: false,
+      error: errorMessage,
+      refetch: vi.fn(),
+      loadMore: vi.fn(),
+      hasMore: true,
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+    });
+
+    renderWithAuthProvider(<VocabularyView />);
+
+    expect(screen.getByText("hej")).toBeInTheDocument();
     expect(screen.getByText(errorMessage)).toBeInTheDocument();
   });
 

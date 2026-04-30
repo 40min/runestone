@@ -302,7 +302,12 @@ class VocabularyRepository:
             await self.batch_insert_vocabulary_items(filtered_items, user_id)
 
     async def get_vocabulary(
-        self, user_id: int, limit: int, search_query: str | None = None, precise: bool = False
+        self,
+        user_id: int,
+        limit: int,
+        search_query: str | None = None,
+        precise: bool = False,
+        offset: int = 0,
     ) -> List[Vocabulary]:
         r"""Retrieve vocabulary items for a user, optionally filtered by search query with wildcard support."""
         stmt = select(Vocabulary).filter(Vocabulary.user_id == user_id)
@@ -321,9 +326,11 @@ class VocabularyRepository:
                 # Use ilike with escape character for case-insensitive matching
                 stmt = stmt.filter(Vocabulary.word_phrase.ilike(search_pattern, escape="\\"))
 
-        stmt = stmt.order_by(
-            func.coalesce(Vocabulary.updated_at, Vocabulary.created_at).desc(), Vocabulary.id.desc()
-        ).limit(limit)
+        stmt = (
+            stmt.order_by(func.coalesce(Vocabulary.updated_at, Vocabulary.created_at).desc(), Vocabulary.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
