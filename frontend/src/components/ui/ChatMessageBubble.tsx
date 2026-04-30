@@ -58,12 +58,20 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   onReplayAudio,
   studentAvatarLabel = "You",
 }) => {
-  const maxCollapsedChars = 300;
-  const isLongMessage = content.length > maxCollapsedChars;
+  const maxCollapsedChars = 450;
   const [isExpanded, setIsExpanded] = useState(false);
+  const hasSources = role === "assistant" && sources && sources.length > 0;
+  const sourcesLength = hasSources
+    ? sources.reduce(
+        (total, source) =>
+          total + (source.title?.length ?? 0) + (source.url?.length ?? 0) + (source.date?.length ?? 0),
+        0,
+      )
+    : 0;
+  const isLongMessage = content.length + sourcesLength > maxCollapsedChars;
   const shouldKeepExpanded = isLast || isLatestByRole;
   const isCollapsed = !shouldKeepExpanded && isLongMessage && !isExpanded;
-  const hasSources = role === "assistant" && sources && sources.length > 0;
+  const shouldShowSources = hasSources && !isCollapsed;
   const messageTime = formatMessageTime(createdAt);
   const showResponseTime =
     role === "assistant" &&
@@ -236,26 +244,6 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           </Typography>
         )}
 
-        {!shouldKeepExpanded && isLongMessage && (
-          <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-            <IconButton
-              onClick={() => setIsExpanded(!isExpanded)}
-              size="small"
-              aria-label={isExpanded ? "Show less" : "Show more"}
-              sx={{
-                color: "var(--primary-color)",
-                mt: 0.5,
-                backgroundColor: "rgba(56, 224, 123, 0.08)",
-                borderRadius: "6px",
-                "&:hover": {
-                  backgroundColor: "rgba(56, 224, 123, 0.14)",
-                },
-              }}
-            >
-              {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </IconButton>
-          </Box>
-        )}
         {role === "assistant" && showAudioControls && (
           <Box
             sx={{
@@ -313,7 +301,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
             </Button>
           </Box>
         )}
-        {hasSources && (
+        {shouldShowSources && (
           <Box sx={{ mt: 1.5 }}>
             <Typography
               sx={(theme) => ({
@@ -382,6 +370,25 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                 </Box>
               ))}
             </Box>
+          </Box>
+        )}
+        {!shouldKeepExpanded && isLongMessage && (
+          <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
+            <IconButton
+              onClick={() => setIsExpanded(!isExpanded)}
+              size="small"
+              aria-label={isExpanded ? "Show less" : "Show more"}
+              sx={{
+                color: "var(--primary-color)",
+                backgroundColor: "rgba(56, 224, 123, 0.08)",
+                borderRadius: "6px",
+                "&:hover": {
+                  backgroundColor: "rgba(56, 224, 123, 0.14)",
+                },
+              }}
+            >
+              {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            </IconButton>
           </Box>
         )}
         {(responseTimeLabel || messageTime) && (

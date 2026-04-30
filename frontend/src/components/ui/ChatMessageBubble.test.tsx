@@ -154,10 +154,10 @@ describe("ChatMessageBubble", () => {
 
   it("collapses long messages and toggles via button", async () => {
     const user = userEvent.setup();
-    const longText = "a".repeat(301);
+    const longText = "a".repeat(451);
     render(<ChatMessageBubble role="user" content={longText} />);
 
-    expect(screen.getByText("a".repeat(300))).toBeInTheDocument();
+    expect(screen.getByText("a".repeat(450))).toBeInTheDocument();
     expect(screen.getByText("...")).toBeInTheDocument();
     expect(screen.queryByText(longText)).not.toBeInTheDocument();
 
@@ -170,12 +170,12 @@ describe("ChatMessageBubble", () => {
     const showLessBtn = screen.getByRole("button", { name: /show less/i });
     await user.click(showLessBtn);
 
-    expect(screen.getByText("a".repeat(300))).toBeInTheDocument();
+    expect(screen.getByText("a".repeat(450))).toBeInTheDocument();
     expect(screen.getByText("...")).toBeInTheDocument();
   });
 
   it("does not collapse long messages if isLast is true", () => {
-    const longText = "a".repeat(301);
+    const longText = "a".repeat(451);
     render(
       <ChatMessageBubble role="user" content={longText} isLast={true} />,
     );
@@ -185,21 +185,44 @@ describe("ChatMessageBubble", () => {
   });
 
   it("collapses long assistant teaching messages", () => {
-    const longText = "a".repeat(320);
+    const longText = "a".repeat(470);
     render(<ChatMessageBubble role="assistant" content={longText} />);
 
-    expect(screen.getByText("a".repeat(300))).toBeInTheDocument();
+    expect(screen.getByText("a".repeat(450))).toBeInTheDocument();
     expect(screen.getByText("...")).toBeInTheDocument();
   });
 
   it("does not collapse long messages when latest by role", () => {
-    const longText = "a".repeat(301);
+    const longText = "a".repeat(451);
     render(
       <ChatMessageBubble role="assistant" content={longText} isLatestByRole={true} />,
     );
 
-    expect(screen.getByText("a".repeat(301))).toBeInTheDocument();
+    expect(screen.getByText("a".repeat(451))).toBeInTheDocument();
     expect(screen.queryByText("...")).not.toBeInTheDocument();
+  });
+
+  it("includes sources in collapse limit and hides them while collapsed", async () => {
+    const user = userEvent.setup();
+    render(
+      <ChatMessageBubble
+        role="assistant"
+        content={"a".repeat(440)}
+        sources={[
+          {
+            title: "T".repeat(20),
+            url: "https://example.com/news",
+            date: "2026-02-05",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText("Sources")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /show more/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /show more/i }));
+    expect(screen.getByText("Sources")).toBeInTheDocument();
   });
 
   it("renders assistant response time as visible copy", () => {
