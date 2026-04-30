@@ -64,7 +64,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
   const sourcesLength = hasSources
     ? sources.reduce(
         (total, source) =>
-          total + source.title.length + source.url.length + source.date.length,
+          total + (source.title?.length ?? 0) + (source.url?.length ?? 0) + (source.date?.length ?? 0),
         0,
       )
     : 0;
