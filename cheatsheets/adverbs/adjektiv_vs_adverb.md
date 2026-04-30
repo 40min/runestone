@@ -8,7 +8,7 @@
 
 **adjektiv + t = adverb**
 
-`snabb → snabbt` · `tyst → tystt` · `lugn → lugnt`
+`snabb → snabbt` · `tyst → tyst` · `lugn → lugnt`
 
 ---
 
