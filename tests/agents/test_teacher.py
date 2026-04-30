@@ -124,7 +124,11 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "grammar_source_urls" in call_kwargs["system_prompt"]
             assert f"at most {MAX_TEACHER_GRAMMAR_SOURCE_LINKS}" in call_kwargs["system_prompt"]
             assert "grammar material URLs" in call_kwargs["system_prompt"]
+            assert "only exact `url` values returned by the `search_grammar` tool" in call_kwargs["system_prompt"]
+            assert "Never invent, guess, reconstruct, or reuse grammar source URLs" in call_kwargs["system_prompt"]
             assert f"top_k=1..{MAX_TEACHER_GRAMMAR_SOURCE_LINKS}" in call_kwargs["system_prompt"]
+            assert "copied\n  verbatim from the latest `search_grammar` results" in call_kwargs["system_prompt"]
+            assert "If you did not call `search_grammar` in this turn" in call_kwargs["system_prompt"]
             assert "keep `grammar_source_urls` empty" in call_kwargs["system_prompt"]
 
 
