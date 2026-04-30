@@ -62,6 +62,34 @@ const MAX_POLL_INTERVAL_MS = 60000;
 const HISTORY_LIMIT = 200;
 const INITIAL_HISTORY_ERROR = 'Failed to load chat history. Starting fresh.';
 
+const deriveResponseTimesFromTimestamps = (messages: ChatMessage[]): ChatMessage[] => {
+  let latestUserTimestampMs: number | null = null;
+
+  return messages.map((message) => {
+    const messageTimestampMs = message.createdAt ? new Date(message.createdAt).getTime() : Number.NaN;
+    const hasValidTimestamp = Number.isFinite(messageTimestampMs);
+
+    if (message.role === 'user') {
+      latestUserTimestampMs = hasValidTimestamp ? messageTimestampMs : latestUserTimestampMs;
+      return message;
+    }
+
+    if (typeof message.responseTimeMs === 'number') {
+      return message;
+    }
+
+    if (!hasValidTimestamp || latestUserTimestampMs === null) {
+      return message;
+    }
+
+    const computedResponseTime = Math.max(0, Math.round(messageTimestampMs - latestUserTimestampMs));
+    return {
+      ...message,
+      responseTimeMs: computedResponseTime,
+    };
+  });
+};
+
 export const useChat = (): UseChatReturn => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -188,10 +216,10 @@ export const useChat = (): UseChatReturn => {
         if (chatChanged) {
           currentChatIdRef.current = data.chat_id;
           lastMessageIdRef.current = maxIncomingId ?? 0;
-          setMessages(serverMessages);
+          setMessages(deriveResponseTimesFromTimestamps(serverMessages));
           setHistorySyncNotice(data.history_truncated ? 'Some older messages are no longer available.' : null);
         } else {
-          setMessages(prev => mergeServerMessages(prev, serverMessages));
+          setMessages((prev) => deriveResponseTimesFromTimestamps(mergeServerMessages(prev, serverMessages)));
           if (typeof maxIncomingId === 'number' && maxIncomingId > lastMessageIdRef.current) {
             lastMessageIdRef.current = maxIncomingId;
           }

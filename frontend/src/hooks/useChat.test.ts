@@ -190,6 +190,54 @@ describe('useChat', () => {
     });
   });
 
+  it('should derive assistant response time from history timestamps', async () => {
+    mockFetch.mockImplementation((url, options) => {
+      if (options?.method === 'GET' || !options?.method) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve(
+              buildHistoryPayload(
+                [
+                  {
+                    id: 1,
+                    role: 'user',
+                    content: 'Hej',
+                    created_at: '2026-04-30T09:00:00.000Z',
+                  },
+                  {
+                    id: 2,
+                    role: 'assistant',
+                    content: 'Hej! Hur mår du?',
+                    created_at: '2026-04-30T09:00:01.420Z',
+                  },
+                ],
+                'chat-1',
+                2
+              )
+            ),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+
+    const { result } = renderHook(() => useChat());
+
+    await waitFor(() => {
+      const assistant = result.current.messages.find((message) => message.role === 'assistant');
+      expect(assistant).toEqual(
+        expect.objectContaining({
+          content: 'Hej! Hur mår du?',
+          responseTimeMs: 1420,
+        })
+      );
+    });
+  });
+
   it('should preserve optimistic assistant message id after history synchronization', async () => {
     mockNow.mockReturnValueOnce(1000).mockReturnValueOnce(1500);
     let historyCallCount = 0;
