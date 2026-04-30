@@ -86,7 +86,7 @@ const VocabularyView: React.FC = () => {
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [hasMore, loading, loadingMore, loadMore, recentVocabulary.length]);
+  }, [hasMore, loading, loadingMore, loadMore]);
 
   const handleSearch = () => {
     setActiveSearchTerm(searchTerm);
