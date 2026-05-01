@@ -256,14 +256,11 @@ export const useRecentVocabulary = (
 
   const createVocabularyItem = useCallback(
     async (item: Partial<SavedVocabularyItem>) => {
-      const newItem: SavedVocabularyItem = await post<SavedVocabularyItem>(
-        "/api/vocabulary/item",
-        item
-      );
-      setRecentVocabulary((prev) => [newItem, ...prev]);
+      await post<SavedVocabularyItem>("/api/vocabulary/item", item);
+      await fetchRecentVocabulary();
       closeEditModal();
     },
-    [closeEditModal, post]
+    [closeEditModal, fetchRecentVocabulary, post]
   );
 
   const deleteVocabularyItem = useCallback(
