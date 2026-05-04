@@ -13,6 +13,16 @@ vi.mock('../config', () => ({
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch as unknown as typeof fetch;
 
+const createDeferred = <T,>() => {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+};
+
 // Mock AuthContext
 vi.mock('../context/AuthContext', () => {
   const mockLogout = vi.fn();
@@ -310,6 +320,7 @@ describe('useRecentVocabulary', () => {
 
     await waitFor(() => {
       expect(result.current.hasMore).toBe(true);
+      expect(result.current.loading).toBe(false);
     });
 
     await act(async () => {
@@ -728,6 +739,69 @@ describe('useRecentVocabulary', () => {
     await waitFor(() => {
       expect(result.current.recentVocabulary).toEqual(refreshedVocabulary);
     });
+  });
+
+  it('should close the edit modal after create succeeds before refetch completes', async () => {
+    const refreshedVocabulary = [
+      {
+        id: 3,
+        user_id: 1,
+        word_phrase: 'tack',
+        translation: 'thanks',
+        example_phrase: 'Tack så mycket!',
+        in_learn: true,
+        last_learned: null,
+        created_at: '2023-10-27T10:10:00Z',
+        updated_at: '2023-10-27T10:10:00Z',
+      },
+    ];
+    const refetchDeferred = createDeferred<typeof refreshedVocabulary>();
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: 3 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => refetchDeferred.promise,
+      });
+
+    const { result } = renderHook(() => useRecentVocabulary());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    act(() => {
+      result.current.openEditModal(null);
+    });
+
+    expect(result.current.isEditModalOpen).toBe(true);
+
+    let createPromise: Promise<void>;
+    act(() => {
+      createPromise = result.current.createVocabularyItem({
+        word_phrase: 'tack',
+        translation: 'thanks',
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isEditModalOpen).toBe(false);
+    });
+    expect(result.current.loading).toBe(true);
+
+    await act(async () => {
+      refetchDeferred.resolve(refreshedVocabulary);
+      await createPromise;
+    });
+
+    expect(result.current.recentVocabulary).toEqual(refreshedVocabulary);
   });
 
   it('should handle create vocabulary item error', async () => {
