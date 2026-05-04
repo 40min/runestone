@@ -13,6 +13,16 @@ vi.mock('../config', () => ({
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch as unknown as typeof fetch;
 
+const createDeferred = <T,>() => {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+};
+
 // Mock AuthContext
 vi.mock('../context/AuthContext', () => {
   const mockLogout = vi.fn();
@@ -30,7 +40,7 @@ vi.mock('../context/AuthContext', () => {
 
 describe('useVocabulary', () => {
   beforeEach(() => {
-    mockFetch.mockClear();
+    mockFetch.mockReset();
   });
 
   it('should fetch vocabulary successfully', async () => {
@@ -142,7 +152,7 @@ describe('useVocabulary', () => {
 
 describe('useRecentVocabulary', () => {
   beforeEach(() => {
-    mockFetch.mockClear();
+    mockFetch.mockReset();
   });
 
   it('should fetch recent vocabulary with limit=20 when no search query', async () => {
@@ -310,6 +320,7 @@ describe('useRecentVocabulary', () => {
 
     await waitFor(() => {
       expect(result.current.hasMore).toBe(true);
+      expect(result.current.loading).toBe(false);
     });
 
     await act(async () => {
@@ -318,6 +329,82 @@ describe('useRecentVocabulary', () => {
 
     expect(result.current.recentVocabulary).toHaveLength(21);
     expect(result.current.recentVocabulary.at(-1)?.word_phrase).toBe('word-21');
+  });
+
+  it('should refetch the first page after creating an item so pagination stays aligned', async () => {
+    const firstPage = Array.from({ length: 20 }, (_, index) => ({
+      id: index + 1,
+      user_id: 1,
+      word_phrase: `word-${index + 1}`,
+      translation: `translation-${index + 1}`,
+      example_phrase: null,
+      extra_info: null,
+      in_learn: false,
+      last_learned: null,
+      learned_times: 0,
+      created_at: '2023-10-27T10:00:00Z',
+      updated_at: '2023-10-27T10:00:00Z',
+    }));
+    const refreshedFirstPage = [
+      {
+        id: 99,
+        user_id: 1,
+        word_phrase: 'new-word',
+        translation: 'new-translation',
+        example_phrase: null,
+        extra_info: null,
+        in_learn: false,
+        last_learned: null,
+        learned_times: 0,
+        created_at: '2023-10-27T10:10:00Z',
+        updated_at: '2023-10-27T10:10:00Z',
+      },
+      ...firstPage.slice(0, 19),
+    ];
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(firstPage),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: 99 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(refreshedFirstPage),
+      });
+
+    const { result } = renderHook(() => useRecentVocabulary());
+
+    await waitFor(() => {
+      expect(result.current.recentVocabulary).toEqual(firstPage);
+      expect(result.current.hasMore).toBe(true);
+    });
+
+    await act(async () => {
+      await result.current.createVocabularyItem({
+        word_phrase: 'new-word',
+        translation: 'new-translation',
+      });
+    });
+
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:8010/api/vocabulary/item',
+      expect.objectContaining({
+        method: 'POST',
+      })
+    );
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      3,
+      'http://localhost:8010/api/vocabulary?limit=20&offset=0',
+      expect.objectContaining({
+        method: 'GET',
+      })
+    );
+    expect(result.current.recentVocabulary).toEqual(refreshedFirstPage);
   });
 
   it('should fetch vocabulary with search query and limit=100', async () => {
@@ -593,18 +680,21 @@ describe('useRecentVocabulary', () => {
       created_at: '2023-10-27T10:10:00Z',
       updated_at: '2023-10-27T10:10:00Z',
     };
+    const refreshedVocabulary = [mockCreatedItem];
 
-    // Mock initial fetch response
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve([]),
-    });
-
-    // Mock create response
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockCreatedItem),
-    });
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockCreatedItem),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(refreshedVocabulary),
+      });
 
     const { result } = renderHook(() => useRecentVocabulary());
 
@@ -638,10 +728,80 @@ describe('useRecentVocabulary', () => {
       })
     );
 
-    // Verify state was updated directly with the new item
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      3,
+      'http://localhost:8010/api/vocabulary?limit=20&offset=0',
+      expect.objectContaining({
+        method: 'GET',
+      })
+    );
+
     await waitFor(() => {
-      expect(result.current.recentVocabulary).toEqual([mockCreatedItem]);
+      expect(result.current.recentVocabulary).toEqual(refreshedVocabulary);
     });
+  });
+
+  it('should close the edit modal after create succeeds before refetch completes', async () => {
+    const refreshedVocabulary = [
+      {
+        id: 3,
+        user_id: 1,
+        word_phrase: 'tack',
+        translation: 'thanks',
+        example_phrase: 'Tack så mycket!',
+        in_learn: true,
+        last_learned: null,
+        created_at: '2023-10-27T10:10:00Z',
+        updated_at: '2023-10-27T10:10:00Z',
+      },
+    ];
+    const refetchDeferred = createDeferred<typeof refreshedVocabulary>();
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: 3 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => refetchDeferred.promise,
+      });
+
+    const { result } = renderHook(() => useRecentVocabulary());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    act(() => {
+      result.current.openEditModal(null);
+    });
+
+    expect(result.current.isEditModalOpen).toBe(true);
+
+    let createPromise: Promise<void>;
+    act(() => {
+      createPromise = result.current.createVocabularyItem({
+        word_phrase: 'tack',
+        translation: 'thanks',
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isEditModalOpen).toBe(false);
+    });
+    expect(result.current.loading).toBe(true);
+
+    await act(async () => {
+      refetchDeferred.resolve(refreshedVocabulary);
+      await createPromise;
+    });
+
+    expect(result.current.recentVocabulary).toEqual(refreshedVocabulary);
   });
 
   it('should handle create vocabulary item error', async () => {
@@ -962,7 +1122,7 @@ describe('useRecentVocabulary', () => {
 
 describe('useVocabularyStats', () => {
   beforeEach(() => {
-    mockFetch.mockClear();
+    mockFetch.mockReset();
   });
 
   it('should fetch vocabulary stats successfully', async () => {
@@ -1015,7 +1175,7 @@ describe('useVocabularyStats', () => {
 
 describe('improveVocabularyItem', () => {
   beforeEach(() => {
-    mockFetch.mockClear();
+    mockFetch.mockReset();
   });
 
   // Create a mock API object that simulates the real useApi behavior
