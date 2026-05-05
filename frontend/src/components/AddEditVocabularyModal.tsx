@@ -1,24 +1,27 @@
-import React, { useState, useEffect } from "react";
-import { Modal, Box, TextField, Typography, IconButton, FormControl, InputLabel, Select, MenuItem } from "@mui/material";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Modal,
+  Box,
+  TextField,
+  Typography,
+  IconButton,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  CircularProgress,
+} from "@mui/material";
 import AutoFixNormal from "@mui/icons-material/AutoFixNormal";
 import AutoFixHigh from "@mui/icons-material/AutoFixHigh";
-import { CustomButton, StyledCheckbox } from "./ui";
-import { improveVocabularyItem } from "../hooks/useVocabulary";
+import Search from "@mui/icons-material/Search";
+import { CustomButton, StyledCheckbox, Snackbar } from "./ui";
+import {
+  improveVocabularyItem,
+  type SavedVocabularyItem,
+} from "../hooks/useVocabulary";
 import { useApi } from "../utils/api";
 import { VOCABULARY_IMPROVEMENT_MODES, type VocabularyImprovementMode } from "../constants";
 
-interface SavedVocabularyItem {
-  id: number;
-  user_id: number;
-  word_phrase: string;
-  translation: string;
-  example_phrase: string | null;
-  extra_info: string | null;
-  in_learn: boolean;
-  priority_learn: number;
-  last_learned: string | null;
-  created_at: string;
-}
 
 interface AddEditVocabularyModalProps {
   open: boolean;
@@ -26,6 +29,8 @@ interface AddEditVocabularyModalProps {
   onClose: () => void;
   onSave: (updatedItem: Partial<SavedVocabularyItem>) => Promise<void>;
   onDelete?: () => Promise<void>;
+  onLookup?: (wordPhrase: string) => Promise<SavedVocabularyItem | null>;
+  onLookupFound?: (item: SavedVocabularyItem) => void;
 }
 
 const textFieldStyles = {
@@ -57,6 +62,8 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   onClose,
   onSave,
   onDelete,
+  onLookup,
+  onLookupFound,
 }) => {
   const [wordPhrase, setWordPhrase] = useState("");
   const [translation, setTranslation] = useState("");
@@ -65,6 +72,12 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   const [inLearn, setInLearn] = useState(false);
   const [priorityLearn, setPriorityLearn] = useState(DEFAULT_PRIORITY_LEARN);
   const [isImproving, setIsImproving] = useState(false);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [lookupMessage, setLookupMessage] = useState<string | null>(null);
+  const [lookupSeverity, setLookupSeverity] = useState<"success" | "info">(
+    "info"
+  );
+  const lookupRequestIdRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
 
   // Get authenticated API client
@@ -72,6 +85,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
 
   useEffect(() => {
     setError(null);
+    setLookupMessage(null);
     if (item) {
       setWordPhrase(item.word_phrase);
       setTranslation(item.translation);
@@ -111,6 +125,9 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   };
 
   const handleClose = () => {
+    lookupRequestIdRef.current += 1;
+    setIsLookingUp(false);
+    setLookupMessage(null);
     onClose();
   };
 
@@ -141,6 +158,43 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
     }
   };
 
+  const handleLookupVocabulary = async () => {
+    const trimmedWordPhrase = wordPhrase.trim();
+    if (!trimmedWordPhrase || !onLookup) return;
+
+    const requestId = lookupRequestIdRef.current + 1;
+    lookupRequestIdRef.current = requestId;
+
+    setError(null);
+    setIsLookingUp(true);
+    try {
+      const foundItem = await onLookup(trimmedWordPhrase);
+      if (requestId !== lookupRequestIdRef.current) return;
+      if (foundItem) {
+        setLookupSeverity("success");
+        setLookupMessage(
+          `Found existing word: ${foundItem.word_phrase}. Editing saved entry.`
+        );
+        onLookupFound?.(foundItem);
+      } else {
+        setLookupSeverity("info");
+        setLookupMessage("No existing word found.");
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Failed to look up vocabulary item";
+      if (requestId === lookupRequestIdRef.current) {
+        setError(errorMessage);
+      }
+    } finally {
+      if (requestId === lookupRequestIdRef.current) {
+        setIsLookingUp(false);
+      }
+    }
+  };
+
   const handleFillAll = () => handleImproveVocabulary(VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS);
 
   const handleFillExample = () => handleImproveVocabulary(VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY);
@@ -152,7 +206,8 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
       aria-labelledby="edit-vocabulary-modal"
       aria-describedby="edit-vocabulary-modal-description"
     >
-      <Box
+      <Box>
+        <Box
         sx={{
           position: "absolute",
           top: "50%",
@@ -187,14 +242,45 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
         </Box>
 
         <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <TextField
-            label="Swedish Word/Phrase"
-            value={wordPhrase}
-            onChange={(e) => setWordPhrase(e.target.value)}
-            fullWidth
-            variant="outlined"
-            sx={textFieldStyles}
-          />
+          <Box sx={{ position: "relative" }}>
+            <TextField
+              label="Swedish Word/Phrase"
+              value={wordPhrase}
+              onChange={(e) => setWordPhrase(e.target.value)}
+              fullWidth
+              variant="outlined"
+              sx={{
+                ...textFieldStyles,
+                "& .MuiOutlinedInput-input": {
+                  pr: 5,
+                },
+              }}
+            />
+            <IconButton
+              aria-label="Look up vocabulary word"
+              onClick={handleLookupVocabulary}
+              disabled={!wordPhrase.trim() || isLookingUp || !onLookup}
+              sx={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                color: "var(--primary-color)",
+                "&:hover": {
+                  backgroundColor: "rgba(59, 130, 246, 0.1)",
+                },
+                "&:disabled": {
+                  color: "#6b7280",
+                },
+              }}
+              title="Look up existing word"
+            >
+              {isLookingUp ? (
+                <CircularProgress size={20} color="inherit" />
+              ) : (
+                <Search />
+              )}
+            </IconButton>
+          </Box>
 
           <TextField
             label="English Translation"
@@ -376,6 +462,14 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
             </Box>
           </Box>
         </Box>
+      </Box>
+        <Snackbar
+          open={Boolean(lookupMessage)}
+          message={lookupMessage || ""}
+          severity={lookupSeverity}
+          autoHideDuration={3500}
+          onClose={() => setLookupMessage(null)}
+        />
       </Box>
     </Modal>
   );

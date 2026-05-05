@@ -32,6 +32,7 @@ vi.mock('../hooks/useVocabulary', () => ({
     updateVocabularyItem: vi.fn(),
     createVocabularyItem: vi.fn(),
     deleteVocabularyItem: vi.fn(),
+    lookupVocabularyItem: vi.fn(),
   })),
 }));
 
@@ -103,6 +104,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     renderWithAuthProvider(<VocabularyView />);
@@ -124,6 +126,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     const { rerender } = renderWithAuthProvider(<VocabularyView />);
@@ -157,6 +160,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     rerender(<VocabularyView />);
@@ -192,6 +196,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     rerender(<VocabularyView />);
@@ -319,6 +324,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     renderWithAuthProvider(<VocabularyView />);
@@ -379,6 +385,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     renderWithAuthProvider(<VocabularyView />);
@@ -415,6 +422,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     renderWithAuthProvider(<VocabularyView />);
@@ -436,6 +444,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     renderWithAuthProvider(<VocabularyView />);
@@ -457,6 +466,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     renderWithAuthProvider(<VocabularyView />);
@@ -478,6 +488,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     renderWithAuthProvider(<VocabularyView />);
@@ -504,6 +515,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     };
 
     mockUseRecentVocabulary.mockReturnValue(mockHookReturn);
@@ -534,6 +546,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     renderWithAuthProvider(<VocabularyView />);
@@ -560,6 +573,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     renderWithAuthProvider(<VocabularyView />);
@@ -592,6 +606,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     renderWithAuthProvider(<VocabularyView />);
@@ -653,6 +668,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     renderWithAuthProvider(<VocabularyView />);
@@ -716,6 +732,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem: vi.fn(),
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     renderWithAuthProvider(<VocabularyView />);
@@ -768,6 +785,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem,
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     renderWithAuthProvider(<VocabularyView />);
@@ -810,6 +828,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem,
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     renderWithAuthProvider(<VocabularyView />);
@@ -867,6 +886,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem,
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     renderWithAuthProvider(<VocabularyView />);
@@ -930,6 +950,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem,
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
     });
 
     renderWithAuthProvider(<VocabularyView />);
@@ -983,6 +1004,7 @@ describe("VocabularyView", () => {
       updateVocabularyItem,
       createVocabularyItem: vi.fn(),
       deleteVocabularyItem,
+      lookupVocabularyItem: vi.fn(),
     });
 
     return { deleteVocabularyItem, refetchStats, updateVocabularyItem };
