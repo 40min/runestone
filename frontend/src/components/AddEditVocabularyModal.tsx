@@ -206,7 +206,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
       aria-labelledby="edit-vocabulary-modal"
       aria-describedby="edit-vocabulary-modal-description"
     >
-      <Box>
+      <div>
         <Box
         sx={{
           position: "absolute",
@@ -470,7 +470,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
           autoHideDuration={3500}
           onClose={() => setLookupMessage(null)}
         />
-      </Box>
+      </div>
     </Modal>
   );
 };
