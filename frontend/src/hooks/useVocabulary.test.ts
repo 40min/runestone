@@ -668,6 +668,85 @@ describe('useRecentVocabulary', () => {
     });
   });
 
+
+  it('should look up vocabulary item with precise case-insensitive search and set editing item when found', async () => {
+    const foundItem = {
+      id: 7,
+      user_id: 1,
+      word_phrase: 'hej',
+      translation: 'hello',
+      example_phrase: 'Hej!',
+      extra_info: null,
+      in_learn: true,
+      priority_learn: 3,
+      last_learned: null,
+      learned_times: 0,
+      created_at: '2023-10-27T10:00:00Z',
+      updated_at: '2023-10-27T10:00:00Z',
+    };
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([foundItem]),
+      });
+
+    const { result } = renderHook(() => useRecentVocabulary());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    let lookupResult: unknown = null;
+    await act(async () => {
+      lookupResult = await result.current.lookupVocabularyItem('  hej  ');
+    });
+
+    expect(lookupResult).toEqual(foundItem);
+    expect(result.current.editingItem).toBeNull();
+    expect(result.current.isEditModalOpen).toBe(false);
+    expect(mockFetch).toHaveBeenLastCalledWith(
+      'http://localhost:8010/api/vocabulary?search_query=hej&limit=1&precise=true',
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+    );
+  });
+
+  it('should keep add mode when vocabulary lookup has no match', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+    const { result } = renderHook(() => useRecentVocabulary());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    let lookupResult: unknown = 'not-called';
+    await act(async () => {
+      lookupResult = await result.current.lookupVocabularyItem('nytt');
+    });
+
+    expect(lookupResult).toBeNull();
+    expect(result.current.editingItem).toBeNull();
+    expect(result.current.isEditModalOpen).toBe(false);
+  });
+
   it('should create vocabulary item successfully', async () => {
     const mockCreatedItem = {
       id: 3,

@@ -50,6 +50,7 @@ const VocabularyView: React.FC = () => {
     updateVocabularyItem,
     createVocabularyItem,
     deleteVocabularyItem,
+    lookupVocabularyItem,
   } = useRecentVocabulary(activeSearchTerm, preciseSearch);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
@@ -430,6 +431,8 @@ const VocabularyView: React.FC = () => {
         onClose={closeEditModal}
         onSave={handleSaveEdit}
         onDelete={handleDelete}
+        onLookup={lookupVocabularyItem}
+        onLookupFound={openEditModal}
       />
     </Box>
   );

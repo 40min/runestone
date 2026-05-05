@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useApi } from "../utils/api";
 import type { VocabularyImprovementMode } from "../constants";
 
-interface SavedVocabularyItem {
+export interface SavedVocabularyItem {
   id: number;
   user_id: number;
   word_phrase: string;
@@ -50,6 +50,7 @@ interface UseRecentVocabularyReturn {
   ) => Promise<void>;
   createVocabularyItem: (item: Partial<SavedVocabularyItem>) => Promise<void>;
   deleteVocabularyItem: (id: number) => Promise<void>;
+  lookupVocabularyItem: (wordPhrase: string) => Promise<SavedVocabularyItem | null>;
 }
 
 interface UseVocabularyStatsReturn {
@@ -278,6 +279,26 @@ export const useRecentVocabulary = (
     [closeEditModal, apiDelete]
   );
 
+  const lookupVocabularyItem = useCallback(
+    async (wordPhrase: string) => {
+      const trimmedWordPhrase = wordPhrase.trim();
+      if (!trimmedWordPhrase) {
+        return null;
+      }
+
+      const params = new URLSearchParams({
+        search_query: trimmedWordPhrase,
+        limit: "1",
+        precise: "true",
+      });
+      const data = await get<SavedVocabularyItem[]>(
+        `/api/vocabulary?${params.toString()}`
+      );
+      return data[0] ?? null;
+    },
+    [get]
+  );
+
   useEffect(() => {
     fetchRecentVocabulary();
   }, [searchQuery, preciseSearch, fetchRecentVocabulary]);
@@ -297,6 +318,7 @@ export const useRecentVocabulary = (
     updateVocabularyItem,
     createVocabularyItem,
     deleteVocabularyItem,
+    lookupVocabularyItem,
   };
 };
 

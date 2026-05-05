@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AddEditVocabularyModal from "./AddEditVocabularyModal";
 import { VOCABULARY_IMPROVEMENT_MODES } from "../constants";
@@ -29,6 +29,8 @@ describe("AddEditVocabularyModal", () => {
   const mockOnClose = vi.fn();
   const mockOnSave = vi.fn();
   const mockOnDelete = vi.fn();
+  const mockOnLookup = vi.fn();
+  const mockOnLookupFound = vi.fn();
 
   const defaultProps = {
     open: true,
@@ -36,6 +38,8 @@ describe("AddEditVocabularyModal", () => {
     onClose: mockOnClose,
     onSave: mockOnSave,
     onDelete: mockOnDelete,
+    onLookup: mockOnLookup,
+    onLookupFound: mockOnLookupFound,
   };
 
   const renderWithAuthProvider = (component: React.ReactElement) => {
@@ -50,6 +54,8 @@ describe("AddEditVocabularyModal", () => {
     mockOnClose.mockClear();
     mockOnSave.mockClear();
     mockOnDelete.mockClear();
+    mockOnLookup.mockClear();
+    mockOnLookupFound.mockClear();
     mockImproveVocabularyItem.mockClear();
   });
 
@@ -107,6 +113,112 @@ describe("AddEditVocabularyModal", () => {
     await user.click(cancelButton);
 
     expect(mockOnClose).toHaveBeenCalledTimes(1);
+  });
+
+
+  it("disables lookup button when word phrase is empty", () => {
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
+
+    expect(screen.getByTitle("Look up existing word")).toBeDisabled();
+  });
+
+  it("looks up the trimmed word and shows a found notification", async () => {
+    const user = userEvent.setup();
+    mockOnLookup.mockResolvedValue({
+      id: 7,
+      user_id: 1,
+      word_phrase: "hej",
+      translation: "hello",
+      example_phrase: "Hej!",
+      extra_info: "interjection",
+      in_learn: true,
+      priority_learn: 3,
+      last_learned: null,
+      created_at: "2023-10-27T10:00:00Z",
+    });
+
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
+
+    await user.type(screen.getByLabelText("Swedish Word/Phrase"), "  hej  ");
+    await user.click(screen.getByTitle("Look up existing word"));
+
+    await waitFor(() => {
+      expect(mockOnLookup).toHaveBeenCalledWith("hej");
+      expect(
+        screen.getByText("Found existing word: hej. Editing saved entry.")
+      ).toBeInTheDocument();
+      expect(mockOnLookupFound).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 7, word_phrase: "hej" })
+      );
+    });
+  });
+
+
+
+  it("ignores a lookup result after the modal is closed", async () => {
+    const user = userEvent.setup();
+    let resolveLookup: (item: unknown) => void = () => {};
+    mockOnLookup.mockReturnValue(
+      new Promise((resolve) => {
+        resolveLookup = resolve;
+      })
+    );
+
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
+
+    await user.type(screen.getByLabelText("Swedish Word/Phrase"), "hej");
+    await user.click(screen.getByTitle("Look up existing word"));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await act(async () => {
+      resolveLookup({
+        id: 7,
+        user_id: 1,
+        word_phrase: "hej",
+        translation: "hello",
+        example_phrase: "Hej!",
+        extra_info: null,
+        in_learn: true,
+        priority_learn: 3,
+        last_learned: null,
+        created_at: "2023-10-27T10:00:00Z",
+      });
+    });
+
+    expect(mockOnClose).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByText("Found existing word: hej. Editing saved entry.")
+    ).not.toBeInTheDocument();
+    expect(mockOnLookupFound).not.toHaveBeenCalled();
+  });
+
+  it("keeps add mode and shows a not-found notification when lookup misses", async () => {
+    const user = userEvent.setup();
+    mockOnLookup.mockResolvedValue(null);
+
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
+
+    await user.type(screen.getByLabelText("Swedish Word/Phrase"), "nytt");
+    await user.click(screen.getByTitle("Look up existing word"));
+
+    await waitFor(() => {
+      expect(screen.getByText("No existing word found.")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Add Vocabulary Item")).toBeInTheDocument();
+  });
+
+  it("shows an inline error when lookup fails", async () => {
+    const user = userEvent.setup();
+    mockOnLookup.mockRejectedValue(new Error("Lookup failed"));
+
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
+
+    await user.type(screen.getByLabelText("Swedish Word/Phrase"), "hej");
+    await user.click(screen.getByTitle("Look up existing word"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Lookup failed")).toBeInTheDocument();
+    });
   });
 
   it("fills all fields when Fill All icon button is clicked", async () => {
