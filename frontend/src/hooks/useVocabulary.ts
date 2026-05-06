@@ -288,13 +288,16 @@ export const useRecentVocabulary = (
 
       const params = new URLSearchParams({
         search_query: trimmedWordPhrase,
-        limit: "1",
+        limit: "20",
         precise: "true",
       });
       const data = await get<SavedVocabularyItem[]>(
         `/api/vocabulary?${params.toString()}`
       );
-      return data[0] ?? null;
+      const exactCaseMatch = data.find(
+        (item) => item.word_phrase === trimmedWordPhrase
+      );
+      return exactCaseMatch ?? data[0] ?? null;
     },
     [get]
   );

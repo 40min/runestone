@@ -710,7 +710,7 @@ describe('useRecentVocabulary', () => {
     expect(result.current.editingItem).toBeNull();
     expect(result.current.isEditModalOpen).toBe(false);
     expect(mockFetch).toHaveBeenLastCalledWith(
-      'http://localhost:8010/api/vocabulary?search_query=hej&limit=1&precise=true',
+      'http://localhost:8010/api/vocabulary?search_query=hej&limit=20&precise=true',
       expect.objectContaining({
         method: 'GET',
         headers: {
@@ -745,6 +745,63 @@ describe('useRecentVocabulary', () => {
     expect(lookupResult).toBeNull();
     expect(result.current.editingItem).toBeNull();
     expect(result.current.isEditModalOpen).toBe(false);
+  });
+
+  it('should prefer an exact-case vocabulary match when precise lookup returns multiple case variants', async () => {
+    const lowercaseItem = {
+      id: 7,
+      user_id: 1,
+      word_phrase: 'apple',
+      translation: 'apple',
+      example_phrase: null,
+      extra_info: null,
+      in_learn: true,
+      priority_learn: 3,
+      last_learned: null,
+      learned_times: 0,
+      created_at: '2023-10-27T10:00:00Z',
+      updated_at: '2023-10-27T10:00:00Z',
+    };
+    const uppercaseItem = {
+      ...lowercaseItem,
+      id: 8,
+      word_phrase: 'APPLE',
+      translation: 'APPLE',
+      created_at: '2023-10-28T10:00:00Z',
+      updated_at: '2023-10-28T10:00:00Z',
+    };
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([lowercaseItem, uppercaseItem]),
+      });
+
+    const { result } = renderHook(() => useRecentVocabulary());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    let lookupResult: unknown = null;
+    await act(async () => {
+      lookupResult = await result.current.lookupVocabularyItem('APPLE');
+    });
+
+    expect(lookupResult).toEqual(uppercaseItem);
+    expect(mockFetch).toHaveBeenLastCalledWith(
+      'http://localhost:8010/api/vocabulary?search_query=APPLE&limit=20&precise=true',
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+    );
   });
 
   it('should create vocabulary item successfully', async () => {
