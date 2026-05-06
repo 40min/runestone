@@ -53,10 +53,14 @@ vi.mock("./AddEditVocabularyModal", () => ({
     open,
     onSave,
     onDelete,
+    onLookup,
+    onLookupFound,
   }: {
     open: boolean;
     onSave: (item: Record<string, unknown>) => Promise<void>;
     onDelete: () => Promise<void>;
+    onLookup?: (wordPhrase: string) => Promise<unknown>;
+    onLookupFound?: (item: Record<string, unknown>) => void;
   }) =>
     open ? (
       <div>
@@ -65,6 +69,21 @@ vi.mock("./AddEditVocabularyModal", () => ({
         </button>
         <button type="button" onClick={() => void onDelete()}>
           Mock Delete
+        </button>
+        <button type="button" onClick={() => void onLookup?.(" hej ")}>
+          Mock Lookup
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onLookupFound?.({
+              id: 11,
+              word_phrase: "hej",
+              translation: "hello",
+            })
+          }
+        >
+          Mock Lookup Found
         </button>
       </div>
     ) : null,
@@ -1032,5 +1051,45 @@ describe("VocabularyView", () => {
       expect(deleteVocabularyItem).toHaveBeenCalledWith(1);
       expect(refetchStats).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("passes lookup callbacks through to the modal and reopens edit mode for a found item", async () => {
+    const openEditModal = vi.fn();
+    const lookupVocabularyItem = vi.fn().mockResolvedValue({
+      id: 11,
+      word_phrase: "hej",
+      translation: "hello",
+    });
+
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+      isEditModalOpen: true,
+      editingItem: null,
+      openEditModal,
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem,
+    });
+
+    renderWithAuthProvider(<VocabularyView />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mock Lookup" }));
+    await waitFor(() => {
+      expect(lookupVocabularyItem).toHaveBeenCalledWith(" hej ");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Mock Lookup Found" }));
+    expect(openEditModal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 11,
+        word_phrase: "hej",
+        translation: "hello",
+      })
+    );
   });
 });
