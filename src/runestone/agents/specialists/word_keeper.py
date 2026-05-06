@@ -27,7 +27,7 @@ from runestone.schemas.vocabulary_save import (
 logger = logging.getLogger(__name__)
 
 
-WORDKEEPER_SYSTEM_PROMPT = """
+WORDKEEPER_SAVE_REQUEST_EXTRACTION_PROMPT = """
 You are WordKeeper, an internal vocabulary extraction specialist for a Swedish tutoring app.
 You do not interact with the student. Your sole job is to decide whether vocabulary should be saved.
 
@@ -35,39 +35,31 @@ You do not interact with the student. Your sole job is to decide whether vocabul
 Be conservative. When in doubt, return no candidates.
 Never invent candidates simply because a Swedish word appears in the conversation.
 
-## Phase Behavior
-
-### Pre-response phase
-- Save ONLY when the student explicitly requests it (e.g. "save", "add", "remember", "keep this word").
-- Do NOT save words just because an earlier assistant message in `history` highlighted or introduced them.
-
-### Post-response phase
-- Treat `teacher_response` as the authoritative current teacher message.
-- Save vocabulary when the teacher explicitly highlights it, including:
-  - Named vocabulary sections (e.g. "подсказка по лексике", "key vocabulary", "useful words").
-  - Structured word–translation lists or bullet pairs regardless of the header label.
-  - Explicit save phrasing (e.g. "the key words here are", "good words to memorize").
-- Save the corrected Swedish vocabulary item when the teacher explicitly says the student's form is
-  misspelled, invalid, nonexistent, or should be replaced by a specific corrected Swedish word.
-  Never save the student's erroneous form in this case.
-- Do NOT treat ordinary exercise wording as a save signal, even if words are bolded or repeated.
-- Do NOT save words from prompts like "use X or Y in a sentence", "try another sentence with X",
-  or other drill wording unless the teacher also explicitly says the words are worth remembering.
-- By default, ignore older assistant messages in `history` when deciding what to save.
-- Use older history ONLY when the student explicitly asks to revisit it.
+## Request Scope
+This extractor handles explicit save requests before the teacher response.
+- Evaluate `message` as the active save request.
+- When `message` points to a word or phrase indirectly (for example "save that word"),
+  you may use `teacher_response` only to resolve the immediately preceding teacher context.
+- Return candidates only if `message` explicitly asks to save vocabulary
+  (for example: "save", "add", "remember", "keep this word").
+- Otherwise return no candidates.
 
 ## What NOT to Save
 - Words the student merely reused in their message.
 - Words that appear only in grammar corrections or example sentences without a save signal.
-- Misspelled, invalid, or nonexistent student-written word forms. If a correction should be saved,
-  save only the corrected Swedish item supplied by the teacher.
+- Misspelled, invalid, or nonexistent student-written word forms unless the student explicitly asks to save
+  the corrected target item.
 - Words introduced in earlier turns unless the student explicitly references them.
 - Words that are only mentioned as options in a practice prompt or writing exercise.
 - Bolded words that are emphasized for an exercise but not presented as vocabulary to memorize.
 
 ## Candidate Field Rules
 - `word_phrase` — the canonical Swedish learning item, not a noisy slice of the surrounding sentence.
-- `source_form` — optional original form from the current context when it differs from `word_phrase`.
+- `source_form` — optional original form from `message` when it differs from `word_phrase`.
+- `context_phrase` — a Swedish sentence or phrase that helps the learner remember the item.
+- When `message` already contains a useful Swedish sentence or phrase for the item, reuse it as `context_phrase`.
+- When `message` names bare words without a useful Swedish context, generate a short, natural Swedish
+  `context_phrase` for each saved item.
 
 ## Normalization Rules
 - No leading articles: save `hund`, not `en hund`; save `äpple`, not `ett äpple`.
@@ -84,7 +76,7 @@ Never invent candidates simply because a Swedish word appears in the conversatio
 - Do not save grammar-only tokens as vocabulary unless explicitly presented as learning items.
 
 ## Extraction Rules (apply to every candidate)
-- Return only canonical word keys and optional context source forms.
+- Return only canonical word keys, optional context source forms, and optional context phrases.
 - Do not generate translations, examples, grammar notes, or reasons.
 
 ## Output
@@ -106,9 +98,14 @@ Generate full save fields only for the requested new vocabulary items.
 - `extra_info` — an optional compact learner note with grammar or usage details.
 
 ## Context Rules
-- Prefer translations and examples already present in `teacher_response` when they fit the requested word.
-- Otherwise infer a concise translation and generate a short, natural Swedish example.
+- Prefer a provided `context_phrase` as the example phrase when it is a natural Swedish sentence that demonstrates
+  the saved item.
+- Otherwise infer a concise translation and generate a short, natural Swedish example from `word_phrase`.
 - If `source_form` differs from `word_phrase`, use it only when useful for `extra_info`.
+- `translation` and `example_phrase` should be filled whenever reasonably possible.
+- If `context_phrase` is missing, unnatural, or not useful, infer the missing fields from `word_phrase`.
+- Leave `extra_info` empty when unsure, but avoid leaving `translation` or `example_phrase` empty unless the
+  item is genuinely impossible to complete.
 
 ## Extra Info Guidance
 `extra_info` is a compact learner note, not a second translation and not a full grammar lesson.
@@ -197,7 +194,7 @@ class WordKeeperSpecialist(BaseSpecialist):
 
     async def run(self, context: SpecialistContext) -> SpecialistResult:
         started = time.monotonic()
-        extraction = await self._extract_candidates(context)
+        extraction = self._direct_candidates(context) or await self._extract_candidates(context)
         if extraction.decision == "no_action" or not extraction.candidates:
             return self._no_action_result(SaveRunState())
 
@@ -352,6 +349,12 @@ class WordKeeperSpecialist(BaseSpecialist):
             state.saved_words.append(item.word_phrase)
 
     @staticmethod
+    def _direct_candidates(context: SpecialistContext) -> WordKeeperExtraction | None:
+        if not context.vocabulary_candidates:
+            return None
+        return WordKeeperExtraction(decision="save_words", candidates=context.vocabulary_candidates)
+
+    @staticmethod
     def _error_result(state: SaveRunState) -> SpecialistResult:
         return SpecialistResult(
             status="error",
@@ -379,16 +382,13 @@ class WordKeeperSpecialist(BaseSpecialist):
         model = self.model.with_structured_output(WordKeeperExtraction)
         payload = {
             "message": context.message,
-            "history": [msg.model_dump(mode="json") for msg in context.history],
             "teacher_response": context.teacher_response,
-            "routing_reason": context.routing_reason,
-            "phase": "post_response" if context.teacher_response else "pre_response",
             "target_translation_language": self._target_translation_language(context),
         }
         try:
             return await model.ainvoke(
                 [
-                    SystemMessage(content=WORDKEEPER_SYSTEM_PROMPT),
+                    SystemMessage(content=WORDKEEPER_SAVE_REQUEST_EXTRACTION_PROMPT),
                     HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
                 ]
             )
@@ -407,10 +407,6 @@ class WordKeeperSpecialist(BaseSpecialist):
         model = self.model.with_structured_output(WordKeeperEnrichment)
         payload = {
             "new_words": [candidate.as_artifact() for candidate in new_candidates],
-            "message": context.message,
-            "history": [msg.model_dump(mode="json") for msg in context.history],
-            "teacher_response": context.teacher_response,
-            "phase": "post_response" if context.teacher_response else "pre_response",
             "target_translation_language": self._target_translation_language(context),
         }
         try:

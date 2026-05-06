@@ -33,8 +33,9 @@ class WordSaveCandidate(BaseModel):
 
     word_phrase: str = Field(..., description="Swedish word or phrase to save")
     source_form: str | None = Field(None, description="Original context form when it differs from word_phrase")
+    context_phrase: str | None = Field(None, description="Original Swedish sentence or phrase that introduced the item")
 
-    @field_validator("word_phrase", "source_form", mode="before")
+    @field_validator("word_phrase", "source_form", "context_phrase", mode="before")
     @classmethod
     def decode_candidate_unicode_escapes(cls, value: str | None) -> str | None:
         """Normalize double-escaped unicode before candidate dedupe or persistence planning."""
@@ -90,6 +91,7 @@ class VocabularyPrioritizationAction:
     candidate_id: str
     word_phrase: str
     source_form: str | None
+    context_phrase: str | None
     action: PriorityWordAction
     word_id: int | None
     changed: bool
@@ -99,6 +101,7 @@ class VocabularyPrioritizationAction:
             "candidate_id": self.candidate_id,
             "word_phrase": self.word_phrase,
             "source_form": self.source_form,
+            "context_phrase": self.context_phrase,
             "action": self.action,
             "word_id": self.word_id,
             "changed": self.changed,

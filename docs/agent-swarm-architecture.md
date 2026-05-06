@@ -154,9 +154,17 @@ Runs in `pre_response` when:
 
 - the student explicitly asks to save or remember words
 
-Runs in `post_response` when:
+Runs after the teacher response when:
 
-- the teacher reply explicitly highlights words worth learning
+- `TeacherOutput.vocabulary_candidates` is non-empty
+- `AgentsManager` dispatches a direct background `word_keeper` branch in parallel with
+  coordinator-owned post specialists
+
+Does not do:
+
+- mine post-stage vocabulary from teacher prose
+- inspect distant chat history to resolve vague earlier-turn save requests
+- receive post-stage routing from the post coordinator
 
 #### MemoryKeeper
 
@@ -373,11 +381,10 @@ Decision:
 
 - handle in pre stage
 
-Teacher-highlighted vocabulary examples:
+Teacher-emitted vocabulary candidate examples:
 
-- "these are key words"
-- "these are good words to memorize"
-- "let's keep these words in mind"
+- `TeacherOutput.vocabulary_candidates = [{"word_phrase": "begripa", "context_phrase": "Jag begriper inte."}]`
+- visible teacher wording may still highlight useful words, but the structured field is the authoritative signal
 
 Decision:
 
@@ -450,14 +457,27 @@ Input:
 Output:
 
 - final user-facing response
+- optional structured `vocabulary_candidates`
 
 ### WordKeeper Contract
 
-Input:
+Pre-response extraction input:
 
 - latest user message
-- recent relevant history
-- teacher response when running in post stage
+- `target_translation_language`
+
+Post-response save/enrichment input:
+
+- structured `vocabulary_candidates`
+- `target_translation_language`
+
+Notes:
+
+- pre-response extraction evaluates the current user message and may use the immediately
+  preceding teacher message to resolve deictic save requests
+- post-response WordKeeper does not receive chat history or teacher prose
+- `VocabularyService` normalizes, deduplicates, assigns candidate ids, and prioritizes
+  existing rows before enrichment
 
 Output artifacts:
 

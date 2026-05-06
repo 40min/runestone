@@ -330,6 +330,7 @@ class VocabularyService:
                 candidate_id=str(index),
                 word_phrase=candidate.word_phrase,
                 source_form=candidate.source_form,
+                context_phrase=candidate.context_phrase,
                 action=action_result.action,
                 word_id=action_result.word_id,
                 changed=action_result.changed,
@@ -352,6 +353,7 @@ class VocabularyService:
                 WordSaveCandidate(
                     word_phrase=normalized_word_phrase,
                     source_form=(candidate.source_form or "").strip() or None,
+                    context_phrase=(candidate.context_phrase or "").strip() or None,
                 )
             )
         return normalized_candidates

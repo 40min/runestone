@@ -19,6 +19,7 @@ from runestone.agents.schemas import (
 )
 from runestone.agents.specialists.base import BaseSpecialist, SpecialistContext, SpecialistResult
 from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
+from runestone.schemas.vocabulary_save import WordSaveCandidate
 from runestone.services.agent_side_effect_service import AgentSideEffectService
 
 
@@ -118,7 +119,14 @@ async def test_process_turn_returns_teacher_reply_and_starts_background_post(
     manager = AgentsManager(mock_settings)
     manager.handle_stale_post_task = AsyncMock()
     manager.prepare_pre_turn = AsyncMock(return_value=(_make_plan(), [{"name": "pre"}], "", []))
-    manager.generate_teacher_response = AsyncMock(return_value=("Teacher says hi", [{"title": "Src"}], "happy"))
+    manager.generate_teacher_response = AsyncMock(
+        return_value=(
+            "Teacher says hi",
+            [{"title": "Src"}],
+            "happy",
+            [WordSaveCandidate(word_phrase="begripa", context_phrase="Jag begriper inte.")],
+        )
+    )
     manager.start_background_post_turn = AsyncMock()
 
     response, sources, teacher_emotion = await manager.process_turn(
@@ -148,6 +156,7 @@ async def test_process_turn_returns_teacher_reply_and_starts_background_post(
         history=[ChatMessage(role="assistant", content="Earlier")],
         user=mock_user,
         teacher_response="Teacher says hi",
+        vocabulary_candidates=[WordSaveCandidate(word_phrase="begripa", context_phrase="Jag begriper inte.")],
         pre_results=[{"name": "pre"}],
         coordinator_row_id=42,
     )
@@ -160,7 +169,7 @@ async def test_process_turn_skips_stale_check_on_first_turn(
     manager = AgentsManager(mock_settings)
     manager.handle_stale_post_task = AsyncMock()
     manager.prepare_pre_turn = AsyncMock(return_value=(_make_plan(), [], "", []))
-    manager.generate_teacher_response = AsyncMock(return_value=("Teacher says hi", None, "neutral"))
+    manager.generate_teacher_response = AsyncMock(return_value=("Teacher says hi", None, "neutral", []))
     manager.start_background_post_turn = AsyncMock()
 
     await manager.process_turn(
@@ -362,7 +371,7 @@ async def test_generate_teacher_response_returns_text_and_sources(mock_settings,
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(message="Hi there!", final_messages=[])
 
-    response, sources, teacher_emotion = await manager.generate_teacher_response(
+    response, sources, teacher_emotion, vocabulary_candidates = await manager.generate_teacher_response(
         message="Hello",
         history=[],
         user=mock_user,
@@ -374,6 +383,7 @@ async def test_generate_teacher_response_returns_text_and_sources(mock_settings,
     assert response == "Hi there!"
     assert sources is None
     assert teacher_emotion == "neutral"
+    assert vocabulary_candidates == []
 
 
 @pytest.mark.anyio
@@ -384,7 +394,7 @@ async def test_generate_teacher_response_returns_teacher_emotion(mock_settings, 
         message="Great work!", emotion="happy", final_messages=[]
     )
 
-    response, sources, teacher_emotion = await manager.generate_teacher_response(
+    response, sources, teacher_emotion, vocabulary_candidates = await manager.generate_teacher_response(
         message="Hello",
         history=[],
         user=mock_user,
@@ -396,6 +406,33 @@ async def test_generate_teacher_response_returns_teacher_emotion(mock_settings, 
     assert response == "Great work!"
     assert sources is None
     assert teacher_emotion == "happy"
+    assert vocabulary_candidates == []
+
+
+@pytest.mark.anyio
+async def test_generate_teacher_response_returns_vocabulary_candidates(mock_settings, mock_user):
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    candidate = WordSaveCandidate(word_phrase="begripa", context_phrase="Jag begriper inte.")
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(
+        message="Great work!",
+        vocabulary_candidates=[candidate],
+        final_messages=[],
+    )
+
+    response, sources, teacher_emotion, vocabulary_candidates = await manager.generate_teacher_response(
+        message="Hello",
+        history=[],
+        user=mock_user,
+        pre_results=[],
+        starter_memory="",
+        recent_side_effects=[],
+    )
+
+    assert response == "Great work!"
+    assert sources is None
+    assert teacher_emotion == "neutral"
+    assert vocabulary_candidates == [candidate]
 
 
 @pytest.mark.anyio
@@ -416,7 +453,7 @@ async def test_generate_teacher_response_extracts_news_sources(mock_settings, mo
         ],
     )
 
-    response, sources, _teacher_emotion = await manager.generate_teacher_response(
+    response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
         message="Nyheter",
         history=[],
         user=mock_user,
@@ -448,7 +485,7 @@ async def test_generate_teacher_response_combines_news_sources_from_pre_results(
         ],
     )
 
-    response, sources, _teacher_emotion = await manager.generate_teacher_response(
+    response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
         message="Nyheter",
         history=[],
         user=mock_user,
@@ -494,7 +531,7 @@ async def test_generate_teacher_response_deduplicates_sources_across_pre_results
         ],
     )
 
-    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
+    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
         message="Nyheter",
         history=[],
         user=mock_user,
@@ -538,7 +575,7 @@ async def test_generate_teacher_response_filters_unsafe_urls(mock_settings, mock
         ],
     )
 
-    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
+    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
         message="Nyheter", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
     )
 
@@ -557,7 +594,7 @@ async def test_generate_teacher_response_requires_search_grammar_result_for_gram
         final_messages=[],
     )
 
-    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
+    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
         message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
     )
 
@@ -590,7 +627,7 @@ async def test_generate_teacher_response_caps_search_grammar_selected_sources(mo
         ],
     )
 
-    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
+    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
         message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
     )
 
@@ -632,7 +669,7 @@ async def test_generate_teacher_response_uses_selected_grammar_sources(mock_sett
         ],
     )
 
-    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
+    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
         message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
     )
 
@@ -672,7 +709,7 @@ async def test_generate_teacher_response_rejects_grammar_sources_not_returned_by
         ],
     )
 
-    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
+    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
         message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
     )
 
@@ -707,7 +744,7 @@ async def test_generate_teacher_response_rejects_same_host_invented_grammar_sour
         ],
     )
 
-    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
+    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
         message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
     )
 
@@ -735,7 +772,7 @@ async def test_generate_teacher_response_rejects_unsafe_search_grammar_source(mo
         ],
     )
 
-    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
+    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
         message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
     )
 
@@ -761,7 +798,7 @@ async def test_generate_teacher_response_rejects_disallowed_port_search_grammar_
         ],
     )
 
-    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
+    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
         message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
     )
 
@@ -778,7 +815,7 @@ async def test_generate_teacher_response_can_hide_irrelevant_grammar_sources(moc
         final_messages=[],
     )
 
-    _response, sources, _teacher_emotion = await manager.generate_teacher_response(
+    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
         message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
     )
 
@@ -815,15 +852,15 @@ async def test_generate_teacher_response_passes_pre_results(mock_settings, mock_
 async def test_run_post_turn_runs_post_specialists(mock_settings, mock_user, mock_side_effect_service):
     manager = AgentsManager(mock_settings)
     manager.coordinator.plan_post_turn = AsyncMock(
-        return_value=_make_plan(post=[RoutingItem(name="word_keeper", reason="save words", chat_history_size=0)])
+        return_value=_make_plan(post=[RoutingItem(name="memory_keeper", reason="save memory", chat_history_size=0)])
     )
 
     class _ActionSpecialist(BaseSpecialist):
         def __init__(self):
-            super().__init__(name="word_keeper")
+            super().__init__(name="memory_keeper")
 
         async def run(self, context: SpecialistContext) -> SpecialistResult:
-            return SpecialistResult(status="action_taken", info_for_teacher="Saved words.")
+            return SpecialistResult(status="action_taken", info_for_teacher="Saved memory.")
 
     manager.registry.register(_ActionSpecialist(), overwrite=True)
 
@@ -833,6 +870,7 @@ async def test_run_post_turn_runs_post_specialists(mock_settings, mock_user, moc
         history=[],
         user=mock_user,
         teacher_response="Great words!",
+        vocabulary_candidates=[],
         pre_results=[],
         side_effect_service=mock_side_effect_service,
         coordinator_row_id=99,
@@ -844,12 +882,272 @@ async def test_run_post_turn_runs_post_specialists(mock_settings, mock_user, moc
     assert kwargs["user_id"] == mock_user.id
     assert kwargs["chat_id"] == "chat-1"
     assert kwargs["coordinator_row_id"] == 99
-    assert kwargs["results"][0]["name"] == "word_keeper"
+    assert kwargs["results"][0]["name"] == "memory_keeper"
     assert kwargs["results"][0]["result"]["status"] == "action_taken"
     manager.coordinator.plan_post_turn.assert_awaited_once()
     mock_side_effect_service.mark_coordinator_done_if_current.assert_awaited_once_with(
         row_id=99, user_id=mock_user.id, chat_id="chat-1"
     )
+
+
+@pytest.mark.anyio
+async def test_run_post_turn_excludes_word_keeper_from_coordinator_available_specialists(
+    mock_settings, mock_user, mock_side_effect_service
+):
+    manager = AgentsManager(mock_settings)
+    manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
+
+    await manager.run_post_turn(
+        message="Hello",
+        chat_id="chat-1",
+        history=[],
+        user=mock_user,
+        teacher_response="Hi!",
+        vocabulary_candidates=[],
+        pre_results=[],
+        side_effect_service=mock_side_effect_service,
+        coordinator_row_id=99,
+    )
+
+    _args, kwargs = manager.coordinator.plan_post_turn.call_args
+    assert "word_keeper" not in kwargs["available_specialists"]
+    assert "memory_keeper" in kwargs["available_specialists"]
+
+
+@pytest.mark.anyio
+async def test_run_post_turn_routes_teacher_vocabulary_candidates_directly(
+    mock_settings, mock_user, mock_side_effect_service
+):
+    manager = AgentsManager(mock_settings)
+    manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
+    capture = _CaptureHistorySpecialist()
+    capture.name = "word_keeper"
+    manager.registry.register(capture, overwrite=True)
+    candidate = WordSaveCandidate(word_phrase="begripa", context_phrase="Jag begriper inte.")
+
+    await manager.run_post_turn(
+        message="Jag begriper inte.",
+        chat_id="chat-1",
+        history=[ChatMessage(role="user", content="Earlier")],
+        user=mock_user,
+        teacher_response="Good sentence. Let's keep begripa in mind.",
+        vocabulary_candidates=[candidate],
+        pre_results=[],
+        side_effect_service=mock_side_effect_service,
+        coordinator_row_id=99,
+    )
+
+    assert capture.seen_vocabulary_candidates == [candidate]
+    assert capture.seen_teacher_response is None
+    assert capture.seen_routing_reason == "teacher emitted vocabulary_candidates"
+    kwargs = mock_side_effect_service.replace_post_specialist_results.call_args.kwargs
+    assert kwargs["results"][0]["name"] == "word_keeper"
+
+
+@pytest.mark.anyio
+async def test_run_post_turn_persists_direct_word_keeper_when_coordinator_fails(
+    mock_settings, mock_user, mock_side_effect_service
+):
+    manager = AgentsManager(mock_settings)
+    manager.coordinator.plan_post_turn = AsyncMock(side_effect=RuntimeError("coordinator exploded"))
+
+    class _ActionSpecialist(BaseSpecialist):
+        def __init__(self):
+            super().__init__(name="word_keeper")
+
+        async def run(self, context: SpecialistContext) -> SpecialistResult:
+            return SpecialistResult(status="action_taken", info_for_teacher="Saved words.")
+
+    manager.registry.register(_ActionSpecialist(), overwrite=True)
+
+    await manager.run_post_turn(
+        message="Jag begriper inte.",
+        chat_id="chat-1",
+        history=[],
+        user=mock_user,
+        teacher_response="Good sentence. Let's keep begripa in mind.",
+        vocabulary_candidates=[WordSaveCandidate(word_phrase="begripa")],
+        pre_results=[],
+        side_effect_service=mock_side_effect_service,
+        coordinator_row_id=99,
+    )
+
+    kwargs = mock_side_effect_service.replace_post_specialist_results.call_args.kwargs
+    assert kwargs["results"][0]["name"] == "word_keeper"
+    assert kwargs["results"][0]["result"]["status"] == "action_taken"
+    mock_side_effect_service.mark_coordinator_failed_if_current.assert_awaited_once_with(
+        row_id=99, user_id=mock_user.id, chat_id="chat-1"
+    )
+    mock_side_effect_service.mark_coordinator_done_if_current.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_run_post_turn_persists_coordinator_and_direct_word_keeper_results_together(
+    mock_settings, mock_user, mock_side_effect_service
+):
+    manager = AgentsManager(mock_settings)
+    manager.coordinator.plan_post_turn = AsyncMock(
+        return_value=_make_plan(post=[RoutingItem(name="memory_keeper", reason="memory", chat_history_size=0)])
+    )
+
+    class _NamedSpecialist(BaseSpecialist):
+        async def run(self, context: SpecialistContext) -> SpecialistResult:
+            return SpecialistResult(status="action_taken", info_for_teacher=f"{self.name} done.")
+
+    manager.registry.register(_NamedSpecialist("memory_keeper"), overwrite=True)
+    manager.registry.register(_NamedSpecialist("word_keeper"), overwrite=True)
+
+    await manager.run_post_turn(
+        message="Jag begriper inte.",
+        chat_id="chat-1",
+        history=[],
+        user=mock_user,
+        teacher_response="Good sentence. Let's keep begripa in mind.",
+        vocabulary_candidates=[WordSaveCandidate(word_phrase="begripa")],
+        pre_results=[],
+        side_effect_service=mock_side_effect_service,
+        coordinator_row_id=99,
+    )
+
+    kwargs = mock_side_effect_service.replace_post_specialist_results.call_args.kwargs
+    assert [item["name"] for item in kwargs["results"]] == ["memory_keeper", "word_keeper"]
+
+
+@pytest.mark.anyio
+async def test_run_post_turn_does_not_route_word_keeper_without_candidates(
+    mock_settings, mock_user, mock_side_effect_service
+):
+    manager = AgentsManager(mock_settings)
+    manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
+    capture = _CaptureHistorySpecialist()
+    capture.name = "word_keeper"
+    manager.registry.register(capture, overwrite=True)
+
+    await manager.run_post_turn(
+        message="Hello",
+        chat_id="chat-1",
+        history=[],
+        user=mock_user,
+        teacher_response="Hi!",
+        vocabulary_candidates=[],
+        pre_results=[],
+        side_effect_service=mock_side_effect_service,
+        coordinator_row_id=99,
+    )
+
+    assert capture.seen_vocabulary_candidates is None
+    kwargs = mock_side_effect_service.replace_post_specialist_results.call_args.kwargs
+    assert kwargs["results"] == []
+
+
+@pytest.mark.anyio
+async def test_run_post_turn_skips_teacher_candidates_already_saved_in_pre_phase(
+    mock_settings, mock_user, mock_side_effect_service
+):
+    manager = AgentsManager(mock_settings)
+    manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
+    capture = _CaptureHistorySpecialist()
+    capture.name = "word_keeper"
+    manager.registry.register(capture, overwrite=True)
+
+    await manager.run_post_turn(
+        message="Save that word for me.",
+        chat_id="chat-1",
+        history=[ChatMessage(role="assistant", content="Begripa means understand.")],
+        user=mock_user,
+        teacher_response="Let's save begripa for later.",
+        vocabulary_candidates=[WordSaveCandidate(word_phrase="begripa", context_phrase="Jag begriper inte.")],
+        pre_results=[
+            {
+                "name": "word_keeper",
+                "result": {
+                    "status": "action_taken",
+                    "artifacts": {
+                        "saved_words": [" Begripa "],
+                    },
+                },
+            }
+        ],
+        side_effect_service=mock_side_effect_service,
+        coordinator_row_id=99,
+    )
+
+    assert capture.seen_vocabulary_candidates is None
+    kwargs = mock_side_effect_service.replace_post_specialist_results.call_args.kwargs
+    assert kwargs["results"] == []
+
+
+@pytest.mark.anyio
+async def test_run_post_turn_keeps_teacher_candidates_when_pre_phase_only_extracted_them(
+    mock_settings, mock_user, mock_side_effect_service
+):
+    manager = AgentsManager(mock_settings)
+    manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
+    capture = _CaptureHistorySpecialist()
+    capture.name = "word_keeper"
+    manager.registry.register(capture, overwrite=True)
+    candidate = WordSaveCandidate(word_phrase="begripa", context_phrase="Jag begriper inte.")
+
+    await manager.run_post_turn(
+        message="Save that word for me.",
+        chat_id="chat-1",
+        history=[ChatMessage(role="assistant", content="Begripa means understand.")],
+        user=mock_user,
+        teacher_response="Let's save begripa for later.",
+        vocabulary_candidates=[candidate],
+        pre_results=[
+            {
+                "name": "word_keeper",
+                "result": {
+                    "status": "error",
+                    "artifacts": {
+                        "saved_words": [],
+                        "save_candidates": [{"word_phrase": "begripa"}],
+                    },
+                },
+            }
+        ],
+        side_effect_service=mock_side_effect_service,
+        coordinator_row_id=99,
+    )
+
+    assert capture.seen_vocabulary_candidates == [candidate]
+    kwargs = mock_side_effect_service.replace_post_specialist_results.call_args.kwargs
+    assert kwargs["results"][0]["name"] == "word_keeper"
+
+
+@pytest.mark.anyio
+async def test_run_post_turn_records_direct_word_keeper_failure_without_raising(
+    mock_settings, mock_user, mock_side_effect_service
+):
+    manager = AgentsManager(mock_settings)
+    manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
+
+    class _FailingSpecialist(BaseSpecialist):
+        def __init__(self):
+            super().__init__(name="word_keeper")
+
+        async def run(self, context: SpecialistContext) -> SpecialistResult:
+            raise RuntimeError("word keeper failed")
+
+    manager.registry.register(_FailingSpecialist(), overwrite=True)
+
+    await manager.run_post_turn(
+        message="Jag begriper inte.",
+        chat_id="chat-1",
+        history=[],
+        user=mock_user,
+        teacher_response="Good sentence. Let's keep begripa in mind.",
+        vocabulary_candidates=[WordSaveCandidate(word_phrase="begripa")],
+        pre_results=[],
+        side_effect_service=mock_side_effect_service,
+        coordinator_row_id=99,
+    )
+
+    kwargs = mock_side_effect_service.replace_post_specialist_results.call_args.kwargs
+    assert kwargs["results"][0]["name"] == "word_keeper"
+    assert kwargs["results"][0]["result"]["status"] == "error"
+    mock_side_effect_service.mark_coordinator_done_if_current.assert_awaited_once()
 
 
 @pytest.mark.anyio
@@ -865,6 +1163,7 @@ async def test_run_post_turn_marks_failed_on_exception(mock_settings, mock_user,
             history=[],
             user=mock_user,
             teacher_response="Hi!",
+            vocabulary_candidates=[],
             pre_results=[],
             side_effect_service=mock_side_effect_service,
             coordinator_row_id=99,
@@ -890,6 +1189,7 @@ async def test_run_post_turn_skips_done_mark_when_persistence_is_stale(
         history=[],
         user=mock_user,
         teacher_response="Hi!",
+        vocabulary_candidates=[],
         pre_results=[],
         side_effect_service=mock_side_effect_service,
         coordinator_row_id=99,
@@ -1005,6 +1305,7 @@ async def test_start_background_post_turn_creates_task(mock_settings, mock_user,
             history=[],
             user=mock_user,
             teacher_response="Hi!",
+            vocabulary_candidates=[],
             pre_results=[],
             coordinator_row_id=42,
         )
@@ -1040,6 +1341,7 @@ async def test_start_background_post_turn_returns_before_slow_post_finishes(
             history=[],
             user=mock_user,
             teacher_response="Hi!",
+            vocabulary_candidates=[],
             pre_results=[],
             coordinator_row_id=42,
         )
@@ -1072,6 +1374,7 @@ async def test_start_background_post_turn_marks_failed_on_timeout(mock_settings,
             history=[],
             user=mock_user,
             teacher_response="Hi!",
+            vocabulary_candidates=[],
             pre_results=[],
             coordinator_row_id=42,
         )
@@ -1093,11 +1396,13 @@ class _CaptureHistorySpecialist(BaseSpecialist):
         super().__init__(name="capture_history")
         self.seen_history = None
         self.seen_teacher_response = None
+        self.seen_vocabulary_candidates = None
         self.seen_routing_reason = None
 
     async def run(self, context: SpecialistContext) -> SpecialistResult:
         self.seen_history = context.history
         self.seen_teacher_response = context.teacher_response
+        self.seen_vocabulary_candidates = context.vocabulary_candidates
         self.seen_routing_reason = context.routing_reason
         return SpecialistResult(status="no_action")
 
@@ -1164,7 +1469,7 @@ async def test_specialist_history_truncation_logs_warning(mock_settings, mock_us
 
 
 @pytest.mark.anyio
-async def test_word_keeper_history_is_capped_to_two_messages(
+async def test_word_keeper_receives_latest_teacher_message_without_history(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
     manager = AgentsManager(mock_settings)
@@ -1172,7 +1477,7 @@ async def test_word_keeper_history_is_capped_to_two_messages(
     capture.name = "word_keeper"
     manager.registry.register(capture, overwrite=True)
     manager.coordinator.plan_pre_turn = AsyncMock(
-        return_value=_make_plan(pre=[RoutingItem(name="word_keeper", reason="save words", chat_history_size=6)])
+        return_value=_make_plan(pre=[RoutingItem(name="word_keeper", reason="save words", chat_history_size=0)])
     )
 
     history = [
@@ -1192,23 +1497,50 @@ async def test_word_keeper_history_is_capped_to_two_messages(
     )
 
     assert capture.seen_history is not None
-    assert len(capture.seen_history) == 2
-    assert [msg.content for msg in capture.seen_history] == ["m3", "m4"]
+    assert capture.seen_history == []
+    assert capture.seen_teacher_response == "m4"
 
 
 @pytest.mark.anyio
-async def test_run_post_turn_passes_previous_history_and_current_teacher_response_to_word_keeper(
+async def test_word_keeper_does_not_receive_non_adjacent_teacher_message(
+    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+):
+    manager = AgentsManager(mock_settings)
+    capture = _CaptureHistorySpecialist()
+    capture.name = "word_keeper"
+    manager.registry.register(capture, overwrite=True)
+    manager.coordinator.plan_pre_turn = AsyncMock(
+        return_value=_make_plan(pre=[RoutingItem(name="word_keeper", reason="save words", chat_history_size=0)])
+    )
+
+    history = [
+        ChatMessage(role="assistant", content="m1"),
+        ChatMessage(role="user", content="m2"),
+    ]
+
+    await manager.prepare_pre_turn(
+        message="Save that word for me.",
+        chat_id="chat-1",
+        history=history,
+        user=mock_user,
+        memory_item_service=mock_memory_item_service,
+        side_effect_service=mock_side_effect_service,
+    )
+
+    assert capture.seen_history is not None
+    assert capture.seen_history == []
+    assert capture.seen_teacher_response is None
+
+
+@pytest.mark.anyio
+async def test_run_post_turn_passes_candidates_without_chat_history_or_teacher_response_to_word_keeper(
     mock_settings, mock_user, mock_side_effect_service
 ):
     manager = AgentsManager(mock_settings)
     capture = _CaptureHistorySpecialist()
     capture.name = "word_keeper"
     manager.registry.register(capture, overwrite=True)
-    manager.coordinator.plan_post_turn = AsyncMock(
-        return_value=_make_plan(
-            post=[RoutingItem(name="word_keeper", reason="teacher highlighted words", chat_history_size=2)]
-        )
-    )
+    manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
 
     history = [
         ChatMessage(role="user", content="Can you explain these words?"),
@@ -1221,18 +1553,16 @@ async def test_run_post_turn_passes_previous_history_and_current_teacher_respons
         history=history,
         user=mock_user,
         teacher_response="Let's keep this new word in mind: begripa.",
+        vocabulary_candidates=[WordSaveCandidate(word_phrase="begripa")],
         pre_results=[],
         side_effect_service=mock_side_effect_service,
         coordinator_row_id=99,
     )
 
     assert capture.seen_history is not None
-    assert [msg.content for msg in capture.seen_history] == [
-        "Can you explain these words?",
-        "Let's save these words: beskriva, bekräfta.",
-    ]
-    assert capture.seen_teacher_response == "Let's keep this new word in mind: begripa."
-    assert capture.seen_routing_reason == "teacher highlighted words"
+    assert capture.seen_history == []
+    assert capture.seen_teacher_response is None
+    assert capture.seen_routing_reason == "teacher emitted vocabulary_candidates"
 
 
 @pytest.mark.anyio

@@ -29,6 +29,7 @@ from runestone.core.exceptions import RunestoneError
 from runestone.core.observability import elapsed_ms_since
 from runestone.db.models import User
 from runestone.rag.index import GrammarIndex
+from runestone.schemas.vocabulary_save import WordSaveCandidate
 from runestone.services.agent_side_effect_service import AgentSideEffectService
 from runestone.services.grammar_service import GrammarService
 
@@ -43,7 +44,6 @@ class AgentsManager:
     """
 
     COORDINATOR_MAX_HISTORY_MESSAGES = 5
-    WORD_KEEPER_MAX_HISTORY_MESSAGES = 2
     POST_TASK_TIMEOUT_SECONDS = 15
     STARTER_MEMORY_PERSONAL_LIMIT = 50
     STARTER_MEMORY_AREA_LIMIT = 5
@@ -186,9 +186,9 @@ class AgentsManager:
         pre_results: list[dict],
         starter_memory: str,
         recent_side_effects: list[TeacherSideEffect],
-    ) -> tuple[str, Optional[list[dict[str, str]]], TeacherEmotion]:
+    ) -> tuple[str, Optional[list[dict[str, str]]], TeacherEmotion, list[WordSaveCandidate]]:
         """
-        Run teacher agent synchronously and return (response_text, sources, teacher_emotion).
+        Run teacher agent synchronously and return visible response data plus vocabulary candidates.
         """
         try:
             generated = await self.teacher.generate_response(
@@ -208,7 +208,7 @@ class AgentsManager:
             messages=generated.final_messages,
             grammar_source_urls=generated.grammar_source_urls,
         )
-        return generated.message, sources, generated.emotion
+        return generated.message, sources, generated.emotion, generated.vocabulary_candidates
 
     async def process_turn(
         self,
@@ -247,7 +247,7 @@ class AgentsManager:
             side_effect_service=side_effect_service,
         )
 
-        assistant_text, sources, teacher_emotion = await self.generate_teacher_response(
+        assistant_text, sources, teacher_emotion, vocabulary_candidates = await self.generate_teacher_response(
             message=message,
             history=history,
             user=user,
@@ -267,6 +267,7 @@ class AgentsManager:
             history=history,
             user=user,
             teacher_response=assistant_text,
+            vocabulary_candidates=vocabulary_candidates,
             pre_results=pre_results,
             coordinator_row_id=coordinator_row_id,
         )
@@ -280,6 +281,7 @@ class AgentsManager:
         history: list[ChatMessage],
         user: User,
         teacher_response: str,
+        vocabulary_candidates: list[WordSaveCandidate] | None,
         pre_results: list[dict],
         side_effect_service: AgentSideEffectService,
         coordinator_row_id: int,
@@ -292,32 +294,12 @@ class AgentsManager:
         await side_effect_service.mark_coordinator_running(coordinator_row_id)
 
         try:
-            coordinator_history = history[-self.COORDINATOR_MAX_HISTORY_MESSAGES :] if history else []
-            if history and len(history) > self.COORDINATOR_MAX_HISTORY_MESSAGES:
-                logger.warning(
-                    "[agents:manager] Truncated coordinator history from %s to %s messages",
-                    len(history),
-                    len(coordinator_history),
-                )
-
-            plan = await self.coordinator.plan_post_turn(
-                message=message,
-                history=coordinator_history,
-                teacher_response=teacher_response,
-                available_specialists=[name for name in self.registry.list_names() if name != "teacher"],
-            )
-            logger.info(
-                "[agents:manager] Post-phase selection: user_id=%s specialists=%s",
-                user.id,
-                ",".join([item.name for item in plan.post_response]) if plan.post_response else "none",
-            )
-
-            post_results = await self._run_specialists(
-                plan.post_response,
+            post_results, coordinator_failed = await self._run_post_branches(
                 message=message,
                 history=history,
                 user=user,
                 teacher_response=teacher_response,
+                vocabulary_candidates=vocabulary_candidates or [],
                 pre_results=pre_results,
             )
             persisted = await side_effect_service.replace_post_specialist_results(
@@ -334,6 +316,18 @@ class AgentsManager:
                     coordinator_row_id,
                 )
                 return
+            if coordinator_failed:
+                await side_effect_service.mark_coordinator_failed_if_current(
+                    row_id=coordinator_row_id,
+                    user_id=user.id,
+                    chat_id=chat_id,
+                )
+                logger.warning(
+                    "[agents:manager] Post-turn completed with coordinator failure: user_id=%s chat_id=%s",
+                    user.id,
+                    chat_id,
+                )
+                return
             await side_effect_service.mark_coordinator_done_if_current(
                 row_id=coordinator_row_id,
                 user_id=user.id,
@@ -348,6 +342,99 @@ class AgentsManager:
                 chat_id=chat_id,
             )
             raise
+
+    async def _run_post_branches(
+        self,
+        *,
+        message: str,
+        history: list[ChatMessage],
+        user: User,
+        teacher_response: str,
+        vocabulary_candidates: list[WordSaveCandidate],
+        pre_results: list[dict],
+    ) -> tuple[list[dict], bool]:
+        filtered_vocabulary_candidates = self._filter_post_vocabulary_candidates(
+            vocabulary_candidates,
+            pre_results=pre_results,
+        )
+
+        async def _coordinator_branch() -> list[dict]:
+            coordinator_history = history[-self.COORDINATOR_MAX_HISTORY_MESSAGES :] if history else []
+            if history and len(history) > self.COORDINATOR_MAX_HISTORY_MESSAGES:
+                logger.warning(
+                    "[agents:manager] Truncated coordinator history from %s to %s messages",
+                    len(history),
+                    len(coordinator_history),
+                )
+
+            plan = await self.coordinator.plan_post_turn(
+                message=message,
+                history=coordinator_history,
+                teacher_response=teacher_response,
+                available_specialists=[
+                    name for name in self.registry.list_names() if name not in {"teacher", "word_keeper"}
+                ],
+            )
+            post_items = [item for item in plan.post_response if item.name != "word_keeper"]
+            logger.info(
+                "[agents:manager] Post-phase selection: user_id=%s specialists=%s",
+                user.id,
+                ",".join([item.name for item in post_items]) if post_items else "none",
+            )
+            return await self._run_specialists(
+                post_items,
+                message=message,
+                history=history,
+                user=user,
+                teacher_response=teacher_response,
+                pre_results=pre_results,
+            )
+
+        async def _word_keeper_branch() -> list[dict]:
+            if not filtered_vocabulary_candidates:
+                return []
+            return await self._run_specialists(
+                [
+                    RoutingItem(
+                        name="word_keeper",
+                        reason="teacher emitted vocabulary_candidates",
+                        chat_history_size=0,
+                    )
+                ],
+                message=message,
+                history=history,
+                user=user,
+                teacher_response=teacher_response,
+                vocabulary_candidates=filtered_vocabulary_candidates,
+                pre_results=pre_results,
+            )
+
+        coordinator_results, word_keeper_results = await asyncio.gather(
+            _coordinator_branch(),
+            _word_keeper_branch(),
+            return_exceptions=True,
+        )
+
+        post_results: list[dict] = []
+        coordinator_failed = False
+        if isinstance(coordinator_results, Exception):
+            coordinator_failed = True
+            logger.error(
+                "[agents:manager] Coordinator post branch failed",
+                exc_info=(type(coordinator_results), coordinator_results, coordinator_results.__traceback__),
+            )
+        else:
+            post_results.extend(coordinator_results)
+
+        if isinstance(word_keeper_results, Exception):
+            logger.error(
+                "[agents:manager] Direct WordKeeper post branch failed",
+                exc_info=(type(word_keeper_results), word_keeper_results, word_keeper_results.__traceback__),
+            )
+        else:
+            post_results.extend(word_keeper_results)
+
+        return post_results, coordinator_failed
 
     # ------------------------------------------------------------------
     # Background task registry
@@ -370,6 +457,7 @@ class AgentsManager:
         history: list[ChatMessage],
         user: User,
         teacher_response: str,
+        vocabulary_candidates: list[WordSaveCandidate] | None,
         pre_results: list[dict],
         coordinator_row_id: int,
     ) -> None:
@@ -388,6 +476,7 @@ class AgentsManager:
                                 history=history,
                                 user=user,
                                 teacher_response=teacher_response,
+                                vocabulary_candidates=vocabulary_candidates or [],
                                 pre_results=pre_results,
                                 side_effect_service=background_side_effect_service,
                                 coordinator_row_id=coordinator_row_id,
@@ -471,23 +560,19 @@ class AgentsManager:
         history: list[ChatMessage],
         user: User,
         teacher_response: str | None = None,
+        vocabulary_candidates: list[WordSaveCandidate] | None = None,
         pre_results: list[dict] | None = None,
     ) -> list[dict]:
         if not routing_items:
             return []
 
+        previous_teacher_message = self._previous_teacher_message(history)
+
         async def _invoke(item, specialist):
             started = time.monotonic()
             effective_history_size = item.chat_history_size
             if item.name == "word_keeper":
-                effective_history_size = min(item.chat_history_size, self.WORD_KEEPER_MAX_HISTORY_MESSAGES)
-                if item.chat_history_size != effective_history_size:
-                    logger.warning(
-                        "[agents:manager] Capped specialist history for '%s' from %s to %s messages",
-                        item.name,
-                        item.chat_history_size,
-                        effective_history_size,
-                    )
+                effective_history_size = 0
 
             history_window = history[-effective_history_size:] if effective_history_size else []
             if effective_history_size and len(history) > effective_history_size:
@@ -501,7 +586,12 @@ class AgentsManager:
                 message=message,
                 history=history_window,
                 user=user,
-                teacher_response=teacher_response,
+                teacher_response=(
+                    None
+                    if item.name == "word_keeper" and vocabulary_candidates
+                    else previous_teacher_message if item.name == "word_keeper" else teacher_response
+                ),
+                vocabulary_candidates=vocabulary_candidates or [],
                 pre_results=pre_results or [],
                 routing_reason=item.reason,
                 chat_history_size=effective_history_size,
@@ -552,6 +642,65 @@ class AgentsManager:
 
         # Fan-out / fan-in: run specialists concurrently but preserve routing order.
         return await asyncio.gather(*tasks)
+
+    @staticmethod
+    def _previous_teacher_message(history: list[ChatMessage]) -> str | None:
+        """Return the immediately preceding assistant message only when it is adjacent."""
+        if not history:
+            return None
+        item = history[-1]
+        if item.role == "assistant" and item.content:
+            return item.content
+        return None
+
+    @classmethod
+    def _filter_post_vocabulary_candidates(
+        cls,
+        candidates: list[WordSaveCandidate],
+        *,
+        pre_results: list[dict],
+    ) -> list[WordSaveCandidate]:
+        """Drop teacher candidates that were already saved by pre-response WordKeeper this turn."""
+        if not candidates:
+            return []
+
+        previously_saved = cls._pre_saved_word_keys(pre_results)
+        if not previously_saved:
+            return candidates
+
+        return [
+            candidate
+            for candidate in candidates
+            if (dedupe_key := cls._normalize_word_key(candidate.word_phrase)) and dedupe_key not in previously_saved
+        ]
+
+    @classmethod
+    def _pre_saved_word_keys(cls, pre_results: list[dict]) -> set[str]:
+        """Collect normalized word keys already saved by pre-response WordKeeper artifacts."""
+        keys: set[str] = set()
+        for item in pre_results:
+            if item.get("name") != "word_keeper":
+                continue
+            result = item.get("result")
+            if not isinstance(result, dict):
+                continue
+            artifacts = result.get("artifacts")
+            if not isinstance(artifacts, dict):
+                continue
+
+            for word in artifacts.get("saved_words", []):
+                key = cls._normalize_word_key(word)
+                if key:
+                    keys.add(key)
+
+        return keys
+
+    @staticmethod
+    def _normalize_word_key(word_phrase: object) -> str:
+        """Mirror VocabularyService priority-candidate dedupe for manager-level routing guards."""
+        if not isinstance(word_phrase, str):
+            return ""
+        return word_phrase.strip().casefold()
 
     @staticmethod
     def _safe_json_loads(payload):

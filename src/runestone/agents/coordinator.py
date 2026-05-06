@@ -35,7 +35,8 @@ Your sole job is to decide which specialist agents to route to for the current s
 - Always emit valid JSON matching the CoordinatorPlan schema. No extra text outside the JSON.
 
 ## Chat History Window
-- Set `chat_history_size` to a small even integer (e.g. 2, 4, 6) to keep specialist inputs stable and testable.
+- Set `chat_history_size` to a small non-negative integer
+  (e.g. 0, 2, 4, 6) to keep specialist inputs stable and testable.
 - Default to `2` for most specialists unless a specific routing rule below says otherwise.
 """
 
@@ -57,11 +58,13 @@ COORDINATOR_PRE_RESPONSE_PROMPT = (
 **Route when:**
 - The current student message explicitly asks to save vocabulary in this turn
   (e.g. "save this word", "remember this phrase", "add this to my list").
-- Decide this primarily from the current student message, not from earlier student messages in `history`.
+- This includes cases where the student explicitly names the words to save in the current message
+  (e.g. "save `begripa` and `noggrann`") or clearly points to words present in that same message
+  (e.g. "save these words for me: beskriva, bekräfta").
+- This also includes deictic save requests that clearly refer to words from the immediately preceding
+  teacher message (e.g. "save that word", "remember those words").
+- Decide this from the current student message only.
 - Do not treat an earlier student request to practice/save a word as an active save request for the current turn.
-- If the current student explicitly asks to save words from an earlier turn
-  (e.g. "save the words you mentioned before"), you may use `history` to identify
-  those words and increase `chat_history_size` accordingly.
 
 **Do NOT route when:**
 - The student merely reused a word without a save request.
@@ -72,7 +75,7 @@ COORDINATOR_PRE_RESPONSE_PROMPT = (
   (e.g. "next task", "let's continue", "another exercise", "I'm done").
 - Words were already saved in earlier turns — do not re-trigger on later turns.
 
-For all normal word_keeper cases, set `chat_history_size` to `2`.
+Set `chat_history_size` to `0` for `word_keeper`.
 
 ### news_agent (pre)
 **Route when:** The student's current message asks about a specific real-time or current-events topic that requires
@@ -136,28 +139,6 @@ Examples that should NOT route:
 - Teacher: "Good job."
 - Teacher: "Write one more sentence with these words."
 - Teacher: "There is no such word as 'varen'; use 'våren' for spring."
-
-### word_keeper (post)
-
-**Route when:**
-- The actual `teacher_response` explicitly marks vocabulary as worth saving
-  (e.g. "the key words here are…", "good words to memorize",
-  "let's keep these words in mind").
-- The teacher clearly presents a vocabulary-saving moment, not just vocabulary usage inside a drill.
-- The teacher explicitly corrects a misspelled, invalid, or nonexistent student-written word and provides
-  the corrected Swedish vocabulary item. Route so WordKeeper can prioritize the corrected item, not the error.
-
-Examples that SHOULD route:
-- Teacher: "There is no such word as 'varen'; use 'våren' for spring."
-
-**Do NOT route when:**
-- The teacher is only asking the student to practice, answer, or write another sentence using words.
-- Words are merely bolded, translated, grammatically corrected, or reused in an exercise prompt without
-  an explicit memory/save signal or a corrected Swedish vocabulary item.
-- The teacher gives an example sentence using words but does not say they are important to memorize or save.
-- The response is an ordinary exercise, correction, explanation, or drill rather than a vocabulary-saving moment.
-
-For all normal word_keeper cases, set `chat_history_size` to `2`.
 """
 )
 

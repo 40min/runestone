@@ -73,16 +73,28 @@ Intents should declare *what needs to happen*, not carry extracted data. The Tea
 structuring word lists or memory corrections inside `intents` is the same attention problem
 in a different field.
 
-Subagents receive the full conversation context anyway — WordKeeper can find the vocabulary
-itself. That's its job. Keeping intents as pure signals means:
+In the current Runestone architecture, vocabulary saving no longer uses a pure enum-only
+intent. Teacher returns a typed response envelope with student-facing text plus optional
+structured `vocabulary_candidates`. That narrower payload works because it is a bounded,
+tested side-effect channel rather than an open-ended intent bag.
+
+Keeping most intents as pure signals still means:
 
 - The Teacher stays focused on generation and declaration only
 - Intents remain cheap to emit regardless of enum size
 - Subagents own their extraction logic, not the Teacher
 
-The one exception: a minimal disambiguation hint when the subagent genuinely can't resolve
-something from context — e.g. an explicit Teacher override. This should be rare and
-case-specific, not a default payload shape.
+The current vocabulary exception is intentional:
+
+- pre-response explicit save requests are still extracted by WordKeeper from the current user message
+- post-response saves use Teacher-owned structured `vocabulary_candidates`
+- WordKeeper no longer mines teacher prose or full chat history in post phase
+
+Possible next simplification:
+
+- remove the pre-response WordKeeper save fast path entirely
+- let Teacher own explicit save-request reactions as part of the normal reply
+- route all vocabulary persistence through post-response structured `vocabulary_candidates`
 
 ---
 

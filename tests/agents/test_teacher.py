@@ -14,6 +14,7 @@ from runestone.agents.specialists.base import INFO_FOR_TEACHER_MAX_CHARS
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
 from runestone.constants import MAX_TEACHER_GRAMMAR_SOURCE_LINKS
+from runestone.schemas.vocabulary_save import WordSaveCandidate
 
 
 @pytest.fixture
@@ -104,8 +105,16 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "read-only in this phase" in call_kwargs["system_prompt"]
             assert "only say words were definitely saved" in call_kwargs["system_prompt"].lower()
             assert "WORDKEEPER SPECIALIST" in call_kwargs["system_prompt"]
-            assert "The key words here are" in call_kwargs["system_prompt"]
-            assert "Write a sentence with" in call_kwargs["system_prompt"]
+            assert "vocabulary_candidates" in call_kwargs["system_prompt"]
+            assert "structured field is the authoritative signal" in call_kwargs["system_prompt"]
+            assert "Leave `vocabulary_candidates` empty" in call_kwargs["system_prompt"]
+            assert "You may still naturally highlight useful vocabulary" in call_kwargs["system_prompt"]
+            assert "No leading articles: save `hund`, not `en hund`" in call_kwargs["system_prompt"]
+            assert "Prefer lemma or base form unless the inflected form matters." in call_kwargs["system_prompt"]
+            assert "Keep Swedish characters; never ASCII-fold `å`, `ä`, or `ö`." in call_kwargs["system_prompt"]
+            assert "Do not save grammar-only tokens as vocabulary unless explicitly presented as learning items." in (
+                call_kwargs["system_prompt"]
+            )
             assert "MEMORYKEEPER POST-PHASE SIGNALS" in call_kwargs["system_prompt"]
             assert "prefer to include one short" in call_kwargs["system_prompt"]
             assert "explicit sentence" in call_kwargs["system_prompt"]
@@ -254,6 +263,7 @@ async def test_run_returns_structured_teacher_emotion(teacher_agent, mock_user):
             message="Bra jobbat!",
             emotion="happy",
             grammar_source_urls=["https://example.com/grammar"],
+            vocabulary_candidates=[WordSaveCandidate(word_phrase="begripa")],
         ),
     }
 
@@ -262,6 +272,7 @@ async def test_run_returns_structured_teacher_emotion(teacher_agent, mock_user):
     assert generated.message == "Bra jobbat!"
     assert generated.emotion == "happy"
     assert generated.grammar_source_urls == ["https://example.com/grammar"]
+    assert generated.vocabulary_candidates == [WordSaveCandidate(word_phrase="begripa")]
     assert isinstance(generated.final_messages, list)
 
 
@@ -544,6 +555,21 @@ def test_teacher_output_normalizes_and_deduplicates_grammar_source_urls():
         "https://example.com/1",
         "https://example.com/2",
         "https://example.com/3",
+    ]
+
+
+def test_teacher_output_defaults_and_preserves_vocabulary_candidates():
+    empty_payload = TeacherOutput(message="Hej")
+    payload = TeacherOutput(
+        message="Hej",
+        vocabulary_candidates=[
+            WordSaveCandidate(word_phrase="begripa", context_phrase="Jag begriper inte."),
+        ],
+    )
+
+    assert empty_payload.vocabulary_candidates == []
+    assert payload.vocabulary_candidates == [
+        WordSaveCandidate(word_phrase="begripa", context_phrase="Jag begriper inte."),
     ]
 
 
