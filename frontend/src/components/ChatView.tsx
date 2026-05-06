@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Box, Typography } from "@mui/material";
+import { ExpandLess, ExpandMore } from "@mui/icons-material";
+import { Box, ButtonBase, Collapse, Typography } from "@mui/material";
 import {
   ErrorAlert,
   ChatMessageBubble,
@@ -71,6 +72,8 @@ const ChatView: React.FC = () => {
   } = useChatImageUpload();
   const [snackbarError, setSnackbarError] = useState<string | null>(null);
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
+  const [areComposerControlsExpanded, setAreComposerControlsExpanded] =
+    useState(false);
 
   // Voice recording with improve option
   const [improveTranscription, setImproveTranscription] = useState(() => {
@@ -223,6 +226,12 @@ const ChatView: React.FC = () => {
       clearVoiceError();
     }
   }, [voiceError, clearVoiceError]);
+
+  useEffect(() => {
+    if (isRecording) {
+      setAreComposerControlsExpanded(true);
+    }
+  }, [isRecording]);
 
   // Auto-scroll to bottom when messages change or loading state changes
   useEffect(() => {
@@ -469,36 +478,103 @@ const ChatView: React.FC = () => {
             onSendMessage={handleSendMessage}
           />
 
-          <ChatComposerControls
-            isAnyProcessing={isAnyProcessing}
-            isRecording={isRecording}
-            canUseMicrophone={canUseMicrophone}
-            isTranscribing={isTranscribing}
-            recordedDuration={recordedDuration}
-            autoSend={autoSend}
-            improveTranscription={improveTranscription}
-            speechLanguage={speechLanguage}
-            languages={LANGUAGES}
-            onImageUpload={handleImageUpload}
-            onImageError={handleImageError}
-            onStartRecording={handleStartRecording}
-            onStopRecording={handleStopRecording}
-            onAutoSendChange={setAutoSend}
-            onImproveTranscriptionChange={setImproveTranscription}
-            onSpeechLanguageChange={(value) => {
-              setHasSpeechLanguageOverride(true);
-              setSpeechLanguage(value);
+          <Box
+            sx={{
+              borderRadius: 2,
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+              backgroundColor: "rgba(255, 255, 255, 0.03)",
+              overflow: "hidden",
             }}
-          />
+          >
+            <ButtonBase
+              onClick={() =>
+                setAreComposerControlsExpanded((expanded) => !expanded)
+              }
+              disabled={isRecording}
+              aria-expanded={areComposerControlsExpanded}
+              aria-controls="teacher-chat-controls-panel"
+              sx={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 1,
+                px: 1.5,
+                py: 1,
+                color: "#d1d5db",
+                "&.Mui-disabled": {
+                  opacity: 0.6,
+                  color: "#9ca3af",
+                  cursor: "not-allowed",
+                },
+              }}
+            >
+              <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                <Typography
+                  component="span"
+                  sx={{ fontSize: "0.85rem", fontWeight: 600, letterSpacing: "0.01em" }}
+                >
+                  Chat controls
+                </Typography>
+                <Typography
+                  component="span"
+                  sx={{ fontSize: "0.72rem", color: "#9ca3af" }}
+                >
+                  Voice, image, and transcription settings
+                </Typography>
+              </Box>
+              {areComposerControlsExpanded ? (
+                <ExpandLess fontSize="small" />
+              ) : (
+                <ExpandMore fontSize="small" />
+              )}
+            </ButtonBase>
 
-          <ChatPlaybackSettings
-            voiceEnabled={voiceEnabled}
-            isAudioPlaying={isAudioPlaying}
-            isAnyProcessing={isAnyProcessing}
-            speechSpeed={speechSpeed}
-            onVoiceEnabledChange={setVoiceEnabled}
-            onSpeechSpeedChange={setSpeechSpeed}
-          />
+            <Collapse
+              in={areComposerControlsExpanded}
+              id="teacher-chat-controls-panel"
+              unmountOnExit
+            >
+              <Box
+                sx={{
+                  px: 1.5,
+                  pb: 1.25,
+                  borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+                }}
+              >
+                <ChatComposerControls
+                  isAnyProcessing={isAnyProcessing}
+                  isRecording={isRecording}
+                  canUseMicrophone={canUseMicrophone}
+                  isTranscribing={isTranscribing}
+                  recordedDuration={recordedDuration}
+                  autoSend={autoSend}
+                  improveTranscription={improveTranscription}
+                  speechLanguage={speechLanguage}
+                  languages={LANGUAGES}
+                  onImageUpload={handleImageUpload}
+                  onImageError={handleImageError}
+                  onStartRecording={handleStartRecording}
+                  onStopRecording={handleStopRecording}
+                  onAutoSendChange={setAutoSend}
+                  onImproveTranscriptionChange={setImproveTranscription}
+                  onSpeechLanguageChange={(value) => {
+                    setHasSpeechLanguageOverride(true);
+                    setSpeechLanguage(value);
+                  }}
+                />
+
+                <ChatPlaybackSettings
+                  voiceEnabled={voiceEnabled}
+                  isAudioPlaying={isAudioPlaying}
+                  isAnyProcessing={isAnyProcessing}
+                  speechSpeed={speechSpeed}
+                  onVoiceEnabledChange={setVoiceEnabled}
+                  onSpeechSpeedChange={setSpeechSpeed}
+                />
+              </Box>
+            </Collapse>
+          </Box>
         </Box>
 
         {/* Upload error display */}

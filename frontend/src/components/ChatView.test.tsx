@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ChatView from './ChatView';
 import { AuthProvider } from '../context/AuthContext';
+import * as voiceRecordingHook from '../hooks/useVoiceRecording';
 
 // Mock the API
 const mockFetch = vi.fn();
@@ -72,6 +73,10 @@ const getSendButton = () => {
   return screen.getByRole('button', { name: /send message/i });
 };
 
+const expandChatControls = () => {
+  fireEvent.click(screen.getByRole('button', { name: /chat controls/i }));
+};
+
 describe('ChatView', () => {
   const resetLocalStorage = (userData: Record<string, unknown> = {
     id: '1',
@@ -122,7 +127,67 @@ describe('ChatView', () => {
       </AuthProvider>
     );
 
+    expandChatControls();
     expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('Finnish');
+  });
+
+  it('keeps teacher chat controls collapsed by default', () => {
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    expect(screen.getByRole('button', { name: /chat controls/i })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('combobox', { name: /speech language/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Autosend')).not.toBeInTheDocument();
+    expect(screen.queryByText('Speed:')).not.toBeInTheDocument();
+  });
+
+  it('expands teacher chat controls when toggled', async () => {
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /chat controls/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /chat controls/i })).toHaveAttribute('aria-expanded', 'true');
+    });
+    expect(screen.getByRole('combobox', { name: /speech language/i })).toBeInTheDocument();
+    expect(screen.getByText('Autosend')).toBeInTheDocument();
+    expect(screen.getByText('Speed:')).toBeInTheDocument();
+  });
+
+  it('keeps chat controls expanded and disables the toggle while recording', () => {
+    const startRecording = vi.fn();
+    const stopRecording = vi.fn();
+    const useVoiceRecordingSpy = vi
+      .spyOn(voiceRecordingHook, 'useVoiceRecording')
+      .mockReturnValue({
+        isRecording: true,
+        isProcessing: false,
+        recordedDuration: 12,
+        startRecording,
+        stopRecording,
+        error: null,
+        clearError: vi.fn(),
+      });
+
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    const toggleButton = screen.getByRole('button', { name: /chat controls/i });
+    expect(toggleButton).toHaveAttribute('aria-expanded', 'true');
+    expect(toggleButton).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: /speech language/i })).toBeInTheDocument();
+
+    useVoiceRecordingSpy.mockRestore();
   });
 
   it('uses stored speech language before profile language', () => {
@@ -146,6 +211,7 @@ describe('ChatView', () => {
       </AuthProvider>
     );
 
+    expandChatControls();
     expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('German');
   });
 
@@ -170,6 +236,7 @@ describe('ChatView', () => {
       </AuthProvider>
     );
 
+    expandChatControls();
     expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('Finnish');
   });
 
@@ -180,6 +247,7 @@ describe('ChatView', () => {
       </AuthProvider>
     );
 
+    expandChatControls();
     fireEvent.mouseDown(screen.getByRole('combobox', { name: /speech language/i }));
     fireEvent.click(screen.getByRole('option', { name: 'Finnish' }));
 
@@ -195,6 +263,7 @@ describe('ChatView', () => {
       </AuthProvider>
     );
 
+    expandChatControls();
     expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('Swedish');
 
     act(() => {
@@ -236,6 +305,7 @@ describe('ChatView', () => {
       </AuthProvider>
     );
 
+    expandChatControls();
     expect(screen.getByRole('combobox', { name: /speech language/i })).toHaveTextContent('German');
 
     act(() => {
@@ -264,6 +334,7 @@ describe('ChatView', () => {
       </AuthProvider>
     );
 
+    expandChatControls();
     fireEvent.mouseDown(screen.getByRole('combobox', { name: /speech language/i }));
     fireEvent.click(screen.getByRole('option', { name: 'German' }));
 
@@ -536,6 +607,7 @@ describe('ChatView', () => {
       expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
     });
 
+    expandChatControls();
     // 1. Upload an image
     const file = new File(['(⌐□_□)'], 'chucknorris.png', { type: 'image/png' });
     const fileInput = container.querySelector('input[type="file"]');
@@ -599,6 +671,7 @@ describe('ChatView', () => {
       expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
     });
 
+    expandChatControls();
     const file = new File(['(⌐□_□)'], 'test.png', { type: 'image/png' });
     const fileInput = container.querySelector('input[type="file"]');
 
@@ -654,6 +727,7 @@ describe('ChatView', () => {
       expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
     });
 
+    expandChatControls();
     const file = new File(['test'], 'test.png', { type: 'image/png' });
     const fileInput = container.querySelector('input[type="file"]');
 
@@ -698,6 +772,7 @@ describe('ChatView', () => {
       expect(screen.queryByTestId('loading-indicator')).not.toBeInTheDocument();
     });
 
+    expandChatControls();
     const file = new File(['test'], 'test.png', { type: 'image/png' });
     const fileInput = container.querySelector('input[type="file"]');
 
@@ -746,6 +821,7 @@ describe('ChatView', () => {
 
     const input = screen.getByPlaceholderText('Skriv ditt svar här...') as HTMLInputElement;
     const sendButton = getSendButton();
+    expandChatControls();
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
 
     // Type a message to enable send button
