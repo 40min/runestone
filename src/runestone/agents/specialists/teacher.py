@@ -189,20 +189,38 @@ Post-phase memory maintenance is handled by internal specialists.
 ### WORDKEEPER SPECIALIST
 Word-saving is handled by an internal helper specialist called `WordKeeper`, not by a tool you call directly.
 
-Use natural wording to surface candidate vocabulary when helpful, for example:
-- "The key words here are ..."
-- "These are good words to memorize ..."
-- "Let's keep these words in mind ..."
-- "These are useful words to remember ..."
+When you notice genuinely useful Swedish vocabulary worth saving from the current teaching moment, put it in the
+structured `vocabulary_candidates` field. This structured field is the authoritative signal for post-response
+word saving.
+
+Candidate rules:
+- Leave `vocabulary_candidates` empty when there are no useful words to save.
+- `word_phrase` is the canonical Swedish learning item, not a noisy slice of a sentence.
+- `context_phrase` is the Swedish sentence or phrase that introduced the word when one is available.
+- Use `source_form` only when the observed form differs from the canonical `word_phrase`.
+- Be conservative: do not invent vocabulary candidates just because Swedish words appear in the conversation.
+- Do not add words from routine drills like "write a sentence with ..." unless you explicitly want them remembered.
+- You may still naturally highlight useful vocabulary in the visible `message` when it helps the student.
+
+Normalization rules for `word_phrase`:
+- No leading articles: save `hund`, not `en hund`; save `äpple`, not `ett äpple`.
+- Allow definite or bestämd forms when the form itself is the learning target.
+- Use smart lowercase: lowercase ordinary words, but preserve acronyms, personal names, proper nouns, and fixed casing.
+- Prefer lemma or base form unless the inflected form matters.
+- Do not save bare `att` for verbs; keep `att` inside real constructions such as
+  `ha svårt att`, `komma att`, or `se till att`.
+- Preserve particles, prepositions, and reflexives that change meaning, such as
+  `tycka om`, `hälsa på`, `höra av sig`, and `se fram emot`.
+- Preserve fixed phrases exactly, minus surrounding punctuation and extra whitespace.
+- Keep Swedish characters; never ASCII-fold `å`, `ä`, or `ö`.
+- Use canonical duplicate handling so casing, articles, and punctuation do not create near-duplicates.
+- Do not save grammar-only tokens as vocabulary unless explicitly presented as learning items.
 
 Truthfulness rules:
 - Only say words were definitely saved if the internal pre-response specialist
   already confirmed that in this turn.
 - Otherwise, you may highlight useful or memorable words as candidates for
   post-response capture without claiming persistence already happened.
-- Do NOT expect WordKeeper to trigger from ordinary exercise phrasing alone.
-- Phrases like "Write a sentence with ...", "Try again using ...", routine corrections,
-  or bolded vocabulary inside drills should not be treated as save signals by themselves.
 - Keep this guidance compact in your response; do not mention `WordKeeper` or internal routing.
 
 ### MEMORYKEEPER POST-PHASE SIGNALS
@@ -347,6 +365,7 @@ to read its contents before deciding.
                 message=structured_response.message,
                 emotion=structured_response.emotion,
                 grammar_source_urls=structured_response.grammar_source_urls,
+                vocabulary_candidates=structured_response.vocabulary_candidates,
                 final_messages=final_messages,
             )
 

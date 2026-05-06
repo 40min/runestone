@@ -12,6 +12,7 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from runestone.constants import DEFAULT_TEACHER_EMOTION, TeacherEmotion
+from runestone.schemas.vocabulary_save import WordSaveCandidate
 
 
 def normalize_teacher_emotion(value: Any) -> TeacherEmotion:
@@ -131,6 +132,10 @@ class TeacherOutput(BaseModel):
         default_factory=list,
         description="Grammar reference URLs selected by Teacher to surface alongside the reply",
     )
+    vocabulary_candidates: list[WordSaveCandidate] = Field(
+        default_factory=list,
+        description="Teacher-proposed Swedish vocabulary candidates for post-response WordKeeper handling",
+    )
 
     @field_validator("emotion", mode="before")
     @classmethod
@@ -167,6 +172,7 @@ class TeacherGenerationResult:
     message: str
     emotion: TeacherEmotion = DEFAULT_TEACHER_EMOTION
     grammar_source_urls: list[str] | None = None
+    vocabulary_candidates: list[WordSaveCandidate] = field(default_factory=list)
     final_messages: list[Any] = field(default_factory=list)
 
 

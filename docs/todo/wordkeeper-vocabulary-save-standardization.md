@@ -72,11 +72,51 @@ If WordKeeper is unsure, it should leave `extra_info` empty rather than guess.
 WordKeeper now splits prioritization from addition so it does not generate complete
 candidate payloads before knowing whether the word already exists:
 
-1. WordKeeper extracts raw candidate word keys from the current turn.
+1. Candidate formation depends on phase:
+   - pre-response: WordKeeper extracts candidates from the current explicit save-request message
+   - post-response: Teacher emits structured `vocabulary_candidates`
 2. `VocabularyService` normalizes and deduplicates the candidate list, assigns
    stable candidate IDs, and prioritizes existing vocabulary rows.
-3. Only for genuinely new candidate IDs, ask the LLM to generate full add payload
+3. Only for genuinely new candidate IDs, ask the enrichment LLM to generate full add payload
    fields: `translation`, `example_phrase`, and optional `extra_info`.
+
+Current contract notes:
+
+- pre-response extraction reads the current user message and may use the immediately
+  preceding teacher message to resolve words referenced deictically
+- post-response saving no longer depends on parsing teacher prose
+- post-response enrichment runs from candidate artifacts plus target translation language
+
+## Future Follow-Ups
+
+### 1. Refactor WordKeeper and AgentsManager after post-phase simplification
+
+Now that post-response vocabulary saving is driven by structured `TeacherOutput.vocabulary_candidates`,
+there is still some orchestration and specialist complexity left over from the older split path.
+
+Future cleanup should revisit:
+
+- whether `WordKeeperSpecialist` should be split more explicitly into extraction-only and enrichment/persistence-only code paths
+- whether `AgentsManager` should own less vocabulary-specific filtering and branching logic
+- whether the post-phase direct WordKeeper branch can be expressed through a smaller, clearer contract
+
+The goal is to make the post-response save path easier to read, easier to test, and less coupled
+to the pre-response explicit-save flow.
+
+### 2. Remove the pre-response WordKeeper save stage
+
+The current pre-response save path still exists for explicit student save requests. A possible
+next simplification is to remove that stage entirely and let Teacher react to save requests in the
+normal reply, then emit structured `vocabulary_candidates` for post-response handling.
+
+If this is pursued, the design should ensure:
+
+- explicit student requests like "save that word" remain supported through Teacher behavior
+- WordKeeper no longer needs extraction logic for chat-time save requests
+- Coordinator no longer routes `word_keeper` in pre-response at all
+- tests cover that explicit save requests are still persisted through the Teacher-owned structured path
+
+This would further reduce branching in the swarm and make vocabulary saving fully post-response.
 
 Existing prioritized rows should not get blank `translation`, `example_phrase`, or
 `extra_info` fields auto-filled by that follow-up prioritization flow. Those fields

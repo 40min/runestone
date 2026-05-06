@@ -8,7 +8,7 @@ from runestone.agents.schemas import ChatMessage
 from runestone.agents.specialists.base import SpecialistContext
 from runestone.agents.specialists.word_keeper import (
     WORDKEEPER_ENRICHMENT_PROMPT,
-    WORDKEEPER_SYSTEM_PROMPT,
+    WORDKEEPER_SAVE_REQUEST_EXTRACTION_PROMPT,
     WordEnrichmentItem,
     WordKeeperEnrichment,
     WordKeeperExtraction,
@@ -89,16 +89,17 @@ def _priority_actions(*entries):
             candidate_id=str(index),
             word_phrase=word_phrase,
             source_form=source_form,
+            context_phrase=context_phrase,
             action=action,
             word_id=word_id,
             changed=changed,
         )
-        for index, (word_phrase, action, word_id, changed, source_form) in enumerate(entries)
+        for index, (word_phrase, action, word_id, changed, source_form, context_phrase) in enumerate(entries)
     ]
 
 
-def _priority_entry(word_phrase, action, word_id=1, changed=True, source_form=None):
-    return word_phrase, action, word_id, changed, source_form
+def _priority_entry(word_phrase, action, word_id=1, changed=True, source_form=None, context_phrase=None):
+    return word_phrase, action, word_id, changed, source_form, context_phrase
 
 
 def test_word_keeper_uses_structured_specialist_purpose(mock_settings, mock_chat_model):
@@ -109,39 +110,45 @@ def test_word_keeper_uses_structured_specialist_purpose(mock_settings, mock_chat
 
 
 def test_word_keeper_prompt_limits_pre_stage_to_explicit_save_requests():
-    assert "### Pre-response phase" in WORDKEEPER_SYSTEM_PROMPT
-    assert "Save ONLY when the student explicitly requests it" in WORDKEEPER_SYSTEM_PROMPT
-    assert "Do NOT save words just because an earlier assistant message in `history` highlighted" in (
-        WORDKEEPER_SYSTEM_PROMPT
+    assert "## Request Scope" in WORDKEEPER_SAVE_REQUEST_EXTRACTION_PROMPT
+    assert "Evaluate `message` as the active save request." in WORDKEEPER_SAVE_REQUEST_EXTRACTION_PROMPT
+    assert "you may use `teacher_response` only to resolve the immediately preceding teacher context" in (
+        WORDKEEPER_SAVE_REQUEST_EXTRACTION_PROMPT
+    )
+    assert "Return candidates only if `message` explicitly asks to save vocabulary" in (
+        WORDKEEPER_SAVE_REQUEST_EXTRACTION_PROMPT
     )
 
 
-def test_word_keeper_prompt_uses_teacher_response_as_current_post_stage_signal():
-    assert "### Post-response phase" in WORDKEEPER_SYSTEM_PROMPT
-    assert "Treat `teacher_response` as the authoritative current teacher message." in WORDKEEPER_SYSTEM_PROMPT
-    assert "By default, ignore older assistant messages in `history` when deciding what to save." in (
-        WORDKEEPER_SYSTEM_PROMPT
-    )
+def test_word_keeper_prompt_is_pre_response_only():
+    assert "teacher_response" in WORDKEEPER_SAVE_REQUEST_EXTRACTION_PROMPT
+    assert "post-response" not in WORDKEEPER_SAVE_REQUEST_EXTRACTION_PROMPT
+    assert "immediately preceding teacher context" in WORDKEEPER_SAVE_REQUEST_EXTRACTION_PROMPT
 
 
 def test_word_keeper_prompt_rejects_exercise_wording_as_save_signal():
-    assert "Do NOT treat ordinary exercise wording as a save signal" in WORDKEEPER_SYSTEM_PROMPT
-    assert 'Do NOT save words from prompts like "use X or Y in a sentence"' in WORDKEEPER_SYSTEM_PROMPT
+    assert "Words that are only mentioned as options in a practice prompt or writing exercise." in (
+        WORDKEEPER_SAVE_REQUEST_EXTRACTION_PROMPT
+    )
     assert "Bolded words that are emphasized for an exercise but not presented as vocabulary to memorize." in (
-        WORDKEEPER_SYSTEM_PROMPT
+        WORDKEEPER_SAVE_REQUEST_EXTRACTION_PROMPT
     )
 
 
 def test_word_keeper_prompt_saves_corrected_word_not_misspelling():
-    assert "Save the corrected Swedish vocabulary item" in WORDKEEPER_SYSTEM_PROMPT
-    assert "Never save the student's erroneous form in this case." in WORDKEEPER_SYSTEM_PROMPT
-    assert "save only the corrected Swedish item supplied by the teacher" in WORDKEEPER_SYSTEM_PROMPT
+    assert "Misspelled, invalid, or nonexistent student-written word forms" in (
+        WORDKEEPER_SAVE_REQUEST_EXTRACTION_PROMPT
+    )
+    assert "the corrected target item" in WORDKEEPER_SAVE_REQUEST_EXTRACTION_PROMPT
 
 
 def test_word_keeper_extraction_schema_is_key_only():
     fields = WordSaveCandidate.model_fields
-    assert set(fields) == {"word_phrase", "source_form"}
-    assert "Do not generate translations, examples, grammar notes, or reasons." in WORDKEEPER_SYSTEM_PROMPT
+    assert set(fields) == {"word_phrase", "source_form", "context_phrase"}
+    assert "Do not generate translations, examples, grammar notes, or reasons." in (
+        WORDKEEPER_SAVE_REQUEST_EXTRACTION_PROMPT
+    )
+    assert "generate a short, natural Swedish" in WORDKEEPER_SAVE_REQUEST_EXTRACTION_PROMPT
 
 
 def test_word_keeper_enrichment_prompt_owns_full_save_fields():
@@ -151,6 +158,10 @@ def test_word_keeper_enrichment_prompt_owns_full_save_fields():
     assert "`extra_info`" in WORDKEEPER_ENRICHMENT_PROMPT
     assert "`en-word noun; plural: hundar; definite: hunden`" in WORDKEEPER_ENRICHMENT_PROMPT
     assert "If unsure, leave `extra_info` empty rather than guess." in WORDKEEPER_ENRICHMENT_PROMPT
+    assert "`translation` and `example_phrase` should be filled whenever reasonably possible." in (
+        WORDKEEPER_ENRICHMENT_PROMPT
+    )
+    assert "teacher_response" not in WORDKEEPER_ENRICHMENT_PROMPT
 
 
 def test_word_keeper_models_decode_double_escaped_unicode():
@@ -204,10 +215,6 @@ def test_word_keeper_models_decode_double_escaped_non_bmp_unicode():
 
 @pytest.mark.anyio
 async def test_word_keeper_prioritizes_existing_without_enrichment(specialist, mock_chat_model, mock_user):
-    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(
-        decision="save_words",
-        candidates=[WordSaveCandidate(word_phrase="noggrann")],
-    )
     vocabulary_service = _mock_vocabulary_service(
         priority_actions=_priority_actions(_priority_entry("noggrann", "prioritized", word_id=2))
     )
@@ -222,11 +229,13 @@ async def test_word_keeper_prioritizes_existing_without_enrichment(specialist, m
                 history=[ChatMessage(role="assistant", content="Noggrann means careful.")],
                 user=mock_user,
                 teacher_response="The key words here are noggrann.",
-                routing_reason="teacher highlighted key words",
+                vocabulary_candidates=[WordSaveCandidate(word_phrase="noggrann")],
+                routing_reason="teacher emitted vocabulary_candidates",
             )
         )
 
     assert result.status == "action_taken"
+    mock_chat_model.extraction_model.ainvoke.assert_not_awaited()
     assert result.artifacts["saved_words"] == ["noggrann"]
     assert result.artifacts["action_counts"]["prioritized"] == 1
     assert result.artifacts["priority_actions"][0]["action"] == "prioritized"
@@ -291,11 +300,68 @@ async def test_word_keeper_enriches_and_saves_new_word(specialist, mock_chat_mod
 
 
 @pytest.mark.anyio
-async def test_word_keeper_saves_corrected_word_instead_of_student_misspelling(specialist, mock_chat_model, mock_user):
-    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(
-        decision="save_words",
-        candidates=[WordSaveCandidate(word_phrase="våren", source_form="varen")],
+async def test_word_keeper_direct_candidates_skip_extraction_and_reach_enrichment(
+    specialist, mock_chat_model, mock_user
+):
+    mock_chat_model.enrichment_model.ainvoke.return_value = WordKeeperEnrichment(
+        items=[
+            WordEnrichmentItem(
+                candidate_id="0",
+                word_phrase="begripa",
+                translation="understand",
+                example_phrase="Jag begriper inte.",
+            )
+        ]
     )
+    vocabulary_service = _mock_vocabulary_service(
+        priority_actions=_priority_actions(
+            _priority_entry(
+                "begripa",
+                "missing",
+                word_id=None,
+                changed=False,
+                source_form="begriper",
+                context_phrase="Jag begriper inte.",
+            )
+        ),
+        upsert_return={"action": "created", "word_id": 3, "changed": True},
+    )
+
+    with patch(
+        "runestone.agents.specialists.word_keeper.provide_vocabulary_service",
+        _service_provider(vocabulary_service),
+    ):
+        result = await specialist.run(
+            SpecialistContext(
+                message="Jag begriper inte.",
+                history=[],
+                user=mock_user,
+                teacher_response="Good sentence. Let's keep begripa in mind.",
+                vocabulary_candidates=[
+                    WordSaveCandidate(
+                        word_phrase="begripa",
+                        source_form="begriper",
+                        context_phrase="Jag begriper inte.",
+                    )
+                ],
+                routing_reason="teacher emitted vocabulary_candidates",
+            )
+        )
+
+    assert result.status == "action_taken"
+    mock_chat_model.extraction_model.ainvoke.assert_not_awaited()
+    priority_candidates = vocabulary_service.prepare_priority_word_save.call_args.args[0]
+    assert [candidate.model_dump(exclude_none=True) for candidate in priority_candidates] == [
+        {"word_phrase": "begripa", "source_form": "begriper", "context_phrase": "Jag begriper inte."}
+    ]
+    enrichment_payload = json.loads(mock_chat_model.enrichment_model.ainvoke.call_args.args[0][1].content)
+    assert enrichment_payload["new_words"][0]["context_phrase"] == "Jag begriper inte."
+    assert enrichment_payload["target_translation_language"] == "English"
+    assert set(enrichment_payload) == {"new_words", "target_translation_language"}
+
+
+@pytest.mark.anyio
+async def test_word_keeper_saves_corrected_word_instead_of_student_misspelling(specialist, mock_chat_model, mock_user):
     mock_chat_model.enrichment_model.ainvoke.return_value = WordKeeperEnrichment(
         items=[
             WordEnrichmentItem(
@@ -324,14 +390,16 @@ async def test_word_keeper_saves_corrected_word_instead_of_student_misspelling(s
                 history=[],
                 user=mock_user,
                 teacher_response="There is no such word as 'varen'; use 'våren' for spring.",
-                routing_reason="teacher corrected misspelled vocabulary item",
+                vocabulary_candidates=[WordSaveCandidate(word_phrase="våren", source_form="varen")],
+                routing_reason="teacher emitted vocabulary_candidates",
             )
         )
 
     assert result.status == "action_taken"
+    mock_chat_model.extraction_model.ainvoke.assert_not_awaited()
     assert result.artifacts["saved_words"] == ["våren"]
     priority_candidates = vocabulary_service.prepare_priority_word_save.call_args[0][0]
-    assert [candidate.model_dump() for candidate in priority_candidates] == [
+    assert [candidate.model_dump(exclude_none=True) for candidate in priority_candidates] == [
         {"word_phrase": "våren", "source_form": "varen"}
     ]
 
@@ -356,13 +424,6 @@ async def test_word_keeper_saves_corrected_word_instead_of_student_misspelling(s
 
 @pytest.mark.anyio
 async def test_word_keeper_mixed_existing_and_new_enriches_only_new_word(specialist, mock_chat_model, mock_user):
-    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(
-        decision="save_words",
-        candidates=[
-            WordSaveCandidate(word_phrase="noggrann"),
-            WordSaveCandidate(word_phrase="begripa", source_form="begriper"),
-        ],
-    )
     mock_chat_model.enrichment_model.ainvoke.return_value = WordKeeperEnrichment(
         items=[
             WordEnrichmentItem(
@@ -392,11 +453,16 @@ async def test_word_keeper_mixed_existing_and_new_enriches_only_new_word(special
                 history=[],
                 user=mock_user,
                 teacher_response="Let's keep this new word in mind: begripa.",
-                routing_reason="teacher highlighted words to memorize",
+                vocabulary_candidates=[
+                    WordSaveCandidate(word_phrase="noggrann"),
+                    WordSaveCandidate(word_phrase="begripa", source_form="begriper"),
+                ],
+                routing_reason="teacher emitted vocabulary_candidates",
             )
         )
 
     assert result.status == "action_taken"
+    mock_chat_model.extraction_model.ainvoke.assert_not_awaited()
     assert result.artifacts["saved_words"] == ["noggrann", "begripa"]
     assert result.artifacts["action_counts"] == {
         "created": 1,
@@ -490,10 +556,6 @@ async def test_word_keeper_skips_new_words_when_enrichment_fails(specialist, moc
 
 @pytest.mark.anyio
 async def test_word_keeper_skips_new_word_with_incomplete_enrichment(specialist, mock_chat_model, mock_user):
-    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(
-        decision="save_words",
-        candidates=[WordSaveCandidate(word_phrase="förutsättning")],
-    )
     mock_chat_model.enrichment_model.ainvoke.return_value = WordKeeperEnrichment(
         items=[
             WordEnrichmentItem(
@@ -518,11 +580,13 @@ async def test_word_keeper_skips_new_word_with_incomplete_enrichment(specialist,
                 history=[],
                 user=mock_user,
                 teacher_response="These are good words to memorize: förutsättning.",
-                routing_reason="teacher highlighted words to memorize",
+                vocabulary_candidates=[WordSaveCandidate(word_phrase="förutsättning")],
+                routing_reason="teacher emitted vocabulary_candidates",
             )
         )
 
     assert result.status == "no_action"
+    mock_chat_model.extraction_model.ainvoke.assert_not_awaited()
     assert result.artifacts["saved_words"] == []
     assert result.artifacts["skipped_words"] == [
         {"word_phrase": "förutsättning", "reason": "missing_required_fields_after_enrichment"}
@@ -638,6 +702,8 @@ async def test_word_keeper_payload_uses_user_mother_tongue(specialist, mock_chat
     call_args = mock_chat_model.extraction_model.ainvoke.call_args[0][0]
     payload = call_args[1].content
     assert '"target_translation_language": "Finnish"' in payload
+    assert '"message": "Save this word for me: avgörande"' in payload
+    assert '"teacher_response": null' in payload
 
 
 @pytest.mark.anyio
@@ -656,56 +722,28 @@ async def test_word_keeper_payload_defaults_translation_language_to_english(spec
     call_args = mock_chat_model.extraction_model.ainvoke.call_args[0][0]
     payload = call_args[1].content
     assert '"target_translation_language": "English"' in payload
+    assert '"message": "Save this word for me: avgörande"' in payload
+    assert '"teacher_response": null' in payload
 
 
 @pytest.mark.anyio
-async def test_word_keeper_post_response_payload_keeps_previous_teacher_message_in_history_but_marks_post_phase(
+async def test_word_keeper_extraction_payload_includes_teacher_response_for_deictic_save_request(
     specialist, mock_chat_model, mock_user
 ):
     mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(decision="no_action", candidates=[])
 
     await specialist.run(
         SpecialistContext(
-            message="Jag begriper inte.",
-            history=[
-                ChatMessage(role="user", content="Can you explain these words?"),
-                ChatMessage(role="assistant", content="Let's save these words: beskriva, bekräfta."),
-            ],
+            message="Save that word for me.",
+            history=[],
+            teacher_response="Begripa means understand.",
             user=mock_user,
-            teacher_response="Let's keep this new word in mind: begripa.",
-            routing_reason="teacher highlighted words to memorize",
+            routing_reason="explicit save request",
         )
     )
 
     call_args = mock_chat_model.extraction_model.ainvoke.call_args[0][0]
     payload = call_args[1].content
-    assert '"phase": "post_response"' in payload
-    assert '"teacher_response": "Let\'s keep this new word in mind: begripa."' in payload
-    assert '"content": "Let\'s save these words: beskriva, bekräfta."' in payload
-
-
-@pytest.mark.anyio
-async def test_word_keeper_payload_preserves_earlier_history_for_explicit_revisit_request(
-    specialist, mock_chat_model, mock_user
-):
-    mock_chat_model.extraction_model.ainvoke.return_value = WordKeeperExtraction(decision="no_action", candidates=[])
-
-    await specialist.run(
-        SpecialistContext(
-            message="Ok, save the words you mentioned before.",
-            history=[
-                ChatMessage(role="user", content="Can you explain these words?"),
-                ChatMessage(role="assistant", content="Let's save these words: beskriva, bekräfta."),
-                ChatMessage(role="user", content="Thanks, and one more question."),
-                ChatMessage(role="assistant", content="Sure, ask away."),
-            ],
-            user=mock_user,
-            routing_reason="explicit earlier-history save request",
-        )
-    )
-
-    call_args = mock_chat_model.extraction_model.ainvoke.call_args[0][0]
-    payload = call_args[1].content
-    assert '"phase": "pre_response"' in payload
-    assert '"message": "Ok, save the words you mentioned before."' in payload
-    assert '"content": "Let\'s save these words: beskriva, bekräfta."' in payload
+    assert '"message": "Save that word for me."' in payload
+    assert '"target_translation_language": "English"' in payload
+    assert '"teacher_response": "Begripa means understand."' in payload

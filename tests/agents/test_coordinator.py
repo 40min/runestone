@@ -64,18 +64,15 @@ def test_init_coordinator_model(mock_settings, mock_chat_model):
 def test_word_keeper_prompt_eligibility():
     """Coordinator prompt should define WordKeeper eligibility correctly."""
     assert "word_keeper" in COORDINATOR_PRE_RESPONSE_PROMPT
-    assert "word_keeper" in COORDINATOR_POST_RESPONSE_PROMPT
-    assert "If the current student explicitly asks to save words from an earlier turn" in (
-        COORDINATOR_PRE_RESPONSE_PROMPT
-    )
+    assert "word_keeper" not in COORDINATOR_POST_RESPONSE_PROMPT
+    assert "immediately preceding" in COORDINATOR_PRE_RESPONSE_PROMPT
     assert "An earlier teacher message highlighted vocabulary but the student did not request saving it." in (
         COORDINATOR_PRE_RESPONSE_PROMPT
     )
     assert "Words were already saved in earlier turns — do not re-trigger on later turns." in (
         COORDINATOR_PRE_RESPONSE_PROMPT
     )
-    assert "For all normal word_keeper cases, set `chat_history_size` to `2`." in COORDINATOR_PRE_RESPONSE_PROMPT
-    assert "For all normal word_keeper cases, set `chat_history_size` to `2`." in COORDINATOR_POST_RESPONSE_PROMPT
+    assert "Set `chat_history_size` to `0` for `word_keeper`." in COORDINATOR_PRE_RESPONSE_PROMPT
 
 
 def test_memory_reader_is_absent_from_pre_prompt():
@@ -120,13 +117,7 @@ def test_grammar_is_absent_from_coordinator_prompt():
 
 def test_word_keeper_prompt_does_not_allow_anticipatory_post_routing():
     assert "anticipate the teacher reply" not in COORDINATOR_POST_RESPONSE_PROMPT
-    assert (
-        "The actual `teacher_response` explicitly marks vocabulary as worth saving" in COORDINATOR_POST_RESPONSE_PROMPT
-    )
-    assert "The teacher is only asking the student to practice, answer, or write another sentence using words." in (
-        COORDINATOR_POST_RESPONSE_PROMPT
-    )
-    assert "provides\n  the corrected Swedish vocabulary item" in COORDINATOR_POST_RESPONSE_PROMPT
+    assert "word_keeper" not in COORDINATOR_POST_RESPONSE_PROMPT
 
 
 def test_word_keeper_prompt_limits_pre_stage_to_explicit_save_requests():
@@ -134,6 +125,10 @@ def test_word_keeper_prompt_limits_pre_stage_to_explicit_save_requests():
     assert "The current student message explicitly asks to save vocabulary in this turn" in (
         COORDINATOR_PRE_RESPONSE_PROMPT
     )
+    assert "save `begripa` and `noggrann`" in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "save these words for me: beskriva, bekräfta" in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "save that word" in COORDINATOR_PRE_RESPONSE_PROMPT
+    assert "If the student explicitly asks to save words from an earlier turn" not in COORDINATOR_PRE_RESPONSE_PROMPT
     assert "An earlier teacher message highlighted vocabulary but the student did not request saving it." in (
         COORDINATOR_PRE_RESPONSE_PROMPT
     )

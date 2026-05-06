@@ -26,6 +26,19 @@
     "path": "adjectives/swedish_adjectives_cheatsheet.md"
   },
   {
+    "url": "{HOST}/?view=grammar&cheatsheet=adjectives%2Fadjective_t_special",
+    "tags": [
+      "adjectives",
+      "adverbs",
+      "neuter",
+      "adjective + t",
+      "det är",
+      "att-clause"
+    ],
+    "annotation": "Explains special cases where Swedish adjectives take neuter -t without a specific noun, including 'det är', att-clauses, and general noun references.",
+    "path": "adjectives/adjective_t_special.md"
+  },
+  {
     "url": "{HOST}/?view=grammar&cheatsheet=adjectives%2Futrop-med-adj",
     "tags": [
       "adjectives",

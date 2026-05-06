@@ -4,6 +4,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, StringConstraints
 
 from runestone.agents.schemas import ChatMessage
+from runestone.schemas.vocabulary_save import WordSaveCandidate
 
 INFO_FOR_TEACHER_MAX_CHARS = 12000
 
@@ -15,6 +16,7 @@ class SpecialistContext(BaseModel):
     history: list[ChatMessage] = Field(default_factory=list)
     user: Any
     teacher_response: str | None = None
+    vocabulary_candidates: list[WordSaveCandidate] = Field(default_factory=list)
     pre_results: list[dict[str, Any]] = Field(default_factory=list)
     routing_reason: str = ""
     chat_history_size: int = 0

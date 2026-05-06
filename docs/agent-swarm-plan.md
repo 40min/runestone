@@ -11,7 +11,7 @@ The following were delivered in `feat/agent-swarm-ms1` through `feat/agent-swarm
 - **MS1**: Introduced specialist interfaces, `SpecialistResult` schema, `agents/specialists/` package, `[agents:<component>]` log convention.
 - **MS2**: Split `AgentService` → `AgentsManager` + `TeacherAgent` as first specialist.
 - **MS3**: Introduced `CoordinatorAgent` for pre/post orchestration with structured `CoordinatorPlan`, concurrent specialist fan-out, and `agent_side_effects` persistence.
-- **MS4**: Extracted `WordKeeper` specialist; pre-response fast path for explicit save requests; post-response path for teacher-highlighted vocabulary.
+- **MS4**: Extracted `WordKeeper` specialist; pre-response fast path for explicit save requests; later refined so post-response saves come from structured `TeacherOutput.vocabulary_candidates`.
 
 ## Design Direction (Post-MS4)
 
@@ -85,7 +85,9 @@ If stale (`pending`/`running`/`failed`): log loudly, cancel task, mark failed, c
 ### Milestone 8: Align Specialist Routing
 
 Update coordinator prompt:
-- WordKeeper eligible for `post_response` when teacher highlights vocabulary
+- WordKeeper pre-routing stays current-message-only for explicit save requests
+- post-response teacher vocabulary is no longer coordinator-routed; Teacher emits structured
+  `vocabulary_candidates` and `AgentsManager` launches the direct WordKeeper background branch
 - News routing: known topic → pre; vague request → skip
 - Remove any grammar-specialist routing mentions
 
