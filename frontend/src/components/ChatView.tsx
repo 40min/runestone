@@ -227,6 +227,12 @@ const ChatView: React.FC = () => {
     }
   }, [voiceError, clearVoiceError]);
 
+  useEffect(() => {
+    if (isRecording) {
+      setAreComposerControlsExpanded(true);
+    }
+  }, [isRecording]);
+
   // Auto-scroll to bottom when messages change or loading state changes
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -484,6 +490,7 @@ const ChatView: React.FC = () => {
               onClick={() =>
                 setAreComposerControlsExpanded((expanded) => !expanded)
               }
+              disabled={isRecording}
               aria-expanded={areComposerControlsExpanded}
               aria-controls="teacher-chat-controls-panel"
               sx={{
@@ -495,6 +502,11 @@ const ChatView: React.FC = () => {
                 px: 1.5,
                 py: 1,
                 color: "#d1d5db",
+                "&.Mui-disabled": {
+                  opacity: 0.6,
+                  color: "#9ca3af",
+                  cursor: "not-allowed",
+                },
               }}
             >
               <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>

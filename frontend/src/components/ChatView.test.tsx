@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ChatView from './ChatView';
 import { AuthProvider } from '../context/AuthContext';
+import * as voiceRecordingHook from '../hooks/useVoiceRecording';
 
 // Mock the API
 const mockFetch = vi.fn();
@@ -158,6 +159,35 @@ describe('ChatView', () => {
     expect(screen.getByRole('combobox', { name: /speech language/i })).toBeInTheDocument();
     expect(screen.getByText('Autosend')).toBeInTheDocument();
     expect(screen.getByText('Speed:')).toBeInTheDocument();
+  });
+
+  it('keeps chat controls expanded and disables the toggle while recording', () => {
+    const startRecording = vi.fn();
+    const stopRecording = vi.fn();
+    const useVoiceRecordingSpy = vi
+      .spyOn(voiceRecordingHook, 'useVoiceRecording')
+      .mockReturnValue({
+        isRecording: true,
+        isProcessing: false,
+        recordedDuration: 12,
+        startRecording,
+        stopRecording,
+        error: null,
+        clearError: vi.fn(),
+      });
+
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    const toggleButton = screen.getByRole('button', { name: /chat controls/i });
+    expect(toggleButton).toHaveAttribute('aria-expanded', 'true');
+    expect(toggleButton).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: /speech language/i })).toBeInTheDocument();
+
+    useVoiceRecordingSpy.mockRestore();
   });
 
   it('uses stored speech language before profile language', () => {
