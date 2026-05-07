@@ -671,6 +671,12 @@ class TestVocabularyService:
         assert result.example_phrase is None
         assert result.extra_info == "en-word, noun, base form: äpple"
 
+        service.llm_client.improve_vocabulary_item.assert_called_once()
+        prompt_arg = service.llm_client.improve_vocabulary_item.call_args[0][0]
+        assert '"translation"' in prompt_arg
+        assert '"example_phrase"' in prompt_arg
+        assert '"extra_info"' in prompt_arg
+
     async def test_enrich_vocabulary_items_success(self, service):
         """Test successful vocabulary items batch enrichment."""
         # Mock LLM client to return batch response

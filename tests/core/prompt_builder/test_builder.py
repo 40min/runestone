@@ -133,49 +133,27 @@ class TestBuildVocabularyPrompt:
         """Set up test fixtures."""
         self.builder = PromptBuilder()
 
-    def test_build_vocabulary_prompt_example_only_mode(self):
-        """Test building vocabulary prompt in EXAMPLE_ONLY mode."""
+    def test_build_vocabulary_prompt_contains_shared_rich_instructions(self):
+        """Test the shared vocabulary prompt contains all rich fields and instructions."""
         word_phrase = "hund"
-        prompt = self.builder.build_vocabulary_prompt(word_phrase, ImprovementMode.EXAMPLE_ONLY)
-
-        assert isinstance(prompt, str)
-        assert word_phrase in prompt
-        assert "example phrase" in prompt.lower()
-        # Should not request translation or extra info
-        assert "translation" not in prompt.lower() or '"translation"' not in prompt
-
-    def test_build_vocabulary_prompt_extra_info_only_mode(self):
-        """Test building vocabulary prompt in EXTRA_INFO_ONLY mode."""
-        word_phrase = "katt"
-        prompt = self.builder.build_vocabulary_prompt(word_phrase, ImprovementMode.EXTRA_INFO_ONLY)
-
-        assert isinstance(prompt, str)
-        assert word_phrase in prompt
-        assert "extra info" in prompt.lower() or "extra_info" in prompt
-        # Should not request translation or example
-        assert "translation" not in prompt.lower() or '"translation"' not in prompt
-
-    def test_build_vocabulary_prompt_all_fields_mode(self):
-        """Test building vocabulary prompt in ALL_FIELDS mode."""
-        word_phrase = "bil"
         prompt = self.builder.build_vocabulary_prompt(word_phrase, ImprovementMode.ALL_FIELDS)
 
         assert isinstance(prompt, str)
         assert word_phrase in prompt
-        # Should request all fields
-        assert "translation" in prompt.lower()
-        assert "example" in prompt.lower()
-        assert "extra" in prompt.lower()
+        assert '"translation"' in prompt
+        assert '"example_phrase"' in prompt
+        assert '"extra_info"' in prompt
+        assert "1. For translation" in prompt
+        assert "2. For example_phrase" in prompt
+        assert "3. For extra_info" in prompt
 
-    def test_build_vocabulary_prompt_default_mode(self):
-        """Test building vocabulary prompt with default mode (EXAMPLE_ONLY)."""
+    def test_build_vocabulary_prompt_is_shared_across_modes(self):
+        """Test all improvement modes reuse the same prompt structure."""
         word_phrase = "hus"
-        prompt = self.builder.build_vocabulary_prompt(word_phrase)
+        prompts = {mode: self.builder.build_vocabulary_prompt(word_phrase, mode) for mode in ImprovementMode}
 
-        assert isinstance(prompt, str)
-        assert word_phrase in prompt
-        # Default should be EXAMPLE_ONLY
-        assert "example" in prompt.lower()
+        assert prompts[ImprovementMode.EXAMPLE_ONLY] == prompts[ImprovementMode.EXTRA_INFO_ONLY]
+        assert prompts[ImprovementMode.EXTRA_INFO_ONLY] == prompts[ImprovementMode.ALL_FIELDS]
 
     def test_build_vocabulary_prompt_with_special_characters(self):
         """Test building vocabulary prompt with Swedish special characters."""
@@ -199,8 +177,8 @@ class TestBuildVocabularyParams:
         """Set up test fixtures."""
         self.builder = PromptBuilder()
 
-    def test_build_params_all_fields_mode(self):
-        """Test building parameters for ALL_FIELDS mode."""
+    def test_build_params_returns_shared_rich_structure(self):
+        """Test vocabulary params always contain the full shared prompt structure."""
         params = self.builder._build_vocabulary_params("test", ImprovementMode.ALL_FIELDS)
 
         assert params["word_phrase"] == "test"
@@ -211,40 +189,6 @@ class TestBuildVocabularyParams:
         assert params["example_phrase_detail"] != ""
         assert params["extra_info_json"] != ""
         assert params["extra_info_detail"] != ""
-
-    def test_build_params_example_only_mode(self):
-        """Test building parameters for EXAMPLE_ONLY mode."""
-        params = self.builder._build_vocabulary_params("test", ImprovementMode.EXAMPLE_ONLY)
-
-        assert params["word_phrase"] == "test"
-        assert "example phrase" in params["content_type"]
-        # Translation and extra_info should be empty
-        assert params["translation_instruction_json"] == ""
-        assert params["translation_detail"] == ""
-        assert params["extra_info_json"] == ""
-        assert params["extra_info_detail"] == ""
-        # Example phrase should be populated
-        assert params["example_phrase_json"] != ""
-        assert params["example_phrase_detail"] != ""
-        # Example phrase should not have leading comma
-        assert not params["example_phrase_json"].startswith(",")
-
-    def test_build_params_extra_info_only_mode(self):
-        """Test building parameters for EXTRA_INFO_ONLY mode."""
-        params = self.builder._build_vocabulary_params("test", ImprovementMode.EXTRA_INFO_ONLY)
-
-        assert params["word_phrase"] == "test"
-        assert "extra info" in params["content_type"]
-        # Translation and example should be empty
-        assert params["translation_instruction_json"] == ""
-        assert params["translation_detail"] == ""
-        assert params["example_phrase_json"] == ""
-        assert params["example_phrase_detail"] == ""
-        # Extra info should be populated
-        assert params["extra_info_json"] != ""
-        assert params["extra_info_detail"] != ""
-        # Extra info should not have leading comma
-        assert not params["extra_info_json"].startswith(",")
 
     def test_build_params_all_modes_have_word_phrase(self):
         """Test all modes include word_phrase parameter."""
@@ -259,18 +203,9 @@ class TestBuildVocabularyParams:
             assert params["content_type"] != ""
             assert isinstance(params["content_type"], str)
 
-    def test_build_params_numbering_consistency(self):
-        """Test that instruction numbering is consistent for each mode."""
-        # EXAMPLE_ONLY should have "1. For example_phrase"
-        params_example = self.builder._build_vocabulary_params("test", ImprovementMode.EXAMPLE_ONLY)
-        assert "1. For example_phrase" in params_example["example_phrase_detail"]
+    def test_build_params_are_identical_across_modes(self):
+        """Test all improvement modes reuse the same prompt parameters."""
+        params_by_mode = {mode: self.builder._build_vocabulary_params("test", mode) for mode in ImprovementMode}
 
-        # EXTRA_INFO_ONLY should have "1. For extra_info"
-        params_extra = self.builder._build_vocabulary_params("test", ImprovementMode.EXTRA_INFO_ONLY)
-        assert "1. For extra_info" in params_extra["extra_info_detail"]
-
-        # ALL_FIELDS should have numbered instructions
-        params_all = self.builder._build_vocabulary_params("test", ImprovementMode.ALL_FIELDS)
-        assert "1. For translation" in params_all["translation_detail"]
-        assert "2. For example_phrase" in params_all["example_phrase_detail"]
-        assert "3. For extra_info" in params_all["extra_info_detail"]
+        assert params_by_mode[ImprovementMode.EXAMPLE_ONLY] == params_by_mode[ImprovementMode.EXTRA_INFO_ONLY]
+        assert params_by_mode[ImprovementMode.EXTRA_INFO_ONLY] == params_by_mode[ImprovementMode.ALL_FIELDS]
