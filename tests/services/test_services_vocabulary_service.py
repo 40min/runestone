@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from langchain_core.messages import AIMessage
 from sqlalchemy import func, select
 
 from runestone.api.schemas import ImprovementMode
@@ -54,12 +55,11 @@ class TestVocabularyService:
         """Create a VocabularyService instance."""
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "openai"
-        mock_llm_client = AsyncMock()
-        # Set default mock response for LLM client to avoid TypeError
-        mock_llm_client.improve_vocabulary_item.return_value = (
-            '{"translation": "mock translation", "example_phrase": "mock example", "extra_info": "mock info"}'
+        mock_llm_model = AsyncMock()
+        mock_llm_model.ainvoke.return_value = AIMessage(
+            content='{"translation": "mock translation", "example_phrase": "mock example", "extra_info": "mock info"}'
         )
-        return VocabularyService(vocabulary_repository, mock_settings, mock_llm_client)
+        return VocabularyService(vocabulary_repository, mock_settings, mock_llm_model)
 
     async def test_save_vocabulary_new(self, service, db_session):
         """Test saving new vocabulary items."""
@@ -571,8 +571,8 @@ class TestVocabularyService:
     async def test_improve_item_success(self, service):
         """Test successful vocabulary item improvement with ALL_FIELDS mode."""
         # Mock LLM client from the service fixture
-        service.llm_client.improve_vocabulary_item.return_value = (
-            '{"translation": "an apple", "example_phrase": "Jag äter ett äpple varje dag.", '
+        service.llm_model.ainvoke.return_value = AIMessage(
+            content='{"translation": "an apple", "example_phrase": "Jag äter ett äpple varje dag.", '
             '"extra_info": "en-word, noun"}'
         )
 
@@ -588,14 +588,16 @@ class TestVocabularyService:
         assert result.extra_info == "en-word, noun"
 
         # Verify LLM client was called correctly
-        service.llm_client.improve_vocabulary_item.assert_called_once()
-        prompt_arg = service.llm_client.improve_vocabulary_item.call_args[0][0]
+        service.llm_model.ainvoke.assert_called_once()
+        prompt_arg = service.llm_model.ainvoke.call_args[0][0]
         assert "ett äpple" in prompt_arg
 
     async def test_improve_item_without_translation(self, service):
         """Test vocabulary improvement with EXAMPLE_ONLY mode."""
         # Mock LLM client from the service fixture
-        service.llm_client.improve_vocabulary_item.return_value = '{"example_phrase": "Jag äter ett äpple varje dag."}'
+        service.llm_model.ainvoke.return_value = AIMessage(
+            content='{"example_phrase": "Jag äter ett äpple varje dag."}'
+        )
 
         # Test request with EXAMPLE_ONLY mode
         request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.EXAMPLE_ONLY)
@@ -612,8 +614,8 @@ class TestVocabularyService:
         """Test vocabulary improvement with malformed LLM response that gets parsed gracefully."""
 
         # Mock LLM client from the service fixture
-        service.llm_client.improve_vocabulary_item.return_value = (
-            'translation: "clear", example_phrase: "Det är tydliga instruktioner.", extra_info: "adjective"'
+        service.llm_model.ainvoke.return_value = AIMessage(
+            content='translation: "clear", example_phrase: "Det är tydliga instruktioner.", extra_info: "adjective"'
         )
 
         # Test request with ALL_FIELDS mode
@@ -633,8 +635,8 @@ class TestVocabularyService:
     async def test_improve_item_with_extra_info(self, service):
         """Test vocabulary improvement with ALL_FIELDS mode including extra_info."""
         # Mock LLM client from the service fixture
-        service.llm_client.improve_vocabulary_item.return_value = (
-            '{"translation": "an apple", "example_phrase": "Jag äter ett äpple varje dag.", '
+        service.llm_model.ainvoke.return_value = AIMessage(
+            content='{"translation": "an apple", "example_phrase": "Jag äter ett äpple varje dag.", '
             '"extra_info": "en-word, noun, base form: äpple"}'
         )
 
@@ -650,15 +652,15 @@ class TestVocabularyService:
         assert result.extra_info == "en-word, noun, base form: äpple"
 
         # Verify LLM client was called correctly
-        service.llm_client.improve_vocabulary_item.assert_called_once()
-        prompt_arg = service.llm_client.improve_vocabulary_item.call_args[0][0]
+        service.llm_model.ainvoke.assert_called_once()
+        prompt_arg = service.llm_model.ainvoke.call_args[0][0]
         assert "ett äpple" in prompt_arg
         assert "extra_info" in prompt_arg
 
     async def test_improve_item_extra_info_only(self, service):
         """Test vocabulary improvement with EXTRA_INFO_ONLY mode."""
         # Mock LLM client from the service fixture
-        service.llm_client.improve_vocabulary_item.return_value = '{"extra_info": "en-word, noun, base form: äpple"}'
+        service.llm_model.ainvoke.return_value = AIMessage(content='{"extra_info": "en-word, noun, base form: äpple"}')
 
         # Test request with EXTRA_INFO_ONLY mode
         request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.EXTRA_INFO_ONLY)
@@ -671,16 +673,24 @@ class TestVocabularyService:
         assert result.example_phrase is None
         assert result.extra_info == "en-word, noun, base form: äpple"
 
+        service.llm_model.ainvoke.assert_called_once()
+        prompt_arg = service.llm_model.ainvoke.call_args[0][0]
+        assert '"translation"' in prompt_arg
+        assert '"example_phrase"' in prompt_arg
+        assert '"extra_info"' in prompt_arg
+
     async def test_enrich_vocabulary_items_success(self, service):
         """Test successful vocabulary items batch enrichment."""
         # Mock LLM client to return batch response
-        service.llm_client.improve_vocabulary_batch.return_value = """
+        service.llm_model.ainvoke.return_value = AIMessage(
+            content="""
         {
             "ett äpple": "en-word, noun, base form: äpple",
             "en banan": "en-word, noun",
             "vara": "verb, forms: vara, är, var, varit"
         }
         """
+        )
 
         # Test items
         items = [
@@ -701,7 +711,7 @@ class TestVocabularyService:
     async def test_enrich_vocabulary_items_llm_exception(self, service):
         """Test vocabulary items enrichment when LLM raises exception."""
         # Mock LLM to raise exception
-        service.llm_client.improve_vocabulary_batch.side_effect = Exception("LLM error")
+        service.llm_model.ainvoke.side_effect = Exception("LLM error")
 
         items = [
             VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple."),
@@ -716,7 +726,7 @@ class TestVocabularyService:
     async def test_save_vocabulary_items_with_enrichment(self, service, db_session):
         """Test saving vocabulary items with enrichment enabled."""
         # Mock LLM client
-        service.llm_client.improve_vocabulary_batch.return_value = '{"ett äpple": "en-word, noun"}'
+        service.llm_model.ainvoke.return_value = AIMessage(content='{"ett äpple": "en-word, noun"}')
 
         items = [
             VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple.")
@@ -745,18 +755,20 @@ class TestVocabularyService:
 
         # Verify item was not enriched - result is a dict with message
         assert result == {"message": "Vocabulary saved successfully"}
-        service.llm_client.improve_vocabulary_batch.assert_not_called()
+        service.llm_model.ainvoke.assert_not_called()
 
     async def test_enrich_vocabulary_items_partial_failure(self, service):
         """Test vocabulary items batch enrichment with partial failures."""
         # Mock LLM with some null values
-        service.llm_client.improve_vocabulary_batch.return_value = """
+        service.llm_model.ainvoke.return_value = AIMessage(
+            content="""
         {
             "ett äpple": "en-word, noun, base form: äpple",
             "en banan": null,
             "vara": "verb, forms: vara, är, var, varit"
         }
         """
+        )
 
         items = [
             VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple."),
@@ -792,30 +804,32 @@ class TestVocabularyService:
                 # Second batch (100-149)
                 return "{" + ",".join(f'"word_{i}": "info_{i}"' for i in range(100, 150)) + "}"
 
-        service.llm_client.improve_vocabulary_batch.side_effect = mock_batch_response
+        service.llm_model.ainvoke.side_effect = lambda prompt: AIMessage(content=mock_batch_response(prompt))
 
         enriched_items = await service._enrich_vocabulary_items(items)
 
         # Verify all 150 items enriched across 2 batches
         assert len(enriched_items) == 150
         assert all(item.extra_info for item in enriched_items)
-        assert service.llm_client.improve_vocabulary_batch.call_count == 2
+        assert service.llm_model.ainvoke.call_count == 2
 
     async def test_enrich_vocabulary_items_empty_list(self, service):
         """Test vocabulary items enrichment with empty list."""
         enriched_items = await service._enrich_vocabulary_items([])
 
         assert enriched_items == []
-        service.llm_client.improve_vocabulary_batch.assert_not_called()
+        service.llm_model.ainvoke.assert_not_called()
 
     async def test_save_vocabulary_with_batch_enrichment(self, service, db_session):
         """Test save_vocabulary using batch enrichment."""
         # Mock batch enrichment
-        service.llm_client.improve_vocabulary_batch.return_value = """
+        service.llm_model.ainvoke.return_value = AIMessage(
+            content="""
         {
             "ett äpple": "en-word, noun, base form: äpple"
         }
         """
+        )
 
         items = [
             VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple.")
@@ -831,7 +845,7 @@ class TestVocabularyService:
         vocab = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.word_phrase == "ett äpple"))
         assert vocab is not None
         assert vocab.extra_info == "en-word, noun, base form: äpple"
-        service.llm_client.improve_vocabulary_item.assert_not_called()
+        service.llm_model.ainvoke.assert_called_once()
 
     async def test_get_existing_word_phrases(self, service, db_session):
         """Test retrieving existing word phrases."""
@@ -1278,9 +1292,9 @@ class TestVocabularyService:
         """Concurrent upserts for same word should not surface integrity errors or duplicate rows."""
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "openai"
-        mock_llm_client = AsyncMock()
-        mock_llm_client.improve_vocabulary_item.return_value = (
-            '{"translation": "mock translation", "example_phrase": "mock example", "extra_info": "mock info"}'
+        mock_llm_model = AsyncMock()
+        mock_llm_model.ainvoke.return_value = AIMessage(
+            content='{"translation": "mock translation", "example_phrase": "mock example", "extra_info": "mock info"}'
         )
         async with db_session_factory() as setup_db:
             race_user = UserModel(
@@ -1297,8 +1311,8 @@ class TestVocabularyService:
             race_user_id = race_user.id
 
         async with db_session_factory() as db1, db_session_factory() as db2:
-            service1 = VocabularyService(VocabularyRepository(db1), mock_settings, mock_llm_client)
-            service2 = VocabularyService(VocabularyRepository(db2), mock_settings, mock_llm_client)
+            service1 = VocabularyService(VocabularyRepository(db1), mock_settings, mock_llm_model)
+            service2 = VocabularyService(VocabularyRepository(db2), mock_settings, mock_llm_model)
 
             result1, result2 = await asyncio.gather(
                 service1.insert_or_prioritize_words(

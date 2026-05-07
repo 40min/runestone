@@ -77,44 +77,36 @@ class PromptBuilder:
 
     def build_vocabulary_prompt(self, word_phrase: str, mode: ImprovementMode = ImprovementMode.EXAMPLE_ONLY) -> str:
         """
-        Build vocabulary improvement prompt based on mode.
+        Build the vocabulary improvement prompt.
 
-        This method constructs different prompts depending on the improvement mode:
-        - EXAMPLE_ONLY: Request only example phrase
-        - EXTRA_INFO_ONLY: Request only grammatical information
-        - ALL_FIELDS: Request translation, example, and extra info
+        All improvement modes share the same rich prompt so the model always gets
+        the same linguistic context. The requested mode is applied later when the
+        response is filtered for the caller.
 
         Args:
             word_phrase: Swedish word or phrase to improve
-            mode: Type of improvement requested
+            mode: Type of improvement requested. The prompt is shared across
+                modes; filtering happens after the model response is parsed.
 
         Returns:
             Complete vocabulary improvement prompt string
         """
         template = self._templates[PromptType.VOCABULARY_IMPROVE]
 
-        # Build mode-specific parameters
-        params = self._build_vocabulary_params(word_phrase, mode)
+        params = self._build_vocabulary_params(word_phrase)
 
         return template.render(**params)
 
-    def _build_vocabulary_params(self, word_phrase: str, mode: ImprovementMode) -> Dict[str, str]:
+    def _build_vocabulary_params(self, word_phrase: str) -> Dict[str, str]:
         """
-        Build parameters for vocabulary template based on improvement mode.
-
-        This method encapsulates the conditional logic for different vocabulary
-        improvement modes, extracted from VocabularyService._build_improvement_prompt().
-
-        Strategy: Start with ALL_FIELDS mode and then filter based on specific mode flags.
+        Build parameters for the shared vocabulary template.
 
         Args:
             word_phrase: Swedish word or phrase
-            mode: Improvement mode
 
         Returns:
             Dictionary of template parameters
         """
-        # Start with ALL_FIELDS - all parts of the prompt defined
         params = {
             "word_phrase": word_phrase,
             "content_type": "translation, example phrase and extra info",
@@ -145,48 +137,6 @@ class PromptBuilder:
                 "already in basic form. Provide comparative forms for adjectives."
             ),
         }
-
-        # Apply mode-specific filtering
-        if mode == ImprovementMode.EXTRA_INFO_ONLY:
-            # Only extra info requested - remove translation and example
-            params["content_type"] = "extra info"
-            params["translation_instruction_json"] = ""
-            params["translation_detail"] = ""
-            params["example_phrase_json"] = ""
-            params["example_phrase_detail"] = ""
-            # Remove leading comma from extra_info_json since it's now the first field
-            params["extra_info_json"] = (
-                '"extra_info": "A concise description of grammatical details '
-                '(e.g., word form, base form, en/ett classification)"'
-            )
-            # Re-number the instruction for extra_info to be 1 instead of 3
-            params["extra_info_detail"] = (
-                "1. For extra_info:\n    - Provide grammatical information about "
-                "the Swedish word/phrase\n    - Include word form (noun, verb, "
-                "adjective, etc.), en/ett classification for nouns, base forms, etc.\n"
-                '    - Keep it concise and human-readable (e.g., "en-word, noun, '
-                'base form: ord")\n    - Focus on the most important grammatical '
-                "details for language learners"
-            )
-        elif mode == ImprovementMode.EXAMPLE_ONLY:
-            # Only example requested - remove translation and extra info
-            params["content_type"] = "example phrase"
-            params["translation_instruction_json"] = ""
-            params["translation_detail"] = ""
-            params["extra_info_json"] = ""
-            params["extra_info_detail"] = ""
-            # Remove leading comma from example_phrase_json since it's now the first field
-            params["example_phrase_json"] = (
-                '"example_phrase": "A natural Swedish sentence using the ' 'word/phrase in context"'
-            )
-            # Re-number the instruction for example_phrase to be 1 instead of 2
-            params["example_phrase_detail"] = (
-                "1. For example_phrase:\n    - Create a natural, conversational "
-                "Swedish sentence that uses the word/phrase\n    - The sentence "
-                "should clearly demonstrate the meaning and usage\n    - Keep it "
-                "simple and appropriate for language learners\n    - The example "
-                "should be practical and realistic"
-            )
 
         return params
 

@@ -1,6 +1,6 @@
 ---
 name: runestone-orchestration
-description: Thin Runestone adapter for the global dev-work-item-orchestration lifecycle. Use by default for any implementation command while working in /Users/40min/www/runestone, including "let's do ...", "start ...", "implement ...", "apply this plan", "fix this", or "take this through PR", unless the user explicitly says not to use orchestration. Do not use for creating or modifying skills; use skill-creator for skill work instead.
+description: Thin Runestone adapter for the global dev-work-item-orchestration lifecycle. Use by default for any implementation command while working in an active Runestone checkout, whether that is the primary repository clone or a Codex worktree. Trigger on requests like "let's do ...", "let's tackle ...", "start ...", "implement ...", "apply this plan", "fix this", "take this through PR", or when the user references a Runestone task id to investigate or implement. Do not use for creating or modifying skills; use skill-creator for skill work instead.
 ---
 
 # Runestone Orchestration
@@ -11,28 +11,30 @@ Use this skill as the Runestone adapter for `/Users/40min/.codex/skills/dev-work
 
 - Lifecycle sequence and gates: `/Users/40min/.codex/skills/dev-work-item-orchestration/SKILL.md`.
 - Dart task CRUD and generic task safety: `/Users/40min/.codex/skills/dev-project-task-management/SKILL.md`.
-- Runestone Dart defaults: `/Users/40min/www/runestone/.codex/skills/runestone-task-management/SKILL.md`.
-- Repository conventions: `/Users/40min/www/runestone/AGENTS.md`.
+- Runestone Dart defaults: read `.codex/skills/runestone-task-management/SKILL.md` from the active Runestone checkout.
+- Repository conventions: read `AGENTS.md` from the active Runestone checkout.
 
 Load those files when this skill triggers. Do not copy their rules into this skill.
 
 ## Runestone Defaults
 
-- Repository: `/Users/40min/www/runestone`.
+- Repository: the active Runestone checkout, whether that is the primary repository clone or a Codex worktree.
 - Task wrapper skill: `runestone-task-management`.
 - Branch names: use `feat/<slug>` for new functionality and `fix/<slug>` for bug fixes. Do not use the generic `codex/` branch prefix for Runestone work.
 
 ## Trigger Coverage
 
-Treat this adapter as the default entrypoint for implementation work in `/Users/40min/www/runestone`, not only for exact phrase matches. If the user gives any implementation command, use this lifecycle unless they explicitly opt out of orchestration.
+Treat this adapter as the default entrypoint for implementation work in any Runestone checkout, not only for exact phrase matches. If the user gives any implementation command, use this lifecycle unless they explicitly opt out of orchestration.
 
 Trigger this skill when the user:
 
 - asks to implement code changes (for example: "implement this", "please implement this plan", "apply this plan", "fix this", "add this endpoint")
+- asks to investigate and fix behavior in the codebase, even if phrased as debugging or comparison work
 - asks to carry work through checks/commit/PR
 - asks to continue or finish an in-flight Runestone change that already has code edits
+- references a Runestone task id or issue id together with implementation intent, for example "let's tackle 9fzWVGdbo2HP" or "take task 9fzWVGdbo2HP"
 
-Do not wait for literal phrases like "let's do", "start", or "take this through PR" if the implementation intent is already clear. Do not skip this skill merely because the request looks small, frontend-only, backend-only, docs-only, or test-only.
+Do not wait for literal phrases like "let's do", "let's tackle", "start", or "take this through PR" if the implementation intent is already clear. Do not skip this skill merely because the request looks small, frontend-only, backend-only, docs-only, investigation-heavy, or test-only.
 
 Do not trigger this lifecycle for creating or modifying skills, including skill trigger text, skill workflows, bundled skill scripts, or skill metadata. Use `skill-creator` for those requests unless the user explicitly asks to run Runestone orchestration for the skill work.
 
