@@ -1,6 +1,6 @@
 ---
 name: runestone-orchestration
-description: Thin Runestone adapter for the global dev-work-item-orchestration lifecycle. Use by default for any implementation command while working in any Runestone checkout, including /Users/40min/www/runestone and Codex worktrees such as /Users/40min/.codex/worktrees/*/runestone. Trigger on requests like "let's do ...", "let's tackle ...", "start ...", "implement ...", "apply this plan", "fix this", "take this through PR", or when the user references a Runestone task id to investigate or implement. Do not use for creating or modifying skills; use skill-creator for skill work instead.
+description: Thin Runestone adapter for the global dev-work-item-orchestration lifecycle. Use by default for any implementation command while working in an active Runestone checkout, whether that is the primary repository clone or a Codex worktree. Trigger on requests like "let's do ...", "let's tackle ...", "start ...", "implement ...", "apply this plan", "fix this", "take this through PR", or when the user references a Runestone task id to investigate or implement. Do not use for creating or modifying skills; use skill-creator for skill work instead.
 ---
 
 # Runestone Orchestration
@@ -18,7 +18,7 @@ Load those files when this skill triggers. Do not copy their rules into this ski
 
 ## Runestone Defaults
 
-- Repository: the active Runestone checkout, including `/Users/40min/www/runestone` and Codex worktrees such as `/Users/40min/.codex/worktrees/<id>/runestone`.
+- Repository: the active Runestone checkout, whether that is the primary repository clone or a Codex worktree.
 - Task wrapper skill: `runestone-task-management`.
 - Branch names: use `feat/<slug>` for new functionality and `fix/<slug>` for bug fixes. Do not use the generic `codex/` branch prefix for Runestone work.
 

@@ -85,24 +85,24 @@ class PromptBuilder:
 
         Args:
             word_phrase: Swedish word or phrase to improve
-            mode: Type of improvement requested
+            mode: Type of improvement requested. The prompt is shared across
+                modes; filtering happens after the model response is parsed.
 
         Returns:
             Complete vocabulary improvement prompt string
         """
         template = self._templates[PromptType.VOCABULARY_IMPROVE]
 
-        params = self._build_vocabulary_params(word_phrase, mode)
+        params = self._build_vocabulary_params(word_phrase)
 
         return template.render(**params)
 
-    def _build_vocabulary_params(self, word_phrase: str, mode: ImprovementMode) -> Dict[str, str]:
+    def _build_vocabulary_params(self, word_phrase: str) -> Dict[str, str]:
         """
         Build parameters for the shared vocabulary template.
 
         Args:
             word_phrase: Swedish word or phrase
-            mode: Improvement mode, retained for API compatibility
 
         Returns:
             Dictionary of template parameters

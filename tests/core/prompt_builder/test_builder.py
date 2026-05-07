@@ -179,7 +179,7 @@ class TestBuildVocabularyParams:
 
     def test_build_params_returns_shared_rich_structure(self):
         """Test vocabulary params always contain the full shared prompt structure."""
-        params = self.builder._build_vocabulary_params("test", ImprovementMode.ALL_FIELDS)
+        params = self.builder._build_vocabulary_params("test")
 
         assert params["word_phrase"] == "test"
         assert "translation, example phrase and extra info" in params["content_type"]
@@ -193,19 +193,19 @@ class TestBuildVocabularyParams:
     def test_build_params_all_modes_have_word_phrase(self):
         """Test all modes include word_phrase parameter."""
         for mode in ImprovementMode:
-            params = self.builder._build_vocabulary_params("testord", mode)
+            params = self.builder._build_vocabulary_params("testord")
             assert params["word_phrase"] == "testord"
 
     def test_build_params_all_modes_have_content_type(self):
         """Test all modes include content_type parameter."""
         for mode in ImprovementMode:
-            params = self.builder._build_vocabulary_params("test", mode)
+            params = self.builder._build_vocabulary_params("test")
             assert params["content_type"] != ""
             assert isinstance(params["content_type"], str)
 
     def test_build_params_are_identical_across_modes(self):
         """Test all improvement modes reuse the same prompt parameters."""
-        params_by_mode = {mode: self.builder._build_vocabulary_params("test", mode) for mode in ImprovementMode}
+        params_by_mode = {mode: self.builder._build_vocabulary_params("test") for mode in ImprovementMode}
 
         assert params_by_mode[ImprovementMode.EXAMPLE_ONLY] == params_by_mode[ImprovementMode.EXTRA_INFO_ONLY]
         assert params_by_mode[ImprovementMode.EXTRA_INFO_ONLY] == params_by_mode[ImprovementMode.ALL_FIELDS]
