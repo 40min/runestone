@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ExpandLess, ExpandMore } from "@mui/icons-material";
+import { MoreHorizRounded } from "@mui/icons-material";
 import { Box, ButtonBase, Collapse, Typography } from "@mui/material";
 import {
   ErrorAlert,
@@ -28,6 +28,17 @@ const VOICE_ENABLED_KEY = "runestone_voice_enabled";
 const SPEECH_SPEED_KEY = "runestone_speech_speed";
 const AUTOSEND_KEY = "runestone_autosend";
 const STT_LANGUAGE_KEY = "runestone_stt_language";
+const visuallyHiddenTextSx = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  p: 0,
+  m: -1,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap",
+  border: 0,
+} as const;
 
 const getSupportedSpeechLanguage = (language?: string | null) =>
   language && LANGUAGES.includes(language as (typeof LANGUAGES)[number])
@@ -480,10 +491,9 @@ const ChatView: React.FC = () => {
 
           <Box
             sx={{
-              borderRadius: 2,
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-              backgroundColor: "rgba(255, 255, 255, 0.03)",
-              overflow: "hidden",
+              position: "relative",
+              mt: 2.5,
+              pt: areComposerControlsExpanded ? 1.75 : 0,
             }}
           >
             <ButtonBase
@@ -493,41 +503,47 @@ const ChatView: React.FC = () => {
               disabled={isRecording}
               aria-expanded={areComposerControlsExpanded}
               aria-controls="teacher-chat-controls-panel"
+              aria-label={areComposerControlsExpanded ? "Hide chat controls" : "Show chat controls"}
               sx={{
-                width: "100%",
-                display: "flex",
+                position: "absolute",
+                top: 0,
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                zIndex: 1,
+                display: "inline-flex",
                 alignItems: "center",
-                justifyContent: "space-between",
-                gap: 1,
-                px: 1.5,
-                py: 1,
-                color: "#d1d5db",
+                justifyContent: "center",
+                minWidth: 72,
+                gap: 0.5,
+                px: 1.65,
+                py: 0.4,
+                borderRadius: 999,
+                border: "1px solid rgba(164, 92, 255, 0.55)",
+                background:
+                  areComposerControlsExpanded
+                    ? "linear-gradient(180deg, rgba(101, 34, 188, 0.92) 0%, rgba(54, 22, 103, 0.96) 100%)"
+                    : "linear-gradient(180deg, rgba(41, 18, 79, 0.98) 0%, rgba(26, 14, 51, 0.98) 100%)",
+                boxShadow: areComposerControlsExpanded
+                  ? "0 0 0 1px rgba(192, 132, 252, 0.15), 0 10px 30px rgba(126, 34, 206, 0.4)"
+                  : "0 8px 24px rgba(10, 6, 24, 0.42)",
+                color: "#f5f3ff",
+                transition:
+                  "transform 180ms ease, box-shadow 180ms ease, background 180ms ease, border-color 180ms ease",
+                "&:hover": {
+                  transform: "translate(-50%, -50%) scale(1.03)",
+                  boxShadow: "0 0 0 1px rgba(216, 180, 254, 0.22), 0 12px 34px rgba(126, 34, 206, 0.46)",
+                },
                 "&.Mui-disabled": {
-                  opacity: 0.6,
-                  color: "#9ca3af",
+                  opacity: 0.58,
+                  color: "#c4b5fd",
                   cursor: "not-allowed",
                 },
               }}
             >
-              <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-                <Typography
-                  component="span"
-                  sx={{ fontSize: "0.85rem", fontWeight: 600, letterSpacing: "0.01em" }}
-                >
-                  Chat controls
-                </Typography>
-                <Typography
-                  component="span"
-                  sx={{ fontSize: "0.72rem", color: "#9ca3af" }}
-                >
-                  Voice, image, and transcription settings
-                </Typography>
-              </Box>
-              {areComposerControlsExpanded ? (
-                <ExpandLess fontSize="small" />
-              ) : (
-                <ExpandMore fontSize="small" />
-              )}
+              <Typography component="span" sx={visuallyHiddenTextSx}>
+                Chat controls
+              </Typography>
+              <MoreHorizRounded fontSize="small" />
             </ButtonBase>
 
             <Collapse
@@ -537,11 +553,28 @@ const ChatView: React.FC = () => {
             >
               <Box
                 sx={{
-                  px: 1.5,
+                  px: { xs: 1.25, md: 1.5 },
                   pb: 1.25,
-                  borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+                  pt: 1.1,
+                  borderRadius: 2.5,
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  background:
+                    "radial-gradient(circle at top center, rgba(111, 34, 178, 0.18) 0%, rgba(255, 255, 255, 0.03) 42%, rgba(255, 255, 255, 0.02) 100%)",
+                  boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 40px rgba(8, 5, 20, 0.22)",
                 }}
               >
+                <Typography
+                  sx={{
+                    mb: 1.15,
+                    color: "#9ca3af",
+                    fontSize: "0.72rem",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Voice, image, and transcription settings
+                </Typography>
+
                 <ChatComposerControls
                   isAnyProcessing={isAnyProcessing}
                   isRecording={isRecording}
