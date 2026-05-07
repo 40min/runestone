@@ -21,9 +21,26 @@ const mockUseMemoryItems = {
   clearCategory: vi.fn().mockResolvedValue(undefined),
 };
 
+const setMatchMedia = (matches: boolean) => {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation(() => ({
+      matches,
+      media: '',
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+};
+
 describe('AgentMemoryModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    setMatchMedia(false);
     (useMemoryItemsModule.default as Mock).mockReturnValue(mockUseMemoryItems);
   });
 
@@ -97,6 +114,19 @@ describe('AgentMemoryModal', () => {
     expect(screen.getByText('Add Memory Item')).toBeInTheDocument();
     expect(screen.getByLabelText(/Key/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Content/i)).toBeInTheDocument();
+  });
+
+  it('collapses mobile filters behind a toggle', () => {
+    setMatchMedia(true);
+
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+
+    expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument();
+    expect(screen.getAllByText('All statuses').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Newest first').length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    expect(screen.getByText('Clear Category')).toBeVisible();
   });
 
   it('shows category-specific status options in add form for area_to_improve', () => {

@@ -9,6 +9,7 @@ interface CustomButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement
   onClick?: () => void;
   disabled?: boolean;
   startIcon?: React.ReactNode;
+  endIcon?: React.ReactNode;
   fullWidth?: boolean;
   sx?: SxProps<Theme>;
   active?: boolean; // For tab variant
@@ -21,6 +22,7 @@ const CustomButton = ({
   onClick,
   disabled = false,
   startIcon,
+  endIcon,
   fullWidth = false,
   sx,
   active = false,
@@ -125,6 +127,7 @@ const CustomButton = ({
       onClick={onClick}
       disabled={disabled}
       startIcon={startIcon}
+      endIcon={endIcon}
       fullWidth={fullWidth}
       sx={{
         ...getVariantStyles(),
