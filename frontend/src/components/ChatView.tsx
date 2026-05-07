@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { MoreHorizRounded } from "@mui/icons-material";
+import { ExpandLess, ExpandMore } from "@mui/icons-material";
 import { Box, ButtonBase, Collapse, Typography } from "@mui/material";
 import {
   ErrorAlert,
@@ -28,17 +28,6 @@ const VOICE_ENABLED_KEY = "runestone_voice_enabled";
 const SPEECH_SPEED_KEY = "runestone_speech_speed";
 const AUTOSEND_KEY = "runestone_autosend";
 const STT_LANGUAGE_KEY = "runestone_stt_language";
-const visuallyHiddenTextSx = {
-  position: "absolute",
-  width: 1,
-  height: 1,
-  p: 0,
-  m: -1,
-  overflow: "hidden",
-  clip: "rect(0 0 0 0)",
-  whiteSpace: "nowrap",
-  border: 0,
-} as const;
 
 const getSupportedSpeechLanguage = (language?: string | null) =>
   language && LANGUAGES.includes(language as (typeof LANGUAGES)[number])
@@ -533,6 +522,11 @@ const ChatView: React.FC = () => {
                   transform: "translate(-50%, -50%) scale(1.03)",
                   boxShadow: "0 0 0 1px rgba(216, 180, 254, 0.22), 0 12px 34px rgba(126, 34, 206, 0.46)",
                 },
+                "&:focus-visible": {
+                  outline: "none",
+                  transform: "translate(-50%, -50%) scale(1.03)",
+                  boxShadow: "0 0 0 2px rgba(243, 232, 255, 0.72), 0 0 0 5px rgba(126, 34, 206, 0.22), 0 12px 34px rgba(126, 34, 206, 0.46)",
+                },
                 "&.Mui-disabled": {
                   opacity: 0.58,
                   color: "#c4b5fd",
@@ -540,10 +534,11 @@ const ChatView: React.FC = () => {
                 },
               }}
             >
-              <Typography component="span" sx={visuallyHiddenTextSx}>
-                Chat controls
-              </Typography>
-              <MoreHorizRounded fontSize="small" />
+              {areComposerControlsExpanded ? (
+                <ExpandLess fontSize="small" />
+              ) : (
+                <ExpandMore fontSize="small" />
+              )}
             </ButtonBase>
 
             <Collapse
