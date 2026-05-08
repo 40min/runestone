@@ -9,11 +9,12 @@ import uuid
 from unittest.mock import Mock
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from runestone.api.main import app
 from runestone.auth.dependencies import get_current_user
 from runestone.db.models import User
-from runestone.dependencies import get_llm_client
+from runestone.dependencies import get_llm_model
 
 
 @pytest.fixture
@@ -31,18 +32,13 @@ async def client(client_with_overrides):
 
 
 @pytest.fixture(scope="function")
-def mock_llm_client():
-    """Create a mock LLM client that doesn't make external API calls."""
+def mock_llm_model():
+    """Create a mock LangChain model that doesn't make external API calls."""
     from unittest.mock import AsyncMock, Mock
 
-    mock_client = Mock()
-    # Mock the improve_vocabulary_item method to return a sample response
-    mock_client.improve_vocabulary_item = AsyncMock(return_value="Mock extra info for vocabulary enrichment")
-    mock_client.improve_vocabulary_batch = AsyncMock(return_value='{"word": "mock info"}')
-    mock_client.analyze_content = AsyncMock(return_value="Mock analysis result")
-    mock_client.extract_text_from_image = AsyncMock(return_value="Mock extracted text")
-    mock_client.search_resources = AsyncMock(return_value="Mock search results")
-    return mock_client
+    mock_model = Mock()
+    mock_model.ainvoke = AsyncMock(return_value=AIMessage(content='{"word": "mock info"}'))
+    return mock_model
 
 
 @pytest.fixture(scope="function")
@@ -91,7 +87,7 @@ async def client_no_db():
 
 
 @pytest.fixture(scope="function")
-def client_with_overrides(mock_llm_client, db_with_test_user):
+def client_with_overrides(mock_llm_model, db_with_test_user):
     """
     Factory fixture for creating test clients with customizable dependency overrides.
     """
@@ -105,7 +101,7 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
         grammar_service=None,
         grammar_index=None,
         processor=None,
-        llm_client=None,
+        llm_model=None,
         current_user=None,
         agent_service=None,
         tts_service=None,
@@ -118,8 +114,8 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
             """Override database dependency to ensure consistent session use."""
             yield db
 
-        def override_get_llm_client():
-            return llm_client or mock_llm_client
+        def override_get_llm_model():
+            return llm_model or mock_llm_model
 
         def override_get_current_user():
             user = current_user or test_user
@@ -134,7 +130,7 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
 
         # Apply overrides
         overrides = {
-            get_llm_client: override_get_llm_client,
+            get_llm_model: override_get_llm_model,
             get_current_user: override_get_current_user,
             get_db: db_override or override_get_db,
         }
@@ -204,7 +200,7 @@ def client_with_overrides(mock_llm_client, db_with_test_user):
                 "grammar_service": grammar_service,
                 "grammar_index": grammar_index,
                 "processor": processor,
-                "llm_client": llm_client or mock_llm_client,
+                "llm_model": llm_model or mock_llm_model,
                 "current_user": current_user or test_user,
                 "agent_service": agent_service_instance,
                 "tts_service": tts_service_instance,
