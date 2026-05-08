@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings
 
-from runestone.config import ReasoningLevel, Settings
+from runestone.config import DEFAULT_SERVICE_LLM_MODEL, ReasoningLevel, Settings
 
 
 class TestSettings:
@@ -164,6 +164,52 @@ class TestSettings:
 
         assert test_settings.teacher_provider == "openai"
         assert test_settings.teacher_model == "teacher-env-model"
+
+    def test_service_llm_resolvers_use_default_fallbacks(self):
+        """Service-side resolver helpers should centralize default provider/model selection."""
+        test_settings = Settings.model_construct(
+            llm_provider="openai",
+            llm_model_name=None,
+            openai_api_key="test-key",
+            openrouter_api_key="test-openrouter-key",
+            ocr_llm_provider=None,
+            ocr_llm_model_name=None,
+            allowed_origins="http://localhost:3000",
+            database_url="sqlite:///./test.db",
+            telegram_bot_token="test-token",
+            frontend_url="http://localhost:5173",
+            jwt_secret_key="secret",
+            teacher_provider="openrouter",
+            teacher_model="teacher-model",
+            coordinator_model="coordinator-model",
+        )
+
+        assert test_settings.resolve_service_llm_provider() == "openai"
+        assert test_settings.resolve_service_llm_model() == DEFAULT_SERVICE_LLM_MODEL
+        assert test_settings.resolve_ocr_llm_provider() == "openai"
+        assert test_settings.resolve_ocr_llm_model() == DEFAULT_SERVICE_LLM_MODEL
+
+    def test_ocr_service_llm_resolvers_prefer_explicit_overrides(self):
+        """OCR resolver helpers should prefer OCR-specific provider/model overrides."""
+        test_settings = Settings.model_construct(
+            llm_provider="openai",
+            llm_model_name="gpt-5-mini",
+            openai_api_key="test-key",
+            openrouter_api_key="test-openrouter-key",
+            ocr_llm_provider="openrouter",
+            ocr_llm_model_name="anthropic/claude-3.5-sonnet",
+            allowed_origins="http://localhost:3000",
+            database_url="sqlite:///./test.db",
+            telegram_bot_token="test-token",
+            frontend_url="http://localhost:5173",
+            jwt_secret_key="secret",
+            teacher_provider="openrouter",
+            teacher_model="teacher-model",
+            coordinator_model="coordinator-model",
+        )
+
+        assert test_settings.resolve_ocr_llm_provider() == "openrouter"
+        assert test_settings.resolve_ocr_llm_model() == "anthropic/claude-3.5-sonnet"
 
     def test_news_agent_defaults_to_teacher_model_settings(self):
         """Test news_agent inherits teacher provider/model when not configured explicitly."""

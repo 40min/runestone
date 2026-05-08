@@ -64,6 +64,11 @@ class ContentAnalyzer:
             # Build analysis prompt using PromptBuilder
             analysis_prompt = self.builder.build_analysis_prompt(extracted_text)
 
+            self.logger.info(
+                "[ContentAnalyzer] Analyzing content with provider=%s model=%s",
+                self.settings.resolve_service_llm_provider(),
+                self.settings.resolve_service_llm_model(),
+            )
             response_text = extract_message_text(await self.model.ainvoke(analysis_prompt))
 
             if not response_text:

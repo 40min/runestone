@@ -13,6 +13,8 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, model_validator
 from pydantic_settings import BaseSettings
 
+DEFAULT_SERVICE_LLM_MODEL = "gpt-4o-mini"
+
 
 class ReasoningLevel(str, Enum):
     """Supported reasoning effort levels for chat models."""
@@ -160,6 +162,22 @@ class Settings(BaseSettings):
         if self.memory_keeper_model is None:
             self.memory_keeper_model = self.teacher_model
         return self
+
+    def resolve_service_llm_provider(self) -> str:
+        """Return the provider used by non-agent service flows."""
+        return self.llm_provider
+
+    def resolve_service_llm_model(self) -> str:
+        """Return the resolved model used by non-agent service flows."""
+        return self.llm_model_name or DEFAULT_SERVICE_LLM_MODEL
+
+    def resolve_ocr_llm_provider(self) -> str:
+        """Return the provider used by OCR, falling back to the default service provider."""
+        return self.ocr_llm_provider or self.resolve_service_llm_provider()
+
+    def resolve_ocr_llm_model(self) -> str:
+        """Return the resolved OCR model, falling back to the default service model."""
+        return self.ocr_llm_model_name or self.resolve_service_llm_model()
 
     def get_agent_llm_settings(
         self, agent_name: Literal["teacher", "coordinator", "word_keeper", "news_agent", "memory_keeper"]

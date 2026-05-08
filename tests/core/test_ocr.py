@@ -106,8 +106,10 @@ class TestOCRProcessor:
         mock_image.size = (800, 600)
 
         # Mock client response - now async
-        mock_model = AsyncMock()
-        mock_model.ainvoke.return_value = AIMessage(
+        mock_model = Mock()
+        bound_model = AsyncMock()
+        mock_model.bind.return_value = bound_model
+        bound_model.ainvoke.return_value = AIMessage(
             content="""{
             "transcribed_text": "Svenska text från läroboken",
             "recognition_statistics": {
@@ -129,8 +131,9 @@ class TestOCRProcessor:
         assert result.recognition_statistics.successfully_transcribed == 50
 
         # Verify LLM client was called correctly
-        mock_model.ainvoke.assert_called_once()
-        args = mock_model.ainvoke.call_args[0][0]
+        mock_model.bind.assert_called_once_with(max_tokens=10000, temperature=0.1)
+        bound_model.ainvoke.assert_called_once()
+        args = bound_model.ainvoke.call_args[0][0]
         assert len(args) == 1
         assert "accurately transcribe all readable text" in args[0].content[0]["text"]
 
@@ -143,8 +146,10 @@ class TestOCRProcessor:
         mock_image.size = (800, 600)
 
         # Mock client error response - now async
-        mock_model = AsyncMock()
-        mock_model.ainvoke.return_value = AIMessage(content='{"error": "Could not recognize text on the page."}')
+        mock_model = Mock()
+        bound_model = AsyncMock()
+        mock_model.bind.return_value = bound_model
+        bound_model.ainvoke.return_value = AIMessage(content='{"error": "Could not recognize text on the page."}')
 
         processor = OCRProcessor(settings=self.settings, model=mock_model)
 
@@ -162,8 +167,10 @@ class TestOCRProcessor:
         mock_image.size = (800, 600)
 
         # Mock client response with very short text - now async
-        mock_model = AsyncMock()
-        mock_model.ainvoke.return_value = AIMessage(
+        mock_model = Mock()
+        bound_model = AsyncMock()
+        mock_model.bind.return_value = bound_model
+        bound_model.ainvoke.return_value = AIMessage(
             content="""{
             "transcribed_text": "Hi",
             "recognition_statistics": {
@@ -191,8 +198,10 @@ class TestOCRProcessor:
         mock_image.size = (800, 600)
 
         # Mock empty client response - now async
-        mock_model = AsyncMock()
-        mock_model.ainvoke.return_value = AIMessage(content="")
+        mock_model = Mock()
+        bound_model = AsyncMock()
+        mock_model.bind.return_value = bound_model
+        bound_model.ainvoke.return_value = AIMessage(content="")
 
         processor = OCRProcessor(settings=self.settings, model=mock_model)
 
@@ -317,8 +326,10 @@ class TestOCRProcessor:
         mock_image.size = (800, 600)
 
         # Mock client response with stats - now async
-        mock_model = AsyncMock()
-        mock_model.ainvoke.return_value = AIMessage(
+        mock_model = Mock()
+        bound_model = AsyncMock()
+        mock_model.bind.return_value = bound_model
+        bound_model.ainvoke.return_value = AIMessage(
             content="""{
             "transcribed_text": "Extracted Swedish text content.",
             "recognition_statistics": {
@@ -347,8 +358,10 @@ class TestOCRProcessor:
         mock_image.size = (800, 600)
 
         # Mock client response with poor stats - now async
-        mock_model = AsyncMock()
-        mock_model.ainvoke.return_value = AIMessage(
+        mock_model = Mock()
+        bound_model = AsyncMock()
+        mock_model.bind.return_value = bound_model
+        bound_model.ainvoke.return_value = AIMessage(
             content="""{
             "transcribed_text": "Some text.",
             "recognition_statistics": {

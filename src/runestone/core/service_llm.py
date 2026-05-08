@@ -42,8 +42,8 @@ def build_service_llm_model(
         APIKeyError: If the selected provider is not configured.
         ValueError: If the provider is unsupported.
     """
-    effective_provider = cast(ServiceLLMProvider, (provider or settings.llm_provider).lower())
-    effective_model_name = model_name or settings.llm_model_name or "gpt-4o-mini"
+    effective_provider = cast(ServiceLLMProvider, (provider or settings.resolve_service_llm_provider()).lower())
+    effective_model_name = model_name or settings.resolve_service_llm_model()
 
     if effective_provider not in get_available_service_llm_providers():
         raise ValueError(
@@ -101,4 +101,4 @@ def extract_message_text(message: BaseMessage) -> str:
             if isinstance(text, str):
                 parts.append(text)
 
-    return "\n".join(part.strip() for part in parts if part and part.strip()).strip()
+    return "\n".join(part.strip() for part in parts if part.strip()).strip()

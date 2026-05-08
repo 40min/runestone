@@ -81,7 +81,7 @@ def cli():
 @click.option(
     "--model",
     help=(
-        "Model name to use. If not provided, uses provider defaults (gpt-4o-mini for OpenAI, ). "
+        "Model name to use. If not provided, uses provider defaults (gpt-5-mini for OpenAI). "
         "Can be set via OPENAI_MODEL environment "
         "variable for OpenAI."
     ),

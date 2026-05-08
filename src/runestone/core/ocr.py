@@ -213,8 +213,14 @@ class OCRProcessor:
             self.logger.debug(f"[OCRProcessor] Prompt built, length: {len(ocr_prompt)} chars")
 
             image_data_url = self._image_to_data_url(preprocessed_image)
+            self.logger.info(
+                "[OCRProcessor] Extracting text with provider=%s model=%s",
+                self.settings.resolve_ocr_llm_provider(),
+                self.settings.resolve_ocr_llm_model(),
+            )
+            ocr_model = self.model.bind(max_tokens=10000, temperature=0.1)
             extracted_text = extract_message_text(
-                await self.model.ainvoke(
+                await ocr_model.ainvoke(
                     [
                         HumanMessage(
                             content=[

@@ -212,6 +212,11 @@ class VocabularyService:
         prompt = self.builder.build_vocabulary_prompt(word_phrase=request.word_phrase, mode=request.mode)
 
         # Get improvement from LLM (async call)
+        self.logger.info(
+            "Improving vocabulary item with provider=%s model=%s",
+            self.settings.resolve_service_llm_provider(),
+            self.settings.resolve_service_llm_model(),
+        )
         response_text = extract_message_text(await self.llm_model.ainvoke(prompt))
 
         # Parse response using ResponseParser (includes automatic fallback)
@@ -262,6 +267,11 @@ class VocabularyService:
                 prompt = self.builder.build_vocabulary_batch_prompt(word_phrases)
 
                 # Get batch improvements from LLM (async call)
+                self.logger.info(
+                    "Improving vocabulary batch with provider=%s model=%s",
+                    self.settings.resolve_service_llm_provider(),
+                    self.settings.resolve_service_llm_model(),
+                )
                 response_text = extract_message_text(await self.llm_model.ainvoke(prompt))
 
                 # Parse batch response

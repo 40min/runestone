@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 from pydantic import SecretStr
 
-from runestone.config import Settings
+from runestone.config import DEFAULT_SERVICE_LLM_MODEL, Settings
 from runestone.core.exceptions import APIKeyError
 from runestone.core.service_llm import (
     OPENAI_SERVICE_LLM_MAX_RETRIES,
@@ -28,6 +28,8 @@ class TestServiceLLMBuilder:
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "openai"
         mock_settings.llm_model_name = "gpt-4o-mini"
+        mock_settings.resolve_service_llm_provider.return_value = "openai"
+        mock_settings.resolve_service_llm_model.return_value = "gpt-4o-mini"
         mock_settings.openai_api_key = "test-openai-key"
 
         build_service_llm_model(mock_settings)
@@ -41,11 +43,28 @@ class TestServiceLLMBuilder:
         assert "base_url" not in call_kwargs
 
     @patch("runestone.core.service_llm.ChatOpenAI")
+    def test_build_service_llm_model_uses_shared_default_model(self, mock_chat_openai):
+        """OpenAI builder should fall back to the shared non-agent default model."""
+        mock_settings = Mock(spec=Settings)
+        mock_settings.llm_provider = "openai"
+        mock_settings.llm_model_name = None
+        mock_settings.resolve_service_llm_provider.return_value = "openai"
+        mock_settings.resolve_service_llm_model.return_value = DEFAULT_SERVICE_LLM_MODEL
+        mock_settings.openai_api_key = "test-openai-key"
+
+        build_service_llm_model(mock_settings)
+
+        call_kwargs = mock_chat_openai.call_args[1]
+        assert call_kwargs["model"] == DEFAULT_SERVICE_LLM_MODEL
+
+    @patch("runestone.core.service_llm.ChatOpenAI")
     def test_build_service_llm_model_openrouter(self, mock_chat_openai):
         """OpenRouter builder should preserve base URL, attribution headers, and timeout."""
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "openrouter"
         mock_settings.llm_model_name = "anthropic/claude-3.5-sonnet"
+        mock_settings.resolve_service_llm_provider.return_value = "openrouter"
+        mock_settings.resolve_service_llm_model.return_value = "anthropic/claude-3.5-sonnet"
         mock_settings.openrouter_api_key = "test-openrouter-key"
 
         build_service_llm_model(mock_settings)
@@ -65,6 +84,8 @@ class TestServiceLLMBuilder:
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "openai"
         mock_settings.llm_model_name = "gpt-4o-mini"
+        mock_settings.resolve_service_llm_provider.return_value = "openai"
+        mock_settings.resolve_service_llm_model.return_value = "gpt-4o-mini"
         mock_settings.openai_api_key = "unused-openai-key"
         mock_settings.openrouter_api_key = "test-openrouter-key"
 
@@ -87,6 +108,8 @@ class TestServiceLLMBuilder:
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "openai"
         mock_settings.llm_model_name = "gpt-4o-mini"
+        mock_settings.resolve_service_llm_provider.return_value = "openai"
+        mock_settings.resolve_service_llm_model.return_value = "gpt-4o-mini"
         mock_settings.openai_api_key = ""
 
         with pytest.raises(APIKeyError, match="OpenAI API key is required"):
@@ -97,6 +120,8 @@ class TestServiceLLMBuilder:
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "openrouter"
         mock_settings.llm_model_name = "anthropic/claude-3.5-sonnet"
+        mock_settings.resolve_service_llm_provider.return_value = "openrouter"
+        mock_settings.resolve_service_llm_model.return_value = "anthropic/claude-3.5-sonnet"
         mock_settings.openrouter_api_key = ""
 
         with pytest.raises(APIKeyError, match="OpenRouter API key is required"):
@@ -107,6 +132,8 @@ class TestServiceLLMBuilder:
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "unsupported"
         mock_settings.llm_model_name = "test-model"
+        mock_settings.resolve_service_llm_provider.return_value = "unsupported"
+        mock_settings.resolve_service_llm_model.return_value = "test-model"
 
         with pytest.raises(ValueError, match="Unsupported LLM provider: unsupported"):
             build_service_llm_model(mock_settings)
