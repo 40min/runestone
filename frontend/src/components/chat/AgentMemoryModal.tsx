@@ -13,6 +13,7 @@ import {
   CardActions,
   CircularProgress,
   FormControl,
+  Collapse,
   InputLabel,
   Select,
   MenuItem,
@@ -25,6 +26,9 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import CheckIcon from "@mui/icons-material/Check";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import TuneIcon from "@mui/icons-material/Tune";
 import PsychologyIcon from "@mui/icons-material/Psychology";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CalendarTodayOutlinedIcon from "@mui/icons-material/CalendarTodayOutlined";
@@ -164,6 +168,8 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
   open,
   onClose,
 }) => {
+  const dialogPaperRef = useRef<HTMLDivElement | null>(null);
+  const [isCompactLayout, setIsCompactLayout] = useState(false);
   const [activeTab, setActiveTab] = useState<MemoryCategory>("personal_info");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<MemorySortBy>("updated_at");
@@ -181,6 +187,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
   } = useMemoryItems();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MemoryItem | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -195,6 +202,18 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const displayedCountLabel = `${items.length} item${items.length === 1 ? "" : "s"}`;
+  const sortSummaryLabel =
+    sortBy === "priority"
+      ? sortDirection === "asc"
+        ? "Priority low-high"
+        : "Priority high-low"
+      : sortDirection === "asc"
+        ? "Oldest first"
+        : "Newest first";
+  const statusSummaryLabel =
+    statusFilter === "all"
+      ? "All statuses"
+      : (STATUS_OPTIONS[statusFilter]?.label ?? statusFilter);
 
   const getItemTitle = (item: MemoryItem): string => {
     if (!item.metadata_json) return item.key;
@@ -234,7 +253,38 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
       setConfirmDeleteId(null);
       setConfirmClear(false);
       setEditingPriorityId(null);
+      setIsFiltersOpen(false);
     }
+  }, [open]);
+
+  useEffect(() => {
+    const paper = dialogPaperRef.current;
+
+    const updateCompactLayout = () => {
+      const measuredWidth = paper?.clientWidth ?? 0;
+      if (measuredWidth > 0) {
+        setIsCompactLayout(measuredWidth < 760);
+        return;
+      }
+
+      if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+        setIsCompactLayout(window.matchMedia("(max-width: 760px)").matches);
+      }
+    };
+
+    updateCompactLayout();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      updateCompactLayout();
+    });
+    if (paper) {
+      observer.observe(paper);
+    }
+    return () => observer.disconnect();
   }, [open]);
 
   const handleScroll = useCallback(() => {
@@ -258,6 +308,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
     setStatusFilter("all");
     setSortBy("updated_at");
     setSortDirection("desc");
+    setIsFiltersOpen(false);
     setConfirmDeleteId(null);
     setConfirmClear(false);
     setEditingPriorityId(null);
@@ -333,6 +384,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
           },
         }}
         PaperProps={{
+          ref: dialogPaperRef,
           sx: {
             width: { xs: "calc(100vw - 16px)", sm: "calc(100vw - 48px)", lg: "1220px" },
             maxWidth: "1220px",
@@ -354,25 +406,25 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
             justifyContent: "space-between",
             alignItems: "center",
             px: { xs: 2.25, md: 4.5 },
-            pt: { xs: 2.25, md: 4 },
-            pb: { xs: 2, md: 2.5 },
+            pt: { xs: 1.75, md: 4 },
+            pb: { xs: 1.5, md: 2.5 },
           }}
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1.5, md: 2 } }}>
             <PsychologyIcon
-              sx={{ color: "var(--primary-color)", fontSize: { xs: "2.6rem", md: "3.2rem" } }}
+              sx={{ color: "var(--primary-color)", fontSize: { xs: "2.2rem", md: "3.2rem" } }}
             />
             <Box>
               <Typography
                 variant="h6"
                 fontWeight="bold"
-                sx={{ fontSize: { xs: "1.7rem", md: "2.1rem" }, lineHeight: 1.1, mb: 0.5 }}
+                sx={{ fontSize: { xs: "1.35rem", md: "2.1rem" }, lineHeight: 1.1, mb: 0.35 }}
               >
                 Teacher&apos;s Memory
               </Typography>
               <Typography
                 variant="body2"
-                sx={{ color: "#a5b4c7", fontSize: { xs: "0.95rem", md: "1rem" } }}
+                sx={{ color: "#a5b4c7", fontSize: { xs: "0.86rem", md: "1rem" } }}
               >
                 What your teacher remembers about your learning journey
               </Typography>
@@ -407,13 +459,13 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
           }}
           buttonSx={{
             px: { xs: 0.5, md: 0 },
-            py: 1.6,
+            py: { xs: 1.2, md: 1.6 },
             color: "#d5dbe6",
-            fontSize: { xs: "0.95rem", md: "1.02rem" },
+            fontSize: { xs: "0.88rem", md: "1.02rem" },
             fontWeight: 500,
             whiteSpace: "normal",
             textAlign: "center",
-            lineHeight: 1.35,
+            lineHeight: { xs: 1.25, md: 1.35 },
             minWidth: 0,
             "&:hover": {
               color: "white",
@@ -441,11 +493,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
         >
           <Box
             sx={{
-              p: { xs: 1.5, sm: 2, md: 2.25 },
-              display: "flex",
-              flexWrap: "wrap",
-              gap: { xs: 1.25, md: 1.5 },
-              alignItems: { xs: "stretch", md: "flex-end" },
+              p: { xs: 1.25, sm: 2, md: 2.25 },
               border: "1px solid rgba(148, 163, 184, 0.18)",
               borderRadius: "1rem",
               bgcolor: "rgba(30, 41, 59, 0.56)",
@@ -455,84 +503,16 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
           >
             <Box
               sx={{
-                display: "grid",
-                gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" },
-                gap: { xs: 1.25, md: 1.5 },
-                flex: "1 1 560px",
-                minWidth: 0,
-              }}
-            >
-              <FormControl size="small" sx={{ minWidth: 0, ...textFieldStyles }}>
-                <Typography
-                  id="status-filter-label"
-                  component="label"
-                  sx={{ mb: 0.75, color: "#cbd5e1", fontSize: "0.92rem", fontWeight: 500 }}
-                >
-                  Status
-                </Typography>
-                <Select
-                  labelId="status-filter-label"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  <MenuItem value="all">All statuses</MenuItem>
-                  {renderStatusMenuItems(activeTab)}
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" sx={{ minWidth: 0, ...textFieldStyles }}>
-                <Typography
-                  id="sort-by-label"
-                  component="label"
-                  sx={{ mb: 0.75, color: "#cbd5e1", fontSize: "0.92rem", fontWeight: 500 }}
-                >
-                  Sort by
-                </Typography>
-                <Select
-                  labelId="sort-by-label"
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as MemorySortBy)}
-                >
-                  <MenuItem value="updated_at">Last updated</MenuItem>
-                  {activeTab === "area_to_improve" && (
-                    <MenuItem value="priority">Priority</MenuItem>
-                  )}
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" sx={{ minWidth: 0, ...textFieldStyles }}>
-                <Typography
-                  id="sort-direction-label"
-                  component="label"
-                  sx={{ mb: 0.75, color: "#cbd5e1", fontSize: "0.92rem", fontWeight: 500 }}
-                >
-                  Direction
-                </Typography>
-                <Select
-                  labelId="sort-direction-label"
-                  value={sortDirection}
-                  onChange={(e) => setSortDirection(e.target.value as SortDirection)}
-                >
-                  <MenuItem value="asc">Ascending</MenuItem>
-                  <MenuItem value="desc">Descending</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-
-            <Box
-              sx={{
                 display: "flex",
-                flex: "1 1 280px",
-                minWidth: 0,
-                alignItems: { xs: "stretch", lg: "center" },
+                flexDirection: { xs: "column", sm: "row" },
+                alignItems: { xs: "stretch", sm: "center" },
                 justifyContent: "space-between",
-                gap: 1.25,
-                flexWrap: "wrap",
+                gap: 1,
               }}
             >
               <Typography
                 variant="body2"
-                sx={{ color: "#a5b4c7", whiteSpace: "nowrap", mr: { lg: 1 } }}
+                sx={{ color: "#a5b4c7", whiteSpace: "nowrap", fontSize: { xs: "0.88rem", md: "0.95rem" } }}
               >
                 {displayedCountLabel}
               </Typography>
@@ -542,8 +522,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                   display: "flex",
                   gap: 1,
                   flexWrap: "wrap",
-                  justifyContent: { xs: "stretch", md: "flex-end" },
-                  width: { xs: "100%", lg: "auto" },
+                  justifyContent: { xs: "stretch", sm: "flex-end" },
                 }}
               >
                 <CustomButton
@@ -555,7 +534,8 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                     bgcolor: "rgba(15, 23, 42, 0.34)",
                     color: "#e2e8f0",
                     px: 2.5,
-                    width: { xs: "100%", sm: "auto" },
+                    minHeight: 42,
+                    flex: { xs: "1 1 0", sm: "0 0 auto" },
                     "&:hover": {
                       bgcolor: "rgba(15, 23, 42, 0.56)",
                       color: "white",
@@ -564,52 +544,228 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                 >
                   Add Item
                 </CustomButton>
-                {confirmClear ? (
-                  <>
-                    <CustomButton
-                      variant="secondary"
-                      onClick={async () => {
-                        await clearCategory(activeTab);
-                        setConfirmClear(false);
-                      }}
-                      disabled={items.length === 0}
-                      sx={{
-                        color: "#f87171",
-                        border: "1px solid rgba(239, 68, 68, 0.18)",
-                        bgcolor: "rgba(127, 29, 29, 0.16)",
-                        width: { xs: "100%", sm: "auto" },
-                        "&:hover": { bgcolor: "rgba(127, 29, 29, 0.28)" },
-                      }}
-                    >
-                      Confirm Clear
-                    </CustomButton>
-                    <CustomButton
-                      variant="secondary"
-                      onClick={() => setConfirmClear(false)}
-                      sx={{
-                        border: "1px solid rgba(148, 163, 184, 0.2)",
-                        width: { xs: "100%", sm: "auto" },
-                      }}
-                    >
-                      Cancel
-                    </CustomButton>
-                  </>
-                ) : (
+
+                {isCompactLayout ? (
                   <CustomButton
                     variant="secondary"
-                    onClick={handleClearCategory}
-                    disabled={items.length === 0}
+                    onClick={() => setIsFiltersOpen((current) => !current)}
+                    startIcon={<TuneIcon />}
+                    endIcon={isFiltersOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                    aria-expanded={isFiltersOpen}
+                    aria-controls="memory-mobile-filters"
                     sx={{
-                      color: "#f87171",
-                      width: { xs: "100%", sm: "auto" },
-                      "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" },
+                      border: "1px solid rgba(148, 163, 184, 0.2)",
+                      color: "#cbd5e1",
+                      minHeight: 42,
+                      flex: "1 1 0",
                     }}
                   >
-                    Clear Category
+                    Filters
                   </CustomButton>
+                ) : (
+                  <>
+                    {confirmClear ? (
+                      <>
+                        <CustomButton
+                          variant="secondary"
+                          onClick={async () => {
+                            await clearCategory(activeTab);
+                            setConfirmClear(false);
+                          }}
+                          disabled={items.length === 0}
+                          sx={{
+                            color: "#f87171",
+                            border: "1px solid rgba(239, 68, 68, 0.18)",
+                            bgcolor: "rgba(127, 29, 29, 0.16)",
+                            "&:hover": { bgcolor: "rgba(127, 29, 29, 0.28)" },
+                          }}
+                        >
+                          Confirm Clear
+                        </CustomButton>
+                        <CustomButton
+                          variant="secondary"
+                          onClick={() => setConfirmClear(false)}
+                          sx={{
+                            border: "1px solid rgba(148, 163, 184, 0.2)",
+                          }}
+                        >
+                          Cancel
+                        </CustomButton>
+                      </>
+                    ) : (
+                      <CustomButton
+                        variant="secondary"
+                        onClick={handleClearCategory}
+                        disabled={items.length === 0}
+                        sx={{
+                          color: "#f87171",
+                          "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" },
+                        }}
+                      >
+                        Clear Category
+                      </CustomButton>
+                    )}
+                  </>
                 )}
               </Box>
             </Box>
+
+            {isCompactLayout && (
+              <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", mt: 1.25 }}>
+                <Chip
+                  label={statusSummaryLabel}
+                  size="small"
+                  sx={{
+                    bgcolor: "rgba(15, 23, 42, 0.5)",
+                    color: "#cbd5e1",
+                    border: "1px solid rgba(148, 163, 184, 0.16)",
+                  }}
+                />
+                <Chip
+                  label={sortSummaryLabel}
+                  size="small"
+                  sx={{
+                    bgcolor: "rgba(15, 23, 42, 0.5)",
+                    color: "#cbd5e1",
+                    border: "1px solid rgba(148, 163, 184, 0.16)",
+                  }}
+                />
+              </Box>
+            )}
+
+            <Collapse in={!isCompactLayout || isFiltersOpen} id="memory-mobile-filters">
+              <Box
+                sx={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: { xs: 1.25, md: 1.5 },
+                  alignItems: { xs: "stretch", md: "flex-end" },
+                  mt: 1.5,
+                }}
+              >
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" },
+                    gap: { xs: 1, md: 1.5 },
+                    flex: "1 1 560px",
+                    minWidth: 0,
+                  }}
+                >
+                  <FormControl size="small" sx={{ minWidth: 0, ...textFieldStyles }}>
+                    <Typography
+                      id="status-filter-label"
+                      component="label"
+                      sx={{ mb: 0.5, color: "#cbd5e1", fontSize: "0.9rem", fontWeight: 500 }}
+                    >
+                      Status
+                    </Typography>
+                    <Select
+                      labelId="status-filter-label"
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                    >
+                      <MenuItem value="all">All statuses</MenuItem>
+                      {renderStatusMenuItems(activeTab)}
+                    </Select>
+                  </FormControl>
+
+                  <FormControl size="small" sx={{ minWidth: 0, ...textFieldStyles }}>
+                    <Typography
+                      id="sort-by-label"
+                      component="label"
+                      sx={{ mb: 0.5, color: "#cbd5e1", fontSize: "0.9rem", fontWeight: 500 }}
+                    >
+                      Sort by
+                    </Typography>
+                    <Select
+                      labelId="sort-by-label"
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as MemorySortBy)}
+                    >
+                      <MenuItem value="updated_at">Last updated</MenuItem>
+                      {activeTab === "area_to_improve" && (
+                        <MenuItem value="priority">Priority</MenuItem>
+                      )}
+                    </Select>
+                  </FormControl>
+
+                  <FormControl size="small" sx={{ minWidth: 0, ...textFieldStyles }}>
+                    <Typography
+                      id="sort-direction-label"
+                      component="label"
+                      sx={{ mb: 0.5, color: "#cbd5e1", fontSize: "0.9rem", fontWeight: 500 }}
+                    >
+                      Direction
+                    </Typography>
+                    <Select
+                      labelId="sort-direction-label"
+                      value={sortDirection}
+                      onChange={(e) => setSortDirection(e.target.value as SortDirection)}
+                    >
+                      <MenuItem value="asc">Ascending</MenuItem>
+                      <MenuItem value="desc">Descending</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Box>
+
+                {isCompactLayout && (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      gap: 1,
+                      flexWrap: "wrap",
+                      width: "100%",
+                    }}
+                  >
+                    {confirmClear ? (
+                      <>
+                        <CustomButton
+                          variant="secondary"
+                          onClick={async () => {
+                            await clearCategory(activeTab);
+                            setConfirmClear(false);
+                          }}
+                          disabled={items.length === 0}
+                          sx={{
+                            color: "#f87171",
+                            border: "1px solid rgba(239, 68, 68, 0.18)",
+                            bgcolor: "rgba(127, 29, 29, 0.16)",
+                            flex: "1 1 0",
+                            "&:hover": { bgcolor: "rgba(127, 29, 29, 0.28)" },
+                          }}
+                        >
+                          Confirm Clear
+                        </CustomButton>
+                        <CustomButton
+                          variant="secondary"
+                          onClick={() => setConfirmClear(false)}
+                          sx={{
+                            border: "1px solid rgba(148, 163, 184, 0.2)",
+                            flex: "1 1 0",
+                          }}
+                        >
+                          Cancel
+                        </CustomButton>
+                      </>
+                    ) : (
+                      <CustomButton
+                        variant="secondary"
+                        onClick={handleClearCategory}
+                        disabled={items.length === 0}
+                        sx={{
+                          color: "#f87171",
+                          width: "100%",
+                          "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" },
+                        }}
+                      >
+                        Clear Category
+                      </CustomButton>
+                    )}
+                  </Box>
+                )}
+              </Box>
+            </Collapse>
           </Box>
 
           <Box
