@@ -268,7 +268,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
       }
 
       if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
-        setIsCompactLayout(window.matchMedia("(max-width: 900px)").matches);
+        setIsCompactLayout(window.matchMedia("(max-width: 760px)").matches);
       }
     };
 
@@ -281,7 +281,9 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
     const observer = new ResizeObserver(() => {
       updateCompactLayout();
     });
-    observer.observe(paper);
+    if (paper) {
+      observer.observe(paper);
+    }
     return () => observer.disconnect();
   }, [open]);
 
