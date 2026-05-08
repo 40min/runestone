@@ -1,187 +1,139 @@
-"""
-Tests for LLM client factory.
-
-This module tests the factory functions for creating LLM clients,
-ensuring proper API key validation and client instantiation.
-"""
+"""Tests for the non-agent LangChain model builder."""
 
 from unittest.mock import Mock, patch
 
 import pytest
+from pydantic import SecretStr
 
-from runestone.config import Settings
-from runestone.core.clients.factory import (
-    _create_openai_client,
-    _create_openrouter_client,
-    create_llm_client,
-    get_available_providers,
-)
+from runestone.config import DEFAULT_SERVICE_LLM_MODEL, Settings
 from runestone.core.exceptions import APIKeyError
+from runestone.core.service_llm import (
+    OPENAI_SERVICE_LLM_MAX_RETRIES,
+    SERVICE_LLM_TIMEOUT_SECONDS,
+    build_service_llm_model,
+    get_available_service_llm_providers,
+)
 
 
-class TestFactory:
-    """Test cases for LLM client factory functions."""
+class TestServiceLLMBuilder:
+    """Test cases for service-side LangChain model construction."""
 
     def test_get_available_providers(self):
-        """Test get_available_providers returns correct list."""
-        providers = get_available_providers()
-        assert providers == ["openai", "openrouter"]
+        """Supported non-agent providers should match the legacy surface."""
+        assert get_available_service_llm_providers() == ["openai", "openrouter"]
 
-    @patch("runestone.core.clients.factory.OpenAIClient")
-    def test_create_openai_client_success(self, mock_openai_client):
-        """Test successful OpenAI client creation."""
-        mock_settings = Mock(spec=Settings)
-        mock_settings.openai_api_key = "test-key"
-        mock_settings.verbose = True
-        mock_client = Mock()
-        mock_openai_client.return_value = mock_client
-
-        result = _create_openai_client(mock_settings, "gpt-4")
-
-        assert result == mock_client
-        mock_openai_client.assert_called_once_with(api_key="test-key", model_name="gpt-4", verbose=True)
-
-    def test_create_openai_client_missing_api_key(self):
-        """Test OpenAI client creation fails with missing API key."""
-        mock_settings = Mock(spec=Settings)
-        mock_settings.openai_api_key = ""
-
-        with pytest.raises(APIKeyError) as exc_info:
-            _create_openai_client(mock_settings, None)
-
-        assert "OpenAI API key is required" in str(exc_info.value)
-
-    @patch("runestone.core.clients.factory.OpenAIClient")
-    def test_create_openai_client_no_model_name(self, mock_openai_client):
-        """Test OpenAI client creation without model name."""
-        mock_settings = Mock(spec=Settings)
-        mock_settings.openai_api_key = "test-key"
-        mock_settings.verbose = False
-        mock_client = Mock()
-        mock_openai_client.return_value = mock_client
-
-        result = _create_openai_client(mock_settings, None)
-
-        assert result == mock_client
-        mock_openai_client.assert_called_once_with(api_key="test-key", verbose=False)
-
-    @patch("runestone.core.clients.factory.OpenRouterClient")
-    def test_create_openrouter_client_success(self, mock_openrouter_client):
-        """Test successful OpenRouter client creation."""
-        mock_settings = Mock(spec=Settings)
-        mock_settings.openrouter_api_key = "test-key"
-        mock_settings.verbose = True
-        mock_client = Mock()
-        mock_openrouter_client.return_value = mock_client
-
-        result = _create_openrouter_client(mock_settings, "anthropic/claude-3.5-sonnet")
-
-        assert result == mock_client
-        mock_openrouter_client.assert_called_once_with(
-            api_key="test-key", model_name="anthropic/claude-3.5-sonnet", verbose=True
-        )
-
-    def test_create_openrouter_client_missing_api_key(self):
-        """Test OpenRouter client creation fails with missing API key."""
-        mock_settings = Mock(spec=Settings)
-        mock_settings.openrouter_api_key = ""
-
-        with pytest.raises(APIKeyError) as exc_info:
-            _create_openrouter_client(mock_settings, None)
-
-        assert "OpenRouter API key is required" in str(exc_info.value)
-
-    @patch("runestone.core.clients.factory.OpenRouterClient")
-    def test_create_openrouter_client_no_model_name(self, mock_openrouter_client):
-        """Test OpenRouter client creation without model name."""
-        mock_settings = Mock(spec=Settings)
-        mock_settings.openrouter_api_key = "test-key"
-        mock_settings.verbose = False
-        mock_client = Mock()
-        mock_openrouter_client.return_value = mock_client
-
-        result = _create_openrouter_client(mock_settings, None)
-
-        assert result == mock_client
-        mock_openrouter_client.assert_called_once_with(api_key="test-key", verbose=False)
-
-    @patch("runestone.core.clients.factory._create_openai_client")
-    def test_create_llm_client_openai(self, mock_create_openai):
-        """Test create_llm_client for OpenAI provider."""
+    @patch("runestone.core.service_llm.ChatOpenAI")
+    def test_build_service_llm_model_openai(self, mock_chat_openai):
+        """OpenAI builder should use the configured key, model, and resilience settings."""
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "openai"
-        mock_settings.llm_model_name = "gpt-4"
-        mock_client = Mock()
-        mock_create_openai.return_value = mock_client
+        mock_settings.llm_model_name = "gpt-4o-mini"
+        mock_settings.resolve_service_llm_provider.return_value = "openai"
+        mock_settings.resolve_service_llm_model.return_value = "gpt-4o-mini"
+        mock_settings.openai_api_key = "test-openai-key"
 
-        result = create_llm_client(mock_settings)
+        build_service_llm_model(mock_settings)
 
-        assert result == mock_client
-        mock_create_openai.assert_called_once_with(settings=mock_settings, model_name="gpt-4")
+        call_kwargs = mock_chat_openai.call_args[1]
+        assert call_kwargs["model"] == "gpt-4o-mini"
+        assert call_kwargs["api_key"] == SecretStr("test-openai-key")
+        assert call_kwargs["temperature"] == 0.1
+        assert call_kwargs["timeout"] == SERVICE_LLM_TIMEOUT_SECONDS
+        assert call_kwargs["max_retries"] == OPENAI_SERVICE_LLM_MAX_RETRIES
+        assert "base_url" not in call_kwargs
 
-    @patch("runestone.core.clients.factory._create_openrouter_client")
-    def test_create_llm_client_openrouter(self, mock_create_openrouter):
-        """Test create_llm_client for OpenRouter provider."""
+    @patch("runestone.core.service_llm.ChatOpenAI")
+    def test_build_service_llm_model_uses_shared_default_model(self, mock_chat_openai):
+        """OpenAI builder should fall back to the shared non-agent default model."""
+        mock_settings = Mock(spec=Settings)
+        mock_settings.llm_provider = "openai"
+        mock_settings.llm_model_name = None
+        mock_settings.resolve_service_llm_provider.return_value = "openai"
+        mock_settings.resolve_service_llm_model.return_value = DEFAULT_SERVICE_LLM_MODEL
+        mock_settings.openai_api_key = "test-openai-key"
+
+        build_service_llm_model(mock_settings)
+
+        call_kwargs = mock_chat_openai.call_args[1]
+        assert call_kwargs["model"] == DEFAULT_SERVICE_LLM_MODEL
+
+    @patch("runestone.core.service_llm.ChatOpenAI")
+    def test_build_service_llm_model_openrouter(self, mock_chat_openai):
+        """OpenRouter builder should preserve base URL, attribution headers, and timeout."""
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "openrouter"
         mock_settings.llm_model_name = "anthropic/claude-3.5-sonnet"
-        mock_client = Mock()
-        mock_create_openrouter.return_value = mock_client
+        mock_settings.resolve_service_llm_provider.return_value = "openrouter"
+        mock_settings.resolve_service_llm_model.return_value = "anthropic/claude-3.5-sonnet"
+        mock_settings.openrouter_api_key = "test-openrouter-key"
 
-        result = create_llm_client(mock_settings)
+        build_service_llm_model(mock_settings)
 
-        assert result == mock_client
-        mock_create_openrouter.assert_called_once_with(settings=mock_settings, model_name="anthropic/claude-3.5-sonnet")
+        call_kwargs = mock_chat_openai.call_args[1]
+        assert call_kwargs["model"] == "anthropic/claude-3.5-sonnet"
+        assert call_kwargs["api_key"] == SecretStr("test-openrouter-key")
+        assert call_kwargs["base_url"] == "https://openrouter.ai/api/v1"
+        assert call_kwargs["default_headers"]["HTTP-Referer"] == "https://runestone.app"
+        assert call_kwargs["default_headers"]["X-Title"] == "Runestone"
+        assert call_kwargs["timeout"] == SERVICE_LLM_TIMEOUT_SECONDS
+        assert "max_retries" not in call_kwargs
 
-    @patch("runestone.core.clients.factory._create_openai_client")
-    def test_create_llm_client_with_provider_override(self, mock_create_openai):
-        """Test create_llm_client with provider parameter override."""
-        mock_settings = Mock(spec=Settings)
-        mock_settings.llm_provider = "openrouter"  # Default provider
-        mock_settings.llm_model_name = "gpt-4"
-        mock_client = Mock()
-        mock_create_openai.return_value = mock_client
-
-        result = create_llm_client(mock_settings, provider="openai")
-
-        assert result == mock_client
-        mock_create_openai.assert_called_once_with(settings=mock_settings, model_name="gpt-4")
-
-    @patch("runestone.core.clients.factory._create_openai_client")
-    def test_create_llm_client_with_model_name_override(self, mock_create_openai):
-        """Test create_llm_client with model_name parameter override."""
+    @patch("runestone.core.service_llm.ChatOpenAI")
+    def test_build_service_llm_model_respects_overrides(self, mock_chat_openai):
+        """Provider and model overrides should win over default settings."""
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "openai"
-        mock_settings.llm_model_name = "gpt-4"  # Default model
-        mock_client = Mock()
-        mock_create_openai.return_value = mock_client
+        mock_settings.llm_model_name = "gpt-4o-mini"
+        mock_settings.resolve_service_llm_provider.return_value = "openai"
+        mock_settings.resolve_service_llm_model.return_value = "gpt-4o-mini"
+        mock_settings.openai_api_key = "unused-openai-key"
+        mock_settings.openrouter_api_key = "test-openrouter-key"
 
-        result = create_llm_client(mock_settings, model_name="gpt-3.5-turbo")
+        build_service_llm_model(
+            mock_settings,
+            provider="openrouter",
+            model_name="google/gemini-2.5-flash",
+            temperature=0.0,
+        )
 
-        assert result == mock_client
-        mock_create_openai.assert_called_once_with(settings=mock_settings, model_name="gpt-3.5-turbo")
+        call_kwargs = mock_chat_openai.call_args[1]
+        assert call_kwargs["model"] == "google/gemini-2.5-flash"
+        assert call_kwargs["api_key"] == SecretStr("test-openrouter-key")
+        assert call_kwargs["temperature"] == 0.0
+        assert call_kwargs["base_url"] == "https://openrouter.ai/api/v1"
+        assert call_kwargs["timeout"] == SERVICE_LLM_TIMEOUT_SECONDS
 
-    @patch("runestone.core.clients.factory._create_openrouter_client")
-    def test_create_llm_client_with_both_overrides(self, mock_create_openrouter):
-        """Test create_llm_client with both provider and model_name overrides."""
+    def test_build_service_llm_model_missing_openai_key(self):
+        """Missing OpenAI configuration should raise a helpful error."""
         mock_settings = Mock(spec=Settings)
-        mock_settings.llm_provider = "openai"  # Default provider
-        mock_settings.llm_model_name = "gpt-4"  # Default model
-        mock_client = Mock()
-        mock_create_openrouter.return_value = mock_client
+        mock_settings.llm_provider = "openai"
+        mock_settings.llm_model_name = "gpt-4o-mini"
+        mock_settings.resolve_service_llm_provider.return_value = "openai"
+        mock_settings.resolve_service_llm_model.return_value = "gpt-4o-mini"
+        mock_settings.openai_api_key = ""
 
-        result = create_llm_client(mock_settings, provider="openrouter", model_name="anthropic/claude-3.5-sonnet")
+        with pytest.raises(APIKeyError, match="OpenAI API key is required"):
+            build_service_llm_model(mock_settings)
 
-        assert result == mock_client
-        mock_create_openrouter.assert_called_once_with(settings=mock_settings, model_name="anthropic/claude-3.5-sonnet")
+    def test_build_service_llm_model_missing_openrouter_key(self):
+        """Missing OpenRouter configuration should raise a helpful error."""
+        mock_settings = Mock(spec=Settings)
+        mock_settings.llm_provider = "openrouter"
+        mock_settings.llm_model_name = "anthropic/claude-3.5-sonnet"
+        mock_settings.resolve_service_llm_provider.return_value = "openrouter"
+        mock_settings.resolve_service_llm_model.return_value = "anthropic/claude-3.5-sonnet"
+        mock_settings.openrouter_api_key = ""
 
-    def test_create_llm_client_unsupported_provider(self):
-        """Test create_llm_client fails with unsupported provider."""
+        with pytest.raises(APIKeyError, match="OpenRouter API key is required"):
+            build_service_llm_model(mock_settings)
+
+    def test_build_service_llm_model_unsupported_provider(self):
+        """Unsupported providers should fail fast."""
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "unsupported"
-        mock_settings.llm_model_name = None
+        mock_settings.llm_model_name = "test-model"
+        mock_settings.resolve_service_llm_provider.return_value = "unsupported"
+        mock_settings.resolve_service_llm_model.return_value = "test-model"
 
-        with pytest.raises(ValueError) as exc_info:
-            create_llm_client(mock_settings)
-
-        assert "Unsupported LLM provider: unsupported" in str(exc_info.value)
+        with pytest.raises(ValueError, match="Unsupported LLM provider: unsupported"):
+            build_service_llm_model(mock_settings)

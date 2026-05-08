@@ -1,6 +1,1 @@
-"""
-LLM client implementations for different providers.
-
-This package contains the client interfaces and implementations for various
-LLM providers like OpenAI and Gemini.
-"""
+"""Provider-specific client helpers that do not use the service LangChain path."""

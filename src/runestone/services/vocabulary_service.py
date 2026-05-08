@@ -7,6 +7,8 @@ for vocabulary-related operations.
 
 from typing import List
 
+from langchain_core.language_models.chat_models import BaseChatModel
+
 from ..api.schemas import Vocabulary as VocabularySchema
 from ..api.schemas import (
     VocabularyImproveRequest,
@@ -16,13 +18,13 @@ from ..api.schemas import (
     VocabularyUpdate,
 )
 from ..config import Settings
-from ..core.clients.base import BaseLLMClient
 from ..core.constants import VOCABULARY_BATCH_SIZE
 from ..core.exceptions import VocabularyItemExists
 from ..core.logging_config import get_logger
 from ..core.prompt_builder.builder import PromptBuilder
 from ..core.prompt_builder.exceptions import ResponseParseError
 from ..core.prompt_builder.parsers import ResponseParser
+from ..core.service_llm import extract_message_text
 from ..db.models import Vocabulary
 from ..db.vocabulary_repository import VocabularyRepository
 from ..schemas.vocabulary import VocabularyResponse
@@ -32,11 +34,11 @@ from ..schemas.vocabulary_save import PriorityWordSaveItem, VocabularyPrioritiza
 class VocabularyService:
     """Service for vocabulary-related business logic."""
 
-    def __init__(self, vocabulary_repository: VocabularyRepository, settings: Settings, llm_client: BaseLLMClient):
-        """Initialize service with vocabulary repository, settings, and LLM client."""
+    def __init__(self, vocabulary_repository: VocabularyRepository, settings: Settings, llm_model: BaseChatModel):
+        """Initialize service with vocabulary repository, settings, and LLM model."""
         self.repo = vocabulary_repository
         self.settings = settings
-        self.llm_client = llm_client
+        self.llm_model = llm_model
         self.logger = get_logger(__name__)
 
         # Initialize prompt builder and parser
@@ -210,7 +212,12 @@ class VocabularyService:
         prompt = self.builder.build_vocabulary_prompt(word_phrase=request.word_phrase, mode=request.mode)
 
         # Get improvement from LLM (async call)
-        response_text = await self.llm_client.improve_vocabulary_item(prompt)
+        self.logger.info(
+            "Improving vocabulary item with provider=%s model=%s",
+            self.settings.resolve_service_llm_provider(),
+            self.settings.resolve_service_llm_model(),
+        )
+        response_text = extract_message_text(await self.llm_model.ainvoke(prompt))
 
         # Parse response using ResponseParser (includes automatic fallback)
         try:
@@ -260,7 +267,12 @@ class VocabularyService:
                 prompt = self.builder.build_vocabulary_batch_prompt(word_phrases)
 
                 # Get batch improvements from LLM (async call)
-                response_text = await self.llm_client.improve_vocabulary_batch(prompt)
+                self.logger.info(
+                    "Improving vocabulary batch with provider=%s model=%s",
+                    self.settings.resolve_service_llm_provider(),
+                    self.settings.resolve_service_llm_model(),
+                )
+                response_text = extract_message_text(await self.llm_model.ainvoke(prompt))
 
                 # Parse batch response
                 enrichments = self.parser.parse_vocabulary_batch_response(response_text)

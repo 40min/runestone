@@ -7,13 +7,15 @@ grammar rules, vocabulary, and generate learning resources.
 
 from typing import Optional
 
+from langchain_core.language_models.chat_models import BaseChatModel
+
 from runestone.config import Settings
-from runestone.core.clients.base import BaseLLMClient
 from runestone.core.exceptions import ContentAnalysisError
 from runestone.core.logging_config import get_logger
 from runestone.core.prompt_builder.builder import PromptBuilder
 from runestone.core.prompt_builder.exceptions import ResponseParseError
 from runestone.core.prompt_builder.parsers import ResponseParser
+from runestone.core.service_llm import extract_message_text
 from runestone.schemas.analysis import ContentAnalysis
 
 
@@ -23,7 +25,7 @@ class ContentAnalyzer:
     def __init__(
         self,
         settings: Settings,
-        client: BaseLLMClient,
+        model: BaseChatModel,
         verbose: Optional[bool] = None,
     ):
         """
@@ -31,7 +33,7 @@ class ContentAnalyzer:
 
         Args:
             settings: Centralized application settings
-            client: LLM client for processing
+            model: LangChain chat model for processing
             verbose: Enable verbose logging. If None, uses settings.verbose
         """
         # Use provided settings or create default
@@ -39,7 +41,7 @@ class ContentAnalyzer:
         self.verbose = verbose if verbose is not None else self.settings.verbose
         self.logger = get_logger(__name__)
 
-        self.client = client
+        self.model = model
 
         # Initialize prompt builder and parser
         self.builder = PromptBuilder()
@@ -62,9 +64,12 @@ class ContentAnalyzer:
             # Build analysis prompt using PromptBuilder
             analysis_prompt = self.builder.build_analysis_prompt(extracted_text)
 
-            self.logger.debug(f"[ContentAnalyzer] Analyzing content with {self.client.provider_name}...")
-
-            response_text = await self.client.analyze_content(analysis_prompt)
+            self.logger.info(
+                "[ContentAnalyzer] Analyzing content with provider=%s model=%s",
+                self.settings.resolve_service_llm_provider(),
+                self.settings.resolve_service_llm_model(),
+            )
+            response_text = extract_message_text(await self.model.ainvoke(analysis_prompt))
 
             if not response_text:
                 raise ContentAnalysisError("No analysis returned from LLM")

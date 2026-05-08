@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from runestone.config import Settings
 from runestone.core.exceptions import ImageProcessingError, OCRError
@@ -24,10 +25,10 @@ class TestOCRProcessor:
 
     def test_init_success(self):
         """Test successful initialization."""
-        mock_client = Mock()
-        processor = OCRProcessor(settings=self.settings, client=mock_client, verbose=True)
+        mock_model = Mock()
+        processor = OCRProcessor(settings=self.settings, model=mock_model, verbose=True)
 
-        assert processor.client == mock_client
+        assert processor.model == mock_model
         assert processor.verbose is True
 
     @patch("PIL.Image.open")
@@ -39,8 +40,8 @@ class TestOCRProcessor:
         mock_image.size = (800, 600)
         mock_image_open.return_value = mock_image
 
-        mock_client = Mock()
-        processor = OCRProcessor(settings=self.settings, client=mock_client)
+        mock_model = Mock()
+        processor = OCRProcessor(settings=self.settings, model=mock_model)
 
         result = processor._load_and_validate_image(self.test_image_path)
 
@@ -59,8 +60,8 @@ class TestOCRProcessor:
         mock_image.convert.return_value = mock_converted
         mock_image_open.return_value = mock_image
 
-        mock_client = Mock()
-        processor = OCRProcessor(settings=self.settings, client=mock_client)
+        mock_model = Mock()
+        processor = OCRProcessor(settings=self.settings, model=mock_model)
 
         result = processor._load_and_validate_image(self.test_image_path)
 
@@ -75,8 +76,8 @@ class TestOCRProcessor:
         mock_image.size = (50, 50)  # Too small
         mock_image_open.return_value = mock_image
 
-        mock_client = Mock()
-        processor = OCRProcessor(settings=self.settings, client=mock_client)
+        mock_model = Mock()
+        processor = OCRProcessor(settings=self.settings, model=mock_model)
 
         with pytest.raises(ImageProcessingError) as exc_info:
             processor._load_and_validate_image(self.test_image_path)
@@ -88,8 +89,8 @@ class TestOCRProcessor:
         """Test error handling for missing image file."""
         mock_image_open.side_effect = FileNotFoundError("File not found")
 
-        mock_client = Mock()
-        processor = OCRProcessor(settings=self.settings, client=mock_client)
+        mock_model = Mock()
+        processor = OCRProcessor(settings=self.settings, model=mock_model)
 
         with pytest.raises(ImageProcessingError) as exc_info:
             processor._load_and_validate_image(self.test_image_path)
@@ -105,8 +106,11 @@ class TestOCRProcessor:
         mock_image.size = (800, 600)
 
         # Mock client response - now async
-        mock_client = AsyncMock()
-        mock_client.extract_text_from_image.return_value = """{
+        mock_model = Mock()
+        bound_model = AsyncMock()
+        mock_model.bind.return_value = bound_model
+        bound_model.ainvoke.return_value = AIMessage(
+            content="""{
             "transcribed_text": "Svenska text från läroboken",
             "recognition_statistics": {
                 "total_elements": 50,
@@ -115,8 +119,9 @@ class TestOCRProcessor:
                 "unable_to_recognize": 0
             }
         }"""
+        )
 
-        processor = OCRProcessor(settings=self.settings, client=mock_client)
+        processor = OCRProcessor(settings=self.settings, model=mock_model)
         result = await processor.extract_text(mock_image)
 
         # Verify result structure - now returns OCRResult object
@@ -126,10 +131,11 @@ class TestOCRProcessor:
         assert result.recognition_statistics.successfully_transcribed == 50
 
         # Verify LLM client was called correctly
-        mock_client.extract_text_from_image.assert_called_once()
-        args = mock_client.extract_text_from_image.call_args[0]
-        assert len(args) == 2  # preprocessed_image and ocr_prompt
-        assert "accurately transcribe all readable text" in args[1]
+        mock_model.bind.assert_called_once_with(max_tokens=10000, temperature=0.1)
+        bound_model.ainvoke.assert_called_once()
+        args = bound_model.ainvoke.call_args[0][0]
+        assert len(args) == 1
+        assert "accurately transcribe all readable text" in args[0].content[0]["text"]
 
     @pytest.mark.anyio
     async def test_extract_text_error_response(self):
@@ -140,10 +146,12 @@ class TestOCRProcessor:
         mock_image.size = (800, 600)
 
         # Mock client error response - now async
-        mock_client = AsyncMock()
-        mock_client.extract_text_from_image.return_value = """{"error": "Could not recognize text on the page."}"""
+        mock_model = Mock()
+        bound_model = AsyncMock()
+        mock_model.bind.return_value = bound_model
+        bound_model.ainvoke.return_value = AIMessage(content='{"error": "Could not recognize text on the page."}')
 
-        processor = OCRProcessor(settings=self.settings, client=mock_client)
+        processor = OCRProcessor(settings=self.settings, model=mock_model)
 
         with pytest.raises(OCRError) as exc_info:
             await processor.extract_text(mock_image)
@@ -159,8 +167,11 @@ class TestOCRProcessor:
         mock_image.size = (800, 600)
 
         # Mock client response with very short text - now async
-        mock_client = AsyncMock()
-        mock_client.extract_text_from_image.return_value = """{
+        mock_model = Mock()
+        bound_model = AsyncMock()
+        mock_model.bind.return_value = bound_model
+        bound_model.ainvoke.return_value = AIMessage(
+            content="""{
             "transcribed_text": "Hi",
             "recognition_statistics": {
                 "total_elements": 1,
@@ -169,8 +180,9 @@ class TestOCRProcessor:
                 "unable_to_recognize": 0
             }
         }"""
+        )
 
-        processor = OCRProcessor(settings=self.settings, client=mock_client)
+        processor = OCRProcessor(settings=self.settings, model=mock_model)
 
         with pytest.raises(OCRError) as exc_info:
             await processor.extract_text(mock_image)
@@ -186,10 +198,12 @@ class TestOCRProcessor:
         mock_image.size = (800, 600)
 
         # Mock empty client response - now async
-        mock_client = AsyncMock()
-        mock_client.extract_text_from_image.return_value = None
+        mock_model = Mock()
+        bound_model = AsyncMock()
+        mock_model.bind.return_value = bound_model
+        bound_model.ainvoke.return_value = AIMessage(content="")
 
-        processor = OCRProcessor(settings=self.settings, client=mock_client)
+        processor = OCRProcessor(settings=self.settings, model=mock_model)
 
         with pytest.raises(OCRError) as exc_info:
             await processor.extract_text(mock_image)
@@ -198,8 +212,8 @@ class TestOCRProcessor:
 
     def test_parse_and_analyze_recognition_stats_success(self):
         """Test successful parsing and analysis of recognition statistics."""
-        mock_client = Mock()
-        processor = OCRProcessor(settings=self.settings, client=mock_client)
+        mock_model = Mock()
+        processor = OCRProcessor(settings=self.settings, model=mock_model)
 
         # Test JSON response with good recognition stats
         test_json = """{
@@ -222,8 +236,8 @@ class TestOCRProcessor:
 
     def test_parse_and_analyze_recognition_stats_low_percentage(self):
         """Test that OCRError is raised when recognition percentage is below 90%."""
-        mock_client = Mock()
-        processor = OCRProcessor(settings=self.settings, client=mock_client)
+        mock_model = Mock()
+        processor = OCRProcessor(settings=self.settings, model=mock_model)
 
         # Test JSON response with poor recognition stats
         test_json = """{
@@ -244,8 +258,8 @@ class TestOCRProcessor:
 
     def test_parse_and_analyze_recognition_stats_no_stats(self):
         """Test handling when no recognition statistics are present."""
-        mock_client = Mock()
-        processor = OCRProcessor(settings=self.settings, client=mock_client)
+        mock_model = Mock()
+        processor = OCRProcessor(settings=self.settings, model=mock_model)
 
         # Test JSON response without statistics (empty stats object)
         test_json = """{
@@ -261,8 +275,8 @@ class TestOCRProcessor:
 
     def test_parse_and_analyze_recognition_stats_zero_total(self):
         """Test handling when total text elements is zero."""
-        mock_client = Mock()
-        processor = OCRProcessor(settings=self.settings, client=mock_client)
+        mock_model = Mock()
+        processor = OCRProcessor(settings=self.settings, model=mock_model)
 
         # Test JSON response with zero total elements
         test_json = """{
@@ -283,8 +297,8 @@ class TestOCRProcessor:
 
     def test_parse_and_analyze_recognition_stats_boundary_percentage(self):
         """Test boundary case where percentage is exactly 90%."""
-        mock_client = Mock()
-        processor = OCRProcessor(settings=self.settings, client=mock_client)
+        mock_model = Mock()
+        processor = OCRProcessor(settings=self.settings, model=mock_model)
 
         # Test JSON response with exactly 90% recognition
         test_json = """{
@@ -312,8 +326,11 @@ class TestOCRProcessor:
         mock_image.size = (800, 600)
 
         # Mock client response with stats - now async
-        mock_client = AsyncMock()
-        mock_client.extract_text_from_image.return_value = """{
+        mock_model = Mock()
+        bound_model = AsyncMock()
+        mock_model.bind.return_value = bound_model
+        bound_model.ainvoke.return_value = AIMessage(
+            content="""{
             "transcribed_text": "Extracted Swedish text content.",
             "recognition_statistics": {
                 "total_elements": 100,
@@ -322,8 +339,9 @@ class TestOCRProcessor:
                 "unable_to_recognize": 2
             }
         }"""
+        )
 
-        processor = OCRProcessor(settings=self.settings, client=mock_client)
+        processor = OCRProcessor(settings=self.settings, model=mock_model)
         result = await processor.extract_text(mock_image)
 
         # Verify result is OCRResult object with text
@@ -340,8 +358,11 @@ class TestOCRProcessor:
         mock_image.size = (800, 600)
 
         # Mock client response with poor stats - now async
-        mock_client = AsyncMock()
-        mock_client.extract_text_from_image.return_value = """{
+        mock_model = Mock()
+        bound_model = AsyncMock()
+        mock_model.bind.return_value = bound_model
+        bound_model.ainvoke.return_value = AIMessage(
+            content="""{
             "transcribed_text": "Some text.",
             "recognition_statistics": {
                 "total_elements": 100,
@@ -350,8 +371,9 @@ class TestOCRProcessor:
                 "unable_to_recognize": 5
             }
         }"""
+        )
 
-        processor = OCRProcessor(settings=self.settings, client=mock_client)
+        processor = OCRProcessor(settings=self.settings, model=mock_model)
 
         with pytest.raises(OCRError) as exc_info:
             await processor.extract_text(mock_image)

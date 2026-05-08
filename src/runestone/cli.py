@@ -21,7 +21,6 @@ from runestone.agents.tools.read_url import read_url
 from runestone.api.schemas import VocabularyItemCreate
 from runestone.config import Settings
 from runestone.core.analyzer import ContentAnalyzer
-from runestone.core.clients.factory import create_llm_client, get_available_providers
 from runestone.core.console import setup_console
 from runestone.core.exceptions import RunestoneError
 from runestone.core.logging_config import setup_logging
@@ -29,6 +28,7 @@ from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
 from runestone.core.prompt_builder.builder import PromptBuilder
 from runestone.core.prompt_builder.types import ImprovementMode
+from runestone.core.service_llm import build_service_llm_model, get_available_service_llm_providers
 from runestone.db.models import User
 from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
@@ -65,7 +65,7 @@ def cli():
 @click.argument("image_path", type=click.Path(exists=True, path_type=Path))
 @click.option(
     "--provider",
-    type=click.Choice(get_available_providers()),
+    type=click.Choice(get_available_service_llm_providers()),
     envvar="LLM_PROVIDER",
     help=(
         f"LLM provider to use (default: {settings.llm_provider}). Can be set via " "LLM_PROVIDER environment variable."
@@ -81,7 +81,7 @@ def cli():
 @click.option(
     "--model",
     help=(
-        "Model name to use. If not provided, uses provider defaults (gpt-4o-mini for OpenAI, ). "
+        "Model name to use. If not provided, uses provider defaults (gpt-5-mini for OpenAI). "
         "Can be set via OPENAI_MODEL environment "
         "variable for OpenAI."
     ),
@@ -126,7 +126,7 @@ def process(
             if provider == "openai":
                 api_key = settings.openai_api_key
             elif provider == "openrouter":
-                api_key = settings.openai_api_key
+                api_key = settings.openrouter_api_key
 
         # Validate API key is available
         if not api_key:
@@ -170,7 +170,7 @@ def process(
             console.print(f"Output format: {output_format}")
 
         # Create LLM client with the specified provider
-        llm_client = create_llm_client(
+        llm_model = build_service_llm_model(
             settings=settings,
             provider=provider,
             model_name=model,
@@ -178,17 +178,17 @@ def process(
 
         # Create OCR client (use dedicated OCR provider if configured, otherwise use main client)
         if settings.ocr_llm_provider:
-            ocr_llm_client = create_llm_client(
+            ocr_llm_model = build_service_llm_model(
                 settings=settings,
                 provider=settings.ocr_llm_provider,
                 model_name=settings.ocr_llm_model_name,
             )
         else:
-            ocr_llm_client = llm_client
+            ocr_llm_model = llm_model
 
         # Initialize components
-        ocr_processor = OCRProcessor(settings, ocr_llm_client)
-        content_analyzer = ContentAnalyzer(settings, llm_client)
+        ocr_processor = OCRProcessor(settings, ocr_llm_model)
+        content_analyzer = ContentAnalyzer(settings, llm_model)
 
         # For CLI, create a simple user object (id=1 for backward compatibility)
         mock_user = User(id=1, email="cli@runestone.local", name="CLI User", hashed_password="", timezone="UTC")
@@ -199,7 +199,7 @@ def process(
         user_service = UserService(user_repo, vocab_repo)
 
         # Create vocabulary service with mock LLM
-        vocab_service = VocabularyService(vocab_repo, settings, llm_client)
+        vocab_service = VocabularyService(vocab_repo, settings, llm_model)
 
         # Initialize processor with dependencies
         processor = RunestoneProcessor(
@@ -309,8 +309,8 @@ def load_vocab(csv_path: Path, db_name: str, skip_existence_check: bool):
             # Create service with database session
             repo = VocabularyRepository(db)
             # Create LLM client for vocabulary service
-            llm_client = create_llm_client(settings=settings)
-            service = VocabularyService(repo, settings, llm_client)
+            llm_model = build_service_llm_model(settings=settings)
+            service = VocabularyService(repo, settings, llm_model)
 
             # Load vocabulary using service
             stats = service.load_vocab_from_csv(items, skip_existence_check, user_id=1)

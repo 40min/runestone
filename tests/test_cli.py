@@ -211,12 +211,12 @@ class TestCLI:
         assert "0.1.0" in result.output
 
     @patch("runestone.cli.settings")
-    @patch("runestone.cli.create_llm_client")
+    @patch("runestone.cli.build_service_llm_model")
     @patch("runestone.cli.ContentAnalyzer")
     @patch("runestone.cli.OCRProcessor")
     @patch("runestone.cli.RunestoneProcessor")
     def test_process_command_env_api_key(
-        self, mock_processor_class, mock_ocr_class, mock_analyzer_class, mock_create_client, mock_settings
+        self, mock_processor_class, mock_ocr_class, mock_analyzer_class, mock_build_model, mock_settings
     ):
         """Test process command using API key from environment."""
         # Mock the global settings instance to use the test API key
@@ -228,8 +228,8 @@ class TestCLI:
         mock_settings.verbose = False
 
         # Mock LLM client
-        mock_llm_client = Mock()
-        mock_create_client.return_value = mock_llm_client
+        mock_llm_model = Mock()
+        mock_build_model.return_value = mock_llm_model
 
         with self.runner.isolated_filesystem():
             Path(self.test_image_path).touch()

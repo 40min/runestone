@@ -6,6 +6,7 @@ import json
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from runestone.config import Settings
 from runestone.core.analyzer import ContentAnalyzer
@@ -26,10 +27,10 @@ class TestContentAnalyzer:
 
     def test_init_success(self):
         """Test successful initialization."""
-        mock_client = Mock()
-        analyzer = ContentAnalyzer(settings=self.settings, client=mock_client, verbose=True)
+        mock_model = Mock()
+        analyzer = ContentAnalyzer(settings=self.settings, model=mock_model, verbose=True)
 
-        assert analyzer.client == mock_client
+        assert analyzer.model == mock_model
         assert analyzer.verbose is True
 
     @pytest.mark.anyio
@@ -53,10 +54,10 @@ class TestContentAnalyzer:
         # Mock client response - now async
         mock_response = analysis_result.model_dump_json()
 
-        mock_client = AsyncMock()
-        mock_client.analyze_content.return_value = mock_response
+        mock_model = AsyncMock()
+        mock_model.ainvoke.return_value = AIMessage(content=mock_response)
 
-        analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
+        analyzer = ContentAnalyzer(settings=self.settings, model=mock_model)
         result = await analyzer.analyze_content(self.sample_text)
 
         # Verify result structure
@@ -75,8 +76,8 @@ class TestContentAnalyzer:
         assert hasattr(result.grammar_focus, "rules")
 
         # Verify client was called correctly
-        mock_client.analyze_content.assert_called_once()
-        args = mock_client.analyze_content.call_args[0]
+        mock_model.ainvoke.assert_called_once()
+        args = mock_model.ainvoke.call_args[0]
         assert self.sample_text in args[0]
         assert "JSON format" in args[0]
 
@@ -86,10 +87,10 @@ class TestContentAnalyzer:
         # Mock invalid JSON response - now async
         mock_response = "This is not valid JSON"
 
-        mock_client = AsyncMock()
-        mock_client.analyze_content.return_value = mock_response
+        mock_model = AsyncMock()
+        mock_model.ainvoke.return_value = AIMessage(content=mock_response)
 
-        analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
+        analyzer = ContentAnalyzer(settings=self.settings, model=mock_model)
         result = await analyzer.analyze_content(self.sample_text)
 
         # Should get fallback analysis with default structure
@@ -116,10 +117,10 @@ class TestContentAnalyzer:
 
         mock_response = json.dumps(incomplete_result)
 
-        mock_client = AsyncMock()
-        mock_client.analyze_content.return_value = mock_response
+        mock_model = AsyncMock()
+        mock_model.ainvoke.return_value = AIMessage(content=mock_response)
 
-        analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
+        analyzer = ContentAnalyzer(settings=self.settings, model=mock_model)
 
         # With the new parser, missing fields trigger fallback
         result = await analyzer.analyze_content(self.sample_text)
@@ -136,12 +137,12 @@ class TestContentAnalyzer:
     @pytest.mark.anyio
     async def test_analyze_content_no_response(self):
         """Test handling of empty response."""
-        mock_response = None
+        mock_response = ""
 
-        mock_client = AsyncMock()
-        mock_client.analyze_content.return_value = mock_response
+        mock_model = AsyncMock()
+        mock_model.ainvoke.return_value = AIMessage(content=mock_response)
 
-        analyzer = ContentAnalyzer(settings=self.settings, client=mock_client)
+        analyzer = ContentAnalyzer(settings=self.settings, model=mock_model)
 
         with pytest.raises(ContentAnalysisError) as exc_info:
             await analyzer.analyze_content(self.sample_text)

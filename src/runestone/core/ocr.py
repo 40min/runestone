@@ -5,19 +5,23 @@ This module handles image processing and text extraction from Swedish textbook p
 using various LLM providers like OpenAI or Gemini.
 """
 
+import base64
+import io
 import time
 from pathlib import Path
 from typing import Optional
 
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import HumanMessage
 from PIL import Image
 
 from runestone.config import Settings
-from runestone.core.clients.base import BaseLLMClient
 from runestone.core.exceptions import ImageProcessingError, OCRError
 from runestone.core.logging_config import get_logger
 from runestone.core.prompt_builder.builder import PromptBuilder
 from runestone.core.prompt_builder.exceptions import ResponseParseError
 from runestone.core.prompt_builder.parsers import ResponseParser
+from runestone.core.service_llm import extract_message_text
 from runestone.schemas.ocr import OCRResult
 
 
@@ -27,7 +31,7 @@ class OCRProcessor:
     def __init__(
         self,
         settings: Settings,
-        client: BaseLLMClient,
+        model: BaseChatModel,
         verbose: Optional[bool] = None,
     ):
         """
@@ -35,7 +39,7 @@ class OCRProcessor:
 
         Args:
             settings: application settings
-            client: LLM client for processing
+            model: LangChain chat model for processing
             verbose: Enable verbose logging. If None, uses settings.verbose
         """
         # Use provided settings or create default
@@ -43,7 +47,7 @@ class OCRProcessor:
         self.verbose = verbose if verbose is not None else self.settings.verbose
         self.logger = get_logger(__name__)
 
-        self.client = client
+        self.model = model
 
         # Initialize prompt builder and parser
         self.builder = PromptBuilder()
@@ -155,6 +159,14 @@ class OCRProcessor:
             else:
                 return image
 
+    @staticmethod
+    def _image_to_data_url(image: Image.Image) -> str:
+        """Convert PIL image to an inline JPEG data URL for multimodal model input."""
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG", quality=95)
+        encoded = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        return f"data:image/jpeg;base64,{encoded}"
+
     async def extract_text(self, image: Image.Image) -> OCRResult:
         """
         Extract text from a Swedish textbook page image with enhanced preprocessing.
@@ -200,8 +212,31 @@ class OCRProcessor:
             ocr_prompt = self.builder.build_ocr_prompt()
             self.logger.debug(f"[OCRProcessor] Prompt built, length: {len(ocr_prompt)} chars")
 
-            # Use the client for OCR processing with preprocessed image
-            extracted_text = await self.client.extract_text_from_image(preprocessed_image, ocr_prompt)
+            image_data_url = self._image_to_data_url(preprocessed_image)
+            self.logger.info(
+                "[OCRProcessor] Extracting text with provider=%s model=%s",
+                self.settings.resolve_ocr_llm_provider(),
+                self.settings.resolve_ocr_llm_model(),
+            )
+            ocr_model = self.model.bind(max_tokens=10000, temperature=0.1)
+            extracted_text = extract_message_text(
+                await ocr_model.ainvoke(
+                    [
+                        HumanMessage(
+                            content=[
+                                {"type": "text", "text": ocr_prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": image_data_url,
+                                        "detail": "high",
+                                    },
+                                },
+                            ]
+                        )
+                    ]
+                )
+            )
 
             # Check if we got a valid response
             if not extracted_text:

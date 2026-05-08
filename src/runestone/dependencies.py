@@ -9,12 +9,12 @@ consistent object creation and configuration.
 from typing import Annotated
 
 from fastapi import Depends, Request
+from langchain_core.language_models.chat_models import BaseChatModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from runestone.agents.manager import AgentsManager
 from runestone.config import Settings, settings
 from runestone.core.analyzer import ContentAnalyzer
-from runestone.core.clients.base import BaseLLMClient
 from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.agent_side_effect_repository import AgentSideEffectRepository
@@ -158,36 +158,36 @@ def get_memory_item_service(
     return MemoryItemService(repo)
 
 
-def get_llm_client(request: Request) -> BaseLLMClient:
+def get_llm_model(request: Request) -> BaseChatModel:
     """
-    Dependency injection for LLM client.
+    Dependency injection for LLM model.
 
     Args:
         request: FastAPI request object
 
     Returns:
-        BaseLLMClient: Cached LLM client instance
+        BaseChatModel: Cached LLM model instance
     """
-    return request.app.state.llm_client
+    return request.app.state.llm_model
 
 
-def get_ocr_llm_client(request: Request) -> BaseLLMClient:
+def get_ocr_llm_model(request: Request) -> BaseChatModel:
     """
-    Dependency injection for OCR-specific LLM client.
+    Dependency injection for OCR-specific LLM model.
 
     Args:
         request: FastAPI request object
 
     Returns:
-        BaseLLMClient: Cached OCR-specific LLM client instance
+        BaseChatModel: Cached OCR-specific LLM model instance
     """
-    return request.app.state.ocr_llm_client
+    return request.app.state.ocr_llm_model
 
 
 def get_vocabulary_service(
     repo: Annotated[VocabularyRepository, Depends(get_vocabulary_repository)],
     settings: Annotated[Settings, Depends(get_settings)],
-    llm_client: Annotated[BaseLLMClient, Depends(get_llm_client)],
+    llm_model: Annotated[BaseChatModel, Depends(get_llm_model)],
 ) -> VocabularyService:
     """
     Dependency injection for vocabulary service.
@@ -195,46 +195,46 @@ def get_vocabulary_service(
     Args:
         repo: VocabularyRepository from dependency injection
         settings: Application settings from dependency injection
-        llm_client: LLM client from dependency injection
+        llm_model: LLM model from dependency injection
 
     Returns:
         VocabularyService: Service instance with repository and settings dependencies
     """
-    return VocabularyService(repo, settings, llm_client)
+    return VocabularyService(repo, settings, llm_model)
 
 
 def get_ocr_processor(
     settings: Annotated[Settings, Depends(get_settings)],
-    ocr_llm_client: Annotated[BaseLLMClient, Depends(get_ocr_llm_client)],
+    ocr_llm_model: Annotated[BaseChatModel, Depends(get_ocr_llm_model)],
 ) -> OCRProcessor:
     """
     Dependency injection for OCR processor.
 
     Args:
         settings: Application settings from dependency injection
-        ocr_llm_client: OCR-specific LLM client from dependency injection
+        ocr_llm_model: OCR-specific LLM model from dependency injection
 
     Returns:
         OCRProcessor: OCR processor instance
     """
-    return OCRProcessor(settings, ocr_llm_client)
+    return OCRProcessor(settings, ocr_llm_model)
 
 
 def get_content_analyzer(
     settings: Annotated[Settings, Depends(get_settings)],
-    llm_client: Annotated[BaseLLMClient, Depends(get_llm_client)],
+    llm_model: Annotated[BaseChatModel, Depends(get_llm_model)],
 ) -> ContentAnalyzer:
     """
     Dependency injection for content analyzer.
 
     Args:
         settings: Application settings from dependency injection
-        llm_client: LLM client from dependency injection
+        llm_model: LLM model from dependency injection
 
     Returns:
         ContentAnalyzer: Content analyzer instance
     """
-    return ContentAnalyzer(settings, llm_client)
+    return ContentAnalyzer(settings, llm_model)
 
 
 def get_runestone_processor(

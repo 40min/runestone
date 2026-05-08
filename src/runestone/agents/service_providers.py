@@ -13,11 +13,11 @@ from runestone.services.memory_item_service import MemoryItemService
 from runestone.services.vocabulary_service import VocabularyService
 
 
-def _create_llm_client():
-    """Get LLM client based on settings (for use in non-request contexts)."""
-    from runestone.core.clients.factory import create_llm_client
+def _create_llm_model():
+    """Get non-agent chat model based on settings for service-layer use."""
+    from runestone.core.service_llm import build_service_llm_model
 
-    return create_llm_client(settings)
+    return build_service_llm_model(settings)
 
 
 @asynccontextmanager
@@ -59,8 +59,8 @@ async def provide_vocabulary_service() -> AsyncIterator[VocabularyService]:
     current_settings = settings
     async with provide_db_session() as session:
         repo = VocabularyRepository(session)
-        llm_client = _create_llm_client()
-        service = VocabularyService(repo, current_settings, llm_client)
+        llm_model = _create_llm_model()
+        service = VocabularyService(repo, current_settings, llm_model)
         yield service
 
 
