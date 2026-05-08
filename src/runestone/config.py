@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, model_validator
 from pydantic_settings import BaseSettings
 
-DEFAULT_SERVICE_LLM_MODEL = "gpt-4o-mini"
+DEFAULT_SERVICE_LLM_MODEL = "gpt-5.4-nano"
 
 
 class ReasoningLevel(str, Enum):
