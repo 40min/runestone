@@ -592,6 +592,22 @@ class TestVocabularyService:
         prompt_arg = service.llm_model.ainvoke.call_args[0][0]
         assert "ett äpple" in prompt_arg
 
+    async def test_improve_item_falls_back_to_client_method(self, service):
+        """Use the legacy client helpers when the injected model lacks ainvoke."""
+        service.llm_model = object()
+        service.llm_client.improve_vocabulary_item = AsyncMock(
+            return_value='{"translation": "an apple", "example_phrase": "Jag äter ett äpple varje dag."}'
+        )
+
+        request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.ALL_FIELDS)
+
+        result = await service.improve_item(request)
+
+        assert isinstance(result, VocabularyImproveResponse)
+        assert result.translation == "an apple"
+        assert result.example_phrase == "Jag äter ett äpple varje dag."
+        service.llm_client.improve_vocabulary_item.assert_awaited_once()
+
     async def test_improve_item_without_translation(self, service):
         """Test vocabulary improvement with EXAMPLE_ONLY mode."""
         # Mock LLM client from the service fixture
@@ -707,6 +723,23 @@ class TestVocabularyService:
         assert enriched_items[0].extra_info == "en-word, noun, base form: äpple"
         assert enriched_items[1].extra_info == "en-word, noun"
         assert enriched_items[2].extra_info == "verb, forms: vara, är, var, varit"
+
+    async def test_enrich_vocabulary_items_fall_back_to_client_method(self, service):
+        """Use the legacy batch helper when the injected model lacks ainvoke."""
+        service.llm_model = object()
+        service.llm_client.improve_vocabulary_batch = AsyncMock(
+            return_value='{"ett äpple": "en-word, noun, base form: äpple"}'
+        )
+
+        items = [
+            VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple.")
+        ]
+
+        enriched_items = await service._enrich_vocabulary_items(items)
+
+        assert len(enriched_items) == 1
+        assert enriched_items[0].extra_info == "en-word, noun, base form: äpple"
+        service.llm_client.improve_vocabulary_batch.assert_awaited_once()
 
     async def test_enrich_vocabulary_items_llm_exception(self, service):
         """Test vocabulary items enrichment when LLM raises exception."""

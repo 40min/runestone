@@ -1,11 +1,13 @@
 """
 Service layer for vocabulary operations.
 
-This module contains service classes that handle business logic
-for vocabulary-related operations.
+This module contains service classes that handle vocabulary business logic and
+normalize the LLM response shape used by enrichment workflows.
 """
 
 from typing import List
+
+from langchain_core.messages import BaseMessage
 
 from ..api.schemas import Vocabulary as VocabularySchema
 from ..api.schemas import (
@@ -37,6 +39,7 @@ class VocabularyService:
         self.repo = vocabulary_repository
         self.settings = settings
         self.llm_client = llm_client
+        self.llm_model = llm_client
         self.logger = get_logger(__name__)
 
         # Initialize prompt builder and parser
@@ -210,7 +213,7 @@ class VocabularyService:
         prompt = self.builder.build_vocabulary_prompt(word_phrase=request.word_phrase, mode=request.mode)
 
         # Get improvement from LLM (async call)
-        response_text = await self.llm_client.improve_vocabulary_item(prompt)
+        response_text = await self._invoke_vocabulary_item(prompt)
 
         # Parse response using ResponseParser (includes automatic fallback)
         try:
@@ -260,7 +263,7 @@ class VocabularyService:
                 prompt = self.builder.build_vocabulary_batch_prompt(word_phrases)
 
                 # Get batch improvements from LLM (async call)
-                response_text = await self.llm_client.improve_vocabulary_batch(prompt)
+                response_text = await self._invoke_vocabulary_batch(prompt)
 
                 # Parse batch response
                 enrichments = self.parser.parse_vocabulary_batch_response(response_text)
@@ -312,6 +315,27 @@ class VocabularyService:
         )
 
         return enriched_items
+
+    async def _invoke_vocabulary_item(self, prompt: str) -> str:
+        """Return single-item vocabulary output from either supported LLM interface."""
+        if hasattr(self.llm_model, "ainvoke"):
+            response = await self.llm_model.ainvoke(prompt)
+            return self._extract_message_text(response)
+        return await self.llm_client.improve_vocabulary_item(prompt)
+
+    async def _invoke_vocabulary_batch(self, prompt: str) -> str:
+        """Return batch vocabulary output from either supported LLM interface."""
+        if hasattr(self.llm_model, "ainvoke"):
+            response = await self.llm_model.ainvoke(prompt)
+            return self._extract_message_text(response)
+        return await self.llm_client.improve_vocabulary_batch(prompt)
+
+    @staticmethod
+    def _extract_message_text(response: str | BaseMessage) -> str:
+        """Normalize LLM responses into plain text before parsing."""
+        if isinstance(response, BaseMessage):
+            return response.text
+        return response
 
     async def get_existing_word_phrases(self, word_phrases: List[str], user_id: int) -> List[str]:
         """Get existing word phrases from the repository."""
