@@ -9,9 +9,11 @@ Keep package `__init__.py` files empty unless there is an explicit, reviewed rea
 Prefer the Makefile targets over spelling out raw tool commands; the Makefile also keeps the `uv` cache inside the repo for reproducible local and CI runs.
 
 - Use `make check-readiness` before commit-sized changes. It runs lint checks, backend and frontend tests, then a frontend build dry-run.
-- Use scoped checks while iterating: `make backend-test`, `make frontend-test`, `make lint-check`, or targeted `uv run pytest tests/path -v` for backend tests.
-- Bootstrap a fresh worktree with `make setup` or `make install-dev`; use `make install-backend` and `make install-frontend` when only one side of the stack needs dependency refreshes.
+- Use scoped checks while iterating: `make backend-test`, `make frontend-test`, `make lint-check`, `make test-coverage`, or targeted `uv run pytest tests/path -v` for backend tests.
+- For broader validation sweeps, prefer the composed Make workflows: `make dev-test`, `make dev-full`, `make ci-lint`, and `make ci-test`.
+- Bootstrap a fresh worktree with `make setup` or `make install-dev`; use `make install-backend` and `make install-frontend` when only one side of the stack needs dependency refreshes, or `make install-all` to refresh both together.
 - Start services with `make run-backend` (applies Alembic migrations, serves FastAPI on port 8010), `make run-frontend` (Vite on port 5173), or `make run-dev` for both.
+- For CLI and prompt-debugging workflows, use `make run IMAGE_PATH=...`, `make load-vocab CSV_PATH=...`, and the prompt targets `make test-prompts-ocr`, `make test-prompts-analysis TEXT=...`, `make test-prompts-vocabulary WORD=...`, and `make test-grammar-search QUERY=...`.
 - When touching the Telegram recall worker or containerized dev stack, use `make run-recall`, `make docker-up`, `make docker-down`, and `make docker-build`; when refreshing running containers, prefer `make restart-recall`, `make rebuild-restart-recall`, or `make rebuild-restart-all` over ad hoc Docker commands.
 - Manage schema changes through Alembic targets: `make db-init`, `make db-migrate MESSAGE="..."`, `make db-upgrade`, `make db-downgrade REVISION=...`, `make db-current`, and `make db-history`.
 
