@@ -80,9 +80,10 @@ def cli():
 )
 @click.option(
     "--model",
+    envvar="LLM_MODEL_NAME",
     help=(
-        "Model name to use. If not provided, uses the configured service default "
-        "(gpt-5.4-nano). Can be set via the LLM_MODEL_NAME environment variable."
+        f"Model name to use (default: {settings.resolve_service_llm_model()}). "
+        "Can be set via the LLM_MODEL_NAME environment variable."
     ),
 )
 @click.option(
