@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import AIMessage
 from sqlalchemy import func, select
 
@@ -20,6 +21,7 @@ from runestone.core.exceptions import VocabularyItemExists
 from runestone.db.models import User as UserModel
 from runestone.db.models import Vocabulary as VocabularyModel
 from runestone.db.vocabulary_repository import VocabularyRepository
+from runestone.schemas.vocabulary import VocabularyResponse
 from runestone.schemas.vocabulary_save import PriorityWordSaveItem, WordSaveCandidate
 from runestone.services.vocabulary_service import VocabularyService
 
@@ -570,11 +572,13 @@ class TestVocabularyService:
 
     async def test_improve_item_success(self, service):
         """Test successful vocabulary item improvement with ALL_FIELDS mode."""
-        # Mock LLM client from the service fixture
-        service.llm_model.ainvoke.return_value = AIMessage(
-            content='{"translation": "an apple", "example_phrase": "Jag äter ett äpple varje dag.", '
-            '"extra_info": "en-word, noun"}'
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = VocabularyResponse(
+            translation="an apple",
+            example_phrase="Jag äter ett äpple varje dag.",
+            extra_info="en-word, noun",
         )
+        service.llm_model.with_structured_output = Mock(return_value=structured_model)
 
         # Test request with ALL_FIELDS mode
         request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.ALL_FIELDS)
@@ -588,16 +592,80 @@ class TestVocabularyService:
         assert result.extra_info == "en-word, noun"
 
         # Verify LLM client was called correctly
-        service.llm_model.ainvoke.assert_called_once()
-        prompt_arg = service.llm_model.ainvoke.call_args[0][0]
+        structured_model.ainvoke.assert_awaited_once()
+        prompt_arg = structured_model.ainvoke.call_args[0][0]
         assert "ett äpple" in prompt_arg
+
+    async def test_improve_item_uses_structured_output_when_available(self, service):
+        """Prefer LangChain schema output over legacy text parsing when supported."""
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = VocabularyResponse(
+            translation="an apple",
+            example_phrase="Jag äter ett äpple varje dag.",
+            extra_info="en-word, noun",
+        )
+        service.llm_model.with_structured_output = Mock(return_value=structured_model)
+
+        request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.ALL_FIELDS)
+
+        result = await service.improve_item(request)
+
+        assert isinstance(result, VocabularyImproveResponse)
+        assert result.translation == "an apple"
+        assert result.example_phrase == "Jag äter ett äpple varje dag."
+        assert result.extra_info == "en-word, noun"
+        service.llm_model.with_structured_output.assert_called_once()
+        structured_model.ainvoke.assert_awaited_once()
+        service.llm_model.ainvoke.assert_not_called()
+
+    async def test_improve_item_structured_output_respects_mode_compatibility(self, service):
+        """Structured output should preserve existing mode-specific response fields."""
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = VocabularyResponse(
+            translation="an apple",
+            example_phrase="Jag äter ett äpple varje dag.",
+            extra_info="en-word, noun",
+        )
+        service.llm_model.with_structured_output = Mock(return_value=structured_model)
+
+        request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.EXTRA_INFO_ONLY)
+
+        result = await service.improve_item(request)
+
+        assert isinstance(result, VocabularyImproveResponse)
+        assert result.translation is None
+        assert result.example_phrase is None
+        assert result.extra_info == "en-word, noun"
+
+    async def test_improve_item_without_structured_output_support_fails(self, service):
+        """Fail when the configured model lacks structured output support."""
+        service.llm_model = object()
+
+        request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.ALL_FIELDS)
+
+        with pytest.raises(RuntimeError, match="Structured vocabulary response failed"):
+            await service.improve_item(request)
+
+    async def test_improve_item_structured_output_parser_failure_is_signaled(self, service):
+        """Propagate schema parsing failures instead of silently falling back."""
+        structured_model = AsyncMock()
+        structured_model.ainvoke.side_effect = OutputParserException("bad schema output")
+        service.llm_model.with_structured_output = Mock(return_value=structured_model)
+
+        request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.ALL_FIELDS)
+
+        with pytest.raises(ValueError, match="Structured vocabulary response validation failed"):
+            await service.improve_item(request)
 
     async def test_improve_item_without_translation(self, service):
         """Test vocabulary improvement with EXAMPLE_ONLY mode."""
-        # Mock LLM client from the service fixture
-        service.llm_model.ainvoke.return_value = AIMessage(
-            content='{"example_phrase": "Jag äter ett äpple varje dag."}'
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = VocabularyResponse(
+            translation="an apple",
+            example_phrase="Jag äter ett äpple varje dag.",
+            extra_info="en-word, noun",
         )
+        service.llm_model.with_structured_output = Mock(return_value=structured_model)
 
         # Test request with EXAMPLE_ONLY mode
         request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.EXAMPLE_ONLY)
@@ -611,34 +679,35 @@ class TestVocabularyService:
         assert result.extra_info is None
 
     async def test_improve_item_malformed_response_handling(self, service):
-        """Test vocabulary improvement with malformed LLM response that gets parsed gracefully."""
-
-        # Mock LLM client from the service fixture
-        service.llm_model.ainvoke.return_value = AIMessage(
-            content='translation: "clear", example_phrase: "Det är tydliga instruktioner.", extra_info: "adjective"'
+        """Test vocabulary improvement with structured schema output."""
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = VocabularyResponse(
+            translation="clear",
+            example_phrase="Det är tydliga instruktioner.",
+            extra_info="adjective",
         )
+        service.llm_model.with_structured_output = Mock(return_value=structured_model)
 
         # Test request with ALL_FIELDS mode
         request = VocabularyImproveRequest(word_phrase="tydliga", mode=ImprovementMode.ALL_FIELDS)
 
         result = await service.improve_item(request)
 
-        # Should handle malformed response gracefully and extract what it can
+        # Structured output should map directly
         assert isinstance(result, VocabularyImproveResponse)
-        # The parser should extract "clear" from the translation field
         assert result.translation == "clear"
-        # The parser should extract the example phrase from the example_phrase field
         assert result.example_phrase == "Det är tydliga instruktioner."
-        # The parser should extract extra_info
         assert result.extra_info == "adjective"
 
     async def test_improve_item_with_extra_info(self, service):
         """Test vocabulary improvement with ALL_FIELDS mode including extra_info."""
-        # Mock LLM client from the service fixture
-        service.llm_model.ainvoke.return_value = AIMessage(
-            content='{"translation": "an apple", "example_phrase": "Jag äter ett äpple varje dag.", '
-            '"extra_info": "en-word, noun, base form: äpple"}'
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = VocabularyResponse(
+            translation="an apple",
+            example_phrase="Jag äter ett äpple varje dag.",
+            extra_info="en-word, noun, base form: äpple",
         )
+        service.llm_model.with_structured_output = Mock(return_value=structured_model)
 
         # Test request with ALL_FIELDS mode
         request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.ALL_FIELDS)
@@ -651,16 +720,20 @@ class TestVocabularyService:
         assert result.example_phrase == "Jag äter ett äpple varje dag."
         assert result.extra_info == "en-word, noun, base form: äpple"
 
-        # Verify LLM client was called correctly
-        service.llm_model.ainvoke.assert_called_once()
-        prompt_arg = service.llm_model.ainvoke.call_args[0][0]
+        service.llm_model.with_structured_output.assert_called_once()
+        prompt_arg = structured_model.ainvoke.call_args[0][0]
         assert "ett äpple" in prompt_arg
         assert "extra_info" in prompt_arg
 
     async def test_improve_item_extra_info_only(self, service):
         """Test vocabulary improvement with EXTRA_INFO_ONLY mode."""
-        # Mock LLM client from the service fixture
-        service.llm_model.ainvoke.return_value = AIMessage(content='{"extra_info": "en-word, noun, base form: äpple"}')
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = VocabularyResponse(
+            translation="an apple",
+            example_phrase="Jag äter ett äpple varje dag.",
+            extra_info="en-word, noun, base form: äpple",
+        )
+        service.llm_model.with_structured_output = Mock(return_value=structured_model)
 
         # Test request with EXTRA_INFO_ONLY mode
         request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.EXTRA_INFO_ONLY)
@@ -673,11 +746,7 @@ class TestVocabularyService:
         assert result.example_phrase is None
         assert result.extra_info == "en-word, noun, base form: äpple"
 
-        service.llm_model.ainvoke.assert_called_once()
-        prompt_arg = service.llm_model.ainvoke.call_args[0][0]
-        assert '"translation"' in prompt_arg
-        assert '"example_phrase"' in prompt_arg
-        assert '"extra_info"' in prompt_arg
+        structured_model.ainvoke.assert_awaited_once()
 
     async def test_enrich_vocabulary_items_success(self, service):
         """Test successful vocabulary items batch enrichment."""
@@ -707,6 +776,23 @@ class TestVocabularyService:
         assert enriched_items[0].extra_info == "en-word, noun, base form: äpple"
         assert enriched_items[1].extra_info == "en-word, noun"
         assert enriched_items[2].extra_info == "verb, forms: vara, är, var, varit"
+
+    async def test_enrich_vocabulary_items_fall_back_to_client_method(self, service):
+        """Use the legacy batch helper when the injected model lacks ainvoke."""
+        service.llm_model = object()
+        service.llm_client.improve_vocabulary_batch = AsyncMock(
+            return_value='{"ett äpple": "en-word, noun, base form: äpple"}'
+        )
+
+        items = [
+            VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple.")
+        ]
+
+        enriched_items = await service._enrich_vocabulary_items(items)
+
+        assert len(enriched_items) == 1
+        assert enriched_items[0].extra_info == "en-word, noun, base form: äpple"
+        service.llm_client.improve_vocabulary_batch.assert_awaited_once()
 
     async def test_enrich_vocabulary_items_llm_exception(self, service):
         """Test vocabulary items enrichment when LLM raises exception."""

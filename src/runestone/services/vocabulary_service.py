@@ -1,14 +1,16 @@
 """
 Service layer for vocabulary operations.
 
-This module contains service classes that handle business logic
-for vocabulary-related operations.
+This module contains service classes that handle vocabulary business logic and
+normalize the LLM response shape used by enrichment workflows.
 """
 
 from typing import List
 
+from langchain_core.exceptions import OutputParserException
 from langchain_core.language_models.chat_models import BaseChatModel
 
+from ..api.schemas import ImprovementMode
 from ..api.schemas import Vocabulary as VocabularySchema
 from ..api.schemas import (
     VocabularyImproveRequest,
@@ -22,7 +24,6 @@ from ..core.constants import VOCABULARY_BATCH_SIZE
 from ..core.exceptions import VocabularyItemExists
 from ..core.logging_config import get_logger
 from ..core.prompt_builder.builder import PromptBuilder
-from ..core.prompt_builder.exceptions import ResponseParseError
 from ..core.prompt_builder.parsers import ResponseParser
 from ..core.service_llm import extract_message_text
 from ..db.models import Vocabulary
@@ -35,7 +36,12 @@ class VocabularyService:
     """Service for vocabulary-related business logic."""
 
     def __init__(self, vocabulary_repository: VocabularyRepository, settings: Settings, llm_model: BaseChatModel):
-        """Initialize service with vocabulary repository, settings, and LLM model."""
+        """
+        Initialize service with vocabulary repository, settings, and LangChain chat model.
+
+        The provided model must support `with_structured_output` because
+        `improve_item` relies on schema-backed output validation.
+        """
         self.repo = vocabulary_repository
         self.settings = settings
         self.llm_model = llm_model
@@ -210,28 +216,42 @@ class VocabularyService:
         """Improve a vocabulary item using LLM to generate translation, example phrase, and extra info."""
         # Build improvement prompt using PromptBuilder
         prompt = self.builder.build_vocabulary_prompt(word_phrase=request.word_phrase, mode=request.mode)
+        structured_response = await self._invoke_vocabulary_item_structured(prompt)
+        return self._to_improve_response(structured_response, request.mode)
 
-        # Get improvement from LLM (async call)
-        self.logger.info(
-            "Improving vocabulary item with provider=%s model=%s",
-            self.settings.resolve_service_llm_provider(),
-            self.settings.resolve_service_llm_model(),
-        )
-        response_text = extract_message_text(await self.llm_model.ainvoke(prompt))
-
-        # Parse response using ResponseParser (includes automatic fallback)
+    async def _invoke_vocabulary_item_structured(self, prompt: str) -> VocabularyResponse:
+        """Return schema-backed vocabulary improvement via LangChain structured output."""
         try:
-            vocab_response: VocabularyResponse = self.parser.parse_vocabulary_response(response_text, request.mode)
+            structured_model = self.llm_model.with_structured_output(VocabularyResponse)
+            response = await structured_model.ainvoke(prompt)
+            if isinstance(response, VocabularyResponse):
+                return response
+            return VocabularyResponse.model_validate(response)
+        except OutputParserException as exc:
+            raise ValueError(f"Structured vocabulary response validation failed: {exc}") from exc
+        except Exception as exc:
+            raise RuntimeError(f"Structured vocabulary response failed: {exc}") from exc
 
+    @staticmethod
+    def _to_improve_response(vocab_response: VocabularyResponse, mode: ImprovementMode) -> VocabularyImproveResponse:
+        """Map schema output into API response while preserving mode compatibility."""
+        if mode == ImprovementMode.EXAMPLE_ONLY:
             return VocabularyImproveResponse(
-                translation=vocab_response.translation,
+                translation=None,
                 example_phrase=vocab_response.example_phrase,
+                extra_info=None,
+            )
+        if mode == ImprovementMode.EXTRA_INFO_ONLY:
+            return VocabularyImproveResponse(
+                translation=None,
+                example_phrase=None,
                 extra_info=vocab_response.extra_info,
             )
-        except ResponseParseError as e:
-            self.logger.error(f"Failed to parse vocabulary response: {e}")
-            # Return empty response as fallback
-            return VocabularyImproveResponse(translation=None, example_phrase="", extra_info=None)
+        return VocabularyImproveResponse(
+            translation=vocab_response.translation,
+            example_phrase=vocab_response.example_phrase,
+            extra_info=vocab_response.extra_info,
+        )
 
     async def _enrich_vocabulary_items(self, items: List[VocabularyItemCreate]) -> List[VocabularyItemCreate]:
         """
@@ -266,13 +286,7 @@ class VocabularyService:
                 # Build batch prompt
                 prompt = self.builder.build_vocabulary_batch_prompt(word_phrases)
 
-                # Get batch improvements from LLM (async call)
-                self.logger.info(
-                    "Improving vocabulary batch with provider=%s model=%s",
-                    self.settings.resolve_service_llm_provider(),
-                    self.settings.resolve_service_llm_model(),
-                )
-                response_text = extract_message_text(await self.llm_model.ainvoke(prompt))
+                response_text = await self._invoke_vocabulary_batch(prompt)
 
                 # Parse batch response
                 enrichments = self.parser.parse_vocabulary_batch_response(response_text)
@@ -324,6 +338,11 @@ class VocabularyService:
         )
 
         return enriched_items
+
+    async def _invoke_vocabulary_batch(self, prompt: str) -> str:
+        """Return batch vocabulary output."""
+        response = await self.llm_model.ainvoke(prompt)
+        return extract_message_text(response)
 
     async def get_existing_word_phrases(self, word_phrases: List[str], user_id: int) -> List[str]:
         """Get existing word phrases from the repository."""
