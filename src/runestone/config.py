@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Literal, Optional
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, model_validator
+from pydantic import AliasChoices, BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings
 
 DEFAULT_SERVICE_LLM_MODEL = "gpt-5.4-nano"
@@ -40,7 +40,7 @@ class Settings(BaseSettings):
 
     # LLM Provider Configuration
     llm_provider: str
-    llm_model_name: Optional[str] = None
+    llm_model_name: Optional[str] = Field(default=None, validation_alias=AliasChoices("LLM_MODEL_NAME", "OPENAI_MODEL"))
 
     # OpenAI Configuration
     openai_api_key: str

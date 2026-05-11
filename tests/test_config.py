@@ -165,6 +165,28 @@ class TestSettings:
         assert test_settings.teacher_provider == "openai"
         assert test_settings.teacher_model == "teacher-env-model"
 
+    def test_service_llm_model_accepts_legacy_openai_model_env_name(self):
+        """OPENAI_MODEL should keep configuring the shared service model during the migration."""
+        env_vars = {
+            "LLM_PROVIDER": "openai",
+            "OPENAI_API_KEY": "test-key",
+            "OPENAI_MODEL": "gpt-4o-mini",
+            "OPENROUTER_API_KEY": "test-openrouter-key",
+            "ALLOWED_ORIGINS": "http://localhost:3000",
+            "DATABASE_URL": "sqlite:///./test.db",
+            "TELEGRAM_BOT_TOKEN": "test-token",
+            "FRONTEND_URL": "http://localhost:5173",
+            "JWT_SECRET_KEY": "secret",
+            "TEACHER_MODEL": "teacher-model",
+            "COORDINATOR_MODEL": "coordinator-model",
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            test_settings = Settings()
+
+        assert test_settings.llm_model_name == "gpt-4o-mini"
+        assert test_settings.resolve_service_llm_model() == "gpt-4o-mini"
+
     def test_service_llm_resolvers_use_default_fallbacks(self):
         """Service-side resolver helpers should centralize default provider/model selection."""
         test_settings = Settings.model_construct(
