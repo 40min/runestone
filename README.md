@@ -478,10 +478,10 @@ Design docs:
 
 **Provider Selection:**
 - `LLM_PROVIDER`: Choose your LLM provider (`openai` or `openrouter`, default: `openai`)
+- `LLM_MODEL_NAME`: Shared service model name for OCR, analysis, and vocabulary enrichment (default: `gpt-5.4-nano`)
 
 **OpenAI Configuration:**
 - `OPENAI_API_KEY`: Your OpenAI API key (required for OpenAI provider)
-- `OPENAI_MODEL`: Model to use (default: `gpt-4o-mini`)
 
 **Gemini Configuration:**
 - `GEMINI_API_KEY`: Your Google Gemini API key (required for Gemini provider)
@@ -529,10 +529,10 @@ Edit `.env` with your preferred settings:
 ```env
 # Choose your provider
 LLM_PROVIDER=openai
+LLM_MODEL_NAME=gpt-4o-mini
 
 # OpenAI settings
 OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-4o-mini
 
 # Gemini settings (if using Gemini)
 GEMINI_API_KEY=your_gemini_api_key_here
@@ -640,4 +640,3 @@ If you encounter issues or have questions:
 
 
 **Happy Swedish learning!** 🇸🇪✨
-

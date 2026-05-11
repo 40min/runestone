@@ -19,7 +19,7 @@ class TestSettings:
         class TestSettings(BaseSettings):
             llm_provider: str
             openai_api_key: str
-            openai_model: str
+            llm_model_name: str
             verbose: bool = False
             allowed_origins: str
             database_url: str = "sqlite:///./state/runestone.db"
@@ -37,7 +37,7 @@ class TestSettings:
         env_vars = {
             "LLM_PROVIDER": "openai",
             "OPENAI_API_KEY": "test-key",
-            "OPENAI_MODEL": "gpt-4o-mini",
+            "LLM_MODEL_NAME": "gpt-4o-mini",
             "VERBOSE": "true",
             "ALLOWED_ORIGINS": "http://localhost:3000",
             "DATABASE_URL": "sqlite:///./test.db",
@@ -53,7 +53,7 @@ class TestSettings:
 
             assert test_settings.llm_provider == "openai"
             assert test_settings.openai_api_key == "test-key"
-            assert test_settings.openai_model == "gpt-4o-mini"
+            assert test_settings.llm_model_name == "gpt-4o-mini"
             assert test_settings.verbose is True
             assert test_settings.allowed_origins == "http://localhost:3000"
             assert test_settings.database_url == "sqlite:///./test.db"
@@ -69,7 +69,7 @@ class TestSettings:
         class TestSettings(BaseSettings):
             llm_provider: str
             openai_api_key: str
-            openai_model: str
+            llm_model_name: str
             verbose: bool = False
             allowed_origins: str
             database_url: str = "sqlite:///./state/runestone.db"
