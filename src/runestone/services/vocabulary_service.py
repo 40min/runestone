@@ -7,8 +7,8 @@ normalize the LLM response shape used by enrichment workflows.
 
 from typing import List
 
-from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.exceptions import OutputParserException
+from langchain_core.language_models.chat_models import BaseChatModel
 
 from ..api.schemas import ImprovementMode
 from ..api.schemas import Vocabulary as VocabularySchema
@@ -36,7 +36,12 @@ class VocabularyService:
     """Service for vocabulary-related business logic."""
 
     def __init__(self, vocabulary_repository: VocabularyRepository, settings: Settings, llm_model: BaseChatModel):
-        """Initialize service with vocabulary repository, settings, and LLM model."""
+        """
+        Initialize service with vocabulary repository, settings, and LangChain chat model.
+
+        The provided model must support `with_structured_output` because
+        `improve_item` relies on schema-backed output validation.
+        """
         self.repo = vocabulary_repository
         self.settings = settings
         self.llm_model = llm_model
@@ -228,7 +233,7 @@ class VocabularyService:
             raise RuntimeError(f"Structured vocabulary response failed: {exc}") from exc
 
     @staticmethod
-    def _to_improve_response(vocab_response: VocabularyResponse, mode: str | object) -> VocabularyImproveResponse:
+    def _to_improve_response(vocab_response: VocabularyResponse, mode: ImprovementMode) -> VocabularyImproveResponse:
         """Map schema output into API response while preserving mode compatibility."""
         if mode == ImprovementMode.EXAMPLE_ONLY:
             return VocabularyImproveResponse(
@@ -333,11 +338,6 @@ class VocabularyService:
         )
 
         return enriched_items
-
-    async def _invoke_vocabulary_item(self, prompt: str) -> str:
-        """Return single-item vocabulary output."""
-        response = await self.llm_model.ainvoke(prompt)
-        return extract_message_text(response)
 
     async def _invoke_vocabulary_batch(self, prompt: str) -> str:
         """Return batch vocabulary output."""
