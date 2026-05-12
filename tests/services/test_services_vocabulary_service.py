@@ -777,12 +777,10 @@ class TestVocabularyService:
         assert enriched_items[1].extra_info == "en-word, noun"
         assert enriched_items[2].extra_info == "verb, forms: vara, är, var, varit"
 
-    async def test_enrich_vocabulary_items_fall_back_to_client_method(self, service):
-        """Use the legacy batch helper when the injected model lacks ainvoke."""
+    async def test_enrich_vocabulary_items_without_ainvoke_logs_and_returns_original_items(self, service, caplog):
+        """Log batch-model incompatibility while keeping enrichment as a no-op."""
         service.llm_model = object()
-        service.llm_client.improve_vocabulary_batch = AsyncMock(
-            return_value='{"ett äpple": "en-word, noun, base form: äpple"}'
-        )
+        caplog.set_level("ERROR")
 
         items = [
             VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple.")
@@ -791,8 +789,8 @@ class TestVocabularyService:
         enriched_items = await service._enrich_vocabulary_items(items)
 
         assert len(enriched_items) == 1
-        assert enriched_items[0].extra_info == "en-word, noun, base form: äpple"
-        service.llm_client.improve_vocabulary_batch.assert_awaited_once()
+        assert enriched_items[0] == items[0]
+        assert "does not support ainvoke" in caplog.text
 
     async def test_enrich_vocabulary_items_llm_exception(self, service):
         """Test vocabulary items enrichment when LLM raises exception."""
