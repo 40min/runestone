@@ -341,8 +341,6 @@ class VocabularyService:
 
     async def _invoke_vocabulary_batch(self, prompt: str) -> str:
         """Return batch vocabulary output."""
-        if not hasattr(self.llm_model, "ainvoke"):
-            raise TypeError("Configured vocabulary batch model does not support ainvoke")
         response = await self.llm_model.ainvoke(prompt)
         return extract_message_text(response)
 

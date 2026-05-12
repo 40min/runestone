@@ -777,9 +777,9 @@ class TestVocabularyService:
         assert enriched_items[1].extra_info == "en-word, noun"
         assert enriched_items[2].extra_info == "verb, forms: vara, är, var, varit"
 
-    async def test_enrich_vocabulary_items_without_ainvoke_logs_and_returns_original_items(self, service, caplog):
-        """Log batch-model incompatibility while keeping enrichment as a no-op."""
-        service.llm_model = object()
+    async def test_enrich_vocabulary_items_logs_and_returns_original_items_on_llm_failure(self, service, caplog):
+        """Log batch invocation failures while keeping enrichment as a no-op."""
+        service.llm_model.ainvoke.side_effect = TypeError("ainvoke misconfigured")
         caplog.set_level("ERROR")
 
         items = [
@@ -790,7 +790,7 @@ class TestVocabularyService:
 
         assert len(enriched_items) == 1
         assert enriched_items[0] == items[0]
-        assert "does not support ainvoke" in caplog.text
+        assert "Failed to enrich batch 1: ainvoke misconfigured" in caplog.text
 
     async def test_enrich_vocabulary_items_llm_exception(self, service):
         """Test vocabulary items enrichment when LLM raises exception."""
