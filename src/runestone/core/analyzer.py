@@ -7,15 +7,13 @@ grammar rules, vocabulary, and generate learning resources.
 
 from typing import Optional
 
+from langchain_core.exceptions import OutputParserException
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from runestone.config import Settings
 from runestone.core.exceptions import ContentAnalysisError
 from runestone.core.logging_config import get_logger
 from runestone.core.prompt_builder.builder import PromptBuilder
-from runestone.core.prompt_builder.exceptions import ResponseParseError
-from runestone.core.prompt_builder.parsers import ResponseParser
-from runestone.core.service_llm import extract_message_text
 from runestone.schemas.analysis import ContentAnalysis
 
 
@@ -33,7 +31,8 @@ class ContentAnalyzer:
 
         Args:
             settings: Centralized application settings
-            model: LangChain chat model for processing
+            model: LangChain chat model for processing. It must support
+                `with_structured_output(ContentAnalysis)`.
             verbose: Enable verbose logging. If None, uses settings.verbose
         """
         # Use provided settings or create default
@@ -43,9 +42,8 @@ class ContentAnalyzer:
 
         self.model = model
 
-        # Initialize prompt builder and parser
+        # Initialize prompt builder
         self.builder = PromptBuilder()
-        self.parser = ResponseParser()
 
     async def analyze_content(self, extracted_text: str) -> ContentAnalysis:
         """
@@ -55,7 +53,7 @@ class ContentAnalyzer:
             extracted_text: Raw text extracted from the textbook page
 
         Returns:
-            AnalysisResponse object containing analyzed content with grammar, vocabulary, and resources
+            ContentAnalysis object containing analyzed content with grammar, vocabulary, and resources
 
         Raises:
             ContentAnalysisError: If content analysis fails
@@ -69,23 +67,18 @@ class ContentAnalyzer:
                 self.settings.resolve_service_llm_provider(),
                 self.settings.resolve_service_llm_model(),
             )
-            response_text = extract_message_text(await self.model.ainvoke(analysis_prompt))
-
-            if not response_text:
+            structured_model = self.model.with_structured_output(
+                ContentAnalysis,
+                method="json_schema",
+            )
+            response = await structured_model.ainvoke(analysis_prompt)
+            if response is None:
                 raise ContentAnalysisError("No analysis returned from LLM")
-
-            # Log the raw response for debugging
-            self.logger.debug(f"[ContentAnalyzer] Raw LLM response (first 500 chars): {response_text[:500]}")
-
-            # Parse response using ResponseParser (includes automatic fallback)
-            try:
-                analysis_response = self.parser.parse_analysis_response(response_text)
-                return analysis_response
-            except ResponseParseError as e:
-                self.logger.warning(f"[ContentAnalyzer] Response parsing failed: {e}")
-                raise ContentAnalysisError(f"Failed to parse analysis response: {str(e)}")
+            return ContentAnalysis.model_validate(response)
 
         except ContentAnalysisError:
             raise
+        except OutputParserException as e:
+            raise ContentAnalysisError(f"Structured content analysis validation failed: {str(e)}") from e
         except Exception as e:
             raise ContentAnalysisError(f"Content analysis failed: {str(e)}")
