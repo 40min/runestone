@@ -72,8 +72,8 @@ class ContentAnalyzer:
                 method="json_schema",
             )
             response = await structured_model.ainvoke(analysis_prompt)
-            if isinstance(response, ContentAnalysis):
-                return response
+            if response is None:
+                raise ContentAnalysisError("No analysis returned from LLM")
             return ContentAnalysis.model_validate(response)
 
         except ContentAnalysisError:
