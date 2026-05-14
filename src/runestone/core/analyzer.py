@@ -67,10 +67,7 @@ class ContentAnalyzer:
                 self.settings.resolve_service_llm_provider(),
                 self.settings.resolve_service_llm_model(),
             )
-            structured_model = self.model.with_structured_output(
-                ContentAnalysis,
-                method="json_schema",
-            )
+            structured_model = self.model.with_structured_output(ContentAnalysis)
             response = await structured_model.ainvoke(analysis_prompt)
             if response is None:
                 raise ContentAnalysisError("No analysis returned from LLM")
