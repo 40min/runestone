@@ -21,6 +21,36 @@
   - *för en vecka sedan* — a week ago
   - *för fem år sedan* — five years ago
 
+### 1.1️⃣ Time Prepositions: *om*, *i*, or *på*?
+
+- **om** → for frequency with *dag*, *år*, and *dygn*
+  - *en gång om dagen* — once a day
+  - *två gånger om året* — twice a year
+  - *medicin tre gånger om dygnet* — medicine three times a day
+
+- **i** → for frequency with other time units
+  - *två gånger i veckan* — twice a week
+  - *en gång i timmen* — once an hour
+
+- **i** or **no preposition** → for duration / how long
+  - *Jag springer i skogen i två timmar varje vecka.* — I run in the forest for two hours every week
+  - *Jag har bott i Sverige tre år.* — I have lived in Sweden for three years
+
+- **på** → for completed time / how fast something was done
+  - *Hon sprang maraton på fem timmar.* — She ran the marathon in five hours
+  - *Han sprang 100 meter på nio sekunder.* — He ran 100 meters in nine seconds
+
+---
+
+### 1.2️⃣ Quick Rule by Question
+
+| Question | Rule | Example |
+|----------|------|---------|
+| Hur ofta? | **om** with *dag/år/dygn* | *om dagen, om året, om dygnet* |
+| Hur ofta? | **i** with other units | *i veckan, i timmen* |
+| Hur länge? | **i** or no preposition | *i två timmar, bott här tre år* |
+| Hur snabbt? | **på** | *på fem timmar, på nio sekunder* |
+
 ---
 
 ## 🕰️ Telling the Time (Klockan)
@@ -96,8 +126,11 @@ Use **i** (to/before):
 
 | Concept                     | Swedish Preposition / Form | Example                            |
 |-----------------------------|-----------------------------|------------------------------------|
+| Frequency with day/year     | **om**                     | *om dagen, om året*                |
+| Frequency with other units  | **i**                      | *i veckan, i timmen*               |
 | On a day / season           | **på**                     | *på måndag, på vintern*            |
-| For a duration              | **i**                      | *i två timmar*                     |
+| For a duration              | **i** / no preposition     | *i två timmar, bott här tre år*    |
+| Completed time / how fast   | **på**                     | *på fem timmar*                    |
 | In (after) a time           | **om**                     | *om en timme*                      |
 | Ago                         | **för ... sedan**          | *för tre dagar sedan*              |
 | Quarter past                | **kvart över**             | *kvart över fyra*                  |
