@@ -140,6 +140,19 @@ class TestContentAnalyzer:
             await analyzer.analyze_content(self.sample_text)
 
     @pytest.mark.anyio
+    async def test_analyze_content_none_response(self):
+        """Raise a content-analysis error when the structured model returns no data."""
+        mock_model = Mock()
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = None
+        mock_model.with_structured_output.return_value = structured_model
+
+        analyzer = ContentAnalyzer(settings=self.settings, model=mock_model)
+
+        with pytest.raises(ContentAnalysisError, match="No analysis returned from LLM"):
+            await analyzer.analyze_content(self.sample_text)
+
+    @pytest.mark.anyio
     async def test_analyze_content_model_validate_failure(self):
         """Wrap schema validation failures from plain mappings."""
         mock_model = Mock()
