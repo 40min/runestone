@@ -32,6 +32,8 @@ from runestone.rag.index import GrammarIndex
 from runestone.schemas.vocabulary_save import WordSaveCandidate
 from runestone.services.agent_side_effect_service import AgentSideEffectService
 from runestone.services.grammar_service import GrammarService
+from runestone.state.state_manager import StateManager
+from runestone.utils.telegram import normalize_telegram_username
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +53,7 @@ class AgentsManager:
     def __init__(
         self,
         settings: Settings,
+        state_manager: StateManager,
         grammar_index: GrammarIndex | None = None,
         grammar_service: GrammarService | None = None,
     ):
@@ -58,6 +61,9 @@ class AgentsManager:
         Initialize the agent manager.
         """
         self.settings = settings
+        # Inject state manager to keep orchestration dependencies explicit.
+        # StateManager itself is a singleton class, so this remains one instance per process.
+        self.state_manager = state_manager
         self._init_allowed_ports()
         self.coordinator = CoordinatorAgent(settings=settings)
         self.teacher = TeacherAgent(
@@ -101,14 +107,15 @@ class AgentsManager:
         user: User,
         memory_item_service,
         side_effect_service: AgentSideEffectService,
-    ) -> tuple[CoordinatorPlan, list[dict], str, list[TeacherSideEffect]]:
+    ) -> tuple[CoordinatorPlan, list[dict], str, list[TeacherSideEffect], list[str]]:
         """
         Run pre-stage: coordinator planning, pre specialists, side effect loading.
 
         Returns:
-            (plan, pre_results, starter_memory, recent_side_effects)
+            (plan, pre_results, starter_memory, recent_side_effects, current_recall_words)
         """
         starter_memory = ""
+        current_recall_words: list[str] = []
         if not history:
             try:
                 deleted_count = await memory_item_service.cleanup_old_mastered_areas(
@@ -135,6 +142,7 @@ class AgentsManager:
                     starter_memory = serialize_memory_items(starter_items)
             except (SQLAlchemyError, ValueError, RuntimeError) as e:
                 logger.warning("[agents:manager] Failed to load starter memory for user %s: %s", user.id, e)
+            current_recall_words = self._load_current_recall_words(user)
 
         coordinator_history = history[-self.COORDINATOR_MAX_HISTORY_MESSAGES :] if history else []
         if history and len(history) > self.COORDINATOR_MAX_HISTORY_MESSAGES:
@@ -176,7 +184,7 @@ class AgentsManager:
             chat_id=chat_id,
         )
 
-        return plan, pre_results, starter_memory, recent_side_effects
+        return plan, pre_results, starter_memory, recent_side_effects, current_recall_words
 
     async def generate_teacher_response(
         self,
@@ -186,6 +194,7 @@ class AgentsManager:
         pre_results: list[dict],
         starter_memory: str,
         recent_side_effects: list[TeacherSideEffect],
+        current_recall_words: list[str] | None = None,
     ) -> tuple[str, Optional[list[dict[str, str]]], TeacherEmotion, list[WordSaveCandidate]]:
         """
         Run teacher agent synchronously and return visible response data plus vocabulary candidates.
@@ -198,6 +207,7 @@ class AgentsManager:
                 pre_results=pre_results,
                 starter_memory=starter_memory,
                 recent_side_effects=recent_side_effects,
+                current_recall_words=current_recall_words or [],
             )
         except (RunestoneError, ValueError, RuntimeError) as e:
             logger.error("[agents:manager] Error generating response: %s", e)
@@ -238,7 +248,7 @@ class AgentsManager:
                 side_effect_service=side_effect_service,
             )
 
-        _plan, pre_results, starter_memory, recent_side_effects = await self.prepare_pre_turn(
+        _plan, pre_results, starter_memory, recent_side_effects, current_recall_words = await self.prepare_pre_turn(
             message=message,
             chat_id=chat_id,
             history=history,
@@ -254,6 +264,7 @@ class AgentsManager:
             pre_results=pre_results,
             starter_memory=starter_memory,
             recent_side_effects=recent_side_effects,
+            current_recall_words=current_recall_words,
         )
 
         coordinator_row_id = await side_effect_service.create_post_coordinator_row(
@@ -642,6 +653,34 @@ class AgentsManager:
 
         # Fan-out / fan-in: run specialists concurrently but preserve routing order.
         return await asyncio.gather(*tasks)
+
+    def _load_current_recall_words(self, user: User) -> list[str]:
+        """Best-effort load of today's recall queue words for first-turn teacher context."""
+        telegram_username = normalize_telegram_username(getattr(user, "telegram_username", None))
+        if not telegram_username:
+            return []
+
+        try:
+            _state_username, user_data = self.state_manager.get_user_by_normalized_telegram_username(telegram_username)
+            if not user_data or not user_data.daily_selection:
+                return []
+            if user_data.db_user_id != user.id:
+                logger.warning(
+                    "[agents:manager] Recall state user mismatch for user %s: state db_user_id=%s",
+                    user.id,
+                    user_data.db_user_id,
+                )
+                return []
+
+            words = [word.word_phrase.strip() for word in user_data.daily_selection if word.word_phrase.strip()]
+            return words
+        except Exception as e:
+            logger.warning(
+                "[agents:manager] Failed to load current recall words for user %s: %s",
+                user.id,
+                e,
+            )
+            return []
 
     @staticmethod
     def _previous_teacher_message(history: list[ChatMessage]) -> str | None:

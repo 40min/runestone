@@ -32,6 +32,7 @@ from runestone.rag.index import GrammarIndex
 from runestone.services.grammar_service import GrammarService
 from runestone.services.tts_service import TTSService
 from runestone.services.voice_service import VoiceService
+from runestone.state.state_manager import StateManager
 
 
 @asynccontextmanager
@@ -55,10 +56,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     app.state.grammar_service = GrammarService(settings.cheatsheets_dir)
     app.state.grammar_index = GrammarIndex(settings.cheatsheets_dir, settings.frontend_url)
+    app.state.recall_state_manager = StateManager(settings.state_file_path)
     app.state.agent_service = AgentsManager(
         settings,
         grammar_index=app.state.grammar_index,
         grammar_service=app.state.grammar_service,
+        state_manager=app.state.recall_state_manager,
     )
     app.state.tts_service = TTSService(
         settings=settings,
