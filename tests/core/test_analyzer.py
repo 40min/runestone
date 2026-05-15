@@ -72,7 +72,7 @@ class TestContentAnalyzer:
         assert hasattr(result.grammar_focus, "rules")
 
         # Verify client was called correctly
-        mock_model.with_structured_output.assert_called_once_with(ContentAnalysis, method="json_schema")
+        mock_model.with_structured_output.assert_called_once_with(ContentAnalysis)
         structured_model.ainvoke.assert_called_once()
         args = structured_model.ainvoke.call_args[0]
         assert self.sample_text in args[0]
@@ -105,8 +105,8 @@ class TestContentAnalyzer:
         assert result.vocabulary[0].swedish == "hej"
 
     @pytest.mark.anyio
-    async def test_analyze_content_uses_json_schema_method(self):
-        """Use native JSON schema structured output for content analysis."""
+    async def test_analyze_content_uses_default_structured_output_method(self):
+        """Use the provider-default structured output method for content analysis."""
         mock_model = Mock()
         structured_model = AsyncMock()
         structured_model.ainvoke.return_value = ContentAnalysis(
@@ -124,7 +124,7 @@ class TestContentAnalyzer:
         analyzer = ContentAnalyzer(settings=self.settings, model=mock_model)
         await analyzer.analyze_content(self.sample_text)
 
-        mock_model.with_structured_output.assert_called_once_with(ContentAnalysis, method="json_schema")
+        mock_model.with_structured_output.assert_called_once_with(ContentAnalysis)
 
     @pytest.mark.anyio
     async def test_analyze_content_validation_failure(self):
