@@ -41,6 +41,7 @@ def mock_settings():
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
     settings.allowed_origins = "http://localhost:5173"
+    settings.state_file_path = "state/state.json"
     settings.get_agent_llm_settings.side_effect = lambda agent_name: {
         "teacher": AgentLLMSettings(
             provider="openrouter",
@@ -81,6 +82,7 @@ def mock_user():
     user = MagicMock()
     user.id = 1
     user.mother_tongue = None
+    user.telegram_username = None
     return user
 
 
@@ -107,6 +109,10 @@ def _make_plan(pre=None, post=None):
     return CoordinatorPlan(pre_response=pre or [], post_response=post or [], audit={})
 
 
+def _make_manager(mock_settings):
+    return AgentsManager(mock_settings, state_manager=MagicMock())
+
+
 # ---------------------------------------------------------------------------
 # process_turn tests
 # ---------------------------------------------------------------------------
@@ -116,9 +122,9 @@ def _make_plan(pre=None, post=None):
 async def test_process_turn_returns_teacher_reply_and_starts_background_post(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.handle_stale_post_task = AsyncMock()
-    manager.prepare_pre_turn = AsyncMock(return_value=(_make_plan(), [{"name": "pre"}], "", []))
+    manager.prepare_pre_turn = AsyncMock(return_value=(_make_plan(), [{"name": "pre"}], "", [], []))
     manager.generate_teacher_response = AsyncMock(
         return_value=(
             "Teacher says hi",
@@ -166,9 +172,9 @@ async def test_process_turn_returns_teacher_reply_and_starts_background_post(
 async def test_process_turn_skips_stale_check_on_first_turn(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.handle_stale_post_task = AsyncMock()
-    manager.prepare_pre_turn = AsyncMock(return_value=(_make_plan(), [], "", []))
+    manager.prepare_pre_turn = AsyncMock(return_value=(_make_plan(), [], "", [], []))
     manager.generate_teacher_response = AsyncMock(return_value=("Teacher says hi", None, "neutral", []))
     manager.start_background_post_turn = AsyncMock()
 
@@ -193,12 +199,12 @@ async def test_process_turn_skips_stale_check_on_first_turn(
 async def test_prepare_pre_turn_delegates_to_coordinator(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
     manager.teacher = AsyncMock()
     mock_memory_item_service.list_start_student_info_items.return_value = []
 
-    plan, pre_results, starter_memory, recent_effects = await manager.prepare_pre_turn(
+    plan, pre_results, starter_memory, recent_effects, current_recall_words = await manager.prepare_pre_turn(
         message="Hello",
         chat_id="chat-1",
         history=[],
@@ -211,13 +217,14 @@ async def test_prepare_pre_turn_delegates_to_coordinator(
     assert pre_results == []
     assert starter_memory == ""
     assert recent_effects is not None
+    assert current_recall_words == []
 
 
 @pytest.mark.anyio
 async def test_prepare_pre_turn_runs_cleanup_on_first_turn(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
     manager.teacher = AsyncMock()
 
@@ -241,7 +248,7 @@ async def test_prepare_pre_turn_uses_configured_cleanup_days(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
     mock_settings.memory_mastered_cleanup_days = 3
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
     manager.teacher = AsyncMock()
 
@@ -261,7 +268,7 @@ async def test_prepare_pre_turn_uses_configured_cleanup_days(
 async def test_prepare_pre_turn_skips_cleanup_with_history(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
     manager.teacher = AsyncMock()
 
@@ -281,7 +288,7 @@ async def test_prepare_pre_turn_skips_cleanup_with_history(
 async def test_coordinator_history_is_truncated(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
 
     history = [ChatMessage(role="user", content=f"m{i}") for i in range(10)]
@@ -302,7 +309,7 @@ async def test_coordinator_history_is_truncated(
 async def test_coordinator_history_truncation_logs_warning(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service, caplog
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
 
     history = [ChatMessage(role="user", content=f"m{i}") for i in range(10)]
@@ -323,7 +330,7 @@ async def test_coordinator_history_truncation_logs_warning(
 async def test_prepare_pre_turn_passes_bounded_history_into_news_agent(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(
         return_value=_make_plan(pre=[RoutingItem(name="news_agent", reason="topic", chat_history_size=2)])
     )
@@ -367,7 +374,7 @@ async def test_prepare_pre_turn_passes_bounded_history_into_news_agent(
 
 @pytest.mark.anyio
 async def test_generate_teacher_response_returns_text_and_sources(mock_settings, mock_user):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(message="Hi there!", final_messages=[])
 
@@ -388,7 +395,7 @@ async def test_generate_teacher_response_returns_text_and_sources(mock_settings,
 
 @pytest.mark.anyio
 async def test_generate_teacher_response_returns_teacher_emotion(mock_settings, mock_user):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(
         message="Great work!", emotion="happy", final_messages=[]
@@ -411,7 +418,7 @@ async def test_generate_teacher_response_returns_teacher_emotion(mock_settings, 
 
 @pytest.mark.anyio
 async def test_generate_teacher_response_returns_vocabulary_candidates(mock_settings, mock_user):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()
     candidate = WordSaveCandidate(word_phrase="begripa", context_phrase="Jag begriper inte.")
     manager.teacher.generate_response.return_value = TeacherGenerationResult(
@@ -437,7 +444,7 @@ async def test_generate_teacher_response_returns_vocabulary_candidates(mock_sett
 
 @pytest.mark.anyio
 async def test_generate_teacher_response_extracts_news_sources(mock_settings, mock_user):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(
         message="Svar med källor",
@@ -468,7 +475,7 @@ async def test_generate_teacher_response_extracts_news_sources(mock_settings, mo
 
 @pytest.mark.anyio
 async def test_generate_teacher_response_combines_news_sources_from_pre_results(mock_settings, mock_user):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(
         message="Svar med specialistkällor",
@@ -513,7 +520,7 @@ async def test_generate_teacher_response_combines_news_sources_from_pre_results(
 
 @pytest.mark.anyio
 async def test_generate_teacher_response_deduplicates_sources_across_pre_results_and_teacher(mock_settings, mock_user):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(
         message="Svar med specialistkällor",
@@ -558,7 +565,7 @@ async def test_generate_teacher_response_deduplicates_sources_across_pre_results
 
 @pytest.mark.anyio
 async def test_generate_teacher_response_filters_unsafe_urls(mock_settings, mock_user):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(
         message="Svar",
@@ -584,7 +591,7 @@ async def test_generate_teacher_response_filters_unsafe_urls(mock_settings, mock
 
 @pytest.mark.anyio
 async def test_generate_teacher_response_requires_search_grammar_result_for_grammar_sources(mock_settings, mock_user):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(
         message="Grammatik",
@@ -603,7 +610,7 @@ async def test_generate_teacher_response_requires_search_grammar_result_for_gram
 
 @pytest.mark.anyio
 async def test_generate_teacher_response_caps_search_grammar_selected_sources(mock_settings, mock_user):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(
         message="Grammatik",
@@ -647,7 +654,7 @@ async def test_generate_teacher_response_caps_search_grammar_selected_sources(mo
 
 @pytest.mark.anyio
 async def test_generate_teacher_response_uses_selected_grammar_sources(mock_settings, mock_user):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(
         message="Grammatik",
@@ -689,7 +696,7 @@ async def test_generate_teacher_response_uses_selected_grammar_sources(mock_sett
 
 @pytest.mark.anyio
 async def test_generate_teacher_response_rejects_grammar_sources_not_returned_by_search(mock_settings, mock_user):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(
         message="Grammatik",
@@ -724,7 +731,7 @@ async def test_generate_teacher_response_rejects_grammar_sources_not_returned_by
 
 @pytest.mark.anyio
 async def test_generate_teacher_response_rejects_same_host_invented_grammar_sources(mock_settings, mock_user):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(
         message="Grammatik",
@@ -759,7 +766,7 @@ async def test_generate_teacher_response_rejects_same_host_invented_grammar_sour
 
 @pytest.mark.anyio
 async def test_generate_teacher_response_rejects_unsafe_search_grammar_source(mock_settings, mock_user):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(
         message="Grammatik",
@@ -781,7 +788,7 @@ async def test_generate_teacher_response_rejects_unsafe_search_grammar_source(mo
 
 @pytest.mark.anyio
 async def test_generate_teacher_response_rejects_disallowed_port_search_grammar_source(mock_settings, mock_user):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(
         message="Grammatik",
@@ -807,7 +814,7 @@ async def test_generate_teacher_response_rejects_disallowed_port_search_grammar_
 
 @pytest.mark.anyio
 async def test_generate_teacher_response_can_hide_irrelevant_grammar_sources(mock_settings, mock_user):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(
         message="Grammatik",
@@ -824,7 +831,7 @@ async def test_generate_teacher_response_can_hide_irrelevant_grammar_sources(moc
 
 @pytest.mark.anyio
 async def test_generate_teacher_response_passes_pre_results(mock_settings, mock_user):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(message="Hi!", final_messages=[])
 
@@ -841,6 +848,54 @@ async def test_generate_teacher_response_passes_pre_results(mock_settings, mock_
     _args, kwargs = manager.teacher.generate_response.call_args
     assert kwargs["pre_results"] == pre_results
     assert kwargs["starter_memory"] == "starter"
+    assert kwargs["current_recall_words"] == []
+
+
+def test_load_current_recall_words_returns_words(mock_settings, mock_user):
+    mock_state_manager = MagicMock()
+    manager = AgentsManager(mock_settings, state_manager=mock_state_manager)
+    mock_user.telegram_username = "@TestUser"
+
+    state_user_data = MagicMock()
+    state_user_data.db_user_id = mock_user.id
+    state_user_data.daily_selection = [MagicMock(word_phrase="hej"), MagicMock(word_phrase="  tack  ")]
+    mock_state_manager.get_user_by_normalized_telegram_username.return_value = ("testuser", state_user_data)
+    words = manager._load_current_recall_words(mock_user)
+
+    assert words == ["hej", "tack"]
+    mock_state_manager.get_user_by_normalized_telegram_username.assert_called_once_with("testuser")
+
+
+def test_load_current_recall_words_returns_empty_on_missing_username(mock_settings, mock_user):
+    manager = AgentsManager(mock_settings, state_manager=MagicMock())
+    mock_user.telegram_username = None
+
+    assert manager._load_current_recall_words(mock_user) == []
+
+
+def test_load_current_recall_words_returns_empty_on_state_error(mock_settings, mock_user):
+    mock_state_manager = MagicMock()
+    mock_state_manager.get_user_by_normalized_telegram_username.side_effect = RuntimeError("boom")
+    manager = AgentsManager(mock_settings, state_manager=mock_state_manager)
+    mock_user.telegram_username = "testuser"
+    words = manager._load_current_recall_words(mock_user)
+
+    assert words == []
+
+
+def test_load_current_recall_words_returns_empty_on_user_mismatch(mock_settings, mock_user):
+    mock_state_manager = MagicMock()
+    manager = AgentsManager(mock_settings, state_manager=mock_state_manager)
+    mock_user.telegram_username = "testuser"
+
+    state_user_data = MagicMock()
+    state_user_data.db_user_id = 999
+    state_user_data.daily_selection = [MagicMock(word_phrase="hej")]
+    mock_state_manager.get_user_by_normalized_telegram_username.return_value = ("testuser", state_user_data)
+
+    words = manager._load_current_recall_words(mock_user)
+
+    assert words == []
 
 
 # ---------------------------------------------------------------------------
@@ -850,7 +905,7 @@ async def test_generate_teacher_response_passes_pre_results(mock_settings, mock_
 
 @pytest.mark.anyio
 async def test_run_post_turn_runs_post_specialists(mock_settings, mock_user, mock_side_effect_service):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_post_turn = AsyncMock(
         return_value=_make_plan(post=[RoutingItem(name="memory_keeper", reason="save memory", chat_history_size=0)])
     )
@@ -894,7 +949,7 @@ async def test_run_post_turn_runs_post_specialists(mock_settings, mock_user, moc
 async def test_run_post_turn_excludes_word_keeper_from_coordinator_available_specialists(
     mock_settings, mock_user, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
 
     await manager.run_post_turn(
@@ -918,7 +973,7 @@ async def test_run_post_turn_excludes_word_keeper_from_coordinator_available_spe
 async def test_run_post_turn_routes_teacher_vocabulary_candidates_directly(
     mock_settings, mock_user, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
     capture = _CaptureHistorySpecialist()
     capture.name = "word_keeper"
@@ -948,7 +1003,7 @@ async def test_run_post_turn_routes_teacher_vocabulary_candidates_directly(
 async def test_run_post_turn_persists_direct_word_keeper_when_coordinator_fails(
     mock_settings, mock_user, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_post_turn = AsyncMock(side_effect=RuntimeError("coordinator exploded"))
 
     class _ActionSpecialist(BaseSpecialist):
@@ -985,7 +1040,7 @@ async def test_run_post_turn_persists_direct_word_keeper_when_coordinator_fails(
 async def test_run_post_turn_persists_coordinator_and_direct_word_keeper_results_together(
     mock_settings, mock_user, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_post_turn = AsyncMock(
         return_value=_make_plan(post=[RoutingItem(name="memory_keeper", reason="memory", chat_history_size=0)])
     )
@@ -1017,7 +1072,7 @@ async def test_run_post_turn_persists_coordinator_and_direct_word_keeper_results
 async def test_run_post_turn_does_not_route_word_keeper_without_candidates(
     mock_settings, mock_user, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
     capture = _CaptureHistorySpecialist()
     capture.name = "word_keeper"
@@ -1044,7 +1099,7 @@ async def test_run_post_turn_does_not_route_word_keeper_without_candidates(
 async def test_run_post_turn_skips_teacher_candidates_already_saved_in_pre_phase(
     mock_settings, mock_user, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
     capture = _CaptureHistorySpecialist()
     capture.name = "word_keeper"
@@ -1081,7 +1136,7 @@ async def test_run_post_turn_skips_teacher_candidates_already_saved_in_pre_phase
 async def test_run_post_turn_keeps_teacher_candidates_when_pre_phase_only_extracted_them(
     mock_settings, mock_user, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
     capture = _CaptureHistorySpecialist()
     capture.name = "word_keeper"
@@ -1120,7 +1175,7 @@ async def test_run_post_turn_keeps_teacher_candidates_when_pre_phase_only_extrac
 async def test_run_post_turn_records_direct_word_keeper_failure_without_raising(
     mock_settings, mock_user, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
 
     class _FailingSpecialist(BaseSpecialist):
@@ -1152,7 +1207,7 @@ async def test_run_post_turn_records_direct_word_keeper_failure_without_raising(
 
 @pytest.mark.anyio
 async def test_run_post_turn_marks_failed_on_exception(mock_settings, mock_user, mock_side_effect_service):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
     mock_side_effect_service.replace_post_specialist_results.side_effect = RuntimeError("db error")
 
@@ -1179,7 +1234,7 @@ async def test_run_post_turn_marks_failed_on_exception(mock_settings, mock_user,
 async def test_run_post_turn_skips_done_mark_when_persistence_is_stale(
     mock_settings, mock_user, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
     mock_side_effect_service.replace_post_specialist_results.return_value = False
 
@@ -1200,7 +1255,7 @@ async def test_run_post_turn_skips_done_mark_when_persistence_is_stale(
 
 @pytest.mark.anyio
 async def test_handle_stale_post_task_cancels_live_task_and_marks_failed(mock_settings, mock_side_effect_service):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     stale_row = MagicMock()
     stale_row.status = "pending"
     stale_row.id = 456
@@ -1223,7 +1278,7 @@ async def test_handle_stale_post_task_cancels_live_task_and_marks_failed(mock_se
 
 @pytest.mark.anyio
 async def test_handle_stale_post_task_ignores_done_row(mock_settings, mock_side_effect_service):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     done_row = MagicMock()
     done_row.status = "done"
     mock_side_effect_service.load_latest_coordinator_row.return_value = done_row
@@ -1246,7 +1301,7 @@ async def test_handle_stale_post_task_ignores_done_row(mock_settings, mock_side_
 
 @pytest.mark.anyio
 async def test_register_and_cancel_post_task(mock_settings):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
 
     async def dummy():
         await asyncio.sleep(10)
@@ -1264,12 +1319,12 @@ async def test_register_and_cancel_post_task(mock_settings):
 
 
 def test_cancel_post_task_returns_false_when_no_task(mock_settings):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     assert manager.cancel_post_task("non-existent-chat") is False
 
 
 def test_unregister_removes_task(mock_settings):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     task = MagicMock()
     manager._post_task_registry.tasks["chat-1"] = task
     manager._unregister_post_task("chat-1")
@@ -1277,7 +1332,7 @@ def test_unregister_removes_task(mock_settings):
 
 
 def test_register_post_task_cancels_existing_live_task(mock_settings):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     old_task = MagicMock()
     old_task.done.return_value = False
     new_task = MagicMock()
@@ -1291,7 +1346,7 @@ def test_register_post_task_cancels_existing_live_task(mock_settings):
 
 @pytest.mark.anyio
 async def test_start_background_post_turn_creates_task(mock_settings, mock_user, mock_side_effect_service):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.run_post_turn = AsyncMock()
 
     @asynccontextmanager
@@ -1322,7 +1377,7 @@ async def test_start_background_post_turn_creates_task(mock_settings, mock_user,
 async def test_start_background_post_turn_returns_before_slow_post_finishes(
     mock_settings, mock_user, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     gate = asyncio.Event()
 
     async def slow_post_turn(**_kwargs):
@@ -1355,7 +1410,7 @@ async def test_start_background_post_turn_returns_before_slow_post_finishes(
 
 @pytest.mark.anyio
 async def test_start_background_post_turn_marks_failed_on_timeout(mock_settings, mock_user, mock_side_effect_service):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.POST_TASK_TIMEOUT_SECONDS = 0.01  # very short timeout
 
     async def slow_post_turn(**_kwargs):
@@ -1409,7 +1464,7 @@ class _CaptureHistorySpecialist(BaseSpecialist):
 
 @pytest.mark.anyio
 async def test_specialist_history_is_truncated(mock_settings, mock_user, mock_memory_item_service):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     capture = _CaptureHistorySpecialist()
     manager.registry.register(capture)
     manager.coordinator.plan_pre_turn = AsyncMock(
@@ -1440,7 +1495,7 @@ async def test_specialist_history_is_truncated(mock_settings, mock_user, mock_me
 
 @pytest.mark.anyio
 async def test_specialist_history_truncation_logs_warning(mock_settings, mock_user, mock_memory_item_service, caplog):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     capture = _CaptureHistorySpecialist()
     manager.registry.register(capture)
     manager.coordinator.plan_pre_turn = AsyncMock(
@@ -1472,7 +1527,7 @@ async def test_specialist_history_truncation_logs_warning(mock_settings, mock_us
 async def test_word_keeper_receives_latest_teacher_message_without_history(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     capture = _CaptureHistorySpecialist()
     capture.name = "word_keeper"
     manager.registry.register(capture, overwrite=True)
@@ -1505,7 +1560,7 @@ async def test_word_keeper_receives_latest_teacher_message_without_history(
 async def test_word_keeper_does_not_receive_non_adjacent_teacher_message(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     capture = _CaptureHistorySpecialist()
     capture.name = "word_keeper"
     manager.registry.register(capture, overwrite=True)
@@ -1536,7 +1591,7 @@ async def test_word_keeper_does_not_receive_non_adjacent_teacher_message(
 async def test_run_post_turn_passes_candidates_without_chat_history_or_teacher_response_to_word_keeper(
     mock_settings, mock_user, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     capture = _CaptureHistorySpecialist()
     capture.name = "word_keeper"
     manager.registry.register(capture, overwrite=True)
@@ -1569,7 +1624,7 @@ async def test_run_post_turn_passes_candidates_without_chat_history_or_teacher_r
 async def test_recent_side_effects_loaded_in_pre_turn(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
     side_effects = [
         TeacherSideEffect(
@@ -1585,7 +1640,7 @@ async def test_recent_side_effects_loaded_in_pre_turn(
     ]
     mock_side_effect_service.load_recent_for_teacher.return_value = side_effects
 
-    _plan, _pre, _starter_memory, recent = await manager.prepare_pre_turn(
+    _plan, _pre, _starter_memory, recent, _current_recall_words = await manager.prepare_pre_turn(
         message="Hello",
         chat_id="chat-1",
         history=[],
@@ -1602,7 +1657,7 @@ async def test_recent_side_effects_loaded_in_pre_turn(
 async def test_prepare_pre_turn_loads_starter_memory_on_first_turn(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
     starter_items = [
         MagicMock(
@@ -1619,7 +1674,7 @@ async def test_prepare_pre_turn_loads_starter_memory_on_first_turn(
     ]
     mock_memory_item_service.list_start_student_info_items.return_value = starter_items
 
-    _plan, _pre_results, starter_memory, _recent = await manager.prepare_pre_turn(
+    _plan, _pre_results, starter_memory, _recent, _current_recall_words = await manager.prepare_pre_turn(
         message="Hello",
         chat_id="chat-1",
         history=[],
@@ -1640,10 +1695,10 @@ async def test_prepare_pre_turn_loads_starter_memory_on_first_turn(
 async def test_prepare_pre_turn_skips_starter_memory_with_history(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
 
-    _plan, _pre_results, starter_memory, _recent = await manager.prepare_pre_turn(
+    _plan, _pre_results, starter_memory, _recent, _current_recall_words = await manager.prepare_pre_turn(
         message="Hello",
         chat_id="chat-1",
         history=[ChatMessage(role="user", content="prev")],
@@ -1656,13 +1711,53 @@ async def test_prepare_pre_turn_skips_starter_memory_with_history(
     assert starter_memory == ""
 
 
+@pytest.mark.anyio
+async def test_prepare_pre_turn_loads_current_recall_words_on_first_turn(
+    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+):
+    manager = _make_manager(mock_settings)
+    manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
+    with patch.object(manager, "_load_current_recall_words", return_value=["hej", "tack"]) as mock_loader:
+        _plan, _pre_results, _starter_memory, _recent, current_recall_words = await manager.prepare_pre_turn(
+            message="Hello",
+            chat_id="chat-1",
+            history=[],
+            user=mock_user,
+            memory_item_service=mock_memory_item_service,
+            side_effect_service=mock_side_effect_service,
+        )
+
+    mock_loader.assert_called_once_with(mock_user)
+    assert current_recall_words == ["hej", "tack"]
+
+
+@pytest.mark.anyio
+async def test_prepare_pre_turn_skips_current_recall_words_with_history(
+    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+):
+    manager = _make_manager(mock_settings)
+    manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
+    with patch.object(manager, "_load_current_recall_words", return_value=["hej"]) as mock_loader:
+        _plan, _pre_results, _starter_memory, _recent, current_recall_words = await manager.prepare_pre_turn(
+            message="Hello",
+            chat_id="chat-1",
+            history=[ChatMessage(role="user", content="prev")],
+            user=mock_user,
+            memory_item_service=mock_memory_item_service,
+            side_effect_service=mock_side_effect_service,
+        )
+
+    mock_loader.assert_not_called()
+    assert current_recall_words == []
+
+
 # ---------------------------------------------------------------------------
 # URL safety tests (static)
 # ---------------------------------------------------------------------------
 
 
 def test_is_safe_url(mock_settings):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
 
     assert manager._is_safe_url("https://example.com") is True
     assert manager._is_safe_url("http://example.com") is True
@@ -1675,5 +1770,5 @@ def test_is_safe_url(mock_settings):
 
 
 def test_manager_registers_default_specialists(mock_settings):
-    manager = AgentsManager(mock_settings)
+    manager = _make_manager(mock_settings)
     assert manager.registry.list_names() == ["memory_keeper", "news_agent", "word_keeper"]
