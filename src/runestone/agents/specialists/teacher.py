@@ -344,6 +344,12 @@ to read its contents before deciding.
         if starter_memory:
             messages.append(SystemMessage(content=self._format_starter_memory(starter_memory)))
         if current_recall_words:
+            logger.info(
+                "[agents:teacher] Injecting %s current recall words into teacher prompt for user_id=%s: %s",
+                len(current_recall_words),
+                user.id,
+                json.dumps(current_recall_words, ensure_ascii=False),
+            )
             messages.append(SystemMessage(content=self._format_current_recall_words(current_recall_words)))
         if pre_results:
             messages.append(SystemMessage(content=self._format_pre_results(pre_results)))
