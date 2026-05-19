@@ -160,7 +160,7 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
             "- If you cannot reliably produce that language, fall back to English content.\n"
             "- Keep all memory item keys in English only."
         )
-        logger.debug(
+        logger.info(
             (
                 "[agents:memorymaintainer] Outbound LLM request: "
                 "user_id=%s, provider=%s, model=%s, system_prompt=%s, prompt=%s"
