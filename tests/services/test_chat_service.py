@@ -18,6 +18,7 @@ def mock_agent_service():
     mock = AsyncMock()
     mock.process_turn_result = ("Björn's reply", None, "neutral")
     mock.process_turn.side_effect = lambda **_kwargs: mock.process_turn_result
+    mock.start_background_memory_maintenance = AsyncMock(return_value=True)
     return mock
 
 
@@ -263,8 +264,20 @@ async def test_clear_history(chat_service, db_with_test_user):
     chat_id = str(uuid4())
     await chat_service.repository.add_message(user.id, chat_id, "user", "Test")
     chat_service.user_service.rotate_current_chat_id = AsyncMock(return_value=str(uuid4()))
+    chat_service.user_service.get_user_by_id = AsyncMock(return_value=user)
     await chat_service.clear_history(user.id)
     chat_service.user_service.rotate_current_chat_id.assert_awaited_once_with(user.id)
+    chat_service.agent_service.start_background_memory_maintenance.assert_awaited_once_with(user)
+
+
+@pytest.mark.anyio
+async def test_start_new_chat_skips_maintenance_when_user_missing(chat_service):
+    chat_service.user_service.rotate_current_chat_id = AsyncMock(return_value=str(uuid4()))
+    chat_service.user_service.get_user_by_id = AsyncMock(return_value=None)
+
+    await chat_service.start_new_chat(user_id=123)
+
+    chat_service.agent_service.start_background_memory_maintenance.assert_not_called()
 
 
 @pytest.mark.anyio

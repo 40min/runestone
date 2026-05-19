@@ -174,6 +174,7 @@ async def test_clear_history_rotates_chat_id(client_with_mock_agent_service, db_
     assert after_clear["chat_id"] != old_chat_id
     assert after_clear["latest_id"] == 0
     assert after_clear["messages"] == []
+    mock_agent_service.start_background_memory_maintenance.assert_awaited_once()
 
 
 async def test_send_message_requires_authentication(client):

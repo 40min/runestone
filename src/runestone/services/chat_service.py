@@ -239,8 +239,31 @@ Instructions:
         return await self.user_service.get_or_create_current_chat_id(user_id)
 
     async def start_new_chat(self, user_id: int) -> str:
-        """Rotate the user onto a fresh chat session id."""
-        return await self.user_service.rotate_current_chat_id(user_id)
+        """
+        Rotate the user onto a fresh chat session id and trigger background maintenance.
+
+        Memory maintenance is fire-and-forget on purpose so chat reset stays fast.
+        If scheduling fails, the fresh chat session is still returned successfully.
+        """
+        chat_id = await self.user_service.rotate_current_chat_id(user_id)
+
+        user = await self.user_service.get_user_by_id(user_id)
+        if user is None:
+            logger.warning(
+                "[chat:service] Skipped background memory maintenance because user %s was not found", user_id
+            )
+            return chat_id
+
+        try:
+            await self.agent_service.start_background_memory_maintenance(user)
+        except Exception:
+            logger.error(
+                "[chat:service] Failed to schedule background memory maintenance for user %s",
+                user_id,
+                exc_info=True,
+            )
+
+        return chat_id
 
     async def clear_history(self, user_id: int) -> str:
         """Backward-compatible alias for starting a new chat session."""

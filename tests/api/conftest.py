@@ -298,6 +298,7 @@ def mock_agent_service():
     mock = AsyncMock()
     mock.process_turn_result = ("Mock response", None, "neutral")
     mock.process_turn.side_effect = lambda **_kwargs: mock.process_turn_result
+    mock.start_background_memory_maintenance = AsyncMock(return_value=True)
     mock.cancel_post_task = Mock(return_value=False)
     return mock
 

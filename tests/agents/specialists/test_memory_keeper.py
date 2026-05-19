@@ -150,3 +150,8 @@ def test_memory_keeper_prompt_rejects_misspelled_word_pollution():
     assert "Treat spelling corrections, nonexistent-word feedback" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "Do not create `area_to_improve` items for misspelled" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "leave it to WordKeeper unless a recurring durable pattern is named" in MEMORY_KEEPER_SYSTEM_PROMPT
+
+
+def test_memory_keeper_prompt_excludes_broad_startup_compaction():
+    assert "Broad start-of-session consolidation, duplicate cleanup" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "handled by a separate `memory_maintainer`" in MEMORY_KEEPER_SYSTEM_PROMPT
