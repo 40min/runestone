@@ -160,6 +160,17 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
             "- If you cannot reliably produce that language, fall back to English content.\n"
             "- Keep all memory item keys in English only."
         )
+        logger.debug(
+            (
+                "[agents:memorymaintainer] Outbound LLM request: "
+                "user_id=%s, provider=%s, model=%s, system_prompt=%s, prompt=%s"
+            ),
+            context.user.id,
+            self.settings.memory_keeper_provider,
+            self.settings.memory_keeper_model,
+            MEMORY_MAINTAINER_SYSTEM_PROMPT.strip(),
+            prompt,
+        )
 
         try:
             try:
@@ -168,7 +179,14 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
                     context=AgentContext(user=context.user),
                 )
             except Exception as exc:
-                logger.warning("[agents:memorymaintainer] Agent execution failed: %s", exc, exc_info=True)
+                logger.warning(
+                    "[agents:memorymaintainer] Agent execution failed: %s | provider=%s model=%s prompt=%s",
+                    exc,
+                    self.settings.memory_keeper_provider,
+                    self.settings.memory_keeper_model,
+                    prompt,
+                    exc_info=True,
+                )
                 return SpecialistResult(
                     status="error",
                     info_for_teacher="",
