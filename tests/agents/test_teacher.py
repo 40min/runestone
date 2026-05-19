@@ -387,6 +387,24 @@ async def test_generate_response_logs_sanitized_current_recall_words(teacher_age
     assert ("x" * 117 + "...") in caplog.text
 
 
+@pytest.mark.anyio
+async def test_generate_response_skips_empty_sanitized_recall_words(teacher_agent, mock_user, caplog):
+    teacher_agent.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
+
+    with caplog.at_level("INFO"):
+        await teacher_agent.generate_response(
+            message="msg",
+            history=[],
+            user=mock_user,
+            current_recall_words=["\n\t", "   "],
+        )
+
+    invoke_args = teacher_agent.agent.ainvoke.call_args[0][0]
+    messages = invoke_args["messages"]
+    assert not any(isinstance(m, SystemMessage) and "[CURRENT_RECALL_WORDS]" in m.content for m in messages)
+    assert "Injecting" not in caplog.text
+
+
 def test_format_recent_side_effects_prefers_info_for_teacher():
     formatted = TeacherAgent._format_recent_side_effects(
         [

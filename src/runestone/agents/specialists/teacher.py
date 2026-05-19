@@ -345,13 +345,14 @@ to read its contents before deciding.
             messages.append(SystemMessage(content=self._format_starter_memory(starter_memory)))
         if current_recall_words:
             safe_recall_words = self._sanitize_current_recall_words(current_recall_words)
-            logger.info(
-                "[agents:teacher] Injecting %s current recall words into teacher prompt for user_id=%s: %s",
-                len(safe_recall_words),
-                user.id,
-                json.dumps(safe_recall_words, ensure_ascii=False),
-            )
-            messages.append(SystemMessage(content=self._format_current_recall_words(current_recall_words)))
+            if safe_recall_words:
+                logger.info(
+                    "[agents:teacher] Injecting %s current recall words into teacher prompt for user_id=%s: %s",
+                    len(safe_recall_words),
+                    user.id,
+                    json.dumps(safe_recall_words, ensure_ascii=False),
+                )
+                messages.append(SystemMessage(content=self._format_current_recall_words(current_recall_words)))
         if pre_results:
             messages.append(SystemMessage(content=self._format_pre_results(pre_results)))
         if recent_side_effects:
@@ -517,17 +518,17 @@ to read its contents before deciding.
             ]
         )
 
-    @staticmethod
-    def _sanitize_current_recall_words(current_recall_words: list[str]) -> list[str]:
+    @classmethod
+    def _sanitize_current_recall_words(cls, current_recall_words: list[str]) -> list[str]:
         """Normalize recall words before logging or injecting them into prompts."""
         safe_words = []
-        for word in current_recall_words[: TeacherAgent.RECALL_WORDS_MAX_ITEMS]:
+        for word in current_recall_words[: cls.RECALL_WORDS_MAX_ITEMS]:
             # Treat recall items as untrusted user data before reusing them.
             normalized = re.sub(r"[\r\n\t]+", " ", word).strip()
             if not normalized:
                 continue
-            if len(normalized) > TeacherAgent.RECALL_WORD_MAX_CHARS:
-                normalized = normalized[: TeacherAgent.RECALL_WORD_MAX_CHARS - 3] + "..."
+            if len(normalized) > cls.RECALL_WORD_MAX_CHARS:
+                normalized = normalized[: cls.RECALL_WORD_MAX_CHARS - 3] + "..."
             safe_words.append(normalized)
         return safe_words
 
