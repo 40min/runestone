@@ -16,6 +16,11 @@ Examples:
 - `agent-swarm-architecture.md`
 - `tool-db-di.md`
 
+## Stable Docs
+
+- [`agent-swarm-architecture.md`](agent-swarm-architecture.md): current agent routing, tool ownership, async-post behavior, and memory boundaries
+- [`memory-maintainer.md`](memory-maintainer.md): chat-reset background memory cleanup flow and maintainer tool contract
+
 ## `docs/todo` Purpose
 
 Use `docs/todo/` for temporary planning documents about upcoming work.
