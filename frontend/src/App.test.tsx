@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App';
 import { AuthProvider } from './context/AuthContext';
@@ -68,7 +68,7 @@ describe('App', () => {
 
     expect(screen.getByText('Analyze Your Swedish Textbook Page')).toBeInTheDocument();
     expect(screen.getByText('Upload an image to get an instant analysis of the text, grammar, and vocabulary.')).toBeInTheDocument();
-    expect(screen.getByText('Drag & drop a file or click to upload')).toBeInTheDocument();
+    expect(screen.getByText('Drag and drop an image here')).toBeInTheDocument();
   });
 
   it('handles file selection and calls processImage', async () => {
@@ -89,12 +89,13 @@ describe('App', () => {
     expect(document.querySelector('header')).toBeInTheDocument();
   });
 
-  it('should call only recognizeImage when "Recognize only" is checked', async () => {
+  it('should call only recognizeImage when analysis mode is set to OCR only', async () => {
     mockRecognizeImage.mockResolvedValue({ text: 'OCR Text', character_count: 8 });
     render(<App />, { wrapper });
 
-    const recognizeOnlyCheckbox = screen.getByLabelText('Recognize only');
-    await userEvent.click(recognizeOnlyCheckbox);
+    const modeSelector = screen.getByRole('combobox');
+    fireEvent.mouseDown(modeSelector);
+    await userEvent.click(screen.getByRole('option', { name: 'OCR only' }));
 
     const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
@@ -105,13 +106,9 @@ describe('App', () => {
     });
   });
 
-  it('should call both recognizeImage and analyzeText when "Recognize only" is unchecked', async () => {
+  it('should call both recognizeImage and analyzeText when full analysis mode is selected', async () => {
     mockRecognizeImage.mockResolvedValue({ text: 'OCR Text', character_count: 8 });
     render(<App />, { wrapper });
-
-    // Ensure checkbox is unchecked (default state)
-    const recognizeOnlyCheckbox = screen.getByLabelText('Recognize only');
-    expect(recognizeOnlyCheckbox).not.toBeChecked();
 
     const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;

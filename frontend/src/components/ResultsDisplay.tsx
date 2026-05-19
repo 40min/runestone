@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Box, Typography, Snackbar, Alert, IconButton } from "@mui/material";
+import {
+  Box,
+  Typography,
+  Snackbar,
+  Alert,
+  IconButton,
+} from "@mui/material";
 import type { AlertColor } from "@mui/material";
 import { Copy, Save } from "lucide-react";
 import { ContentCopy } from "@mui/icons-material";
@@ -283,7 +289,14 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   ].filter(Boolean) as { id: string; label: string }[];
 
   return (
-    <Box sx={{ py: 8 }}>
+    <Box
+      sx={{
+        borderRadius: "0.8rem",
+        border: "1px solid rgba(99, 114, 173, 0.35)",
+        background:
+          "radial-gradient(circle at 14% 10%, rgba(34, 48, 112, 0.36), rgba(6, 11, 42, 0.96))",
+      }}
+    >
       {isProcessing && (
         <ProcessingStatus
           isProcessing={isProcessing}
@@ -301,9 +314,12 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
         tabs={tabs}
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        containerSx={{ px: { xs: 1.5, md: 2.5 }, borderColor: "rgba(106, 120, 178, 0.4)" }}
+        tabsSx={{ gap: { xs: 1, md: 4 } }}
+        buttonSx={{ px: { xs: 1.2, md: 2 }, py: 1.1, fontSize: { xs: "1rem", md: "1.05rem" } }}
       />
 
-      <Box sx={{ pt: 6 }}>
+      <Box sx={{ px: { xs: 1.5, md: 2.5 }, pt: 2.5, pb: 2.5 }}>
         {activeTab === "ocr" && (
           <Box>
             {ocrResult && (
@@ -416,8 +432,10 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
               sx={{
                 display: "flex",
                 justifyContent: "space-between",
-                alignItems: "center",
-                mb: 4,
+                alignItems: "flex-start",
+                gap: 2,
+                flexDirection: { xs: "column", md: "row" },
+                mb: 2.2,
               }}
             >
               <SectionTitle>Vocabulary Analysis</SectionTitle>
@@ -426,15 +444,17 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                   sx={{
                     display: "flex",
                     flexDirection: "column",
-                    alignItems: "flex-end",
-                    gap: 1,
+                    alignItems: { xs: "stretch", md: "flex-end" },
+                    gap: 1.2,
+                    width: { xs: "100%", md: "auto" },
                   }}
                 >
-                  <Box sx={{ display: "flex", gap: 2 }}>
+                  <Box sx={{ display: "flex", gap: 1.2, flexWrap: "wrap" }}>
                     <CustomButton
                       variant="primary"
                       onClick={handleSaveVocabulary}
                       startIcon={<Save size={16} />}
+                      sx={{ minWidth: { xs: "100%", md: 0 } }}
                     >
                       Save to Database
                     </CustomButton>
@@ -442,6 +462,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                       variant="primary"
                       onClick={handleCopyVocabulary}
                       startIcon={<Copy size={16} />}
+                      sx={{ minWidth: { xs: "100%", md: 0 } }}
                     >
                       Copy
                     </CustomButton>
@@ -449,9 +470,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                   <Box
                     sx={{
                       display: "flex",
-                      alignItems: "center",
+                      alignItems: "flex-start",
                       gap: 1,
-                      mt: 2,
                     }}
                   >
                     <StyledCheckbox
@@ -463,13 +483,11 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                       Enrich with grammar info
                     </Typography>
                   </Box>
-                  {/* New checkbox for hiding known words */}
                   <Box
                     sx={{
                       display: "flex",
-                      alignItems: "center",
+                      alignItems: "flex-start",
                       gap: 1,
-                      mt: 1,
                     }}
                   >
                     <StyledCheckbox
@@ -503,6 +521,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                     },
                   ]}
                   data={filteredVocabulary}
+                  mobileVariant="vocabulary"
                 />
               </Box>
             )}
