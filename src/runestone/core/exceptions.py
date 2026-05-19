@@ -98,3 +98,9 @@ class PermissionDeniedError(ValueError):
     """Raised when a user lacks permission to perform an action."""
 
     pass
+
+
+class MemoryItemNotFoundError(ValueError):
+    """Raised when a memory item is not found."""
+
+    pass

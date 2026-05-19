@@ -7,11 +7,14 @@ Use it to understand how a turn flows through the swarm, which agent owns which 
 Historical exploration has been consolidated into this contract and the implementation tracks. Keep this file authoritative.
 
 For milestone tracking, see [`agent-swarm-plan.md`](agent-swarm-plan.md).
+For chat-reset memory cleanup details, see
+[`memory-maintainer.md`](memory-maintainer.md).
 
 ## Index
 
 - [Current Status](#current-status)
 - [Architecture](#architecture)
+- [Memory Maintainer](#memory-maintainer)
 - [Tool Cases](#tool-cases)
 - [Contracts](#contracts)
 - [Future Work](#future-work)
@@ -30,6 +33,7 @@ Implemented now:
 - in-memory post-task registry with stale next-turn cancellation
 - image flow using the same async-post pattern
 - `MemoryKeeper` specialist running in post stage for durable memory maintenance
+- `memory_maintainer` specialist running in background after chat reset for scoped startup cleanup
 - `NewsAgent` specialist running in pre stage for topic-based news retrieval
 - teacher-side memory model narrowed to read-only lookup (`read_memory`) during response generation
 - compact first-turn starter memory injection (`personal_info` active, top-priority `area_to_improve` struggling/improving)
@@ -174,6 +178,11 @@ Owns:
 - explicit student-requested memory edits in the current turn when routed by post coordinator
 - review and update `area_to_improve` status and priority when the turn shows progress or regression
 
+Does not own:
+
+- broad startup compaction or duplicate cleanup sweeps; those belong to
+  [`memory_maintainer`](memory-maintainer.md)
+
 #### NewsAgent
 
 Owns:
@@ -243,6 +252,21 @@ Area-to-improve review rules:
 - visible progress moves the item toward `improving` and may reduce urgency by raising numeric priority
 - confirmed mastery marks the item `mastered`
 - new recurring issues create a fresh `area_to_improve` item with an explicit initial priority
+
+### Memory Maintainer
+
+`memory_maintainer` is a background specialist scheduled after chat reset. It is
+not routed through the coordinator and does not block the new session from
+starting.
+
+It reviews only `area_to_improve` memory with status `struggling` or
+`improving`, then conservatively consolidates obvious duplicates and adjusts
+priority only when clearly justified. Its tools enforce that merge replacements
+stay in category/status scope and that one merge is completed before another
+begins.
+
+For the full runtime, tool flow, logging contract, and ownership boundary, see
+[`memory-maintainer.md`](memory-maintainer.md).
 
 ### Post-Response Runtime
 

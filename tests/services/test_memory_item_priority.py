@@ -305,10 +305,10 @@ async def test_update_item_priority_permission_denied(db_with_test_user):
 
 
 async def test_update_item_priority_not_found(db_with_test_user):
-    from runestone.core.exceptions import UserNotFoundError
+    from runestone.core.exceptions import MemoryItemNotFoundError
 
     db, user = db_with_test_user
     service = _service(db)
 
-    with pytest.raises(UserNotFoundError):
+    with pytest.raises(MemoryItemNotFoundError):
         await service.update_item_priority(99999, 1, user.id)

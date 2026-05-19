@@ -21,6 +21,14 @@ class MemoryItemRepository:
         result = await self.db.execute(stmt)
         return result.scalars().first()
 
+    async def get_by_ids(self, item_ids: list[int]) -> list[MemoryItem]:
+        """Get memory items by IDs."""
+        if not item_ids:
+            return []
+        stmt = select(MemoryItem).filter(MemoryItem.id.in_(item_ids))
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
     async def get_by_user_category_key(self, user_id: int, category: str, key: str) -> Optional[MemoryItem]:
         """
         Get memory item by user_id, category, and key.

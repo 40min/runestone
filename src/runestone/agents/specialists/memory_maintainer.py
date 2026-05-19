@@ -1,0 +1,235 @@
+"""
+Background specialist for start-of-session memory maintenance.
+"""
+
+import logging
+from typing import Any
+
+from langchain.agents import create_agent
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_openai import ChatOpenAI
+from pydantic import ValidationError
+
+from runestone.agents.llm import build_chat_model
+from runestone.agents.specialists.base import BaseSpecialist, SpecialistContext, SpecialistResult
+from runestone.agents.tools.context import AgentContext
+from runestone.agents.tools.memory_maintainer import (
+    clear_pending_merge_plan,
+    maintainer_delete_memory_item,
+    maintainer_insert_memory_item,
+    maintainer_read_memory,
+    maintainer_update_memory_priority,
+)
+from runestone.config import Settings
+
+logger = logging.getLogger(__name__)
+
+MEMORY_MAINTAINER_SYSTEM_PROMPT = """
+You are Björn, a Swedish language teacher. Before starting a new tutoring
+session, perform a routine memory maintenance check.
+
+This is an internal maintenance task. You do not interact with the student.
+
+Review current memory items only in category `area_to_improve` with status
+`struggling` or `improving`. Only where it clearly makes sense, consolidate
+overlapping entries. The goal is clarity and usability, not compaction for its
+own sake. If everything looks well-organized already, making no changes at all
+is a perfectly valid outcome.
+
+When reviewing, consider merging items that:
+- cover the same core grammatical concept, even across slightly different contexts
+- are near-duplicates or explicit repeats
+
+Be moderate: merge when overlap is obvious and the result preserves all
+meaningful sub-cases and examples from the originals. Keep items separate if
+their different contexts carry distinct instructional value.
+
+Language normalization rules:
+- The content target language is provided in the runtime instruction message.
+- If one or more merged items use another language, write the new consolidated
+  content in the target language while preserving meaning.
+- Always keep memory item keys in English.
+- If you cannot reliably produce target-language content, fall back to English
+  content.
+- Keep Swedish example words/phrases as-is when they are language-study examples.
+- Do not rewrite unrelated untouched items only to normalize language.
+
+For each merge you decide to perform:
+- create one new consolidated item with:
+  - a descriptive key in English capturing the concept
+  - key must be a new versioned key (for example: `<concept>_v2` or `<concept>_merged_v2`)
+  - never reuse any original key from the merged items
+  - combined content preserving all distinct sub-cases and examples
+  - the same category `area_to_improve`
+  - the same status as the merged items
+  - priority set to the highest priority (lowest number) among merged items
+- delete all original items being replaced
+
+Merge execution rules:
+- for merge creation, call `maintainer_insert_memory_item` with
+  `replaced_item_ids` containing all original ids to replace
+- never mix statuses in one merge group; all `replaced_item_ids` must share one status
+- after a merge upsert, only delete ids listed in that `replaced_item_ids` set
+- you must complete one merge (insert then delete all replaced items) before starting another
+
+Deletion safety rule:
+- when maintainer_insert_memory_item returns `Memory item saved: [ID:<n>] ...`, treat `<n>` as the consolidated item id
+- never delete that consolidated item id, even if it was listed among originals by mistake
+
+After merges, briefly review priorities:
+- consider bumping up items that are recurring or YKI exam-critical
+- be conservative and change priority only when clearly justified
+
+Allowed tools:
+- maintainer_read_memory
+- maintainer_insert_memory_item
+- maintainer_delete_memory_item
+- maintainer_update_memory_priority
+
+Broad inspection is allowed for this maintenance task.
+
+Return valid JSON matching this exact structure and nothing else:
+{
+  "status": "no_action" | "action_taken" | "error",
+  "actions": [{"tool": string, "status": "success" | "error", "summary": string}],
+  "artifacts": {
+    "maintenance_type": "chat_reset_memory_maintenance",
+    "scope": {"category": "area_to_improve", "statuses": ["struggling", "improving"]},
+    "reviewed_item_count": number,
+    "merged_groups": [
+      {
+        "new_key": string,
+        "new_priority": number | null,
+        "replaced_item_ids": [number],
+        "replaced_keys": [string],
+        "status": string
+      }
+    ],
+    "priority_updates": [
+      {
+        "item_id": number,
+        "key": string,
+        "from_priority": number | null,
+        "to_priority": number | null,
+        "reason": string
+      }
+    ],
+    "summary": string,
+    "no_change_reason": string | null
+  }
+}
+"""
+
+
+class MemoryMaintainerSpecialist(BaseSpecialist):
+    """Background specialist that consolidates start-of-session learner memory."""
+
+    def __init__(self, settings: Settings):
+        super().__init__(name="memory_maintainer")
+        self.settings = settings
+        # Reuse the memory_keeper model configuration for this adjacent maintenance role.
+        model = build_chat_model(settings, "memory_keeper")
+        self.agent = self._build_agent(model)
+        logger.info(
+            "[agents:memorymaintainer] Initialized MemoryMaintainerSpecialist with provider=%s, model=%s",
+            settings.memory_keeper_provider,
+            settings.memory_keeper_model,
+        )
+
+    def _build_agent(self, model: ChatOpenAI):
+        """Build the internal tool-using agent for background memory maintenance."""
+        return create_agent(
+            model=model,
+            tools=[
+                maintainer_read_memory,
+                maintainer_insert_memory_item,
+                maintainer_delete_memory_item,
+                maintainer_update_memory_priority,
+            ],
+            system_prompt=MEMORY_MAINTAINER_SYSTEM_PROMPT,
+            context_schema=AgentContext,
+        )
+
+    async def run(self, context: SpecialistContext) -> SpecialistResult:
+        clear_pending_merge_plan(context.user.id)
+        language = self._memory_item_language(context)
+        prompt = (
+            "Run the routine chat-reset memory maintenance check.\n"
+            "Language policy:\n"
+            f"- Use '{language}' for memory item content.\n"
+            "- If you cannot reliably produce that language, fall back to English content.\n"
+            "- Keep all memory item keys in English only."
+        )
+
+        try:
+            try:
+                result = await self.agent.ainvoke(
+                    {"messages": [HumanMessage(content=prompt)]},
+                    context=AgentContext(user=context.user),
+                )
+            except Exception as exc:
+                logger.warning("[agents:memorymaintainer] Agent execution failed: %s", exc, exc_info=True)
+                return SpecialistResult(
+                    status="error",
+                    info_for_teacher="",
+                    actions=[],
+                    artifacts={
+                        "maintenance_type": "chat_reset_memory_maintenance",
+                        "summary": "agent_execution_failed",
+                        "scope": {"category": "area_to_improve", "statuses": ["struggling", "improving"]},
+                        "reviewed_item_count": 0,
+                        "merged_groups": [],
+                        "priority_updates": [],
+                        "no_change_reason": None,
+                    },
+                )
+
+            parsed = self._parse_result(result.get("messages", []))
+            if parsed is None:
+                logger.warning("[agents:memorymaintainer] Failed to parse final agent result")
+                return SpecialistResult(
+                    status="error",
+                    info_for_teacher="",
+                    actions=[],
+                    artifacts={
+                        "maintenance_type": "chat_reset_memory_maintenance",
+                        "summary": "invalid_agent_output",
+                        "scope": {"category": "area_to_improve", "statuses": ["struggling", "improving"]},
+                        "reviewed_item_count": 0,
+                        "merged_groups": [],
+                        "priority_updates": [],
+                        "no_change_reason": None,
+                    },
+                )
+            return parsed
+        finally:
+            clear_pending_merge_plan(context.user.id)
+
+    @staticmethod
+    def _parse_result(messages: list[Any]) -> SpecialistResult | None:
+        for message in reversed(messages):
+            if not isinstance(message, AIMessage):
+                continue
+            if getattr(message, "tool_calls", None):
+                continue
+            content = message.content
+            if not isinstance(content, str) or not content.strip():
+                continue
+            json_content = content.strip()
+            if json_content.startswith("```"):
+                start = json_content.find("{")
+                end = json_content.rfind("}")
+                if start != -1 and end != -1 and end >= start:
+                    json_content = json_content[start : end + 1]
+            try:
+                return SpecialistResult.model_validate_json(json_content)
+            except (ValidationError, ValueError):
+                continue
+        return None
+
+    @staticmethod
+    def _memory_item_language(context: SpecialistContext) -> str:
+        mother_tongue = getattr(context.user, "mother_tongue", None)
+        if isinstance(mother_tongue, str) and mother_tongue.strip():
+            return mother_tongue.strip()
+        return "English"

@@ -459,6 +459,7 @@ LangGraph tools may execute concurrently. To keep DB operations safe, use async 
 Design docs:
 
 - Contracts + orchestration flow: [`agent-swarm-architecture.md`](docs/agent-swarm-architecture.md:1)
+- Chat-reset memory maintenance: [`memory-maintainer.md`](docs/memory-maintainer.md:1)
 - Implementation milestones: [`agent-swarm-plan.md`](docs/agent-swarm-plan.md:1)
 - Documentation naming convention: [`docs/README.md`](docs/README.md:1)
 

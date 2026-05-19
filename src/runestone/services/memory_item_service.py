@@ -17,7 +17,7 @@ from runestone.api.memory_item_schemas import (
     SortDirection,
 )
 from runestone.constants import MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY
-from runestone.core.exceptions import PermissionDeniedError, UserNotFoundError
+from runestone.core.exceptions import MemoryItemNotFoundError, PermissionDeniedError
 from runestone.core.logging_config import get_logger
 from runestone.db.memory_item_repository import MemoryItemRepository
 from runestone.db.models import MemoryItem
@@ -39,7 +39,7 @@ class MemoryItemService:
     def _utc_now(self) -> datetime:
         return datetime.now(timezone.utc)
 
-    def _validate_status(self, category: MemoryCategory, status: str) -> None:
+    def validate_status(self, category: MemoryCategory, status: str) -> None:
         """
         Validate that status is valid for the given category.
 
@@ -139,7 +139,7 @@ class MemoryItemService:
             status = self.DEFAULT_STATUS[category]
 
         # Validate status
-        self._validate_status(category, status)
+        self.validate_status(category, status)
 
         # Check if item exists
         existing_item = await self.repo.get_by_user_category_key(user_id, category.value, key)
@@ -193,12 +193,12 @@ class MemoryItemService:
             Updated MemoryItemResponse
 
         Raises:
-            UserNotFoundError: If item not found
+            MemoryItemNotFoundError: If item not found
             ValueError: If user doesn't own item or status is invalid
         """
         item = await self.repo.get_by_id(item_id)
         if not item:
-            raise UserNotFoundError(f"Memory item with id {item_id} not found")
+            raise MemoryItemNotFoundError(f"Memory item with id {item_id} not found")
 
         if item.user_id != user_id:
             raise PermissionDeniedError("You don't have permission to update this item")
@@ -208,7 +208,7 @@ class MemoryItemService:
             category = MemoryCategory(item.category)
         except Exception as e:
             raise ValueError(f"Invalid category '{item.category}' on memory item {item.id}") from e
-        self._validate_status(category, new_status)
+        self.validate_status(category, new_status)
 
         # Update status
         old_status = item.status
@@ -233,13 +233,13 @@ class MemoryItemService:
             Updated MemoryItemResponse
 
         Raises:
-            UserNotFoundError: If item not found
+            MemoryItemNotFoundError: If item not found
             PermissionDeniedError: If user doesn't own item
             ValueError: If category is not area_to_improve or priority out of range
         """
         item = await self.repo.get_by_id(item_id)
         if not item:
-            raise UserNotFoundError(f"Memory item with id {item_id} not found")
+            raise MemoryItemNotFoundError(f"Memory item with id {item_id} not found")
 
         if item.user_id != user_id:
             raise PermissionDeniedError("You don't have permission to update this item")
@@ -267,12 +267,12 @@ class MemoryItemService:
             user_id: User ID (for authorization)
 
         Raises:
-            UserNotFoundError: If item not found
+            MemoryItemNotFoundError: If item not found
             ValueError: If user doesn't own item
         """
         item = await self.repo.get_by_id(item_id)
         if not item:
-            raise UserNotFoundError(f"Memory item with id {item_id} not found")
+            raise MemoryItemNotFoundError(f"Memory item with id {item_id} not found")
 
         if item.user_id != user_id:
             raise PermissionDeniedError("You don't have permission to delete this item")

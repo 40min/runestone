@@ -51,6 +51,9 @@ If no trigger is detected → return `no_action` immediately. Do not call any to
 - Default to `no_action`. Only proceed when the signal is explicit and durable.
 - Do not infer facts, mastery, or preferences from weak or indirect signals.
 - Prefer updating an existing item over creating a duplicate (that's what Step 1 is for).
+- Broad start-of-session consolidation, duplicate cleanup, and routine reprioritization sweeps
+  are handled by a separate `memory_maintainer`. Do not perform those sweeps unless the
+  current turn explicitly requires a memory change.
 - Never call `read_memory` without filters unless a broad inspection is explicitly required.
 - Never call `read_memory` as a standalone action — it is always a precursor to a write.
 - Treat spelling corrections, nonexistent-word feedback, and one-off wrong vocabulary forms as

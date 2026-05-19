@@ -16,8 +16,9 @@ from runestone.agents.background_task_registry import BackgroundTaskRegistry
 from runestone.agents.coordinator import CoordinatorAgent
 from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem, TeacherEmotion, TeacherSideEffect
 from runestone.agents.service_providers import provide_agent_side_effect_service
-from runestone.agents.specialists.base import SpecialistContext
+from runestone.agents.specialists.base import SpecialistContext, SpecialistResult
 from runestone.agents.specialists.memory_keeper import MemoryKeeperSpecialist
+from runestone.agents.specialists.memory_maintainer import MemoryMaintainerSpecialist
 from runestone.agents.specialists.news_agent import NewsAgentSpecialist
 from runestone.agents.specialists.registry import SpecialistRegistry
 from runestone.agents.specialists.teacher import TeacherAgent
@@ -47,6 +48,7 @@ class AgentsManager:
 
     COORDINATOR_MAX_HISTORY_MESSAGES = 5
     POST_TASK_TIMEOUT_SECONDS = 15
+    MEMORY_MAINTENANCE_TIMEOUT_SECONDS = 30
     STARTER_MEMORY_PERSONAL_LIMIT = 50
     STARTER_MEMORY_AREA_LIMIT = 5
 
@@ -75,8 +77,14 @@ class AgentsManager:
         self.registry.register(MemoryKeeperSpecialist(settings))
         self.registry.register(NewsAgentSpecialist(settings))
         self.registry.register(WordKeeperSpecialist(settings))
+        self.memory_maintainer = MemoryMaintainerSpecialist(settings)
 
         self._post_task_registry = BackgroundTaskRegistry(logger=logger, key_name="chat_id")
+        self._memory_maintenance_registry = BackgroundTaskRegistry(
+            logger=logger,
+            log_prefix="[agents:memory-maintenance]",
+            key_name="user_id",
+        )
 
         logger.info(
             "[agents:manager] Initialized AgentsManager with provider=%s, model=%s, persona=%s",
@@ -460,6 +468,74 @@ class AgentsManager:
     def cancel_post_task(self, chat_id: str) -> bool:
         """Cancel any live background post task for chat_id. Returns True if a task was cancelled."""
         return self._post_task_registry.cancel(chat_id)
+
+    async def start_background_memory_maintenance(self, user: User) -> bool:
+        """
+        Schedule background memory maintenance at chat reset time.
+
+        Only one run per user may be active at a time; repeated reset requests
+        while maintenance is still running are treated as a no-op.
+        """
+        user_key = str(user.id)
+        existing_task = self._memory_maintenance_registry.tasks.get(user_key)
+        if existing_task and not existing_task.done():
+            logger.info(
+                "[agents:memory-maintenance] Skipping schedule because maintenance is already running: user_id=%s",
+                user.id,
+            )
+            return False
+
+        async def _run() -> None:
+            try:
+                result = await asyncio.wait_for(
+                    self.run_memory_maintenance(user),
+                    timeout=self.MEMORY_MAINTENANCE_TIMEOUT_SECONDS,
+                )
+                artifacts = result.artifacts if isinstance(result.artifacts, dict) else {}
+                logger.info(
+                    "[agents:memory-maintenance] Completed: user_id=%s status=%s actions=%s reviewed=%s merged=%s "
+                    "priority_updates=%s",
+                    user.id,
+                    result.status,
+                    len(result.actions),
+                    artifacts.get("reviewed_item_count"),
+                    len(artifacts.get("merged_groups", [])) if isinstance(artifacts.get("merged_groups"), list) else 0,
+                    (
+                        len(artifacts.get("priority_updates", []))
+                        if isinstance(artifacts.get("priority_updates"), list)
+                        else 0
+                    ),
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    "[agents:memory-maintenance] Timed out after %ss: user_id=%s",
+                    self.MEMORY_MAINTENANCE_TIMEOUT_SECONDS,
+                    user.id,
+                )
+            except Exception:
+                logger.error(
+                    "[agents:memory-maintenance] Failed: user_id=%s",
+                    user.id,
+                    exc_info=True,
+                )
+            finally:
+                self._memory_maintenance_registry.unregister(user_key)
+
+        task = asyncio.create_task(_run())
+        self._memory_maintenance_registry.register(user_key, task)
+        logger.info("[agents:memory-maintenance] Background task started: user_id=%s", user.id)
+        return True
+
+    async def run_memory_maintenance(self, user: User) -> SpecialistResult:
+        """Run the memory maintainer directly for chat-reset startup hygiene."""
+        return await self.memory_maintainer.run(
+            SpecialistContext(
+                message="start_new_chat",
+                history=[],
+                user=user,
+                routing_reason="new_chat_session_started",
+            )
+        )
 
     async def start_background_post_turn(
         self,

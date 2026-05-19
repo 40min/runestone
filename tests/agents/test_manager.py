@@ -190,6 +190,86 @@ async def test_process_turn_skips_stale_check_on_first_turn(
     manager.handle_stale_post_task.assert_not_awaited()
 
 
+@pytest.mark.anyio
+async def test_start_background_memory_maintenance_runs_specialist_and_clears_registry(mock_settings, mock_user):
+    manager = _make_manager(mock_settings)
+    manager.memory_maintainer.run = AsyncMock(
+        return_value=SpecialistResult(
+            status="no_action",
+            actions=[],
+            info_for_teacher="",
+            artifacts={},
+        )
+    )
+
+    scheduled = await manager.start_background_memory_maintenance(mock_user)
+
+    assert scheduled is True
+    task = manager._memory_maintenance_registry.tasks[str(mock_user.id)]
+    await task
+    manager.memory_maintainer.run.assert_awaited_once()
+    assert str(mock_user.id) not in manager._memory_maintenance_registry.tasks
+
+
+@pytest.mark.anyio
+async def test_start_background_memory_maintenance_skips_duplicate_run(mock_settings, mock_user):
+    manager = _make_manager(mock_settings)
+    gate = asyncio.Event()
+
+    async def _wait_for_gate(_context):
+        await gate.wait()
+        return SpecialistResult(status="no_action", actions=[], info_for_teacher="", artifacts={})
+
+    manager.memory_maintainer.run = AsyncMock(side_effect=_wait_for_gate)
+
+    first_scheduled = await manager.start_background_memory_maintenance(mock_user)
+    await asyncio.sleep(0)
+    second_scheduled = await manager.start_background_memory_maintenance(mock_user)
+
+    assert first_scheduled is True
+    assert second_scheduled is False
+    manager.memory_maintainer.run.assert_awaited_once()
+
+    gate.set()
+    task = manager._memory_maintenance_registry.tasks[str(mock_user.id)]
+    await task
+
+
+@pytest.mark.anyio
+async def test_start_background_memory_maintenance_clears_registry_on_failure(mock_settings, mock_user, caplog):
+    manager = _make_manager(mock_settings)
+    manager.memory_maintainer.run = AsyncMock(side_effect=RuntimeError("boom"))
+
+    await manager.start_background_memory_maintenance(mock_user)
+
+    task = manager._memory_maintenance_registry.tasks[str(mock_user.id)]
+    with caplog.at_level("ERROR"):
+        await task
+
+    assert str(mock_user.id) not in manager._memory_maintenance_registry.tasks
+    assert "Failed: user_id=1" in caplog.text
+
+
+@pytest.mark.anyio
+async def test_start_background_memory_maintenance_clears_registry_on_timeout(mock_settings, mock_user, caplog):
+    manager = _make_manager(mock_settings)
+    manager.MEMORY_MAINTENANCE_TIMEOUT_SECONDS = 0.01
+
+    async def _slow_run(_context):
+        await asyncio.sleep(0.05)
+        return SpecialistResult(status="no_action", actions=[], info_for_teacher="", artifacts={})
+
+    manager.memory_maintainer.run = AsyncMock(side_effect=_slow_run)
+
+    await manager.start_background_memory_maintenance(mock_user)
+    task = manager._memory_maintenance_registry.tasks[str(mock_user.id)]
+    with caplog.at_level("ERROR"):
+        await task
+
+    assert str(mock_user.id) not in manager._memory_maintenance_registry.tasks
+    assert "Timed out" in caplog.text
+
+
 # ---------------------------------------------------------------------------
 # prepare_pre_turn tests
 # ---------------------------------------------------------------------------
