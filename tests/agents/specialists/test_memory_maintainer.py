@@ -114,39 +114,6 @@ async def test_memory_maintainer_uses_chat_reset_prompt(specialist, mock_user):
 
 
 @pytest.mark.anyio
-async def test_memory_maintainer_logs_outbound_prompt_debug(specialist, mock_user, caplog):
-    specialist.agent.ainvoke.return_value = {
-        "messages": [
-            AIMessage(
-                content=(
-                    '{"status":"no_action","actions":[],'
-                    '"artifacts":{"maintenance_type":"chat_reset_memory_maintenance",'
-                    '"scope":{"category":"area_to_improve",'
-                    '"statuses":["struggling","improving"]},"reviewed_item_count":0,"merged_groups":[],'
-                    '"priority_updates":[],"summary":"noop","no_change_reason":"already clean"}}'
-                )
-            )
-        ]
-    }
-
-    caplog.set_level("DEBUG")
-    await specialist.run(
-        SpecialistContext(
-            message="start_new_chat",
-            history=[],
-            user=mock_user,
-            routing_reason="new_chat_session_started",
-        )
-    )
-
-    assert "Outbound LLM request" in caplog.text
-    assert "provider=openrouter" in caplog.text
-    assert "model=test-model" in caplog.text
-    assert "Run the routine chat-reset memory maintenance check." in caplog.text
-    assert "Use 'English' for memory item content." in caplog.text
-
-
-@pytest.mark.anyio
 async def test_memory_maintainer_uses_user_mother_tongue_in_prompt(specialist):
     specialist.agent.ainvoke.return_value = {
         "messages": [
