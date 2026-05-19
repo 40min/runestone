@@ -36,8 +36,6 @@ overlapping entries. The goal is clarity and usability, not compaction for its
 own sake. If everything looks well-organized already, making no changes at all
 is a perfectly valid outcome.
 
-Use English for all memory item keys and content.
-
 When reviewing, consider merging items that:
 - cover the same core grammatical concept, even across slightly different contexts
 - are near-duplicates or explicit repeats
@@ -46,9 +44,19 @@ Be moderate: merge when overlap is obvious and the result preserves all
 meaningful sub-cases and examples from the originals. Keep items separate if
 their different contexts carry distinct instructional value.
 
+Language normalization rules:
+- The content target language is provided in the runtime instruction message.
+- If one or more merged items use another language, write the new consolidated
+  content in the target language while preserving meaning.
+- Always keep memory item keys in English.
+- If you cannot reliably produce target-language content, fall back to English
+  content.
+- Keep Swedish example words/phrases as-is when they are language-study examples.
+- Do not rewrite unrelated untouched items only to normalize language.
+
 For each merge you decide to perform:
 - create one new consolidated item with:
-  - a descriptive key capturing the concept
+  - a descriptive key in English capturing the concept
   - key must be a new versioned key (for example: `<concept>_v2` or `<concept>_merged_v2`)
   - never reuse any original key from the merged items
   - combined content preserving all distinct sub-cases and examples
@@ -144,7 +152,14 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
 
     async def run(self, context: SpecialistContext) -> SpecialistResult:
         clear_pending_merge_plan(context.user.id)
-        prompt = "Run the routine chat-reset memory maintenance check."
+        language = self._memory_item_language(context)
+        prompt = (
+            "Run the routine chat-reset memory maintenance check.\n"
+            "Language policy:\n"
+            f"- Use '{language}' for memory item content.\n"
+            "- If you cannot reliably produce that language, fall back to English content.\n"
+            "- Keep all memory item keys in English only."
+        )
 
         try:
             try:
@@ -211,3 +226,10 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
             except (ValidationError, ValueError):
                 continue
         return None
+
+    @staticmethod
+    def _memory_item_language(context: SpecialistContext) -> str:
+        mother_tongue = getattr(context.user, "mother_tongue", None)
+        if isinstance(mother_tongue, str) and mother_tongue.strip():
+            return mother_tongue.strip()
+        return "English"

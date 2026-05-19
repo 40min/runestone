@@ -105,8 +105,44 @@ async def test_memory_maintainer_uses_chat_reset_prompt(specialist, mock_user):
     )
 
     args, kwargs = specialist.agent.ainvoke.call_args
-    assert args[0]["messages"][0].content == "Run the routine chat-reset memory maintenance check."
+    prompt = args[0]["messages"][0].content
+    assert prompt.startswith("Run the routine chat-reset memory maintenance check.")
+    assert "Use 'English' for memory item content." in prompt
+    assert "fall back to English content" in prompt
+    assert "Keep all memory item keys in English only." in prompt
     assert kwargs["context"].user == mock_user
+
+
+@pytest.mark.anyio
+async def test_memory_maintainer_uses_user_mother_tongue_in_prompt(specialist):
+    specialist.agent.ainvoke.return_value = {
+        "messages": [
+            AIMessage(
+                content=(
+                    '{"status":"no_action","actions":[],'
+                    '"artifacts":{"maintenance_type":"chat_reset_memory_maintenance",'
+                    '"scope":{"category":"area_to_improve",'
+                    '"statuses":["struggling","improving"]},"reviewed_item_count":0,"merged_groups":[],'
+                    '"priority_updates":[],"summary":"noop","no_change_reason":"already clean"}}'
+                )
+            )
+        ]
+    }
+
+    user = SimpleNamespace(id=7, mother_tongue="Finnish")
+    await specialist.run(
+        SpecialistContext(
+            message="start_new_chat",
+            history=[],
+            user=user,
+            routing_reason="new_chat_session_started",
+        )
+    )
+
+    args, _kwargs = specialist.agent.ainvoke.call_args
+    prompt = args[0]["messages"][0].content
+    assert "Use 'Finnish' for memory item content." in prompt
+    assert "Keep all memory item keys in English only." in prompt
 
 
 @pytest.mark.anyio
@@ -177,6 +213,12 @@ async def test_memory_maintainer_parses_fenced_json_output(specialist, mock_user
 def test_memory_maintainer_prompt_defines_expected_scope_and_tools():
     assert "category `area_to_improve` with status" in MEMORY_MAINTAINER_SYSTEM_PROMPT
     assert "`struggling` or `improving`" in MEMORY_MAINTAINER_SYSTEM_PROMPT
+    assert (
+        "The content target language is provided in the runtime instruction message." in MEMORY_MAINTAINER_SYSTEM_PROMPT
+    )
+    assert "Always keep memory item keys in English." in MEMORY_MAINTAINER_SYSTEM_PROMPT
+    assert "fall back to English" in MEMORY_MAINTAINER_SYSTEM_PROMPT
+    assert "Keep Swedish example words/phrases as-is" in MEMORY_MAINTAINER_SYSTEM_PROMPT
     assert "- maintainer_delete_memory_item" in MEMORY_MAINTAINER_SYSTEM_PROMPT
     assert "- maintainer_update_memory_priority" in MEMORY_MAINTAINER_SYSTEM_PROMPT
     assert "key must be a new versioned key" in MEMORY_MAINTAINER_SYSTEM_PROMPT

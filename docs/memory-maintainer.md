@@ -50,6 +50,8 @@ maintainer-specific tools.
 The maintainer owns broad start-of-session cleanup:
 
 - conservatively consolidate obvious duplicate or overlapping weaknesses
+- write memory item content in `User.mother_tongue` (fallback: English)
+- keep memory item keys in English only
 - preserve meaningful sub-cases and examples during consolidation
 - keep separate items when different contexts still carry instructional value
 - conservatively adjust priority when an item is recurring or YKI-critical
@@ -57,6 +59,12 @@ The maintainer owns broad start-of-session cleanup:
 - log the structured maintenance result at info level
 
 No action is a valid successful outcome when memory is already clear.
+
+If merged source cards contain mixed languages, the consolidated card should use
+`User.mother_tongue` for content text while keeping the key in English.
+If target-language content cannot be produced reliably, content falls back to
+English. Swedish study examples are preserved as-is, and unchanged cards are not
+rewritten only for language normalization.
 
 ## Tool Flow
 
