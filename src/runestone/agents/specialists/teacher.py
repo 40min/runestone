@@ -344,11 +344,12 @@ to read its contents before deciding.
         if starter_memory:
             messages.append(SystemMessage(content=self._format_starter_memory(starter_memory)))
         if current_recall_words:
+            safe_recall_words = self._sanitize_current_recall_words(current_recall_words)
             logger.info(
                 "[agents:teacher] Injecting %s current recall words into teacher prompt for user_id=%s: %s",
-                len(current_recall_words),
+                len(safe_recall_words),
                 user.id,
-                json.dumps(current_recall_words, ensure_ascii=False),
+                json.dumps(safe_recall_words, ensure_ascii=False),
             )
             messages.append(SystemMessage(content=self._format_current_recall_words(current_recall_words)))
         if pre_results:
@@ -517,16 +518,24 @@ to read its contents before deciding.
         )
 
     @staticmethod
-    def _format_current_recall_words(current_recall_words: list[str]) -> str:
+    def _sanitize_current_recall_words(current_recall_words: list[str]) -> list[str]:
+        """Normalize recall words before logging or injecting them into prompts."""
         safe_words = []
         for word in current_recall_words[: TeacherAgent.RECALL_WORDS_MAX_ITEMS]:
-            # Treat recall items as untrusted user data before placing them in a SystemMessage.
+            # Treat recall items as untrusted user data before reusing them.
             normalized = re.sub(r"[\r\n\t]+", " ", word).strip()
             if not normalized:
                 continue
             if len(normalized) > TeacherAgent.RECALL_WORD_MAX_CHARS:
                 normalized = normalized[: TeacherAgent.RECALL_WORD_MAX_CHARS - 3] + "..."
-            safe_words.append(json.dumps(normalized, ensure_ascii=False))
+            safe_words.append(normalized)
+        return safe_words
+
+    @classmethod
+    def _format_current_recall_words(cls, current_recall_words: list[str]) -> str:
+        safe_words = []
+        for word in cls._sanitize_current_recall_words(current_recall_words):
+            safe_words.append(json.dumps(word, ensure_ascii=False))
 
         words_list = "\n".join(f"- {word}" for word in safe_words)
         return "\n".join(
