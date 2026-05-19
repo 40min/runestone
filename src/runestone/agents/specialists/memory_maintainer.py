@@ -62,6 +62,7 @@ Merge execution rules:
   `replaced_item_ids` containing all original ids to replace
 - never mix statuses in one merge group; all `replaced_item_ids` must share one status
 - after a merge upsert, only delete ids listed in that `replaced_item_ids` set
+- you must complete one merge (insert then delete all replaced items) before starting another
 
 Deletion safety rule:
 - when maintainer_insert_memory_item returns `Memory item saved: [ID:<n>] ...`, treat `<n>` as the consolidated item id
