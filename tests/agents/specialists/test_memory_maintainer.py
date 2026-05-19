@@ -287,7 +287,7 @@ async def test_maintainer_insert_rejects_cross_status_replacements():
     item_1 = SimpleNamespace(id=1, user_id=42, category="area_to_improve", status="struggling")
     item_2 = SimpleNamespace(id=2, user_id=42, category="area_to_improve", status="improving")
     mock_service = MagicMock()
-    mock_service.repo.get_by_id = AsyncMock(side_effect=[item_1, item_2])
+    mock_service.repo.get_by_ids = AsyncMock(return_value=[item_1, item_2])
     mock_service.repo.create = AsyncMock()
     mock_service._validate_status = MagicMock()
     mock_service._utc_now = MagicMock(return_value="now")

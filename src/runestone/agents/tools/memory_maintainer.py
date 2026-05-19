@@ -4,6 +4,7 @@ Tool wrappers for memory maintainer background consolidation.
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Annotated
 
 from langchain.tools import ToolRuntime
@@ -17,7 +18,7 @@ from runestone.agents.tools.memory import _format_tool_error
 from runestone.agents.tools.utils import serialize_memory_items
 from runestone.api.memory_item_schemas import AreaToImproveStatus, MemoryCategory
 from runestone.constants import MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY
-from runestone.core.exceptions import PermissionDeniedError, UserNotFoundError
+from runestone.core.exceptions import MemoryItemNotFoundError, PermissionDeniedError
 from runestone.db.models import MemoryItem
 
 logger = logging.getLogger(__name__)
@@ -181,13 +182,19 @@ async def maintainer_insert_memory_item(
     async with provide_memory_item_service() as service:
         if replaced_item_ids:
             replaced_statuses: set[str] = set()
+            replaced_items = await service.repo.get_by_ids(replaced_item_ids)
+            replaced_by_id = {replaced_item.id: replaced_item for replaced_item in replaced_items}
+            missing_ids = [
+                replaced_item_id for replaced_item_id in replaced_item_ids if replaced_item_id not in replaced_by_id
+            ]
+            if missing_ids:
+                return _format_tool_error(
+                    "maintainer_insert_memory_item",
+                    MemoryItemNotFoundError(f"Memory item with id {missing_ids[0]} not found"),
+                )
+
             for replaced_item_id in replaced_item_ids:
-                replaced_item = await service.repo.get_by_id(replaced_item_id)
-                if not replaced_item:
-                    return _format_tool_error(
-                        "maintainer_insert_memory_item",
-                        UserNotFoundError(f"Memory item with id {replaced_item_id} not found"),
-                    )
+                replaced_item = replaced_by_id[replaced_item_id]
                 if replaced_item.user_id != user.id:
                     return _format_tool_error(
                         "maintainer_insert_memory_item",
@@ -227,7 +234,7 @@ async def maintainer_insert_memory_item(
                 ValueError(f"priority must be between 0 and 9, got {item.priority}"),
             )
 
-        service._validate_status(MemoryCategory.AREA_TO_IMPROVE, status)
+        service.validate_status(MemoryCategory.AREA_TO_IMPROVE, status)
         create_priority = item.priority
         if create_priority is None:
             create_priority = MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY
@@ -241,7 +248,7 @@ async def maintainer_insert_memory_item(
                     content=item.content,
                     status=status,
                     priority=create_priority,
-                    status_changed_at=service._utc_now(),
+                    status_changed_at=datetime.now(timezone.utc),
                 )
             )
         except IntegrityError as exc:
@@ -297,7 +304,7 @@ async def maintainer_delete_memory_item(
         if not item:
             return _format_tool_error(
                 "maintainer_delete_memory_item",
-                UserNotFoundError(f"Memory item with id {delete.item_id} not found"),
+                MemoryItemNotFoundError(f"Memory item with id {delete.item_id} not found"),
             )
         if item.user_id != user.id:
             return _format_tool_error(
@@ -332,7 +339,7 @@ async def maintainer_update_memory_priority(
         if not item:
             return _format_tool_error(
                 "maintainer_update_memory_priority",
-                UserNotFoundError(f"Memory item with id {update.item_id} not found"),
+                MemoryItemNotFoundError(f"Memory item with id {update.item_id} not found"),
             )
         if item.user_id != user.id:
             return _format_tool_error(
