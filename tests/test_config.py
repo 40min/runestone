@@ -313,6 +313,25 @@ class TestSettings:
         assert test_settings.memory_maintainer_temperature == 0.3
         assert test_settings.memory_maintainer_reasoning_level == ReasoningLevel.MINIMAL
 
+    def test_memory_mastered_cleanup_days_defaults_to_three(self):
+        """Test mastered memory cleanup defaults to a tighter retention window."""
+        test_settings = Settings.model_construct(
+            llm_provider="openai",
+            openai_api_key="test-key",
+            gemini_api_key="test-gemini-key",
+            openrouter_api_key="test-openrouter-key",
+            allowed_origins="http://localhost:3000",
+            database_url="sqlite:///./test.db",
+            telegram_bot_token="test-token",
+            frontend_url="http://localhost:5173",
+            jwt_secret_key="secret",
+            teacher_provider="openrouter",
+            teacher_model="teacher-model",
+            coordinator_model="coordinator-model",
+        )
+
+        assert test_settings.memory_mastered_cleanup_days == 3
+
     def test_voice_settings_defaults_include_elevenlabs_configuration(self):
         """Test new voice provider settings keep OpenAI defaults while exposing ElevenLabs config."""
         env_vars = {
