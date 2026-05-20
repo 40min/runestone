@@ -190,7 +190,8 @@ async def update_memory_priority(
     - Raise priority (lower number) when the student repeatedly makes errors on the same topic.
     - Lower priority (higher number) only when the current signal is explicitly about reduced urgency,
       not as a routine companion to a status change.
-    - Items with priority set appear first in memory reads for area_to_improve.
+    - Priority still matters for stored urgency and for downstream maintenance decisions, even though
+      read_memory now returns the freshest matching items first.
     - Only reprioritize the specific item(s) directly tied to the current turn's explicit signal.
       Never use this tool to rebalance or renumber the broader memory set; that belongs to MemoryMaintainer.
     - For normal progress updates such as struggling -> improving or improving -> mastered, prefer

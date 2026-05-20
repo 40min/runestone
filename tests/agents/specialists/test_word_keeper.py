@@ -106,7 +106,11 @@ def test_word_keeper_uses_structured_specialist_purpose(mock_settings, mock_chat
     with patch("runestone.agents.specialists.word_keeper.build_chat_model", return_value=mock_chat_model) as mock_build:
         WordKeeperSpecialist(mock_settings)
 
-    mock_build.assert_called_once_with(mock_settings, "word_keeper")
+    mock_build.assert_called_once_with(
+        mock_settings,
+        "word_keeper",
+        timeout_seconds=WordKeeperSpecialist.MODEL_TIMEOUT_SECONDS,
+    )
 
 
 def test_word_keeper_prompt_limits_pre_stage_to_explicit_save_requests():

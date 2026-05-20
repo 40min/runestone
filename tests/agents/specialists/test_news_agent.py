@@ -51,7 +51,11 @@ def test_news_agent_uses_news_agent_model_profile(mock_settings):
     with patch("runestone.agents.specialists.news_agent.build_chat_model", return_value=MagicMock()) as mock_build:
         with patch("runestone.agents.specialists.news_agent.create_agent"):
             NewsAgentSpecialist(mock_settings)
-    mock_build.assert_called_once_with(mock_settings, "news_agent")
+    mock_build.assert_called_once_with(
+        mock_settings,
+        "news_agent",
+        timeout_seconds=NewsAgentSpecialist.MODEL_TIMEOUT_SECONDS,
+    )
 
 
 @pytest.mark.anyio
