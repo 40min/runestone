@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from runestone.agents.service_providers import provide_memory_item_service
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.utils import serialize_memory_items
-from runestone.api.memory_item_schemas import MemoryCategory, MemoryItemCreate
+from runestone.api.memory_item_schemas import MemoryCategory, MemoryItemCreate, MemorySortBy, SortDirection
 from runestone.core.exceptions import PermissionDeniedError, UserNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -66,8 +66,8 @@ async def read_memory(
     Returns structured memory items with IDs, categories, keys, content, and status.
     Use this tool when you need context about the student to personalize your
     teaching or when asked about what you know about the student.
-    For area_to_improve items, results are ordered by priority (lowest number first),
-    then by last-updated date.
+    Results are capped to the 100 freshest matching items and ordered by last-updated date
+    descending so agents see the newest signals first.
 
     Args:
         runtime: Tool runtime context
@@ -82,7 +82,15 @@ async def read_memory(
 
     # Use fresh service with its own session for concurrency safety
     async with provide_memory_item_service() as service:
-        items = await service.list_memory_items(user_id=user.id, category=category, status=status, limit=200, offset=0)
+        items = await service.list_memory_items(
+            user_id=user.id,
+            category=category,
+            status=status,
+            sort_by=MemorySortBy.UPDATED_AT,
+            sort_direction=SortDirection.DESC,
+            limit=100,
+            offset=0,
+        )
 
     if not items:
         return "No memory items found."
