@@ -33,6 +33,11 @@ interface DataTableProps<T extends { id: string }> {
   masterCheckboxId?: string;
   rowCheckboxIdPrefix?: string;
   sx?: SxProps<Theme>;
+  renderMobileRow?: (
+    row: T,
+    index: number,
+    checkbox: React.ReactNode
+  ) => React.ReactNode;
 }
 
 function DataTable<T extends { id: string } & Record<string, unknown>>({
@@ -46,6 +51,7 @@ function DataTable<T extends { id: string } & Record<string, unknown>>({
   masterCheckboxId,
   rowCheckboxIdPrefix,
   sx = {},
+  renderMobileRow,
 }: DataTableProps<T>) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -59,6 +65,55 @@ function DataTable<T extends { id: string } & Record<string, unknown>>({
   };
 
   if (isMobile) {
+    if (renderMobileRow) {
+      return (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, ...sx }}>
+          {selectable && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                p: 1.2,
+                backgroundColor: 'rgba(34, 44, 95, 0.7)',
+                border: '1px solid rgba(106, 121, 181, 0.5)',
+                borderRadius: '0.65rem',
+              }}
+            >
+              <StyledCheckbox
+                id={masterCheckboxId}
+                checked={allSelected}
+                indeterminate={someSelected}
+                onChange={handleSelectAll}
+              />
+              <Typography sx={{ ml: 0.75, color: '#d8e2ff', fontWeight: 700 }}>
+                Select All
+              </Typography>
+            </Box>
+          )}
+          {data.map((row, index) => {
+            const checkbox = selectable ? (
+              <Box
+                onClick={(e) => e.stopPropagation()}
+                sx={{ display: 'flex', alignItems: 'center' }}
+              >
+                <StyledCheckbox
+                  id={rowCheckboxIdPrefix ? `${rowCheckboxIdPrefix}-${row.id}` : undefined}
+                  checked={selectedItems.get(row.id) || false}
+                  onChange={(checked) => onSelectionChange?.(row.id, checked)}
+                />
+              </Box>
+            ) : null;
+
+            return (
+              <React.Fragment key={row.id}>
+                {renderMobileRow(row, index, checkbox)}
+              </React.Fragment>
+            );
+          })}
+        </Box>
+      );
+    }
+
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, ...sx }}>
          {selectable && (

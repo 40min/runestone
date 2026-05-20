@@ -13,14 +13,14 @@ describe('FileUpload', () => {
   it('renders the file upload component', () => {
     render(<FileUpload onFileSelect={mockOnFileSelect} isProcessing={false} />);
 
-    expect(screen.getByText('Drag & drop a file or click to upload')).toBeInTheDocument();
-    expect(screen.getByText('Browse Files')).toBeInTheDocument();
+    expect(screen.getByText('Drag and drop an image here')).toBeInTheDocument();
+    expect(screen.getByText('Choose File')).toBeInTheDocument();
   });
 
   it('handles drag events', async () => {
     render(<FileUpload onFileSelect={mockOnFileSelect} isProcessing={false} />);
 
-    const dropzone = screen.getByText('Drag & drop a file or click to upload').closest('div');
+    const dropzone = screen.getByText('Drag and drop an image here').closest('div');
     act(() => {
       fireEvent.dragEnter(dropzone!);
     });
@@ -97,7 +97,7 @@ describe('FileUpload', () => {
 
     // Click again to zoom out
     fireEvent.click(previewImage);
-    expect(previewImage).toHaveClass('max-h-96');
+    expect(previewImage).toHaveClass('max-h-72');
   });
 
   it('cleans up object URL on unmount', async () => {

@@ -48,6 +48,17 @@ const mockAnalysisResult = {
   core_topics: [],
 };
 
+const createMatchMedia = (matches: boolean) => (query: string) => ({
+  matches,
+  media: query,
+  onchange: null,
+  addListener: vi.fn(),
+  removeListener: vi.fn(),
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+  dispatchEvent: vi.fn(),
+});
+
 
 describe("ResultsDisplay", () => {
   it("renders error state when error is provided and no results", () => {
@@ -819,6 +830,59 @@ describe("ResultsDisplay", () => {
     });
   });
 
+  it("shows mobile vocabulary select-all and applies it to visible words only", async () => {
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn().mockImplementation(createMatchMedia(true)),
+    });
+
+    const mockClipboard = {
+      writeText: vi.fn().mockResolvedValue(undefined),
+    };
+    Object.assign(navigator, { clipboard: mockClipboard });
+
+    try {
+      render(
+        <ResultsDisplay
+          ocrResult={mockOcrResult}
+          analysisResult={mockAnalysisResult}
+          error={null}
+          saveVocabulary={vi.fn()}
+          processingStep="IDLE"
+          isProcessing={false}
+        />
+      );
+
+      const vocabularyTab = screen.getByText("Vocabulary");
+      fireEvent.click(vocabularyTab);
+
+      const hideKnownCheckbox = document.getElementById(
+        "hide-known-words-checkbox"
+      );
+      fireEvent.click(hideKnownCheckbox!);
+
+      const masterCheckbox = document.getElementById(
+        "vocabulary-master-checkbox"
+      );
+      expect(masterCheckbox).toBeInTheDocument();
+
+      fireEvent.click(masterCheckbox!);
+      fireEvent.click(screen.getByText("Copy"));
+
+      await waitFor(() => {
+        expect(mockClipboard.writeText).toHaveBeenCalledWith(
+          "hej - hello\nhus - house"
+        );
+      });
+    } finally {
+      Object.defineProperty(window, "matchMedia", {
+        writable: true,
+        value: originalMatchMedia,
+      });
+    }
+  });
+
   describe("UUID Generation", () => {
     it("should generate UUIDs for vocabulary items without IDs", () => {
       const mockVocabulary = [
@@ -1088,6 +1152,26 @@ describe("ResultsDisplay", () => {
       // The actual text depends on ProcessingStatus implementation
       // We just verify the component renders when isProcessing is true
       expect(screen.queryByText("Analysis")).not.toBeInTheDocument();
+    });
+
+    it("does not show mobile tap-for-details helper text", () => {
+      render(
+        <ResultsDisplay
+          ocrResult={mockOcrResult}
+          analysisResult={mockAnalysisResult}
+          error={null}
+          saveVocabulary={vi.fn()}
+          processingStep="IDLE"
+          isProcessing={false}
+        />
+      );
+
+      const vocabularyTab = screen.getByText("Vocabulary");
+      fireEvent.click(vocabularyTab);
+
+      expect(
+        screen.queryByText("Tap a row to see more details and examples.")
+      ).not.toBeInTheDocument();
     });
   });
 });

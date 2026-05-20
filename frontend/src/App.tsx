@@ -9,7 +9,6 @@ import Register from "./components/auth/Register";
 import Profile from "./components/auth/Profile";
 import useImageProcessing from "./hooks/useImageProcessing";
 import { useState, useEffect } from "react";
-import StyledCheckbox from "./components/ui/StyledCheckbox";
 import { CustomButton } from "./components/ui";
 import { BrainCircuit } from "lucide-react";
 import { Box } from "@mui/material";
@@ -47,6 +46,7 @@ function getInitialView(): ViewType {
 function App() {
   const [currentView, setCurrentView] = useState<ViewType>(getInitialView);
   const [recognizeOnly, setRecognizeOnly] = useState(false);
+  const [lastSelectedFile, setLastSelectedFile] = useState<File | null>(null);
   const [authView, setAuthView] = useState<AuthView>("login");
   const { isAuthenticated } = useAuth();
 
@@ -63,6 +63,7 @@ function App() {
   } = useImageProcessing();
 
   const handleFileSelect = async (file: File) => {
+    setLastSelectedFile(file);
     await processImage(file, recognizeOnly);
   };
 
@@ -74,6 +75,9 @@ function App() {
 
   const isAnalyzeButtonDisabled =
     processingStep === "ANALYZING";
+  const hasAnalyzerContent = Boolean(
+    ocrResult || analysisResult || error || isProcessing
+  );
 
   // Persist view changes to localStorage
   useEffect(() => {
@@ -112,7 +116,7 @@ function App() {
   }
 
   return (
-    <div className="bg-[#1a102b] min-h-screen">
+    <div className="min-h-screen bg-[#060b26]">
       <div className="layout-container flex h-full grow flex-col">
         <Header currentView={currentView} onViewChange={setCurrentView} />
         <main className={`flex flex-1 justify-center ${currentView === "chat" ? "" : "py-4 px-2 sm:py-12 sm:px-6 lg:px-8"}`}>
@@ -121,55 +125,87 @@ function App() {
           >
             {currentView === "analyzer" ? (
               <>
-                <div className="text-center">
-                  <h2 className="text-4xl font-bold text-white tracking-tight sm:text-5xl">
+                <div className="space-y-3 text-left">
+                  <h2 className="text-4xl font-bold tracking-tight text-slate-100 sm:text-5xl">
                     Analyze Your Swedish Textbook Page
                   </h2>
-                  <p className="mt-4 text-lg leading-8 text-gray-300">
+                  <p className="max-w-3xl text-lg leading-8 text-slate-300">
                     Upload an image to get an instant analysis of the text,
                     grammar, and vocabulary.
                   </p>
                 </div>
 
-                <FileUpload
-                  onFileSelect={handleFileSelect}
-                  isProcessing={isProcessing}
-                />
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <StyledCheckbox
-                    label="Recognize only"
-                    checked={recognizeOnly}
-                    onChange={(checked: boolean) => setRecognizeOnly(checked)}
-                  />
-                  {recognizeOnly && ocrResult && (
-                    <CustomButton
-                      onClick={handleAnalyzeOcrText}
-                      disabled={isAnalyzeButtonDisabled}
+                {!hasAnalyzerContent ? (
+                  <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+                    <FileUpload
+                      onFileSelect={handleFileSelect}
+                      isProcessing={isProcessing}
+                      recognizeOnly={recognizeOnly}
+                      onRecognizeOnlyChange={setRecognizeOnly}
+                      selectedFileOverride={lastSelectedFile}
+                    />
+                    <Box
                       sx={{
-                        minWidth: 0,
-                        padding: "4px 8px",
-                        fontSize: "0.75rem",
+                        display: { xs: "none", lg: "flex" },
+                        minHeight: "420px",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: "0.75rem",
+                        border: "1px solid rgba(99, 114, 173, 0.35)",
+                        background:
+                          "radial-gradient(circle at 20% 20%, rgba(32, 40, 95, 0.55), rgba(8, 11, 39, 0.94))",
+                        color: "#c2cee8",
+                        textAlign: "center",
+                        px: 4,
                       }}
-                      aria-label="Analyze"
                     >
-                      <BrainCircuit size={16} />
-                    </CustomButton>
-                  )}
-                </Box>
-
-                {(ocrResult ||
-                  analysisResult ||
-                  error ||
-                  isProcessing) && (
-                  <ResultsDisplay
-                    ocrResult={ocrResult}
-                    analysisResult={analysisResult}
-                    error={error}
-                    saveVocabulary={saveVocabulary}
-                    onVocabularyUpdated={onVocabularyUpdated}
-                    processingStep={processingStep}
-                    isProcessing={isProcessing}
-                  />
+                      <div className="space-y-4">
+                        <div className="text-4xl text-slate-500">⌁</div>
+                        <h3 className="text-4xl font-semibold text-slate-100">
+                          No analysis yet
+                        </h3>
+                        <p className="max-w-md text-lg text-slate-300">
+                          Upload an image of a Swedish textbook page to get
+                          started.
+                        </p>
+                      </div>
+                    </Box>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+                    <div className="lg:w-[300px] lg:shrink-0">
+                      <FileUpload
+                        onFileSelect={handleFileSelect}
+                        isProcessing={isProcessing}
+                        recognizeOnly={recognizeOnly}
+                        onRecognizeOnlyChange={setRecognizeOnly}
+                        selectedFileOverride={lastSelectedFile}
+                        compact
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      {recognizeOnly && ocrResult && !analysisResult && (
+                        <Box sx={{ mb: 2 }}>
+                          <CustomButton
+                            onClick={handleAnalyzeOcrText}
+                            disabled={isAnalyzeButtonDisabled}
+                            startIcon={<BrainCircuit size={16} />}
+                          >
+                            Analyze OCR Text
+                          </CustomButton>
+                        </Box>
+                      )}
+                      <ResultsDisplay
+                        ocrResult={ocrResult}
+                        analysisResult={analysisResult}
+                        error={error}
+                        saveVocabulary={saveVocabulary}
+                        onVocabularyUpdated={onVocabularyUpdated}
+                        processingStep={processingStep}
+                        isProcessing={isProcessing}
+                      />
+                    </div>
+                  </div>
                 )}
               </>
             ) : currentView === "vocabulary" ? (
