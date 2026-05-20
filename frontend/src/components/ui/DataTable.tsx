@@ -13,7 +13,6 @@ import {
   useMediaQuery,
 } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
-import { ChevronRight } from 'lucide-react';
 import StyledCheckbox from './StyledCheckbox';
 
 interface Column<T> {
@@ -34,7 +33,11 @@ interface DataTableProps<T extends { id: string }> {
   masterCheckboxId?: string;
   rowCheckboxIdPrefix?: string;
   sx?: SxProps<Theme>;
-  mobileVariant?: 'default' | 'vocabulary';
+  renderMobileRow?: (
+    row: T,
+    index: number,
+    checkbox: React.ReactNode
+  ) => React.ReactNode;
 }
 
 function DataTable<T extends { id: string } & Record<string, unknown>>({
@@ -48,7 +51,7 @@ function DataTable<T extends { id: string } & Record<string, unknown>>({
   masterCheckboxId,
   rowCheckboxIdPrefix,
   sx = {},
-  mobileVariant = 'default',
+  renderMobileRow,
 }: DataTableProps<T>) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -62,7 +65,7 @@ function DataTable<T extends { id: string } & Record<string, unknown>>({
   };
 
   if (isMobile) {
-    if (mobileVariant === 'vocabulary') {
+    if (renderMobileRow) {
       return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, ...sx }}>
           {selectable && (
@@ -88,78 +91,23 @@ function DataTable<T extends { id: string } & Record<string, unknown>>({
             </Box>
           )}
           {data.map((row, index) => {
-            const swedish = String(row.swedish || '—');
-            const english = String(row.english || '—');
-            const examplePhrase = String(row.example_phrase || '—');
+            const checkbox = selectable ? (
+              <Box
+                onClick={(e) => e.stopPropagation()}
+                sx={{ display: 'flex', alignItems: 'center' }}
+              >
+                <StyledCheckbox
+                  id={rowCheckboxIdPrefix ? `${rowCheckboxIdPrefix}-${row.id}` : undefined}
+                  checked={selectedItems.get(row.id) || false}
+                  onChange={(checked) => onSelectionChange?.(row.id, checked)}
+                />
+              </Box>
+            ) : null;
 
             return (
-              <Paper
-                key={row.id}
-                elevation={0}
-                onClick={() => onRowClick?.(row, index)}
-                sx={{
-                  backgroundColor: 'rgba(34, 44, 95, 0.7)',
-                  border: '1px solid rgba(106, 121, 181, 0.5)',
-                  borderRadius: '0.65rem',
-                  p: 1.4,
-                  cursor: onRowClick ? 'pointer' : 'default',
-                  '&:hover': {
-                    backgroundColor: 'rgba(43, 57, 118, 0.75)',
-                  },
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.5,
-                }}
-              >
-                {selectable && (
-                  <Box
-                    onClick={(e) => e.stopPropagation()}
-                    sx={{ display: 'flex', alignItems: 'center' }}
-                  >
-                    <StyledCheckbox
-                      id={rowCheckboxIdPrefix ? `${rowCheckboxIdPrefix}-${row.id}` : undefined}
-                      checked={selectedItems.get(row.id) || false}
-                      onChange={(checked) => onSelectionChange?.(row.id, checked)}
-                    />
-                  </Box>
-                )}
-                <Box sx={{ minWidth: 0, flex: '0 0 30%' }}>
-                  <Typography
-                    sx={{
-                      color: '#f4f7ff',
-                      fontWeight: 700,
-                      lineHeight: 1.25,
-                      fontSize: '1.05rem',
-                      wordBreak: 'break-word',
-                    }}
-                  >
-                    {swedish}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      color: '#adbce4',
-                      fontSize: '0.95rem',
-                      lineHeight: 1.2,
-                      mt: 0.25,
-                    }}
-                  >
-                    {english}
-                  </Typography>
-                </Box>
-                <Typography
-                  sx={{
-                    color: '#d0d9ef',
-                    flex: 1,
-                    fontSize: '1rem',
-                    lineHeight: 1.3,
-                    whiteSpace: 'normal',
-                    wordBreak: 'break-word',
-                  }}
-                >
-                  {examplePhrase}
-                </Typography>
-                <ChevronRight size={18} color="#bec8e6" />
-              </Paper>
+              <React.Fragment key={row.id}>
+                {renderMobileRow(row, index, checkbox)}
+              </React.Fragment>
             );
           })}
         </Box>

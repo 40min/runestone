@@ -521,7 +521,57 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                     },
                   ]}
                   data={filteredVocabulary}
-                  mobileVariant="vocabulary"
+                  renderMobileRow={(row, _index, checkbox) => (
+                    <Box
+                      key={row.id}
+                      sx={{
+                        backgroundColor: "rgba(34, 44, 95, 0.7)",
+                        border: "1px solid rgba(106, 121, 181, 0.5)",
+                        borderRadius: "0.65rem",
+                        p: 1.4,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1.5,
+                      }}
+                    >
+                      {checkbox}
+                      <Box sx={{ minWidth: 0, flex: "0 0 30%" }}>
+                        <Typography
+                          sx={{
+                            color: "#f4f7ff",
+                            fontWeight: 700,
+                            lineHeight: 1.25,
+                            fontSize: "1.05rem",
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {String(row.swedish || "—")}
+                        </Typography>
+                        <Typography
+                          sx={{
+                            color: "#adbce4",
+                            fontSize: "0.95rem",
+                            lineHeight: 1.2,
+                            mt: 0.25,
+                          }}
+                        >
+                          {String(row.english || "—")}
+                        </Typography>
+                      </Box>
+                      <Typography
+                        sx={{
+                          color: "#d0d9ef",
+                          flex: 1,
+                          fontSize: "1rem",
+                          lineHeight: 1.3,
+                          whiteSpace: "normal",
+                          wordBreak: "break-word",
+                        }}
+                      >
+                        {String(row.example_phrase || "—")}
+                      </Typography>
+                    </Box>
+                  )}
                 />
               </Box>
             )}

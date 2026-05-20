@@ -39,10 +39,6 @@ const FileUpload: React.FC<FileUploadProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const applySelectedFile = (file: File) => {
-    if (previewUrl && typeof URL !== "undefined" && URL.revokeObjectURL) {
-      URL.revokeObjectURL(previewUrl);
-    }
-
     setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
   };
@@ -66,15 +62,11 @@ const FileUpload: React.FC<FileUploadProps> = ({
   }, [previewUrl]);
 
   useEffect(() => {
-    if (!selectedFileOverride) return;
-    if (selectedFileOverride === selectedFile) return;
-
-    if (previewUrl && typeof URL !== "undefined" && URL.revokeObjectURL) {
-      URL.revokeObjectURL(previewUrl);
+    if (selectedFileOverride && selectedFileOverride !== selectedFile) {
+      setSelectedFile(selectedFileOverride);
+      setPreviewUrl(URL.createObjectURL(selectedFileOverride));
     }
-    setSelectedFile(selectedFileOverride);
-    setPreviewUrl(URL.createObjectURL(selectedFileOverride));
-  }, [selectedFileOverride, selectedFile, previewUrl]);
+  }, [selectedFileOverride, selectedFile]);
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
