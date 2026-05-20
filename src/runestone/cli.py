@@ -75,7 +75,7 @@ def cli():
     "--api-key",
     help=(
         "API key for the selected provider. If not provided, uses provider-specific "
-        "environment variables (OPENAI_API_KEY or GEMINI_API_KEY)."
+        "environment variables (OPENAI_API_KEY, GEMINI_API_KEY, or OPENROUTER_API_KEY)."
     ),
 )
 @click.option(
@@ -125,6 +125,8 @@ def process(
         if not api_key:
             if provider == "openai":
                 api_key = settings.openai_api_key
+            elif provider == "gemini":
+                api_key = settings.gemini_api_key
             elif provider == "openrouter":
                 api_key = settings.openrouter_api_key
 
@@ -134,6 +136,12 @@ def process(
                 console.print(
                     "[red]Error:[/red] OpenAI API key is required. "
                     "Set OPENAI_API_KEY environment variable or use --api-key option."
+                )
+                sys.exit(1)
+            elif provider == "gemini":
+                console.print(
+                    "[red]Error:[/red] Gemini API key is required. "
+                    "Set GEMINI_API_KEY environment variable or use --api-key option."
                 )
                 sys.exit(1)
             elif provider == "openrouter":
@@ -161,6 +169,8 @@ def process(
             # Temporarily override the appropriate API key in settings
             if provider == "openai":
                 settings.openai_api_key = api_key
+            elif provider == "gemini":
+                settings.gemini_api_key = api_key
             elif provider == "openrouter":
                 settings.openrouter_api_key = api_key
 

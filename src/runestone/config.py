@@ -14,6 +14,7 @@ from pydantic import BaseModel, model_validator
 from pydantic_settings import BaseSettings
 
 DEFAULT_SERVICE_LLM_MODEL = "gpt-5.4-nano"
+DEFAULT_GEMINI_SERVICE_LLM_MODEL = "gemini-2.5-flash"
 
 
 class ReasoningLevel(str, Enum):
@@ -29,7 +30,7 @@ class ReasoningLevel(str, Enum):
 class AgentLLMSettings(BaseModel):
     """Resolved LLM settings for a specific agent."""
 
-    provider: Literal["openrouter", "openai"]
+    provider: Literal["openrouter", "openai", "gemini"]
     model: str
     temperature: float
     reasoning_level: ReasoningLevel
@@ -44,6 +45,9 @@ class Settings(BaseSettings):
 
     # OpenAI Configuration
     openai_api_key: str
+
+    # Gemini Configuration
+    gemini_api_key: Optional[str] = None
 
     # OpenRouter Configuration
     openrouter_api_key: Optional[str] = None
@@ -89,27 +93,27 @@ class Settings(BaseSettings):
     cooldown_days: int = 7
 
     # Chat Agent Configuration
-    teacher_provider: Literal["openrouter", "openai"] = "openrouter"
+    teacher_provider: Literal["openrouter", "openai", "gemini"] = "openrouter"
     teacher_model: str
     teacher_temperature: float = 1.0
     teacher_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
 
-    coordinator_provider: Optional[Literal["openrouter", "openai"]] = None
+    coordinator_provider: Optional[Literal["openrouter", "openai", "gemini"]] = None
     coordinator_model: str
     coordinator_temperature: float = 0.0
     coordinator_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
 
-    word_keeper_provider: Optional[Literal["openrouter", "openai"]] = None
+    word_keeper_provider: Optional[Literal["openrouter", "openai", "gemini"]] = None
     word_keeper_model: Optional[str] = None
     word_keeper_temperature: float = 0.0
     word_keeper_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
 
-    news_agent_provider: Optional[Literal["openrouter", "openai"]] = None
+    news_agent_provider: Optional[Literal["openrouter", "openai", "gemini"]] = None
     news_agent_model: Optional[str] = None
     news_agent_temperature: float = 0.0
     news_agent_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
 
-    memory_keeper_provider: Optional[Literal["openrouter", "openai"]] = None
+    memory_keeper_provider: Optional[Literal["openrouter", "openai", "gemini"]] = None
     memory_keeper_model: Optional[str] = None
     memory_keeper_temperature: float = 0.0
     memory_keeper_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
@@ -167,9 +171,15 @@ class Settings(BaseSettings):
         """Return the provider used by non-agent service flows."""
         return self.llm_provider
 
-    def resolve_service_llm_model(self) -> str:
+    def resolve_service_llm_model(self, provider: Optional[str] = None) -> str:
         """Return the resolved model used by non-agent service flows."""
-        return self.llm_model_name or DEFAULT_SERVICE_LLM_MODEL
+        if self.llm_model_name:
+            return self.llm_model_name
+
+        effective_provider = (provider or self.resolve_service_llm_provider()).lower()
+        if effective_provider == "gemini":
+            return DEFAULT_GEMINI_SERVICE_LLM_MODEL
+        return DEFAULT_SERVICE_LLM_MODEL
 
     def resolve_ocr_llm_provider(self) -> str:
         """Return the provider used by OCR, falling back to the default service provider."""
@@ -177,7 +187,9 @@ class Settings(BaseSettings):
 
     def resolve_ocr_llm_model(self) -> str:
         """Return the resolved OCR model, falling back to the default service model."""
-        return self.ocr_llm_model_name or self.resolve_service_llm_model()
+        if self.ocr_llm_model_name:
+            return self.ocr_llm_model_name
+        return self.resolve_service_llm_model(provider=self.resolve_ocr_llm_provider())
 
     def get_agent_llm_settings(
         self, agent_name: Literal["teacher", "coordinator", "word_keeper", "news_agent", "memory_keeper"]
