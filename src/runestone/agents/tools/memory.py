@@ -177,11 +177,13 @@ async def update_memory_priority(
     """
     Set the priority of an area_to_improve memory item.
 
-    Use this to indicate which topics need the most urgent attention:
+    Use this to indicate which directly implicated topics need the most urgent attention:
     - Lower priority = more urgent (0 is the highest priority).
-    - Raise priority (lower number) when the student repeatedly makes errors on a topic.
-    - Lower priority (higher number) when the student shows improvement.
+    - Raise priority (lower number) when the student repeatedly makes errors on the same topic.
+    - Lower priority (higher number) when that specific topic shows clear improvement or mastery.
     - Items with priority set appear first in memory reads for area_to_improve.
+    - Only reprioritize the specific item(s) directly tied to the current turn's explicit signal.
+      Never use this tool to rebalance or renumber the broader memory set; that belongs to MemoryMaintainer.
 
     Args:
         runtime: Tool runtime context

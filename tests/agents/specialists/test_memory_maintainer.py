@@ -19,8 +19,8 @@ from runestone.agents.tools.memory_maintainer import (
 @pytest.fixture
 def mock_settings():
     settings = MagicMock()
-    settings.memory_keeper_provider = "openrouter"
-    settings.memory_keeper_model = "test-model"
+    settings.memory_maintainer_provider = "openrouter"
+    settings.memory_maintainer_model = "test-model"
     return settings
 
 
@@ -239,6 +239,14 @@ def test_memory_maintainer_builds_agent_with_expected_tools(mock_settings):
         "maintainer_delete_memory_item",
         "maintainer_update_memory_priority",
     ]
+
+
+def test_memory_maintainer_uses_dedicated_agent_settings(mock_settings):
+    with patch("runestone.agents.specialists.memory_maintainer.build_chat_model", return_value=MagicMock()) as build:
+        with patch("runestone.agents.specialists.memory_maintainer.create_agent"):
+            MemoryMaintainerSpecialist(mock_settings)
+
+    build.assert_called_once_with(mock_settings, "memory_maintainer")
 
 
 @pytest.mark.anyio

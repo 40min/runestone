@@ -12,7 +12,9 @@ from runestone.config import ReasoningLevel, Settings
 
 logger = logging.getLogger(__name__)
 
-AgentName = Literal["teacher", "coordinator", "word_keeper", "news_agent", "memory_keeper"]
+AgentName = Literal["teacher", "coordinator", "word_keeper", "news_agent", "memory_keeper", "memory_maintainer"]
+AGENT_LLM_TIMEOUT_SECONDS = 120.0
+GEMINI_AGENT_MAX_RETRIES = 3
 
 
 def build_chat_model(settings: Settings, agent_name: AgentName) -> BaseChatModel:
@@ -56,6 +58,9 @@ def build_chat_model(settings: Settings, agent_name: AgentName) -> BaseChatModel
             model=agent_settings.model,
             api_key=SecretStr(api_key),
             temperature=agent_settings.temperature,
+            timeout=AGENT_LLM_TIMEOUT_SECONDS,
+            max_retries=GEMINI_AGENT_MAX_RETRIES,
+            disable_streaming="tool_calling",
             **gemini_kwargs,
         )
 

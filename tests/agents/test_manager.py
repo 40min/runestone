@@ -36,6 +36,8 @@ def mock_settings():
     settings.news_agent_model = "test-model"
     settings.memory_keeper_provider = "openrouter"
     settings.memory_keeper_model = "test-model"
+    settings.memory_maintainer_provider = "openrouter"
+    settings.memory_maintainer_model = "test-memory-maintainer-model"
     settings.memory_mastered_cleanup_days = 7
     settings.agent_persona = "default"
     settings.openrouter_api_key = "test-api-key"
@@ -70,6 +72,12 @@ def mock_settings():
         "memory_keeper": AgentLLMSettings(
             provider="openrouter",
             model="test-model",
+            temperature=0.0,
+            reasoning_level=ReasoningLevel.NONE,
+        ),
+        "memory_maintainer": AgentLLMSettings(
+            provider="openrouter",
+            model="test-memory-maintainer-model",
             temperature=0.0,
             reasoning_level=ReasoningLevel.NONE,
         ),

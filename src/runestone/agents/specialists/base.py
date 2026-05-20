@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, StringConstraints
+from langchain_core.messages import AIMessage
+from pydantic import BaseModel, Field, StringConstraints, ValidationError
 
 from runestone.agents.schemas import ChatMessage
+from runestone.core.service_llm import extract_message_text
 from runestone.schemas.vocabulary_save import WordSaveCandidate
 
 INFO_FOR_TEACHER_MAX_CHARS = 12000
@@ -71,3 +73,42 @@ class BaseSpecialist(ABC):
             SpecialistResult: Structured output of the specialist run.
         """
         pass
+
+
+def parse_specialist_result(payload: dict[str, Any]) -> SpecialistResult | None:
+    """Parse a specialist result from structured output or final AI text."""
+    structured_response = payload.get("structured_response")
+    if isinstance(structured_response, SpecialistResult):
+        return structured_response
+    if isinstance(structured_response, dict):
+        try:
+            return SpecialistResult.model_validate(structured_response)
+        except ValidationError:
+            pass
+
+    for message in reversed(payload.get("messages", [])):
+        if not isinstance(message, AIMessage):
+            continue
+        if getattr(message, "tool_calls", None):
+            continue
+        text_content = extract_message_text(message)
+        if not text_content:
+            continue
+        json_content = _extract_json_object(text_content)
+        if not json_content:
+            continue
+        try:
+            return SpecialistResult.model_validate_json(json_content)
+        except (ValidationError, ValueError):
+            continue
+    return None
+
+
+def _extract_json_object(content: str) -> str | None:
+    """Trim fenced or mixed-content agent output down to the JSON object payload."""
+    stripped = content.strip()
+    start = stripped.find("{")
+    end = stripped.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        return None
+    return stripped[start : end + 1]

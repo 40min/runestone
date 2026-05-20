@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
-from runestone.agents.llm import build_chat_model
+from runestone.agents.llm import AGENT_LLM_TIMEOUT_SECONDS, GEMINI_AGENT_MAX_RETRIES, build_chat_model
 from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
 
 
@@ -79,6 +79,9 @@ def test_build_chat_model_gemini(mock_settings):
         assert call_kwargs["model"] == "gemini-2.5-flash"
         assert call_kwargs["api_key"] == SecretStr("test-gemini-key")
         assert call_kwargs["temperature"] == 0.2
+        assert call_kwargs["timeout"] == AGENT_LLM_TIMEOUT_SECONDS
+        assert call_kwargs["max_retries"] == GEMINI_AGENT_MAX_RETRIES
+        assert call_kwargs["disable_streaming"] == "tool_calling"
         assert "thinking_level" not in call_kwargs
 
 
@@ -145,6 +148,14 @@ def test_build_chat_model_supports_news_agent(mock_settings):
         build_chat_model(mock_settings, "news_agent")
 
     mock_settings.get_agent_llm_settings.assert_called_once_with("news_agent")
+
+
+def test_build_chat_model_supports_memory_maintainer(mock_settings):
+    """Test memory_maintainer uses the standard per-agent config path."""
+    with patch("runestone.agents.llm.ChatOpenAI"):
+        build_chat_model(mock_settings, "memory_maintainer")
+
+    mock_settings.get_agent_llm_settings.assert_called_once_with("memory_maintainer")
 
 
 def test_build_chat_model_unsupported_provider(mock_settings):

@@ -3,15 +3,18 @@ Background specialist for start-of-session memory maintenance.
 """
 
 import logging
-from typing import Any
 
 from langchain.agents import create_agent
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage
-from pydantic import ValidationError
+from langchain_core.messages import HumanMessage
 
 from runestone.agents.llm import build_chat_model
-from runestone.agents.specialists.base import BaseSpecialist, SpecialistContext, SpecialistResult
+from runestone.agents.specialists.base import (
+    BaseSpecialist,
+    SpecialistContext,
+    SpecialistResult,
+    parse_specialist_result,
+)
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.memory_maintainer import (
     clear_pending_merge_plan,
@@ -127,13 +130,12 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
     def __init__(self, settings: Settings):
         super().__init__(name="memory_maintainer")
         self.settings = settings
-        # Reuse the memory_keeper model configuration for this adjacent maintenance role.
-        model = build_chat_model(settings, "memory_keeper")
+        model = build_chat_model(settings, "memory_maintainer")
         self.agent = self._build_agent(model)
         logger.info(
             "[agents:memorymaintainer] Initialized MemoryMaintainerSpecialist with provider=%s, model=%s",
-            settings.memory_keeper_provider,
-            settings.memory_keeper_model,
+            settings.memory_maintainer_provider,
+            settings.memory_maintainer_model,
         )
 
     def _build_agent(self, model: BaseChatModel):
@@ -147,6 +149,7 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
                 maintainer_update_memory_priority,
             ],
             system_prompt=MEMORY_MAINTAINER_SYSTEM_PROMPT,
+            response_format=SpecialistResult,
             context_schema=AgentContext,
         )
 
@@ -184,7 +187,7 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
                     },
                 )
 
-            parsed = self._parse_result(result.get("messages", []))
+            parsed = parse_specialist_result(result)
             if parsed is None:
                 logger.warning("[agents:memorymaintainer] Failed to parse final agent result")
                 return SpecialistResult(
@@ -204,28 +207,6 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
             return parsed
         finally:
             clear_pending_merge_plan(context.user.id)
-
-    @staticmethod
-    def _parse_result(messages: list[Any]) -> SpecialistResult | None:
-        for message in reversed(messages):
-            if not isinstance(message, AIMessage):
-                continue
-            if getattr(message, "tool_calls", None):
-                continue
-            content = message.content
-            if not isinstance(content, str) or not content.strip():
-                continue
-            json_content = content.strip()
-            if json_content.startswith("```"):
-                start = json_content.find("{")
-                end = json_content.rfind("}")
-                if start != -1 and end != -1 and end >= start:
-                    json_content = json_content[start : end + 1]
-            try:
-                return SpecialistResult.model_validate_json(json_content)
-            except (ValidationError, ValueError):
-                continue
-        return None
 
     @staticmethod
     def _memory_item_language(context: SpecialistContext) -> str:

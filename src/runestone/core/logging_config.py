@@ -38,6 +38,7 @@ def setup_logging(level: str = "INFO", format_string: Optional[str] = None, verb
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("google.generativeai").setLevel(logging.WARNING)
+    logging.getLogger("google_genai._api_client").setLevel(logging.WARNING)
     logging.getLogger("openai").setLevel(logging.WARNING)
     logging.getLogger("PIL").setLevel(logging.WARNING)
     logging.getLogger("sqlalchemy").setLevel(logging.WARNING)

@@ -118,6 +118,11 @@ class Settings(BaseSettings):
     memory_keeper_temperature: float = 0.0
     memory_keeper_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
 
+    memory_maintainer_provider: Optional[Literal["openrouter", "openai", "gemini"]] = None
+    memory_maintainer_model: Optional[str] = None
+    memory_maintainer_temperature: Optional[float] = None
+    memory_maintainer_reasoning_level: Optional[ReasoningLevel] = None
+
     agent_persona: str = "default"
 
     # Chat History Configuration
@@ -165,6 +170,14 @@ class Settings(BaseSettings):
             self.memory_keeper_provider = self.teacher_provider
         if self.memory_keeper_model is None:
             self.memory_keeper_model = self.teacher_model
+        if self.memory_maintainer_provider is None:
+            self.memory_maintainer_provider = self.memory_keeper_provider
+        if self.memory_maintainer_model is None:
+            self.memory_maintainer_model = self.memory_keeper_model
+        if self.memory_maintainer_temperature is None:
+            self.memory_maintainer_temperature = self.memory_keeper_temperature
+        if self.memory_maintainer_reasoning_level is None:
+            self.memory_maintainer_reasoning_level = self.memory_keeper_reasoning_level
         return self
 
     def resolve_service_llm_provider(self) -> str:
@@ -192,7 +205,10 @@ class Settings(BaseSettings):
         return self.resolve_service_llm_model(provider=self.resolve_ocr_llm_provider())
 
     def get_agent_llm_settings(
-        self, agent_name: Literal["teacher", "coordinator", "word_keeper", "news_agent", "memory_keeper"]
+        self,
+        agent_name: Literal[
+            "teacher", "coordinator", "word_keeper", "news_agent", "memory_keeper", "memory_maintainer"
+        ],
     ) -> AgentLLMSettings:
         """Return resolved model settings for the requested agent."""
         if agent_name == "teacher":
@@ -233,6 +249,14 @@ class Settings(BaseSettings):
                 model=self.memory_keeper_model,
                 temperature=self.memory_keeper_temperature,
                 reasoning_level=self.memory_keeper_reasoning_level,
+            )
+
+        if agent_name == "memory_maintainer":
+            return AgentLLMSettings(
+                provider=self.memory_maintainer_provider,
+                model=self.memory_maintainer_model,
+                temperature=self.memory_maintainer_temperature,
+                reasoning_level=self.memory_maintainer_reasoning_level,
             )
 
         raise ValueError(f"Unsupported agent name: {agent_name}")
