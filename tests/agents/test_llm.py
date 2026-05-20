@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
-from runestone.agents.llm import DEFAULT_AGENT_LLM_TIMEOUT_SECONDS, GEMINI_AGENT_MAX_RETRIES, build_chat_model
+from runestone.agents.llm import DEFAULT_AGENT_LLM_TIMEOUT_SECONDS, DEFAULT_AGENT_MAX_RETRIES, build_chat_model
 from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
 
 
@@ -82,7 +82,7 @@ def test_build_chat_model_gemini(mock_settings):
         assert call_kwargs["api_key"] == SecretStr("test-gemini-key")
         assert call_kwargs["temperature"] == 0.2
         assert call_kwargs["timeout"] == DEFAULT_AGENT_LLM_TIMEOUT_SECONDS
-        assert call_kwargs["max_retries"] == GEMINI_AGENT_MAX_RETRIES
+        assert call_kwargs["max_retries"] == DEFAULT_AGENT_MAX_RETRIES
         assert call_kwargs["disable_streaming"] == "tool_calling"
         assert "thinking_level" not in call_kwargs
 

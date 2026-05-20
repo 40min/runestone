@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 AgentName = Literal["teacher", "coordinator", "word_keeper", "news_agent", "memory_keeper", "memory_maintainer"]
 DEFAULT_AGENT_LLM_TIMEOUT_SECONDS = 10.0
-GEMINI_AGENT_MAX_RETRIES = 3
+DEFAULT_AGENT_MAX_RETRIES = 3
 
 
 def build_chat_model(
@@ -61,7 +61,7 @@ def build_chat_model(
             api_key=SecretStr(api_key),
             temperature=agent_settings.temperature,
             timeout=timeout_seconds,
-            max_retries=GEMINI_AGENT_MAX_RETRIES,
+            max_retries=DEFAULT_AGENT_MAX_RETRIES,
             disable_streaming="tool_calling",
             **gemini_kwargs,
         )
