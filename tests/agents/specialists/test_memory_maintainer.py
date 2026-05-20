@@ -225,6 +225,14 @@ def test_memory_maintainer_prompt_defines_expected_scope_and_tools():
     assert "never reuse any original key from the merged items" in MEMORY_MAINTAINER_SYSTEM_PROMPT
     assert "never delete that consolidated item id" in MEMORY_MAINTAINER_SYSTEM_PROMPT
     assert "maintainer_insert_memory_item" in MEMORY_MAINTAINER_SYSTEM_PROMPT
+    assert "Do NOT create broad catch-all items" in MEMORY_MAINTAINER_SYSTEM_PROMPT
+    assert "A merged item must still point to one coherent topic" in MEMORY_MAINTAINER_SYSTEM_PROMPT
+    assert "vocabulary confusion vs spelling" in MEMORY_MAINTAINER_SYSTEM_PROMPT
+    assert "time expressions vs V2 word order" in MEMORY_MAINTAINER_SYSTEM_PROMPT
+    assert 'one giant item like "Struggles with Swedish grammar and vocabulary"' in MEMORY_MAINTAINER_SYSTEM_PROMPT
+    assert "If you feel tempted to summarize several different weaknesses into one compact" in (
+        MEMORY_MAINTAINER_SYSTEM_PROMPT
+    )
 
 
 def test_memory_maintainer_builds_agent_with_expected_tools(mock_settings):

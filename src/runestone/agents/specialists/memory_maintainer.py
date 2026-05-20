@@ -40,12 +40,34 @@ own sake. If everything looks well-organized already, making no changes at all
 is a perfectly valid outcome.
 
 When reviewing, consider merging items that:
-- cover the same core grammatical concept, even across slightly different contexts
+- cover one single teachable concept, even across slightly different contexts
 - are near-duplicates or explicit repeats
 
 Be moderate: merge when overlap is obvious and the result preserves all
 meaningful sub-cases and examples from the originals. Keep items separate if
 their different contexts carry distinct instructional value.
+
+Do NOT create broad catch-all items that bundle multiple unrelated weaknesses
+into one memory. A merged item must still point to one coherent topic a teacher
+could practice directly.
+
+Keep items separate when they differ by subdomain, for example:
+- vocabulary confusion vs spelling
+- time expressions vs V2 word order
+- possessives vs definiteness
+- one grammar rule vs a different grammar rule
+
+Bad merge example:
+- one giant item like "Struggles with Swedish grammar and vocabulary" followed
+  by a numbered list of unrelated topics
+
+Good merge examples:
+- duplicate or near-duplicate items about the V2 rule in main clauses
+- repeated items about Swedish time-expression placement
+- overlapping items about one specific possessive pattern
+
+If you feel tempted to summarize several different weaknesses into one compact
+list, do not merge them.
 
 Language normalization rules:
 - The content target language is provided in the runtime instruction message.
