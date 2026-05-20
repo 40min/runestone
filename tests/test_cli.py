@@ -35,6 +35,7 @@ class TestCLI:
         assert result.exit_code == 0
         assert "Process a Swedish textbook page" in result.output
         assert "IMAGE_PATH" in result.output
+        assert "gemini" in result.output
 
     @patch("runestone.cli.ContentAnalyzer")
     @patch("runestone.cli.OCRProcessor")
@@ -104,6 +105,30 @@ class TestCLI:
             assert result.exit_code == 1
             # Check for API key error message
             assert "api key" in result.output.lower()
+
+    @patch("runestone.cli.settings")
+    @patch("PIL.Image.open")
+    def test_process_command_missing_gemini_api_key(self, mock_image_open, mock_settings):
+        """Test Gemini-specific API key validation."""
+        mock_settings.llm_provider = "gemini"
+        mock_settings.openai_api_key = None
+        mock_settings.gemini_api_key = None
+        mock_settings.openrouter_api_key = None
+        mock_settings.ocr_llm_provider = None
+        mock_settings.verbose = False
+
+        mock_image = Mock()
+        mock_image.mode = "RGB"
+        mock_image.size = (800, 600)
+        mock_image_open.return_value = mock_image
+
+        with self.runner.isolated_filesystem():
+            Path(self.test_image_path).touch()
+
+            result = self.runner.invoke(cli, ["process", self.test_image_path, "--provider", "gemini"])
+
+            assert result.exit_code == 1
+            assert "Gemini API key is required" in result.output
 
     def test_process_command_file_not_found(self):
         """Test process command with non-existent file."""
@@ -253,6 +278,52 @@ class TestCLI:
             assert "settings" in call_args[1]
             assert "ocr_processor" in call_args[1]
             assert "content_analyzer" in call_args[1]
+
+    @patch("runestone.cli.settings")
+    @patch("runestone.cli.build_service_llm_model")
+    @patch("runestone.cli.ContentAnalyzer")
+    @patch("runestone.cli.OCRProcessor")
+    @patch("runestone.cli.RunestoneProcessor")
+    def test_process_command_gemini_api_key_override(
+        self, mock_processor_class, mock_ocr_class, mock_analyzer_class, mock_build_model, mock_settings
+    ):
+        """Test process command using an explicit Gemini API key override."""
+        mock_settings.llm_provider = "gemini"
+        mock_settings.openai_api_key = None
+        mock_settings.gemini_api_key = None
+        mock_settings.openrouter_api_key = None
+        mock_settings.ocr_llm_provider = None
+        mock_settings.verbose = False
+
+        mock_llm_model = Mock()
+        mock_build_model.return_value = mock_llm_model
+
+        with self.runner.isolated_filesystem():
+            Path(self.test_image_path).touch()
+
+            mock_processor = AsyncMock()
+            mock_results = {
+                "ocr_result": {"text": "Test text", "character_count": 9},
+                "analysis": {"grammar_focus": {}, "vocabulary": []},
+                "resources": [],
+            }
+            mock_processor.process_image.return_value = mock_results
+            mock_processor_class.return_value = mock_processor
+
+            result = self.runner.invoke(
+                cli,
+                [
+                    "process",
+                    self.test_image_path,
+                    "--provider",
+                    "gemini",
+                    "--api-key",
+                    self.api_key,
+                ],
+            )
+
+            assert result.exit_code == 0
+            assert mock_settings.gemini_api_key == self.api_key
 
     def test_load_vocab_command_help(self):
         """Test load_vocab command help message."""

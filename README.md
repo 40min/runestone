@@ -57,9 +57,15 @@ A command-line tool and web application for analyzing Swedish textbook pages usi
    export OPENAI_API_KEY="your-openai-api-key"
    ```
 
-   **For Openrouter:**
+   **For Gemini:**
    ```bash
-   export GEMINI_API_KEY="your-openrouter-api-key"
+   export GEMINI_API_KEY="your-gemini-api-key"
+   export LLM_PROVIDER="gemini"
+   ```
+
+   **For OpenRouter:**
+   ```bash
+   export OPENROUTER_API_KEY="your-openrouter-api-key"
    export LLM_PROVIDER="openrouter"
    ```
 
@@ -82,6 +88,9 @@ runestone process /path/to/textbook_page.jpg
 
 # Use Openrouter provider
 runestone process --provider openrouter /path/to/textbook_page.jpg
+
+# Use Gemini provider
+runestone process --provider gemini /path/to/textbook_page.jpg
 
 # Use specific OpenAI model
 runestone process --provider openai --model gpt-4o-mini /path/to/textbook_page.jpg
@@ -149,7 +158,7 @@ make run-frontend   # Frontend development server
 The web interface will be available at `http://localhost:5173` with the following features:
 
 - **📤 File Upload**: Drag and drop or click to select Swedish textbook page images
-- **⚙️ Provider Selection**: Choose between OpenAI GPT-4o or Google Gemini
+- **⚙️ Provider Selection**: Choose between OpenAI, OpenRouter, or Google Gemini
 - **📊 Real-time Results**: View formatted analysis results with grammar explanations and vocabulary
 - **🔄 Processing Status**: Visual feedback during image processing
 - **🧠 Agent Memory Modal**: View, add, edit, and delete memory items by category
@@ -309,7 +318,7 @@ make backend-test      # Run backend tests only
 make frontend-test     # Run frontend tests only
 
 # Running Applications
-make run IMAGE_PATH=/path/to/image.jpg GEMINI_API_KEY=your_key  # Run CLI application
+make run IMAGE_PATH=/path/to/image.jpg GEMINI_API_KEY=your_key  # Run CLI application with Gemini
 make run-backend       # Start FastAPI backend server
 make run-frontend      # Start frontend development server
 make run-dev           # Start both backend and frontend concurrently
@@ -478,14 +487,19 @@ Design docs:
 ### Environment Variables
 
 **Provider Selection:**
-- `LLM_PROVIDER`: Choose your LLM provider (`openai` or `openrouter`, default: `openai`)
-- `LLM_MODEL_NAME`: Shared service model name for OCR, analysis, and vocabulary enrichment (default: `gpt-5.4-nano`)
+- `LLM_PROVIDER`: Choose your LLM provider (`openai`, `openrouter`, or `gemini`, default: `openai`)
+- `LLM_MODEL_NAME`: Shared service model name for OCR, analysis, and vocabulary enrichment (default: `gpt-5.4-nano`; Gemini defaults to `gemini-2.5-flash` when provider is `gemini`)
 
 **OpenAI Configuration:**
-- `OPENAI_API_KEY`: Your OpenAI API key (required for OpenAI provider)
+- `OPENAI_API_KEY`: Your OpenAI API key (required for OpenAI provider and for current backend voice features such as transcript enhancement and default TTS)
 
 **Gemini Configuration:**
 - `GEMINI_API_KEY`: Your Google Gemini API key (required for Gemini provider)
+
+**OpenRouter Configuration:**
+- `OPENROUTER_API_KEY`: Your OpenRouter API key (required for OpenRouter provider and OCR when `OCR_LLM_PROVIDER=openrouter`)
+- `OCR_LLM_PROVIDER`: OCR provider override (`openrouter` keeps OCR on OpenRouter while other service and agent flows use another provider)
+- `OCR_LLM_MODEL_NAME`: OCR model override for the OCR provider
 
 **Voice Configuration:**
 - `VOICE_TRANSCRIPTION_PROVIDER`: Voice transcription provider (`openai` or `elevenlabs`, default: `openai`)

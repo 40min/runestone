@@ -17,6 +17,7 @@ def mock_settings():
     settings = MagicMock(spec=Settings)
     settings.openrouter_api_key = "test-openrouter-key"
     settings.openai_api_key = "test-openai-key"
+    settings.gemini_api_key = "test-gemini-key"
     settings.get_agent_llm_settings.return_value = AgentLLMSettings(
         provider="openrouter",
         model="test-chat-model",
@@ -59,6 +60,58 @@ def test_build_chat_model_openai(mock_settings):
         assert call_kwargs["api_key"] == SecretStr("test-openai-key")
         assert call_kwargs.get("base_url") is None
         assert call_kwargs["temperature"] == 0.1
+
+
+def test_build_chat_model_gemini(mock_settings):
+    """Test building a model with Gemini provider."""
+    mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+        provider="gemini",
+        model="gemini-2.5-flash",
+        temperature=0.2,
+        reasoning_level=ReasoningLevel.NONE,
+    )
+
+    with patch("runestone.agents.llm.ChatGoogleGenerativeAI") as mock_chat_gemini:
+        build_chat_model(mock_settings, "coordinator")
+
+        mock_chat_gemini.assert_called_once()
+        call_kwargs = mock_chat_gemini.call_args[1]
+        assert call_kwargs["model"] == "gemini-2.5-flash"
+        assert call_kwargs["api_key"] == SecretStr("test-gemini-key")
+        assert call_kwargs["temperature"] == 0.2
+        assert "thinking_level" not in call_kwargs
+
+
+def test_build_chat_model_gemini_25_ignores_thinking_level_when_reasoning_configured(mock_settings):
+    """Gemini 2.5 should not receive thinking_level."""
+    mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+        provider="gemini",
+        model="gemini-2.5-flash",
+        temperature=0.2,
+        reasoning_level=ReasoningLevel.MINIMAL,
+    )
+
+    with patch("runestone.agents.llm.ChatGoogleGenerativeAI") as mock_chat_gemini:
+        build_chat_model(mock_settings, "coordinator")
+
+        call_kwargs = mock_chat_gemini.call_args[1]
+        assert "thinking_level" not in call_kwargs
+
+
+def test_build_chat_model_gemini_3_adds_thinking_level_when_reasoning_configured(mock_settings):
+    """Gemini 3 models should map reasoning_level to thinking_level."""
+    mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+        provider="gemini",
+        model="gemini-3-flash-preview",
+        temperature=0.2,
+        reasoning_level=ReasoningLevel.MINIMAL,
+    )
+
+    with patch("runestone.agents.llm.ChatGoogleGenerativeAI") as mock_chat_gemini:
+        build_chat_model(mock_settings, "coordinator")
+
+        call_kwargs = mock_chat_gemini.call_args[1]
+        assert call_kwargs["thinking_level"] == "minimal"
 
 
 def test_build_chat_model_adds_openrouter_reasoning_when_configured(mock_settings):
@@ -108,12 +161,18 @@ def test_build_chat_model_unsupported_provider(mock_settings):
 
 def test_build_chat_model_missing_api_key(mock_settings):
     """Test that missing API key raises ValueError."""
-    mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings(
-        provider="openai",
-        model="test-chat-model",
-        temperature=0.0,
-        reasoning_level=ReasoningLevel.NONE,
-    )
-    mock_settings.openai_api_key = None
-    with pytest.raises(ValueError, match="API key for openai is not configured"):
-        build_chat_model(mock_settings, "teacher")
+    for provider_name, attr_name in (
+        ("openai", "openai_api_key"),
+        ("openrouter", "openrouter_api_key"),
+        ("gemini", "gemini_api_key"),
+    ):
+        mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+            provider=provider_name,
+            model="test-chat-model",
+            temperature=0.0,
+            reasoning_level=ReasoningLevel.NONE,
+        )
+        setattr(mock_settings, attr_name, None)
+        with pytest.raises(ValueError, match=f"API key for {provider_name} is not configured"):
+            build_chat_model(mock_settings, "teacher")
+        setattr(mock_settings, attr_name, f"restored-{provider_name}-key")

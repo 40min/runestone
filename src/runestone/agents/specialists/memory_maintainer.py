@@ -6,8 +6,8 @@ import logging
 from typing import Any
 
 from langchain.agents import create_agent
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage
-from langchain_openai import ChatOpenAI
 from pydantic import ValidationError
 
 from runestone.agents.llm import build_chat_model
@@ -136,7 +136,7 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
             settings.memory_keeper_model,
         )
 
-    def _build_agent(self, model: ChatOpenAI):
+    def _build_agent(self, model: BaseChatModel):
         """Build the internal tool-using agent for background memory maintenance."""
         return create_agent(
             model=model,

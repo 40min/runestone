@@ -4,20 +4,21 @@ from typing import Literal, cast
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
 from runestone.config import Settings
 from runestone.core.exceptions import APIKeyError
 
-ServiceLLMProvider = Literal["openai", "openrouter"]
+ServiceLLMProvider = Literal["openai", "openrouter", "gemini"]
 SERVICE_LLM_TIMEOUT_SECONDS = 120.0
 OPENAI_SERVICE_LLM_MAX_RETRIES = 3
 
 
 def get_available_service_llm_providers() -> list[str]:
     """Return supported provider names for non-agent LLM flows."""
-    return ["openai", "openrouter"]
+    return ["openai", "openrouter", "gemini"]
 
 
 def build_service_llm_model(
@@ -43,7 +44,7 @@ def build_service_llm_model(
         ValueError: If the provider is unsupported.
     """
     effective_provider = cast(ServiceLLMProvider, (provider or settings.resolve_service_llm_provider()).lower())
-    effective_model_name = model_name or settings.resolve_service_llm_model()
+    effective_model_name = model_name or settings.resolve_service_llm_model(provider=effective_provider)
 
     if effective_provider not in get_available_service_llm_providers():
         raise ValueError(
@@ -65,6 +66,17 @@ def build_service_llm_model(
                 "X-Title": "Runestone",
             },
             timeout=SERVICE_LLM_TIMEOUT_SECONDS,
+        )
+
+    if effective_provider == "gemini":
+        api_key = settings.gemini_api_key
+        if not api_key:
+            raise APIKeyError("Gemini API key is required. Set GEMINI_API_KEY environment variable.")
+        return ChatGoogleGenerativeAI(
+            model=effective_model_name,
+            api_key=SecretStr(api_key),
+            temperature=temperature,
+            request_timeout=SERVICE_LLM_TIMEOUT_SECONDS,
         )
 
     api_key = settings.openai_api_key

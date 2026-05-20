@@ -1,10 +1,10 @@
-"""
-LLM factory for agent models.
-"""
+"""LLM factory for agent models."""
 
 import logging
 from typing import Literal
 
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
@@ -15,13 +15,16 @@ logger = logging.getLogger(__name__)
 AgentName = Literal["teacher", "coordinator", "word_keeper", "news_agent", "memory_keeper"]
 
 
-def build_chat_model(settings: Settings, agent_name: AgentName) -> ChatOpenAI:
-    """Build a ChatOpenAI instance from validated per-agent configuration."""
+def build_chat_model(settings: Settings, agent_name: AgentName) -> BaseChatModel:
+    """Build a LangChain chat model from validated per-agent configuration."""
     agent_settings = settings.get_agent_llm_settings(agent_name)
 
     if agent_settings.provider == "openrouter":
         api_key = settings.openrouter_api_key
         api_base = "https://openrouter.ai/api/v1"
+    elif agent_settings.provider == "gemini":
+        api_key = settings.gemini_api_key
+        api_base = None
     elif agent_settings.provider == "openai":
         api_key = settings.openai_api_key
         api_base = None
@@ -36,13 +39,25 @@ def build_chat_model(settings: Settings, agent_name: AgentName) -> ChatOpenAI:
         extra_kwargs["extra_body"] = {"reasoning": {"effort": agent_settings.reasoning_level.value}}
 
     logger.debug(
-        "[agents:llm] Building ChatOpenAI model: agent=%s, provider=%s, model=%s, temp=%.2f, reasoning=%s",
+        "[agents:llm] Building chat model: agent=%s, provider=%s, model=%s, temp=%.2f, reasoning=%s",
         agent_name,
         agent_settings.provider,
         agent_settings.model,
         agent_settings.temperature,
         agent_settings.reasoning_level.value,
     )
+
+    if agent_settings.provider == "gemini":
+        gemini_kwargs = {}
+        # Gemini 3+ supports reasoning levels directly via thinking_level.
+        if agent_settings.reasoning_level != ReasoningLevel.NONE and agent_settings.model.startswith("gemini-3"):
+            gemini_kwargs["thinking_level"] = agent_settings.reasoning_level.value
+        return ChatGoogleGenerativeAI(
+            model=agent_settings.model,
+            api_key=SecretStr(api_key),
+            temperature=agent_settings.temperature,
+            **gemini_kwargs,
+        )
 
     return ChatOpenAI(
         model=agent_settings.model,

@@ -46,7 +46,7 @@ help:
 	@echo "  frontend-test    - Run frontend tests only"
 	@echo ""
 	@echo "Running Applications:"
-	@echo "  run              - Run CLI application (requires IMAGE_PATH and GEMINI_API_KEY)"
+	@echo "  run              - Run CLI application (requires IMAGE_PATH and the selected provider API key)"
 	@echo "  load-vocab       - Load vocabulary from CSV file (requires CSV_PATH, optional: DB_NAME, SKIP_EXISTENCE_CHECK)"
 	@echo "  run-backend      - Start FastAPI backend server"
 	@echo "  run-frontend     - Start frontend development server"
@@ -205,10 +205,6 @@ frontend-test:
 run:
 	@if [ -z "$(IMAGE_PATH)" ]; then \
 		echo "❌ Error: IMAGE_PATH is required. Usage: make run IMAGE_PATH=path/to/image.jpg"; \
-		exit 1; \
-	fi
-	@if [ -z "$(GEMINI_API_KEY)" ]; then \
-		echo "❌ Error: GEMINI_API_KEY environment variable is required"; \
 		exit 1; \
 	fi
 	@echo "🚀 Running Runestone with image: $(IMAGE_PATH)"

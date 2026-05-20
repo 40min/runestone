@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 from pydantic import SecretStr
 
-from runestone.config import DEFAULT_SERVICE_LLM_MODEL, Settings
+from runestone.config import DEFAULT_GEMINI_SERVICE_LLM_MODEL, DEFAULT_SERVICE_LLM_MODEL, Settings
 from runestone.core.exceptions import APIKeyError
 from runestone.core.service_llm import (
     OPENAI_SERVICE_LLM_MAX_RETRIES,
@@ -20,7 +20,7 @@ class TestServiceLLMBuilder:
 
     def test_get_available_providers(self):
         """Supported non-agent providers should match the legacy surface."""
-        assert get_available_service_llm_providers() == ["openai", "openrouter"]
+        assert get_available_service_llm_providers() == ["openai", "openrouter", "gemini"]
 
     @patch("runestone.core.service_llm.ChatOpenAI")
     def test_build_service_llm_model_openai(self, mock_chat_openai):
@@ -103,6 +103,39 @@ class TestServiceLLMBuilder:
         assert call_kwargs["base_url"] == "https://openrouter.ai/api/v1"
         assert call_kwargs["timeout"] == SERVICE_LLM_TIMEOUT_SECONDS
 
+    @patch("runestone.core.service_llm.ChatGoogleGenerativeAI")
+    def test_build_service_llm_model_gemini(self, mock_chat_gemini):
+        """Gemini builder should use the configured key, model, and timeout."""
+        mock_settings = Mock(spec=Settings)
+        mock_settings.llm_provider = "gemini"
+        mock_settings.llm_model_name = "gemini-2.5-flash"
+        mock_settings.resolve_service_llm_provider.return_value = "gemini"
+        mock_settings.resolve_service_llm_model.return_value = "gemini-2.5-flash"
+        mock_settings.gemini_api_key = "test-gemini-key"
+
+        build_service_llm_model(mock_settings)
+
+        call_kwargs = mock_chat_gemini.call_args[1]
+        assert call_kwargs["model"] == "gemini-2.5-flash"
+        assert call_kwargs["api_key"] == SecretStr("test-gemini-key")
+        assert call_kwargs["temperature"] == 0.1
+        assert call_kwargs["request_timeout"] == SERVICE_LLM_TIMEOUT_SECONDS
+
+    @patch("runestone.core.service_llm.ChatGoogleGenerativeAI")
+    def test_build_service_llm_model_gemini_uses_provider_default_model(self, mock_chat_gemini):
+        """Gemini builder should fall back to the Gemini default model."""
+        mock_settings = Mock(spec=Settings)
+        mock_settings.llm_provider = "gemini"
+        mock_settings.llm_model_name = None
+        mock_settings.resolve_service_llm_provider.return_value = "gemini"
+        mock_settings.resolve_service_llm_model.return_value = DEFAULT_GEMINI_SERVICE_LLM_MODEL
+        mock_settings.gemini_api_key = "test-gemini-key"
+
+        build_service_llm_model(mock_settings)
+
+        call_kwargs = mock_chat_gemini.call_args[1]
+        assert call_kwargs["model"] == DEFAULT_GEMINI_SERVICE_LLM_MODEL
+
     def test_build_service_llm_model_missing_openai_key(self):
         """Missing OpenAI configuration should raise a helpful error."""
         mock_settings = Mock(spec=Settings)
@@ -125,6 +158,18 @@ class TestServiceLLMBuilder:
         mock_settings.openrouter_api_key = ""
 
         with pytest.raises(APIKeyError, match="OpenRouter API key is required"):
+            build_service_llm_model(mock_settings)
+
+    def test_build_service_llm_model_missing_gemini_key(self):
+        """Missing Gemini configuration should raise a helpful error."""
+        mock_settings = Mock(spec=Settings)
+        mock_settings.llm_provider = "gemini"
+        mock_settings.llm_model_name = "gemini-2.5-flash"
+        mock_settings.resolve_service_llm_provider.return_value = "gemini"
+        mock_settings.resolve_service_llm_model.return_value = "gemini-2.5-flash"
+        mock_settings.gemini_api_key = ""
+
+        with pytest.raises(APIKeyError, match="Gemini API key is required"):
             build_service_llm_model(mock_settings)
 
     def test_build_service_llm_model_unsupported_provider(self):
