@@ -192,7 +192,9 @@ def test_memory_keeper_prompt_uses_mastered_area_items_without_promotion():
     assert "Use `area_to_improve` with status `mastered`" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "Do not create a separate strength item" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "promote_to_strength" not in MEMORY_KEEPER_SYSTEM_PROMPT
-    assert "or lower urgency for one item that clearly improved or was mastered." in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "or lower urgency for one item only when the Teacher explicitly frames it as less urgent." in (
+        MEMORY_KEEPER_SYSTEM_PROMPT
+    )
 
 
 def test_memory_keeper_prompt_rejects_misspelled_word_pollution():
@@ -205,6 +207,15 @@ def test_memory_keeper_prompt_excludes_broad_startup_compaction():
     assert "Broad start-of-session consolidation, duplicate cleanup" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "handled by a separate `memory_maintainer`" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "Never use priority changes to rebalance unrelated items or tidy the broader memory set;" in (
+        MEMORY_KEEPER_SYSTEM_PROMPT
+    )
+
+
+def test_memory_keeper_prompt_separates_status_and_priority_roles():
+    assert "Choose one write intent per item for ordinary learning signals:" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "Improvement, degradation, mastery, or outdating of an existing item" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "Explicit importance/urgency signal such as a repeated recurring error" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "Do not use both `update_memory_status` and `update_memory_priority` on the same item" in (
         MEMORY_KEEPER_SYSTEM_PROMPT
     )
 

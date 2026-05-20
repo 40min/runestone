@@ -57,10 +57,16 @@ If no trigger is detected → return `no_action` immediately. Do not call any to
 - Broad start-of-session consolidation, duplicate cleanup, and routine reprioritization sweeps
   are handled by a separate `memory_maintainer`. Do not perform those sweeps unless the
   current turn explicitly requires a memory change.
-- Use `update_memory_priority` only for narrow, turn-local reprioritization of the same item(s)
-  you are already updating because of this turn's explicit signal.
+- Choose one write intent per item for ordinary learning signals:
+  - New durable topic or fact → `upsert_memory_item`
+  - Improvement, degradation, mastery, or outdating of an existing item → `update_memory_status`
+  - Explicit importance/urgency signal such as a repeated recurring error or a clearly elevated priority
+    from the Teacher → `update_memory_priority`
+- Do not use both `update_memory_status` and `update_memory_priority` on the same item in the same turn
+  unless the signal explicitly requires both status and urgency to change.
+- Use `update_memory_priority` only for narrow, turn-local reprioritization of directly implicated item(s).
 - It is acceptable to raise urgency for one item the student is explicitly struggling with again,
-  or lower urgency for one item that clearly improved or was mastered.
+  or lower urgency for one item only when the Teacher explicitly frames it as less urgent.
 - Never use priority changes to rebalance unrelated items or tidy the broader memory set; leave
   that work to `memory_maintainer`.
 - Never call `read_memory` without filters unless a broad inspection is explicitly required.
