@@ -246,7 +246,11 @@ def test_memory_maintainer_uses_dedicated_agent_settings(mock_settings):
         with patch("runestone.agents.specialists.memory_maintainer.create_agent"):
             MemoryMaintainerSpecialist(mock_settings)
 
-    build.assert_called_once_with(mock_settings, "memory_maintainer")
+    build.assert_called_once_with(
+        mock_settings,
+        "memory_maintainer",
+        timeout_seconds=MemoryMaintainerSpecialist.MODEL_TIMEOUT_SECONDS,
+    )
 
 
 @pytest.mark.anyio

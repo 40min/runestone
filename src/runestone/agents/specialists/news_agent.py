@@ -88,10 +88,12 @@ If no action is needed, return an empty `results` and `sources` list.
 class NewsAgentSpecialist(BaseSpecialist):
     """Tool-using pre-response specialist for topic-based news retrieval."""
 
+    MODEL_TIMEOUT_SECONDS = 10.0
+
     def __init__(self, settings: Settings):
         super().__init__(name="news_agent")
         self.settings = settings
-        self.model = build_chat_model(settings, "news_agent")
+        self.model = build_chat_model(settings, "news_agent", timeout_seconds=self.MODEL_TIMEOUT_SECONDS)
         self.agent = self._build_agent()
         logger.info(
             "[agents:news] Initialized NewsAgentSpecialist with provider=%s, model=%s",

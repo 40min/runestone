@@ -182,10 +182,12 @@ class SaveRunState:
 class WordKeeperSpecialist(BaseSpecialist):
     """Specialist that owns vocabulary capture and prioritization."""
 
+    MODEL_TIMEOUT_SECONDS = 15.0
+
     def __init__(self, settings: Settings):
         super().__init__(name="word_keeper")
         self.settings = settings
-        self.model = build_chat_model(settings, "word_keeper")
+        self.model = build_chat_model(settings, "word_keeper", timeout_seconds=self.MODEL_TIMEOUT_SECONDS)
         logger.info(
             "[agents:wordkeeper] Initialized WordKeeperSpecialist with provider=%s, model=%s",
             settings.word_keeper_provider,

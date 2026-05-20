@@ -127,10 +127,12 @@ Return valid JSON matching this exact structure and nothing else:
 class MemoryMaintainerSpecialist(BaseSpecialist):
     """Background specialist that consolidates start-of-session learner memory."""
 
+    MODEL_TIMEOUT_SECONDS = 30.0
+
     def __init__(self, settings: Settings):
         super().__init__(name="memory_maintainer")
         self.settings = settings
-        model = build_chat_model(settings, "memory_maintainer")
+        model = build_chat_model(settings, "memory_maintainer", timeout_seconds=self.MODEL_TIMEOUT_SECONDS)
         self.agent = self._build_agent(model)
         logger.info(
             "[agents:memorymaintainer] Initialized MemoryMaintainerSpecialist with provider=%s, model=%s",

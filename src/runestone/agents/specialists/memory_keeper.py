@@ -121,10 +121,12 @@ Return valid JSON matching this exact shape and nothing else:
 class MemoryKeeperSpecialist(BaseSpecialist):
     """Tool-using post-response specialist for durable memory maintenance."""
 
+    MODEL_TIMEOUT_SECONDS = 15.0
+
     def __init__(self, settings: Settings):
         super().__init__(name="memory_keeper")
         self.settings = settings
-        self.model = build_chat_model(settings, "memory_keeper")
+        self.model = build_chat_model(settings, "memory_keeper", timeout_seconds=self.MODEL_TIMEOUT_SECONDS)
         self.agent = self._build_agent()
         logger.info(
             "[agents:memorykeeper] Initialized MemoryKeeperSpecialist with provider=%s, model=%s",
