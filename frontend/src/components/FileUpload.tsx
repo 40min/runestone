@@ -13,7 +13,11 @@ import {
   RefreshCw,
   Replace,
 } from "lucide-react";
-import { CustomButton } from "./ui";
+import {
+  CustomButton,
+  analyzerShellGradients,
+  buildAnalyzerShellSx,
+} from "./ui";
 
 interface DimmedContentProps {
   children: React.ReactNode;
@@ -130,13 +134,9 @@ const FileUpload: React.FC<FileUploadProps> = ({
       <Box
         sx={{
           position: "relative",
-          borderRadius: "1rem",
-          border: "1px solid rgba(99, 114, 173, 0.35)",
-          background:
-            "radial-gradient(circle at 12% 10%, rgba(36, 48, 114, 0.44), rgba(7, 12, 44, 0.97))",
           p: { xs: 2, md: 2.25 },
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
           overflow: "hidden",
+          ...buildAnalyzerShellSx(analyzerShellGradients.uploadCompact),
         }}
       >
         <DimmedContent
@@ -287,12 +287,8 @@ const FileUpload: React.FC<FileUploadProps> = ({
   return (
     <Box
       sx={{
-        borderRadius: "1rem",
-        border: "1px solid rgba(99, 114, 173, 0.35)",
-        background:
-          "radial-gradient(circle at 10% 8%, rgba(35, 50, 116, 0.42), rgba(7, 11, 39, 0.97))",
         p: { xs: 2, sm: 3 },
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+        ...buildAnalyzerShellSx(analyzerShellGradients.uploadFull),
       }}
     >
       <Box

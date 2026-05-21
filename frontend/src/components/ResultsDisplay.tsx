@@ -18,6 +18,9 @@ import {
   TabNavigation,
   StyledCheckbox,
   DataTable,
+  analyzerShellGradients,
+  analyzerSurfaceCardSx,
+  buildAnalyzerShellSx,
 } from "./ui";
 import { parseMarkdown } from "../utils/markdownParser";
 import type {
@@ -318,16 +321,12 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
       <Box
         sx={{
           minHeight: { xs: 320, lg: 420 },
-          borderRadius: "1rem",
-          border: "1px solid rgba(99, 114, 173, 0.35)",
-          background:
-            "radial-gradient(circle at 18% 16%, rgba(35, 49, 116, 0.5), rgba(7, 12, 43, 0.97))",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           px: { xs: 3, md: 5 },
           textAlign: "center",
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+          ...buildAnalyzerShellSx(analyzerShellGradients.processing),
         }}
       >
         <Box sx={{ maxWidth: 520 }}>
@@ -376,12 +375,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   return (
     <Box
       sx={{
-        borderRadius: "1rem",
-        border: "1px solid rgba(99, 114, 173, 0.35)",
-        background:
-          "radial-gradient(circle at 14% 10%, rgba(34, 48, 112, 0.4), rgba(6, 11, 42, 0.97))",
         overflow: "hidden",
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+        ...buildAnalyzerShellSx(analyzerShellGradients.results),
       }}
     >
       {error && (
@@ -736,9 +731,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                   masterCheckboxId="vocabulary-master-checkbox"
                   rowCheckboxIdPrefix="vocabulary-item"
                   sx={{
-                    backgroundColor: "rgba(40, 29, 56, 0.92)",
-                    borderRadius: "0.9rem",
-                    border: "1px solid rgba(95, 76, 123, 0.82)",
+                    ...analyzerSurfaceCardSx,
                   }}
                   columns={[
                     { key: "swedish", label: "Swedish" },

@@ -18,15 +18,17 @@ const ContentCard: React.FC<ContentCardProps> = ({
   borderRadius = '0.5rem',
   sx = {},
 }) => {
+  const mergedSx: SxProps<Theme> = [
+    {
+      p: padding,
+      backgroundColor,
+      borderRadius,
+    },
+    ...(Array.isArray(sx) ? sx : [sx]),
+  ];
+
   return (
-    <Box
-      sx={{
-        p: padding,
-        backgroundColor,
-        borderRadius,
-        ...sx,
-      }}
-    >
+    <Box sx={mergedSx}>
       {children}
     </Box>
   );

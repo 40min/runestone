@@ -12,6 +12,7 @@ import { useState, useEffect } from "react";
 import { BrainCircuit } from "lucide-react";
 import { Box } from "@mui/material";
 import { useAuth } from "./context/AuthContext";
+import { analyzerShellGradients, buildAnalyzerShellSx } from "./components/ui";
 
 type AuthView = "login" | "register";
 type ViewType = "analyzer" | "vocabulary" | "grammar" | "chat" | "profile";
@@ -149,16 +150,11 @@ function App() {
                         minHeight: "420px",
                         alignItems: "center",
                         justifyContent: "center",
-                        borderRadius: "1rem",
-                        border: "1px solid rgba(99, 114, 173, 0.35)",
-                        background:
-                          "radial-gradient(circle at 18% 16%, rgba(37, 48, 116, 0.52), rgba(7, 11, 41, 0.97))",
                         color: "#c2cee8",
                         textAlign: "center",
                         px: 5,
                         position: "relative",
                         overflow: "hidden",
-                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
                         "&::before": {
                           content: '""',
                           position: "absolute",
@@ -167,6 +163,7 @@ function App() {
                             "linear-gradient(135deg, rgba(124, 148, 224, 0.08), transparent 30%, transparent 70%, rgba(34, 223, 132, 0.05))",
                           pointerEvents: "none",
                         },
+                        ...buildAnalyzerShellSx(analyzerShellGradients.emptyState),
                       }}
                     >
                       <div className="relative z-10 space-y-4">

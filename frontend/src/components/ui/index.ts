@@ -11,6 +11,11 @@ export { default as SearchInput } from './SearchInput';
 export { default as MarkdownDisplay } from './MarkdownDisplay';
 export { default as Snackbar } from './Snackbar';
 export { default as ImageUploadButton } from './ImageUploadButton';
+export {
+  analyzerShellGradients,
+  analyzerSurfaceCardSx,
+  buildAnalyzerShellSx,
+} from './analyzerStyles';
 export { ChatMessageBubble } from './ChatMessageBubble';
 export { ChatEmptyState } from './ChatEmptyState';
 export { ChatLoadingIndicator } from './ChatLoadingIndicator';

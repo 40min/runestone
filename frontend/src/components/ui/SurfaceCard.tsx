@@ -1,6 +1,11 @@
 import React from "react";
 import type { SxProps, Theme } from "@mui/material";
 import ContentCard from "./ContentCard";
+import {
+  analyzerSurfaceBackground,
+  analyzerSurfaceCardSx,
+  analyzerSurfaceRadius,
+} from "./analyzerStyles";
 
 interface SurfaceCardProps {
   children: React.ReactNode;
@@ -13,15 +18,17 @@ const SurfaceCard: React.FC<SurfaceCardProps> = ({
   padding = { xs: 2, md: 4 },
   sx = {},
 }) => {
+  const mergedSx: SxProps<Theme> = [
+    analyzerSurfaceCardSx,
+    ...(Array.isArray(sx) ? sx : [sx]),
+  ];
+
   return (
     <ContentCard
       padding={padding}
-      backgroundColor="rgba(40, 29, 56, 0.92)"
-      borderRadius="0.9rem"
-      sx={{
-        border: "1px solid rgba(95, 76, 123, 0.82)",
-        ...sx,
-      }}
+      backgroundColor={analyzerSurfaceBackground}
+      borderRadius={analyzerSurfaceRadius}
+      sx={mergedSx}
     >
       {children}
     </ContentCard>
