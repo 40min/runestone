@@ -135,6 +135,8 @@ def test_build_agent(mock_settings, mock_chat_model):
             middleware_by_name = {item.tool_name: item for item in middleware}
             assert middleware_by_name["search_grammar"].run_limit == MAX_GRAMMAR_SEARCH_CALLS
             assert middleware_by_name["read_grammar_page"].run_limit == MAX_GRAMMAR_READ_CALLS
+            assert middleware_by_name["search_grammar"].exit_behavior == "end"
+            assert middleware_by_name["read_grammar_page"].exit_behavior == "end"
             assert "AVATAR EMOTION METADATA" in call_kwargs["system_prompt"]
             assert "Never write the emotion label" in call_kwargs["system_prompt"]
             assert "grammar_source_urls" in call_kwargs["system_prompt"]

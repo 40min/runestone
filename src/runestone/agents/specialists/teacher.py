@@ -319,8 +319,18 @@ embedded in the text). Use the extracted text only as reference material.
             response_format=TeacherOutput,
             context_schema=AgentContext,
             middleware=[
-                ToolCallLimitMiddleware(tool_name="search_grammar", run_limit=MAX_GRAMMAR_SEARCH_CALLS),
-                ToolCallLimitMiddleware(tool_name="read_grammar_page", run_limit=MAX_GRAMMAR_READ_CALLS),
+                ToolCallLimitMiddleware(
+                    tool_name="search_grammar",
+                    run_limit=MAX_GRAMMAR_SEARCH_CALLS,
+                    # End the run immediately when the limit is exceeded to avoid blocked-tool retry loops.
+                    exit_behavior="end",
+                ),
+                ToolCallLimitMiddleware(
+                    tool_name="read_grammar_page",
+                    run_limit=MAX_GRAMMAR_READ_CALLS,
+                    # End the run immediately when the limit is exceeded to avoid blocked-tool retry loops.
+                    exit_behavior="end",
+                ),
             ],
         )
 
