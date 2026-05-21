@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import ValidationError
 
@@ -30,7 +31,7 @@ from runestone.agents.tools.grammar import read_grammar_page, search_grammar
 from runestone.agents.tools.memory import read_memory
 from runestone.agents.tools.read_url import read_url
 from runestone.config import Settings
-from runestone.constants import MAX_TEACHER_GRAMMAR_SOURCE_LINKS
+from runestone.constants import MAX_GRAMMAR_READ_CALLS, MAX_GRAMMAR_SEARCH_CALLS, MAX_TEACHER_GRAMMAR_SOURCE_LINKS
 from runestone.core.observability import timed_operation
 from runestone.db.models import User
 from runestone.rag.index import GrammarIndex
@@ -293,8 +294,9 @@ embedded in the text). Use the extracted text only as reference material.
 
 
 **HARD LIMITS (enforced, not guidelines):**
-- Maximum 2 `search_grammar` calls per reply. Stop after 2, even if results are unsatisfying.
-- Maximum 3 `read_grammar_page` calls per reply.
+- Maximum {MAX_GRAMMAR_SEARCH_CALLS} `search_grammar` calls per reply.
+  Stop after {MAX_GRAMMAR_SEARCH_CALLS}, even if results are unsatisfying.
+- Maximum {MAX_GRAMMAR_READ_CALLS} `read_grammar_page` calls per reply.
 - If the first 2 searches return off-topic results, STOP searching. Respond without grammar links.
 - These limits are absolute. Do not attempt workarounds.
 
@@ -316,6 +318,10 @@ embedded in the text). Use the extracted text only as reference material.
             system_prompt=system_prompt,
             response_format=TeacherOutput,
             context_schema=AgentContext,
+            middleware=[
+                ToolCallLimitMiddleware(tool_name="search_grammar", run_limit=MAX_GRAMMAR_SEARCH_CALLS),
+                ToolCallLimitMiddleware(tool_name="read_grammar_page", run_limit=MAX_GRAMMAR_READ_CALLS),
+            ],
         )
 
         return agent

@@ -7,13 +7,14 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from runestone.agents.schemas import ChatMessage, TeacherOutput, TeacherSideEffect
 from runestone.agents.specialists.base import INFO_FOR_TEACHER_MAX_CHARS
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
-from runestone.constants import MAX_TEACHER_GRAMMAR_SOURCE_LINKS
+from runestone.constants import MAX_GRAMMAR_READ_CALLS, MAX_GRAMMAR_SEARCH_CALLS, MAX_TEACHER_GRAMMAR_SOURCE_LINKS
 from runestone.schemas.vocabulary_save import WordSaveCandidate
 
 
@@ -128,6 +129,12 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "summarize it naturally in plain prose" in call_kwargs["system_prompt"]
             assert "Use `search_news_with_dates`" not in call_kwargs["system_prompt"]
             assert call_kwargs["response_format"] == TeacherOutput
+            middleware = call_kwargs["middleware"]
+            assert len(middleware) == 2
+            assert all(isinstance(item, ToolCallLimitMiddleware) for item in middleware)
+            middleware_by_name = {item.tool_name: item for item in middleware}
+            assert middleware_by_name["search_grammar"].run_limit == MAX_GRAMMAR_SEARCH_CALLS
+            assert middleware_by_name["read_grammar_page"].run_limit == MAX_GRAMMAR_READ_CALLS
             assert "AVATAR EMOTION METADATA" in call_kwargs["system_prompt"]
             assert "Never write the emotion label" in call_kwargs["system_prompt"]
             assert "grammar_source_urls" in call_kwargs["system_prompt"]
