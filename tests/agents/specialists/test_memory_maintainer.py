@@ -211,6 +211,10 @@ async def test_memory_maintainer_parses_fenced_json_output(specialist, mock_user
 
 
 def test_memory_maintainer_prompt_defines_expected_scope_and_tools():
+    assert "The default outcome of this task is NO ACTION." in MEMORY_MAINTAINER_SYSTEM_PROMPT
+    assert "Merging is the exception," in MEMORY_MAINTAINER_SYSTEM_PROMPT
+    assert "not the goal." in MEMORY_MAINTAINER_SYSTEM_PROMPT
+    assert "When in doubt, do not merge." in MEMORY_MAINTAINER_SYSTEM_PROMPT
     assert "category `area_to_improve` with status" in MEMORY_MAINTAINER_SYSTEM_PROMPT
     assert "`struggling` or `improving`" in MEMORY_MAINTAINER_SYSTEM_PROMPT
     assert (
@@ -230,6 +234,9 @@ def test_memory_maintainer_prompt_defines_expected_scope_and_tools():
     assert "vocabulary confusion vs spelling" in MEMORY_MAINTAINER_SYSTEM_PROMPT
     assert "time expressions vs V2 word order" in MEMORY_MAINTAINER_SYSTEM_PROMPT
     assert 'one giant item like "Struggles with Swedish grammar and vocabulary"' in MEMORY_MAINTAINER_SYSTEM_PROMPT
+    assert "Bad merge example (prose form" in MEMORY_MAINTAINER_SYSTEM_PROMPT
+    assert "Prose paragraph form does not change the violation." in MEMORY_MAINTAINER_SYSTEM_PROMPT
+    assert "five distinct grammar topics and must be kept separate" in MEMORY_MAINTAINER_SYSTEM_PROMPT
     assert "If you feel tempted to summarize several different weaknesses into one compact" in (
         MEMORY_MAINTAINER_SYSTEM_PROMPT
     )

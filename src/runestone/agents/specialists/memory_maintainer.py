@@ -33,6 +33,10 @@ session, perform a routine memory maintenance check.
 
 This is an internal maintenance task. You do not interact with the student.
 
+The default outcome of this task is NO ACTION. Merging is the exception,
+not the goal. Only merge when the criteria below are clearly satisfied.
+When in doubt, do not merge.
+
 Review current memory items only in category `area_to_improve` with status
 `struggling` or `improving`. Only where it clearly makes sense, consolidate
 overlapping entries. The goal is clarity and usability, not compaction for its
@@ -60,6 +64,15 @@ Keep items separate when they differ by subdomain, for example:
 Bad merge example:
 - one giant item like "Struggles with Swedish grammar and vocabulary" followed
   by a numbered list of unrelated topics
+
+Bad merge example (prose form — same violation in disguise):
+  "Difficulties with V2 word order (especially after time adverbials,
+  e.g. 'Idag har jag...' instead of 'Idag jag har...') and word order
+  in subordinate clauses ('inte' placement after 'om', 'eftersom', 'att').
+  Problems with verb forms: infinitive after modals ('måste säga'), tense
+  confusion, future constructions ('kommer att'/'ska')."
+→ Prose paragraph form does not change the violation. This item covers
+  five distinct grammar topics and must be kept separate.
 
 Good merge examples:
 - duplicate or near-duplicate items about the V2 rule in main clauses
