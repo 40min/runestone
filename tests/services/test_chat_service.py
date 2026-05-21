@@ -259,7 +259,7 @@ async def test_process_image_message_uses_mother_tongue(
 
 @pytest.mark.anyio
 async def test_clear_history(chat_service, db_with_test_user):
-    """Test clearing history via service."""
+    """Test clearing history via service without scheduling maintenance."""
     db, user = db_with_test_user
     chat_id = str(uuid4())
     await chat_service.repository.add_message(user.id, chat_id, "user", "Test")
@@ -267,7 +267,7 @@ async def test_clear_history(chat_service, db_with_test_user):
     chat_service.user_service.get_user_by_id = AsyncMock(return_value=user)
     await chat_service.clear_history(user.id)
     chat_service.user_service.rotate_current_chat_id.assert_awaited_once_with(user.id)
-    chat_service.agent_service.start_background_memory_maintenance.assert_awaited_once_with(user)
+    chat_service.agent_service.start_background_memory_maintenance.assert_not_called()
 
 
 @pytest.mark.anyio
