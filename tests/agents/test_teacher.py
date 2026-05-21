@@ -141,7 +141,11 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert f"top_k=1..{MAX_TEACHER_GRAMMAR_SOURCE_LINKS}" in call_kwargs["system_prompt"]
             assert "Does the student's message contain a concrete grammar error?" in (call_kwargs["system_prompt"])
             assert "Did the student explicitly ask a grammar question?" in (call_kwargs["system_prompt"])
-            assert "Maximum 3 `search_grammar` calls per reply." in call_kwargs["system_prompt"]
+            assert "### GRAMMAR REFERENCE TOOL (search_grammar, read_grammar_page)" in call_kwargs["system_prompt"]
+            assert "### URL READING TOOL (read_url)" in call_kwargs["system_prompt"]
+            assert "### MEMORY PROTOCOL (read_memory)" in call_kwargs["system_prompt"]
+            assert "DECISION RULE — evaluate BEFORE calling the search_grammar tool:" in call_kwargs["system_prompt"]
+            assert "Maximum 2 `search_grammar` calls per reply." in call_kwargs["system_prompt"]
             assert "Maximum 3 `read_grammar_page` calls per reply." in call_kwargs["system_prompt"]
             assert "If the first 2 searches return off-topic results, STOP searching." in (call_kwargs["system_prompt"])
             assert "Do NOT call `search_grammar`. Set `grammar_source_urls` to `[]` and move on." in (
