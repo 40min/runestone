@@ -7,6 +7,7 @@ from runestone.agents.specialists.base import (
     SpecialistAction,
     SpecialistContext,
     SpecialistResult,
+    _extract_json_object,
 )
 
 
@@ -58,3 +59,24 @@ async def test_concrete_specialist_instantiation():
     context = SpecialistContext(message="Hi", history=[], user=object())
     result = await specialist.run(context)
     assert result.status == "no_action"
+
+
+def test_extract_json_object_skips_stray_braces_before_payload():
+    content = (
+        "prefix with braces {not json} and then "
+        '{"status":"no_action","actions":[],"info_for_teacher":"","artifacts":{}}'
+    )
+    extracted = _extract_json_object(content)
+    assert extracted == '{"status":"no_action","actions":[],"info_for_teacher":"","artifacts":{}}'
+
+
+def test_extract_json_object_ignores_trailing_brace_text_after_payload():
+    content = '{"status":"no_action","actions":[],"info_for_teacher":"","artifacts":{}} trailing {noise}'
+    extracted = _extract_json_object(content)
+    assert extracted == '{"status":"no_action","actions":[],"info_for_teacher":"","artifacts":{}}'
+
+
+def test_extract_json_object_returns_first_valid_json_object():
+    content = 'intro {"status":"no_action","actions":[],"info_for_teacher":"","artifacts":{}} {"other":"block"}'
+    extracted = _extract_json_object(content)
+    assert extracted == '{"status":"no_action","actions":[],"info_for_teacher":"","artifacts":{}}'

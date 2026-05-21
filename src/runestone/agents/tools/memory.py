@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from runestone.agents.service_providers import provide_memory_item_service
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.utils import serialize_memory_items
-from runestone.api.memory_item_schemas import MemoryCategory, MemoryItemCreate
+from runestone.api.memory_item_schemas import MemoryCategory, MemoryItemCreate, MemorySortBy, SortDirection
 from runestone.core.exceptions import PermissionDeniedError, UserNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -66,8 +66,8 @@ async def read_memory(
     Returns structured memory items with IDs, categories, keys, content, and status.
     Use this tool when you need context about the student to personalize your
     teaching or when asked about what you know about the student.
-    For area_to_improve items, results are ordered by priority (lowest number first),
-    then by last-updated date.
+    Results are capped to the 100 freshest matching items and ordered by last-updated date
+    descending so agents see the newest signals first.
 
     Args:
         runtime: Tool runtime context
@@ -82,7 +82,15 @@ async def read_memory(
 
     # Use fresh service with its own session for concurrency safety
     async with provide_memory_item_service() as service:
-        items = await service.list_memory_items(user_id=user.id, category=category, status=status, limit=200, offset=0)
+        items = await service.list_memory_items(
+            user_id=user.id,
+            category=category,
+            status=status,
+            sort_by=MemorySortBy.UPDATED_AT,
+            sort_direction=SortDirection.DESC,
+            limit=100,
+            offset=0,
+        )
 
     if not items:
         return "No memory items found."
@@ -177,11 +185,17 @@ async def update_memory_priority(
     """
     Set the priority of an area_to_improve memory item.
 
-    Use this to indicate which topics need the most urgent attention:
+    Use this to indicate which directly implicated topics need the most urgent attention:
     - Lower priority = more urgent (0 is the highest priority).
-    - Raise priority (lower number) when the student repeatedly makes errors on a topic.
-    - Lower priority (higher number) when the student shows improvement.
-    - Items with priority set appear first in memory reads for area_to_improve.
+    - Raise priority (lower number) when the student repeatedly makes errors on the same topic.
+    - Lower priority (higher number) only when the current signal is explicitly about reduced urgency,
+      not as a routine companion to a status change.
+    - Priority still matters for stored urgency and for downstream maintenance decisions, even though
+      read_memory now returns the freshest matching items first.
+    - Only reprioritize the specific item(s) directly tied to the current turn's explicit signal.
+      Never use this tool to rebalance or renumber the broader memory set; that belongs to MemoryMaintainer.
+    - For normal progress updates such as struggling -> improving or improving -> mastered, prefer
+      update_memory_status instead of changing both status and priority for the same item in one turn.
 
     Args:
         runtime: Tool runtime context

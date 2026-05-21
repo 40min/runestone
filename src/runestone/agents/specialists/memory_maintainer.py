@@ -3,15 +3,18 @@ Background specialist for start-of-session memory maintenance.
 """
 
 import logging
-from typing import Any
 
 from langchain.agents import create_agent
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage
-from pydantic import ValidationError
+from langchain_core.messages import HumanMessage
 
 from runestone.agents.llm import build_chat_model
-from runestone.agents.specialists.base import BaseSpecialist, SpecialistContext, SpecialistResult
+from runestone.agents.specialists.base import (
+    BaseSpecialist,
+    SpecialistContext,
+    SpecialistResult,
+    parse_specialist_result,
+)
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.memory_maintainer import (
     clear_pending_merge_plan,
@@ -30,6 +33,10 @@ session, perform a routine memory maintenance check.
 
 This is an internal maintenance task. You do not interact with the student.
 
+The default outcome of this task is NO ACTION. Merging is the exception,
+not the goal. Only merge when the criteria below are clearly satisfied.
+When in doubt, do not merge.
+
 Review current memory items only in category `area_to_improve` with status
 `struggling` or `improving`. Only where it clearly makes sense, consolidate
 overlapping entries. The goal is clarity and usability, not compaction for its
@@ -37,12 +44,43 @@ own sake. If everything looks well-organized already, making no changes at all
 is a perfectly valid outcome.
 
 When reviewing, consider merging items that:
-- cover the same core grammatical concept, even across slightly different contexts
+- cover one single teachable concept, even across slightly different contexts
 - are near-duplicates or explicit repeats
 
 Be moderate: merge when overlap is obvious and the result preserves all
 meaningful sub-cases and examples from the originals. Keep items separate if
 their different contexts carry distinct instructional value.
+
+Do NOT create broad catch-all items that bundle multiple unrelated weaknesses
+into one memory. A merged item must still point to one coherent topic a teacher
+could practice directly.
+
+Keep items separate when they differ by subdomain, for example:
+- vocabulary confusion vs spelling
+- time expressions vs V2 word order
+- possessives vs definiteness
+- one grammar rule vs a different grammar rule
+
+Bad merge example:
+- one giant item like "Struggles with Swedish grammar and vocabulary" followed
+  by a numbered list of unrelated topics
+
+Bad merge example (prose form — same violation in disguise):
+  "Difficulties with V2 word order (especially after time adverbials,
+  e.g. 'Idag har jag...' instead of 'Idag jag har...') and word order
+  in subordinate clauses ('inte' placement after 'om', 'eftersom', 'att').
+  Problems with verb forms: infinitive after modals ('måste säga'), tense
+  confusion, future constructions ('kommer att'/'ska')."
+→ Prose paragraph form does not change the violation. This item covers
+  five distinct grammar topics and must be kept separate.
+
+Good merge examples:
+- duplicate or near-duplicate items about the V2 rule in main clauses
+- repeated items about Swedish time-expression placement
+- overlapping items about one specific possessive pattern
+
+If you feel tempted to summarize several different weaknesses into one compact
+list, do not merge them.
 
 Language normalization rules:
 - The content target language is provided in the runtime instruction message.
@@ -124,16 +162,17 @@ Return valid JSON matching this exact structure and nothing else:
 class MemoryMaintainerSpecialist(BaseSpecialist):
     """Background specialist that consolidates start-of-session learner memory."""
 
+    MODEL_TIMEOUT_SECONDS = 30.0
+
     def __init__(self, settings: Settings):
         super().__init__(name="memory_maintainer")
         self.settings = settings
-        # Reuse the memory_keeper model configuration for this adjacent maintenance role.
-        model = build_chat_model(settings, "memory_keeper")
+        model = build_chat_model(settings, "memory_maintainer", timeout_seconds=self.MODEL_TIMEOUT_SECONDS)
         self.agent = self._build_agent(model)
         logger.info(
             "[agents:memorymaintainer] Initialized MemoryMaintainerSpecialist with provider=%s, model=%s",
-            settings.memory_keeper_provider,
-            settings.memory_keeper_model,
+            settings.memory_maintainer_provider,
+            settings.memory_maintainer_model,
         )
 
     def _build_agent(self, model: BaseChatModel):
@@ -147,6 +186,7 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
                 maintainer_update_memory_priority,
             ],
             system_prompt=MEMORY_MAINTAINER_SYSTEM_PROMPT,
+            response_format=SpecialistResult,
             context_schema=AgentContext,
         )
 
@@ -184,7 +224,7 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
                     },
                 )
 
-            parsed = self._parse_result(result.get("messages", []))
+            parsed = parse_specialist_result(result)
             if parsed is None:
                 logger.warning("[agents:memorymaintainer] Failed to parse final agent result")
                 return SpecialistResult(
@@ -204,28 +244,6 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
             return parsed
         finally:
             clear_pending_merge_plan(context.user.id)
-
-    @staticmethod
-    def _parse_result(messages: list[Any]) -> SpecialistResult | None:
-        for message in reversed(messages):
-            if not isinstance(message, AIMessage):
-                continue
-            if getattr(message, "tool_calls", None):
-                continue
-            content = message.content
-            if not isinstance(content, str) or not content.strip():
-                continue
-            json_content = content.strip()
-            if json_content.startswith("```"):
-                start = json_content.find("{")
-                end = json_content.rfind("}")
-                if start != -1 and end != -1 and end >= start:
-                    json_content = json_content[start : end + 1]
-            try:
-                return SpecialistResult.model_validate_json(json_content)
-            except (ValidationError, ValueError):
-                continue
-        return None
 
     @staticmethod
     def _memory_item_language(context: SpecialistContext) -> str:

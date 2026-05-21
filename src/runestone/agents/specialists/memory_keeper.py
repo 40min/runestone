@@ -4,14 +4,17 @@ Post-response specialist that maintains learner memory with memory tools.
 
 import json
 import logging
-from typing import Any
 
 from langchain.agents import create_agent
-from langchain_core.messages import AIMessage, HumanMessage
-from pydantic import ValidationError
+from langchain_core.messages import HumanMessage
 
 from runestone.agents.llm import build_chat_model
-from runestone.agents.specialists.base import BaseSpecialist, SpecialistContext, SpecialistResult
+from runestone.agents.specialists.base import (
+    BaseSpecialist,
+    SpecialistContext,
+    SpecialistResult,
+    parse_specialist_result,
+)
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.memory import read_memory, update_memory_priority, update_memory_status, upsert_memory_item
 from runestone.config import Settings
@@ -43,7 +46,7 @@ Do not stop after reading.
 Step 1 — READ:   Call read_memory with a category filter scoped to the relevant category.
 Step 2 — DECIDE: Compare results against the incoming signal. Choose the correct write tool if changes are needed.
 Step 3 — WRITE:  Call the write tool (upsert_memory_item, update_memory_status,
-update_memory_priority).
+update_memory_priority) only for the specific memory item(s) directly implicated by this turn.
 
 If no trigger is detected → return `no_action` immediately. Do not call any tools.
 
@@ -54,6 +57,18 @@ If no trigger is detected → return `no_action` immediately. Do not call any to
 - Broad start-of-session consolidation, duplicate cleanup, and routine reprioritization sweeps
   are handled by a separate `memory_maintainer`. Do not perform those sweeps unless the
   current turn explicitly requires a memory change.
+- Choose one write intent per item for ordinary learning signals:
+  - New durable topic or fact → `upsert_memory_item`
+  - Improvement, degradation, mastery, or outdating of an existing item → `update_memory_status`
+  - Explicit importance/urgency signal such as a repeated recurring error or a clearly elevated priority
+    from the Teacher → `update_memory_priority`
+- Do not use both `update_memory_status` and `update_memory_priority` on the same item in the same turn
+  unless the signal explicitly requires both status and urgency to change.
+- Use `update_memory_priority` only for narrow, turn-local reprioritization of directly implicated item(s).
+- It is acceptable to raise urgency for one item the student is explicitly struggling with again,
+  or lower urgency for one item only when the Teacher explicitly frames it as less urgent.
+- Never use priority changes to rebalance unrelated items or tidy the broader memory set; leave
+  that work to `memory_maintainer`.
 - Never call `read_memory` without filters unless a broad inspection is explicitly required.
 - Never call `read_memory` as a standalone action — it is always a precursor to a write.
 - Treat spelling corrections, nonexistent-word feedback, and one-off wrong vocabulary forms as
@@ -112,10 +127,12 @@ Return valid JSON matching this exact shape and nothing else:
 class MemoryKeeperSpecialist(BaseSpecialist):
     """Tool-using post-response specialist for durable memory maintenance."""
 
+    MODEL_TIMEOUT_SECONDS = 15.0
+
     def __init__(self, settings: Settings):
         super().__init__(name="memory_keeper")
         self.settings = settings
-        self.model = build_chat_model(settings, "memory_keeper")
+        self.model = build_chat_model(settings, "memory_keeper", timeout_seconds=self.MODEL_TIMEOUT_SECONDS)
         self.agent = self._build_agent()
         logger.info(
             "[agents:memorykeeper] Initialized MemoryKeeperSpecialist with provider=%s, model=%s",
@@ -134,6 +151,7 @@ class MemoryKeeperSpecialist(BaseSpecialist):
                 update_memory_priority,
             ],
             system_prompt=MEMORY_KEEPER_SYSTEM_PROMPT,
+            response_format=SpecialistResult,
             context_schema=AgentContext,
         )
 
@@ -164,7 +182,7 @@ class MemoryKeeperSpecialist(BaseSpecialist):
                 },
             )
 
-        parsed = self._parse_result(result.get("messages", []))
+        parsed = parse_specialist_result(result)
         if parsed is None:
             logger.warning("[agents:memorykeeper] Failed to parse final agent result")
             return SpecialistResult(
@@ -174,25 +192,3 @@ class MemoryKeeperSpecialist(BaseSpecialist):
                 artifacts={"trigger_source": "unknown", "summary": "invalid_agent_output", "notes": []},
             )
         return parsed
-
-    @staticmethod
-    def _parse_result(messages: list[Any]) -> SpecialistResult | None:
-        for message in reversed(messages):
-            if not isinstance(message, AIMessage):
-                continue
-            if getattr(message, "tool_calls", None):
-                continue
-            content = message.content
-            if not isinstance(content, str) or not content.strip():
-                continue
-            json_content = content.strip()
-            if json_content.startswith("```"):
-                start = json_content.find("{")
-                end = json_content.rfind("}")
-                if start != -1 and end != -1 and end >= start:
-                    json_content = json_content[start : end + 1]
-            try:
-                return SpecialistResult.model_validate_json(json_content)
-            except (ValidationError, ValueError):
-                continue
-        return None

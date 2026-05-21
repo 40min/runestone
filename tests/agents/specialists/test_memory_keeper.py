@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage
 
-from runestone.agents.specialists.base import SpecialistContext
+from runestone.agents.specialists.base import SpecialistContext, SpecialistResult, parse_specialist_result
 from runestone.agents.specialists.memory_keeper import MEMORY_KEEPER_SYSTEM_PROMPT, MemoryKeeperSpecialist
 
 
@@ -140,10 +140,61 @@ async def test_memory_keeper_parses_fenced_json_output(specialist, mock_user):
     assert result.artifacts["trigger_source"] == "none"
 
 
+@pytest.mark.anyio
+async def test_memory_keeper_parses_content_blocks_with_text_and_tool_use(specialist, mock_user):
+    specialist.agent.ainvoke.return_value = {
+        "messages": [
+            AIMessage(
+                content=[
+                    {
+                        "type": "text",
+                        "text": (
+                            "```json\n"
+                            '{"status":"no_action","actions":[],"info_for_teacher":"",'
+                            '"artifacts":{"trigger_source":"none","summary":"noop","notes":[]}}'
+                            "\n```"
+                        ),
+                    },
+                    {"type": "tool_use", "name": "noop", "input": {}},
+                ]
+            )
+        ]
+    }
+
+    result = await specialist.run(
+        SpecialistContext(
+            message="Ok",
+            history=[],
+            user=mock_user,
+            teacher_response="Good effort.",
+            routing_reason="no durable signal",
+        )
+    )
+
+    assert result.status == "no_action"
+    assert result.artifacts["summary"] == "noop"
+
+
+def test_parse_specialist_result_prefers_structured_response():
+    structured = SpecialistResult(
+        status="action_taken",
+        actions=[],
+        info_for_teacher="Updated memory.",
+        artifacts={"trigger_source": "teacher", "summary": "updated", "notes": []},
+    )
+
+    parsed = parse_specialist_result({"structured_response": structured, "messages": []})
+
+    assert parsed == structured
+
+
 def test_memory_keeper_prompt_uses_mastered_area_items_without_promotion():
     assert "Use `area_to_improve` with status `mastered`" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "Do not create a separate strength item" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "promote_to_strength" not in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "or lower urgency for one item only when the Teacher explicitly frames it as less urgent." in (
+        MEMORY_KEEPER_SYSTEM_PROMPT
+    )
 
 
 def test_memory_keeper_prompt_rejects_misspelled_word_pollution():
@@ -155,3 +206,29 @@ def test_memory_keeper_prompt_rejects_misspelled_word_pollution():
 def test_memory_keeper_prompt_excludes_broad_startup_compaction():
     assert "Broad start-of-session consolidation, duplicate cleanup" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "handled by a separate `memory_maintainer`" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "Never use priority changes to rebalance unrelated items or tidy the broader memory set;" in (
+        MEMORY_KEEPER_SYSTEM_PROMPT
+    )
+
+
+def test_memory_keeper_prompt_separates_status_and_priority_roles():
+    assert "Choose one write intent per item for ordinary learning signals:" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "Improvement, degradation, mastery, or outdating of an existing item" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "Explicit importance/urgency signal such as a repeated recurring error" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "Do not use both `update_memory_status` and `update_memory_priority` on the same item" in (
+        MEMORY_KEEPER_SYSTEM_PROMPT
+    )
+
+
+def test_memory_keeper_builds_agent_with_priority_tool(mock_settings):
+    with patch("runestone.agents.specialists.memory_keeper.build_chat_model", return_value=MagicMock()):
+        with patch("runestone.agents.specialists.memory_keeper.create_agent") as create_agent_mock:
+            MemoryKeeperSpecialist(mock_settings)
+
+    tool_names = [tool.name for tool in create_agent_mock.call_args.kwargs["tools"]]
+    assert tool_names == [
+        "read_memory",
+        "upsert_memory_item",
+        "update_memory_status",
+        "update_memory_priority",
+    ]

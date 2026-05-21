@@ -137,6 +137,18 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "Never invent, guess, reconstruct, or reuse grammar source URLs" in call_kwargs["system_prompt"]
             assert f"top_k=1..{MAX_TEACHER_GRAMMAR_SOURCE_LINKS}" in call_kwargs["system_prompt"]
             assert "copied\n  verbatim from the latest `search_grammar` results" in call_kwargs["system_prompt"]
+            assert "Only after identifying a concrete grammar error in the student's current message." in (
+                call_kwargs["system_prompt"]
+            )
+            assert "NEVER search for greetings, casual chat, or error-free messages." in (call_kwargs["system_prompt"])
+            assert "Maximum 3 `search_grammar` calls per reply." in call_kwargs["system_prompt"]
+            assert "Maximum 9 `read_grammar_page` calls per reply." in call_kwargs["system_prompt"]
+            assert "If results feel off-topic after 2 attempts, stop and proceed without grammar links." in (
+                call_kwargs["system_prompt"]
+            )
+            assert "skip the grammar tool entirely and set `grammar_source_urls` to `[]`." in (
+                call_kwargs["system_prompt"]
+            )
             assert "If you did not call `search_grammar` in this turn" in call_kwargs["system_prompt"]
             assert "keep `grammar_source_urls` empty" in call_kwargs["system_prompt"]
 

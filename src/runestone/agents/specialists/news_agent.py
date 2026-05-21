@@ -4,14 +4,17 @@ Pre-response specialist that handles topical news retrieval with agent-owned too
 
 import json
 import logging
-from typing import Any
 
 from langchain.agents import create_agent
-from langchain_core.messages import AIMessage, HumanMessage
-from pydantic import ValidationError
+from langchain_core.messages import HumanMessage
 
 from runestone.agents.llm import build_chat_model
-from runestone.agents.specialists.base import BaseSpecialist, SpecialistContext, SpecialistResult
+from runestone.agents.specialists.base import (
+    BaseSpecialist,
+    SpecialistContext,
+    SpecialistResult,
+    parse_specialist_result,
+)
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.news import search_news_with_dates
 from runestone.agents.tools.read_url import read_url
@@ -85,10 +88,12 @@ If no action is needed, return an empty `results` and `sources` list.
 class NewsAgentSpecialist(BaseSpecialist):
     """Tool-using pre-response specialist for topic-based news retrieval."""
 
+    MODEL_TIMEOUT_SECONDS = 10.0
+
     def __init__(self, settings: Settings):
         super().__init__(name="news_agent")
         self.settings = settings
-        self.model = build_chat_model(settings, "news_agent")
+        self.model = build_chat_model(settings, "news_agent", timeout_seconds=self.MODEL_TIMEOUT_SECONDS)
         self.agent = self._build_agent()
         logger.info(
             "[agents:news] Initialized NewsAgentSpecialist with provider=%s, model=%s",
@@ -102,6 +107,7 @@ class NewsAgentSpecialist(BaseSpecialist):
             model=self.model,
             tools=[search_news_with_dates, read_url],
             system_prompt=NEWS_AGENT_SYSTEM_PROMPT,
+            response_format=SpecialistResult,
             context_schema=AgentContext,
         )
 
@@ -127,7 +133,7 @@ class NewsAgentSpecialist(BaseSpecialist):
                 artifacts={"topic": "", "query": "", "timelimit": "m", "results": [], "sources": []},
             )
 
-        parsed = self._parse_result(result.get("messages", []))
+        parsed = parse_specialist_result(result)
         if parsed is None:
             logger.warning("[agents:news] Failed to parse final agent result")
             return SpecialistResult(
@@ -137,24 +143,3 @@ class NewsAgentSpecialist(BaseSpecialist):
                 artifacts={"topic": "", "query": "", "timelimit": "m", "results": [], "sources": []},
             )
         return parsed
-
-    @staticmethod
-    def _parse_result(messages: list[Any]) -> SpecialistResult | None:
-        for message in reversed(messages):
-            if not isinstance(message, AIMessage):
-                continue
-            if getattr(message, "tool_calls", None):
-                continue
-            content = message.content
-            if not isinstance(content, str) or not content.strip():
-                continue
-            json_content = content.strip()
-            start = json_content.find("{")
-            end = json_content.rfind("}")
-            if start != -1 and end != -1 and end >= start:
-                json_content = json_content[start : end + 1]
-            try:
-                return SpecialistResult.model_validate_json(json_content)
-            except (ValidationError, ValueError):
-                continue
-        return None

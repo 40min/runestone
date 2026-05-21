@@ -7,7 +7,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
-from runestone.agents.llm import build_chat_model
+from runestone.agents.llm import (
+    DEFAULT_AGENT_LLM_TIMEOUT_SECONDS,
+    DEFAULT_AGENT_MAX_RETRIES,
+    GEMINI_MIN_TIMEOUT_SECONDS,
+    build_chat_model,
+)
 from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
 
 
@@ -38,6 +43,8 @@ def test_build_chat_model_openrouter(mock_settings):
         assert call_kwargs["api_key"] == SecretStr("test-openrouter-key")
         assert call_kwargs["base_url"] == "https://openrouter.ai/api/v1"
         assert call_kwargs["temperature"] == 0.3
+        assert call_kwargs["timeout"] == DEFAULT_AGENT_LLM_TIMEOUT_SECONDS
+        assert call_kwargs["max_retries"] == DEFAULT_AGENT_MAX_RETRIES
         assert "extra_body" not in call_kwargs
         mock_settings.get_agent_llm_settings.assert_called_once_with("teacher")
 
@@ -60,6 +67,8 @@ def test_build_chat_model_openai(mock_settings):
         assert call_kwargs["api_key"] == SecretStr("test-openai-key")
         assert call_kwargs.get("base_url") is None
         assert call_kwargs["temperature"] == 0.1
+        assert call_kwargs["timeout"] == DEFAULT_AGENT_LLM_TIMEOUT_SECONDS
+        assert call_kwargs["max_retries"] == DEFAULT_AGENT_MAX_RETRIES
 
 
 def test_build_chat_model_gemini(mock_settings):
@@ -79,6 +88,9 @@ def test_build_chat_model_gemini(mock_settings):
         assert call_kwargs["model"] == "gemini-2.5-flash"
         assert call_kwargs["api_key"] == SecretStr("test-gemini-key")
         assert call_kwargs["temperature"] == 0.2
+        assert call_kwargs["timeout"] == DEFAULT_AGENT_LLM_TIMEOUT_SECONDS
+        assert call_kwargs["max_retries"] == DEFAULT_AGENT_MAX_RETRIES
+        assert call_kwargs["disable_streaming"] == "tool_calling"
         assert "thinking_level" not in call_kwargs
 
 
@@ -145,6 +157,47 @@ def test_build_chat_model_supports_news_agent(mock_settings):
         build_chat_model(mock_settings, "news_agent")
 
     mock_settings.get_agent_llm_settings.assert_called_once_with("news_agent")
+
+
+def test_build_chat_model_supports_memory_maintainer(mock_settings):
+    """Test memory_maintainer uses the standard per-agent config path."""
+    with patch("runestone.agents.llm.ChatOpenAI"):
+        build_chat_model(mock_settings, "memory_maintainer")
+
+    mock_settings.get_agent_llm_settings.assert_called_once_with("memory_maintainer")
+
+
+def test_build_chat_model_allows_timeout_override(mock_settings):
+    """Test build_chat_model allows callers to override the default timeout."""
+    mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+        provider="openai",
+        model="gpt-4o-mini",
+        temperature=0.2,
+        reasoning_level=ReasoningLevel.NONE,
+    )
+
+    with patch("runestone.agents.llm.ChatOpenAI") as mock_chat_openai:
+        build_chat_model(mock_settings, "teacher", timeout_seconds=3.0)
+
+        call_kwargs = mock_chat_openai.call_args[1]
+        assert call_kwargs["timeout"] == 3.0
+        assert call_kwargs["max_retries"] == DEFAULT_AGENT_MAX_RETRIES
+
+
+def test_build_chat_model_clamps_gemini_timeout_to_provider_minimum(mock_settings):
+    """Test Gemini timeouts are clamped to the provider minimum deadline."""
+    mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+        provider="gemini",
+        model="gemini-2.5-flash",
+        temperature=0.2,
+        reasoning_level=ReasoningLevel.NONE,
+    )
+
+    with patch("runestone.agents.llm.ChatGoogleGenerativeAI") as mock_chat_gemini:
+        build_chat_model(mock_settings, "teacher", timeout_seconds=3.0)
+
+        call_kwargs = mock_chat_gemini.call_args[1]
+        assert call_kwargs["timeout"] == GEMINI_MIN_TIMEOUT_SECONDS
 
 
 def test_build_chat_model_unsupported_provider(mock_settings):
