@@ -2,6 +2,7 @@
 Tests for the CLI module.
 """
 
+import os
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -324,6 +325,60 @@ class TestCLI:
 
             assert result.exit_code == 0
             assert mock_settings.gemini_api_key == self.api_key
+
+    @patch("runestone.cli.settings")
+    @patch("runestone.cli.build_service_llm_model")
+    @patch("runestone.cli.ContentAnalyzer")
+    @patch("runestone.cli.OCRProcessor")
+    @patch("runestone.cli.RunestoneProcessor")
+    def test_process_command_uses_dedicated_ocr_provider_when_configured(
+        self, mock_processor_class, mock_ocr_class, mock_analyzer_class, mock_build_model, mock_settings
+    ):
+        """Process should build a separate OCR model when OCR provider overrides are configured."""
+        mock_settings.llm_provider = "gemini"
+        mock_settings.openai_api_key = None
+        mock_settings.gemini_api_key = "env-gemini-key"
+        mock_settings.openrouter_api_key = "env-openrouter-key"
+        mock_settings.ocr_llm_provider = "openrouter"
+        mock_settings.ocr_llm_model_name = "amazon/nova-lite-v1"
+        mock_settings.verbose = False
+
+        mock_llm_model = Mock(name="service_llm")
+        mock_ocr_llm_model = Mock(name="ocr_llm")
+        mock_build_model.side_effect = [mock_llm_model, mock_ocr_llm_model]
+
+        with self.runner.isolated_filesystem():
+            Path(self.test_image_path).touch()
+
+            mock_processor = AsyncMock()
+            mock_results = {
+                "ocr_result": {"text": "Test text", "character_count": 9},
+                "analysis": {"grammar_focus": {}, "vocabulary": []},
+                "resources": [],
+            }
+            mock_processor.process_image.return_value = mock_results
+            mock_processor_class.return_value = mock_processor
+
+            with patch.dict(os.environ, {}, clear=True):
+                result = self.runner.invoke(cli, ["process", self.test_image_path, "--provider", "gemini"])
+
+            assert result.exit_code == 0
+            assert mock_build_model.call_count == 2
+            first_call_kwargs = mock_build_model.call_args_list[0].kwargs
+            second_call_kwargs = mock_build_model.call_args_list[1].kwargs
+
+            assert first_call_kwargs == {
+                "settings": mock_settings,
+                "provider": "gemini",
+                "model_name": None,
+            }
+            assert second_call_kwargs == {
+                "settings": mock_settings,
+                "provider": "openrouter",
+                "model_name": "amazon/nova-lite-v1",
+            }
+            mock_ocr_class.assert_called_once_with(mock_settings, mock_ocr_llm_model)
+            mock_analyzer_class.assert_called_once_with(mock_settings, mock_llm_model)
 
     def test_load_vocab_command_help(self):
         """Test load_vocab command help message."""
