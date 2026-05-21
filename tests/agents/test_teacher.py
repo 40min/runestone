@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langgraph.errors import GraphRecursionError
 
 from runestone.agents.schemas import ChatMessage, TeacherOutput, TeacherSideEffect
 from runestone.agents.specialists.base import INFO_FOR_TEACHER_MAX_CHARS
@@ -610,6 +611,43 @@ async def test_generate_response_passes_recursion_limit(teacher_agent, mock_user
     call_kwargs = teacher_agent.agent.ainvoke.call_args[1]
     assert "config" in call_kwargs
     assert call_kwargs["config"] == {"recursion_limit": teacher_agent.RECURSION_LIMIT}
+
+
+@pytest.mark.anyio
+async def test_generate_response_retries_after_tool_limit_termination(teacher_agent, mock_user):
+    teacher_agent.agent.ainvoke.return_value = {
+        "messages": [AIMessage(content="'search_grammar' tool call limit reached: run limit exceeded (3/2 calls).")]
+    }
+    fallback_agent = AsyncMock()
+    fallback_agent.ainvoke.return_value = {
+        "messages": [AIMessage(content="Här är en tydlig förklaring utan fler länkar.")]
+    }
+    teacher_agent._get_tool_limit_fallback_agent = MagicMock(return_value=fallback_agent)
+
+    generated = await teacher_agent.generate_response(
+        message="Explain V2 and en/ett quickly", history=[], user=mock_user
+    )
+
+    assert generated.message == "Här är en tydlig förklaring utan fler länkar."
+    fallback_agent.ainvoke.assert_called_once()
+    fallback_messages = fallback_agent.ainvoke.call_args[0][0]["messages"]
+    assert any(
+        isinstance(msg, SystemMessage) and teacher_agent.TOOL_LIMIT_FALLBACK_NOTE in msg.content
+        for msg in fallback_messages
+    )
+
+
+@pytest.mark.anyio
+async def test_generate_response_retries_after_graph_recursion_error(teacher_agent, mock_user):
+    teacher_agent.agent.ainvoke.side_effect = GraphRecursionError("limit reached")
+    fallback_agent = AsyncMock()
+    fallback_agent.ainvoke.return_value = {"messages": [AIMessage(content="Vi fortsätter utan fler verktygskall.")]}
+    teacher_agent._get_tool_limit_fallback_agent = MagicMock(return_value=fallback_agent)
+
+    generated = await teacher_agent.generate_response(message="Help me with noun gender", history=[], user=mock_user)
+
+    assert generated.message == "Vi fortsätter utan fler verktygskall."
+    fallback_agent.ainvoke.assert_called_once()
 
 
 def test_openai_provider_configuration(mock_settings):

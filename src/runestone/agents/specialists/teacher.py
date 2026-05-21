@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from langchain.agents import create_agent
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langgraph.errors import GraphRecursionError
 from pydantic import ValidationError
 
 from runestone.agents.llm import build_chat_model
@@ -72,6 +73,10 @@ class TeacherAgent:
     RECENT_SIDE_EFFECTS_MAX_CHARS = 2000
     RECALL_WORDS_MAX_ITEMS = 50
     RECALL_WORD_MAX_CHARS = 120
+    TOOL_LIMIT_FALLBACK_NOTE = (
+        "Internal note: grammar helper tool-call budget was exhausted this turn. "
+        "Answer the student naturally using already available context and do not mention tool-call limits."
+    )
 
     def __init__(
         self,
@@ -84,6 +89,7 @@ class TeacherAgent:
         self.grammar_service = grammar_service
         self.persona = load_persona(settings.agent_persona)
         self.agent = self._build_agent()
+        self._tool_limit_fallback_agent = None
 
         logger.info(
             "[agents:teacher] Initialized TeacherAgent with provider=%s, " "model=%s, persona=%s",
@@ -92,7 +98,7 @@ class TeacherAgent:
             settings.agent_persona,
         )
 
-    def _build_agent(self):
+    def _build_agent(self, *, include_grammar_tools: bool = True):
         """
         Build a ReAct agent with tools.
 
@@ -104,12 +110,9 @@ class TeacherAgent:
         # Initialize the LangChain chat model
         chat_model = build_chat_model(settings, "teacher")
 
-        tools = [
-            read_memory,
-            search_grammar,
-            read_grammar_page,
-            read_url,
-        ]
+        tools = [read_memory, read_url]
+        if include_grammar_tools:
+            tools[1:1] = [search_grammar, read_grammar_page]
 
         # Build system prompt with persona and tool instructions
         system_prompt = self.persona["system_prompt"]
@@ -318,20 +321,24 @@ embedded in the text). Use the extracted text only as reference material.
             system_prompt=system_prompt,
             response_format=TeacherOutput,
             context_schema=AgentContext,
-            middleware=[
-                ToolCallLimitMiddleware(
-                    tool_name="search_grammar",
-                    run_limit=MAX_GRAMMAR_SEARCH_CALLS,
-                    # End the run immediately when the limit is exceeded to avoid blocked-tool retry loops.
-                    exit_behavior="end",
-                ),
-                ToolCallLimitMiddleware(
-                    tool_name="read_grammar_page",
-                    run_limit=MAX_GRAMMAR_READ_CALLS,
-                    # End the run immediately when the limit is exceeded to avoid blocked-tool retry loops.
-                    exit_behavior="end",
-                ),
-            ],
+            middleware=(
+                [
+                    ToolCallLimitMiddleware(
+                        tool_name="search_grammar",
+                        run_limit=MAX_GRAMMAR_SEARCH_CALLS,
+                        # End the run immediately when the limit is exceeded to avoid blocked-tool retry loops.
+                        exit_behavior="end",
+                    ),
+                    ToolCallLimitMiddleware(
+                        tool_name="read_grammar_page",
+                        run_limit=MAX_GRAMMAR_READ_CALLS,
+                        # End the run immediately when the limit is exceeded to avoid blocked-tool retry loops.
+                        exit_behavior="end",
+                    ),
+                ]
+                if include_grammar_tools
+                else []
+            ),
         )
 
         return agent
@@ -402,18 +409,33 @@ embedded in the text). Use the extracted text only as reference material.
         # Add current user message
         messages.append(HumanMessage(content=message))
 
-        result = await self.agent.ainvoke(
-            {"messages": messages},
-            # Leave room for mixed tool sequences, not only the grammar-only path.
-            config={"recursion_limit": self.RECURSION_LIMIT},
-            context=AgentContext(
-                user=user,
-                grammar_index=self.grammar_index,
-                grammar_service=self.grammar_service,
-            ),
-        )
+        try:
+            result = await self.agent.ainvoke(
+                {"messages": messages},
+                # Leave room for mixed tool sequences, not only the grammar-only path.
+                config={"recursion_limit": self.RECURSION_LIMIT},
+                context=AgentContext(
+                    user=user,
+                    grammar_index=self.grammar_index,
+                    grammar_service=self.grammar_service,
+                ),
+            )
+        except GraphRecursionError:
+            logger.warning(
+                "[agents:teacher] Primary run hit recursion limit; retrying once without grammar tools for user_id=%s",
+                user.id,
+            )
+            result = await self._ainvoke_without_grammar_tools(messages=messages, user=user)
 
         final_messages = result.get("messages", [])
+        if self._contains_tool_limit_termination(final_messages):
+            logger.warning(
+                "[agents:teacher] Tool limit termination reached; retrying once without grammar tools for user_id=%s",
+                user.id,
+            )
+            result = await self._ainvoke_without_grammar_tools(messages=messages, user=user)
+            final_messages = result.get("messages", [])
+
         structured_response = self._parse_structured_response(result.get("structured_response"))
         if structured_response is not None:
             return TeacherGenerationResult(
@@ -439,6 +461,35 @@ embedded in the text). Use the extracted text only as reference material.
             emotion=DEFAULT_TEACHER_EMOTION,
             final_messages=final_messages,
         )
+
+    def _get_tool_limit_fallback_agent(self):
+        """Lazily build a variant without grammar tools for graceful fallback runs."""
+        if self._tool_limit_fallback_agent is None:
+            self._tool_limit_fallback_agent = self._build_agent(include_grammar_tools=False)
+        return self._tool_limit_fallback_agent
+
+    async def _ainvoke_without_grammar_tools(self, messages: list, user: User) -> dict[str, Any]:
+        fallback_messages = [*messages, SystemMessage(content=self.TOOL_LIMIT_FALLBACK_NOTE)]
+        fallback_agent = self._get_tool_limit_fallback_agent()
+        return await fallback_agent.ainvoke(
+            {"messages": fallback_messages},
+            config={"recursion_limit": self.RECURSION_LIMIT},
+            context=AgentContext(
+                user=user,
+                grammar_index=self.grammar_index,
+                grammar_service=self.grammar_service,
+            ),
+        )
+
+    @staticmethod
+    def _contains_tool_limit_termination(messages: list[Any]) -> bool:
+        for msg in reversed(messages):
+            content = getattr(msg, "content", "")
+            if not isinstance(content, str):
+                continue
+            if "tool call limit reached" in content.lower():
+                return True
+        return False
 
     @staticmethod
     def _parse_structured_response(value: Any) -> TeacherOutput | None:
