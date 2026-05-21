@@ -1,3 +1,4 @@
+import json
 from abc import ABC, abstractmethod
 from typing import Annotated, Any, Literal
 
@@ -105,10 +106,17 @@ def parse_specialist_result(payload: dict[str, Any]) -> SpecialistResult | None:
 
 
 def _extract_json_object(content: str) -> str | None:
-    """Trim fenced or mixed-content agent output down to the JSON object payload."""
+    """Return the first valid JSON object embedded in mixed model output."""
     stripped = content.strip()
-    start = stripped.find("{")
-    end = stripped.rfind("}")
-    if start == -1 or end == -1 or end < start:
-        return None
-    return stripped[start : end + 1]
+    decoder = json.JSONDecoder()
+
+    for start, char in enumerate(stripped):
+        if char != "{":
+            continue
+        try:
+            parsed, end = decoder.raw_decode(stripped[start:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return stripped[start : start + end]
+    return None
