@@ -1,5 +1,6 @@
 export { default as CustomButton } from './CustomButton';
 export { default as ContentCard } from './ContentCard';
+export { default as SurfaceCard } from './SurfaceCard';
 export { default as LoadingSpinner } from './LoadingSpinner';
 export { default as ErrorAlert } from './ErrorAlert';
 export { default as SectionTitle } from './SectionTitle';
@@ -10,6 +11,11 @@ export { default as SearchInput } from './SearchInput';
 export { default as MarkdownDisplay } from './MarkdownDisplay';
 export { default as Snackbar } from './Snackbar';
 export { default as ImageUploadButton } from './ImageUploadButton';
+export {
+  analyzerShellGradients,
+  analyzerSurfaceCardSx,
+  buildAnalyzerShellSx,
+} from './analyzerStyles';
 export { ChatMessageBubble } from './ChatMessageBubble';
 export { ChatEmptyState } from './ChatEmptyState';
 export { ChatLoadingIndicator } from './ChatLoadingIndicator';

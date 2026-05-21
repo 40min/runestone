@@ -13,7 +13,34 @@ import {
   RefreshCw,
   Replace,
 } from "lucide-react";
-import { CustomButton } from "./ui";
+import {
+  CustomButton,
+  analyzerShellGradients,
+  buildAnalyzerShellSx,
+} from "./ui";
+
+interface DimmedContentProps {
+  children: React.ReactNode;
+  isDimmed: boolean;
+  sx?: React.ComponentProps<typeof Box>["sx"];
+}
+
+const DimmedContent: React.FC<DimmedContentProps> = ({
+  children,
+  isDimmed,
+  sx,
+}) => (
+  <Box
+    sx={{
+      filter: isDimmed ? "blur(1.5px)" : "none",
+      opacity: isDimmed ? 0.45 : 1,
+      transition: "filter 0.2s ease, opacity 0.2s ease",
+      ...(sx || {}),
+    }}
+  >
+    {children}
+  </Box>
+);
 
 interface FileUploadProps {
   onFileSelect: (file: File) => void;
@@ -106,19 +133,25 @@ const FileUpload: React.FC<FileUploadProps> = ({
     return (
       <Box
         sx={{
-          borderRadius: "0.75rem",
-          border: "1px solid rgba(99, 114, 173, 0.35)",
-          background:
-            "radial-gradient(circle at 8% 8%, rgba(38, 49, 113, 0.42), rgba(7, 12, 44, 0.96))",
-          p: 2,
+          position: "relative",
+          p: { xs: 2, md: 2.25 },
+          overflow: "hidden",
+          ...buildAnalyzerShellSx(analyzerShellGradients.uploadCompact),
         }}
       >
-        <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+        <DimmedContent
+          isDimmed={isProcessing}
+          sx={{
+            display: "flex",
+            gap: 1.5,
+            alignItems: "center",
+          }}
+        >
           <Box
             sx={{
-              width: 92,
-              height: 92,
-              borderRadius: "0.5rem",
+              width: 98,
+              height: 98,
+              borderRadius: "0.9rem",
               border: "1px solid rgba(140, 160, 220, 0.35)",
               overflow: "hidden",
               flexShrink: 0,
@@ -142,8 +175,9 @@ const FileUpload: React.FC<FileUploadProps> = ({
             <Typography
               sx={{
                 color: "#f0f4ff",
-                fontWeight: 700,
-                lineHeight: 1.3,
+                fontWeight: 800,
+                lineHeight: 1.25,
+                fontSize: "1rem",
                 wordBreak: "break-word",
               }}
             >
@@ -153,9 +187,14 @@ const FileUpload: React.FC<FileUploadProps> = ({
               {selectedFile ? "Uploaded" : "Upload a textbook page"}
             </Typography>
           </Box>
-        </Box>
+        </DimmedContent>
 
-        <Box sx={{ mt: 2 }}>
+        <DimmedContent
+          isDimmed={isProcessing}
+          sx={{
+            mt: 2.25,
+          }}
+        >
           <Typography sx={{ color: "#9fb0de", mb: 0.75, fontSize: "0.85rem" }}>
             Analysis mode
           </Typography>
@@ -181,9 +220,16 @@ const FileUpload: React.FC<FileUploadProps> = ({
               <MenuItem value="ocr">OCR only</MenuItem>
             </Select>
           </FormControl>
-        </Box>
+        </DimmedContent>
 
-        <Box sx={{ mt: 2, display: "flex", gap: 1.5 }}>
+        <DimmedContent
+          isDimmed={isProcessing}
+          sx={{
+            mt: 2,
+            display: "flex",
+            gap: 1.5,
+          }}
+        >
           <CustomButton
             variant="secondary"
             onClick={triggerFilePicker}
@@ -191,9 +237,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
             startIcon={<Replace size={16} />}
             sx={{
               flex: 1,
+              minHeight: "3.6rem",
               color: "#d8e2ff",
               border: "1px solid rgba(127, 148, 205, 0.6)",
-              borderRadius: "0.5rem",
+              borderRadius: "0.85rem",
               "&:hover": {
                 backgroundColor: "rgba(65, 84, 142, 0.22)",
               },
@@ -205,11 +252,25 @@ const FileUpload: React.FC<FileUploadProps> = ({
             onClick={triggerReanalyze}
             disabled={isProcessing || !selectedFile}
             startIcon={<RefreshCw size={16} />}
-            sx={{ flex: 1 }}
+            sx={{ flex: 1, minHeight: "3.6rem", borderRadius: "0.85rem" }}
           >
             Re-analyze
           </CustomButton>
-        </Box>
+        </DimmedContent>
+
+        {isProcessing && (
+          <Box
+            data-testid="compact-processing-overlay"
+            sx={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(180deg, rgba(9, 14, 48, 0.18), rgba(9, 14, 48, 0.52))",
+              backdropFilter: "blur(6px)",
+              pointerEvents: "auto",
+            }}
+          />
+        )}
 
         <input
           ref={fileInputRef}
@@ -226,17 +287,14 @@ const FileUpload: React.FC<FileUploadProps> = ({
   return (
     <Box
       sx={{
-        borderRadius: "0.75rem",
-        border: "1px solid rgba(99, 114, 173, 0.35)",
-        background:
-          "radial-gradient(circle at 10% 8%, rgba(35, 50, 116, 0.38), rgba(7, 11, 39, 0.96))",
         p: { xs: 2, sm: 3 },
+        ...buildAnalyzerShellSx(analyzerShellGradients.uploadFull),
       }}
     >
       <Box
         sx={{
           border: "1px dashed rgba(111, 133, 192, 0.48)",
-          borderRadius: "0.75rem",
+          borderRadius: "1rem",
           px: 2.5,
           py: 4,
           textAlign: "center",
@@ -294,8 +352,9 @@ const FileUpload: React.FC<FileUploadProps> = ({
           sx={{
             mt: 2,
             minWidth: 150,
-            height: "2.8rem",
+            height: "3rem",
             fontSize: "1rem",
+            borderRadius: "0.85rem",
           }}
         >
           Choose File
@@ -339,7 +398,13 @@ const FileUpload: React.FC<FileUploadProps> = ({
         disabled={isProcessing || !selectedFile}
         startIcon={<RefreshCw size={16} />}
         fullWidth
-        sx={{ mt: 2, height: "2.9rem", fontSize: "1.05rem", fontWeight: 600 }}
+        sx={{
+          mt: 2,
+          height: "3.1rem",
+          fontSize: "1.05rem",
+          fontWeight: 700,
+          borderRadius: "0.85rem",
+        }}
       >
         Analyze Page
       </CustomButton>

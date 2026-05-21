@@ -58,6 +58,19 @@ describe('FileUpload', () => {
     expect(input).toBeDisabled();
   });
 
+  it('shows a compact processing overlay while working', () => {
+    render(
+      <FileUpload
+        onFileSelect={mockOnFileSelect}
+        isProcessing={true}
+        compact
+        selectedFileOverride={new File(['test'], 'test.jpg', { type: 'image/jpeg' })}
+      />
+    );
+
+    expect(screen.getByTestId('compact-processing-overlay')).toBeInTheDocument();
+  });
+
   it('shows file preview when file is selected', async () => {
     render(<FileUpload onFileSelect={mockOnFileSelect} isProcessing={false} />);
 
