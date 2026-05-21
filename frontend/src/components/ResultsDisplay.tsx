@@ -67,11 +67,13 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   isAnalyzeOcrDisabled = false,
   analyzeOcrButtonIcon,
 }) => {
-  const availableTabs = [
-    ocrResult && "ocr",
-    analysisResult && "grammar",
-    analysisResult && "vocabulary",
-  ].filter(Boolean) as string[];
+  const availableTabs = useMemo(
+    () =>
+      [ocrResult && "ocr", analysisResult && "grammar", analysisResult && "vocabulary"].filter(
+        Boolean
+      ) as string[],
+    [ocrResult, analysisResult]
+  );
   const [activeTab, setActiveTab] = useState(availableTabs[0] || "ocr");
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
@@ -93,10 +95,12 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   >([]);
 
   useEffect(() => {
-    if (availableTabs.length > 0 && !availableTabs.includes(activeTab)) {
-      setActiveTab(availableTabs[0]);
+    if (availableTabs.length > 0) {
+      setActiveTab((currentTab) =>
+        availableTabs.includes(currentTab) ? currentTab : availableTabs[0]
+      );
     }
-  }, [activeTab, availableTabs]);
+  }, [availableTabs]);
 
   useEffect(() => {
     if (analysisResult?.vocabulary) {
@@ -119,6 +123,10 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   const filteredVocabulary = useMemo(
     () => enrichedVocabulary.filter((item) => !hideKnown || !item.known),
     [enrichedVocabulary, hideKnown]
+  );
+  const renderedOcrHtml = useMemo(
+    () => parseMarkdown(ocrResult?.text ?? ""),
+    [ocrResult?.text]
   );
 
   if (!ocrResult && !analysisResult && !isProcessing) {
@@ -510,7 +518,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                 sx={{ color: "white" }}
                 className="markdown-content"
                 dangerouslySetInnerHTML={{
-                  __html: parseMarkdown(ocrResult.text),
+                  __html: renderedOcrHtml,
                 }}
               />
             </SurfaceCard>
