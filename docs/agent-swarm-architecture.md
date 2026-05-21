@@ -381,6 +381,16 @@ flowchart TD
     G --> C
 ```
 
+#### Runaway Tool-Use Prevention (Recursion Limits)
+
+To prevent infinite ReAct/LangGraph loop executions (particularly when using highly responsive, direct LLM providers like Gemini that bypass typical slow proxy layers), every specialist agent is configured with a strict `recursion_limit` on every `ainvoke` invocation.
+
+The limits are adjusted based on each specialist's responsibilities:
+- **TeacherAgent**: **16** steps (highly constrained to prevent runaway grammar lookup loops)
+- **MemoryKeeper**: **50** steps (supports multiple read/write actions for memory items)
+- **NewsAgent**: **10** steps (conservatively bounded search and read sequence)
+- **MemoryMaintainer**: **250** steps (allows scanning and merging up to 100 memory items at session start)
+
 ### Observability
 
 Prefix conventions:

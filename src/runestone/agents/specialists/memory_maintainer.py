@@ -205,6 +205,7 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
             try:
                 result = await self.agent.ainvoke(
                     {"messages": [HumanMessage(content=prompt)]},
+                    config={"recursion_limit": 250},
                     context=AgentContext(user=context.user),
                 )
             except Exception as exc:

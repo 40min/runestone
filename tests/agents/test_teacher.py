@@ -133,23 +133,24 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "grammar_source_urls" in call_kwargs["system_prompt"]
             assert f"at most {MAX_TEACHER_GRAMMAR_SOURCE_LINKS}" in call_kwargs["system_prompt"]
             assert "grammar material URLs" in call_kwargs["system_prompt"]
-            assert "only exact `url` values returned by the `search_grammar` tool" in call_kwargs["system_prompt"]
-            assert "Never invent, guess, reconstruct, or reuse grammar source URLs" in call_kwargs["system_prompt"]
+            assert (
+                "Only include exact `url` values returned by `search_grammar` in THIS turn."
+                in call_kwargs["system_prompt"]
+            )
+            assert "Never invent, guess, or reuse URLs" in call_kwargs["system_prompt"]
             assert f"top_k=1..{MAX_TEACHER_GRAMMAR_SOURCE_LINKS}" in call_kwargs["system_prompt"]
-            assert "copied\n  verbatim from the latest `search_grammar` results" in call_kwargs["system_prompt"]
-            assert "Only after identifying a concrete grammar error in the student's current message." in (
-                call_kwargs["system_prompt"]
-            )
-            assert "NEVER search for greetings, casual chat, or error-free messages." in (call_kwargs["system_prompt"])
+            assert "Does the student's message contain a concrete grammar error?" in (call_kwargs["system_prompt"])
+            assert "Did the student explicitly ask a grammar question?" in (call_kwargs["system_prompt"])
             assert "Maximum 3 `search_grammar` calls per reply." in call_kwargs["system_prompt"]
-            assert "Maximum 9 `read_grammar_page` calls per reply." in call_kwargs["system_prompt"]
-            assert "If results feel off-topic after 2 attempts, stop and proceed without grammar links." in (
+            assert "Maximum 3 `read_grammar_page` calls per reply." in call_kwargs["system_prompt"]
+            assert "If the first 2 searches return off-topic results, STOP searching." in (call_kwargs["system_prompt"])
+            assert "Do NOT call `search_grammar`. Set `grammar_source_urls` to `[]` and move on." in (
                 call_kwargs["system_prompt"]
             )
-            assert "skip the grammar tool entirely and set `grammar_source_urls` to `[]`." in (
-                call_kwargs["system_prompt"]
+            assert (
+                "If results are off-topic or you did not search, keep `grammar_source_urls` empty."
+                in call_kwargs["system_prompt"]
             )
-            assert "If you did not call `search_grammar` in this turn" in call_kwargs["system_prompt"]
             assert "keep `grammar_source_urls` empty" in call_kwargs["system_prompt"]
 
 
@@ -579,6 +580,23 @@ async def test_generate_response_prompt_matches_fixture(teacher_agent, mock_user
 
     assert actual_prompt == expected_prompt
     assert len(actual_prompt) > 0
+
+
+@pytest.mark.anyio
+async def test_generate_response_passes_recursion_limit(teacher_agent, mock_user):
+    """Test that recursion_limit is passed in the config dict to agent.ainvoke()."""
+    teacher_agent.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
+
+    await teacher_agent.generate_response(
+        message="Hello",
+        history=[],
+        user=mock_user,
+    )
+
+    teacher_agent.agent.ainvoke.assert_called_once()
+    call_kwargs = teacher_agent.agent.ainvoke.call_args[1]
+    assert "config" in call_kwargs
+    assert call_kwargs["config"] == {"recursion_limit": teacher_agent.RECURSION_LIMIT}
 
 
 def test_openai_provider_configuration(mock_settings):

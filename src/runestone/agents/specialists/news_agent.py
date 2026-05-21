@@ -122,6 +122,7 @@ class NewsAgentSpecialist(BaseSpecialist):
         try:
             result = await self.agent.ainvoke(
                 {"messages": [HumanMessage(content=json.dumps(payload, ensure_ascii=False))]},
+                config={"recursion_limit": 10},
                 context=AgentContext(user=context.user),
             )
         except Exception as exc:

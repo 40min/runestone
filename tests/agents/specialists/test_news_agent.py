@@ -212,3 +212,30 @@ async def test_news_agent_parses_json_with_prefixed_text(specialist, mock_user):
     )
 
     assert result.status == "no_action"
+
+
+@pytest.mark.anyio
+async def test_news_agent_passes_recursion_limit(specialist, mock_user):
+    specialist.agent.ainvoke.return_value = {
+        "messages": [
+            AIMessage(
+                content=(
+                    '{"status":"no_action","actions":[],"info_for_teacher":"",'
+                    '"artifacts":{"topic":"","query":"","timelimit":"m","results":[],"sources":[]}}'
+                )
+            )
+        ]
+    }
+
+    await specialist.run(
+        SpecialistContext(
+            message="Show me Swedish news about economy",
+            history=[],
+            user=mock_user,
+            routing_reason="known topic",
+        )
+    )
+
+    _, kwargs = specialist.agent.ainvoke.call_args
+    assert "config" in kwargs
+    assert kwargs["config"] == {"recursion_limit": 10}
