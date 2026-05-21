@@ -8,7 +8,6 @@ import {
   CircularProgress,
 } from "@mui/material";
 import type { AlertColor } from "@mui/material";
-import { ContentCopy } from "@mui/icons-material";
 import { ArrowRight, Copy, Save, Sparkles } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -427,7 +426,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
               <Typography
                 sx={{ color: "#edf4ff", fontWeight: 700, lineHeight: 1.25 }}
               >
-                Building grammar and vocabulary insights
+                {processingHeadline}
               </Typography>
               <Typography
                 sx={{ color: "#9fb0d9", fontSize: "0.94rem", mt: 0.35 }}
@@ -504,7 +503,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                   }}
                   title={copyButtonText}
                 >
-                  <ContentCopy />
+                  <Copy size={20} />
                 </IconButton>
               </Box>
             </Box>
@@ -747,9 +746,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                     <Box
                       key={row.id}
                       sx={{
-                        backgroundColor: "rgba(34, 44, 95, 0.74)",
-                        border: "1px solid rgba(106, 121, 181, 0.5)",
-                        borderRadius: "0.85rem",
+                        ...analyzerSurfaceCardSx,
                         p: 1.35,
                         display: "flex",
                         alignItems: "center",
