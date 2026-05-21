@@ -129,7 +129,7 @@ describe("ResultsDisplay", () => {
     const grammarTab = screen.getByText("Grammar");
     fireEvent.click(grammarTab);
 
-    expect(screen.getByText("Grammar Analysis")).toBeInTheDocument();
+    expect(screen.getByText("Grammar focus")).toBeInTheDocument();
     expect(screen.getByText("Topic:")).toBeInTheDocument();
     expect(
       screen.getByText(mockAnalysisResult.grammar_focus.topic)
@@ -157,7 +157,9 @@ describe("ResultsDisplay", () => {
     const vocabularyTab = screen.getByText("Vocabulary");
     fireEvent.click(vocabularyTab);
 
-    expect(screen.getByText("Vocabulary Analysis")).toBeInTheDocument();
+    expect(
+      screen.getByText("Select words to copy or save, then refine the list with the filters on the right.")
+    ).toBeInTheDocument();
     expect(screen.getByText("hej")).toBeInTheDocument();
     expect(screen.getByText("hello")).toBeInTheDocument();
     expect(screen.getByText("bra")).toBeInTheDocument();
@@ -1148,10 +1150,31 @@ describe("ResultsDisplay", () => {
         />
       );
 
-      // ProcessingStatus component should be rendered
-      // The actual text depends on ProcessingStatus implementation
-      // We just verify the component renders when isProcessing is true
-      expect(screen.queryByText("Analysis")).not.toBeInTheDocument();
+      expect(screen.getByText("Reading the textbook page")).toBeInTheDocument();
+    });
+
+    it("keeps an analyzing status visible after OCR completes but before analysis results arrive", () => {
+      render(
+        <ResultsDisplay
+          ocrResult={mockOcrResult}
+          analysisResult={null}
+          error={null}
+          saveVocabulary={vi.fn()}
+          processingStep="ANALYZING"
+          isProcessing={true}
+        />
+      );
+
+      expect(
+        screen.getByText("Building grammar and vocabulary insights")
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "OCR is ready. We are turning it into the final analysis now."
+        )
+      ).toBeInTheDocument();
+      expect(screen.getByText("Recognized text")).toBeInTheDocument();
+      expect(screen.getByText(mockOcrResult.text)).toBeInTheDocument();
     });
 
     it("does not show mobile tap-for-details helper text", () => {

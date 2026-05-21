@@ -1,10 +1,11 @@
 import React from 'react';
 import { Box } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material';
+import type { ResponsiveStyleValue } from '@mui/system';
 
 interface ContentCardProps {
   children: React.ReactNode;
-  padding?: number | string;
+  padding?: ResponsiveStyleValue<number | string>;
   backgroundColor?: string;
   borderRadius?: string;
   sx?: SxProps<Theme>;

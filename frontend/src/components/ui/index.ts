@@ -1,5 +1,6 @@
 export { default as CustomButton } from './CustomButton';
 export { default as ContentCard } from './ContentCard';
+export { default as SurfaceCard } from './SurfaceCard';
 export { default as LoadingSpinner } from './LoadingSpinner';
 export { default as ErrorAlert } from './ErrorAlert';
 export { default as SectionTitle } from './SectionTitle';

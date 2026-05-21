@@ -9,7 +9,6 @@ import Register from "./components/auth/Register";
 import Profile from "./components/auth/Profile";
 import useImageProcessing from "./hooks/useImageProcessing";
 import { useState, useEffect } from "react";
-import { CustomButton } from "./components/ui";
 import { BrainCircuit } from "lucide-react";
 import { Box } from "@mui/material";
 import { useAuth } from "./context/AuthContext";
@@ -136,7 +135,7 @@ function App() {
                 </div>
 
                 {!hasAnalyzerContent ? (
-                  <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+                  <div className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)] xl:gap-7">
                     <FileUpload
                       onFileSelect={handleFileSelect}
                       isProcessing={isProcessing}
@@ -150,21 +149,32 @@ function App() {
                         minHeight: "420px",
                         alignItems: "center",
                         justifyContent: "center",
-                        borderRadius: "0.75rem",
+                        borderRadius: "1rem",
                         border: "1px solid rgba(99, 114, 173, 0.35)",
                         background:
-                          "radial-gradient(circle at 20% 20%, rgba(32, 40, 95, 0.55), rgba(8, 11, 39, 0.94))",
+                          "radial-gradient(circle at 18% 16%, rgba(37, 48, 116, 0.52), rgba(7, 11, 41, 0.97))",
                         color: "#c2cee8",
                         textAlign: "center",
-                        px: 4,
+                        px: 5,
+                        position: "relative",
+                        overflow: "hidden",
+                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+                        "&::before": {
+                          content: '""',
+                          position: "absolute",
+                          inset: 0,
+                          background:
+                            "linear-gradient(135deg, rgba(124, 148, 224, 0.08), transparent 30%, transparent 70%, rgba(34, 223, 132, 0.05))",
+                          pointerEvents: "none",
+                        },
                       }}
                     >
-                      <div className="space-y-4">
-                        <div className="text-4xl text-slate-500">⌁</div>
+                      <div className="relative z-10 space-y-4">
+                        <div className="text-5xl text-slate-500">⌁</div>
                         <h3 className="text-4xl font-semibold text-slate-100">
                           No analysis yet
                         </h3>
-                        <p className="max-w-md text-lg text-slate-300">
+                        <p className="mx-auto max-w-md text-lg leading-8 text-slate-300">
                           Upload an image of a Swedish textbook page to get
                           started.
                         </p>
@@ -172,8 +182,8 @@ function App() {
                     </Box>
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-                    <div className="lg:w-[300px] lg:shrink-0">
+                  <div className="grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)] xl:gap-7">
+                    <div className="lg:sticky lg:top-24 lg:self-start">
                       <FileUpload
                         onFileSelect={handleFileSelect}
                         isProcessing={isProcessing}
@@ -183,18 +193,7 @@ function App() {
                         compact
                       />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      {recognizeOnly && ocrResult && !analysisResult && (
-                        <Box sx={{ mb: 2 }}>
-                          <CustomButton
-                            onClick={handleAnalyzeOcrText}
-                            disabled={isAnalyzeButtonDisabled}
-                            startIcon={<BrainCircuit size={16} />}
-                          >
-                            Analyze OCR Text
-                          </CustomButton>
-                        </Box>
-                      )}
+                    <div className="min-w-0">
                       <ResultsDisplay
                         ocrResult={ocrResult}
                         analysisResult={analysisResult}
@@ -203,6 +202,12 @@ function App() {
                         onVocabularyUpdated={onVocabularyUpdated}
                         processingStep={processingStep}
                         isProcessing={isProcessing}
+                        onAnalyzeOcrText={handleAnalyzeOcrText}
+                        showAnalyzeOcrAction={
+                          recognizeOnly && Boolean(ocrResult) && !analysisResult
+                        }
+                        isAnalyzeOcrDisabled={isAnalyzeButtonDisabled}
+                        analyzeOcrButtonIcon={<BrainCircuit size={16} />}
                       />
                     </div>
                   </div>
