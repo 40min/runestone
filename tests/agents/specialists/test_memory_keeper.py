@@ -232,3 +232,31 @@ def test_memory_keeper_builds_agent_with_priority_tool(mock_settings):
         "update_memory_status",
         "update_memory_priority",
     ]
+
+
+@pytest.mark.anyio
+async def test_memory_keeper_passes_recursion_limit(specialist, mock_user):
+    specialist.agent.ainvoke.return_value = {
+        "messages": [
+            AIMessage(
+                content=(
+                    '{"status":"no_action","actions":[],"info_for_teacher":"",'
+                    '"artifacts":{"trigger_source":"student","summary":"noop","notes":[]}}'
+                )
+            )
+        ]
+    }
+
+    await specialist.run(
+        SpecialistContext(
+            message="Forget my old goal.",
+            history=[],
+            user=mock_user,
+            teacher_response="Let's keep practicing.",
+            routing_reason="student asked to forget memory",
+        )
+    )
+
+    _, kwargs = specialist.agent.ainvoke.call_args
+    assert "config" in kwargs
+    assert kwargs["config"] == {"recursion_limit": 50}

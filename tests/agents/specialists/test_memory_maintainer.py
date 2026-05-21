@@ -269,6 +269,36 @@ def test_memory_maintainer_uses_dedicated_agent_settings(mock_settings):
 
 
 @pytest.mark.anyio
+async def test_memory_maintainer_passes_recursion_limit(specialist, mock_user):
+    specialist.agent.ainvoke.return_value = {
+        "messages": [
+            AIMessage(
+                content=(
+                    '{"status":"no_action","actions":[],'
+                    '"artifacts":{"maintenance_type":"chat_reset_memory_maintenance",'
+                    '"scope":{"category":"area_to_improve",'
+                    '"statuses":["struggling","improving"]},"reviewed_item_count":0,"merged_groups":[],'
+                    '"priority_updates":[],"summary":"noop","no_change_reason":"already clean"}}'
+                )
+            )
+        ]
+    }
+
+    await specialist.run(
+        SpecialistContext(
+            message="start_new_chat",
+            history=[],
+            user=mock_user,
+            routing_reason="new_chat_session_started",
+        )
+    )
+
+    _, kwargs = specialist.agent.ainvoke.call_args
+    assert "config" in kwargs
+    assert kwargs["config"] == {"recursion_limit": 250}
+
+
+@pytest.mark.anyio
 async def test_maintainer_delete_rejects_personal_info_item():
     user = SimpleNamespace(id=42)
     out_of_scope_item = SimpleNamespace(id=7, user_id=42, category="personal_info", status="active")
