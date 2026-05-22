@@ -2,7 +2,6 @@
 Tests for grammar reference tools.
 """
 
-import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -40,8 +39,7 @@ async def test_search_grammar_tool(mock_grammar_tools):
     )
     mock_index.search.return_value = [mock_doc]
 
-    result_json = await grammar_tools.search_grammar.coroutine(query="comparison", top_k=1, runtime=runtime)
-    result = json.loads(result_json)
+    result = await grammar_tools.search_grammar.coroutine(query="comparison", top_k=1, runtime=runtime)
 
     assert result["tool"] == "search_grammar"
     assert len(result["results"]) == 1
@@ -56,11 +54,11 @@ async def test_search_grammar_no_results(mock_grammar_tools):
     runtime, mock_index, _ = mock_grammar_tools
     mock_index.search.return_value = []
 
-    result_json = await grammar_tools.search_grammar.coroutine(query="nonexistent", top_k=3, runtime=runtime)
-    result = json.loads(result_json)
+    result = await grammar_tools.search_grammar.coroutine(query="nonexistent", top_k=3, runtime=runtime)
 
     assert result["tool"] == "search_grammar"
     assert result["results"] == []
+    assert "No matching grammar pages found" in result["note"]
 
 
 @pytest.mark.anyio

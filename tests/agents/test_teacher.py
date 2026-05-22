@@ -142,30 +142,29 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "Never write the emotion label" in call_kwargs["system_prompt"]
             assert "grammar_source_urls" in call_kwargs["system_prompt"]
             assert f"at most {MAX_TEACHER_GRAMMAR_SOURCE_LINKS}" in call_kwargs["system_prompt"]
-            assert "grammar material URLs" in call_kwargs["system_prompt"]
-            assert (
-                "Only include exact `url` values returned by `search_grammar` in THIS turn."
-                in call_kwargs["system_prompt"]
-            )
-            assert "Never invent, guess, or reuse URLs" in call_kwargs["system_prompt"]
-            assert f"top_k=1..{MAX_TEACHER_GRAMMAR_SOURCE_LINKS}" in call_kwargs["system_prompt"]
-            assert "Does the student's message contain a concrete grammar error?" in (call_kwargs["system_prompt"])
-            assert "Did the student explicitly ask a grammar question?" in (call_kwargs["system_prompt"])
-            assert "### GRAMMAR REFERENCE TOOL (search_grammar, read_grammar_page)" in call_kwargs["system_prompt"]
-            assert "### URL READING TOOL (read_url)" in call_kwargs["system_prompt"]
-            assert "### MEMORY PROTOCOL (read_memory)" in call_kwargs["system_prompt"]
-            assert "DECISION RULE — evaluate BEFORE calling the search_grammar tool:" in call_kwargs["system_prompt"]
-            assert "Maximum 2 `search_grammar` calls per reply." in call_kwargs["system_prompt"]
-            assert "Maximum 3 `read_grammar_page` calls per reply." in call_kwargs["system_prompt"]
-            assert "If the first 2 searches return off-topic results, STOP searching." in (call_kwargs["system_prompt"])
-            assert "Do NOT call `search_grammar`. Set `grammar_source_urls` to `[]` and move on." in (
+            assert "Only include grammar URLs when they are genuinely helpful for this reply." in (
                 call_kwargs["system_prompt"]
             )
             assert (
-                "If results are off-topic or you did not search, keep `grammar_source_urls` empty."
+                "Only include exact `url` values returned by `search_grammar` in this same reply."
                 in call_kwargs["system_prompt"]
             )
-            assert "keep `grammar_source_urls` empty" in call_kwargs["system_prompt"]
+            assert "Never invent or guess URLs." in call_kwargs["system_prompt"]
+            assert "Use grammar tools only when the student made a concrete grammar mistake" in (
+                call_kwargs["system_prompt"]
+            )
+            assert "explicitly asked a grammar question" in call_kwargs["system_prompt"]
+            assert "### GRAMMAR REFERENCES (search_grammar, read_grammar_page)" in call_kwargs["system_prompt"]
+            assert "### URL READING TOOL (read_url)" in call_kwargs["system_prompt"]
+            assert "### MEMORY PROTOCOL (read_memory)" in call_kwargs["system_prompt"]
+            assert "you may use `search_grammar` 1-2 times with focused queries." in call_kwargs["system_prompt"]
+            assert "`search_grammar` returns a payload with a `results` list." in call_kwargs["system_prompt"]
+            assert "top 1-2 results" in call_kwargs["system_prompt"]
+            assert "stop and answer without grammar links" in call_kwargs["system_prompt"]
+            assert "Do not use grammar tools for greetings, casual chat, correct Swedish" in (
+                call_kwargs["system_prompt"]
+            )
+            assert "It is completely OK to leave it empty." in call_kwargs["system_prompt"]
 
 
 def test_build_agent_uses_teacher_purpose(mock_settings, mock_chat_model):

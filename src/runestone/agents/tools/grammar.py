@@ -3,7 +3,6 @@ Grammar search and reading tools for the teacher agent.
 """
 
 import asyncio
-import json
 import logging
 
 from langchain.tools import ToolRuntime
@@ -30,12 +29,28 @@ class ReadGrammarPageInput(BaseModel):
     )
 
 
+class GrammarSearchResult(BaseModel):
+    """Single grammar search result returned to the teacher agent."""
+
+    title: str = Field(description="Human-readable grammar page title")
+    url: str = Field(description="Public grammar page URL")
+    path: str = Field(description="Internal cheatsheet path for read_grammar_page")
+
+
+class GrammarSearchOutput(BaseModel):
+    """Structured payload for grammar search results."""
+
+    tool: str = Field("search_grammar", description="Tool name for traceability")
+    results: list[GrammarSearchResult] = Field(description="Ordered grammar search matches")
+    note: str | None = Field(default=None, description="Optional guidance when no useful matches were found")
+
+
 @tool("search_grammar", args_schema=SearchGrammarInput)
 async def search_grammar(
     query: str,
     runtime: ToolRuntime[AgentContext],
     top_k: int = 3,
-) -> str:
+) -> dict:
     """
     Search for relevant Swedish grammar cheatsheet pages.
 
@@ -48,36 +63,41 @@ async def search_grammar(
         top_k: Maximum number of results to return (1-3)
 
     Returns:
-        JSON string with search results in the format:
+        Structured search results in the format:
         {"tool": "search_grammar", "results": [{"title": "...", "url": "...", "path": "..."}]}
     """
     if runtime is None:
-        return json.dumps({"error": "Missing tool runtime context"})
+        return {"error": "Missing tool runtime context"}
 
     grammar_index = runtime.context.grammar_index
     if grammar_index is None:
-        return json.dumps({"error": "Grammar index not initialized"})
+        return {"error": "Grammar index not initialized"}
 
     try:
         # Run synchronous search in thread pool to avoid blocking
         results = await asyncio.to_thread(grammar_index.search, query, top_k=top_k)
         if not results:
-            return json.dumps({"tool": "search_grammar", "results": []})
+            payload = GrammarSearchOutput(
+                results=[],
+                note="No matching grammar pages found. Respond without grammar links.",
+            )
+            return payload.model_dump()
 
-        formatted_results = []
+        formatted_results: list[GrammarSearchResult] = []
         for doc in results:
             formatted_results.append(
-                {
-                    "title": doc.metadata.get("annotation", ""),
-                    "url": doc.metadata.get("url", ""),
-                    "path": doc.metadata.get("path", ""),
-                }
+                GrammarSearchResult(
+                    title=doc.metadata.get("annotation", ""),
+                    url=doc.metadata.get("url", ""),
+                    path=doc.metadata.get("path", ""),
+                )
             )
 
-        return json.dumps({"tool": "search_grammar", "results": formatted_results})
+        payload = GrammarSearchOutput(results=formatted_results)
+        return payload.model_dump()
     except Exception as e:
         logger.exception("Error searching grammar: %s", e)
-        return json.dumps({"error": f"Grammar search failed: {str(e)}"})
+        return {"error": f"Grammar search failed: {str(e)}"}
 
 
 @tool("read_grammar_page", args_schema=ReadGrammarPageInput)
@@ -97,6 +117,7 @@ async def read_grammar_page(
     Returns:
         Markdown content of the cheatsheet or error message
     """
+    logger.info("Reading grammar page: %s", cheatsheet_path)
     if runtime is None:
         return "Error: Missing tool runtime context"
 
