@@ -4,6 +4,8 @@ from enum import Enum
 
 MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY = 9
 MAX_TEACHER_GRAMMAR_SOURCE_LINKS = 2
+MAX_GRAMMAR_SEARCH_CALLS = 2
+MAX_GRAMMAR_READ_CALLS = 10
 
 # Vocabulary priority model (0 = highest, 9 = lowest/default)
 VOCABULARY_PRIORITY_HIGH = 0

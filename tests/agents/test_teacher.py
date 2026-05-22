@@ -7,13 +7,15 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langgraph.errors import GraphRecursionError
 
 from runestone.agents.schemas import ChatMessage, TeacherOutput, TeacherSideEffect
 from runestone.agents.specialists.base import INFO_FOR_TEACHER_MAX_CHARS
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
-from runestone.constants import MAX_TEACHER_GRAMMAR_SOURCE_LINKS
+from runestone.constants import MAX_GRAMMAR_READ_CALLS, MAX_GRAMMAR_SEARCH_CALLS, MAX_TEACHER_GRAMMAR_SOURCE_LINKS
 from runestone.schemas.vocabulary_save import WordSaveCandidate
 
 
@@ -128,34 +130,41 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "summarize it naturally in plain prose" in call_kwargs["system_prompt"]
             assert "Use `search_news_with_dates`" not in call_kwargs["system_prompt"]
             assert call_kwargs["response_format"] == TeacherOutput
+            middleware = call_kwargs["middleware"]
+            assert len(middleware) == 2
+            assert all(isinstance(item, ToolCallLimitMiddleware) for item in middleware)
+            middleware_by_name = {item.tool_name: item for item in middleware}
+            assert middleware_by_name["search_grammar"].run_limit == MAX_GRAMMAR_SEARCH_CALLS
+            assert middleware_by_name["read_grammar_page"].run_limit == MAX_GRAMMAR_READ_CALLS
+            assert middleware_by_name["search_grammar"].exit_behavior == "end"
+            assert middleware_by_name["read_grammar_page"].exit_behavior == "end"
             assert "AVATAR EMOTION METADATA" in call_kwargs["system_prompt"]
             assert "Never write the emotion label" in call_kwargs["system_prompt"]
             assert "grammar_source_urls" in call_kwargs["system_prompt"]
             assert f"at most {MAX_TEACHER_GRAMMAR_SOURCE_LINKS}" in call_kwargs["system_prompt"]
-            assert "grammar material URLs" in call_kwargs["system_prompt"]
-            assert (
-                "Only include exact `url` values returned by `search_grammar` in THIS turn."
-                in call_kwargs["system_prompt"]
-            )
-            assert "Never invent, guess, or reuse URLs" in call_kwargs["system_prompt"]
-            assert f"top_k=1..{MAX_TEACHER_GRAMMAR_SOURCE_LINKS}" in call_kwargs["system_prompt"]
-            assert "Does the student's message contain a concrete grammar error?" in (call_kwargs["system_prompt"])
-            assert "Did the student explicitly ask a grammar question?" in (call_kwargs["system_prompt"])
-            assert "### GRAMMAR REFERENCE TOOL (search_grammar, read_grammar_page)" in call_kwargs["system_prompt"]
-            assert "### URL READING TOOL (read_url)" in call_kwargs["system_prompt"]
-            assert "### MEMORY PROTOCOL (read_memory)" in call_kwargs["system_prompt"]
-            assert "DECISION RULE — evaluate BEFORE calling the search_grammar tool:" in call_kwargs["system_prompt"]
-            assert "Maximum 2 `search_grammar` calls per reply." in call_kwargs["system_prompt"]
-            assert "Maximum 3 `read_grammar_page` calls per reply." in call_kwargs["system_prompt"]
-            assert "If the first 2 searches return off-topic results, STOP searching." in (call_kwargs["system_prompt"])
-            assert "Do NOT call `search_grammar`. Set `grammar_source_urls` to `[]` and move on." in (
+            assert "Only include grammar URLs when they are genuinely helpful for this reply." in (
                 call_kwargs["system_prompt"]
             )
             assert (
-                "If results are off-topic or you did not search, keep `grammar_source_urls` empty."
+                "Only include exact `url` values returned by `search_grammar` in this same reply."
                 in call_kwargs["system_prompt"]
             )
-            assert "keep `grammar_source_urls` empty" in call_kwargs["system_prompt"]
+            assert "Never invent or guess URLs." in call_kwargs["system_prompt"]
+            assert "Use grammar tools only when the student made a concrete grammar mistake" in (
+                call_kwargs["system_prompt"]
+            )
+            assert "explicitly asked a grammar question" in call_kwargs["system_prompt"]
+            assert "### GRAMMAR REFERENCES (search_grammar, read_grammar_page)" in call_kwargs["system_prompt"]
+            assert "### URL READING TOOL (read_url)" in call_kwargs["system_prompt"]
+            assert "### MEMORY PROTOCOL (read_memory)" in call_kwargs["system_prompt"]
+            assert "you may use `search_grammar` 1-2 times with focused queries." in call_kwargs["system_prompt"]
+            assert "`search_grammar` returns a payload with a `results` list." in call_kwargs["system_prompt"]
+            assert "top 1-2 results" in call_kwargs["system_prompt"]
+            assert "stop and answer without grammar links" in call_kwargs["system_prompt"]
+            assert "Do not use grammar tools for greetings, casual chat, correct Swedish" in (
+                call_kwargs["system_prompt"]
+            )
+            assert "It is completely OK to leave it empty." in call_kwargs["system_prompt"]
 
 
 def test_build_agent_uses_teacher_purpose(mock_settings, mock_chat_model):
@@ -601,6 +610,70 @@ async def test_generate_response_passes_recursion_limit(teacher_agent, mock_user
     call_kwargs = teacher_agent.agent.ainvoke.call_args[1]
     assert "config" in call_kwargs
     assert call_kwargs["config"] == {"recursion_limit": teacher_agent.RECURSION_LIMIT}
+
+
+@pytest.mark.anyio
+async def test_generate_response_retries_after_tool_limit_termination(teacher_agent, mock_user):
+    teacher_agent.agent.ainvoke.return_value = {
+        "messages": [AIMessage(content="'search_grammar' tool call limit reached: run limit exceeded (3/2 calls).")]
+    }
+    fallback_agent = AsyncMock()
+    fallback_agent.ainvoke.return_value = {
+        "messages": [AIMessage(content="Här är en tydlig förklaring utan fler länkar.")]
+    }
+    teacher_agent._get_tool_limit_fallback_agent = MagicMock(return_value=fallback_agent)
+
+    generated = await teacher_agent.generate_response(
+        message="Explain V2 and en/ett quickly", history=[], user=mock_user
+    )
+
+    assert generated.message == "Här är en tydlig förklaring utan fler länkar."
+    fallback_agent.ainvoke.assert_called_once()
+    fallback_messages = fallback_agent.ainvoke.call_args[0][0]["messages"]
+    assert any(
+        isinstance(msg, SystemMessage) and teacher_agent.TOOL_LIMIT_FALLBACK_NOTE in msg.content
+        for msg in fallback_messages
+    )
+
+
+@pytest.mark.anyio
+async def test_generate_response_retries_after_tool_limit_termination_in_text_blocks(teacher_agent, mock_user):
+    teacher_agent.agent.ainvoke.return_value = {
+        "messages": [
+            AIMessage(
+                content=[
+                    {"type": "text", "text": "Some preliminary content."},
+                    {
+                        "type": "text",
+                        "text": "'search_grammar' tool call limit reached: run limit exceeded (3/2 calls).",
+                    },
+                ]
+            )
+        ]
+    }
+    fallback_agent = AsyncMock()
+    fallback_agent.ainvoke.return_value = {"messages": [AIMessage(content="Fallback answer without extra searches.")]}
+    teacher_agent._get_tool_limit_fallback_agent = MagicMock(return_value=fallback_agent)
+
+    generated = await teacher_agent.generate_response(
+        message="Can you explain this grammar point?", history=[], user=mock_user
+    )
+
+    assert generated.message == "Fallback answer without extra searches."
+    fallback_agent.ainvoke.assert_called_once()
+
+
+@pytest.mark.anyio
+async def test_generate_response_retries_after_graph_recursion_error(teacher_agent, mock_user):
+    teacher_agent.agent.ainvoke.side_effect = GraphRecursionError("limit reached")
+    fallback_agent = AsyncMock()
+    fallback_agent.ainvoke.return_value = {"messages": [AIMessage(content="Vi fortsätter utan fler verktygskall.")]}
+    teacher_agent._get_tool_limit_fallback_agent = MagicMock(return_value=fallback_agent)
+
+    generated = await teacher_agent.generate_response(message="Help me with noun gender", history=[], user=mock_user)
+
+    assert generated.message == "Vi fortsätter utan fler verktygskall."
+    fallback_agent.ainvoke.assert_called_once()
 
 
 def test_openai_provider_configuration(mock_settings):

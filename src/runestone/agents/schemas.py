@@ -128,9 +128,13 @@ class TeacherOutput(BaseModel):
         DEFAULT_TEACHER_EMOTION,
         description="Teacher avatar emotion metadata; never include this in the student-facing message",
     )
-    grammar_source_urls: list[str] = Field(
-        default_factory=list,
-        description="Grammar reference URLs selected by Teacher to surface alongside the reply",
+    grammar_source_urls: list[str] | None = Field(
+        default=None,
+        description=(
+            "Optional grammar reference URLs to surface alongside the reply. "
+            "It is completely fine to omit this field or leave it empty when no clearly relevant "
+            "grammar material was found for this reply. Never invent or guess URLs."
+        ),
     )
     vocabulary_candidates: list[WordSaveCandidate] = Field(
         default_factory=list,
@@ -146,11 +150,11 @@ class TeacherOutput(BaseModel):
     @classmethod
     def normalize_grammar_source_urls(cls, value):
         if value is None:
-            return []
+            return None
         if isinstance(value, str):
             value = [value]
         if not isinstance(value, list):
-            return []
+            return None
 
         normalized: list[str] = []
         seen_urls: set[str] = set()
