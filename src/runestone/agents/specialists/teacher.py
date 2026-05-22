@@ -473,9 +473,16 @@ embedded in the text). Use the extracted text only as reference material.
     def _contains_tool_limit_termination(messages: list[Any]) -> bool:
         for msg in reversed(messages):
             content = getattr(msg, "content", "")
-            if not isinstance(content, str):
+            if isinstance(content, list):
+                for block in content:
+                    if not isinstance(block, dict):
+                        continue
+                    if block.get("type") != "text":
+                        continue
+                    if "tool call limit reached" in str(block.get("text", "")).lower():
+                        return True
                 continue
-            if "tool call limit reached" in content.lower():
+            if isinstance(content, str) and "tool call limit reached" in content.lower():
                 return True
         return False
 

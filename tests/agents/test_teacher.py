@@ -637,6 +637,33 @@ async def test_generate_response_retries_after_tool_limit_termination(teacher_ag
 
 
 @pytest.mark.anyio
+async def test_generate_response_retries_after_tool_limit_termination_in_text_blocks(teacher_agent, mock_user):
+    teacher_agent.agent.ainvoke.return_value = {
+        "messages": [
+            AIMessage(
+                content=[
+                    {"type": "text", "text": "Some preliminary content."},
+                    {
+                        "type": "text",
+                        "text": "'search_grammar' tool call limit reached: run limit exceeded (3/2 calls).",
+                    },
+                ]
+            )
+        ]
+    }
+    fallback_agent = AsyncMock()
+    fallback_agent.ainvoke.return_value = {"messages": [AIMessage(content="Fallback answer without extra searches.")]}
+    teacher_agent._get_tool_limit_fallback_agent = MagicMock(return_value=fallback_agent)
+
+    generated = await teacher_agent.generate_response(
+        message="Can you explain this grammar point?", history=[], user=mock_user
+    )
+
+    assert generated.message == "Fallback answer without extra searches."
+    fallback_agent.ainvoke.assert_called_once()
+
+
+@pytest.mark.anyio
 async def test_generate_response_retries_after_graph_recursion_error(teacher_agent, mock_user):
     teacher_agent.agent.ainvoke.side_effect = GraphRecursionError("limit reached")
     fallback_agent = AsyncMock()
