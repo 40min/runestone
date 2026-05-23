@@ -122,6 +122,9 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "explicit sentence" in call_kwargs["system_prompt"]
             assert "This is a recurring issue to remember" in call_kwargs["system_prompt"]
             assert "not by a tool you call directly" in call_kwargs["system_prompt"]
+            assert "Word-saving is handled by an internal helper specialist called `WordKeeper`" in (
+                call_kwargs["system_prompt"]
+            )
             assert "Topical news retrieval is handled by a pre-response specialist" in call_kwargs["system_prompt"]
             assert "no prepared news context is available" in call_kwargs["system_prompt"]
             assert "OUTPUT CONTRACT (MANDATORY)" in call_kwargs["system_prompt"]
@@ -174,6 +177,44 @@ def test_build_agent_uses_teacher_purpose(mock_settings, mock_chat_model):
             TeacherAgent(mock_settings)
 
     mock_build.assert_called_with(mock_settings, "teacher")
+
+
+def test_build_agent_without_tools(mock_settings, mock_chat_model):
+    with patch("runestone.agents.specialists.teacher.build_chat_model", return_value=mock_chat_model):
+        with patch("runestone.agents.specialists.teacher.create_agent") as mock_create_agent:
+            agent = TeacherAgent(mock_settings)
+            agent._build_agent(include_tools=False)
+
+            call_kwargs = mock_create_agent.call_args[1]
+            assert call_kwargs["tools"] == []
+            assert call_kwargs["middleware"] == []
+            assert "### GRAMMAR REFERENCES (search_grammar, read_grammar_page)" not in call_kwargs["system_prompt"]
+            assert "### URL READING TOOL (read_url)" not in call_kwargs["system_prompt"]
+            assert "### MEMORY PROTOCOL (read_memory)" not in call_kwargs["system_prompt"]
+            assert "search_grammar" not in call_kwargs["system_prompt"]
+            assert "read_grammar_page" not in call_kwargs["system_prompt"]
+            assert "read_memory" not in call_kwargs["system_prompt"]
+            assert "read_url" not in call_kwargs["system_prompt"]
+            assert "### MEMORY PROTOCOL" in call_kwargs["system_prompt"]
+            assert "Never invent or guess URLs." in call_kwargs["system_prompt"]
+            assert "inspect it on-demand" not in call_kwargs["system_prompt"]
+            assert "without reading the memory" not in call_kwargs["system_prompt"]
+            assert "use only injected starter memory, recent side effects, and conversation context" in (
+                call_kwargs["system_prompt"].lower()
+            )
+
+
+def test_get_tool_limit_fallback_agent_builds_no_tools_variant(mock_settings, mock_chat_model):
+    with patch("runestone.agents.specialists.teacher.build_chat_model", return_value=mock_chat_model):
+        with patch("runestone.agents.specialists.teacher.create_agent"):
+            agent = TeacherAgent(mock_settings)
+
+    fallback_agent = AsyncMock()
+    with patch.object(agent, "_build_agent", return_value=fallback_agent) as mock_build_agent:
+        resolved = agent._get_tool_limit_fallback_agent()
+
+    assert resolved is fallback_agent
+    mock_build_agent.assert_called_once_with(include_tools=False)
 
 
 def test_format_pre_results_uses_info_for_teacher_only():
