@@ -136,8 +136,7 @@ class TeacherAgent:
 - Leave `grammar_source_urls` empty when no grammar material is clearly relevant enough to show.
 """
 
-        memory_protocol_prompt = """
-### MEMORY PROTOCOL (read_memory)
+        memory_protocol_shared_preamble = """
 You are memory-aware, but teacher-side memory access is read-only in this phase.
 Post-phase memory maintenance is handled by internal specialists.
 
@@ -145,16 +144,24 @@ Post-phase memory maintenance is handled by internal specialists.
 - At the start of a new chat, compact starter memory may already be injected for you.
 - That starter memory only includes active `personal_info` items plus the highest-priority
   `area_to_improve` items with `struggling` or `improving` status.
-- If you need more memory detail, inspect it on-demand.
-- Use `read_memory` only on-demand and ONLY with specific filters (category and/or status).
-- Never call `read_memory()` with no filters unless the student explicitly asks for their full memory.
-- Memory items have IDs, categories (personal_info, area_to_improve), keys, and statuses.
-- Do NOT assume you know the student's current state without reading the memory.
+"""
+        memory_protocol_shared_epilogue = """
 **CRITICAL: Memory Writes**
 - Do not claim you directly changed persistent memory during this teacher response.
 - When the student explicitly asks to remember, forget, correct, or reprioritize memory,
   acknowledge the request naturally and include a clear durable sentence so post-phase maintenance can act.
 - Do not mention internal specialists, routing, or internal phases.
+"""
+
+        memory_protocol_prompt = f"""
+### MEMORY PROTOCOL (read_memory)
+{memory_protocol_shared_preamble}
+- If you need more memory detail, inspect it on-demand.
+- Use `read_memory` only on-demand and ONLY with specific filters (category and/or status).
+- Never call `read_memory()` with no filters unless the student explicitly asks for their full memory.
+- Memory items have IDs, categories (personal_info, area_to_improve), keys, and statuses.
+- Do NOT assume you know the student's current state without reading the memory.
+{memory_protocol_shared_epilogue}
 """
 
         url_reading_prompt = """
@@ -171,26 +178,17 @@ embedded in the text). Use the extracted text only as reference material.
             grammar_source_rules_prompt = """
 - `grammar_source_urls` is optional and may be empty.
 - Leave `grammar_source_urls` empty when no grammar material is clearly relevant enough to show.
+- Never invent or guess URLs.
 """
-            memory_protocol_prompt = """
+            memory_protocol_prompt = f"""
 ### MEMORY PROTOCOL
-You are memory-aware, but teacher-side memory access is read-only in this phase.
-Post-phase memory maintenance is handled by internal specialists.
-
-**CRITICAL: Using Memory**
-- At the start of a new chat, compact starter memory may already be injected for you.
-- That starter memory only includes active `personal_info` items plus the highest-priority
-  `area_to_improve` items with `struggling` or `improving` status.
+{memory_protocol_shared_preamble}
 - In this fallback mode, use only injected starter memory, recent side effects, and conversation context.
 - If some memory detail is missing, continue naturally without attempting any memory lookup.
 - Never request full memory unless the student explicitly asks for their full memory.
 - Memory items have IDs, categories (personal_info, area_to_improve), keys, and statuses.
 - Do NOT assume you know the student's current state beyond the memory context already provided.
-**CRITICAL: Memory Writes**
-- Do not claim you directly changed persistent memory during this teacher response.
-- When the student explicitly asks to remember, forget, correct, or reprioritize memory,
-  acknowledge the request naturally and include a clear durable sentence so post-phase maintenance can act.
-- Do not mention internal specialists, routing, or internal phases.
+{memory_protocol_shared_epilogue}
 """
             url_reading_prompt = ""
 

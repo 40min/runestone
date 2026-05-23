@@ -196,6 +196,7 @@ def test_build_agent_without_tools(mock_settings, mock_chat_model):
             assert "read_memory" not in call_kwargs["system_prompt"]
             assert "read_url" not in call_kwargs["system_prompt"]
             assert "### MEMORY PROTOCOL" in call_kwargs["system_prompt"]
+            assert "Never invent or guess URLs." in call_kwargs["system_prompt"]
             assert "inspect it on-demand" not in call_kwargs["system_prompt"]
             assert "without reading the memory" not in call_kwargs["system_prompt"]
             assert "use only injected starter memory, recent side effects, and conversation context" in (
