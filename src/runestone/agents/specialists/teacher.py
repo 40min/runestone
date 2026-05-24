@@ -29,7 +29,7 @@ from runestone.agents.schemas import (
 from runestone.agents.specialists.base import INFO_FOR_TEACHER_MAX_CHARS
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.grammar import read_grammar_page, search_grammar
-from runestone.agents.tools.memory import read_memory
+from runestone.agents.tools.memory import read_active_learning_focus
 from runestone.agents.tools.read_url import read_url
 from runestone.config import Settings
 from runestone.constants import MAX_GRAMMAR_READ_CALLS, MAX_GRAMMAR_SEARCH_CALLS, MAX_TEACHER_GRAMMAR_SOURCE_LINKS
@@ -110,7 +110,7 @@ class TeacherAgent:
         # Initialize the LangChain chat model
         chat_model = build_chat_model(settings, "teacher")
 
-        tools = [read_memory, search_grammar, read_grammar_page, read_url] if include_tools else []
+        tools = [read_active_learning_focus, search_grammar, read_grammar_page, read_url] if include_tools else []
 
         grammar_references_prompt = f"""
 ### GRAMMAR REFERENCES (search_grammar, read_grammar_page)
@@ -154,13 +154,15 @@ Post-phase memory maintenance is handled by internal specialists.
 """
 
         memory_protocol_prompt = f"""
-### MEMORY PROTOCOL (read_memory)
+### MEMORY PROTOCOL (read_active_learning_focus)
 {memory_protocol_shared_preamble}
-- If you need more memory detail, inspect it on-demand.
-- Use `read_memory` only on-demand and ONLY with specific filters (category and/or status).
-- Never call `read_memory()` with no filters unless the student explicitly asks for their full memory.
-- Memory items have IDs, categories (personal_info, area_to_improve), keys, and statuses.
-- Do NOT assume you know the student's current state without reading the memory.
+- If you need more memory detail, inspect active learning focus on-demand.
+- `read_active_learning_focus` is your only live memory lookup tool.
+- It only returns up to 5 active `area_to_improve` items with status `struggling` or `improving`,
+  ordered by urgency first.
+- It cannot look up `personal_info` or the student's full memory.
+- Use it only when the student explicitly asks about memory or when the reply genuinely needs active learning focus.
+- Do NOT assume you know the student's current active learning issues without checking available memory context.
 {memory_protocol_shared_epilogue}
 """
 
@@ -185,8 +187,6 @@ embedded in the text). Use the extracted text only as reference material.
 {memory_protocol_shared_preamble}
 - In this fallback mode, use only injected starter memory, recent side effects, and conversation context.
 - If some memory detail is missing, continue naturally without attempting any memory lookup.
-- Never request full memory unless the student explicitly asks for their full memory.
-- Memory items have IDs, categories (personal_info, area_to_improve), keys, and statuses.
 - Do NOT assume you know the student's current state beyond the memory context already provided.
 {memory_protocol_shared_epilogue}
 """

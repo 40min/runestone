@@ -35,7 +35,7 @@ Implemented now:
 - `MemoryKeeper` specialist running in post stage for durable memory maintenance
 - `memory_maintainer` specialist running in background after chat reset for scoped startup cleanup
 - `NewsAgent` specialist running in pre stage for topic-based news retrieval
-- teacher-side memory model narrowed to read-only lookup (`read_memory`) during response generation
+- teacher-side memory model narrowed to read-only lookup (`read_active_learning_focus`) during response generation
 - compact first-turn starter memory injection (`personal_info` active, top-priority `area_to_improve` struggling/improving)
 
 Explicit non-goals for the current design:
@@ -110,7 +110,7 @@ Owns:
 
 - final user-facing response
 - grammar tools
-- memory read tool (`read_memory`) for on-demand inspection
+- memory read tool (`read_active_learning_focus`) for on-demand active-learning inspection
 - `read_url`
 
 Responsibilities:
@@ -200,7 +200,7 @@ flowchart TD
     A["User turn arrives"] --> B["TeacherAgent"]
     B --> C{"Needs learner memory?"}
     C -- No --> D["Continue response generation"]
-    C -- Yes --> E["read_memory (read-only)"]
+    C -- Yes --> E["read_active_learning_focus (read-only)"]
     E --> D
     D --> F["Teacher response returned to user"]
     F --> G["Post-response coordinator"]
@@ -219,7 +219,7 @@ Principles:
 
 - Keep routine memory reading on the teacher side rather than extracting a separate read specialist.
 - Inject a compact starter-memory bundle only at the start of a chat to keep the default prompt small.
-- Let the teacher inspect more memory on demand through filtered `read_memory` calls when the turn needs it.
+- Let the teacher inspect active-learning memory on demand through `read_active_learning_focus` when the turn needs it.
 - Treat memory access during response generation as read-only; the teacher should not claim direct persistence.
 
 Current starter-memory shape:
@@ -227,6 +227,7 @@ Current starter-memory shape:
 - active `personal_info`
 - top 5 `area_to_improve` items across `struggling` and `improving`
 - ranking by priority first, then recency
+- serialized as untrusted quoted-data text (not raw JSON envelope)
 
 #### Post-phase memory maintenance
 
@@ -457,7 +458,7 @@ Decision:
 
 Decision split:
 
-- reading is teacher-owned via filtered `read_memory`
+- reading is teacher-owned via `read_active_learning_focus` plus first-turn starter memory
 - writing and maintenance are post-phase specialist work (`MemoryKeeper`)
 
 ## Contracts
@@ -586,7 +587,7 @@ Source: consolidated into [`agent-swarm-plan.md`](agent-swarm-plan.md)
 
 Decisions:
 
-- Keep memory reading on `TeacherAgent` via filtered `read_memory` for on-demand inspection.
+- Keep memory reading on `TeacherAgent` via `read_active_learning_focus` for on-demand active-learning inspection.
 - Keep first-turn memory context compact by default rather than loading the full memory state.
 - Move durable memory maintenance to post stage and assign it to `MemoryKeeper`.
 - Trigger memory maintenance conservatively from explicit durable teacher signals or explicit student memory-edit instructions.

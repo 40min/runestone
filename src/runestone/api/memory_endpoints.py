@@ -41,6 +41,7 @@ async def list_memory_items(
     service: Annotated[MemoryItemService, Depends(get_memory_item_service)],
     category: Optional[MemoryCategory] = Query(None, description="Filter by category"),
     status: Optional[str] = Query(None, description="Filter by status"),
+    statuses: Optional[list[str]] = Query(None, description="Filter by one or more statuses"),
     sort_by: Optional[MemorySortBy] = Query(None, description="Sort field (updated_at or priority)"),
     sort_direction: SortDirection = Query(SortDirection.DESC, description="Sort direction (asc or desc)"),
     limit: int = Query(100, ge=1, le=200, description="Number of items to return"),
@@ -52,10 +53,11 @@ async def list_memory_items(
     Supports infinite scroll with limit/offset pagination.
     """
     try:
+        normalized_statuses = statuses if statuses is not None else ([status] if status else None)
         return await service.list_memory_items(
             current_user.id,
             category,
-            status,
+            normalized_statuses,
             sort_by=sort_by,
             sort_direction=sort_direction,
             limit=limit,

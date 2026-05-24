@@ -12,7 +12,7 @@ Furthermore, agent tools are often imported by the agent manager, and if those t
 
 ## 💡 The Solution: Async Context-Manager Providers
 
-To solve these issues, we use a specialized dependency injection pattern using **async context managers** located in a dedicated module: `src/runestone/agents/tools/service_providers.py`.
+To solve these issues, we use a specialized dependency injection pattern using **async context managers** located in a dedicated module: `src/runestone/agents/service_providers.py`.
 
 ### Key Benefits
 1. **Session Isolation**: Each tool call gets its own fresh `AsyncSession`, ensuring concurrency safety.
@@ -21,7 +21,7 @@ To solve these issues, we use a specialized dependency injection pattern using *
 
 ## 🛠️ Implementation Details
 
-The module `runestone.agents.tools.service_providers` provides factory functions that yield fully configured service instances.
+The module `runestone.agents.service_providers` provides factory functions that yield fully configured service instances.
 
 ### Example Provider Implementation
 
@@ -46,6 +46,7 @@ When defining a LangGraph tool, use the `async with` statement to obtain a servi
 async def read_memory(
     runtime: ToolRuntime[AgentContext],
     category: Optional[MemoryCategory] = None,
+    statuses: Optional[list[str]] = None,
 ) -> str:
     """Read the agent's memory about the user."""
     user = runtime.context.user
@@ -54,7 +55,8 @@ async def read_memory(
     async with provide_memory_item_service() as service:
         items = await service.list_memory_items(
             user_id=user.id,
-            category=category
+            category=category,
+            statuses=statuses,
         )
 
     return format_results(items)

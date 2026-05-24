@@ -1776,7 +1776,8 @@ async def test_prepare_pre_turn_loads_starter_memory_on_first_turn(
         personal_limit=manager.STARTER_MEMORY_PERSONAL_LIMIT,
         area_limit=manager.STARTER_MEMORY_AREA_LIMIT,
     )
-    assert "<memory_items_json>" in starter_memory
+    assert starter_memory.startswith("UNTRUSTED_MEMORY_DATA")
+    assert 'category="personal_info"' in starter_memory
 
 
 @pytest.mark.anyio

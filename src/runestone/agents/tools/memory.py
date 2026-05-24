@@ -13,8 +13,14 @@ from pydantic import BaseModel, Field
 
 from runestone.agents.service_providers import provide_memory_item_service
 from runestone.agents.tools.context import AgentContext
-from runestone.agents.tools.utils import serialize_memory_items
-from runestone.api.memory_item_schemas import MemoryCategory, MemoryItemCreate, MemorySortBy, SortDirection
+from runestone.agents.tools.utils import serialize_active_learning_focus, serialize_memory_items
+from runestone.api.memory_item_schemas import (
+    AreaToImproveStatus,
+    MemoryCategory,
+    MemoryItemCreate,
+    MemorySortBy,
+    SortDirection,
+)
 from runestone.core.exceptions import PermissionDeniedError, UserNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -58,7 +64,10 @@ async def read_memory(
         Optional[MemoryCategory],
         Field(description="Optional category filter"),
     ] = None,
-    status: Annotated[Optional[str], Field(description="Optional status filter")] = None,
+    statuses: Annotated[
+        Optional[list[str]],
+        Field(description="Optional status filters"),
+    ] = None,
 ) -> str:
     """
     Read the agent's memory about the user.
@@ -72,12 +81,12 @@ async def read_memory(
     Args:
         runtime: Tool runtime context
         category: Optional filter by category (personal_info, area_to_improve)
-        status: Optional filter by status
+        statuses: Optional filter by statuses
 
     Returns:
         Formatted string with memory items including IDs for reference
     """
-    logger.info("Agent tool call: read_memory (category=%s, status=%s)", category, status)
+    logger.info("Agent tool call: read_memory (category=%s, statuses=%s)", category, statuses)
     user = runtime.context.user
 
     # Use fresh service with its own session for concurrency safety
@@ -85,7 +94,7 @@ async def read_memory(
         items = await service.list_memory_items(
             user_id=user.id,
             category=category,
-            status=status,
+            statuses=statuses,
             sort_by=MemorySortBy.UPDATED_AT,
             sort_direction=SortDirection.DESC,
             limit=100,
@@ -96,6 +105,30 @@ async def read_memory(
         return "No memory items found."
 
     return serialize_memory_items(items)
+
+
+@tool
+async def read_active_learning_focus(runtime: ToolRuntime[AgentContext]) -> str:
+    """Read the student's current high-priority learning focus for Teacher."""
+    logger.info("Agent tool call: read_active_learning_focus")
+    user = runtime.context.user
+
+    async with provide_memory_item_service() as service:
+        items = await service.list_memory_items(
+            user_id=user.id,
+            category=MemoryCategory.AREA_TO_IMPROVE,
+            statuses=[
+                AreaToImproveStatus.STRUGGLING.value,
+                AreaToImproveStatus.IMPROVING.value,
+            ],
+            limit=5,
+            offset=0,
+        )
+
+    if not items:
+        return "No active learning focus items found."
+
+    return serialize_active_learning_focus(items)
 
 
 @tool

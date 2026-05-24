@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -7,13 +8,16 @@ from sqlalchemy.exc import IntegrityError
 
 from runestone.agents.specialists.base import SpecialistContext
 from runestone.agents.specialists.memory_maintainer import MEMORY_MAINTAINER_SYSTEM_PROMPT, MemoryMaintainerSpecialist
+from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.memory_maintainer import (
     _PENDING_MERGE_DELETIONS,
     PendingMergePlan,
     maintainer_delete_memory_item,
     maintainer_insert_memory_item,
+    maintainer_read_memory,
     maintainer_update_memory_priority,
 )
+from runestone.api.memory_item_schemas import AreaToImproveStatus, MemoryCategory
 
 
 @pytest.fixture
@@ -254,6 +258,32 @@ def test_memory_maintainer_builds_agent_with_expected_tools(mock_settings):
         "maintainer_delete_memory_item",
         "maintainer_update_memory_priority",
     ]
+
+
+@pytest.mark.anyio
+async def test_maintainer_read_memory_uses_single_scoped_query():
+    service = MagicMock()
+    service.list_memory_items = AsyncMock(return_value=[])
+    runtime = SimpleNamespace(context=AgentContext(user=SimpleNamespace(id=42)))
+
+    @asynccontextmanager
+    async def fake_provider():
+        yield service
+
+    with patch("runestone.agents.tools.memory_maintainer.provide_memory_item_service", fake_provider):
+        result = await maintainer_read_memory.coroutine(runtime=runtime)
+
+    assert result == "No in-scope memory items found."
+    service.list_memory_items.assert_awaited_once_with(
+        user_id=42,
+        category=MemoryCategory.AREA_TO_IMPROVE,
+        statuses=[
+            AreaToImproveStatus.STRUGGLING.value,
+            AreaToImproveStatus.IMPROVING.value,
+        ],
+        limit=200,
+        offset=0,
+    )
 
 
 def test_memory_maintainer_uses_dedicated_agent_settings(mock_settings):

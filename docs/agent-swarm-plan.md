@@ -114,7 +114,7 @@ Deliverables:
 Tasks:
 
 - inject compact starter memory from the service layer on first turn
-- keep `read_memory` available for on-demand teacher inspection
+- keep `read_active_learning_focus` available for on-demand teacher inspection
 - plan post-stage `MemoryKeeper` review rules for create/update/status/priority/no-action
 - capture the design in the architecture and plan docs
 
@@ -184,10 +184,10 @@ All agent log lines use `[agents:<component>]` prefix.
 
 | Agent              | Tools                                         |
 | ------------------ | --------------------------------------------- |
-| `TeacherAgent`     | grammar tools + `read_url` + memory tools     |
+| `TeacherAgent`     | grammar tools + `read_url` + `read_active_learning_focus` |
 | `CoordinatorAgent` | none (planning only)                          |
 | `WordKeeper`       | `prioritize_words_for_learning`               |
-| `MemoryKeeper`     | memory maintenance tools (future, post phase) |
+| `MemoryKeeper`     | memory maintenance tools (post phase) |
 | `NewsAgent`        | `search_news_with_dates`, selective `read_url` |
 
 ## Non-Goals (Unchanged)

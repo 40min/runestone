@@ -55,7 +55,7 @@ class MemoryItemRepository:
         self,
         user_id: int,
         category: Optional[str] = None,
-        status: Optional[str] = None,
+        statuses: list[str] | tuple[str, ...] | None = None,
         limit: int = 100,
         offset: int = 0,
         sort_by: Optional[str] = None,
@@ -67,7 +67,7 @@ class MemoryItemRepository:
         Args:
             user_id: User ID
             category: Optional category filter
-            status: Optional status filter
+            statuses: Optional status filters
             limit: Maximum number of items to return
             offset: Number of items to skip
             sort_by: Optional explicit sort field (`updated_at` or `priority`)
@@ -81,8 +81,10 @@ class MemoryItemRepository:
         if category:
             stmt = stmt.filter(MemoryItem.category == category)
 
-        if status:
-            stmt = stmt.filter(MemoryItem.status == status)
+        if statuses is not None:
+            if not statuses:
+                return []
+            stmt = stmt.filter(MemoryItem.status.in_(tuple(statuses)))
 
         direction_desc = sort_direction == "desc"
         if sort_by == "priority":
