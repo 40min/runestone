@@ -255,7 +255,7 @@ async def test_start_background_memory_maintenance_clears_registry_on_failure(mo
         await task
 
     assert str(mock_user.id) not in manager._memory_maintenance_registry.tasks
-    assert "Failed: user_id=1" in caplog.text
+    assert "memory maintenance failed user_id=1" in caplog.text
 
 
 @pytest.mark.anyio
@@ -275,7 +275,7 @@ async def test_start_background_memory_maintenance_clears_registry_on_timeout(mo
         await task
 
     assert str(mock_user.id) not in manager._memory_maintenance_registry.tasks
-    assert "Timed out" in caplog.text
+    assert "memory maintenance timed out" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -411,7 +411,7 @@ async def test_coordinator_history_truncation_logs_warning(
             side_effect_service=mock_side_effect_service,
         )
 
-    assert "Truncated coordinator history" in caplog.text
+    assert "coordinator history truncated from=10 to=5" in caplog.text
 
 
 @pytest.mark.anyio
@@ -1608,7 +1608,7 @@ async def test_specialist_history_truncation_logs_warning(mock_settings, mock_us
             side_effect_service=side_effect_service,
         )
 
-    assert "Truncated specialist history for 'capture_history'" in caplog.text
+    assert "specialist history truncated specialist=capture_history" in caplog.text
 
 
 @pytest.mark.anyio

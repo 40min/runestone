@@ -59,19 +59,19 @@ async def send_message(
     History is now managed on the backend.
     """
     try:
-        logger.info(f"User {current_user.email} sent message: {request.message[:50]}...")
+        logger.info("chat message received user_id=%s message_length=%s", current_user.id, len(request.message))
 
         # Generate response using the chat service which handles persistence
         response_message, sources, teacher_emotion = await chat_service.process_message(
             current_user.id, request.message, tts_expected=request.tts_expected, speed=request.speed
         )
 
-        logger.info(f"Generated response for user {current_user.email}")
+        logger.info("chat response generated user_id=%s", current_user.id)
 
         return ChatResponse(message=response_message, sources=sources, teacher_emotion=teacher_emotion)
 
     except Exception as e:
-        logger.error(f"Error generating chat response: {e}", exc_info=True)
+        logger.error("chat response generation failed: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate response. Please try again."
         )
@@ -96,7 +96,7 @@ async def get_history(
             client_chat_id=client_chat_id,
         )
     except Exception as e:
-        logger.error(f"Error fetching chat history: {e}", exc_info=True)
+        logger.error("chat history fetch failed: %s", e, exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch chat history.")
 
 
@@ -114,7 +114,7 @@ async def send_image(
     """
     # Validate file type
     if not file.content_type or not file.content_type.startswith("image/"):
-        logger.warning(f"Invalid file type: {file.content_type}")
+        logger.warning("invalid image content type: %s", file.content_type)
         raise HTTPException(
             status_code=400,
             detail="Invalid file type. Please upload an image file.",
@@ -133,13 +133,13 @@ async def send_image(
 
     try:
         start_time = time.time()
-        logger.info(f"[IMAGE_UPLOAD] User {current_user.email} uploaded image ({file_size} bytes), starting OCR")
+        logger.info("image upload received user_id=%s file_size_bytes=%s", current_user.id, file_size)
 
         # Process OCR text through agent for translation
         response_message, teacher_emotion = await chat_service.process_image_message(current_user.id, content)
 
         elapsed = time.time() - start_time
-        logger.info(f"[IMAGE_UPLOAD] Image processing completed for user {current_user.email} in {elapsed:.3f}s")
+        logger.info("image processing completed user_id=%s latency_s=%.3f", current_user.id, elapsed)
 
         return ImageChatResponse(message=response_message, teacher_emotion=teacher_emotion)
 
@@ -147,13 +147,13 @@ async def send_image(
         # Re-raise HTTP exceptions as-is
         raise
     except RunestoneError as e:
-        logger.error(f"OCR error: {e}", exc_info=True)
+        logger.error("image OCR failed: %s", e, exc_info=True)
         raise HTTPException(
             status_code=400,
             detail="Could not recognize text from image",
         )
     except Exception as e:
-        logger.error(f"Error processing image: {e}", exc_info=True)
+        logger.error("image processing failed: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to process image. Please try again.",
@@ -189,7 +189,7 @@ async def start_new_chat(
         await chat_service.start_new_chat(current_user.id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except Exception as e:
-        logger.error(f"Error starting new chat session: {e}", exc_info=True)
+        logger.error("start new chat failed user_id=%s: %s", current_user.id, e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to start new chat session."
         )
@@ -213,7 +213,7 @@ async def transcribe_voice(
     """
     # Validate file type
     if not file.content_type or not file.content_type.startswith("audio/"):
-        logger.warning(f"Invalid file type for voice transcription: {file.content_type}")
+        logger.warning("invalid voice content type: %s", file.content_type)
         raise HTTPException(
             status_code=400,
             detail="Invalid file type. Please upload an audio file.",
@@ -244,23 +244,23 @@ async def transcribe_voice(
         )
 
     try:
-        logger.info(f"User {current_user.email} requested voice transcription (improve={improve})")
+        logger.info("voice transcription requested user_id=%s improve=%s", current_user.id, improve)
         transcribed_text = await voice_service.process_voice_input(
             content, improve=improve, language=transcription_language
         )
 
-        logger.info(f"Voice transcription completed for user {current_user.email}")
+        logger.info("voice transcription completed user_id=%s", current_user.id)
 
         return VoiceTranscriptionResponse(text=transcribed_text)
 
     except RunestoneError as e:
-        logger.error(f"Transcription error: {e}", exc_info=True)
+        logger.error("voice transcription failed: %s", e, exc_info=True)
         raise HTTPException(
             status_code=400,
             detail=str(e),
         )
     except Exception as e:
-        logger.error(f"Error processing voice: {e}", exc_info=True)
+        logger.error("voice processing failed: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to transcribe voice. Please try again.",

@@ -43,7 +43,7 @@ class AgentsManager:
     """
     Service for managing chat agent interactions using specialist agents.
 
-    All log lines should be prefixed with `[agents:manager]` for consistency.
+    Logs are emitted from a single manager producer and include per-event context fields.
     """
 
     COORDINATOR_MAX_HISTORY_MESSAGES = 5
@@ -82,12 +82,12 @@ class AgentsManager:
         self._post_task_registry = BackgroundTaskRegistry(logger=logger, key_name="chat_id")
         self._memory_maintenance_registry = BackgroundTaskRegistry(
             logger=logger,
-            log_prefix="[agents:memory-maintenance]",
+            log_prefix="memory-maintenance",
             key_name="user_id",
         )
 
         logger.info(
-            "[agents:manager] Initialized AgentsManager with provider=%s, model=%s, persona=%s",
+            "agents manager initialized provider=%s model=%s persona=%s",
             settings.teacher_provider,
             settings.teacher_model,
             settings.agent_persona,
@@ -101,7 +101,7 @@ class AgentsManager:
                 if app_parsed.port:
                     self.allowed_ports.add(app_parsed.port)
         except (ValueError, AttributeError) as e:
-            logger.warning("[agents:manager] Configuration issue with allowed_origins: %s", e)
+            logger.warning("allowed_origins configuration issue: %s", e)
 
     # ------------------------------------------------------------------
     # Phase methods (public, individually testable)
@@ -132,14 +132,12 @@ class AgentsManager:
                 )
                 if deleted_count:
                     logger.info(
-                        "[agents:manager] Cleaned up %s old mastered memory items for user %s",
+                        "old mastered memory items cleaned up count=%s user_id=%s",
                         deleted_count,
                         user.id,
                     )
             except (SQLAlchemyError, ValueError, RuntimeError) as e:
-                logger.warning(
-                    "[agents:manager] Failed to cleanup old mastered memory items for user %s: %s", user.id, e
-                )
+                logger.warning("old mastered memory cleanup failed user_id=%s error=%s", user.id, e)
             try:
                 starter_items = await memory_item_service.list_start_student_info_items(
                     user.id,
@@ -149,13 +147,13 @@ class AgentsManager:
                 if starter_items:
                     starter_memory = serialize_memory_items(starter_items)
             except (SQLAlchemyError, ValueError, RuntimeError) as e:
-                logger.warning("[agents:manager] Failed to load starter memory for user %s: %s", user.id, e)
+                logger.warning("starter memory load failed user_id=%s error=%s", user.id, e)
             current_recall_words = self._load_current_recall_words(user)
 
         coordinator_history = history[-self.COORDINATOR_MAX_HISTORY_MESSAGES :] if history else []
         if history and len(history) > self.COORDINATOR_MAX_HISTORY_MESSAGES:
             logger.warning(
-                "[agents:manager] Truncated coordinator history from %s to %s messages",
+                "coordinator history truncated from=%s to=%s",
                 len(history),
                 len(coordinator_history),
             )
@@ -167,7 +165,7 @@ class AgentsManager:
                 available_specialists=[name for name in self.registry.list_names() if name != "teacher"],
             )
         except (RunestoneError, ValueError, RuntimeError) as e:
-            logger.error("[agents:manager] Coordinator failed, falling back to teacher only: %s", e)
+            logger.error("coordinator failed, falling back to teacher only: %s", e)
 
         if plan is None:
             plan = CoordinatorPlan(
@@ -176,7 +174,7 @@ class AgentsManager:
                 audit={"fallback": "coordinator_error"},
             )
         logger.info(
-            "[agents:manager] Pre-phase selection: user_id=%s specialists=%s",
+            "pre-phase selection user_id=%s specialists=%s",
             user.id,
             ",".join([item.name for item in plan.pre_response]) if plan.pre_response else "none",
         )
@@ -218,7 +216,7 @@ class AgentsManager:
                 current_recall_words=current_recall_words or [],
             )
         except (RunestoneError, ValueError, RuntimeError) as e:
-            logger.error("[agents:manager] Error generating response: %s", e)
+            logger.error("teacher response generation failed: %s", e)
             raise
 
         sources = self._extract_sources(
@@ -329,7 +327,7 @@ class AgentsManager:
             )
             if not persisted:
                 logger.warning(
-                    "[agents:manager] Skipped stale post-turn persistence: user_id=%s chat_id=%s row_id=%s",
+                    "stale post-turn persistence skipped user_id=%s chat_id=%s row_id=%s",
                     user.id,
                     chat_id,
                     coordinator_row_id,
@@ -342,7 +340,7 @@ class AgentsManager:
                     chat_id=chat_id,
                 )
                 logger.warning(
-                    "[agents:manager] Post-turn completed with coordinator failure: user_id=%s chat_id=%s",
+                    "post-turn completed with coordinator failure user_id=%s chat_id=%s",
                     user.id,
                     chat_id,
                 )
@@ -352,9 +350,9 @@ class AgentsManager:
                 user_id=user.id,
                 chat_id=chat_id,
             )
-            logger.info("[agents:manager] Post-turn completed: user_id=%s chat_id=%s", user.id, chat_id)
+            logger.info("post-turn completed user_id=%s chat_id=%s", user.id, chat_id)
         except Exception:
-            logger.error("[agents:manager] Post-turn failed: user_id=%s chat_id=%s", user.id, chat_id, exc_info=True)
+            logger.error("post-turn failed user_id=%s chat_id=%s", user.id, chat_id, exc_info=True)
             await side_effect_service.mark_coordinator_failed_if_current(
                 row_id=coordinator_row_id,
                 user_id=user.id,
@@ -381,7 +379,7 @@ class AgentsManager:
             coordinator_history = history[-self.COORDINATOR_MAX_HISTORY_MESSAGES :] if history else []
             if history and len(history) > self.COORDINATOR_MAX_HISTORY_MESSAGES:
                 logger.warning(
-                    "[agents:manager] Truncated coordinator history from %s to %s messages",
+                    "coordinator history truncated from=%s to=%s",
                     len(history),
                     len(coordinator_history),
                 )
@@ -396,7 +394,7 @@ class AgentsManager:
             )
             post_items = [item for item in plan.post_response if item.name != "word_keeper"]
             logger.info(
-                "[agents:manager] Post-phase selection: user_id=%s specialists=%s",
+                "post-phase selection user_id=%s specialists=%s",
                 user.id,
                 ",".join([item.name for item in post_items]) if post_items else "none",
             )
@@ -439,7 +437,7 @@ class AgentsManager:
         if isinstance(coordinator_results, Exception):
             coordinator_failed = True
             logger.error(
-                "[agents:manager] Coordinator post branch failed",
+                "coordinator post branch failed",
                 exc_info=(type(coordinator_results), coordinator_results, coordinator_results.__traceback__),
             )
         else:
@@ -447,7 +445,7 @@ class AgentsManager:
 
         if isinstance(word_keeper_results, Exception):
             logger.error(
-                "[agents:manager] Direct WordKeeper post branch failed",
+                "direct word keeper post branch failed",
                 exc_info=(type(word_keeper_results), word_keeper_results, word_keeper_results.__traceback__),
             )
         else:
@@ -480,7 +478,7 @@ class AgentsManager:
         existing_task = self._memory_maintenance_registry.tasks.get(user_key)
         if existing_task and not existing_task.done():
             logger.info(
-                "[agents:memory-maintenance] Skipping schedule because maintenance is already running: user_id=%s",
+                "memory maintenance schedule skipped; already running user_id=%s",
                 user.id,
             )
             return False
@@ -493,7 +491,7 @@ class AgentsManager:
                 )
                 artifacts = result.artifacts if isinstance(result.artifacts, dict) else {}
                 logger.info(
-                    "[agents:memory-maintenance] Completed: user_id=%s status=%s actions=%s reviewed=%s merged=%s "
+                    "memory maintenance completed user_id=%s status=%s actions=%s reviewed=%s merged=%s "
                     "priority_updates=%s",
                     user.id,
                     result.status,
@@ -508,13 +506,13 @@ class AgentsManager:
                 )
             except asyncio.TimeoutError:
                 logger.error(
-                    "[agents:memory-maintenance] Timed out after %ss: user_id=%s",
+                    "memory maintenance timed out timeout_s=%s user_id=%s",
                     self.MEMORY_MAINTENANCE_TIMEOUT_SECONDS,
                     user.id,
                 )
             except Exception:
                 logger.error(
-                    "[agents:memory-maintenance] Failed: user_id=%s",
+                    "memory maintenance failed user_id=%s",
                     user.id,
                     exc_info=True,
                 )
@@ -523,7 +521,7 @@ class AgentsManager:
 
         task = asyncio.create_task(_run())
         self._memory_maintenance_registry.register(user_key, task)
-        logger.info("[agents:memory-maintenance] Background task started: user_id=%s", user.id)
+        logger.info("memory maintenance background task started user_id=%s", user.id)
         return True
 
     async def run_memory_maintenance(self, user: User) -> SpecialistResult:
@@ -572,7 +570,7 @@ class AgentsManager:
                         )
                     except asyncio.TimeoutError:
                         logger.error(
-                            "[agents:post-task] Post task timed out after %ss: chat_id=%s",
+                            "post task timed out timeout_s=%s chat_id=%s",
                             self.POST_TASK_TIMEOUT_SECONDS,
                             chat_id,
                         )
@@ -582,7 +580,7 @@ class AgentsManager:
                             chat_id=chat_id,
                         )
                     except asyncio.CancelledError:
-                        logger.info("[agents:post-task] Post task cancelled: chat_id=%s", chat_id)
+                        logger.info("post task cancelled chat_id=%s", chat_id)
                         await background_side_effect_service.mark_coordinator_failed_if_current(
                             row_id=coordinator_row_id,
                             user_id=user.id,
@@ -594,7 +592,7 @@ class AgentsManager:
         task = asyncio.create_task(_run())
         self._register_post_task(chat_id, task)
         logger.info(
-            "[agents:post-task] Background task started: chat_id=%s timeout=%ss",
+            "post task background task started chat_id=%s timeout_s=%s",
             chat_id,
             self.POST_TASK_TIMEOUT_SECONDS,
         )
@@ -615,7 +613,7 @@ class AgentsManager:
             return
 
         logger.warning(
-            "[agents:post-task] Stale post coordinator row detected: chat_id=%s status=%s — cancelling",
+            "stale post coordinator row detected chat_id=%s status=%s; cancelling",
             chat_id,
             coordinator_row.status,
         )
@@ -630,7 +628,7 @@ class AgentsManager:
             )
         except Exception:
             logger.warning(
-                "[agents:post-task] Failed to mark stale coordinator row as failed: chat_id=%s",
+                "failed to mark stale coordinator row as failed chat_id=%s",
                 chat_id,
                 exc_info=True,
             )
@@ -664,7 +662,7 @@ class AgentsManager:
             history_window = history[-effective_history_size:] if effective_history_size else []
             if effective_history_size and len(history) > effective_history_size:
                 logger.warning(
-                    "[agents:manager] Truncated specialist history for '%s' from %s to %s messages",
+                    "specialist history truncated specialist=%s from=%s to=%s",
                     item.name,
                     len(history),
                     len(history_window),
@@ -687,7 +685,7 @@ class AgentsManager:
                 result = await specialist.run(context)
                 latency_ms = elapsed_ms_since(started)
                 logger.info(
-                    "[agents:%s] Result: status=%s latency_ms=%s",
+                    "specialist=%s status=%s latency_ms=%s",
                     item.name,
                     result.status,
                     latency_ms,
@@ -697,7 +695,7 @@ class AgentsManager:
                         artifacts_json = json.dumps(result.artifacts, ensure_ascii=False, default=str)
                     except (TypeError, ValueError):
                         artifacts_json = repr(result.artifacts)
-                    logger.info("[agents:%s] Artifacts: %s", item.name, artifacts_json)
+                    logger.info("specialist=%s artifacts=%s", item.name, artifacts_json)
                 return {
                     "name": item.name,
                     "result": result.model_dump(),
@@ -706,7 +704,7 @@ class AgentsManager:
                 }
             except Exception:
                 latency_ms = elapsed_ms_since(started)
-                logger.warning("[agents:manager] Specialist '%s' failed", item.name, exc_info=True)
+                logger.warning("specialist failed name=%s", item.name, exc_info=True)
                 return {
                     "name": item.name,
                     # Avoid feeding verbose/technical error details back into the teacher context.
@@ -719,9 +717,9 @@ class AgentsManager:
         for item in routing_items:
             specialist = self.registry.get(item.name)
             if specialist is None:
-                logger.info("[agents:manager] Missing specialist '%s' - skipping", item.name)
+                logger.info("specialist missing; skipping name=%s", item.name)
                 continue
-            logger.info("[agents:manager] Running specialist '%s' reason=%s", item.name, item.reason)
+            logger.info("running specialist name=%s reason=%s", item.name, item.reason)
             tasks.append(_invoke(item, specialist))
 
         if not tasks:
@@ -742,7 +740,7 @@ class AgentsManager:
                 return []
             if user_data.db_user_id != user.id:
                 logger.warning(
-                    "[agents:manager] Recall state user mismatch for user %s: state db_user_id=%s",
+                    "recall state user mismatch user_id=%s state_db_user_id=%s",
                     user.id,
                     user_data.db_user_id,
                 )
@@ -752,7 +750,7 @@ class AgentsManager:
             return words
         except Exception as e:
             logger.warning(
-                "[agents:manager] Failed to load current recall words for user %s: %s",
+                "current recall words load failed user_id=%s error=%s",
                 user.id,
                 e,
             )
@@ -886,13 +884,13 @@ class AgentsManager:
         sources: list[dict[str, str]] = []
         for url in grammar_source_urls:
             if url not in allowed_urls:
-                logger.info("[agents:manager] Rejected grammar source URL (not returned by search_grammar): %s", url)
+                logger.info("grammar source url rejected reason=not_returned_by_search_grammar url=%s", url)
                 continue
             if url in seen_urls:
-                logger.info("[agents:manager] Rejected grammar source URL (duplicate): %s", url)
+                logger.info("grammar source url rejected reason=duplicate url=%s", url)
                 continue
             if not self._is_safe_url(url):
-                logger.info("[agents:manager] Rejected grammar source URL (unsafe): %s", url)
+                logger.info("grammar source url rejected reason=unsafe url=%s", url)
                 continue
             sources.append({"title": self._format_grammar_source_title(url), "url": url, "date": ""})
             seen_urls.add(url)
@@ -962,24 +960,24 @@ class AgentsManager:
         try:
             parsed = urlparse(url)
         except ValueError:
-            logger.info("[agents:manager] Rejected source URL (parse error): %s", url)
+            logger.info("source url rejected reason=parse_error url=%s", url)
             return False
         if parsed.username or parsed.password:
-            logger.info("[agents:manager] Rejected source URL (credentials not allowed): %s", url)
+            logger.info("source url rejected reason=credentials_not_allowed url=%s", url)
             return False
         try:
             port = parsed.port
         except ValueError:
-            logger.info("[agents:manager] Rejected source URL (invalid port): %s", url)
+            logger.info("source url rejected reason=invalid_port url=%s", url)
             return False
         if parsed.scheme not in {"http", "https"}:
-            logger.info("[agents:manager] Rejected source URL (scheme not allowed): %s", url)
+            logger.info("source url rejected reason=scheme_not_allowed url=%s", url)
             return False
 
         if port is not None and port not in self.allowed_ports:
-            logger.info("[agents:manager] Rejected source URL (port not allowed): %s", url)
+            logger.info("source url rejected reason=port_not_allowed url=%s", url)
             return False
         if not parsed.netloc:
-            logger.info("[agents:manager] Rejected source URL (missing netloc): %s", url)
+            logger.info("source url rejected reason=missing_netloc url=%s", url)
             return False
         return True
