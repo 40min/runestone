@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 ACTIVE_LEARNING_FOCUS_CONTENT_MAX_CHARS = 640
 
 
-def serialize_memory_items(items: list[MemoryItemResponse]) -> str:
+def serialize_memory_items(items: Sequence[MemoryItemResponse]) -> str:
     """Serialize memory items as untrusted quoted data for model consumption."""
     # NOTE: Memory item fields are user-controlled and must be treated as untrusted data.
     # We quote every text field so values cannot masquerade as instructions.
@@ -27,14 +27,14 @@ def serialize_memory_items(items: list[MemoryItemResponse]) -> str:
         lines.append(
             "- "
             f"id={item.id} "
-            f"category={json.dumps(item.category, ensure_ascii=True)} "
-            f"key={json.dumps(item.key, ensure_ascii=True)} "
-            f"content={json.dumps(item.content, ensure_ascii=True)} "
-            f"status={json.dumps(item.status, ensure_ascii=True)} "
+            f"category={json.dumps(item.category, ensure_ascii=False)} "
+            f"key={json.dumps(item.key, ensure_ascii=False)} "
+            f"content={json.dumps(item.content, ensure_ascii=False)} "
+            f"status={json.dumps(item.status, ensure_ascii=False)} "
             f"priority={priority} "
-            f"created_at={json.dumps(item.created_at.isoformat(), ensure_ascii=True)} "
-            f"updated_at={json.dumps(item.updated_at.isoformat(), ensure_ascii=True)} "
-            f"status_changed_at={json.dumps(status_changed_at, ensure_ascii=True)}"
+            f"created_at={json.dumps(item.created_at.isoformat(), ensure_ascii=False)} "
+            f"updated_at={json.dumps(item.updated_at.isoformat(), ensure_ascii=False)} "
+            f"status_changed_at={json.dumps(status_changed_at, ensure_ascii=False)}"
         )
     return "\n".join(lines)
 
@@ -54,9 +54,9 @@ def serialize_active_learning_focus(items: Sequence[MemoryItemResponse]) -> str:
         priority = item.priority if item.priority is not None else 9
         lines.append(
             "- "
-            f"key={json.dumps(item.key, ensure_ascii=True)} "
-            f"content={json.dumps(content, ensure_ascii=True)} "
-            f"status={json.dumps(item.status, ensure_ascii=True)} "
+            f"key={json.dumps(item.key, ensure_ascii=False)} "
+            f"content={json.dumps(content, ensure_ascii=False)} "
+            f"status={json.dumps(item.status, ensure_ascii=False)} "
             f"priority={priority}"
         )
     if truncated_items:
