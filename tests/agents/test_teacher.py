@@ -149,9 +149,10 @@ def test_build_agent(mock_settings, mock_chat_model):
                 call_kwargs["system_prompt"]
             )
             assert (
-                "Only include exact `url` values returned by `search_grammar` in this same reply."
+                "You may include only exact `url` values returned by `search_grammar` in this reply"
                 in call_kwargs["system_prompt"]
             )
+            assert "earlier assistant messages in this chat" in call_kwargs["system_prompt"]
             assert "Never invent or guess URLs." in call_kwargs["system_prompt"]
             assert "Use grammar tools only when the student made a concrete grammar mistake" in (
                 call_kwargs["system_prompt"]
@@ -319,7 +320,7 @@ async def test_run_with_history(teacher_agent, mock_user):
     assert len(messages) == 4
     assert "[CURRENT_DATETIME]" in messages[0].content
     assert messages[1].content == "Old user msg"
-    assert "[NEWS_SOURCES]" in messages[2].content
+    assert "[REFERENCE_SOURCES]" in messages[2].content
     assert "Old bot msg" in messages[2].content
     assert messages[3].content == "Current msg"
 
@@ -756,7 +757,7 @@ def test_format_sources():
 
     formatted = TeacherAgent._format_sources(sources)
     assert formatted.count("\n") >= 1
-    assert "[NEWS_SOURCES]" in formatted
+    assert "[REFERENCE_SOURCES]" in formatted
     assert "example.com" in formatted
     assert "Title 1" in formatted
     assert "Title 20" in formatted

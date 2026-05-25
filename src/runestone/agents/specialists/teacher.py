@@ -117,6 +117,9 @@ class TeacherAgent:
 - `grammar_source_urls` is optional. It is completely OK to leave it empty.
 - Use grammar tools only when the student made a concrete grammar mistake or explicitly asked a grammar question.
 - Do not use grammar tools for greetings, casual chat, correct Swedish, or non-grammar topics.
+- First check earlier assistant messages in this chat for clearly relevant grammar references you already found.
+- If an earlier assistant message already contains a clearly relevant grammar reference,
+  reuse that exact URL instead of searching again.
 - If you search, you may use `search_grammar` 1-2 times with focused queries.
 - `search_grammar` returns a payload with a `results` list. Each result contains `title`, `url`, and `path`.
 - Focus on the top returned results first.
@@ -124,14 +127,18 @@ class TeacherAgent:
   from `results` with `read_grammar_page(path)`.
 - If the search returns nothing or the page is not clearly relevant, stop and answer without grammar links.
 - `grammar_source_urls` may contain at most {MAX_TEACHER_GRAMMAR_SOURCE_LINKS} URLs.
-- Only include exact `url` values returned by `search_grammar` in this same reply.
+- You may include only exact `url` values returned by `search_grammar` in this reply
+  or exact grammar reference URLs that already appeared in earlier assistant messages
+  in this chat.
 - Never invent or guess URLs.
 """
 
         grammar_source_rules_prompt = """
 - `grammar_source_urls` is optional and may be empty.
 - Only include grammar URLs when they are genuinely helpful for this reply.
-- `grammar_source_urls` may contain only exact `url` values returned by the `search_grammar` tool in this same turn.
+- `grammar_source_urls` may contain only exact `url` values returned by the
+  `search_grammar` tool in this turn or exact grammar reference URLs that already
+  appeared in earlier assistant messages in this chat.
 - Never invent or guess grammar source URLs.
 - Leave `grammar_source_urls` empty when no grammar material is clearly relevant enough to show.
 """
@@ -573,7 +580,7 @@ already names a clear topic.
     def _format_sources(sources: list[dict[str, str]]) -> str:
         if not sources:
             return ""
-        lines = ["", "", "[NEWS_SOURCES]"]
+        lines = ["", "", "[REFERENCE_SOURCES]"]
         max_sources = 20
         if len(sources) > max_sources:
             logger.warning(

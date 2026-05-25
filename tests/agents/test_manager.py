@@ -678,7 +678,9 @@ async def test_generate_teacher_response_filters_unsafe_urls(mock_settings, mock
 
 
 @pytest.mark.anyio
-async def test_generate_teacher_response_requires_search_grammar_result_for_grammar_sources(mock_settings, mock_user):
+async def test_generate_teacher_response_rejects_grammar_sources_missing_from_search_and_history(
+    mock_settings, mock_user
+):
     manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(
@@ -694,6 +696,50 @@ async def test_generate_teacher_response_requires_search_grammar_result_for_gram
     )
 
     assert sources is None
+
+
+@pytest.mark.anyio
+async def test_generate_teacher_response_accepts_grammar_sources_from_history(mock_settings, mock_user):
+    manager = _make_manager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(
+        message="Grammatik",
+        grammar_source_urls=[
+            "https://localhost:5173/?view=grammar&cheatsheet=word_order/huvudsats",
+        ],
+        final_messages=[],
+    )
+
+    history = [
+        ChatMessage(
+            role="assistant",
+            content="Tidigare svar",
+            sources=[
+                {
+                    "title": "Word Order / Huvudsats",
+                    "url": "https://localhost:5173/?view=grammar&cheatsheet=word_order/huvudsats",
+                    "date": "",
+                }
+            ],
+        )
+    ]
+
+    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
+        message="Grammatik",
+        history=history,
+        user=mock_user,
+        pre_results=[],
+        starter_memory="",
+        recent_side_effects=[],
+    )
+
+    assert sources == [
+        {
+            "title": "Word Order / Huvudsats",
+            "url": "https://localhost:5173/?view=grammar&cheatsheet=word_order/huvudsats",
+            "date": "",
+        }
+    ]
 
 
 @pytest.mark.anyio
