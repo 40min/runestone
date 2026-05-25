@@ -123,13 +123,15 @@ Implementation status:
 
 Implementation status:
 
-- not implemented in this change set
-- the current code changes are intentionally limited to Teacher, shared backend
-  memory filtering, and the MemoryMaintainer single-read path
-- the three-case `MemoryKeeper` simplification below remains planned follow-up
-  work
+- implemented
+- `MemoryKeeper` now uses a three-case split instead of a universal read-before-write
+- `delete_memory_item` is exposed alongside the existing memory tools
+- the `[memory:ID]` tag convention is documented in the Teacher prompt so Teacher can
+  annotate its durable-signal sentences with the relevant memory item id
+- that `[memory:ID]` tag is temporarily exposed in visible chat text as a bridge until
+  structured teacher-side memory signaling lands in the follow-up task below
 
-`MemoryKeeper` should move to a three-case split.
+`MemoryKeeper` has moved to a three-case split.
 
 ### Case A: student explicitly asks to edit memory
 
@@ -148,9 +150,8 @@ Behavior:
 
 Implementation status:
 
-- not implemented in this change set
-- current `MemoryKeeper` behavior has not been refactored to explicitly model
-  this case split yet
+- implemented
+- `delete_memory_item` is now available in this path for explicit forget/remove requests
 
 ### Case B: teacher explicitly points out a new durable issue
 
@@ -162,7 +163,7 @@ Examples:
 Behavior:
 
 - do **not** require memory inspection first
-- just append/create the new memory item
+- just append/create the new memory item using a fresh descriptive English key
 
 Reason:
 
@@ -171,28 +172,32 @@ Reason:
 
 Implementation status:
 
-- not implemented in this change set
-- current `MemoryKeeper` has not been simplified to append/create without a
-  required pre-read for this case
+- implemented
+- `MemoryKeeper` now appends/creates directly without a required pre-read for this case
 
 ### Case C: teacher explicitly signals improvement/mastery/replacement/priority change
 
 Behavior:
 
-- allow append/write behavior without forcing a pre-read in this change set
-- do not block this simplification on perfect update targeting right now
+- if `teacher_response` contains a `[memory:ID]` tag, write directly using that id
+  (no pre-read required)
+- if no `[memory:ID]` tag is present, do a single targeted `read_memory` with a
+  category filter to locate the item id, then write
+- temporary duplicates are acceptable if the narrow read fails; `memory_maintainer`
+  handles cleanup
 
 Note:
 
-- this is intentionally a pragmatic "stop the fire first" decision
-- follow-up cleanup and consolidation quality will rely more heavily on
-  `MemoryMaintainer`
+- `[memory:ID]` tags are emitted by Teacher when an item id is known from starter
+  memory or `read_active_learning_focus` context (which now includes `id=` fields)
+- this tag is temporarily present in the visible chat reply so `MemoryKeeper` can target
+  the right item before structured signaling is implemented
+- follow-up task: `BOyvak7z5hfl` (`feat: Make teacher express ...`) will move this
+  signal out of visible reply text and into structured output
 
 Implementation status:
 
-- not implemented in this change set
-- current `MemoryKeeper` has not yet been simplified to allow this append/write
-  path without a forced pre-read
+- implemented
 
 ## Important Caveat
 
@@ -204,15 +209,15 @@ Known tradeoff:
 - append-first MemoryKeeper behavior can increase duplicate or overlapping
   `area_to_improve` items until `MemoryMaintainer` cleanup is improved and
   re-enabled confidently
+- the `[memory:ID]` tag mechanism mitigates this for Case C when the Teacher
+  has seen the item in context, but Case B always appends fresh
 
-That tradeoff is accepted for now as the next-step work will focus on
-stabilizing and trusting `MemoryMaintainer`.
+That tradeoff is accepted.
 
 Implementation status:
 
-- pending follow-up
-- the tradeoff is documented, but the underlying append-first `MemoryKeeper`
-  simplification has not landed yet
+- implemented
+- the append-first `MemoryKeeper` simplification has landed
 
 ## Double-Check: critical user facts already provided outside memory
 

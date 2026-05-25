@@ -81,6 +81,7 @@ async def test_read_active_learning_focus_uses_single_scoped_query_and_compact_o
         offset=0,
     )
     assert result.startswith("UNTRUSTED_ACTIVE_LEARNING_FOCUS")
+    assert "id=7" in result
     assert 'key="word_order"' in result
     assert 'status="struggling"' in result
     assert "priority=1" in result

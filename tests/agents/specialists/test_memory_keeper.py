@@ -6,6 +6,7 @@ from langchain_core.messages import AIMessage
 
 from runestone.agents.specialists.base import SpecialistContext, SpecialistResult, parse_specialist_result
 from runestone.agents.specialists.memory_keeper import MEMORY_KEEPER_SYSTEM_PROMPT, MemoryKeeperSpecialist
+from runestone.agents.tools.memory import delete_memory_item
 
 
 @pytest.fixture
@@ -197,6 +198,26 @@ def test_memory_keeper_prompt_uses_mastered_area_items_without_promotion():
     )
 
 
+def test_memory_keeper_prompt_three_case_model():
+    """Prompt must describe all three cases without a universal mandatory read-before-write."""
+    assert "Three-Case Execution Model" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "Case A" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "Case B" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "Case C" in MEMORY_KEEPER_SYSTEM_PROMPT
+    # No universal "MUST complete ALL steps" read-first mandate
+    assert "Mandatory Execution Pipeline" not in MEMORY_KEEPER_SYSTEM_PROMPT
+    # Case B: teacher-driven new issue must say no pre-read required
+    assert "Do NOT call `read_memory` first" in MEMORY_KEEPER_SYSTEM_PROMPT
+    # Case C: [memory:ID] tag path
+    assert "[memory:ID]" in MEMORY_KEEPER_SYSTEM_PROMPT
+
+
+def test_memory_keeper_prompt_delete_tool_in_case_a():
+    """Case A (student edit) must expose delete_memory_item for forget/remove."""
+    assert "`delete_memory_item` for explicit forget/remove requests" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "delete_memory_item" in MEMORY_KEEPER_SYSTEM_PROMPT
+
+
 def test_memory_keeper_prompt_rejects_misspelled_word_pollution():
     assert "Treat spelling corrections, nonexistent-word feedback" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "Do not create `area_to_improve` items for misspelled" in MEMORY_KEEPER_SYSTEM_PROMPT
@@ -220,7 +241,7 @@ def test_memory_keeper_prompt_separates_status_and_priority_roles():
     )
 
 
-def test_memory_keeper_builds_agent_with_priority_tool(mock_settings):
+def test_memory_keeper_builds_agent_with_expected_tools(mock_settings):
     with patch("runestone.agents.specialists.memory_keeper.build_chat_model", return_value=MagicMock()):
         with patch("runestone.agents.specialists.memory_keeper.create_agent") as create_agent_mock:
             MemoryKeeperSpecialist(mock_settings)
@@ -231,7 +252,13 @@ def test_memory_keeper_builds_agent_with_priority_tool(mock_settings):
         "upsert_memory_item",
         "update_memory_status",
         "update_memory_priority",
+        "delete_memory_item",
     ]
+
+
+def test_delete_memory_item_tool_is_accessible():
+    """delete_memory_item must exist at the tool layer and be wired into MemoryKeeper."""
+    assert delete_memory_item.name == "delete_memory_item"
 
 
 @pytest.mark.anyio

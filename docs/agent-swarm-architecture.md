@@ -200,15 +200,19 @@ flowchart TD
     A["User turn arrives"] --> B["TeacherAgent"]
     B --> C{"Needs learner memory?"}
     C -- No --> D["Continue response generation"]
-    C -- Yes --> E["read_active_learning_focus (read-only)"]
+    C -- Yes --> E["read_active_learning_focus (read-only, includes item ids)"]
     E --> D
-    D --> F["Teacher response returned to user"]
+    D --> F["Teacher response returned to user (may temporarily include [memory:ID] tags)"]
     F --> G["Post-response coordinator"]
     G --> H{"Memory maintenance needed?"}
     H -- No --> I["No memory change"]
     H -- Yes --> J["MemoryKeeper"]
-    J --> K["Read relevant memory"]
-    K --> L["Create, update, or correct durable memory"]
+    J --> K{"Which case?"}
+    K -- "Case A: student edit" --> L["Read relevant memory, then write/delete"]
+    K -- "Case B: teacher new issue" --> M["Append directly with fresh key (no pre-read)"]
+    K -- "Case C: teacher status/priority change" --> N{"[memory:ID] tag present?"}
+    N -- Yes --> O["Write directly using id"]
+    N -- No --> P["Targeted read to locate id, then write"]
 ```
 
 #### Teacher-side memory reads
@@ -239,13 +243,21 @@ Principles:
 - Use the actual `teacher_response` as the strongest teacher-driven signal for durable updates.
 - Allow explicit student memory-edit instructions from the current turn to trigger maintenance as well.
 - Default to `no_action`; avoid additive or corrective writes without clear evidence.
-- Read relevant memory before writing so updates can correct stale state instead of blindly appending more notes.
+- Use a three-case execution model instead of a universal read-before-write:
+  - **Case A (student edit):** read the relevant category first, then write/delete as instructed.
+  - **Case B (teacher new issue):** append directly using a fresh descriptive key; no pre-read required.
+  - **Case C (teacher status/priority change):** if the teacher embedded a `[memory:ID]` tag, write
+    directly; otherwise do one targeted category-scoped read to locate the item id, then write.
+- The `[memory:ID]` tag is a temporary bridge carried in the visible teacher reply text until
+  the structured-output follow-up replaces this mechanism.
+- Temporary duplicate `area_to_improve` items from append-first writes are an accepted tradeoff;
+  broad duplicate cleanup belongs to `memory_maintainer`.
 
 Scope of maintenance:
 
 - create a new durable memory item when the turn reveals a recurring issue or stable fact worth storing
 - update `area_to_improve` content, status, and priority when the turn shows progress or regression
-- delete or correct memory only when the student explicitly asks or confirms an existing item is wrong
+- delete or correct memory when the student explicitly asks or confirms an existing item is wrong
 
 Area-to-improve review rules:
 
