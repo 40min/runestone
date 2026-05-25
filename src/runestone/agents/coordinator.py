@@ -139,6 +139,8 @@ Examples that should NOT route:
 - Teacher: "Good job."
 - Teacher: "Write one more sentence with these words."
 - Teacher: "There is no such word as 'varen'; use 'våren' for spring."
+
+Set `chat_history_size` to `0` for `memory_keeper`.
 """
 )
 

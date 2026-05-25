@@ -94,6 +94,7 @@ def test_memory_keeper_prompt_mentions_student_driven_memory_requests():
     assert 'Teacher: "You have now clearly mastered this tense."' in COORDINATOR_POST_RESPONSE_PROMPT
     assert "misspelled, invalid, nonexistent" in COORDINATOR_POST_RESPONSE_PROMPT
     assert "That is a vocabulary correction, not a durable memory update." in COORDINATOR_POST_RESPONSE_PROMPT
+    assert "Set `chat_history_size` to `0` for `memory_keeper`." in COORDINATOR_POST_RESPONSE_PROMPT
 
 
 def test_news_prompt_requires_known_topic():

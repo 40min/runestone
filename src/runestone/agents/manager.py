@@ -656,7 +656,7 @@ class AgentsManager:
         async def _invoke(item, specialist):
             started = time.monotonic()
             effective_history_size = item.chat_history_size
-            if item.name == "word_keeper":
+            if item.name in {"word_keeper", "memory_keeper"}:
                 effective_history_size = 0
 
             history_window = history[-effective_history_size:] if effective_history_size else []
