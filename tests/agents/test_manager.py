@@ -1055,6 +1055,7 @@ async def test_run_post_turn_excludes_word_keeper_from_coordinator_available_spe
     _args, kwargs = manager.coordinator.plan_post_turn.call_args
     assert "word_keeper" not in kwargs["available_specialists"]
     assert "memory_keeper" in kwargs["available_specialists"]
+    assert kwargs["history"] == []
 
 
 @pytest.mark.anyio
@@ -1154,6 +1155,43 @@ async def test_run_post_turn_persists_coordinator_and_direct_word_keeper_results
 
     kwargs = mock_side_effect_service.replace_post_specialist_results.call_args.kwargs
     assert [item["name"] for item in kwargs["results"]] == ["memory_keeper", "word_keeper"]
+
+
+@pytest.mark.anyio
+async def test_run_post_turn_forces_memory_keeper_history_to_zero(mock_settings, mock_user, mock_side_effect_service):
+    manager = _make_manager(mock_settings)
+
+    class _MemoryKeeperCaptureSpecialist(BaseSpecialist):
+        def __init__(self):
+            super().__init__(name="memory_keeper")
+            self.seen_history = None
+
+        async def run(self, context: SpecialistContext) -> SpecialistResult:
+            self.seen_history = context.history
+            return SpecialistResult(status="no_action")
+
+    capture = _MemoryKeeperCaptureSpecialist()
+    manager.registry.register(capture, overwrite=True)
+    manager.coordinator.plan_post_turn = AsyncMock(
+        return_value=_make_plan(post=[RoutingItem(name="memory_keeper", reason="memory", chat_history_size=2)])
+    )
+
+    await manager.run_post_turn(
+        message="Ok",
+        chat_id="chat-1",
+        history=[
+            ChatMessage(role="assistant", content="You have now mastered this tense. [memory:137]"),
+            ChatMessage(role="user", content="Thanks"),
+        ],
+        user=mock_user,
+        teacher_response="Good job, let's continue.",
+        vocabulary_candidates=[],
+        pre_results=[],
+        side_effect_service=mock_side_effect_service,
+        coordinator_row_id=99,
+    )
+
+    assert capture.seen_history == []
 
 
 @pytest.mark.anyio

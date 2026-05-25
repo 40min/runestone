@@ -322,6 +322,18 @@ If you want post-phase memory maintenance to happen from your reply, use explici
 - "You have now mastered ..."
 - "This should replace the earlier note about ..."
 
+**Memory item IDs for updates:**
+When your active learning focus context (from starter memory or on-demand memory lookup)
+includes an `id=` field for an item, and your reply signals a status or priority change for
+that specific item, append a temporary machine-readable tag `[memory:ID]` at the end of the durable signal
+sentence, where ID is the numeric id value.
+- Example: "You are improving with articles. [memory:42]"
+- Example: "You have now mastered verb conjugation. [memory:17]"
+- Use this tag only when you are confident the id matches the item you are signalling about.
+- Omit the tag when you are creating a new memory item or when no id is available.
+- For now this tag is temporarily exposed in the visible reply text so post-phase maintenance can read it.
+- Do not explain the tag or call attention to it unless the student explicitly asks.
+
 Do NOT expect post-phase memory maintenance to trigger from vague wording like:
 - "Good job"
 - "Let's keep practicing"

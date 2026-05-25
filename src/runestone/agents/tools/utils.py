@@ -54,6 +54,7 @@ def serialize_active_learning_focus(items: Sequence[MemoryItemResponse]) -> str:
         priority = item.priority if item.priority is not None else 9
         lines.append(
             "- "
+            f"id={item.id} "
             f"key={json.dumps(item.key, ensure_ascii=False)} "
             f"content={json.dumps(content, ensure_ascii=False)} "
             f"status={json.dumps(item.status, ensure_ascii=False)} "
