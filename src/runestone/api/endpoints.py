@@ -77,7 +77,7 @@ async def process_ocr(
     """
     # Validate file type
     if not file.content_type or not file.content_type.startswith("image/"):
-        logger.warning(f"[API] Invalid file type: {file.content_type}")
+        logger.warning("invalid image content type: %s", file.content_type)
         raise HTTPException(
             status_code=400,
             detail="Invalid file type. Please upload an image file.",
@@ -99,19 +99,19 @@ async def process_ocr(
 
         # OCRResult object - return directly (unified schema)
         stats = ocr_result.recognition_statistics
-        logger.debug(f"[API] Result stats: {stats.successfully_transcribed}/{stats.total_elements} elements")
+        logger.debug("ocr result stats transcribed=%s total=%s", stats.successfully_transcribed, stats.total_elements)
         return ocr_result
 
     except RunestoneError as e:
-        logger.error(f"[API] RunestoneError: {type(e).__name__}: {str(e)}")
-        logger.debug("[API] Full exception traceback:", exc_info=True)
+        logger.error("ocr failed error_type=%s error=%s", type(e).__name__, str(e))
+        logger.debug("ocr traceback", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"OCR failed: {str(e)}",
         )
     except Exception as e:
-        logger.error(f"[API] Unexpected error: {type(e).__name__}: {str(e)}")
-        logger.debug("[API] Full exception traceback:", exc_info=True)
+        logger.error("ocr failed unexpectedly error_type=%s error=%s", type(e).__name__, str(e))
+        logger.debug("ocr traceback", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Unexpected error: {type(e).__name__}: {str(e)}",
@@ -148,7 +148,7 @@ async def analyze_content(
     Raises:
         HTTPException: For various error conditions
     """
-    logger.info(f"[API] Analysis request received: text_length={len(request.text)} chars")
+    logger.info("analysis request received text_length=%s", len(request.text))
 
     try:
         # Run content analysis
@@ -156,20 +156,20 @@ async def analyze_content(
 
         # ContentAnalysis object - return directly (unified schema)
         vocab_count = len(analysis_result.vocabulary)
-        logger.debug(f"[API] Found {vocab_count} vocabulary items")
+        logger.debug("analysis vocabulary count=%s", vocab_count)
 
         return analysis_result
 
     except RunestoneError as e:
-        logger.error(f"[API] RunestoneError during analysis: {type(e).__name__}: {str(e)}")
-        logger.debug("[API] Full exception traceback:", exc_info=True)
+        logger.error("analysis failed error_type=%s error=%s", type(e).__name__, str(e))
+        logger.debug("analysis traceback", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Analysis failed: {str(e)}",
         )
     except Exception as e:
-        logger.error(f"[API] Unexpected error during analysis: {type(e).__name__}: {str(e)}")
-        logger.debug("[API] Full exception traceback:", exc_info=True)
+        logger.error("analysis failed unexpectedly error_type=%s error=%s", type(e).__name__, str(e))
+        logger.debug("analysis traceback", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Unexpected error: {type(e).__name__}: {str(e)}",
@@ -210,7 +210,7 @@ async def save_vocabulary(
         return await service.save_vocabulary(request.items, current_user.id, request.enrich)
 
     except Exception:
-        logger.exception("Failed to save vocabulary items")
+        logger.exception("save vocabulary items failed")
         raise HTTPException(
             status_code=500,
             detail="An error occurred while saving vocabulary items. Please try again later.",
@@ -257,7 +257,7 @@ async def save_vocabulary_item(
             detail=str(e),
         )
     except Exception:
-        logger.exception("Failed to save single vocabulary item")
+        logger.exception("save single vocabulary item failed")
         raise HTTPException(
             status_code=500,
             detail="An error occurred while saving the vocabulary item. Please try again later.",
@@ -280,7 +280,7 @@ async def get_vocabulary_stats(
     try:
         return await service.get_vocabulary_stats(current_user.id)
     except Exception:
-        logger.exception("Failed to retrieve vocabulary stats")
+        logger.exception("retrieve vocabulary stats failed")
         raise HTTPException(
             status_code=500,
             detail="An error occurred while retrieving vocabulary stats. Please try again later.",
@@ -342,7 +342,7 @@ async def get_vocabulary(
     except HTTPException:
         raise
     except Exception:
-        logger.exception("Failed to retrieve vocabulary")
+        logger.exception("retrieve vocabulary failed")
         raise HTTPException(
             status_code=500,
             detail="An error occurred while retrieving vocabulary. Please try again later.",
@@ -398,7 +398,7 @@ async def update_vocabulary(
         )
 
     except Exception as exc:
-        logger.exception(f"Failed to update vocabulary item {item_id}")
+        logger.exception("failed to update vocabulary item_id=%s", item_id)
         # Check for specific database integrity errors
         error_str = str(exc).lower()
         if "unique" in error_str or "duplicate" in error_str:
@@ -464,7 +464,7 @@ async def delete_vocabulary(
             detail=str(e),
         )
     except Exception:
-        logger.exception(f"Failed to delete vocabulary item {item_id}")
+        logger.exception("failed to delete vocabulary item_id=%s", item_id)
         raise HTTPException(
             status_code=500,
             detail="An error occurred while deleting the vocabulary item. Please try again later.",
@@ -507,7 +507,7 @@ async def improve_vocabulary(
         return result
 
     except Exception:
-        logger.exception("Failed to improve vocabulary")
+        logger.exception("improve vocabulary failed")
         raise HTTPException(
             status_code=500,
             detail="An internal error occurred while improving vocabulary.",
@@ -564,7 +564,7 @@ async def search_grammar_cheatsheets(
         result_items = await service.search_cheatsheets_async(grammar_index, query, top_k)
         return GrammarSearchResponse(results=[GrammarSearchResult(**item) for item in result_items])
     except Exception:
-        logger.exception("Failed to search grammar cheatsheets")
+        logger.exception("search grammar cheatsheets failed")
         raise HTTPException(
             status_code=500,
             detail="Failed to search grammar cheatsheets",
@@ -597,7 +597,7 @@ async def list_cheatsheets(
         cheatsheets = service.list_cheatsheets()
         return [CheatsheetInfo(**cs) for cs in cheatsheets]
     except Exception as e:
-        logger.error(f"Failed to list cheatsheets: {e}")
+        logger.error("list cheatsheets failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail="Failed to retrieve cheatsheets",
@@ -645,7 +645,7 @@ async def get_cheatsheet_content(
             detail=str(e),
         )
     except Exception as e:
-        logger.error(f"Failed to get cheatsheet content for {filepath}: {e}")
+        logger.error("get cheatsheet content failed filepath=%s error=%s", filepath, e)
         raise HTTPException(
             status_code=500,
             detail="Failed to retrieve cheatsheet content",

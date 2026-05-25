@@ -134,23 +134,23 @@ class OCRProcessor:
             Preprocessed PIL Image object with minimal adjustments
         """
         try:
-            self.logger.debug(f"Starting minimal image preprocessing: mode={image.mode}, size={image.size}")
+            self.logger.debug(f"minimal image preprocessing started mode={image.mode} size={image.size}")
 
             # Only ensure RGB format for LLM compatibility - no aggressive preprocessing
             # Based on user feedback: preprocessing causes more harm than good for accuracy
             if image.mode != "RGB":
                 final_image = image.convert("RGB")
-                self.logger.debug("Converted image to RGB format for LLM compatibility")
+                self.logger.debug("image converted to RGB for llm compatibility")
             else:
                 final_image = image
 
-            self.logger.debug(f"Minimal preprocessing complete: mode={final_image.mode}, size={final_image.size}")
+            self.logger.debug(f"minimal preprocessing completed mode={final_image.mode} size={final_image.size}")
 
             return final_image
 
         except (AttributeError, TypeError) as e:
             # Handle cases where we might be working with a mock object during testing
-            self.logger.warning(f"Image preprocessing failed ({str(e)}), using original image")
+            self.logger.warning("image preprocessing failed error=%s; using original image", str(e))
 
             # Return original image if preprocessing fails (e.g., during testing with mocks)
             # Ensure it's in RGB format for LLM processing
@@ -183,38 +183,38 @@ class OCRProcessor:
         start_time = time.time()
         try:
             # Log original image characteristics for debugging
-            self.logger.debug(f"[OCRProcessor] Starting text extraction: mode={image.mode}, size={image.size}")
+            self.logger.debug(f"text extraction started mode={image.mode} size={image.size}")
 
             # Basic validation and size adjustment
             if image.mode not in ["RGB", "RGBA", "L"]:
-                self.logger.debug(f"[OCRProcessor] Converting image from {image.mode} to RGB")
+                self.logger.debug(f"image converting to RGB from_mode={image.mode}")
                 image = image.convert("RGB")
 
             # Check image size (basic validation)
             width, height = image.size
             if width < 100 or height < 100:
-                self.logger.error(f"[OCRProcessor] Image too small: {width}x{height}")
+                self.logger.error(f"image too small width={width} height={height}")
                 raise ImageProcessingError("Image is too small (minimum 100x100 pixels)")
 
             if width > 4096 or height > 4096:
                 # Resize large images to prevent API issues
-                self.logger.debug(f"[OCRProcessor] Resizing large image from {image.size}")
+                self.logger.debug(f"large image resizing from_size={image.size}")
                 image.thumbnail((4096, 4096), Image.Resampling.LANCZOS)
-                self.logger.debug(f"[OCRProcessor] Resized to {image.size}")
+                self.logger.debug(f"large image resized to_size={image.size}")
 
             # ENHANCEMENT: Apply preprocessing for better light-blue text detection
-            self.logger.debug("[OCRProcessor] Applying image preprocessing...")
+            self.logger.debug("image preprocessing started")
             preprocessed_image = self._preprocess_image_for_ocr(image)
-            self.logger.debug("[OCRProcessor] Preprocessing complete")
+            self.logger.debug("image preprocessing completed")
 
             # Build OCR prompt using PromptBuilder
-            self.logger.debug("[OCRProcessor] Building OCR prompt...")
+            self.logger.debug("ocr prompt build started")
             ocr_prompt = self.builder.build_ocr_prompt()
-            self.logger.debug(f"[OCRProcessor] Prompt built, length: {len(ocr_prompt)} chars")
+            self.logger.debug("ocr prompt built length=%s", len(ocr_prompt))
 
             image_data_url = self._image_to_data_url(preprocessed_image)
             self.logger.info(
-                "[OCRProcessor] Extracting text with provider=%s model=%s",
+                "Extracting text with provider=%s model=%s",
                 self.settings.resolve_ocr_llm_provider(),
                 self.settings.resolve_ocr_llm_model(),
             )
@@ -240,39 +240,33 @@ class OCRProcessor:
 
             # Check if we got a valid response
             if not extracted_text:
-                self.logger.error("[OCRProcessor] No text returned from OCR processing")
+                self.logger.error("ocr returned no text")
                 raise OCRError("No text returned from OCR processing")
 
-            self.logger.debug(f"[OCRProcessor] Received response, length: {len(extracted_text)} chars")
+            self.logger.debug("ocr response received length=%s", len(extracted_text))
 
             # Parse and analyze recognition statistics
-            self.logger.debug("[OCRProcessor] Parsing and validating OCR response...")
+            self.logger.debug("ocr response parsing and validation started")
             ocr_response = self._parse_and_analyze_recognition_stats(extracted_text)
             stats = ocr_response.recognition_statistics
-            self.logger.debug(
-                f"[OCRProcessor] Recognition stats: {stats.successfully_transcribed}/{stats.total_elements} elements"
-            )
+            self.logger.debug(f"Recognition stats: {stats.successfully_transcribed}/{stats.total_elements} elements")
 
             # Check if extracted text is too short
             if len(ocr_response.transcribed_text) < 10:
-                self.logger.error(
-                    f"[OCRProcessor] Extracted text too short: {len(ocr_response.transcribed_text)} chars"
-                )
+                self.logger.error("ocr text too short length=%s", len(ocr_response.transcribed_text))
                 raise OCRError("Extracted text is too short - may not be a valid textbook page")
 
-            self.logger.debug(
-                f"[OCRProcessor] OCR extraction successful: {len(ocr_response.transcribed_text)} characters extracted"
-            )
+            self.logger.debug("ocr extraction successful characters=%s", len(ocr_response.transcribed_text))
 
             processing_time = time.time() - start_time
-            self.logger.info(f"[OCRProcessor] OCR processing completed in {processing_time:.2f} seconds")
+            self.logger.info("ocr processing completed latency_s=%.2f", processing_time)
 
             return ocr_response
 
         except OCRError:
-            self.logger.error("[OCRProcessor] OCRError caught, re-raising")
+            self.logger.error("ocr error raised; re-raising")
             raise
         except Exception as e:
-            self.logger.error(f"[OCRProcessor] Unexpected error type: {type(e).__name__}")
-            self.logger.error(f"[OCRProcessor] Error message: {str(e)}")
+            self.logger.error("ocr unexpected error type=%s", type(e).__name__)
+            self.logger.error("ocr unexpected error message=%s", str(e))
             raise OCRError(f"OCR processing failed: {type(e).__name__}: {str(e)}")
