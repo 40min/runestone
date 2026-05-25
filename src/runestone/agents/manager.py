@@ -394,7 +394,7 @@ class AgentsManager:
             )
             post_items = [item for item in plan.post_response if item.name != "word_keeper"]
             logger.info(
-                "Post-phase selection: user_id=%s specialists=%s",
+                "post-phase selection user_id=%s specialists=%s",
                 user.id,
                 ",".join([item.name for item in post_items]) if post_items else "none",
             )
