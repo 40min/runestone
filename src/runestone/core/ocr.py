@@ -214,7 +214,7 @@ class OCRProcessor:
 
             image_data_url = self._image_to_data_url(preprocessed_image)
             self.logger.info(
-                "Extracting text with provider=%s model=%s",
+                "extracting text provider=%s model=%s",
                 self.settings.resolve_ocr_llm_provider(),
                 self.settings.resolve_ocr_llm_model(),
             )
