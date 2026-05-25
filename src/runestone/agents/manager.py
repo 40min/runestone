@@ -51,6 +51,7 @@ class AgentsManager:
     MEMORY_MAINTENANCE_TIMEOUT_SECONDS = 35
     STARTER_MEMORY_PERSONAL_LIMIT = 50
     STARTER_MEMORY_AREA_LIMIT = 5
+    NO_CHAT_HISTORY_SPECIALISTS = frozenset({"word_keeper", "memory_keeper"})
 
     def __init__(
         self,
@@ -102,6 +103,22 @@ class AgentsManager:
                     self.allowed_ports.add(app_parsed.port)
         except (ValueError, AttributeError) as e:
             logger.warning("allowed_origins configuration issue: %s", e)
+
+    @classmethod
+    def _effective_specialist_history_size(cls, specialist_name: str, requested_history_size: int) -> int:
+        """
+        Apply manager-owned history-window overrides for specialists.
+
+        Some post/pre specialists should never receive raw chat history because their
+        trigger inputs are already passed through dedicated context fields:
+        - `word_keeper` uses the current save request plus the immediately previous
+          teacher message when needed.
+        - `memory_keeper` should act only on the current student message and the
+          current turn's teacher response, not on older teacher durability signals.
+        """
+        if specialist_name in cls.NO_CHAT_HISTORY_SPECIALISTS:
+            return 0
+        return requested_history_size
 
     # ------------------------------------------------------------------
     # Phase methods (public, individually testable)
@@ -655,9 +672,10 @@ class AgentsManager:
 
         async def _invoke(item, specialist):
             started = time.monotonic()
-            effective_history_size = item.chat_history_size
-            if item.name in {"word_keeper", "memory_keeper"}:
-                effective_history_size = 0
+            effective_history_size = self._effective_specialist_history_size(
+                item.name,
+                item.chat_history_size,
+            )
 
             history_window = history[-effective_history_size:] if effective_history_size else []
             if effective_history_size and len(history) > effective_history_size:
