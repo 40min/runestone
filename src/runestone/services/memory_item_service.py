@@ -58,7 +58,7 @@ class MemoryItemService:
         self,
         user_id: int,
         category: Optional[MemoryCategory] = None,
-        status: Optional[str] = None,
+        statuses: list[str] | tuple[str, ...] | None = None,
         sort_by: Optional[MemorySortBy] = None,
         sort_direction: SortDirection = SortDirection.DESC,
         limit: int = 100,
@@ -70,7 +70,7 @@ class MemoryItemService:
         Args:
             user_id: User ID
             category: Optional category filter
-            status: Optional status filter
+            statuses: Optional status filters
             sort_by: Optional explicit sort field
             sort_direction: Sort direction for explicit sort field
             limit: Maximum number of items (default 100 for initial load)
@@ -85,11 +85,11 @@ class MemoryItemService:
         category_value = category.value if category is not None else None
         sort_by_value = sort_by.value if sort_by is not None else None
         items = await self.repo.list_items(
-            user_id,
-            category_value,
-            status,
-            limit,
-            offset,
+            user_id=user_id,
+            category=category_value,
+            statuses=tuple(statuses) if statuses is not None else None,
+            limit=limit,
+            offset=offset,
             sort_by=sort_by_value,
             sort_direction=sort_direction.value,
         )

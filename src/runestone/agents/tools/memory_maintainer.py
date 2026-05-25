@@ -118,22 +118,17 @@ async def maintainer_read_memory(runtime: ToolRuntime[AgentContext]) -> str:
     user = runtime.context.user
 
     async with provide_memory_item_service() as service:
-        struggling_items = await service.list_memory_items(
+        items = await service.list_memory_items(
             user_id=user.id,
             category=MemoryCategory.AREA_TO_IMPROVE,
-            status=AreaToImproveStatus.STRUGGLING.value,
-            limit=200,
-            offset=0,
-        )
-        improving_items = await service.list_memory_items(
-            user_id=user.id,
-            category=MemoryCategory.AREA_TO_IMPROVE,
-            status=AreaToImproveStatus.IMPROVING.value,
+            statuses=[
+                AreaToImproveStatus.STRUGGLING.value,
+                AreaToImproveStatus.IMPROVING.value,
+            ],
             limit=200,
             offset=0,
         )
 
-    items = struggling_items + improving_items
     if not items:
         return "No in-scope memory items found."
     return serialize_memory_items(items)

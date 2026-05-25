@@ -163,6 +163,73 @@ async def test_service_rejects_priority_sort_for_non_area_category(db_with_test_
         )
 
 
+async def test_service_filters_by_single_and_multiple_statuses(db_with_test_user):
+    db, user = db_with_test_user
+    base = datetime(2026, 3, 10, tzinfo=timezone.utc)
+    db.add_all(
+        [
+            MemoryItem(
+                user_id=user.id,
+                category=MemoryCategory.AREA_TO_IMPROVE.value,
+                key="prio_1_struggling",
+                content="Need help with V2",
+                status=AreaToImproveStatus.STRUGGLING.value,
+                priority=1,
+                updated_at=base.replace(minute=1),
+            ),
+            MemoryItem(
+                user_id=user.id,
+                category=MemoryCategory.AREA_TO_IMPROVE.value,
+                key="prio_0_improving",
+                content="Better with articles",
+                status=AreaToImproveStatus.IMPROVING.value,
+                priority=0,
+                updated_at=base.replace(minute=2),
+            ),
+            MemoryItem(
+                user_id=user.id,
+                category=MemoryCategory.AREA_TO_IMPROVE.value,
+                key="mastered_topic",
+                content="Past tense is stable",
+                status=AreaToImproveStatus.MASTERED.value,
+                priority=2,
+                updated_at=base.replace(minute=3),
+            ),
+        ]
+    )
+    await db.commit()
+
+    service = _service(db)
+    active_items = await service.list_memory_items(
+        user_id=user.id,
+        category=MemoryCategory.AREA_TO_IMPROVE,
+        statuses=[AreaToImproveStatus.STRUGGLING.value, AreaToImproveStatus.IMPROVING.value],
+    )
+    struggling_items = await service.list_memory_items(
+        user_id=user.id,
+        category=MemoryCategory.AREA_TO_IMPROVE,
+        statuses=[AreaToImproveStatus.STRUGGLING.value],
+    )
+
+    assert [item.key for item in active_items] == ["prio_0_improving", "prio_1_struggling"]
+    assert [item.key for item in struggling_items] == ["prio_1_struggling"]
+
+
+async def test_service_returns_no_items_for_empty_statuses_filter(db_with_test_user):
+    db, user = db_with_test_user
+    db.add(_area_item(user.id, "grammar", priority=2))
+    await db.commit()
+
+    service = _service(db)
+    items = await service.list_memory_items(
+        user_id=user.id,
+        category=MemoryCategory.AREA_TO_IMPROVE,
+        statuses=[],
+    )
+
+    assert items == []
+
+
 # ---------------------------------------------------------------------------
 # Upsert with priority
 # ---------------------------------------------------------------------------

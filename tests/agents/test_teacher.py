@@ -85,7 +85,7 @@ def test_build_agent(mock_settings, mock_chat_model):
             tools = mock_create_agent.call_args[1]["tools"]
             assert len(tools) == 4
             tool_names = {getattr(tool, "name", None) for tool in tools}
-            assert {"read_memory", "search_grammar", "read_grammar_page", "read_url"} <= tool_names
+            assert {"read_active_learning_focus", "search_grammar", "read_grammar_page", "read_url"} <= tool_names
             assert all(getattr(tool, "name", None) != "prioritize_words_for_learning" for tool in tools)
             assert all(getattr(tool, "name", None) != "start_student_info" for tool in tools)
             assert all(getattr(tool, "name", None) != "search_news_with_dates" for tool in tools)
@@ -159,7 +159,9 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "explicitly asked a grammar question" in call_kwargs["system_prompt"]
             assert "### GRAMMAR REFERENCES (search_grammar, read_grammar_page)" in call_kwargs["system_prompt"]
             assert "### URL READING TOOL (read_url)" in call_kwargs["system_prompt"]
-            assert "### MEMORY PROTOCOL (read_memory)" in call_kwargs["system_prompt"]
+            assert "### MEMORY PROTOCOL (read_active_learning_focus)" in call_kwargs["system_prompt"]
+            assert "only live memory lookup tool" in call_kwargs["system_prompt"]
+            assert "cannot look up `personal_info`" in call_kwargs["system_prompt"]
             assert "you may use `search_grammar` 1-2 times with focused queries." in call_kwargs["system_prompt"]
             assert "`search_grammar` returns a payload with a `results` list." in call_kwargs["system_prompt"]
             assert "top 1-2 results" in call_kwargs["system_prompt"]
@@ -190,10 +192,10 @@ def test_build_agent_without_tools(mock_settings, mock_chat_model):
             assert call_kwargs["middleware"] == []
             assert "### GRAMMAR REFERENCES (search_grammar, read_grammar_page)" not in call_kwargs["system_prompt"]
             assert "### URL READING TOOL (read_url)" not in call_kwargs["system_prompt"]
-            assert "### MEMORY PROTOCOL (read_memory)" not in call_kwargs["system_prompt"]
+            assert "### MEMORY PROTOCOL (read_active_learning_focus)" not in call_kwargs["system_prompt"]
             assert "search_grammar" not in call_kwargs["system_prompt"]
             assert "read_grammar_page" not in call_kwargs["system_prompt"]
-            assert "read_memory" not in call_kwargs["system_prompt"]
+            assert "read_active_learning_focus" not in call_kwargs["system_prompt"]
             assert "read_url" not in call_kwargs["system_prompt"]
             assert "### MEMORY PROTOCOL" in call_kwargs["system_prompt"]
             assert "Never invent or guess URLs." in call_kwargs["system_prompt"]
@@ -394,7 +396,10 @@ async def test_run_with_starter_memory(teacher_agent, mock_user):
         message="msg",
         history=[],
         user=mock_user,
-        starter_memory="UNTRUSTED_MEMORY_DATA (JSON).\n<memory_items_json>{}</memory_items_json>",
+        starter_memory=(
+            "UNTRUSTED_MEMORY_DATA\n"
+            '- id=1 category="personal_info" key="goal" content="Practice" status="active" priority=null'
+        ),
     )
 
     invoke_args = teacher_agent.agent.ainvoke.call_args[0][0]
