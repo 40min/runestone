@@ -957,9 +957,10 @@ class AgentsManager:
     def _is_grammar_reference_url(url: str) -> bool:
         """Detect grammar reference URLs previously surfaced by the teacher."""
         parsed = urlparse(url)
-        if parse_qs(parsed.query).get("view", [""])[0] != "grammar":
+        query_params = parse_qs(parsed.query)
+        if query_params.get("view", [""])[0] != "grammar":
             return False
-        cheatsheet_paths = parse_qs(parsed.query).get("cheatsheet", [])
+        cheatsheet_paths = query_params.get("cheatsheet", [])
         return bool(cheatsheet_paths and cheatsheet_paths[0].strip())
 
     @staticmethod
