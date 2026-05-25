@@ -105,6 +105,8 @@ COORDINATOR_POST_RESPONSE_PROMPT = (
 - Use `teacher_response` as the primary routing signal.
 - If `teacher_response` is absent, do not route any teacher-dependent specialists.
 - Specialists here run after the teacher reply (persistence, follow-up analysis).
+- Post-phase memory routing is history-free: decide from the current student `message`
+  and current `teacher_response` only.
 
 ## Specialist Routing Rules
 
@@ -120,7 +122,6 @@ COORDINATOR_POST_RESPONSE_PROMPT = (
 
 **Do NOT route when:**
 - The student only hints at a fact or preference without explicitly asking to change memory.
-- The request existed only in older `history` rather than the current student `message`.
 - The teacher response is routine praise, a normal correction, a drill prompt, or a generic explanation
   without an explicit durable signal.
 - The teacher only says a student-written word is misspelled, invalid, nonexistent, or should be replaced

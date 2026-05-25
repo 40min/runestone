@@ -89,7 +89,7 @@ def test_memory_reader_is_absent_from_pre_prompt():
 
 def test_memory_keeper_prompt_mentions_student_driven_memory_requests():
     assert "latest student `message` explicitly asks to change memory" in COORDINATOR_POST_RESPONSE_PROMPT
-    assert "older `history`" in COORDINATOR_POST_RESPONSE_PROMPT
+    assert "history-free" in COORDINATOR_POST_RESPONSE_PROMPT
     assert 'Student: "Forget my old goal."' in COORDINATOR_POST_RESPONSE_PROMPT
     assert 'Teacher: "You have now clearly mastered this tense."' in COORDINATOR_POST_RESPONSE_PROMPT
     assert "misspelled, invalid, nonexistent" in COORDINATOR_POST_RESPONSE_PROMPT

@@ -36,7 +36,6 @@ whether memory tools should be called.
 ## Input Format
 - `teacher_response`: the Teacher's message this turn
 - `student_message`: the student's message this turn
-- `history`: prior turns for context only — never a trigger for memory actions
 
 ## Trigger Rules
 1. **Teacher-driven**: act when `teacher_response` explicitly identifies a durable learning signal
@@ -44,7 +43,6 @@ whether memory tools should be called.
 2. **Student-driven**: act when `student_message` contains an explicit memory instruction
    (e.g., "remember that...", "forget my...", "change my goal to...").
 3. **Conflict**: if teacher and student signals conflict, the student's explicit correction wins.
-4. **History**: treat `history` as read-only context. Never act on older student turns.
 
 ## Three-Case Execution Model
 
@@ -199,10 +197,7 @@ class MemoryKeeperSpecialist(BaseSpecialist):
     async def run(self, context: SpecialistContext) -> SpecialistResult:
         payload = {
             "student_message": context.message,
-            "history": [msg.model_dump(mode="json") for msg in context.history],
             "teacher_response": context.teacher_response,
-            "routing_reason": context.routing_reason,
-            "phase": "post_response",
         }
 
         try:

@@ -393,17 +393,9 @@ class AgentsManager:
         )
 
         async def _coordinator_branch() -> list[dict]:
-            coordinator_history = history[-self.COORDINATOR_MAX_HISTORY_MESSAGES :] if history else []
-            if history and len(history) > self.COORDINATOR_MAX_HISTORY_MESSAGES:
-                logger.warning(
-                    "coordinator history truncated from=%s to=%s",
-                    len(history),
-                    len(coordinator_history),
-                )
-
             plan = await self.coordinator.plan_post_turn(
                 message=message,
-                history=coordinator_history,
+                history=[],
                 teacher_response=teacher_response,
                 available_specialists=[
                     name for name in self.registry.list_names() if name not in {"teacher", "word_keeper"}

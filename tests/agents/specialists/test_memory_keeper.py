@@ -89,6 +89,10 @@ async def test_memory_keeper_uses_current_student_message_for_payload(specialist
     args, kwargs = specialist.agent.ainvoke.call_args
     payload_json = args[0]["messages"][0].content
     payload = json.loads(payload_json)
+    assert payload == {
+        "student_message": "Forget my old goal.",
+        "teacher_response": "Let's keep practicing.",
+    }
     assert payload["student_message"] == "Forget my old goal."
     assert "message" not in payload
     assert kwargs["context"].user == mock_user

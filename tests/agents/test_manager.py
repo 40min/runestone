@@ -1055,6 +1055,7 @@ async def test_run_post_turn_excludes_word_keeper_from_coordinator_available_spe
     _args, kwargs = manager.coordinator.plan_post_turn.call_args
     assert "word_keeper" not in kwargs["available_specialists"]
     assert "memory_keeper" in kwargs["available_specialists"]
+    assert kwargs["history"] == []
 
 
 @pytest.mark.anyio
