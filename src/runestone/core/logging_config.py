@@ -77,10 +77,9 @@ def setup_logging(level: str = "INFO", format_string: Optional[str] = None, verb
     date_format = "%Y-%m-%d %H:%M:%S"
     show_color = _resolve_color_setting()
 
-    if show_color is True:
-        force_terminal = True if show_color else None
+    if show_color is True or (show_color is None and sys.stdout.isatty()):
         handler = RichHandler(
-            console=Console(file=sys.stdout, force_terminal=force_terminal),
+            console=Console(file=sys.stdout, force_terminal=show_color),
             rich_tracebacks=True,
             show_time=False,
             show_level=False,
@@ -88,21 +87,10 @@ def setup_logging(level: str = "INFO", format_string: Optional[str] = None, verb
             markup=False,
             log_time_format=date_format,
         )
-        handler.setFormatter(logging.Formatter(format_string, datefmt=date_format))
-    elif show_color is None and sys.stdout.isatty():
-        handler = RichHandler(
-            console=Console(file=sys.stdout),
-            rich_tracebacks=True,
-            show_time=False,
-            show_level=False,
-            show_path=False,
-            markup=False,
-            log_time_format=date_format,
-        )
-        handler.setFormatter(logging.Formatter(format_string, datefmt=date_format))
     else:
         handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(logging.Formatter(format_string, datefmt=date_format))
+
+    handler.setFormatter(logging.Formatter(format_string, datefmt=date_format))
 
     handler.addFilter(log_filter)
     root_logger.addHandler(handler)
