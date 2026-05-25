@@ -238,6 +238,7 @@ class AgentsManager:
 
         sources = self._extract_sources(
             pre_results=pre_results,
+            history=history,
             messages=generated.final_messages,
             grammar_source_urls=generated.grammar_source_urls,
         )
@@ -840,14 +841,16 @@ class AgentsManager:
         self,
         *,
         pre_results: list[dict] | None = None,
+        history: list[ChatMessage] | None = None,
         messages=None,
         grammar_source_urls: list[str] | None = None,
     ) -> Optional[list[dict[str, str]]]:
         specialist_sources = self._extract_pre_result_sources(pre_results or [])
         merged_sources: list[dict[str, str]] = specialist_sources[:] if specialist_sources else []
         seen_urls = {source["url"] for source in merged_sources}
-        grammar_result_urls = self._extract_search_grammar_result_urls(messages or [])
-        grammar_sources = self._extract_grammar_sources(grammar_source_urls or [], grammar_result_urls, seen_urls)
+        allowed_grammar_urls = self._extract_search_grammar_result_urls(messages or [])
+        allowed_grammar_urls.update(self._extract_history_grammar_source_urls(history or []))
+        grammar_sources = self._extract_grammar_sources(grammar_source_urls or [], allowed_grammar_urls, seen_urls)
         merged_sources.extend(grammar_sources)
 
         for msg in reversed(messages or []):
@@ -894,7 +897,7 @@ class AgentsManager:
         sources: list[dict[str, str]] = []
         for url in grammar_source_urls:
             if url not in allowed_urls:
-                logger.info("grammar source url rejected reason=not_returned_by_search_grammar url=%s", url)
+                logger.info("grammar source url rejected reason=not_allowed_by_search_or_history url=%s", url)
                 continue
             if url in seen_urls:
                 logger.info("grammar source url rejected reason=duplicate url=%s", url)
@@ -928,6 +931,37 @@ class AgentsManager:
                 if isinstance(raw_url, str) and raw_url:
                     urls.add(raw_url)
         return urls
+
+    def _extract_history_grammar_source_urls(self, history: list[ChatMessage]) -> set[str]:
+        """Return exact grammar URLs already shown in earlier assistant messages for this chat."""
+        urls: set[str] = set()
+        for item in history:
+            if item.role != "assistant" or not item.sources:
+                continue
+            for source in item.sources:
+                if isinstance(source, dict):
+                    data = source
+                elif hasattr(source, "model_dump"):
+                    data = source.model_dump()
+                else:
+                    continue
+                raw_url = data.get("url")
+                url = str(raw_url) if raw_url is not None else ""
+                if not url or not self._is_safe_url(url):
+                    continue
+                if self._is_grammar_reference_url(url):
+                    urls.add(url)
+        return urls
+
+    @staticmethod
+    def _is_grammar_reference_url(url: str) -> bool:
+        """Detect grammar reference URLs previously surfaced by the teacher."""
+        parsed = urlparse(url)
+        query_params = parse_qs(parsed.query)
+        if query_params.get("view", [""])[0] != "grammar":
+            return False
+        cheatsheet_paths = query_params.get("cheatsheet", [])
+        return bool(cheatsheet_paths and cheatsheet_paths[0].strip())
 
     @staticmethod
     def _format_grammar_source_title(url: str) -> str:
