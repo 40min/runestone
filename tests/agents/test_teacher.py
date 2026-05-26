@@ -155,7 +155,7 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "earlier assistant messages in this chat" in call_kwargs["system_prompt"]
             assert "Never invent or guess URLs." in call_kwargs["system_prompt"]
             assert "DEFAULT: Do NOT call `search_grammar` or `read_grammar_page`." in (call_kwargs["system_prompt"])
-            assert "Only call `search_grammar` when BOTH conditions hold:" in call_kwargs["system_prompt"]
+            assert "Only call grammar tools when BOTH conditions hold:" in call_kwargs["system_prompt"]
             assert "a grammar question (e.g." in call_kwargs["system_prompt"]
             assert "### GRAMMAR REFERENCES (search_grammar, read_grammar_page)" in call_kwargs["system_prompt"]
             assert "### URL READING TOOL (read_url)" in call_kwargs["system_prompt"]

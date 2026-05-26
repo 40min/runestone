@@ -119,7 +119,7 @@ class TeacherAgent:
 The grammar document is a limited reference that does not cover all language aspects.
 Every search adds latency and token cost — skip it unless one of the explicit triggers below applies.
 
-**Only call `search_grammar` when BOTH conditions hold:**
+**Only call grammar tools when BOTH conditions hold:**
 1. The student's message contains a concrete, identifiable grammar mistake (wrong word order,
    wrong verb form, wrong article, incorrect agreement, etc.) OR the student explicitly asks
    a grammar question (e.g. "How do I use …?", "What is the rule for …?").
@@ -132,7 +132,6 @@ Every search adds latency and token cost — skip it unless one of the explicit 
 - General conversation continuations, affirmations, or one-word reactions
 - Vocabulary questions (word meaning, translation) — answer directly
 - News, weather, or any non-grammar topic
-- Any message already written in the student's mother tongue
 
 - `grammar_source_urls` is optional. It is completely OK to leave it empty.
 - First check earlier assistant messages in this chat for clearly relevant grammar references you already found.
