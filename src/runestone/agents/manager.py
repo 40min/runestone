@@ -179,7 +179,9 @@ class AgentsManager:
             plan = await self.coordinator.plan_pre_turn(
                 message=message,
                 history=coordinator_history,
-                available_specialists=[name for name in self.registry.list_names() if name != "teacher"],
+                available_specialists=[
+                    name for name in self.registry.list_names() if name not in {"teacher", "memory_keeper"}
+                ],
             )
         except (RunestoneError, ValueError, RuntimeError) as e:
             logger.error("coordinator failed, falling back to teacher only: %s", e)

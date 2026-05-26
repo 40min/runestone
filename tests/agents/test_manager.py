@@ -394,6 +394,28 @@ async def test_coordinator_history_is_truncated(
 
 
 @pytest.mark.anyio
+async def test_prepare_pre_turn_excludes_memory_keeper_from_coordinator_available_specialists(
+    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+):
+    manager = _make_manager(mock_settings)
+    manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
+
+    await manager.prepare_pre_turn(
+        message="Hello",
+        chat_id="chat-1",
+        history=[],
+        user=mock_user,
+        memory_item_service=mock_memory_item_service,
+        side_effect_service=mock_side_effect_service,
+    )
+
+    _args, kwargs = manager.coordinator.plan_pre_turn.call_args
+    assert "memory_keeper" not in kwargs["available_specialists"]
+    assert "news_agent" in kwargs["available_specialists"]
+    assert "word_keeper" in kwargs["available_specialists"]
+
+
+@pytest.mark.anyio
 async def test_coordinator_history_truncation_logs_warning(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service, caplog
 ):
