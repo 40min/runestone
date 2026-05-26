@@ -114,9 +114,26 @@ class TeacherAgent:
 
         grammar_references_prompt = f"""
 ### GRAMMAR REFERENCES (search_grammar, read_grammar_page)
+
+**DEFAULT: Do NOT call `search_grammar` or `read_grammar_page`.**
+The grammar document is a limited reference that does not cover all language aspects.
+Every search adds latency and token cost — skip it unless one of the explicit triggers below applies.
+
+**Only call grammar tools when BOTH conditions hold:**
+1. The student's message contains a concrete, identifiable grammar mistake (wrong word order,
+   wrong verb form, wrong article, incorrect agreement, etc.) OR the student explicitly asks
+   a grammar question (e.g. "How do I use …?", "What is the rule for …?").
+2. No clearly relevant grammar reference already appears in an earlier assistant message
+   in this conversation — see the history check rule below.
+
+**Never search for:**
+- Greetings, farewells, or small-talk ("Hej!", "Tack", "Hejdå", "Hur mår du?")
+- Correct or near-correct Swedish where no grammar rule needs citing
+- General conversation continuations, affirmations, or one-word reactions
+- Vocabulary questions (word meaning, translation) — answer directly
+- News, weather, or any non-grammar topic
+
 - `grammar_source_urls` is optional. It is completely OK to leave it empty.
-- Use grammar tools only when the student made a concrete grammar mistake or explicitly asked a grammar question.
-- Do not use grammar tools for greetings, casual chat, correct Swedish, or non-grammar topics.
 - First check earlier assistant messages in this chat for clearly relevant grammar references you already found.
 - If an earlier assistant message already contains a clearly relevant grammar reference,
   reuse that exact URL instead of searching again.

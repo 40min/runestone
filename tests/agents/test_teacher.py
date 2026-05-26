@@ -154,10 +154,9 @@ def test_build_agent(mock_settings, mock_chat_model):
             )
             assert "earlier assistant messages in this chat" in call_kwargs["system_prompt"]
             assert "Never invent or guess URLs." in call_kwargs["system_prompt"]
-            assert "Use grammar tools only when the student made a concrete grammar mistake" in (
-                call_kwargs["system_prompt"]
-            )
-            assert "explicitly asked a grammar question" in call_kwargs["system_prompt"]
+            assert "DEFAULT: Do NOT call `search_grammar` or `read_grammar_page`." in (call_kwargs["system_prompt"])
+            assert "Only call grammar tools when BOTH conditions hold:" in call_kwargs["system_prompt"]
+            assert "a grammar question (e.g." in call_kwargs["system_prompt"]
             assert "### GRAMMAR REFERENCES (search_grammar, read_grammar_page)" in call_kwargs["system_prompt"]
             assert "### URL READING TOOL (read_url)" in call_kwargs["system_prompt"]
             assert "### MEMORY PROTOCOL (read_active_learning_focus)" in call_kwargs["system_prompt"]
@@ -167,9 +166,8 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "`search_grammar` returns a payload with a `results` list." in call_kwargs["system_prompt"]
             assert "top 1-2 results" in call_kwargs["system_prompt"]
             assert "stop and answer without grammar links" in call_kwargs["system_prompt"]
-            assert "Do not use grammar tools for greetings, casual chat, correct Swedish" in (
-                call_kwargs["system_prompt"]
-            )
+            assert "Never search for:" in call_kwargs["system_prompt"]
+            assert "Greetings, farewells, or small-talk" in call_kwargs["system_prompt"]
             assert "It is completely OK to leave it empty." in call_kwargs["system_prompt"]
 
 
