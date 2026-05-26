@@ -51,6 +51,14 @@ class MemoryDeleteInput(BaseModel):
     item_id: int = Field(..., description="ID of the memory item to delete")
 
 
+class MemoryContentUpdate(BaseModel):
+    """Input for updating the content of an existing memory item."""
+
+    item_id: int = Field(..., description="ID of the memory item to update")
+    category: MemoryCategory = Field(..., description="Expected category of the memory item")
+    content: str = Field(..., min_length=1, description="Replacement content for the memory item")
+
+
 def _format_tool_error(tool_name: str, exc: Exception) -> str:
     """Return agent-readable tool errors for expected memory business rule failures."""
     logger.warning("Agent tool call failed: %s: %s", tool_name, exc)
@@ -208,6 +216,41 @@ async def update_memory_status(
         return _format_tool_error("update_memory_status", exc)
 
     return f"Status updated: [ID:{result.id}] {result.key} is now '{result.status}'"
+
+
+@tool
+async def update_memory_item_content(
+    runtime: ToolRuntime[AgentContext],
+    update: Annotated[MemoryContentUpdate, Field(description="Content update data")],
+) -> str:
+    """
+    Replace the content of an existing memory item by id.
+
+    Use this when the current turn explicitly corrects or replaces the substance
+    of an existing memory item and you already know which item id should change.
+
+    Args:
+        runtime: Tool runtime context
+        update: Content update data (item_id, content)
+
+    Returns:
+        Confirmation message
+    """
+    logger.info("Agent tool call: update_memory_item_content (item_id=%s)", update.item_id)
+    user = runtime.context.user
+
+    try:
+        async with provide_memory_item_service() as service:
+            result = await service.update_item_content_in_category(
+                update.item_id,
+                update.category,
+                update.content,
+                user.id,
+            )
+    except (PermissionDeniedError, UserNotFoundError, ValueError) as exc:
+        return _format_tool_error("update_memory_item_content", exc)
+
+    return f"Content updated: [ID:{result.id}] {result.key}"
 
 
 @tool

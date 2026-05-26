@@ -220,6 +220,48 @@ class MemoryItemService:
         updated_item = await self.repo.update(item)
         return MemoryItemResponse.model_validate(updated_item)
 
+    async def update_item_content_in_category(
+        self,
+        item_id: int,
+        category: MemoryCategory,
+        content: str,
+        user_id: int,
+    ) -> MemoryItemResponse:
+        """
+        Update the content of a memory item and require the expected category to match.
+
+        Args:
+            item_id: Item ID
+            category: Expected category for the item
+            content: Replacement content for the existing item
+            user_id: User ID (for authorization)
+
+        Returns:
+            Updated MemoryItemResponse
+
+        Raises:
+            MemoryItemNotFoundError: If item not found
+            PermissionDeniedError: If user doesn't own item
+            ValueError: If category mismatches or content is blank
+        """
+        item = await self.repo.get_by_id(item_id)
+        if not item:
+            raise MemoryItemNotFoundError(f"Memory item with id {item_id} not found")
+
+        if item.user_id != user_id:
+            raise PermissionDeniedError("You don't have permission to update this item")
+
+        if item.category != category.value:
+            raise ValueError(f"content update category mismatch: expected '{category.value}', found '{item.category}'")
+
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("content must not be empty")
+
+        item.content = content
+        item.updated_at = self._utc_now()
+        updated_item = await self.repo.update(item)
+        return MemoryItemResponse.model_validate(updated_item)
+
     async def update_item_priority(self, item_id: int, priority: Optional[int], user_id: int) -> MemoryItemResponse:
         """
         Set the priority of an area_to_improve memory item.

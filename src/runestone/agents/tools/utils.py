@@ -55,6 +55,7 @@ def serialize_active_learning_focus(items: Sequence[MemoryItemResponse]) -> str:
         lines.append(
             "- "
             f"id={item.id} "
+            f"category={json.dumps(item.category, ensure_ascii=False)} "
             f"key={json.dumps(item.key, ensure_ascii=False)} "
             f"content={json.dumps(content, ensure_ascii=False)} "
             f"status={json.dumps(item.status, ensure_ascii=False)} "
