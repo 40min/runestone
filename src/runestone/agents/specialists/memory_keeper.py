@@ -60,7 +60,7 @@ Execution:
 3. WRITE: Call the correct write tool for the specific item(s):
    - `upsert_memory_item` for new or corrected facts
    - `update_memory_item_content` for replacing the content of one known existing item
-   - `update_memory_status` for mastery or outdating
+   - `update_memory_status` for changing level of mastery
    - `update_memory_priority` for explicit reprioritization
    - `delete_memory_item` for explicit forget/remove requests
 
