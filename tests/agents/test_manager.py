@@ -1226,7 +1226,7 @@ async def test_run_post_turn_forces_memory_keeper_history_to_zero(mock_settings,
         message="Ok",
         chat_id="chat-1",
         history=[
-            ChatMessage(role="assistant", content="You have now mastered this tense. [memory:137]"),
+            ChatMessage(role="assistant", content="You have now mastered this tense. [memory:area_to_improve:137]"),
             ChatMessage(role="user", content="Thanks"),
         ],
         user=mock_user,

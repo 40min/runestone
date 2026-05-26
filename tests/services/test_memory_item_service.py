@@ -144,6 +144,95 @@ async def test_upsert_memory_item_updates_and_tracks_status_change(db_with_test_
     assert item.updated_at.replace(tzinfo=timezone.utc) == fixed_now
 
 
+async def test_update_item_content_in_category_updates_existing_item_without_changing_status_timestamp(
+    db_with_test_user, monkeypatch
+):
+    db, user = db_with_test_user
+    repo = MemoryItemRepository(db)
+    service = MemoryItemService(repo)
+
+    old_time = datetime(2026, 2, 1, tzinfo=timezone.utc)
+    item = MemoryItem(
+        user_id=user.id,
+        category=MemoryCategory.PERSONAL_INFO.value,
+        key="mother_tongue",
+        content="Finnish",
+        status=PersonalInfoStatus.ACTIVE.value,
+        status_changed_at=old_time,
+        updated_at=old_time,
+    )
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+
+    fixed_now = datetime(2026, 2, 11, tzinfo=timezone.utc)
+    monkeypatch.setattr(service, "_utc_now", lambda: fixed_now)
+
+    response = await service.update_item_content_in_category(
+        item_id=item.id,
+        category=MemoryCategory.PERSONAL_INFO,
+        content="Estonian",
+        user_id=user.id,
+    )
+
+    assert response.content == "Estonian"
+    await db.refresh(item)
+    assert item.content == "Estonian"
+    assert item.status == PersonalInfoStatus.ACTIVE.value
+    assert item.status_changed_at.replace(tzinfo=timezone.utc) == old_time
+    assert item.updated_at.replace(tzinfo=timezone.utc) == fixed_now
+
+
+async def test_update_item_content_rejects_blank_content(db_with_test_user):
+    db, user = db_with_test_user
+    repo = MemoryItemRepository(db)
+    service = MemoryItemService(repo)
+
+    item = MemoryItem(
+        user_id=user.id,
+        category=MemoryCategory.PERSONAL_INFO.value,
+        key="goal",
+        content="Practice speaking",
+        status=PersonalInfoStatus.ACTIVE.value,
+    )
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+
+    with pytest.raises(ValueError, match="content must not be empty"):
+        await service.update_item_content_in_category(
+            item_id=item.id,
+            category=MemoryCategory.PERSONAL_INFO,
+            content="   ",
+            user_id=user.id,
+        )
+
+
+async def test_update_item_content_in_category_rejects_mismatched_category(db_with_test_user):
+    db, user = db_with_test_user
+    repo = MemoryItemRepository(db)
+    service = MemoryItemService(repo)
+
+    item = MemoryItem(
+        user_id=user.id,
+        category=MemoryCategory.AREA_TO_IMPROVE.value,
+        key="articles",
+        content="Needs practice with articles",
+        status=AreaToImproveStatus.STRUGGLING.value,
+    )
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+
+    with pytest.raises(ValueError, match="content update category mismatch"):
+        await service.update_item_content_in_category(
+            item_id=item.id,
+            category=MemoryCategory.PERSONAL_INFO,
+            content="Native language is Estonian",
+            user_id=user.id,
+        )
+
+
 async def test_list_start_student_info_items_uses_single_query_and_applies_bucket_limits(db_with_test_user):
     db, user = db_with_test_user
     repo = MemoryItemRepository(db)

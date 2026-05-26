@@ -6,7 +6,7 @@ from langchain_core.messages import AIMessage
 
 from runestone.agents.specialists.base import SpecialistContext, SpecialistResult, parse_specialist_result
 from runestone.agents.specialists.memory_keeper import MEMORY_KEEPER_SYSTEM_PROMPT, MemoryKeeperSpecialist
-from runestone.agents.tools.memory import delete_memory_item
+from runestone.agents.tools.memory import delete_memory_item, update_memory_item_content
 
 
 @pytest.fixture
@@ -212,14 +212,19 @@ def test_memory_keeper_prompt_three_case_model():
     assert "Mandatory Execution Pipeline" not in MEMORY_KEEPER_SYSTEM_PROMPT
     # Case B: teacher-driven new issue must say no pre-read required
     assert "Do NOT call `read_memory` first" in MEMORY_KEEPER_SYSTEM_PROMPT
-    # Case C: [memory:ID] tag path
-    assert "[memory:ID]" in MEMORY_KEEPER_SYSTEM_PROMPT
+    # Case C: category-aware tag format
+    assert "[memory:<category>:<id>]" in MEMORY_KEEPER_SYSTEM_PROMPT
+    # Old bare-id tag must not appear
+    assert "[memory:ID]" not in MEMORY_KEEPER_SYSTEM_PROMPT
 
 
 def test_memory_keeper_prompt_delete_tool_in_case_a():
     """Case A (student edit) must expose delete_memory_item for forget/remove."""
     assert "`delete_memory_item` for explicit forget/remove requests" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "delete_memory_item" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "`update_memory_item_content` for replacing the content of one known existing item" in (
+        MEMORY_KEEPER_SYSTEM_PROMPT
+    )
 
 
 def test_memory_keeper_prompt_rejects_misspelled_word_pollution():
@@ -231,6 +236,7 @@ def test_memory_keeper_prompt_rejects_misspelled_word_pollution():
 def test_memory_keeper_prompt_excludes_broad_startup_compaction():
     assert "Broad start-of-session consolidation, duplicate cleanup" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "handled by a separate `memory_maintainer`" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "Never update priority for multiple items in one turn" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "Never use priority changes to rebalance unrelated items or tidy the broader memory set;" in (
         MEMORY_KEEPER_SYSTEM_PROMPT
     )
@@ -238,8 +244,10 @@ def test_memory_keeper_prompt_excludes_broad_startup_compaction():
 
 def test_memory_keeper_prompt_separates_status_and_priority_roles():
     assert "Choose one write intent per item for ordinary learning signals:" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "Replacement or correction of an existing known item" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "Improvement, degradation, mastery, or outdating of an existing item" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "Explicit importance/urgency signal such as a repeated recurring error" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "one directly" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "Do not use both `update_memory_status` and `update_memory_priority` on the same item" in (
         MEMORY_KEEPER_SYSTEM_PROMPT
     )
@@ -254,6 +262,7 @@ def test_memory_keeper_builds_agent_with_expected_tools(mock_settings):
     assert tool_names == [
         "read_memory",
         "upsert_memory_item",
+        "update_memory_item_content",
         "update_memory_status",
         "update_memory_priority",
         "delete_memory_item",
@@ -263,6 +272,11 @@ def test_memory_keeper_builds_agent_with_expected_tools(mock_settings):
 def test_delete_memory_item_tool_is_accessible():
     """delete_memory_item must exist at the tool layer and be wired into MemoryKeeper."""
     assert delete_memory_item.name == "delete_memory_item"
+
+
+def test_update_memory_item_content_tool_is_accessible():
+    """update_memory_item_content must exist at the tool layer and be wired into MemoryKeeper."""
+    assert update_memory_item_content.name == "update_memory_item_content"
 
 
 @pytest.mark.anyio
@@ -291,3 +305,22 @@ async def test_memory_keeper_passes_recursion_limit(specialist, mock_user):
     _, kwargs = specialist.agent.ainvoke.call_args
     assert "config" in kwargs
     assert kwargs["config"] == {"recursion_limit": 50}
+
+
+def test_memory_keeper_prompt_terminal_noop_on_not_found():
+    """Prompt must make missing-item failures a terminal stop, not a fallback."""
+    assert "Terminal No-Op Conditions" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "Memory item with id ... not found" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "content update category mismatch: expected '...', found '...'" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert 'status="no_action"' in MEMORY_KEEPER_SYSTEM_PROMPT
+    # Fallback creation is explicitly forbidden after a terminal no-op
+    assert "create a replacement item" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "create a duplicate item" in MEMORY_KEEPER_SYSTEM_PROMPT
+
+
+def test_memory_keeper_prompt_terminal_noop_on_wrong_category_priority():
+    """Prompt must make wrong-category priority errors a terminal stop."""
+    assert "priority is only applicable to category 'area_to_improve'" in MEMORY_KEEPER_SYSTEM_PROMPT
+    # No retry or repair flow after the guardrail fires
+    assert "retry with another write tool" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "continue any broader repair flow this turn" in MEMORY_KEEPER_SYSTEM_PROMPT

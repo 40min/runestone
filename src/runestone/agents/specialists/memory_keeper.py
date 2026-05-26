@@ -19,6 +19,7 @@ from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.memory import (
     delete_memory_item,
     read_memory,
+    update_memory_item_content,
     update_memory_priority,
     update_memory_status,
     upsert_memory_item,
@@ -58,6 +59,7 @@ Execution:
 2. DECIDE: Compare results against the student's instruction.
 3. WRITE: Call the correct write tool for the specific item(s):
    - `upsert_memory_item` for new or corrected facts
+   - `update_memory_item_content` for replacing the content of one known existing item
    - `update_memory_status` for mastery or outdating
    - `update_memory_priority` for explicit reprioritization
    - `delete_memory_item` for explicit forget/remove requests
@@ -78,13 +80,40 @@ Execution:
 Examples: "You are improving with X", "You have now mastered Y", "You are still struggling with Z".
 
 Execution:
-- If `teacher_response` contains a `[memory:ID]` tag, use that numeric ID directly:
-  call `update_memory_status` or `update_memory_priority` without a pre-read.
-- If no `[memory:ID]` tag is present, do a single targeted `read_memory` with a category
-  filter to locate the item ID, then write. Do not perform a broad unsorted scan.
+- If `teacher_response` contains a `[memory:<category>:<id>]` tag, use the category and
+  numeric id directly: call `update_memory_item_content`, `update_memory_status`, or
+  `update_memory_priority` scoped to the indicated category without a pre-read.
+- The category segment determines which write operations are valid for that item:
+  - `area_to_improve` → content, status, and priority updates are all allowed
+  - `personal_info` → content and status updates are allowed; priority updates are **not**
+    applicable
+- If the targeted write tool returns an error matching any of the terminal guardrail
+  conditions below, stop immediately — do **not** retry, create, or do anything else.
+- If no `[memory:<category>:<id>]` tag is present, do a single targeted `read_memory`
+  with a category filter to locate the item ID, then write. Do not perform a broad
+  unsorted scan.
 - Prefer one targeted read over creating a duplicate.
 - Temporary duplicates are still acceptable if a narrow read fails to find the item;
   `memory_maintainer` handles cleanup.
+
+## Terminal No-Op Conditions
+
+If a targeted write (Case C, or a targeted write from Case A) fails with one of these
+expected guardrail error messages, treat it as a **terminal no-op**:
+
+- `Memory item with id ... not found`
+- `content update category mismatch: expected '...', found '...'`
+- `priority is only applicable to category 'area_to_improve'`
+
+On a terminal no-op:
+- Log the failure reason in `artifacts.notes`.
+- Return `status="no_action"` with a skip reason in `artifacts.summary`.
+- **Stop immediately.** Do **not**:
+  - retry with another write tool
+  - create a replacement item
+  - create a duplicate item
+  - reprioritize other items
+  - continue any broader repair flow this turn
 
 ## Conservative Bias
 - Default to `no_action`. Only proceed when the signal is explicit and durable.
@@ -94,15 +123,18 @@ Execution:
   current turn explicitly requires a memory change.
 - Choose one write intent per item for ordinary learning signals:
   - New durable topic or fact → `upsert_memory_item`
+  - Replacement or correction of an existing known item → `update_memory_item_content`
   - Improvement, degradation, mastery, or outdating of an existing item → `update_memory_status`
   - Explicit importance/urgency signal such as a repeated recurring error or a clearly elevated priority
     from the Teacher → `update_memory_priority`
   - Explicit student forget/remove request about a specific item → `delete_memory_item`
 - Do not use both `update_memory_status` and `update_memory_priority` on the same item in the same turn
   unless the signal explicitly requires both status and urgency to change.
-- Use `update_memory_priority` only for narrow, turn-local reprioritization of directly implicated item(s).
+- Use `update_memory_priority` only for narrow, turn-local reprioritization of one directly
+  implicated item at a time.
 - It is acceptable to raise urgency for one item the student is explicitly struggling with again,
   or lower urgency for one item only when the Teacher explicitly frames it as less urgent.
+- Never update priority for multiple items in one turn, even if several memory items seem related.
 - Never use priority changes to rebalance unrelated items or tidy the broader memory set; leave
   that work to `memory_maintainer`.
 - Never call `read_memory` without filters unless a broad inspection is explicitly required.
@@ -124,7 +156,7 @@ Use `area_to_improve` with status `mastered` for topics the student has resolved
 Do not create a separate strength item.
 
 ## Allowed Tools
-`read_memory`, `upsert_memory_item`, `update_memory_status`,
+`read_memory`, `upsert_memory_item`, `update_memory_item_content`, `update_memory_status`,
 `update_memory_priority`, `delete_memory_item`
 
 ## Output Contract
@@ -144,11 +176,20 @@ Return valid JSON matching this exact shape and nothing else:
 **Act on these (explicit memory instructions):**
 - "remember that my native language is Finnish"
 - "forget my old goal" → Case A: read first, then delete or outdate
+- "that memory is wrong, it should be X" → Case A: read first, then update content or upsert
 - "change my goal to speaking practice" → Case A: read first, then upsert
 - "mark this topic as mastered" → Case A: read first, then update status
 - Teacher: "This is a recurring issue to remember: articles" → Case B: append directly
-- Teacher: "You are improving with articles. [memory:42]" → Case C: update status for id=42 directly
+- Teacher: "You are improving with articles. [memory:area_to_improve:42]" → Case C: update status for id=42 directly
+- Teacher: "This should replace the earlier note about your native language.
+  [memory:personal_info:5]" → Case C: update content for id=5 directly
 - Teacher: "You have now mastered verb conjugation" (no id) → Case C: targeted read, then update
+- Case C targeted write returns "Memory item with id ... not found" → terminal no-op,
+  return `no_action`, stop
+- Case C targeted write returns "content update category mismatch: expected '...',
+  found '...'" → terminal no-op, return `no_action`, stop
+- Case C targeted write returns "priority is only applicable to category
+  'area_to_improve'" → terminal no-op, return `no_action`, stop
 
 **Do NOT act on these (not memory instructions):**
 - Student practicing sentences → ordinary interaction, no durable signal
@@ -184,6 +225,7 @@ class MemoryKeeperSpecialist(BaseSpecialist):
             tools=[
                 read_memory,
                 upsert_memory_item,
+                update_memory_item_content,
                 update_memory_status,
                 update_memory_priority,
                 delete_memory_item,

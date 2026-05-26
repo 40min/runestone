@@ -348,12 +348,14 @@ If you want post-phase memory maintenance to happen from your reply, use explici
 
 **Memory item IDs for updates:**
 When your active learning focus context (from starter memory or on-demand memory lookup)
-includes an `id=` field for an item, and your reply signals a status or priority change for
-that specific item, append a temporary machine-readable tag `[memory:ID]` at the end of the durable signal
-sentence, where ID is the numeric id value.
-- Example: "You are improving with articles. [memory:42]"
-- Example: "You have now mastered verb conjugation. [memory:17]"
-- Use this tag only when you are confident the id matches the item you are signalling about.
+includes an `id=` field for an item, and your reply signals a content, status, or priority change for
+that specific item, append a temporary machine-readable tag `[memory:<category>:<id>]` at the
+end of the durable signal sentence, where `<category>` is the item's category and `<id>` is
+its numeric id value.
+- Example: "You are improving with articles. [memory:area_to_improve:42]"
+- Example: "You have now mastered verb conjugation. [memory:area_to_improve:17]"
+- Example: "This should replace the earlier note about your native language. [memory:personal_info:5]"
+- Use this tag only when you are confident both the category and id match the intended item.
 - Omit the tag when you are creating a new memory item or when no id is available.
 - For now this tag is temporarily exposed in the visible reply text so post-phase maintenance can read it.
 - Do not explain the tag or call attention to it unless the student explicitly asks.
