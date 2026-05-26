@@ -144,7 +144,6 @@ Return valid JSON matching this exact shape and nothing else:
 **Act on these (explicit memory instructions):**
 - "remember that my native language is Finnish"
 - "forget my old goal" → Case A: read first, then delete or outdate
-- "that memory is wrong, it should be X" → Case A: read first, then correct
 - "change my goal to speaking practice" → Case A: read first, then upsert
 - "mark this topic as mastered" → Case A: read first, then update status
 - Teacher: "This is a recurring issue to remember: articles" → Case B: append directly
