@@ -153,6 +153,18 @@ const FileUpload: React.FC<FileUploadProps> = ({
           >
             <Box
               onClick={previewUrl ? () => setIsZoomed(true) : undefined}
+              onKeyDown={
+                previewUrl
+                  ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setIsZoomed(true);
+                      }
+                    }
+                  : undefined
+              }
+              tabIndex={previewUrl ? 0 : -1}
+              role={previewUrl ? "button" : undefined}
               sx={{
                 width: 98,
                 height: 98,
@@ -299,6 +311,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         <Dialog
           open={isZoomed}
           onClose={() => setIsZoomed(false)}
+          aria-label="Image preview"
           maxWidth="md"
           fullWidth
           sx={{
@@ -319,7 +332,9 @@ const FileUpload: React.FC<FileUploadProps> = ({
             },
           }}
         >
-          <Box sx={{ position: "relative", maxWidth: "100%", maxHeight: "90vh" }}>
+          <Box
+            sx={{ position: "relative", maxWidth: "100%", maxHeight: "90vh", display: "inline-block" }}
+          >
             <IconButton
               onClick={() => setIsZoomed(false)}
               aria-label="close zoom"

@@ -136,6 +136,7 @@ describe('FileUpload', () => {
     // Enlarged image should be shown in Dialog
     const enlargedImage = screen.getByAltText('Enlarged Preview');
     expect(enlargedImage).toBeInTheDocument();
+    expect(screen.getByLabelText('Image preview')).toBeInTheDocument();
 
     // Click close button to close dialog
     const closeBtn = screen.getByLabelText('close zoom');
@@ -145,6 +146,27 @@ describe('FileUpload', () => {
     await waitFor(() => {
       expect(screen.queryByAltText('Enlarged Preview')).not.toBeInTheDocument();
     });
+  });
+
+  it('supports keyboard interaction for compact preview zoom', async () => {
+    const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
+    render(
+      <FileUpload
+        onFileSelect={mockOnFileSelect}
+        isProcessing={false}
+        compact
+        selectedFileOverride={file}
+      />
+    );
+
+    const previewImage = screen.getByAltText('Preview');
+    const zoomTrigger = previewImage.parentElement;
+    expect(zoomTrigger).toHaveAttribute('role', 'button');
+    expect(zoomTrigger).toHaveAttribute('tabindex', '0');
+
+    zoomTrigger?.focus();
+    fireEvent.keyDown(zoomTrigger!, { key: 'Enter' });
+    expect(screen.getByAltText('Enlarged Preview')).toBeInTheDocument();
   });
 
   it('cleans up object URL on unmount', async () => {
