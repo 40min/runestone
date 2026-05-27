@@ -32,7 +32,12 @@ from runestone.agents.tools.grammar import read_grammar_page, search_grammar
 from runestone.agents.tools.memory import read_active_learning_focus
 from runestone.agents.tools.read_url import read_url
 from runestone.config import Settings
-from runestone.constants import MAX_GRAMMAR_READ_CALLS, MAX_GRAMMAR_SEARCH_CALLS, MAX_TEACHER_GRAMMAR_SOURCE_LINKS
+from runestone.constants import (
+    MAX_GRAMMAR_READ_CALLS,
+    MAX_GRAMMAR_SEARCH_CALLS,
+    MAX_TEACHER_GRAMMAR_SOURCE_LINKS,
+    RECURSION_LIMIT_TEACHER,
+)
 from runestone.core.observability import timed_operation
 from runestone.db.models import User
 from runestone.rag.index import GrammarIndex
@@ -68,7 +73,7 @@ class TeacherAgent:
     """LLM-based teacher agent responsible for final response generation."""
 
     MAX_HISTORY_MESSAGES = 20
-    RECURSION_LIMIT = 30
+    RECURSION_LIMIT = RECURSION_LIMIT_TEACHER
     RECENT_SIDE_EFFECTS_MAX_ITEMS = 5
     RECENT_SIDE_EFFECTS_MAX_CHARS = 2000
     RECALL_WORDS_MAX_ITEMS = 50
@@ -299,6 +304,9 @@ Candidate rules:
 - Be conservative: do not invent vocabulary candidates just because Swedish words appear in the conversation.
 - Do not add words from routine drills like "write a sentence with ..." unless you explicitly want them remembered.
 - You may still naturally highlight useful vocabulary in the visible `message` when it helps the student.
+- Only nominate words that are genuinely new to the current teaching moment. Do not re-nominate words you
+  already highlighted in an earlier assistant message in this conversation — those candidates were already
+  processed. The only exception is when the student explicitly asks to save a specific word in their current message.
 
 Normalization rules for `word_phrase`:
 - No leading articles: save `hund`, not `en hund`; save `äpple`, not `ett äpple`.

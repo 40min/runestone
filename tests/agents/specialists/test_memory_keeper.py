@@ -7,6 +7,7 @@ from langchain_core.messages import AIMessage
 from runestone.agents.specialists.base import SpecialistContext, SpecialistResult, parse_specialist_result
 from runestone.agents.specialists.memory_keeper import MEMORY_KEEPER_SYSTEM_PROMPT, MemoryKeeperSpecialist
 from runestone.agents.tools.memory import delete_memory_item, update_memory_item_content
+from runestone.constants import RECURSION_LIMIT_MEMORY_KEEPER
 
 
 @pytest.fixture
@@ -304,7 +305,7 @@ async def test_memory_keeper_passes_recursion_limit(specialist, mock_user):
 
     _, kwargs = specialist.agent.ainvoke.call_args
     assert "config" in kwargs
-    assert kwargs["config"] == {"recursion_limit": 50}
+    assert kwargs["config"] == {"recursion_limit": RECURSION_LIMIT_MEMORY_KEEPER}
 
 
 def test_memory_keeper_prompt_terminal_noop_on_not_found():

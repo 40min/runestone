@@ -19,6 +19,7 @@ from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.news import search_news_with_dates
 from runestone.agents.tools.read_url import read_url
 from runestone.config import Settings
+from runestone.constants import RECURSION_LIMIT_NEWS_AGENT
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,7 @@ class NewsAgentSpecialist(BaseSpecialist):
         try:
             result = await self.agent.ainvoke(
                 {"messages": [HumanMessage(content=json.dumps(payload, ensure_ascii=False))]},
-                config={"recursion_limit": 10},
+                config={"recursion_limit": RECURSION_LIMIT_NEWS_AGENT},
                 context=AgentContext(user=context.user),
             )
         except Exception as exc:
