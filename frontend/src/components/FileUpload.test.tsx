@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import FileUpload from './FileUpload';
@@ -111,6 +111,40 @@ describe('FileUpload', () => {
     // Click again to zoom out
     fireEvent.click(previewImage);
     expect(previewImage).toHaveClass('max-h-72');
+  });
+
+  it('allows enlarging the preview image in compact mode', async () => {
+    const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
+    render(
+      <FileUpload
+        onFileSelect={mockOnFileSelect}
+        isProcessing={false}
+        compact
+        selectedFileOverride={file}
+      />
+    );
+
+    const previewImage = screen.getByAltText('Preview');
+    expect(previewImage).toBeInTheDocument();
+
+    // Dialog should not be open initially
+    expect(screen.queryByAltText('Enlarged Preview')).not.toBeInTheDocument();
+
+    // Click preview to enlarge
+    fireEvent.click(previewImage);
+
+    // Enlarged image should be shown in Dialog
+    const enlargedImage = screen.getByAltText('Enlarged Preview');
+    expect(enlargedImage).toBeInTheDocument();
+
+    // Click close button to close dialog
+    const closeBtn = screen.getByLabelText('close zoom');
+    fireEvent.click(closeBtn);
+
+    // Dialog should close
+    await waitFor(() => {
+      expect(screen.queryByAltText('Enlarged Preview')).not.toBeInTheDocument();
+    });
   });
 
   it('cleans up object URL on unmount', async () => {
