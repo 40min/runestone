@@ -130,11 +130,7 @@ class TeacherOutput(BaseModel):
     )
     grammar_source_urls: list[str] | None = Field(
         default=None,
-        description=(
-            "Optional grammar reference URLs to surface alongside the reply. "
-            "It is completely fine to omit this field or leave it empty when no clearly relevant "
-            "grammar material was found for this reply. Never invent or guess URLs."
-        ),
+        description="Optional grammar reference URLs. Never invent or guess URLs.",
     )
     vocabulary_candidates: list[WordSaveCandidate] = Field(
         default_factory=list,

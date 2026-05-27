@@ -52,18 +52,14 @@ async def search_grammar(
     top_k: int = 3,
 ) -> dict:
     """
-    Search for relevant Swedish grammar cheatsheet pages.
-
-    Use this when the student asks about grammar topics like verb conjugation,
-    adjective comparison, word order, etc or it is good moment to refer to it
-    (after some error for example).
+    Search the Swedish grammar cheatsheet index.
 
     Args:
         query: Search query describing the grammar topic
         top_k: Maximum number of results to return (1-3)
 
     Returns:
-        Structured search results in the format:
+        Structured search results:
         {"tool": "search_grammar", "results": [{"title": "...", "url": "...", "path": "..."}]}
     """
     if runtime is None:
@@ -108,11 +104,9 @@ async def read_grammar_page(
     """
     Read the full content of a specific grammar cheatsheet page.
 
-    Use this after search_grammar to get detailed grammar explanations.
-    The cheatsheet_path comes from the 'path' field in search results.
-
     Args:
-        cheatsheet_path: Relative path to cheatsheet (e.g., 'adjectives/adjectiv-komparation')
+        cheatsheet_path: Relative path from the 'path' field in search_grammar results
+            (e.g., 'adjectives/adjectiv-komparation')
 
     Returns:
         Markdown content of the cheatsheet or error message

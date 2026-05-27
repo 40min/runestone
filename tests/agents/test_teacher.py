@@ -145,16 +145,14 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "Never write the emotion label" in call_kwargs["system_prompt"]
             assert "grammar_source_urls" in call_kwargs["system_prompt"]
             assert f"at most {MAX_TEACHER_GRAMMAR_SOURCE_LINKS}" in call_kwargs["system_prompt"]
-            assert "Only include grammar URLs when they are genuinely helpful for this reply." in (
-                call_kwargs["system_prompt"]
-            )
+            # grammar_source_urls rules — now consolidated into GRAMMAR REFERENCES block
             assert (
-                "You may include only exact `url` values returned by `search_grammar` in this reply"
+                "Only include exact `url` values returned by `search_grammar` in this turn"
                 in call_kwargs["system_prompt"]
             )
             assert "earlier assistant messages in this chat" in call_kwargs["system_prompt"]
             assert "Never invent or guess URLs." in call_kwargs["system_prompt"]
-            assert "DEFAULT: Do NOT call `search_grammar` or `read_grammar_page`." in (call_kwargs["system_prompt"])
+            assert "DEFAULT: Do NOT call `search_grammar` or `read_grammar_page`." in call_kwargs["system_prompt"]
             assert "Only call grammar tools when BOTH conditions hold:" in call_kwargs["system_prompt"]
             assert "a grammar question (e.g." in call_kwargs["system_prompt"]
             assert "### GRAMMAR REFERENCES (search_grammar, read_grammar_page)" in call_kwargs["system_prompt"]
@@ -165,13 +163,13 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "content, status, or priority change" in call_kwargs["system_prompt"]
             assert "[memory:<category>:<id>]" in call_kwargs["system_prompt"]
             assert "[memory:personal_info:5]" in call_kwargs["system_prompt"]
-            assert "you may use `search_grammar` 1-2 times with focused queries." in call_kwargs["system_prompt"]
-            assert "`search_grammar` returns a payload with a `results` list." in call_kwargs["system_prompt"]
-            assert "top 1-2 results" in call_kwargs["system_prompt"]
+            assert "Use `search_grammar` 1" in call_kwargs["system_prompt"]
+            assert "each result has `title`, `url`, and `path`" in call_kwargs["system_prompt"]
+            assert "top 1" in call_kwargs["system_prompt"]
             assert "stop and answer without grammar links" in call_kwargs["system_prompt"]
             assert "Never search for:" in call_kwargs["system_prompt"]
             assert "Greetings, farewells, or small-talk" in call_kwargs["system_prompt"]
-            assert "It is completely OK to leave it empty." in call_kwargs["system_prompt"]
+            assert "Optional" in call_kwargs["system_prompt"]
 
 
 def test_build_agent_uses_teacher_purpose(mock_settings, mock_chat_model):

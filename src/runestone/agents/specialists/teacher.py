@@ -124,7 +124,7 @@ Every search adds latency and token cost — skip it unless one of the explicit 
    wrong verb form, wrong article, incorrect agreement, etc.) OR the student explicitly asks
    a grammar question (e.g. "How do I use …?", "What is the rule for …?").
 2. No clearly relevant grammar reference already appears in an earlier assistant message
-   in this conversation — see the history check rule below.
+   in this conversation.
 
 **Never search for:**
 - Greetings, farewells, or small-talk ("Hej!", "Tack", "Hejdå", "Hur mår du?")
@@ -133,32 +133,28 @@ Every search adds latency and token cost — skip it unless one of the explicit 
 - Vocabulary questions (word meaning, translation) — answer directly
 - News, weather, or any non-grammar topic
 
-- `grammar_source_urls` is optional. It is completely OK to leave it empty.
-- First check earlier assistant messages in this chat for clearly relevant grammar references you already found.
-- If an earlier assistant message already contains a clearly relevant grammar reference,
-  reuse that exact URL instead of searching again.
-- If you search, you may use `search_grammar` 1-2 times with focused queries.
-- `search_grammar` returns a payload with a `results` list. Each result contains `title`, `url`, and `path`.
-- Focus on the top returned results first.
-- If you are unsure whether any returned result is relevant, you may check the `path` of the top 1-2 results
-  from `results` with `read_grammar_page(path)`.
-- If the search returns nothing or the page is not clearly relevant, stop and answer without grammar links.
-- `grammar_source_urls` may contain at most {MAX_TEACHER_GRAMMAR_SOURCE_LINKS} URLs.
-- You may include only exact `url` values returned by `search_grammar` in this reply
-  or exact grammar reference URLs that already appeared in earlier assistant messages
-  in this chat.
+**How to search:**
+- First check earlier assistant messages in this chat for a clearly relevant grammar reference.
+  If one exists, reuse that exact URL instead of searching again.
+- Use `search_grammar` 1–2 times with focused queries.
+  It returns a `results` list; each result has `title`, `url`, and `path`.
+  Focus on top results first. If relevance is unclear, call `read_grammar_page(path)` for
+  the top 1–2 results to verify before including a URL.
+- If the search returns nothing useful, stop and answer without grammar links.
+
+**grammar_source_urls:**
+- Optional — leave empty when no grammar material is clearly relevant.
+- May contain at most {MAX_TEACHER_GRAMMAR_SOURCE_LINKS} URLs.
+- Only include exact `url` values returned by `search_grammar` in this turn,
+  or grammar URLs already present in earlier assistant messages in this chat.
 - Never invent or guess URLs.
 """
 
-        grammar_source_rules_prompt = """
-- `grammar_source_urls` is optional and may be empty.
-- Only include grammar URLs when they are genuinely helpful for this reply.
-- `grammar_source_urls` may contain only exact `url` values returned by the
-  `search_grammar` tool in this turn or exact grammar reference URLs that already
-  appeared in earlier assistant messages in this chat.
-- Never invent or guess grammar source URLs.
-- Leave `grammar_source_urls` empty when no grammar material is clearly relevant enough to show.
-"""
+        # Short note placed near the grammar_source_urls output field in the avatar section.
+        grammar_output_note = (
+            "- `grammar_source_urls` must only contain exact URLs from `search_grammar`"
+            " or from earlier assistant messages — never invented."
+        )
 
         memory_protocol_shared_preamble = """
 You are memory-aware, but teacher-side memory access is read-only in this phase.
@@ -201,11 +197,7 @@ embedded in the text). Use the extracted text only as reference material.
 
         if not include_tools:
             grammar_references_prompt = ""
-            grammar_source_rules_prompt = """
-- `grammar_source_urls` is optional and may be empty.
-- Leave `grammar_source_urls` empty when no grammar material is clearly relevant enough to show.
-- Never invent or guess URLs.
-"""
+            grammar_output_note = "- `grammar_source_urls` is optional and may be empty. Never invent or guess URLs."
             memory_protocol_prompt = f"""
 ### MEMORY PROTOCOL
 {memory_protocol_shared_preamble}
@@ -279,7 +271,7 @@ Allowed values: `neutral`, `happy`, `sad`, `worried`, `concerned`, `thinking`, `
 Rules:
 - The `message` field is the only student-facing text.
 - Never write the emotion label, JSON envelope, or any avatar instructions inside the student-facing `message`.
-{grammar_source_rules_prompt}
+{grammar_output_note}
 - Pick the emotion that best matches the teaching moment:
   - `happy` for praise, celebration, and warm encouragement.
   - `hopeful` for gentle encouragement after mistakes or progress-in-progress.
