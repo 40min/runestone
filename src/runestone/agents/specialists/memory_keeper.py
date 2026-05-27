@@ -6,6 +6,7 @@ import json
 import logging
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import ModelRetryMiddleware
 from langchain_core.messages import HumanMessage
 
 from runestone.agents.llm import build_chat_model
@@ -235,6 +236,7 @@ class MemoryKeeperSpecialist(BaseSpecialist):
                 update_memory_priority,
                 delete_memory_item,
             ],
+            middleware=[ModelRetryMiddleware(max_retries=3)],
             system_prompt=MEMORY_KEEPER_SYSTEM_PROMPT,
             response_format=SpecialistResult,
             context_schema=AgentContext,

@@ -2,6 +2,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain.agents.middleware import ModelRetryMiddleware
 from langchain_core.messages import AIMessage
 
 from runestone.agents.specialists.base import SpecialistContext, SpecialistResult, parse_specialist_result
@@ -268,6 +269,10 @@ def test_memory_keeper_builds_agent_with_expected_tools(mock_settings):
         "update_memory_priority",
         "delete_memory_item",
     ]
+    middleware = create_agent_mock.call_args.kwargs["middleware"]
+    assert len(middleware) == 1
+    assert isinstance(middleware[0], ModelRetryMiddleware)
+    assert middleware[0].max_retries == 3
 
 
 def test_delete_memory_item_tool_is_accessible():
