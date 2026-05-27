@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   Box,
+  Dialog,
   FormControl,
+  IconButton,
   MenuItem,
   Select,
   type SelectChangeEvent,
@@ -12,6 +14,7 @@ import {
   LockKeyhole,
   RefreshCw,
   Replace,
+  X,
 } from "lucide-react";
 import {
   CustomButton,
@@ -131,156 +134,225 @@ const FileUpload: React.FC<FileUploadProps> = ({
 
   if (compact) {
     return (
-      <Box
-        sx={{
-          position: "relative",
-          p: { xs: 2, md: 2.25 },
-          overflow: "hidden",
-          ...buildAnalyzerShellSx(analyzerShellGradients.uploadCompact),
-        }}
-      >
-        <DimmedContent
-          isDimmed={isProcessing}
+      <>
+        <Box
           sx={{
-            display: "flex",
-            gap: 1.5,
-            alignItems: "center",
+            position: "relative",
+            p: { xs: 2, md: 2.25 },
+            overflow: "hidden",
+            ...buildAnalyzerShellSx(analyzerShellGradients.uploadCompact),
           }}
         >
-          <Box
+          <DimmedContent
+            isDimmed={isProcessing}
             sx={{
-              width: 98,
-              height: 98,
-              borderRadius: "0.9rem",
-              border: "1px solid rgba(140, 160, 220, 0.35)",
+              display: "flex",
+              gap: 1.5,
+              alignItems: "center",
+            }}
+          >
+            <Box
+              onClick={previewUrl ? () => setIsZoomed(true) : undefined}
+              sx={{
+                width: 98,
+                height: 98,
+                borderRadius: "0.9rem",
+                border: "1px solid rgba(140, 160, 220, 0.35)",
+                overflow: "hidden",
+                flexShrink: 0,
+                bgcolor: "rgba(18, 24, 64, 0.75)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: previewUrl ? "pointer" : "default",
+                transition: "transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease",
+                "&:hover": previewUrl
+                  ? {
+                      transform: "scale(1.04)",
+                      borderColor: "rgba(140, 160, 220, 0.7)",
+                      boxShadow: "0 0 12px rgba(110, 135, 207, 0.3)",
+                    }
+                  : {},
+              }}
+            >
+              {previewUrl ? (
+                <img
+                  src={previewUrl}
+                  alt="Preview"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <CloudUpload size={26} color="#6d87cf" />
+              )}
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography
+                sx={{
+                  color: "#f0f4ff",
+                  fontWeight: 800,
+                  lineHeight: 1.25,
+                  fontSize: "1rem",
+                  wordBreak: "break-word",
+                }}
+              >
+                {selectedFile?.name ?? "No file selected"}
+              </Typography>
+              <Typography sx={{ color: "#8ea0d0", mt: 0.6, fontSize: "0.9rem" }}>
+                {selectedFile ? "Uploaded" : "Upload a textbook page"}
+              </Typography>
+            </Box>
+          </DimmedContent>
+
+          <DimmedContent
+            isDimmed={isProcessing}
+            sx={{
+              mt: 2.25,
+            }}
+          >
+            <Typography sx={{ color: "#9fb0de", mb: 0.75, fontSize: "0.85rem" }}>
+              Analysis mode
+            </Typography>
+            <FormControl fullWidth>
+              <Select
+                value={recognizeOnly ? "ocr" : "full"}
+                onChange={handleModeChange}
+                size="small"
+                disabled={isProcessing}
+                sx={{
+                  bgcolor: "rgba(9, 14, 48, 0.85)",
+                  color: "#eef4ff",
+                  borderRadius: "0.5rem",
+                  "& .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "rgba(111, 133, 192, 0.5)",
+                  },
+                  "& .MuiSvgIcon-root": {
+                    color: "#9fc0ff",
+                  },
+                }}
+              >
+                <MenuItem value="full">Full analysis</MenuItem>
+                <MenuItem value="ocr">OCR only</MenuItem>
+              </Select>
+            </FormControl>
+          </DimmedContent>
+
+          <DimmedContent
+            isDimmed={isProcessing}
+            sx={{
+              mt: 2,
+              display: "flex",
+              gap: 1.5,
+            }}
+          >
+            <CustomButton
+              variant="secondary"
+              onClick={triggerFilePicker}
+              disabled={isProcessing}
+              startIcon={<Replace size={16} />}
+              sx={{
+                flex: 1,
+                minHeight: "3.6rem",
+                color: "#d8e2ff",
+                border: "1px solid rgba(127, 148, 205, 0.6)",
+                borderRadius: "0.85rem",
+                "&:hover": {
+                  backgroundColor: "rgba(65, 84, 142, 0.22)",
+                },
+              }}
+            >
+              Replace File
+            </CustomButton>
+            <CustomButton
+              onClick={triggerReanalyze}
+              disabled={isProcessing || !selectedFile}
+              startIcon={<RefreshCw size={16} />}
+              sx={{ flex: 1, minHeight: "3.6rem", borderRadius: "0.85rem" }}
+            >
+              Re-analyze
+            </CustomButton>
+          </DimmedContent>
+
+          {isProcessing && (
+            <Box
+              data-testid="compact-processing-overlay"
+              sx={{
+                position: "absolute",
+                inset: 0,
+                background:
+                  "linear-gradient(180deg, rgba(9, 14, 48, 0.18), rgba(9, 14, 48, 0.52))",
+                backdropFilter: "blur(6px)",
+                pointerEvents: "auto",
+              }}
+            />
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileInputChange}
+            style={{ display: "none" }}
+            disabled={isProcessing}
+          />
+        </Box>
+
+        <Dialog
+          open={isZoomed}
+          onClose={() => setIsZoomed(false)}
+          maxWidth="md"
+          fullWidth
+          sx={{
+            "& .MuiBackdrop-root": {
+              bgcolor: "rgba(2, 6, 23, 0.85)",
+              backdropFilter: "blur(12px)",
+            },
+          }}
+          PaperProps={{
+            sx: {
+              bgcolor: "transparent",
+              boxShadow: "none",
               overflow: "hidden",
-              flexShrink: 0,
-              bgcolor: "rgba(18, 24, 64, 0.75)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-            }}
-          >
-            {previewUrl ? (
+              position: "relative",
+            },
+          }}
+        >
+          <Box sx={{ position: "relative", maxWidth: "100%", maxHeight: "90vh" }}>
+            <IconButton
+              onClick={() => setIsZoomed(false)}
+              aria-label="close zoom"
+              sx={{
+                position: "absolute",
+                top: 12,
+                right: 12,
+                color: "white",
+                bgcolor: "rgba(15, 23, 42, 0.6)",
+                "&:hover": {
+                  bgcolor: "rgba(15, 23, 42, 0.8)",
+                },
+                zIndex: 10,
+              }}
+            >
+              <X size={20} />
+            </IconButton>
+            {previewUrl && (
               <img
                 src={previewUrl}
-                alt="Preview"
-                className="h-full w-full object-cover"
+                alt="Enlarged Preview"
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "90vh",
+                  objectFit: "contain",
+                  borderRadius: "0.75rem",
+                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                }}
               />
-            ) : (
-              <CloudUpload size={26} color="#6d87cf" />
             )}
           </Box>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography
-              sx={{
-                color: "#f0f4ff",
-                fontWeight: 800,
-                lineHeight: 1.25,
-                fontSize: "1rem",
-                wordBreak: "break-word",
-              }}
-            >
-              {selectedFile?.name ?? "No file selected"}
-            </Typography>
-            <Typography sx={{ color: "#8ea0d0", mt: 0.6, fontSize: "0.9rem" }}>
-              {selectedFile ? "Uploaded" : "Upload a textbook page"}
-            </Typography>
-          </Box>
-        </DimmedContent>
-
-        <DimmedContent
-          isDimmed={isProcessing}
-          sx={{
-            mt: 2.25,
-          }}
-        >
-          <Typography sx={{ color: "#9fb0de", mb: 0.75, fontSize: "0.85rem" }}>
-            Analysis mode
-          </Typography>
-          <FormControl fullWidth>
-            <Select
-              value={recognizeOnly ? "ocr" : "full"}
-              onChange={handleModeChange}
-              size="small"
-              disabled={isProcessing}
-              sx={{
-                bgcolor: "rgba(9, 14, 48, 0.85)",
-                color: "#eef4ff",
-                borderRadius: "0.5rem",
-                "& .MuiOutlinedInput-notchedOutline": {
-                  borderColor: "rgba(111, 133, 192, 0.5)",
-                },
-                "& .MuiSvgIcon-root": {
-                  color: "#9fc0ff",
-                },
-              }}
-            >
-              <MenuItem value="full">Full analysis</MenuItem>
-              <MenuItem value="ocr">OCR only</MenuItem>
-            </Select>
-          </FormControl>
-        </DimmedContent>
-
-        <DimmedContent
-          isDimmed={isProcessing}
-          sx={{
-            mt: 2,
-            display: "flex",
-            gap: 1.5,
-          }}
-        >
-          <CustomButton
-            variant="secondary"
-            onClick={triggerFilePicker}
-            disabled={isProcessing}
-            startIcon={<Replace size={16} />}
-            sx={{
-              flex: 1,
-              minHeight: "3.6rem",
-              color: "#d8e2ff",
-              border: "1px solid rgba(127, 148, 205, 0.6)",
-              borderRadius: "0.85rem",
-              "&:hover": {
-                backgroundColor: "rgba(65, 84, 142, 0.22)",
-              },
-            }}
-          >
-            Replace File
-          </CustomButton>
-          <CustomButton
-            onClick={triggerReanalyze}
-            disabled={isProcessing || !selectedFile}
-            startIcon={<RefreshCw size={16} />}
-            sx={{ flex: 1, minHeight: "3.6rem", borderRadius: "0.85rem" }}
-          >
-            Re-analyze
-          </CustomButton>
-        </DimmedContent>
-
-        {isProcessing && (
-          <Box
-            data-testid="compact-processing-overlay"
-            sx={{
-              position: "absolute",
-              inset: 0,
-              background:
-                "linear-gradient(180deg, rgba(9, 14, 48, 0.18), rgba(9, 14, 48, 0.52))",
-              backdropFilter: "blur(6px)",
-              pointerEvents: "auto",
-            }}
-          />
-        )}
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFileInputChange}
-          style={{ display: "none" }}
-          disabled={isProcessing}
-        />
-      </Box>
+        </Dialog>
+      </>
     );
   }
 
