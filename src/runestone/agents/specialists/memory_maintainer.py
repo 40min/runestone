@@ -24,6 +24,7 @@ from runestone.agents.tools.memory_maintainer import (
     maintainer_update_memory_priority,
 )
 from runestone.config import Settings
+from runestone.constants import RECURSION_LIMIT_MEMORY_MAINTAINER
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +206,7 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
             try:
                 result = await self.agent.ainvoke(
                     {"messages": [HumanMessage(content=prompt)]},
-                    config={"recursion_limit": 250},
+                    config={"recursion_limit": RECURSION_LIMIT_MEMORY_MAINTAINER},
                     context=AgentContext(user=context.user),
                 )
             except Exception as exc:

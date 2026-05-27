@@ -6,6 +6,7 @@ from langchain_core.messages import AIMessage
 
 from runestone.agents.specialists.base import SpecialistContext
 from runestone.agents.specialists.news_agent import NEWS_AGENT_SYSTEM_PROMPT, NewsAgentSpecialist
+from runestone.constants import RECURSION_LIMIT_NEWS_AGENT
 
 
 @pytest.fixture
@@ -238,4 +239,4 @@ async def test_news_agent_passes_recursion_limit(specialist, mock_user):
 
     _, kwargs = specialist.agent.ainvoke.call_args
     assert "config" in kwargs
-    assert kwargs["config"] == {"recursion_limit": 10}
+    assert kwargs["config"] == {"recursion_limit": RECURSION_LIMIT_NEWS_AGENT}

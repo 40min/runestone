@@ -18,6 +18,7 @@ from runestone.agents.tools.memory_maintainer import (
     maintainer_update_memory_priority,
 )
 from runestone.api.memory_item_schemas import AreaToImproveStatus, MemoryCategory
+from runestone.constants import RECURSION_LIMIT_MEMORY_MAINTAINER
 
 
 @pytest.fixture
@@ -325,7 +326,7 @@ async def test_memory_maintainer_passes_recursion_limit(specialist, mock_user):
 
     _, kwargs = specialist.agent.ainvoke.call_args
     assert "config" in kwargs
-    assert kwargs["config"] == {"recursion_limit": 250}
+    assert kwargs["config"] == {"recursion_limit": RECURSION_LIMIT_MEMORY_MAINTAINER}
 
 
 @pytest.mark.anyio

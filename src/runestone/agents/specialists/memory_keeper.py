@@ -25,6 +25,7 @@ from runestone.agents.tools.memory import (
     upsert_memory_item,
 )
 from runestone.config import Settings
+from runestone.constants import RECURSION_LIMIT_MEMORY_KEEPER
 
 logger = logging.getLogger(__name__)
 
@@ -92,9 +93,11 @@ Execution:
 - If no `[memory:<category>:<id>]` tag is present, do a single targeted `read_memory`
   with a category filter to locate the item ID, then write. Do not perform a broad
   unsorted scan.
+- **If the targeted read returns no matching item, treat it as a terminal no-op.**
+  The item was never tracked; there is nothing to update. Log the reason in
+  `artifacts.notes` and return `status="no_action"` immediately. Do NOT upsert,
+  create a duplicate, or make a second broader read.
 - Prefer one targeted read over creating a duplicate.
-- Temporary duplicates are still acceptable if a narrow read fails to find the item;
-  `memory_maintainer` handles cleanup.
 
 ## Terminal No-Op Conditions
 
@@ -184,6 +187,8 @@ Return valid JSON matching this exact shape and nothing else:
 - Teacher: "This should replace the earlier note about your native language.
   [memory:personal_info:5]" → Case C: update content for id=5 directly
 - Teacher: "You have now mastered verb conjugation" (no id) → Case C: targeted read, then update
+- Teacher: "You are visibly improving with X" (no id, item not in memory) → Case C: targeted
+  read returns empty → terminal no-op, return `no_action`, stop; do NOT upsert
 - Case C targeted write returns "Memory item with id ... not found" → terminal no-op,
   return `no_action`, stop
 - Case C targeted write returns "content update category mismatch: expected '...',
@@ -244,7 +249,7 @@ class MemoryKeeperSpecialist(BaseSpecialist):
         try:
             result = await self.agent.ainvoke(
                 {"messages": [HumanMessage(content=json.dumps(payload, ensure_ascii=False))]},
-                config={"recursion_limit": 50},
+                config={"recursion_limit": RECURSION_LIMIT_MEMORY_KEEPER},
                 context=AgentContext(user=context.user),
             )
         except Exception as exc:
