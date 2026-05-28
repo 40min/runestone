@@ -209,7 +209,11 @@ class Settings(BaseSettings):
         """Return normalized OpenRouter providers to avoid routing through."""
         if not self.openrouter_disallowed_providers:
             return []
-        return [provider.strip() for provider in self.openrouter_disallowed_providers.split(",") if provider.strip()]
+        return list(
+            dict.fromkeys(
+                provider.strip() for provider in self.openrouter_disallowed_providers.split(",") if provider.strip()
+            )
+        )
 
     def get_agent_llm_settings(
         self,

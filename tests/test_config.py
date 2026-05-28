@@ -244,7 +244,7 @@ class TestSettings:
             openai_api_key="test-key",
             gemini_api_key="test-gemini-key",
             openrouter_api_key="test-openrouter-key",
-            openrouter_disallowed_providers=" bad-provider,another-provider , , ",
+            openrouter_disallowed_providers=" bad-provider,another-provider,bad-provider , , ",
             ocr_llm_provider=None,
             ocr_llm_model_name=None,
             allowed_origins="http://localhost:3000",
