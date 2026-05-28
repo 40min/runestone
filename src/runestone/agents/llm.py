@@ -40,8 +40,15 @@ def build_chat_model(
         raise ValueError(f"API key for {agent_settings.provider} is not configured")
 
     extra_kwargs = {}
-    if agent_settings.provider == "openrouter" and agent_settings.reasoning_level != ReasoningLevel.NONE:
-        extra_kwargs["extra_body"] = {"reasoning": {"effort": agent_settings.reasoning_level.value}}
+    if agent_settings.provider == "openrouter":
+        extra_body: dict[str, object] = {}
+        if agent_settings.reasoning_level != ReasoningLevel.NONE:
+            extra_body["reasoning"] = {"effort": agent_settings.reasoning_level.value}
+        disallowed_providers = settings.resolve_openrouter_disallowed_providers()
+        if disallowed_providers:
+            extra_body["provider"] = {"ignore": disallowed_providers}
+        if extra_body:
+            extra_kwargs["extra_body"] = extra_body
 
     logger.debug(
         "[agents:llm] Building chat model: agent=%s, provider=%s, model=%s, temp=%.2f, reasoning=%s",

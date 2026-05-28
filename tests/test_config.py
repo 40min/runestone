@@ -236,6 +236,29 @@ class TestSettings:
         assert test_settings.resolve_ocr_llm_provider() == "openrouter"
         assert test_settings.resolve_ocr_llm_model() == "anthropic/claude-3.5-sonnet"
 
+    def test_openrouter_disallowed_providers_resolver_parses_csv(self):
+        """OpenRouter ignore list resolver should normalize comma-separated provider slugs."""
+        test_settings = Settings.model_construct(
+            llm_provider="openai",
+            llm_model_name="gpt-5-mini",
+            openai_api_key="test-key",
+            gemini_api_key="test-gemini-key",
+            openrouter_api_key="test-openrouter-key",
+            openrouter_disallowed_providers=" bad-provider,another-provider,bad-provider , , ",
+            ocr_llm_provider=None,
+            ocr_llm_model_name=None,
+            allowed_origins="http://localhost:3000",
+            database_url="sqlite:///./test.db",
+            telegram_bot_token="test-token",
+            frontend_url="http://localhost:5173",
+            jwt_secret_key="secret",
+            teacher_provider="openrouter",
+            teacher_model="teacher-model",
+            coordinator_model="coordinator-model",
+        )
+
+        assert test_settings.resolve_openrouter_disallowed_providers() == ["bad-provider", "another-provider"]
+
     def test_gemini_service_provider_can_keep_ocr_on_openrouter(self):
         """Gemini service flows should coexist with an explicit OpenRouter OCR override."""
         test_settings = Settings.model_construct(

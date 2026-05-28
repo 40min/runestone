@@ -30,6 +30,7 @@ class TestServiceLLMBuilder:
         mock_settings.llm_model_name = "gpt-4o-mini"
         mock_settings.resolve_service_llm_provider.return_value = "openai"
         mock_settings.resolve_service_llm_model.return_value = "gpt-4o-mini"
+        mock_settings.resolve_openrouter_disallowed_providers.return_value = []
         mock_settings.openai_api_key = "test-openai-key"
 
         build_service_llm_model(mock_settings)
@@ -50,6 +51,7 @@ class TestServiceLLMBuilder:
         mock_settings.llm_model_name = None
         mock_settings.resolve_service_llm_provider.return_value = "openai"
         mock_settings.resolve_service_llm_model.return_value = DEFAULT_SERVICE_LLM_MODEL
+        mock_settings.resolve_openrouter_disallowed_providers.return_value = []
         mock_settings.openai_api_key = "test-openai-key"
 
         build_service_llm_model(mock_settings)
@@ -65,6 +67,7 @@ class TestServiceLLMBuilder:
         mock_settings.llm_model_name = "anthropic/claude-3.5-sonnet"
         mock_settings.resolve_service_llm_provider.return_value = "openrouter"
         mock_settings.resolve_service_llm_model.return_value = "anthropic/claude-3.5-sonnet"
+        mock_settings.resolve_openrouter_disallowed_providers.return_value = []
         mock_settings.openrouter_api_key = "test-openrouter-key"
 
         build_service_llm_model(mock_settings)
@@ -76,7 +79,24 @@ class TestServiceLLMBuilder:
         assert call_kwargs["default_headers"]["HTTP-Referer"] == "https://runestone.app"
         assert call_kwargs["default_headers"]["X-Title"] == "Runestone"
         assert call_kwargs["timeout"] == SERVICE_LLM_TIMEOUT_SECONDS
+        assert call_kwargs["extra_body"] is None
         assert "max_retries" not in call_kwargs
+
+    @patch("runestone.core.service_llm.ChatOpenAI")
+    def test_build_service_llm_model_openrouter_adds_provider_blacklist(self, mock_chat_openai):
+        """OpenRouter builder should pass ignored providers when configured."""
+        mock_settings = Mock(spec=Settings)
+        mock_settings.llm_provider = "openrouter"
+        mock_settings.llm_model_name = "anthropic/claude-3.5-sonnet"
+        mock_settings.resolve_service_llm_provider.return_value = "openrouter"
+        mock_settings.resolve_service_llm_model.return_value = "anthropic/claude-3.5-sonnet"
+        mock_settings.resolve_openrouter_disallowed_providers.return_value = ["bad-provider"]
+        mock_settings.openrouter_api_key = "test-openrouter-key"
+
+        build_service_llm_model(mock_settings)
+
+        call_kwargs = mock_chat_openai.call_args[1]
+        assert call_kwargs["extra_body"] == {"provider": {"ignore": ["bad-provider"]}}
 
     @patch("runestone.core.service_llm.ChatOpenAI")
     def test_build_service_llm_model_respects_overrides(self, mock_chat_openai):
@@ -86,6 +106,7 @@ class TestServiceLLMBuilder:
         mock_settings.llm_model_name = "gpt-4o-mini"
         mock_settings.resolve_service_llm_provider.return_value = "openai"
         mock_settings.resolve_service_llm_model.return_value = "gpt-4o-mini"
+        mock_settings.resolve_openrouter_disallowed_providers.return_value = []
         mock_settings.openai_api_key = "unused-openai-key"
         mock_settings.openrouter_api_key = "test-openrouter-key"
 
@@ -111,6 +132,7 @@ class TestServiceLLMBuilder:
         mock_settings.llm_model_name = "gemini-2.5-flash"
         mock_settings.resolve_service_llm_provider.return_value = "gemini"
         mock_settings.resolve_service_llm_model.return_value = "gemini-2.5-flash"
+        mock_settings.resolve_openrouter_disallowed_providers.return_value = []
         mock_settings.gemini_api_key = "test-gemini-key"
 
         build_service_llm_model(mock_settings)
@@ -129,6 +151,7 @@ class TestServiceLLMBuilder:
         mock_settings.llm_model_name = None
         mock_settings.resolve_service_llm_provider.return_value = "gemini"
         mock_settings.resolve_service_llm_model.return_value = DEFAULT_GEMINI_SERVICE_LLM_MODEL
+        mock_settings.resolve_openrouter_disallowed_providers.return_value = []
         mock_settings.gemini_api_key = "test-gemini-key"
 
         build_service_llm_model(mock_settings)
@@ -143,6 +166,7 @@ class TestServiceLLMBuilder:
         mock_settings.llm_model_name = "gpt-4o-mini"
         mock_settings.resolve_service_llm_provider.return_value = "openai"
         mock_settings.resolve_service_llm_model.return_value = "gpt-4o-mini"
+        mock_settings.resolve_openrouter_disallowed_providers.return_value = []
         mock_settings.openai_api_key = ""
 
         with pytest.raises(APIKeyError, match="OpenAI API key is required"):
@@ -155,6 +179,7 @@ class TestServiceLLMBuilder:
         mock_settings.llm_model_name = "anthropic/claude-3.5-sonnet"
         mock_settings.resolve_service_llm_provider.return_value = "openrouter"
         mock_settings.resolve_service_llm_model.return_value = "anthropic/claude-3.5-sonnet"
+        mock_settings.resolve_openrouter_disallowed_providers.return_value = []
         mock_settings.openrouter_api_key = ""
 
         with pytest.raises(APIKeyError, match="OpenRouter API key is required"):
@@ -167,6 +192,7 @@ class TestServiceLLMBuilder:
         mock_settings.llm_model_name = "gemini-2.5-flash"
         mock_settings.resolve_service_llm_provider.return_value = "gemini"
         mock_settings.resolve_service_llm_model.return_value = "gemini-2.5-flash"
+        mock_settings.resolve_openrouter_disallowed_providers.return_value = []
         mock_settings.gemini_api_key = ""
 
         with pytest.raises(APIKeyError, match="Gemini API key is required"):
@@ -179,6 +205,7 @@ class TestServiceLLMBuilder:
         mock_settings.llm_model_name = "test-model"
         mock_settings.resolve_service_llm_provider.return_value = "unsupported"
         mock_settings.resolve_service_llm_model.return_value = "test-model"
+        mock_settings.resolve_openrouter_disallowed_providers.return_value = []
 
         with pytest.raises(ValueError, match="Unsupported LLM provider: unsupported"):
             build_service_llm_model(mock_settings)

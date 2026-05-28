@@ -56,6 +56,10 @@ def build_service_llm_model(
         api_key = settings.openrouter_api_key
         if not api_key:
             raise APIKeyError("OpenRouter API key is required. Set OPENROUTER_API_KEY environment variable.")
+        extra_body: dict[str, object] | None = None
+        disallowed_providers = settings.resolve_openrouter_disallowed_providers()
+        if disallowed_providers:
+            extra_body = {"provider": {"ignore": disallowed_providers}}
         return ChatOpenAI(
             model=effective_model_name,
             api_key=SecretStr(api_key),
@@ -66,6 +70,7 @@ def build_service_llm_model(
                 "X-Title": "Runestone",
             },
             timeout=SERVICE_LLM_TIMEOUT_SECONDS,
+            extra_body=extra_body,
         )
 
     if effective_provider == "gemini":

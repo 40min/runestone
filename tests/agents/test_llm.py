@@ -23,6 +23,7 @@ def mock_settings():
     settings.openrouter_api_key = "test-openrouter-key"
     settings.openai_api_key = "test-openai-key"
     settings.gemini_api_key = "test-gemini-key"
+    settings.resolve_openrouter_disallowed_providers.return_value = []
     settings.get_agent_llm_settings.return_value = AgentLLMSettings(
         provider="openrouter",
         model="test-chat-model",
@@ -140,6 +141,17 @@ def test_build_chat_model_adds_openrouter_reasoning_when_configured(mock_setting
 
         call_kwargs = mock_chat_openai.call_args[1]
         assert call_kwargs["extra_body"] == {"reasoning": {"effort": "minimal"}}
+
+
+def test_build_chat_model_adds_openrouter_ignored_providers(mock_settings):
+    """OpenRouter requests should include provider ignore list when configured."""
+    mock_settings.resolve_openrouter_disallowed_providers.return_value = ["bad-provider"]
+
+    with patch("runestone.agents.llm.ChatOpenAI") as mock_chat_openai:
+        build_chat_model(mock_settings, "teacher")
+
+        call_kwargs = mock_chat_openai.call_args[1]
+        assert call_kwargs["extra_body"] == {"provider": {"ignore": ["bad-provider"]}}
 
 
 def test_build_chat_model_does_not_send_reasoning_when_disabled(mock_settings):
