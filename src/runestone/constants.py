@@ -4,7 +4,7 @@ from enum import Enum
 
 MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY = 9
 MAX_TEACHER_GRAMMAR_SOURCE_LINKS = 2
-MAX_GRAMMAR_SEARCH_CALLS = 2
+MAX_GRAMMAR_SEARCH_CALLS = 1
 MAX_GRAMMAR_READ_CALLS = 10
 
 # Specialist recursion limits to prevent runaway tool loops

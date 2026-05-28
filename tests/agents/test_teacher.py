@@ -163,9 +163,9 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "content, status, or priority change" in call_kwargs["system_prompt"]
             assert "[memory:<category>:<id>]" in call_kwargs["system_prompt"]
             assert "[memory:personal_info:5]" in call_kwargs["system_prompt"]
-            assert "Use `search_grammar` 1" in call_kwargs["system_prompt"]
+            assert "Use `search_grammar` at most once with one focused query." in call_kwargs["system_prompt"]
             assert "each result has `title`, `url`, and `path`" in call_kwargs["system_prompt"]
-            assert "top 1" in call_kwargs["system_prompt"]
+            assert "Focus on the top result first." in call_kwargs["system_prompt"]
             assert "stop and answer without grammar links" in call_kwargs["system_prompt"]
             assert "Never search for:" in call_kwargs["system_prompt"]
             assert "Greetings, farewells, or small-talk" in call_kwargs["system_prompt"]
@@ -661,7 +661,7 @@ async def test_generate_response_passes_recursion_limit(teacher_agent, mock_user
 @pytest.mark.anyio
 async def test_generate_response_retries_after_tool_limit_termination(teacher_agent, mock_user):
     teacher_agent.agent.ainvoke.return_value = {
-        "messages": [AIMessage(content="'search_grammar' tool call limit reached: run limit exceeded (3/2 calls).")]
+        "messages": [AIMessage(content="'search_grammar' tool call limit reached: run limit exceeded (2/1 calls).")]
     }
     fallback_agent = AsyncMock()
     fallback_agent.ainvoke.return_value = {
@@ -691,7 +691,7 @@ async def test_generate_response_retries_after_tool_limit_termination_in_text_bl
                     {"type": "text", "text": "Some preliminary content."},
                     {
                         "type": "text",
-                        "text": "'search_grammar' tool call limit reached: run limit exceeded (3/2 calls).",
+                        "text": "'search_grammar' tool call limit reached: run limit exceeded (2/1 calls).",
                     },
                 ]
             )
