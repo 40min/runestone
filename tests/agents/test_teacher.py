@@ -165,7 +165,7 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "[memory:personal_info:5]" in call_kwargs["system_prompt"]
             assert "Use `search_grammar` at most once with one focused query." in call_kwargs["system_prompt"]
             assert "each result has `title`, `url`, and `path`" in call_kwargs["system_prompt"]
-            assert "Focus on the top result first." in call_kwargs["system_prompt"]
+            assert "Focus on the top result." in call_kwargs["system_prompt"]
             assert "stop and answer without grammar links" in call_kwargs["system_prompt"]
             assert "Never search for:" in call_kwargs["system_prompt"]
             assert "Greetings, farewells, or small-talk" in call_kwargs["system_prompt"]

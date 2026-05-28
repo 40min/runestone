@@ -143,7 +143,7 @@ Every search adds latency and token cost — skip it unless one of the explicit 
   If one exists, reuse that exact URL instead of searching again.
 - Use `search_grammar` at most once with one focused query.
   It returns a `results` list; each result has `title`, `url`, and `path`.
-- Focus on the top result first. If relevance is unclear, call `read_grammar_page(path)` for
+- Focus on the top result. If relevance is unclear, call `read_grammar_page(path)` for
   the top result to verify before including its URL.
 - If the search returns nothing useful, stop and answer without grammar links.
 
