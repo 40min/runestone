@@ -722,6 +722,48 @@ async def test_generate_response_retries_after_graph_recursion_error(teacher_age
     fallback_agent.ainvoke.assert_called_once()
 
 
+@pytest.mark.anyio
+async def test_generate_response_retries_after_deadline_exceeded_error(teacher_agent, mock_user):
+    teacher_agent.agent.ainvoke.side_effect = RuntimeError(
+        "504 DEADLINE_EXCEEDED. "
+        "{'error': {'code': 504, 'message': 'Deadline expired before operation could complete.'}}"
+    )
+    fallback_agent = AsyncMock()
+    fallback_agent.ainvoke.return_value = {"messages": [AIMessage(content="Svar utan verktyg efter timeout.")]}
+    teacher_agent._get_tool_limit_fallback_agent = MagicMock(return_value=fallback_agent)
+
+    generated = await teacher_agent.generate_response(message="Explain this quickly", history=[], user=mock_user)
+
+    assert generated.message == "Svar utan verktyg efter timeout."
+    fallback_agent.ainvoke.assert_called_once()
+
+
+@pytest.mark.anyio
+async def test_generate_response_retries_after_deadline_exceeded_error_with_space_wording(teacher_agent, mock_user):
+    teacher_agent.agent.ainvoke.side_effect = RuntimeError("504 Deadline Exceeded")
+    fallback_agent = AsyncMock()
+    fallback_agent.ainvoke.return_value = {"messages": [AIMessage(content="Fallback after Deadline Exceeded wording.")]}
+    teacher_agent._get_tool_limit_fallback_agent = MagicMock(return_value=fallback_agent)
+
+    generated = await teacher_agent.generate_response(message="Need help", history=[], user=mock_user)
+
+    assert generated.message == "Fallback after Deadline Exceeded wording."
+    fallback_agent.ainvoke.assert_called_once()
+
+
+@pytest.mark.anyio
+async def test_generate_response_retries_after_timeout_error(teacher_agent, mock_user):
+    teacher_agent.agent.ainvoke.side_effect = TimeoutError()
+    fallback_agent = AsyncMock()
+    fallback_agent.ainvoke.return_value = {"messages": [AIMessage(content="Fallback after timeout error.")]}
+    teacher_agent._get_tool_limit_fallback_agent = MagicMock(return_value=fallback_agent)
+
+    generated = await teacher_agent.generate_response(message="Need help", history=[], user=mock_user)
+
+    assert generated.message == "Fallback after timeout error."
+    fallback_agent.ainvoke.assert_called_once()
+
+
 def test_openai_provider_configuration(mock_settings):
     """Test that OpenAI provider is configured correctly."""
     mock_settings.teacher_provider = "openai"
