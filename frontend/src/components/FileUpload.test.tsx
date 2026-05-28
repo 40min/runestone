@@ -180,10 +180,10 @@ describe('FileUpload', () => {
       />
     );
 
-    const zoomTrigger = screen.getByAltText('Preview').parentElement;
+    const zoomTrigger = screen.getByTestId('compact-preview-trigger');
     expect(zoomTrigger).toHaveAttribute('role', 'button');
 
-    fireEvent.keyDown(zoomTrigger!, { key: ' ' });
+    fireEvent.keyDown(zoomTrigger, { key: ' ' });
 
     expect(screen.getByAltText('Enlarged Preview')).toBeInTheDocument();
   });
@@ -197,7 +197,7 @@ describe('FileUpload', () => {
       />
     );
 
-    const uploadPlaceholder = screen.getByText('No file selected').closest('div')?.previousElementSibling;
+    const uploadPlaceholder = screen.getByTestId('compact-preview-trigger');
     expect(uploadPlaceholder).not.toHaveAttribute('role');
     expect(uploadPlaceholder).toHaveAttribute('tabindex', '-1');
   });

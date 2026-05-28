@@ -152,6 +152,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
             }}
           >
             <Box
+              data-testid="compact-preview-trigger"
               onClick={previewUrl ? () => setIsZoomed(true) : undefined}
               onKeyDown={
                 previewUrl
