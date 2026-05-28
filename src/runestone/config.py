@@ -20,16 +20,11 @@ DEFAULT_GEMINI_SERVICE_LLM_MODEL = "gemini-2.5-flash"
 
 def _slugify_openrouter_provider(value: str) -> str:
     """Normalize provider labels to the slug format OpenRouter routing expects."""
-    segments: list[str] = []
-    for raw_segment in value.strip().split("/"):
-        segment = raw_segment.strip().lower()
-        if not segment:
-            continue
-        segment = re.sub(r"[^a-z0-9]+", "-", segment)
-        segment = segment.strip("-")
-        if segment:
-            segments.append(segment)
-    return "/".join(segments)
+    return "/".join(
+        slug
+        for raw_segment in value.split("/")
+        if (slug := re.sub(r"[^a-z0-9]+", "-", raw_segment.strip().lower()).strip("-"))
+    )
 
 
 class ReasoningLevel(str, Enum):
