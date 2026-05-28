@@ -169,6 +169,39 @@ describe('FileUpload', () => {
     expect(screen.getByAltText('Enlarged Preview')).toBeInTheDocument();
   });
 
+  it('opens compact preview zoom with the spacebar', () => {
+    const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
+    render(
+      <FileUpload
+        onFileSelect={mockOnFileSelect}
+        isProcessing={false}
+        compact
+        selectedFileOverride={file}
+      />
+    );
+
+    const zoomTrigger = screen.getByTestId('compact-preview-trigger');
+    expect(zoomTrigger).toHaveAttribute('role', 'button');
+
+    fireEvent.keyDown(zoomTrigger, { key: ' ' });
+
+    expect(screen.getByAltText('Enlarged Preview')).toBeInTheDocument();
+  });
+
+  it('does not expose compact preview keyboard affordances without a file', () => {
+    render(
+      <FileUpload
+        onFileSelect={mockOnFileSelect}
+        isProcessing={false}
+        compact
+      />
+    );
+
+    const uploadPlaceholder = screen.getByTestId('compact-preview-trigger');
+    expect(uploadPlaceholder).not.toHaveAttribute('role');
+    expect(uploadPlaceholder).toHaveAttribute('tabindex', '-1');
+  });
+
   it('cleans up object URL on unmount', async () => {
     const revokeObjectURLSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
