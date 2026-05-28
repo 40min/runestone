@@ -106,7 +106,7 @@ async def test_search_news_with_dates_no_results_after_filter(monkeypatch):
 async def test_search_news_with_dates_clamps_k(monkeypatch):
     class FakeDDGSClampsK(FakeDDGS):
         def news(self, query, max_results, timelimit, region):
-            assert max_results == 10
+            assert max_results == 5
             return []
 
     monkeypatch.setattr(agent_news, "DDGS", FakeDDGSClampsK)
