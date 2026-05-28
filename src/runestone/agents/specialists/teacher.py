@@ -141,10 +141,10 @@ Every search adds latency and token cost — skip it unless one of the explicit 
 **How to search:**
 - First check earlier assistant messages in this chat for a clearly relevant grammar reference.
   If one exists, reuse that exact URL instead of searching again.
-- Use `search_grammar` 1–2 times with focused queries.
+- Use `search_grammar` at most once with one focused query.
   It returns a `results` list; each result has `title`, `url`, and `path`.
-  Focus on top results first. If relevance is unclear, call `read_grammar_page(path)` for
-  the top 1–2 results to verify before including a URL.
+- Focus on the top result. If relevance is unclear, call `read_grammar_page(path)` for
+  the top result to verify before including its URL.
 - If the search returns nothing useful, stop and answer without grammar links.
 
 **grammar_source_urls:**
