@@ -6,6 +6,7 @@ loaded from environment variables using Pydantic BaseSettings.
 """
 
 import os
+import re
 from enum import Enum
 from typing import Literal, Optional
 
@@ -15,6 +16,15 @@ from pydantic_settings import BaseSettings
 
 DEFAULT_SERVICE_LLM_MODEL = "gpt-5.4-nano"
 DEFAULT_GEMINI_SERVICE_LLM_MODEL = "gemini-2.5-flash"
+
+
+def _slugify_openrouter_provider(value: str) -> str:
+    """Normalize provider labels to the slug format OpenRouter routing expects."""
+    return "/".join(
+        slug
+        for raw_segment in value.split("/")
+        if (slug := re.sub(r"[^a-z0-9]+", "-", raw_segment.strip().lower()).strip("-"))
+    )
 
 
 class ReasoningLevel(str, Enum):
@@ -206,12 +216,14 @@ class Settings(BaseSettings):
         return self.resolve_service_llm_model(provider=self.resolve_ocr_llm_provider())
 
     def resolve_openrouter_disallowed_providers(self) -> list[str]:
-        """Return normalized OpenRouter providers to avoid routing through."""
+        """Return OpenRouter provider slugs to avoid routing through."""
         if not self.openrouter_disallowed_providers:
             return []
         return list(
             dict.fromkeys(
-                provider.strip() for provider in self.openrouter_disallowed_providers.split(",") if provider.strip()
+                slug
+                for provider in self.openrouter_disallowed_providers.split(",")
+                if (slug := _slugify_openrouter_provider(provider))
             )
         )
 
