@@ -570,8 +570,15 @@ already names a clear topic.
 
     @staticmethod
     def _is_deadline_exceeded_error(error: Exception) -> bool:
+        if isinstance(error, TimeoutError) or "timeout" in type(error).__name__.lower():
+            return True
         text = str(error).lower()
-        if "deadline_exceeded" in text or "deadline exceeded" in text or "deadline expired" in text:
+        if (
+            "deadline_exceeded" in text
+            or "deadline exceeded" in text
+            or "deadline expired" in text
+            or "timeout" in text
+        ):
             return True
         status = getattr(error, "status", None)
         if isinstance(status, str):
@@ -580,6 +587,7 @@ already names a clear topic.
                 "deadline_exceeded" in normalized_status
                 or "deadline exceeded" in normalized_status
                 or "deadline expired" in normalized_status
+                or "timeout" in normalized_status
             ):
                 return True
         return False

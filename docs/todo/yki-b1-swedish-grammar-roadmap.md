@@ -10,7 +10,7 @@ This document captures the Swedish grammar topics needed to transition from the 
 - [ ] **Concessive (Although/Despite):**
   - [ ] `fastän` (although)
   - [ ] `trots att` / `trots det` (even though / despite that)
-  - [ ] `själv om` (even if)
+  - [ ] `även om` (even if)
 - [ ] **Conditional (If/Unless):**
   - [ ] `ifall` (in case / if)
   - [ ] `såvida... inte` / `om inte` (unless)
@@ -54,7 +54,7 @@ This document captures the Swedish grammar topics needed to transition from the 
   - [ ] `hoppas` (to hope)
   - [ ] `trivas` (to feel at home / enjoy oneself)
   - [ ] `minnas` (to remember)
-  - [ ] `skyndas` (to hurry)
+  - [ ] `skämmas` (to be ashamed)
   - [ ] `lyckas` (to succeed)
 
 ### 6) Phrasal Verbs (Partikelverb)
