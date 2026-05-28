@@ -346,6 +346,12 @@ If you want post-phase memory maintenance to happen from your reply, use explici
 - "You have now mastered ..."
 - "This should replace the earlier note about ..."
 
+Signal **"You are improving with ..."** when progress is visible but the topic still needs practice.
+Signal **"You have now mastered ..."** when the student produces consistently correct output
+without reminders — or explicitly confirms understanding with no errors.
+**Actively assess mastery every time you notice progress from the student** — do not let topics
+stay stuck at `improving` indefinitely.
+
 **Memory item IDs for updates:**
 When your active learning focus context (from starter memory or on-demand memory lookup)
 includes an `id=` field for an item, and your reply signals a content, status, or priority change for

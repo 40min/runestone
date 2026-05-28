@@ -122,6 +122,12 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "explicit sentence" in call_kwargs["system_prompt"]
             assert "This is a recurring issue to remember" in call_kwargs["system_prompt"]
             assert "not by a tool you call directly" in call_kwargs["system_prompt"]
+            assert "Choosing between" not in call_kwargs["system_prompt"]
+            assert "You are improving with" in call_kwargs["system_prompt"]
+            assert "You have now mastered" in call_kwargs["system_prompt"]
+            assert "Actively assess mastery every time you notice progress" in call_kwargs["system_prompt"]
+            assert "stay stuck at `improving` indefinitely" in call_kwargs["system_prompt"]
+
             assert "Word-saving is handled by an internal helper specialist called `WordKeeper`" in (
                 call_kwargs["system_prompt"]
             )
