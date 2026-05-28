@@ -986,7 +986,12 @@ class AgentsManager:
             artifacts = result.get("artifacts")
             if not isinstance(artifacts, dict):
                 continue
+
+            # Extract from "sources" list first, fallback to "results" list if sources is missing or empty
             artifact_sources = artifacts.get("sources")
+            if not isinstance(artifact_sources, list) or not artifact_sources:
+                artifact_sources = artifacts.get("results")
+
             if not isinstance(artifact_sources, list):
                 continue
             for source in artifact_sources:

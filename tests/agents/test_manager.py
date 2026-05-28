@@ -629,6 +629,51 @@ async def test_generate_teacher_response_combines_news_sources_from_pre_results(
 
 
 @pytest.mark.anyio
+async def test_generate_teacher_response_fallback_to_news_agent_results_if_sources_missing(mock_settings, mock_user):
+    manager = _make_manager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(
+        message="Svar med källor",
+        final_messages=[],
+    )
+
+    response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
+        message="Nyheter",
+        history=[],
+        user=mock_user,
+        pre_results=[
+            {
+                "name": "news_agent",
+                "result": {
+                    "status": "action_taken",
+                    "artifacts": {
+                        "topic": "ekonomi",
+                        "query": "svenska ekonominyheter",
+                        "timelimit": "w",
+                        "results": [
+                            {
+                                "title": "Nyhet från resultat",
+                                "url": "https://example.com/article-from-results",
+                                "date": "2026-02-05",
+                                "snippet": "summary",
+                                "article_text": "",
+                            }
+                        ],
+                    },
+                },
+            }
+        ],
+        starter_memory="",
+        recent_side_effects=[],
+    )
+
+    assert response == "Svar med källor"
+    assert sources == [
+        {"title": "Nyhet från resultat", "url": "https://example.com/article-from-results", "date": "2026-02-05"}
+    ]
+
+
+@pytest.mark.anyio
 async def test_generate_teacher_response_deduplicates_sources_across_pre_results_and_teacher(mock_settings, mock_user):
     manager = _make_manager(mock_settings)
     manager.teacher = AsyncMock()

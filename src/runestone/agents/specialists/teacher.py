@@ -72,7 +72,7 @@ def _teacher_timing_fields(args, kwargs, _result, _error) -> dict[str, int | str
 class TeacherAgent:
     """LLM-based teacher agent responsible for final response generation."""
 
-    MAX_HISTORY_MESSAGES = 20
+    MAX_HISTORY_MESSAGES = 10
     RECURSION_LIMIT = RECURSION_LIMIT_TEACHER
     RECENT_SIDE_EFFECTS_MAX_ITEMS = 5
     RECENT_SIDE_EFFECTS_MAX_CHARS = 2000
@@ -486,9 +486,13 @@ already names a clear topic.
                     grammar_service=self.grammar_service,
                 ),
             )
-        except GraphRecursionError:
+        except Exception as exc:
+            if not isinstance(exc, GraphRecursionError) and not self._is_deadline_exceeded_error(exc):
+                raise
+            fallback_reason = "recursion limit" if isinstance(exc, GraphRecursionError) else "deadline exceeded error"
             logger.warning(
-                "[agents:teacher] Primary run hit recursion limit; retrying once without tools for user_id=%s",
+                "[agents:teacher] Primary run hit %s; retrying once without tools for user_id=%s",
+                fallback_reason,
                 user.id,
             )
             result = await self._ainvoke_without_tools(messages=messages, user=user)
@@ -561,6 +565,22 @@ already names a clear topic.
                         return True
                 continue
             if isinstance(content, str) and "tool call limit reached" in content.lower():
+                return True
+        return False
+
+    @staticmethod
+    def _is_deadline_exceeded_error(error: Exception) -> bool:
+        text = str(error).lower()
+        if "deadline_exceeded" in text or "deadline exceeded" in text or "deadline expired" in text:
+            return True
+        status = getattr(error, "status", None)
+        if isinstance(status, str):
+            normalized_status = status.lower()
+            if (
+                "deadline_exceeded" in normalized_status
+                or "deadline exceeded" in normalized_status
+                or "deadline expired" in normalized_status
+            ):
                 return True
         return False
 
