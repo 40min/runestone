@@ -51,6 +51,7 @@ class Settings(BaseSettings):
 
     # OpenRouter Configuration
     openrouter_api_key: Optional[str] = None
+    openrouter_disallowed_providers: Optional[str] = None
     ocr_llm_provider: Optional[str] = None
     ocr_llm_model_name: Optional[str] = None
 
@@ -203,6 +204,12 @@ class Settings(BaseSettings):
         if self.ocr_llm_model_name:
             return self.ocr_llm_model_name
         return self.resolve_service_llm_model(provider=self.resolve_ocr_llm_provider())
+
+    def resolve_openrouter_disallowed_providers(self) -> list[str]:
+        """Return normalized OpenRouter providers to avoid routing through."""
+        if not self.openrouter_disallowed_providers:
+            return []
+        return [provider.strip() for provider in self.openrouter_disallowed_providers.split(",") if provider.strip()]
 
     def get_agent_llm_settings(
         self,
