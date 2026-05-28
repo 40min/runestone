@@ -136,7 +136,7 @@ async def _fetch_url_bytes(url: str) -> tuple[bytes, str, str, bool] | tuple[Non
         "User-Agent": "runestone-teacher-agent/1.0 (+https://example.invalid)",
         "Accept": "text/html,text/plain,application/xhtml+xml,text/markdown;q=0.9,*/*;q=0.1",
     }
-    timeout = httpx.Timeout(connect=5.0, read=10.0, write=10.0, pool=5.0)
+    timeout = httpx.Timeout(connect=3.0, read=6.0, write=6.0, pool=5.0)
 
     current_url = url
     truncated = False

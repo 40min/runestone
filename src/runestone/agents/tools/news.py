@@ -45,9 +45,9 @@ class NewsResultsOutput(BaseModel):
     results: list[NewsResult]
 
 
-MAX_NEWS_TO_FETCH = 10
-DDGS_TIMEOUT = 20
-DDGS_MAX_RETRIES = 2
+MAX_NEWS_TO_FETCH = 5
+DDGS_TIMEOUT = 8
+DDGS_MAX_RETRIES = 1
 DDGS_RETRY_DELAYS = (0.3, 0.6)
 
 

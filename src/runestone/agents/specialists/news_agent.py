@@ -35,7 +35,7 @@ bounded context for the teacher.
 - Use `search_news_with_dates` first when you do act.
 - Use `read_url` only for selected article URLs when snippets are too thin to help the teacher.
 - Never use `read_url` as a general web crawler.
-- Keep retrieval bounded: max 5 search results and max 2 `read_url` calls.
+- Keep retrieval bounded: max 5 search results and max 3 `read_url` calls.
 
 ## Act when
 - The student clearly names a topic or domain for news.
@@ -57,7 +57,7 @@ bounded context for the teacher.
   and generate a non-empty Swedish query (for example: "senaste nyheterna i Sverige").
 - If coordinator already routed this turn to NewsAgent for news retrieval, do not downgrade to
   `no_action` unless the request is clearly unrelated to real-time information.
-- Keep retrieval bounded: max 5 search results and max 2 `read_url` calls.
+- Keep retrieval bounded: max 5 search results and max 3 `read_url` calls.
 
 ## Output Contract
 Return valid JSON with this exact shape and no extra text:
