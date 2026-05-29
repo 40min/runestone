@@ -9,15 +9,16 @@ Keep package `__init__.py` files empty unless there is an explicit, reviewed rea
 Prefer the Makefile targets over spelling out raw tool commands; the Makefile also keeps the `uv` cache inside the repo for reproducible local and CI runs.
 
 - Use `make check-readiness` before commit-sized changes. It runs lint checks, backend and frontend tests, then a frontend build dry-run.
-- Use scoped checks while iterating: `make backend-test`, `make frontend-test`, `make lint-check`, or targeted `uv run pytest tests/path -v` for backend tests.
+- Use scoped checks while iterating: `make backend-test`, `make frontend-test`, `make lint-check`, `make test`, `make test-coverage`, or targeted `uv run pytest tests/path -v` for backend tests.
 - For broader validation sweeps, prefer the composed Make workflows: `make dev-test`, `make dev-full`, `make ci-lint`, and `make ci-test`.
-- Bootstrap a fresh worktree with `make install-all`. Use `make install-backend` and `make install-frontend` for partial dependency refreshes. Run `make setup` to install pre-commit hooks.
+- Use `make install` for production-only dependencies, `make install-dev` for the full Python development set, and `make install-all` when bootstrapping a fresh worktree. Use `make install-backend` and `make install-frontend` for partial dependency refreshes. Run `make setup` to install pre-commit hooks.
 - Start services with `make run-backend` (applies Alembic migrations, serves FastAPI on port 8010), `make run-frontend` (Vite on port 5173), or `make run-dev` for both.
 - For CLI and prompt-debugging workflows, use `make run IMAGE_PATH=...`, `make load-vocab CSV_PATH=...`, and the prompt targets `make test-prompts-ocr`, `make test-prompts-analysis TEXT=...`, `make test-prompts-vocabulary WORD=...`, and `make test-grammar-search QUERY=...`.
 - When touching the Telegram recall worker or containerized dev stack, use `make run-recall`, `make init-state`, `make docker-up`, `make docker-down`, and `make docker-build`.
 - For refreshing running containers, prefer `make restart-recall`, `make rebuild-restart-recall`, or `make rebuild-restart-all` over ad hoc Docker commands.
 - Use `make rebuild-container NAMES="..."` only for explicit full container rebuilds; **note** that this target also runs `git pull` and `sudo docker` cleanup steps, which may affect local changes.
 - Manage schema changes through Alembic targets: `make db-init`, `make db-migrate MESSAGE="..."`, `make db-upgrade`, `make db-downgrade REVISION=...`, `make db-current`, and `make db-history`.
+- Use `make clean` when caches or generated artifacts may be skewing local results, and `make info` when you need a quick environment snapshot while debugging setup issues.
 
 For LangChain `@tool` tests, use `.ainvoke()` for tools without `ToolRuntime`; use `.coroutine(runtime, ...)` with a manually constructed runtime for tools that depend on `ToolRuntime` context.
 
