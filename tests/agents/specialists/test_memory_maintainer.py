@@ -932,13 +932,8 @@ async def test_memory_maintainer_dry_run_reports_duplicate_target_key(specialist
         yield MemoryItemService(MemoryItemRepository(db))
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
-        result = await specialist.run_cli(
-            SpecialistContext(
-                message="maintain_memory_cli",
-                history=[],
-                user=user,
-                routing_reason="cli_memory_maintenance",
-            ),
+        result = await specialist.run_cli_for_user(
+            user,
             dry_run=True,
             with_priority_review=False,
         )
@@ -1007,13 +1002,8 @@ async def test_memory_maintainer_dry_run_rejects_invalid_generated_final_key(spe
         yield MemoryItemService(MemoryItemRepository(db))
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
-        result = await specialist.run_cli(
-            SpecialistContext(
-                message="maintain_memory_cli",
-                history=[],
-                user=user,
-                routing_reason="cli_memory_maintenance",
-            ),
+        result = await specialist.run_cli_for_user(
+            user,
             dry_run=True,
             with_priority_review=False,
         )
@@ -1119,13 +1109,8 @@ async def test_memory_maintainer_dry_run_reports_duplicate_target_key_within_pla
         yield MemoryItemService(MemoryItemRepository(db))
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
-        result = await specialist.run_cli(
-            SpecialistContext(
-                message="maintain_memory_cli",
-                history=[],
-                user=user,
-                routing_reason="cli_memory_maintenance",
-            ),
+        result = await specialist.run_cli_for_user(
+            user,
             dry_run=True,
             with_priority_review=False,
         )
@@ -1344,13 +1329,8 @@ async def test_memory_maintainer_cli_priority_review_can_apply_existing_priority
         yield MemoryItemService(MemoryItemRepository(db))
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
-        result = await specialist.run_cli(
-            SpecialistContext(
-                message="maintain_memory_cli",
-                history=[],
-                user=user,
-                routing_reason="cli_memory_maintenance",
-            ),
+        result = await specialist.run_cli_for_user(
+            user,
             dry_run=False,
             with_priority_review=True,
         )
@@ -1437,13 +1417,8 @@ async def test_memory_maintainer_cli_dry_run_priority_review_does_not_count_sugg
         yield MemoryItemService(MemoryItemRepository(db))
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
-        result = await specialist.run_cli(
-            SpecialistContext(
-                message="maintain_memory_cli",
-                history=[],
-                user=user,
-                routing_reason="cli_memory_maintenance",
-            ),
+        result = await specialist.run_cli_for_user(
+            user,
             dry_run=True,
             with_priority_review=True,
         )

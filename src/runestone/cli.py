@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from runestone.agents.specialists.base import SpecialistContext, SpecialistResult
+from runestone.agents.specialists.base import SpecialistResult
 from runestone.agents.specialists.memory_maintainer import MemoryMaintainerSpecialist
 from runestone.agents.tools.read_url import read_url
 from runestone.api.schemas import VocabularyItemCreate
@@ -274,13 +274,8 @@ async def _run_memory_maintainer_cli(user_id: int, dry_run: bool, with_priority_
             raise RunestoneError(f"User {user_id} not found")
 
     specialist = MemoryMaintainerSpecialist(settings)
-    return await specialist.run_cli(
-        SpecialistContext(
-            message="maintain_memory_cli",
-            history=[],
-            user=user,
-            routing_reason="cli_memory_maintenance",
-        ),
+    return await specialist.run_cli_for_user(
+        user,
         dry_run=dry_run,
         with_priority_review=with_priority_review,
     )

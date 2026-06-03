@@ -11,7 +11,6 @@ from typing import Any, Literal
 from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
-from sqlalchemy.exc import IntegrityError
 
 from runestone.agents.llm import build_chat_model
 from runestone.agents.service_providers import provide_memory_item_service
@@ -250,24 +249,28 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
         )
 
     async def run(self, context: SpecialistContext) -> SpecialistResult:
-        """Run the background chat-reset maintenance flow."""
+        """Run the background chat-reset maintenance flow via the shared specialist contract."""
+        return await self.run_for_user(context.user)
+
+    async def run_for_user(self, user: Any) -> SpecialistResult:
+        """Run chat-reset maintenance for one user without building a full specialist context."""
         return await self.run_session(
-            context,
+            user=user,
             dry_run=False,
             with_priority_review=False,
             trigger_source="chat_reset",
         )
 
-    async def run_cli(
+    async def run_cli_for_user(
         self,
-        context: SpecialistContext,
+        user: Any,
         *,
         dry_run: bool,
         with_priority_review: bool,
     ) -> SpecialistResult:
-        """Run the maintainer in CLI mode with optional dry-run and priority review."""
+        """Run the maintainer in CLI mode for one user without building a full specialist context."""
         return await self.run_session(
-            context,
+            user=user,
             dry_run=dry_run,
             with_priority_review=with_priority_review,
             trigger_source="cli",
@@ -275,7 +278,7 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
 
     async def run_session(
         self,
-        context: SpecialistContext,
+        user: Any,
         *,
         dry_run: bool,
         with_priority_review: bool,
@@ -283,8 +286,8 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
     ) -> SpecialistResult:
         """Execute the full structured maintenance pipeline."""
         started_at = perf_counter()
-        user_id = int(getattr(context.user, "id"))
-        language = self._memory_item_language(context)
+        user_id = int(getattr(user, "id"))
+        language = self._memory_item_language(user)
         artifacts = self._base_artifacts(
             trigger_source=trigger_source,
             dry_run=dry_run,
@@ -772,23 +775,6 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
                     continue
                 reserved_final_keys.add(group.final_key)
 
-                existing_target = await service.repo.get_by_user_category_key(
-                    user_id,
-                    MemoryCategory.AREA_TO_IMPROVE.value,
-                    group.final_key,
-                )
-                if existing_target is not None:
-                    report["failed_groups"].append(
-                        {
-                            "group_id": group.group_id,
-                            "item_ids": group.source_item_ids,
-                            "item_keys": group.source_keys,
-                            "final_key": group.final_key,
-                            "reason": "duplicate_target_key",
-                        }
-                    )
-                    continue
-
                 current_items, validation_error = await self._validate_group_state(
                     service=service,
                     user_id=user_id,
@@ -806,25 +792,12 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
                     )
                     continue
 
-                if dry_run:
-                    report["merged_groups"].append(self._planned_group_artifact(group))
-                    continue
-
-                db = service.repo.db
-                created_item = MemoryItem(
-                    user_id=user_id,
-                    category=MemoryCategory.AREA_TO_IMPROVE.value,
-                    key=group.final_key,
-                    content=group.final_content,
-                    status=group.final_status,
-                    priority=self._merged_priority(current_items),
-                    status_changed_at=self._utc_now(),
+                existing_target = await service.get_item_by_user_category_key(
+                    user_id,
+                    MemoryCategory.AREA_TO_IMPROVE,
+                    group.final_key,
                 )
-                db.add(created_item)
-                try:
-                    await db.flush()
-                except IntegrityError:
-                    await db.rollback()
+                if existing_target is not None:
                     report["failed_groups"].append(
                         {
                             "group_id": group.group_id,
@@ -835,64 +808,34 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
                         }
                     )
                     continue
-                except Exception as exc:
-                    await db.rollback()
-                    report["failed_groups"].append(
-                        {
-                            "group_id": group.group_id,
-                            "item_ids": group.source_item_ids,
-                            "item_keys": group.source_keys,
-                            "final_key": group.final_key,
-                            "reason": f"create_failed:{type(exc).__name__}",
-                        }
-                    )
-                    continue
 
-                deleted_ids: list[int] = []
-                delete_error: str | None = None
-                for item in current_items:
-                    try:
-                        await db.delete(item)
-                        deleted_ids.append(item.id)
-                    except Exception as exc:
-                        delete_error = f"delete_failed:{type(exc).__name__}"
-                        logger.warning(
-                            "[agents:memorymaintainer] Failed deleting source item %s for group %s: %s",
-                            item.id,
-                            group.group_id,
-                            exc,
-                        )
-                        break
-
-                if delete_error:
-                    await db.rollback()
-                    report["failed_groups"].append(
-                        {
-                            "group_id": group.group_id,
-                            "item_ids": group.source_item_ids,
-                            "item_keys": group.source_keys,
-                            "final_key": group.final_key,
-                            "created_item_id": None,
-                            "deleted_item_ids": deleted_ids,
-                            "reason": delete_error,
-                        }
-                    )
+                if dry_run:
+                    report["merged_groups"].append(self._planned_group_artifact(group))
                     continue
 
                 try:
-                    await db.commit()
-                    await db.refresh(created_item)
-                except Exception as exc:
-                    await db.rollback()
+                    self._validate_merged_item_fields(group)
+                    created_item_candidate = MemoryItem(
+                        user_id=user_id,
+                        category=MemoryCategory.AREA_TO_IMPROVE.value,
+                        key=group.final_key,
+                        content=group.final_content,
+                        status=group.final_status,
+                        priority=self._merged_priority(current_items),
+                        status_changed_at=self._utc_now(),
+                    )
+                    created_item, deleted_ids = await service.create_item_and_delete_sources(
+                        item=created_item_candidate,
+                        source_items=current_items,
+                    )
+                except (ValueError, RuntimeError) as exc:
                     report["failed_groups"].append(
                         {
                             "group_id": group.group_id,
                             "item_ids": group.source_item_ids,
                             "item_keys": group.source_keys,
                             "final_key": group.final_key,
-                            "created_item_id": None,
-                            "deleted_item_ids": [],
-                            "reason": f"commit_failed:{type(exc).__name__}",
+                            "reason": str(exc),
                         }
                     )
                     continue
@@ -965,7 +908,7 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
                     continue
 
                 try:
-                    before_item = await service.repo.get_by_id(target_item_id)
+                    before_item = await service.get_item_by_id(target_item_id)
                     if before_item is None:
                         raise MemoryItemNotFoundError(f"Memory item with id {target_item_id} not found")
                     if before_item.user_id != user_id:
@@ -974,8 +917,11 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
                         raise ValueError("priority target category drifted out of scope")
                     if before_item.status not in MAINTAINER_STATUSES:
                         raise ValueError("priority target status drifted out of scope")
-                    old_priority = before_item.priority
-                    updated_item = await service.update_item_priority(target_item_id, suggestion.priority, user_id)
+                    old_priority, updated_item = await service.update_item_priority_with_old_value(
+                        target_item_id,
+                        suggestion.priority,
+                        user_id,
+                    )
                 except (MemoryItemNotFoundError, PermissionDeniedError, ValueError) as exc:
                     priority_skips.append(
                         {
@@ -1009,7 +955,7 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
         group: PlannedGroup,
     ) -> tuple[list[MemoryItem], str | None]:
         """Validate source item state before applying one merge group."""
-        current_items = await service.repo.get_by_ids(group.source_item_ids)
+        current_items = await service.get_items_by_ids(group.source_item_ids)
         current_by_id = {item.id: item for item in current_items}
         missing_ids = [item_id for item_id in group.source_item_ids if item_id not in current_by_id]
         if missing_ids:
@@ -1203,6 +1149,14 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
         return None
 
     @staticmethod
+    def _validate_merged_item_fields(group: PlannedGroup) -> None:
+        """Validate maintainer-owned merged item fields before persistence."""
+        if not isinstance(group.final_content, str) or not group.final_content.strip():
+            raise ValueError("content must not be empty")
+        if group.final_status not in MAINTAINER_STATUSES:
+            raise ValueError(f"invalid_status:{group.final_status}")
+
+    @staticmethod
     def _serialize_scope_item(item: Any) -> dict[str, Any]:
         """Serialize a scope item for structured prompts."""
         return {
@@ -1323,9 +1277,9 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
         return datetime.now(timezone.utc)
 
     @staticmethod
-    def _memory_item_language(context: SpecialistContext) -> str:
+    def _memory_item_language(user: Any) -> str:
         """Resolve the target language for rewritten memory content."""
-        mother_tongue = getattr(context.user, "mother_tongue", None)
+        mother_tongue = getattr(user, "mother_tongue", None)
         if isinstance(mother_tongue, str) and mother_tongue.strip():
             return mother_tongue.strip()
         return "English"

@@ -539,14 +539,7 @@ class AgentsManager:
 
     async def run_memory_maintenance(self, user: User) -> SpecialistResult:
         """Run the memory maintainer directly for chat-reset startup hygiene."""
-        return await self.memory_maintainer.run(
-            SpecialistContext(
-                message="start_new_chat",
-                history=[],
-                user=user,
-                routing_reason="new_chat_session_started",
-            )
-        )
+        return await self.memory_maintainer.run_for_user(user)
 
     async def start_background_post_turn(
         self,
