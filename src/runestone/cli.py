@@ -6,6 +6,7 @@ This module provides the main CLI commands and handles user interaction.
 
 import asyncio
 import csv
+import json
 import shutil
 import sys
 from datetime import datetime
@@ -17,6 +18,8 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from runestone.agents.specialists.base import SpecialistContext, SpecialistResult
+from runestone.agents.specialists.memory_maintainer import MemoryMaintainerSpecialist
 from runestone.agents.tools.read_url import read_url
 from runestone.api.schemas import VocabularyItemCreate
 from runestone.config import Settings
@@ -29,6 +32,7 @@ from runestone.core.processor import RunestoneProcessor
 from runestone.core.prompt_builder.builder import PromptBuilder
 from runestone.core.prompt_builder.types import ImprovementMode
 from runestone.core.service_llm import build_service_llm_model, get_available_service_llm_providers
+from runestone.db.database import provide_db_session
 from runestone.db.models import User
 from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
@@ -256,6 +260,121 @@ def read_url_cli(url: str):
     try:
         markdown = asyncio.run(read_url.ainvoke({"url": url}))
         console.print(markdown)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+
+async def _run_memory_maintainer_cli(user_id: int, dry_run: bool, with_priority_review: bool) -> SpecialistResult:
+    """Load a real user and run the memory maintainer in CLI mode."""
+    async with provide_db_session() as session:
+        user_repo = UserRepository(session)
+        user = await user_repo.get_by_id(user_id)
+        if user is None:
+            raise RunestoneError(f"User {user_id} not found")
+
+    specialist = MemoryMaintainerSpecialist(settings)
+    return await specialist.run_cli(
+        SpecialistContext(
+            message="maintain_memory_cli",
+            history=[],
+            user=user,
+            routing_reason="cli_memory_maintenance",
+        ),
+        dry_run=dry_run,
+        with_priority_review=with_priority_review,
+    )
+
+
+def _print_memory_maintainer_summary(result: SpecialistResult) -> None:
+    """Render a readable CLI summary for a maintainer run."""
+    artifacts = result.artifacts if isinstance(result.artifacts, dict) else {}
+    merged_groups = artifacts.get("merged_groups", [])
+    failed_merges = len(artifacts.get("failed_groups", []))
+    applied_priorities = len(
+        [update for update in artifacts.get("priority_updates", []) if update.get("mode") == "applied"]
+    )
+    suggested_priorities = len(
+        [update for update in artifacts.get("priority_updates", []) if update.get("mode") == "suggested"]
+    )
+
+    mode = "dry-run" if artifacts.get("dry_run") else "apply"
+    priority_mode = "enabled" if artifacts.get("priority_review_enabled") else "disabled"
+
+    console.print("[bold cyan]Memory Maintainer Summary[/bold cyan]")
+    console.print(f"Status: {result.status}")
+    console.print(f"Mode: {mode}")
+    console.print(f"Priority review: {priority_mode}")
+    console.print(f"Reviewed items: {artifacts.get('reviewed_item_count', 0)}")
+    console.print(f"Buckets: {len(artifacts.get('buckets', []))}")
+    console.print(f"Merged groups: {len(merged_groups)}")
+    console.print(f"Failed merges: {failed_merges}")
+    console.print(f"Applied priorities: {applied_priorities}")
+    console.print(f"Suggested priorities: {suggested_priorities}")
+    console.print(f"Summary: {artifacts.get('summary', '')}")
+    if artifacts.get("no_change_reason"):
+        console.print(f"No-change reason: {artifacts['no_change_reason']}")
+
+    if merged_groups:
+        console.print("\n[bold]Merge groups[/bold]")
+        for group in merged_groups:
+            if artifacts.get("dry_run"):
+                console.print(
+                    f"- {group['group_id']}: {group['new_key']} <- {group['replaced_keys']} ({group['status']})"
+                )
+            else:
+                console.print(
+                    f"- {group['group_id']}: created [ID:{group['created_item_id']}] {group['final_key']} "
+                    f"from {group['item_keys']}"
+                )
+
+    if artifacts.get("failed_groups"):
+        console.print("\n[bold]Failed merge groups[/bold]")
+        for group in artifacts["failed_groups"]:
+            console.print(f"- {group['group_id']}: {group.get('final_key', 'n/a')} failed because {group['reason']}")
+
+    if artifacts.get("priority_updates"):
+        label = "Priority review"
+        console.print(f"\n[bold]{label}[/bold]")
+        for update in artifacts["priority_updates"]:
+            to_priority = update.get("to_priority")
+            key = update.get("key", "n/a")
+            mode_label = update.get("mode", "applied")
+            console.print(f"- {mode_label}: {key} -> priority {to_priority}")
+
+    if artifacts.get("step_errors"):
+        console.print("\n[bold]Step errors[/bold]")
+        for error in artifacts["step_errors"]:
+            console.print(f"- {error}")
+
+
+@cli.command("maintain-memory")
+@click.argument("user_id", type=int)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Plan and validate merge execution without writing changes.",
+)
+@click.option(
+    "--with-priority-review",
+    is_flag=True,
+    default=False,
+    help="Run the optional CLI-only priority review step.",
+)
+def maintain_memory(user_id: int, dry_run: bool, with_priority_review: bool):
+    """Run the structured memory maintainer for one user."""
+    try:
+        result = asyncio.run(_run_memory_maintainer_cli(user_id, dry_run, with_priority_review))
+        _print_memory_maintainer_summary(result)
+        console.print("\n[bold cyan]Memory Maintainer JSON[/bold cyan]")
+        console.print(json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2))
+    except RunestoneError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Operation cancelled by user.[/yellow]")
+        sys.exit(1)
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         sys.exit(1)

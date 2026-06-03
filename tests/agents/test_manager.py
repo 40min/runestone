@@ -278,6 +278,11 @@ async def test_start_background_memory_maintenance_clears_registry_on_timeout(mo
     assert "memory maintenance timed out" in caplog.text
 
 
+def test_memory_maintenance_timeout_budget_matches_multi_step_flow(mock_settings):
+    manager = _make_manager(mock_settings)
+    assert manager.MEMORY_MAINTENANCE_TIMEOUT_SECONDS >= manager.memory_maintainer.MODEL_TIMEOUT_SECONDS * 3
+
+
 # ---------------------------------------------------------------------------
 # prepare_pre_turn tests
 # ---------------------------------------------------------------------------

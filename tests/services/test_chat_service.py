@@ -258,8 +258,8 @@ async def test_process_image_message_uses_mother_tongue(
 
 
 @pytest.mark.anyio
-async def test_clear_history(chat_service, db_with_test_user):
-    """Test clearing history via service without scheduling maintenance."""
+async def test_clear_history_schedules_background_maintenance(chat_service, db_with_test_user):
+    """Test clearing history via service and scheduling maintenance."""
     db, user = db_with_test_user
     chat_id = str(uuid4())
     await chat_service.repository.add_message(user.id, chat_id, "user", "Test")
@@ -267,7 +267,7 @@ async def test_clear_history(chat_service, db_with_test_user):
     chat_service.user_service.get_user_by_id = AsyncMock(return_value=user)
     await chat_service.clear_history(user.id)
     chat_service.user_service.rotate_current_chat_id.assert_awaited_once_with(user.id)
-    chat_service.agent_service.start_background_memory_maintenance.assert_not_called()
+    chat_service.agent_service.start_background_memory_maintenance.assert_awaited_once_with(user)
 
 
 @pytest.mark.anyio
@@ -278,6 +278,21 @@ async def test_start_new_chat_skips_maintenance_when_user_missing(chat_service):
     await chat_service.start_new_chat(user_id=123)
 
     chat_service.agent_service.start_background_memory_maintenance.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_start_new_chat_logs_and_keeps_success_when_scheduling_fails(chat_service, db_with_test_user, caplog):
+    _db, user = db_with_test_user
+    next_chat_id = str(uuid4())
+    chat_service.user_service.rotate_current_chat_id = AsyncMock(return_value=next_chat_id)
+    chat_service.user_service.get_user_by_id = AsyncMock(return_value=user)
+    chat_service.agent_service.start_background_memory_maintenance = AsyncMock(side_effect=RuntimeError("boom"))
+
+    with caplog.at_level("ERROR"):
+        returned_chat_id = await chat_service.start_new_chat(user.id)
+
+    assert returned_chat_id == next_chat_id
+    assert "Failed to schedule background memory maintenance" in caplog.text
 
 
 @pytest.mark.anyio

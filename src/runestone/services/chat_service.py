@@ -241,10 +241,6 @@ Instructions:
     async def start_new_chat(self, user_id: int) -> str:
         """
         Rotate the user onto a fresh chat session id.
-
-        Background memory maintenance is temporarily disabled until the flow is
-        stable enough to re-enable. Chat reset still returns the fresh chat
-        session successfully.
         """
         chat_id = await self.user_service.rotate_current_chat_id(user_id)
 
@@ -255,16 +251,14 @@ Instructions:
             )
             return chat_id
 
-        # Temporarily disabled: background memory maintenance has not been
-        # stable enough yet, and we want an easy, explicit restore point here.
-        # try:
-        #     await self.agent_service.start_background_memory_maintenance(user)
-        # except Exception:
-        #     logger.error(
-        #         "[chat:service] Failed to schedule background memory maintenance for user %s",
-        #         user_id,
-        #         exc_info=True,
-        #     )
+        try:
+            await self.agent_service.start_background_memory_maintenance(user)
+        except Exception:
+            logger.error(
+                "[chat:service] Failed to schedule background memory maintenance for user %s",
+                user_id,
+                exc_info=True,
+            )
 
         return chat_id
 

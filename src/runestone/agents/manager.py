@@ -48,7 +48,8 @@ class AgentsManager:
 
     COORDINATOR_MAX_HISTORY_MESSAGES = 5
     POST_TASK_TIMEOUT_SECONDS = 25
-    MEMORY_MAINTENANCE_TIMEOUT_SECONDS = 35
+    # Multi-step structured maintenance can require multiple serial model calls.
+    MEMORY_MAINTENANCE_TIMEOUT_SECONDS = 120
     STARTER_MEMORY_PERSONAL_LIMIT = 50
     STARTER_MEMORY_AREA_LIMIT = 5
     NO_CHAT_HISTORY_SPECIALISTS = frozenset({"word_keeper", "memory_keeper"})
