@@ -138,3 +138,23 @@ async def test_search_news_with_dates_rate_limited(monkeypatch):
 
     assert output["error_type"] == "rate_limited"
     assert call_count["count"] == agent_news.DDGS_MAX_RETRIES + 1
+
+
+@pytest.mark.anyio
+async def test_search_news_with_dates_uses_tightened_ddgs_timeout(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeDDGSTimeout(FakeDDGS):
+        def __init__(self, *args, **kwargs):
+            captured["timeout"] = kwargs.get("timeout")
+
+        def news(self, query, max_results, timelimit, region):
+            return []
+
+    monkeypatch.setattr(agent_news, "DDGS", FakeDDGSTimeout)
+
+    output = await agent_news.search_news_with_dates.ainvoke({"query": "ekonomi"})
+
+    assert output["tool"] == "search_news_with_dates"
+    assert output["results"] == []
+    assert captured["timeout"] == agent_news.DDGS_TIMEOUT

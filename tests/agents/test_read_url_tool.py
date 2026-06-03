@@ -61,3 +61,62 @@ async def test_read_url_logs_when_output_is_truncated(monkeypatch, caplog):
     assert "read_url output truncated" in caplog.text
     assert "[Truncated output.]" in result
     assert "Note: Content was truncated due to size limits." in result
+
+
+@pytest.mark.anyio
+async def test_fetch_url_bytes_uses_tightened_http_timeouts(monkeypatch):
+    captured: dict[str, object] = {}
+
+    async def _allow_url(_url: str) -> tuple[bool, str]:
+        return True, ""
+
+    class FakeResponse:
+        status_code = 200
+        headers = {"content-type": "text/plain"}
+        url = "https://example.com"
+
+        async def aiter_bytes(self):
+            yield b"hello"
+
+    class FakeStreamContext:
+        async def __aenter__(self):
+            return FakeResponse()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            captured["timeout"] = kwargs["timeout"]
+            captured["follow_redirects"] = kwargs["follow_redirects"]
+            captured["headers"] = kwargs["headers"]
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def stream(self, method: str, url: str):
+            captured["method"] = method
+            captured["url"] = url
+            return FakeStreamContext()
+
+    monkeypatch.setattr(tools, "_validate_fetch_url", _allow_url)
+    monkeypatch.setattr(tools.httpx, "AsyncClient", FakeAsyncClient)
+
+    content, final_url, content_type, truncated = await tools._fetch_url_bytes("https://example.com")
+
+    timeout = captured["timeout"]
+    assert content == b"hello"
+    assert final_url == "https://example.com"
+    assert content_type == "text/plain"
+    assert truncated is False
+    assert captured["follow_redirects"] is False
+    assert captured["method"] == "GET"
+    assert captured["url"] == "https://example.com"
+    assert captured["headers"]["User-Agent"] == "runestone-teacher-agent/1.0 (+https://example.invalid)"
+    assert timeout.connect == 3.0
+    assert timeout.read == 6.0
+    assert timeout.write == 6.0
+    assert timeout.pool == 5.0
