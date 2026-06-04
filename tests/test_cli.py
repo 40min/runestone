@@ -24,10 +24,9 @@ class TestCLI:
     @staticmethod
     def _make_processor_mock():
         """Build a processor double with async processing and sync display helpers."""
-        processor = AsyncMock()
-        processor.display_results_console = Mock()
-        processor.display_results_markdown = Mock()
-        return processor
+        from runestone.core.processor import RunestoneProcessor
+
+        return AsyncMock(spec=RunestoneProcessor)
 
     def test_cli_group_help(self):
         """Test CLI group help message."""
