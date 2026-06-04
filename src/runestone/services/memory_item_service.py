@@ -8,6 +8,8 @@ for memory item-related operations.
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from sqlalchemy.exc import IntegrityError
+
 from runestone.api.memory_item_schemas import (
     DEFAULT_STATUS_BY_CATEGORY,
     VALID_STATUSES_BY_CATEGORY,
@@ -38,6 +40,27 @@ class MemoryItemService:
 
     def _utc_now(self) -> datetime:
         return datetime.now(timezone.utc)
+
+    async def get_item_by_id(self, item_id: int) -> Optional[MemoryItem]:
+        """Return one memory item by id for service-layer callers that need raw row access."""
+        return await self.repo.get_by_id(item_id)
+
+    async def get_items_by_ids(self, item_ids: list[int]) -> list[MemoryItem]:
+        """Return raw memory items by id while keeping repository access behind the service boundary."""
+        return await self.repo.get_by_ids(item_ids)
+
+    async def get_item_by_user_category_key(
+        self,
+        user_id: int,
+        category: MemoryCategory,
+        key: str,
+    ) -> Optional[MemoryItem]:
+        """Return one memory item by user, category, and key."""
+        return await self.repo.get_by_user_category_key(user_id, category.value, key)
+
+    async def list_item_keys(self, user_id: int, category: MemoryCategory) -> set[str]:
+        """Return all distinct keys for one user's category without list pagination semantics."""
+        return await self.repo.list_keys_by_user_category(user_id, category.value)
 
     def validate_status(self, category: MemoryCategory, status: str) -> None:
         """
@@ -299,6 +322,97 @@ class MemoryItemService:
         item.updated_at = self._utc_now()
         updated_item = await self.repo.update(item)
         return MemoryItemResponse.model_validate(updated_item)
+
+    async def update_item_priority_with_old_value(
+        self,
+        item_id: int,
+        priority: Optional[int],
+        user_id: int,
+    ) -> tuple[int | None, MemoryItemResponse]:
+        """
+        Update an item's priority and return both the previous and updated values.
+
+        Returns:
+            Tuple of previous priority and updated response.
+
+        Raises:
+            MemoryItemNotFoundError: If item not found.
+            PermissionDeniedError: If the user does not own the item.
+            ValueError: If the item cannot accept priority updates or the new priority is invalid.
+        """
+        item = await self.repo.get_by_id(item_id)
+        if not item:
+            raise MemoryItemNotFoundError(f"Memory item with id {item_id} not found")
+
+        if item.user_id != user_id:
+            raise PermissionDeniedError("You don't have permission to update this item")
+
+        old_priority = item.priority
+        updated_item = await self.update_item_priority(item_id, priority, user_id)
+        return old_priority, updated_item
+
+    async def create_item_and_delete_sources(
+        self,
+        *,
+        item: MemoryItem,
+        source_items: list[MemoryItem],
+    ) -> tuple[MemoryItemResponse, list[int]]:
+        """
+        Persist a new memory item and delete the supplied source items atomically.
+
+        The caller is responsible for constructing a valid `MemoryItem` and validating that
+        the supplied source items should be replaced together.
+
+        Raises:
+            ValueError: If the new item is structurally invalid.
+            RuntimeError: If create/delete/commit fails after the write transaction starts.
+        """
+        if not isinstance(item.key, str) or not item.key.strip():
+            raise ValueError("invalid_target_key:empty")
+        if not isinstance(item.content, str) or not item.content.strip():
+            raise ValueError("content must not be empty")
+
+        db = self.repo.db
+        db.add(item)
+        try:
+            await db.flush()
+        except IntegrityError as exc:
+            await db.rollback()
+            raise ValueError("duplicate_target_key") from exc
+        except Exception as exc:
+            await db.rollback()
+            raise RuntimeError(f"create_failed:{type(exc).__name__}") from exc
+
+        created_response = MemoryItemResponse(
+            id=item.id,
+            user_id=item.user_id,
+            category=item.category,
+            key=item.key,
+            content=item.content,
+            status=item.status,
+            priority=item.priority,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+            status_changed_at=item.status_changed_at,
+            metadata_json=item.metadata_json,
+        )
+
+        deleted_ids: list[int] = []
+        for item in source_items:
+            try:
+                await db.delete(item)
+                deleted_ids.append(item.id)
+            except Exception as exc:
+                await db.rollback()
+                raise RuntimeError(f"delete_failed:{type(exc).__name__}") from exc
+
+        try:
+            await db.commit()
+        except Exception as exc:
+            await db.rollback()
+            raise RuntimeError(f"commit_failed:{type(exc).__name__}") from exc
+
+        return created_response, deleted_ids
 
     async def delete_item(self, item_id: int, user_id: int) -> None:
         """

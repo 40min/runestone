@@ -273,12 +273,12 @@ not routed through the coordinator and does not block the new session from
 starting.
 
 It reviews only `area_to_improve` memory with status `struggling` or
-`improving`, then conservatively consolidates obvious duplicates and adjusts
-priority only when clearly justified. Its tools enforce that merge replacements
-stay in category/status scope and that one merge is completed before another
-begins.
+`improving`, then conservatively consolidates obvious duplicates. It now uses a
+structured multi-pass planner plus plain Python execution rather than a
+tool-calling agent. Background mode is merge-only; optional priority review is
+available from the CLI.
 
-For the full runtime, tool flow, logging contract, and ownership boundary, see
+For the full runtime, structured flow, logging contract, and ownership boundary, see
 [`memory-maintainer.md`](memory-maintainer.md).
 
 ### Post-Response Runtime
@@ -402,7 +402,7 @@ The limits are adjusted based on each specialist's responsibilities:
 - **TeacherAgent**: **30** steps (highly constrained to prevent runaway grammar lookup loops)
 - **MemoryKeeper**: **50** steps (supports multiple read/write actions for memory items)
 - **NewsAgent**: **10** steps (conservatively bounded search and read sequence)
-- **MemoryMaintainer**: **250** steps (allows scanning and merging up to 100 memory items at session start)
+- **MemoryMaintainer**: no LangGraph recursion limit, because it now uses bounded structured-output passes
 
 ### Observability
 

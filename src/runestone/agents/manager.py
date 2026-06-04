@@ -48,7 +48,8 @@ class AgentsManager:
 
     COORDINATOR_MAX_HISTORY_MESSAGES = 5
     POST_TASK_TIMEOUT_SECONDS = 25
-    MEMORY_MAINTENANCE_TIMEOUT_SECONDS = 35
+    # Multi-step structured maintenance can require multiple serial model calls.
+    MEMORY_MAINTENANCE_TIMEOUT_SECONDS = 120
     STARTER_MEMORY_PERSONAL_LIMIT = 50
     STARTER_MEMORY_AREA_LIMIT = 5
     NO_CHAT_HISTORY_SPECIALISTS = frozenset({"word_keeper", "memory_keeper"})
@@ -538,14 +539,7 @@ class AgentsManager:
 
     async def run_memory_maintenance(self, user: User) -> SpecialistResult:
         """Run the memory maintainer directly for chat-reset startup hygiene."""
-        return await self.memory_maintainer.run(
-            SpecialistContext(
-                message="start_new_chat",
-                history=[],
-                user=user,
-                routing_reason="new_chat_session_started",
-            )
-        )
+        return await self.memory_maintainer.run_for_user(user)
 
     async def start_background_post_turn(
         self,

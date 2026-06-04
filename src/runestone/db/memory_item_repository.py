@@ -51,6 +51,17 @@ class MemoryItemRepository:
         result = await self.db.execute(stmt)
         return result.scalars().first()
 
+    async def list_keys_by_user_category(self, user_id: int, category: str) -> set[str]:
+        """Return all distinct keys for one user's category without pagination limits."""
+        stmt = select(MemoryItem.key).filter(
+            and_(
+                MemoryItem.user_id == user_id,
+                MemoryItem.category == category,
+            )
+        )
+        result = await self.db.execute(stmt)
+        return {key for key in result.scalars().all()}
+
     async def list_items(
         self,
         user_id: int,
