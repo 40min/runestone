@@ -148,9 +148,6 @@ async def test_search_news_with_dates_uses_tightened_ddgs_timeout(monkeypatch):
         def __init__(self, *args, **kwargs):
             captured["timeout"] = kwargs.get("timeout")
 
-        def news(self, query, max_results, timelimit, region):
-            return []
-
     monkeypatch.setattr(agent_news, "DDGS", FakeDDGSTimeout)
 
     output = await agent_news.search_news_with_dates.ainvoke({"query": "ekonomi"})
