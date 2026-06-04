@@ -99,7 +99,7 @@ class TestSettings:
         # These should be the test values from .env.test, not from .env
         assert settings.llm_provider == "openai"
         assert settings.openai_api_key == "test_openai_api_key_for_testing_only"
-        assert settings.allowed_origins == "http://localhost:5173,http://127.0.0.1:5173,http://frontend:3010"
+        assert settings.allowed_origins == "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3010"
         assert settings.telegram_bot_token == "test_telegram_bot_token_for_testing_only"
 
     def test_agent_reasoning_level_accepts_known_enum_values(self):
