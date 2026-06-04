@@ -21,6 +21,14 @@ class TestCLI:
         self.test_image_path = "test_image.jpg"
         self.api_key = "test-api-key"
 
+    @staticmethod
+    def _make_processor_mock():
+        """Build a processor double with async processing and sync display helpers."""
+        processor = AsyncMock()
+        processor.display_results_console = Mock()
+        processor.display_results_markdown = Mock()
+        return processor
+
     def test_cli_group_help(self):
         """Test CLI group help message."""
         result = self.runner.invoke(cli, ["--help"])
@@ -49,7 +57,7 @@ class TestCLI:
             Path(self.test_image_path).touch()
 
             # Mock processor and results
-            mock_processor = AsyncMock()
+            mock_processor = self._make_processor_mock()
             mock_results = {
                 "ocr_result": {"text": "Test text", "character_count": 9},
                 "analysis": {"grammar_focus": {}, "vocabulary": []},
@@ -157,7 +165,7 @@ class TestCLI:
             Path(self.test_image_path).touch()
 
             # Mock processor that raises RunestoneError
-            mock_processor = AsyncMock()
+            mock_processor = self._make_processor_mock()
             mock_processor.process_image.side_effect = RunestoneError("Test error")
             mock_processor_class.return_value = mock_processor
 
@@ -173,7 +181,7 @@ class TestCLI:
             Path(self.test_image_path).touch()
 
             # Mock processor that raises unexpected error
-            mock_processor = AsyncMock()
+            mock_processor = self._make_processor_mock()
             mock_processor.process_image.side_effect = ValueError("Unexpected error")
             mock_processor_class.return_value = mock_processor
 
@@ -189,7 +197,7 @@ class TestCLI:
             Path(self.test_image_path).touch()
 
             # Mock processor that raises KeyboardInterrupt
-            mock_processor = AsyncMock()
+            mock_processor = self._make_processor_mock()
             mock_processor.process_image.side_effect = KeyboardInterrupt()
             mock_processor_class.return_value = mock_processor
 
@@ -205,7 +213,7 @@ class TestCLI:
             Path(self.test_image_path).touch()
 
             # Mock processor and results
-            mock_processor = AsyncMock()
+            mock_processor = self._make_processor_mock()
             mock_results = {
                 "ocr_result": {"text": "Test text", "character_count": 9},
                 "analysis": {"grammar_focus": {}, "vocabulary": []},
@@ -261,7 +269,7 @@ class TestCLI:
             Path(self.test_image_path).touch()
 
             # Mock processor and results
-            mock_processor = AsyncMock()
+            mock_processor = self._make_processor_mock()
             mock_results = {
                 "ocr_result": {"text": "Test text", "character_count": 9},
                 "analysis": {"grammar_focus": {}, "vocabulary": []},
@@ -302,7 +310,7 @@ class TestCLI:
         with self.runner.isolated_filesystem():
             Path(self.test_image_path).touch()
 
-            mock_processor = AsyncMock()
+            mock_processor = self._make_processor_mock()
             mock_results = {
                 "ocr_result": {"text": "Test text", "character_count": 9},
                 "analysis": {"grammar_focus": {}, "vocabulary": []},
@@ -350,7 +358,7 @@ class TestCLI:
         with self.runner.isolated_filesystem():
             Path(self.test_image_path).touch()
 
-            mock_processor = AsyncMock()
+            mock_processor = self._make_processor_mock()
             mock_results = {
                 "ocr_result": {"text": "Test text", "character_count": 9},
                 "analysis": {"grammar_focus": {}, "vocabulary": []},
