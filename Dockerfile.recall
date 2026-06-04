@@ -18,14 +18,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies using uv
-# We generate a requirements file with the CPU-only torch index
+# Install locked dependencies using uv.
+# torch is pinned to the PyTorch CPU index in pyproject.toml, while the
+# remaining packages resolve from the lockfile's default PyPI sources.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv export --frozen --no-dev --no-editable --no-emit-project --index-strategy unsafe-best-match --extra-index-url https://download.pytorch.org/whl/cpu > requirements.txt \
-    && uv venv /app/.venv \
-    && uv pip install -r requirements.txt --index-strategy unsafe-best-match --extra-index-url https://download.pytorch.org/whl/cpu
+    uv sync --frozen --no-dev --no-editable --no-install-project
 
 # Production stage
 FROM python:3.13-slim
