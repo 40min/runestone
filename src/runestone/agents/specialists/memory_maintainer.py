@@ -27,7 +27,9 @@ MAINTAINER_STATUSES = (
     AreaToImproveStatus.STRUGGLING.value,
     AreaToImproveStatus.IMPROVING.value,
 )
+UNVERSIONED_KEY_PATTERN = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
 MERGED_KEY_PATTERN = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*_v[0-9]+$")
+VERSIONED_OR_UNVERSIONED_KEY_PATTERN = re.compile(r"^(?P<base>[a-z0-9]+(?:_[a-z0-9]+)*?)(?:_v(?P<version>[0-9]+))?$")
 
 BUCKET_TOPICS_PROMPT = """
 You are Bjorn, an internal Swedish-learning memory maintenance specialist.
@@ -114,8 +116,21 @@ Step 2b: generate one merged memory item for one reviewed same-topic group.
 Rules:
 - The supplied source items have already been reviewed as one exact teachable topic.
 - Write one fresh final content text in the target language while preserving the key meaning.
+- The final content must describe the student's recurring error or weakness, not give direct study instructions.
+- Write it as an observation about the student, for example:
+  - "The student often makes errors with ..."
+  - "The student confuses ..."
+  - "The student still struggles with ..."
+- The content should sound like a concise memory note for a teacher or agent,
+  not like homework instructions for the student.
+- Do not write imperative coaching text such as "practice", "remember", "master", "use", or "learn".
+- Do not write broad textbook explanations unless they are tied back to the student's observed error pattern.
+- Include at least one short concrete example of the student's error or
+  confusion when the source items contain such an example.
+- Prefer wording that summarizes the student's error pattern first, then briefly mentions the relevant rule or contrast.
 - Keep Swedish study examples unchanged when they are part of the learning content.
-- Final keys must be fresh English versioned keys using ASCII letters, digits, and underscores only.
+- Final keys must be fresh English snake_case key stems using ASCII letters, digits, and underscores only.
+- Do not add any version suffix such as `_v1` or `_v2`; Python will assign versions later.
 - Never reuse any original key.
 - The final status must reflect the latest status across the supplied source items.
 - Use the `why` field to explain the anchor/base item and what shared rule or concept is preserved.
@@ -190,7 +205,7 @@ class BucketReviewPlan(BaseModel):
 class MergeGeneration(BaseModel):
     """Structured output for one generated merged item in step 2b."""
 
-    final_key: str = Field(..., min_length=1, max_length=100, description="Fresh English versioned key")
+    final_key: str = Field(..., min_length=1, max_length=100, description="Fresh English snake_case key stem")
     final_content: str = Field(..., min_length=1, max_length=1000, description="Fresh final content text")
     final_status: Literal["struggling", "improving"] = Field(..., description="Winning final status")
     why: str = Field(..., min_length=1, description="Validation-only reasoning for this final group")
@@ -749,19 +764,26 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
         reserved_final_keys: set[str] = set()
 
         async with provide_memory_item_service() as service:
+            existing_area_keys = await service.list_item_keys(user_id, MemoryCategory.AREA_TO_IMPROVE)
             for group in planned_groups:
-                key_error = self._validate_generated_key(group)
+                normalized_key = self._normalize_generated_key(
+                    group.final_key,
+                    existing_area_keys,
+                    reserved_final_keys,
+                )
+                key_error = self._validate_generated_key(normalized_key, group.source_keys)
                 if key_error is not None:
                     report["failed_groups"].append(
                         {
                             "group_id": group.group_id,
                             "item_ids": group.source_item_ids,
                             "item_keys": group.source_keys,
-                            "final_key": group.final_key,
+                            "final_key": normalized_key,
                             "reason": key_error,
                         }
                     )
                     continue
+                group.final_key = normalized_key
                 if group.final_key in reserved_final_keys:
                     report["failed_groups"].append(
                         {
@@ -1138,15 +1160,57 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
         return validated
 
     @staticmethod
-    def _validate_generated_key(group: PlannedGroup) -> str | None:
+    def _validate_generated_key(final_key: str, source_keys: list[str]) -> str | None:
         """Reject model-generated keys that violate deterministic merge-key invariants."""
-        if group.final_key in group.source_keys:
+        if final_key in source_keys:
             return "invalid_target_key:reused_source_key"
-        if not group.final_key.isascii():
+        if not final_key.isascii():
             return "invalid_target_key:non_ascii"
-        if not MERGED_KEY_PATTERN.fullmatch(group.final_key):
+        if not MERGED_KEY_PATTERN.fullmatch(final_key):
             return "invalid_target_key:format"
         return None
+
+    @staticmethod
+    def _extract_generated_key_base(key: str) -> str | None:
+        """Return the semantic key stem, stripping only one trailing maintainer version suffix."""
+        if not key.isascii():
+            return None
+        match = VERSIONED_OR_UNVERSIONED_KEY_PATTERN.fullmatch(key)
+        if not match:
+            return None
+        return match.group("base")
+
+    @classmethod
+    def _normalize_generated_key(
+        cls,
+        generated_key: str,
+        existing_keys: set[str],
+        reserved_final_keys: set[str],
+    ) -> str:
+        """
+        Assign the final maintainer version suffix deterministically in Python.
+
+        The model provides the semantic key stem. If it includes a trailing
+        maintainer suffix anyway, ignore that suffix and recompute the next
+        version from the existing DB keys plus keys already reserved in this run.
+        """
+        base_key = cls._extract_generated_key_base(generated_key)
+        if base_key is None:
+            return generated_key
+
+        used_versions: list[int] = []
+        version_prefix = f"{base_key}_v"
+        for key in existing_keys.union(reserved_final_keys):
+            if not key.startswith(version_prefix):
+                continue
+            if not MERGED_KEY_PATTERN.fullmatch(key):
+                continue
+            suffix = key[len(version_prefix) :]
+            if suffix.isdigit():
+                used_versions.append(int(suffix))
+
+        next_version = max(used_versions, default=0) + 1
+        return f"{base_key}_v{next_version}"
 
     @staticmethod
     def _validate_merged_item_fields(group: PlannedGroup) -> None:

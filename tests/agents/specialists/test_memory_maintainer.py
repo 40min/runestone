@@ -643,7 +643,7 @@ async def test_memory_maintainer_applies_partial_results_when_one_group_fails(sp
                 groups=[
                     BucketResolutionGroup(
                         item_ids=[items[0].id, items[1].id],
-                        final_key="word_order_v2",
+                        final_key="word order merged",
                         final_content="Merged word order issue.",
                         final_status="struggling",
                         why=f"Anchor item id={items[1].id} key={items[1].key} is the latest source item.",
@@ -687,9 +687,9 @@ async def test_memory_maintainer_applies_partial_results_when_one_group_fails(sp
     assert "word_order_v2" in remaining_keys
     assert "time_expr_a" not in remaining_keys
     assert "time_expr_b" not in remaining_keys
-    assert "time_expressions_v2" in remaining_keys
+    assert "time_expressions_v1" in remaining_keys
     assert len(result.artifacts["failed_groups"]) == 1
-    assert result.artifacts["failed_groups"][0]["reason"] == "duplicate_target_key"
+    assert result.artifacts["failed_groups"][0]["reason"] == "invalid_target_key:format"
     assert len(result.artifacts["merged_groups"]) == 1
 
 
@@ -774,7 +774,7 @@ async def test_memory_maintainer_repairs_bucket_duplicates_and_missing_ids_in_ru
     remaining = (await db.execute(select(MemoryItem).where(MemoryItem.user_id == user.id))).scalars().all()
     remaining_keys = {item.key for item in remaining}
     assert result.status == "action_taken"
-    assert "agreement_v2" in remaining_keys
+    assert "agreement_v1" in remaining_keys
     assert "date_format_v1" in remaining_keys
     assert result.artifacts["summary"].startswith("applied_merges=1")
     assert len(result.artifacts["buckets"]) == 2
@@ -868,7 +868,7 @@ async def test_memory_maintainer_skips_merge_when_validator_rejects_it(specialis
 
 
 @pytest.mark.anyio
-async def test_memory_maintainer_dry_run_reports_duplicate_target_key(specialist, db_with_test_user):
+async def test_memory_maintainer_dry_run_bumps_version_past_existing_key(specialist, db_with_test_user):
     db, user = db_with_test_user
     base_time = datetime(2026, 5, 1, tzinfo=timezone.utc)
     first = MemoryItem(
@@ -938,10 +938,10 @@ async def test_memory_maintainer_dry_run_reports_duplicate_target_key(specialist
             with_priority_review=False,
         )
 
-    assert result.status == "error"
-    assert result.artifacts["merged_groups"] == []
-    assert len(result.artifacts["failed_groups"]) == 1
-    assert result.artifacts["failed_groups"][0]["reason"] == "duplicate_target_key"
+    assert result.status == "action_taken"
+    assert result.artifacts["failed_groups"] == []
+    assert len(result.artifacts["merged_groups"]) == 1
+    assert result.artifacts["merged_groups"][0]["new_key"] == "word_order_v3"
 
 
 @pytest.mark.anyio
@@ -1015,7 +1015,227 @@ async def test_memory_maintainer_dry_run_rejects_invalid_generated_final_key(spe
 
 
 @pytest.mark.anyio
-async def test_memory_maintainer_dry_run_reports_duplicate_target_key_within_plan(specialist, db_with_test_user):
+async def test_memory_maintainer_normalizes_unversioned_generated_final_key(specialist, db_with_test_user):
+    db, user = db_with_test_user
+    base_time = datetime(2026, 5, 1, tzinfo=timezone.utc)
+    first = MemoryItem(
+        user_id=user.id,
+        category="area_to_improve",
+        key="word_order_a",
+        content="Word order problem A.",
+        status="struggling",
+        updated_at=base_time,
+        status_changed_at=base_time,
+    )
+    second = MemoryItem(
+        user_id=user.id,
+        category="area_to_improve",
+        key="word_order_b",
+        content="Word order problem B.",
+        status="improving",
+        updated_at=base_time + timedelta(days=1),
+        status_changed_at=base_time + timedelta(days=1),
+    )
+    db.add_all([first, second])
+    await db.commit()
+    await db.refresh(first)
+    await db.refresh(second)
+
+    _wire_structured_models(
+        specialist.model,
+        bucket_plan=BucketTopicsPlan(
+            buckets=[
+                BucketTopicGroup(
+                    bucket_label="Word order",
+                    item_ids=[first.id, second.id],
+                    why=f"Anchor item id={first.id} key={first.key} groups the word-order duplicates.",
+                )
+            ]
+        ),
+        bucket_resolutions=[
+            BucketResolutionPlan(
+                groups=[
+                    BucketResolutionGroup(
+                        item_ids=[first.id, second.id],
+                        final_key="word_order_merged",
+                        final_content="Merged word-order issue.",
+                        final_status="improving",
+                        why=f"Anchor item id={second.id} key={second.key} is the latest source item.",
+                    )
+                ]
+            )
+        ],
+    )
+
+    @asynccontextmanager
+    async def fake_provider():
+        yield MemoryItemService(MemoryItemRepository(db))
+
+    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+        result = await specialist.run_cli_for_user(
+            user,
+            dry_run=True,
+            with_priority_review=False,
+        )
+
+    assert result.status == "action_taken"
+    assert result.artifacts["failed_groups"] == []
+    assert len(result.artifacts["merged_groups"]) == 1
+    assert result.artifacts["merged_groups"][0]["new_key"] == "word_order_merged_v1"
+
+
+@pytest.mark.anyio
+async def test_memory_maintainer_ignores_model_supplied_version_suffix(specialist, db_with_test_user):
+    db, user = db_with_test_user
+    base_time = datetime(2026, 5, 1, tzinfo=timezone.utc)
+    first = MemoryItem(
+        user_id=user.id,
+        category="area_to_improve",
+        key="word_order_a",
+        content="Word order problem A.",
+        status="struggling",
+        updated_at=base_time,
+        status_changed_at=base_time,
+    )
+    second = MemoryItem(
+        user_id=user.id,
+        category="area_to_improve",
+        key="word_order_b",
+        content="Word order problem B.",
+        status="improving",
+        updated_at=base_time + timedelta(days=1),
+        status_changed_at=base_time + timedelta(days=1),
+    )
+    db.add_all([first, second])
+    await db.commit()
+    await db.refresh(first)
+    await db.refresh(second)
+
+    _wire_structured_models(
+        specialist.model,
+        bucket_plan=BucketTopicsPlan(
+            buckets=[
+                BucketTopicGroup(
+                    bucket_label="Word order",
+                    item_ids=[first.id, second.id],
+                    why=f"Anchor item id={first.id} key={first.key} groups the word-order duplicates.",
+                )
+            ]
+        ),
+        bucket_resolutions=[
+            BucketResolutionPlan(
+                groups=[
+                    BucketResolutionGroup(
+                        item_ids=[first.id, second.id],
+                        final_key="word_order_merged_v3",
+                        final_content="Merged word-order issue.",
+                        final_status="improving",
+                        why=f"Anchor item id={second.id} key={second.key} is the latest source item.",
+                    )
+                ]
+            )
+        ],
+    )
+
+    @asynccontextmanager
+    async def fake_provider():
+        yield MemoryItemService(MemoryItemRepository(db))
+
+    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+        result = await specialist.run_cli_for_user(
+            user,
+            dry_run=True,
+            with_priority_review=False,
+        )
+
+    assert result.status == "action_taken"
+    assert result.artifacts["failed_groups"] == []
+    assert len(result.artifacts["merged_groups"]) == 1
+    assert result.artifacts["merged_groups"][0]["new_key"] == "word_order_merged_v1"
+
+
+@pytest.mark.anyio
+async def test_memory_maintainer_assigns_next_version_from_existing_keys(specialist, db_with_test_user):
+    db, user = db_with_test_user
+    base_time = datetime(2026, 5, 1, tzinfo=timezone.utc)
+    existing = MemoryItem(
+        user_id=user.id,
+        category="area_to_improve",
+        key="word_order_merged_v2",
+        content="Existing merged item.",
+        status="improving",
+        updated_at=base_time,
+        status_changed_at=base_time,
+    )
+    first = MemoryItem(
+        user_id=user.id,
+        category="area_to_improve",
+        key="word_order_a",
+        content="Word order problem A.",
+        status="struggling",
+        updated_at=base_time,
+        status_changed_at=base_time,
+    )
+    second = MemoryItem(
+        user_id=user.id,
+        category="area_to_improve",
+        key="word_order_b",
+        content="Word order problem B.",
+        status="improving",
+        updated_at=base_time + timedelta(days=1),
+        status_changed_at=base_time + timedelta(days=1),
+    )
+    db.add_all([existing, first, second])
+    await db.commit()
+    await db.refresh(existing)
+    await db.refresh(first)
+    await db.refresh(second)
+
+    _wire_structured_models(
+        specialist.model,
+        bucket_plan=BucketTopicsPlan(
+            buckets=[
+                BucketTopicGroup(
+                    bucket_label="Word order",
+                    item_ids=[first.id, second.id],
+                    why=f"Anchor item id={first.id} key={first.key} groups the word-order duplicates.",
+                )
+            ]
+        ),
+        bucket_resolutions=[
+            BucketResolutionPlan(
+                groups=[
+                    BucketResolutionGroup(
+                        item_ids=[first.id, second.id],
+                        final_key="word_order_merged",
+                        final_content="Merged word-order issue.",
+                        final_status="improving",
+                        why=f"Anchor item id={second.id} key={second.key} is the latest source item.",
+                    )
+                ]
+            )
+        ],
+    )
+
+    @asynccontextmanager
+    async def fake_provider():
+        yield MemoryItemService(MemoryItemRepository(db))
+
+    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+        result = await specialist.run_cli_for_user(
+            user,
+            dry_run=True,
+            with_priority_review=False,
+        )
+
+    assert result.status == "action_taken"
+    assert result.artifacts["failed_groups"] == []
+    assert len(result.artifacts["merged_groups"]) == 1
+    assert result.artifacts["merged_groups"][0]["new_key"] == "word_order_merged_v3"
+
+
+@pytest.mark.anyio
+async def test_memory_maintainer_dry_run_assigns_distinct_versions_within_plan(specialist, db_with_test_user):
     db, user = db_with_test_user
     user_id = user.id
     base_time = datetime(2026, 5, 1, tzinfo=timezone.utc)
@@ -1116,9 +1336,9 @@ async def test_memory_maintainer_dry_run_reports_duplicate_target_key_within_pla
         )
 
     assert result.status == "action_taken"
-    assert len(result.artifacts["merged_groups"]) == 1
-    assert len(result.artifacts["failed_groups"]) == 1
-    assert result.artifacts["failed_groups"][0]["reason"] == "duplicate_target_key"
+    assert result.artifacts["failed_groups"] == []
+    assert len(result.artifacts["merged_groups"]) == 2
+    assert [group["new_key"] for group in result.artifacts["merged_groups"]] == ["shared_topic_v1", "shared_topic_v2"]
 
 
 @pytest.mark.anyio

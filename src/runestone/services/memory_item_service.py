@@ -58,6 +58,10 @@ class MemoryItemService:
         """Return one memory item by user, category, and key."""
         return await self.repo.get_by_user_category_key(user_id, category.value, key)
 
+    async def list_item_keys(self, user_id: int, category: MemoryCategory) -> set[str]:
+        """Return all distinct keys for one user's category without list pagination semantics."""
+        return await self.repo.list_keys_by_user_category(user_id, category.value)
+
     def validate_status(self, category: MemoryCategory, status: str) -> None:
         """
         Validate that status is valid for the given category.
