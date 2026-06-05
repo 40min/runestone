@@ -34,9 +34,6 @@ LABEL version="1.0.0"
 LABEL description="Runestone Swedish textbook analysis service - Frontend"
 LABEL org.opencontainers.image.source="https://github.com/your-org/runestone"
 
-# Install runtime tools used by container health checks.
-RUN apk add --no-cache curl
-
 # Copy built assets from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 
