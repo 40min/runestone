@@ -7,6 +7,7 @@ import pytest
 from langchain_core.exceptions import OutputParserException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from runestone.agents.specialists.base import SpecialistContext
 from runestone.agents.specialists.memory_maintainer import (
@@ -180,6 +181,17 @@ def _wire_structured_models(
     return bucket_model, review_model, generate_model, validate_model, priority_model
 
 
+def _memory_service_provider(db_session_factory):
+    """Build a test provider that uses a fresh session per specialist call."""
+
+    @asynccontextmanager
+    async def fake_provider():
+        async with db_session_factory() as db:
+            yield MemoryItemService(MemoryItemRepository(db))
+
+    return fake_provider
+
+
 @pytest.mark.anyio
 async def test_memory_maintainer_uses_structured_output_and_skips_priority_review_in_background(specialist, mock_user):
     planned_item = _scope_item(
@@ -331,7 +343,7 @@ def test_repair_bucket_plan_deduplicates_recovers_missing_and_synthesizes_why(sp
 
 @pytest.mark.anyio
 async def test_memory_maintainer_merges_near_duplicates_and_latest_status_wins(
-    specialist, mock_user, db_with_test_user
+    specialist, mock_user, db_with_test_user, db_session_factory
 ):
     db, user = db_with_test_user
     older = datetime(2026, 5, 1, tzinfo=timezone.utc)
@@ -358,8 +370,6 @@ async def test_memory_maintainer_merges_near_duplicates_and_latest_status_wins(
     )
     db.add_all([first, second])
     await db.commit()
-    await db.refresh(first)
-    await db.refresh(second)
 
     _wire_structured_models(
         specialist.model,
@@ -387,9 +397,7 @@ async def test_memory_maintainer_merges_near_duplicates_and_latest_status_wins(
         ],
     )
 
-    @asynccontextmanager
-    async def fake_provider():
-        yield MemoryItemService(MemoryItemRepository(db))
+    fake_provider = _memory_service_provider(db_session_factory)
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
         result = await specialist.run(
@@ -411,7 +419,9 @@ async def test_memory_maintainer_merges_near_duplicates_and_latest_status_wins(
 
 
 @pytest.mark.anyio
-async def test_memory_maintainer_normalizes_group_status_to_latest_source_status(specialist, db_with_test_user):
+async def test_memory_maintainer_normalizes_group_status_to_latest_source_status(
+    specialist, db_with_test_user, db_session_factory
+):
     db, user = db_with_test_user
     older = datetime(2026, 5, 1, tzinfo=timezone.utc)
     newer = datetime(2026, 5, 20, tzinfo=timezone.utc)
@@ -437,8 +447,6 @@ async def test_memory_maintainer_normalizes_group_status_to_latest_source_status
     )
     db.add_all([first, second])
     await db.commit()
-    await db.refresh(first)
-    await db.refresh(second)
 
     _wire_structured_models(
         specialist.model,
@@ -469,9 +477,7 @@ async def test_memory_maintainer_normalizes_group_status_to_latest_source_status
         ],
     )
 
-    @asynccontextmanager
-    async def fake_provider():
-        yield MemoryItemService(MemoryItemRepository(db))
+    fake_provider = _memory_service_provider(db_session_factory)
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
         result = await specialist.run(
@@ -493,7 +499,9 @@ async def test_memory_maintainer_normalizes_group_status_to_latest_source_status
 
 
 @pytest.mark.anyio
-async def test_memory_maintainer_leaves_singleton_groups_unmodified(specialist, mock_user, db_with_test_user):
+async def test_memory_maintainer_leaves_singleton_groups_unmodified(
+    specialist, mock_user, db_with_test_user, db_session_factory
+):
     db, user = db_with_test_user
     first = MemoryItem(
         user_id=user.id,
@@ -511,8 +519,6 @@ async def test_memory_maintainer_leaves_singleton_groups_unmodified(specialist, 
     )
     db.add_all([first, second])
     await db.commit()
-    await db.refresh(first)
-    await db.refresh(second)
 
     _wire_structured_models(
         specialist.model,
@@ -547,9 +553,7 @@ async def test_memory_maintainer_leaves_singleton_groups_unmodified(specialist, 
         ],
     )
 
-    @asynccontextmanager
-    async def fake_provider():
-        yield MemoryItemService(MemoryItemRepository(db))
+    fake_provider = _memory_service_provider(db_session_factory)
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
         result = await specialist.run(
@@ -568,7 +572,9 @@ async def test_memory_maintainer_leaves_singleton_groups_unmodified(specialist, 
 
 
 @pytest.mark.anyio
-async def test_memory_maintainer_applies_partial_results_when_one_group_fails(specialist, mock_user, db_with_test_user):
+async def test_memory_maintainer_applies_partial_results_when_one_group_fails(
+    specialist, mock_user, db_with_test_user, db_session_factory
+):
     db, user = db_with_test_user
     user_id = user.id
     base_time = datetime(2026, 5, 1, tzinfo=timezone.utc)
@@ -619,8 +625,6 @@ async def test_memory_maintainer_applies_partial_results_when_one_group_fails(sp
     ]
     db.add_all(items)
     await db.commit()
-    for item in items:
-        await db.refresh(item)
 
     _wire_structured_models(
         specialist.model,
@@ -664,9 +668,7 @@ async def test_memory_maintainer_applies_partial_results_when_one_group_fails(sp
         ],
     )
 
-    @asynccontextmanager
-    async def fake_provider():
-        yield MemoryItemService(MemoryItemRepository(db))
+    fake_provider = _memory_service_provider(db_session_factory)
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
         result = await specialist.run(
@@ -694,7 +696,9 @@ async def test_memory_maintainer_applies_partial_results_when_one_group_fails(sp
 
 
 @pytest.mark.anyio
-async def test_memory_maintainer_repairs_bucket_duplicates_and_missing_ids_in_run(specialist, db_with_test_user):
+async def test_memory_maintainer_repairs_bucket_duplicates_and_missing_ids_in_run(
+    specialist, db_with_test_user, db_session_factory
+):
     db, user = db_with_test_user
     first = MemoryItem(
         user_id=user.id,
@@ -722,9 +726,6 @@ async def test_memory_maintainer_repairs_bucket_duplicates_and_missing_ids_in_ru
     )
     db.add_all([first, second, third])
     await db.commit()
-    await db.refresh(first)
-    await db.refresh(second)
-    await db.refresh(third)
 
     _wire_structured_models(
         specialist.model,
@@ -757,9 +758,7 @@ async def test_memory_maintainer_repairs_bucket_duplicates_and_missing_ids_in_ru
         ],
     )
 
-    @asynccontextmanager
-    async def fake_provider():
-        yield MemoryItemService(MemoryItemRepository(db))
+    fake_provider = _memory_service_provider(db_session_factory)
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
         result = await specialist.run(
@@ -784,7 +783,9 @@ async def test_memory_maintainer_repairs_bucket_duplicates_and_missing_ids_in_ru
 
 
 @pytest.mark.anyio
-async def test_memory_maintainer_skips_merge_when_validator_rejects_it(specialist, db_with_test_user):
+async def test_memory_maintainer_skips_merge_when_validator_rejects_it(
+    specialist, db_with_test_user, db_session_factory
+):
     db, user = db_with_test_user
     first = MemoryItem(
         user_id=user.id,
@@ -804,8 +805,6 @@ async def test_memory_maintainer_skips_merge_when_validator_rejects_it(specialis
     )
     db.add_all([first, second])
     await db.commit()
-    await db.refresh(first)
-    await db.refresh(second)
 
     _wire_structured_models(
         specialist.model,
@@ -844,9 +843,7 @@ async def test_memory_maintainer_skips_merge_when_validator_rejects_it(specialis
         ],
     )
 
-    @asynccontextmanager
-    async def fake_provider():
-        yield MemoryItemService(MemoryItemRepository(db))
+    fake_provider = _memory_service_provider(db_session_factory)
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
         result = await specialist.run(
@@ -868,7 +865,9 @@ async def test_memory_maintainer_skips_merge_when_validator_rejects_it(specialis
 
 
 @pytest.mark.anyio
-async def test_memory_maintainer_dry_run_bumps_version_past_existing_key(specialist, db_with_test_user):
+async def test_memory_maintainer_dry_run_bumps_version_past_existing_key(
+    specialist, db_with_test_user, db_session_factory
+):
     db, user = db_with_test_user
     base_time = datetime(2026, 5, 1, tzinfo=timezone.utc)
     first = MemoryItem(
@@ -898,8 +897,6 @@ async def test_memory_maintainer_dry_run_bumps_version_past_existing_key(special
     )
     db.add_all([first, second, collision])
     await db.commit()
-    await db.refresh(first)
-    await db.refresh(second)
 
     _wire_structured_models(
         specialist.model,
@@ -927,9 +924,7 @@ async def test_memory_maintainer_dry_run_bumps_version_past_existing_key(special
         ],
     )
 
-    @asynccontextmanager
-    async def fake_provider():
-        yield MemoryItemService(MemoryItemRepository(db))
+    fake_provider = _memory_service_provider(db_session_factory)
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
         result = await specialist.run_cli_for_user(
@@ -945,7 +940,9 @@ async def test_memory_maintainer_dry_run_bumps_version_past_existing_key(special
 
 
 @pytest.mark.anyio
-async def test_memory_maintainer_dry_run_rejects_invalid_generated_final_key(specialist, db_with_test_user):
+async def test_memory_maintainer_dry_run_rejects_invalid_generated_final_key(
+    specialist, db_with_test_user, db_session_factory
+):
     db, user = db_with_test_user
     base_time = datetime(2026, 5, 1, tzinfo=timezone.utc)
     first = MemoryItem(
@@ -968,8 +965,6 @@ async def test_memory_maintainer_dry_run_rejects_invalid_generated_final_key(spe
     )
     db.add_all([first, second])
     await db.commit()
-    await db.refresh(first)
-    await db.refresh(second)
 
     _wire_structured_models(
         specialist.model,
@@ -997,9 +992,7 @@ async def test_memory_maintainer_dry_run_rejects_invalid_generated_final_key(spe
         ],
     )
 
-    @asynccontextmanager
-    async def fake_provider():
-        yield MemoryItemService(MemoryItemRepository(db))
+    fake_provider = _memory_service_provider(db_session_factory)
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
         result = await specialist.run_cli_for_user(
@@ -1015,7 +1008,9 @@ async def test_memory_maintainer_dry_run_rejects_invalid_generated_final_key(spe
 
 
 @pytest.mark.anyio
-async def test_memory_maintainer_normalizes_unversioned_generated_final_key(specialist, db_with_test_user):
+async def test_memory_maintainer_normalizes_unversioned_generated_final_key(
+    specialist, db_with_test_user, db_session_factory
+):
     db, user = db_with_test_user
     base_time = datetime(2026, 5, 1, tzinfo=timezone.utc)
     first = MemoryItem(
@@ -1038,8 +1033,6 @@ async def test_memory_maintainer_normalizes_unversioned_generated_final_key(spec
     )
     db.add_all([first, second])
     await db.commit()
-    await db.refresh(first)
-    await db.refresh(second)
 
     _wire_structured_models(
         specialist.model,
@@ -1067,9 +1060,7 @@ async def test_memory_maintainer_normalizes_unversioned_generated_final_key(spec
         ],
     )
 
-    @asynccontextmanager
-    async def fake_provider():
-        yield MemoryItemService(MemoryItemRepository(db))
+    fake_provider = _memory_service_provider(db_session_factory)
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
         result = await specialist.run_cli_for_user(
@@ -1085,7 +1076,9 @@ async def test_memory_maintainer_normalizes_unversioned_generated_final_key(spec
 
 
 @pytest.mark.anyio
-async def test_memory_maintainer_ignores_model_supplied_version_suffix(specialist, db_with_test_user):
+async def test_memory_maintainer_ignores_model_supplied_version_suffix(
+    specialist, db_with_test_user, db_session_factory
+):
     db, user = db_with_test_user
     base_time = datetime(2026, 5, 1, tzinfo=timezone.utc)
     first = MemoryItem(
@@ -1108,8 +1101,6 @@ async def test_memory_maintainer_ignores_model_supplied_version_suffix(specialis
     )
     db.add_all([first, second])
     await db.commit()
-    await db.refresh(first)
-    await db.refresh(second)
 
     _wire_structured_models(
         specialist.model,
@@ -1137,9 +1128,7 @@ async def test_memory_maintainer_ignores_model_supplied_version_suffix(specialis
         ],
     )
 
-    @asynccontextmanager
-    async def fake_provider():
-        yield MemoryItemService(MemoryItemRepository(db))
+    fake_provider = _memory_service_provider(db_session_factory)
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
         result = await specialist.run_cli_for_user(
@@ -1155,7 +1144,9 @@ async def test_memory_maintainer_ignores_model_supplied_version_suffix(specialis
 
 
 @pytest.mark.anyio
-async def test_memory_maintainer_assigns_next_version_from_existing_keys(specialist, db_with_test_user):
+async def test_memory_maintainer_assigns_next_version_from_existing_keys(
+    specialist, db_with_test_user, db_session_factory
+):
     db, user = db_with_test_user
     base_time = datetime(2026, 5, 1, tzinfo=timezone.utc)
     existing = MemoryItem(
@@ -1187,9 +1178,6 @@ async def test_memory_maintainer_assigns_next_version_from_existing_keys(special
     )
     db.add_all([existing, first, second])
     await db.commit()
-    await db.refresh(existing)
-    await db.refresh(first)
-    await db.refresh(second)
 
     _wire_structured_models(
         specialist.model,
@@ -1217,9 +1205,7 @@ async def test_memory_maintainer_assigns_next_version_from_existing_keys(special
         ],
     )
 
-    @asynccontextmanager
-    async def fake_provider():
-        yield MemoryItemService(MemoryItemRepository(db))
+    fake_provider = _memory_service_provider(db_session_factory)
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
         result = await specialist.run_cli_for_user(
@@ -1235,7 +1221,9 @@ async def test_memory_maintainer_assigns_next_version_from_existing_keys(special
 
 
 @pytest.mark.anyio
-async def test_memory_maintainer_dry_run_assigns_distinct_versions_within_plan(specialist, db_with_test_user):
+async def test_memory_maintainer_dry_run_assigns_distinct_versions_within_plan(
+    specialist, db_with_test_user, db_session_factory
+):
     db, user = db_with_test_user
     user_id = user.id
     base_time = datetime(2026, 5, 1, tzinfo=timezone.utc)
@@ -1279,8 +1267,6 @@ async def test_memory_maintainer_dry_run_assigns_distinct_versions_within_plan(s
     ]
     db.add_all(items)
     await db.commit()
-    for item in items:
-        await db.refresh(item)
 
     _wire_structured_models(
         specialist.model,
@@ -1324,9 +1310,7 @@ async def test_memory_maintainer_dry_run_assigns_distinct_versions_within_plan(s
         ],
     )
 
-    @asynccontextmanager
-    async def fake_provider():
-        yield MemoryItemService(MemoryItemRepository(db))
+    fake_provider = _memory_service_provider(db_session_factory)
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
         result = await specialist.run_cli_for_user(
@@ -1342,7 +1326,9 @@ async def test_memory_maintainer_dry_run_assigns_distinct_versions_within_plan(s
 
 
 @pytest.mark.anyio
-async def test_memory_maintainer_rolls_back_merge_group_when_delete_fails(specialist, db_with_test_user):
+async def test_memory_maintainer_rolls_back_merge_group_when_delete_fails(
+    specialist, db_with_test_user, db_session_factory
+):
     db, user = db_with_test_user
     user_id = user.id
     base_time = datetime(2026, 5, 1, tzinfo=timezone.utc)
@@ -1366,8 +1352,6 @@ async def test_memory_maintainer_rolls_back_merge_group_when_delete_fails(specia
     )
     db.add_all([first, second])
     await db.commit()
-    await db.refresh(first)
-    await db.refresh(second)
 
     _wire_structured_models(
         specialist.model,
@@ -1395,22 +1379,20 @@ async def test_memory_maintainer_rolls_back_merge_group_when_delete_fails(specia
         ],
     )
 
-    original_delete = db.delete
+    original_delete = AsyncSession.delete
     delete_calls = {"count": 0}
 
-    async def flaky_delete(item):
+    async def flaky_delete(self, item):
         delete_calls["count"] += 1
         if delete_calls["count"] == 2:
             raise RuntimeError("simulated delete failure")
-        return await original_delete(item)
+        return await original_delete(self, item)
 
-    @asynccontextmanager
-    async def fake_provider():
-        yield MemoryItemService(MemoryItemRepository(db))
+    fake_provider = _memory_service_provider(db_session_factory)
 
     with (
         patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider),
-        patch.object(db, "delete", AsyncMock(side_effect=flaky_delete)),
+        patch.object(AsyncSession, "delete", flaky_delete),
     ):
         result = await specialist.run(
             SpecialistContext(
@@ -1434,7 +1416,7 @@ async def test_memory_maintainer_rolls_back_merge_group_when_delete_fails(specia
 
 
 @pytest.mark.anyio
-async def test_priority_review_skips_out_of_scope_status_drift(specialist, db_with_test_user):
+async def test_priority_review_skips_out_of_scope_status_drift(specialist, db_with_test_user, db_session_factory):
     db, user = db_with_test_user
     item = MemoryItem(
         user_id=user.id,
@@ -1446,7 +1428,6 @@ async def test_priority_review_skips_out_of_scope_status_drift(specialist, db_wi
     )
     db.add(item)
     await db.commit()
-    await db.refresh(item)
 
     planned_group = PlannedGroup(
         group_id="group_1",
@@ -1466,9 +1447,7 @@ async def test_priority_review_skips_out_of_scope_status_drift(specialist, db_wi
         why=f"Anchor item id={item.id} key={item.key} is important.",
     )
 
-    @asynccontextmanager
-    async def fake_provider():
-        yield MemoryItemService(MemoryItemRepository(db))
+    fake_provider = _memory_service_provider(db_session_factory)
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
         report = await specialist._apply_priority_review(
@@ -1486,7 +1465,9 @@ async def test_priority_review_skips_out_of_scope_status_drift(specialist, db_wi
 
 
 @pytest.mark.anyio
-async def test_memory_maintainer_cli_priority_review_can_apply_existing_priority(specialist, db_with_test_user):
+async def test_memory_maintainer_cli_priority_review_can_apply_existing_priority(
+    specialist, db_with_test_user, db_session_factory
+):
     db, user = db_with_test_user
     first = MemoryItem(
         user_id=user.id,
@@ -1506,8 +1487,6 @@ async def test_memory_maintainer_cli_priority_review_can_apply_existing_priority
     )
     db.add_all([first, second])
     await db.commit()
-    await db.refresh(first)
-    await db.refresh(second)
 
     _wire_structured_models(
         specialist.model,
@@ -1544,9 +1523,7 @@ async def test_memory_maintainer_cli_priority_review_can_apply_existing_priority
         ),
     )
 
-    @asynccontextmanager
-    async def fake_provider():
-        yield MemoryItemService(MemoryItemRepository(db))
+    fake_provider = _memory_service_provider(db_session_factory)
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
         result = await specialist.run_cli_for_user(
@@ -1573,7 +1550,7 @@ async def test_memory_maintainer_cli_priority_review_can_apply_existing_priority
 
 @pytest.mark.anyio
 async def test_memory_maintainer_cli_dry_run_priority_review_does_not_count_suggestions_as_applied(
-    specialist, db_with_test_user
+    specialist, db_with_test_user, db_session_factory
 ):
     db, user = db_with_test_user
     first = MemoryItem(
@@ -1594,8 +1571,6 @@ async def test_memory_maintainer_cli_dry_run_priority_review_does_not_count_sugg
     )
     db.add_all([first, second])
     await db.commit()
-    await db.refresh(first)
-    await db.refresh(second)
 
     _wire_structured_models(
         specialist.model,
@@ -1632,9 +1607,7 @@ async def test_memory_maintainer_cli_dry_run_priority_review_does_not_count_sugg
         ),
     )
 
-    @asynccontextmanager
-    async def fake_provider():
-        yield MemoryItemService(MemoryItemRepository(db))
+    fake_provider = _memory_service_provider(db_session_factory)
 
     with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
         result = await specialist.run_cli_for_user(

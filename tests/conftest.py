@@ -12,6 +12,7 @@ os.environ["ENV_FILE"] = ".env.test"
 
 import pytest  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine  # noqa: E402
+from sqlalchemy.pool import NullPool  # noqa: E402
 
 from runestone.config import settings  # noqa: E402
 from runestone.db.database import Base  # noqa: E402
@@ -33,6 +34,7 @@ async def db_engine():
     engine = create_async_engine(
         settings.database_url,
         pool_pre_ping=True,
+        poolclass=NullPool,
     )
 
     async with engine.begin() as conn:
@@ -62,7 +64,8 @@ async def db_with_test_user(db_session_factory):
     """
     import uuid
 
-    async with db_session_factory() as db:
+    db = db_session_factory()
+    try:
         unique_email = f"test-{uuid.uuid4()}@example.com"
         test_user = User(
             name="Test User",
@@ -75,9 +78,14 @@ async def db_with_test_user(db_session_factory):
         )
         db.add(test_user)
         await db.commit()
-        await db.refresh(test_user)
 
         yield db, test_user
+    finally:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        await db.close()
 
 
 @pytest.fixture(scope="function")
@@ -85,9 +93,15 @@ async def db_session(db_session_factory):
     """
     Create a fresh database session for each test.
     """
-    async with db_session_factory() as db:
+    db = db_session_factory()
+    try:
         yield db
-        await db.rollback()
+    finally:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        await db.close()
 
 
 @pytest.fixture

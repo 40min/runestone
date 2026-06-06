@@ -44,8 +44,9 @@ async def test_register_replaces_and_cancels_existing_live_task(registry):
     await asyncio.sleep(0)
 
 
-def test_unregister_removes_task(registry):
-    task = asyncio.Future()
+@pytest.mark.anyio
+async def test_unregister_removes_task(registry):
+    task = asyncio.get_running_loop().create_future()
     registry.tasks["chat-1"] = task
 
     registry.unregister("chat-1")
@@ -73,8 +74,9 @@ def test_cancel_returns_false_when_task_missing(registry):
     assert registry.cancel("missing-chat") is False
 
 
-def test_cancel_returns_false_when_task_already_done(registry):
-    task = asyncio.Future()
+@pytest.mark.anyio
+async def test_cancel_returns_false_when_task_already_done(registry):
+    task = asyncio.get_running_loop().create_future()
     task.set_result(None)
     registry.tasks["chat-1"] = task
 

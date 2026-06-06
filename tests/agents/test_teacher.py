@@ -137,6 +137,8 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "[/PRE_RESPONSE_SPECIALISTS]" in call_kwargs["system_prompt"]
             assert "raw internal JSON objects" in call_kwargs["system_prompt"]
             assert "summarize it naturally in plain prose" in call_kwargs["system_prompt"]
+            assert "always continue the lesson with a concrete next step" in call_kwargs["system_prompt"]
+            assert 'never has to ask "what\'s next?"' in call_kwargs["system_prompt"]
             assert "Use `search_news_with_dates`" not in call_kwargs["system_prompt"]
             assert call_kwargs["response_format"] == TeacherOutput
             middleware = call_kwargs["middleware"]
