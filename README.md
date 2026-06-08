@@ -376,7 +376,7 @@ See [Postgres Container Tuning](docs/postgres-container-tuning.md) for the curre
 
 ### Postgres Backups
 
-The Compose stack includes a dedicated `postgres-backup` sidecar that runs `pg_dump` against the `postgres` service on a fixed interval and stores custom-format dumps on the host under `./backups/postgres`.
+The Compose stack includes a dedicated `postgres-backup` sidecar image that runs `pg_dump` against the `postgres` service on a fixed interval and stores custom-format dumps on the host under `./backups/postgres`.
 
 - `POSTGRES_BACKUP_INTERVAL_SECONDS=86400` runs one backup every 24 hours
 - `POSTGRES_BACKUP_RETENTION_DAYS=7` prunes dumps older than 7 days

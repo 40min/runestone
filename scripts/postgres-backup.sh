@@ -49,7 +49,7 @@ run_backup() {
 
 prune_backups() {
   log "pruning backups older than ${BACKUP_RETENTION_DAYS} days from ${BACKUP_DIR}"
-  find "${BACKUP_DIR}" -type f -name "${POSTGRES_DB}-*.dump" -mtime "+${BACKUP_RETENTION_DAYS}" -exec rm -f {} \;
+  find "${BACKUP_DIR}" -maxdepth 1 -type f -name "${POSTGRES_DB}-*.dump" -mtime "+${BACKUP_RETENTION_DAYS}" -exec rm -f {} \;
 }
 
 mkdir -p "${BACKUP_DIR}"
