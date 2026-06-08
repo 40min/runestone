@@ -380,12 +380,12 @@ The Compose stack includes a dedicated `postgres-backup` sidecar that runs `pg_d
 
 - `POSTGRES_BACKUP_INTERVAL_SECONDS=86400` runs one backup every 24 hours
 - `POSTGRES_BACKUP_RETENTION_DAYS=7` prunes dumps older than 7 days
-- dumps are written as `runestone-YYYYMMDDTHHMMSSZ.dump`
+- dumps are written as `<database_name>-YYYYMMDDTHHMMSSZ.dump` (defaults to `runestone-YYYYMMDDTHHMMSSZ.dump`)
 
 To restore one of these backups into the running Postgres container, use `pg_restore` against the selected dump file:
 
 ```bash
-docker exec -i runestone-postgres pg_restore --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB" < backups/postgres/runestone-YYYYMMDDTHHMMSSZ.dump
+docker exec -i runestone-postgres pg_restore --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB" < backups/postgres/<database_name>-YYYYMMDDTHHMMSSZ.dump
 ```
 
 On Coolify, redeploy the application after adding the backup environment variables so the backup sidecar starts alongside the rest of the stack.

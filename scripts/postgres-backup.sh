@@ -30,7 +30,7 @@ run_backup() {
   final_file="${BACKUP_DIR}/${POSTGRES_DB}-${timestamp}.dump"
 
   log "starting backup to ${final_file}"
-  pg_dump \
+  if ! pg_dump \
     --format=custom \
     --no-acl \
     --no-owner \
@@ -38,7 +38,11 @@ run_backup() {
     --port="${PGPORT}" \
     --username="${POSTGRES_USER}" \
     --file="${tmp_file}" \
-    "${POSTGRES_DB}"
+    "${POSTGRES_DB}"; then
+    rm -f "${tmp_file}"
+    log "pg_dump failed, cleaned up temporary file"
+    exit 1
+  fi
   mv "${tmp_file}" "${final_file}"
   log "completed backup to ${final_file}"
 }
