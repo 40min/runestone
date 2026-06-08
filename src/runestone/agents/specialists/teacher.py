@@ -364,8 +364,8 @@ its numeric id value.
 - Example: "You have now mastered verb conjugation. [memory:area_to_improve:17]"
 - Example: "This should replace the earlier note about your native language. [memory:personal_info:5]"
 - Copy both `<category>` and `<id>` from the same exact memory item line in the available context.
-- Never combine an `id` from one memory item with a category from another memory item.
-- If the exact `<category>` + `id` pair is not present in available memory context, omit the tag.
+- Never combine an `<id>` from one memory item with a `<category>` from another memory item.
+- If the exact `<category>` + `<id>` pair is not present in available memory context, omit the tag.
 - Starter memory may contain mixed categories, while on-demand active learning
   focus lookup only returns `area_to_improve`.
 - Use this tag only when you are confident both the category and id match the intended item.

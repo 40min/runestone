@@ -174,10 +174,10 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert (
                 "Copy both `<category>` and `<id>` from the same exact memory item line" in call_kwargs["system_prompt"]
             )
-            assert "Never combine an `id` from one memory item with a category from another memory item." in (
+            assert "Never combine an `<id>` from one memory item with a `<category>` from another memory item." in (
                 call_kwargs["system_prompt"]
             )
-            assert "If the exact `<category>` + `id` pair is not present" in call_kwargs["system_prompt"]
+            assert "If the exact `<category>` + `<id>` pair is not present" in call_kwargs["system_prompt"]
             assert "Use `search_grammar` at most once with one focused query." in call_kwargs["system_prompt"]
             assert "each result has `title`, `url`, and `path`" in call_kwargs["system_prompt"]
             assert "Focus on the top result." in call_kwargs["system_prompt"]
