@@ -18,6 +18,7 @@ wheels/
 tasks/
 csv/
 state/*
+backups/
 user_*_memory_items.csv
 
 # Frontend
