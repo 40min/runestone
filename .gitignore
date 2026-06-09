@@ -17,9 +17,11 @@ wheels/
 .env
 tasks/
 csv/
+output/
 state/*
 backups/
 user_*_memory_items.csv
+.codex/
 
 # Frontend
 frontend/node_modules
@@ -37,7 +39,6 @@ frontend/*.local
 *.njsproj
 *.sln
 # Docker
-.dockerignore
 docker-compose.override.yml
 *.sw?
 runestone.db

@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[oc]
+.pytest_cache/
+.coverage
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Node.js
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/*.local
+
+# Git
+.git/
+.gitignore
+
+# Environment files
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Test files
+tests/
+*.test.*
+*_test.*
+test_*
+
+# Development files
+.pre-commit-config.yaml
+Makefile
+uv.lock
+.python-version
