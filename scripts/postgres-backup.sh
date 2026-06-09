@@ -49,7 +49,12 @@ run_backup() {
 
 prune_backups() {
   log "pruning backups older than ${BACKUP_RETENTION_DAYS} days from ${BACKUP_DIR}"
-  find "${BACKUP_DIR}" -maxdepth 1 -type f -name "${POSTGRES_DB}-*.dump" -mtime "+${BACKUP_RETENTION_DAYS}" -exec rm -f {} \;
+  # `find -mtime` rounds file ages down to whole 24-hour buckets, so `+6` is the closest match for a 7-day cutoff.
+  retention_buckets=$((BACKUP_RETENTION_DAYS - 1))
+  if [ "${retention_buckets}" -lt 0 ]; then
+    retention_buckets=0
+  fi
+  find "${BACKUP_DIR}" -maxdepth 1 -type f -name "${POSTGRES_DB}-*.dump" -mtime "+${retention_buckets}" -exec rm -f {} \;
 }
 
 mkdir -p "${BACKUP_DIR}"
