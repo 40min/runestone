@@ -46,6 +46,7 @@ services:
       context: .
       dockerfile: Dockerfile.postgres-backup
     container_name: runestone-postgres-backup
+    init: true
     environment:
       - PGHOST=postgres
       - PGPORT=5432
