@@ -9,4 +9,4 @@ COPY scripts/postgres-backup.sh /usr/local/bin/postgres-backup.sh
 
 RUN chmod 0755 /usr/local/bin/postgres-backup.sh
 
-ENTRYPOINT ["/bin/sh", "/usr/local/bin/postgres-backup.sh"]
+ENTRYPOINT ["/usr/local/bin/postgres-backup.sh"]
