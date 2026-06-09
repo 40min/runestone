@@ -126,9 +126,9 @@ Implementation status:
 - implemented
 - `MemoryKeeper` now uses a three-case split instead of a universal read-before-write
 - `delete_memory_item` is exposed alongside the existing memory tools
-- the `[memory:ID]` tag convention is documented in the Teacher prompt so Teacher can
-  annotate its durable-signal sentences with the relevant memory item id
-- that `[memory:ID]` tag is temporarily exposed in visible chat text as a bridge until
+- the `[memory:<category>:<id>]` tag convention is documented in the Teacher prompt so Teacher can
+  annotate its durable-signal sentences with the relevant memory item category and id
+- that `[memory:<category>:<id>]` tag is temporarily exposed in visible chat text as a bridge until
   structured teacher-side memory signaling lands in the follow-up task below
 
 `MemoryKeeper` has moved to a three-case split.
@@ -179,17 +179,17 @@ Implementation status:
 
 Behavior:
 
-- if `teacher_response` contains a `[memory:ID]` tag, write directly using that id
-  (no pre-read required)
-- if no `[memory:ID]` tag is present, do a single targeted `read_memory` with a
+- if `teacher_response` contains a `[memory:<category>:<id>]` tag, write directly using that
+  category and id (no pre-read required)
+- if no `[memory:<category>:<id>]` tag is present, do a single targeted `read_memory` with a
   category filter to locate the item id, then write
-- temporary duplicates are acceptable if the narrow read fails; `memory_maintainer`
-  handles cleanup
+- if the targeted read returns no matching item, treat it as a terminal no-op instead of creating
+  a duplicate; `memory_maintainer` still handles broad cleanup
 
 Note:
 
-- `[memory:ID]` tags are emitted by Teacher when an item id is known from starter
-  memory or `read_active_learning_focus` context (which now includes `id=` fields)
+- `[memory:<category>:<id>]` tags are emitted by Teacher when an item category/id pair is known
+  from starter memory or `read_active_learning_focus` context (which now includes `id=` fields)
 - this tag is temporarily present in the visible chat reply so `MemoryKeeper` can target
   the right item before structured signaling is implemented
 - follow-up task: `BOyvak7z5hfl` (`feat: Make teacher express ...`) will move this
@@ -209,7 +209,7 @@ Known tradeoff:
 - append-first MemoryKeeper behavior can increase duplicate or overlapping
   `area_to_improve` items until `MemoryMaintainer` cleanup is improved and
   re-enabled confidently
-- the `[memory:ID]` tag mechanism mitigates this for Case C when the Teacher
+- the `[memory:<category>:<id>]` tag mechanism mitigates this for Case C when the Teacher
   has seen the item in context, but Case B always appends fresh
 
 That tradeoff is accepted.

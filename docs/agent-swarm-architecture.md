@@ -202,7 +202,7 @@ flowchart TD
     C -- No --> D["Continue response generation"]
     C -- Yes --> E["read_active_learning_focus (read-only, includes item ids)"]
     E --> D
-    D --> F["Teacher response returned to user (may temporarily include [memory:ID] tags)"]
+    D --> F["Teacher response returned to user (may temporarily include [memory:<category>:<id>] tags)"]
     F --> G["Post-response coordinator"]
     G --> H{"Memory maintenance needed?"}
     H -- No --> I["No memory change"]
@@ -210,7 +210,7 @@ flowchart TD
     J --> K{"Which case?"}
     K -- "Case A: student edit" --> L["Read relevant memory, then write/delete"]
     K -- "Case B: teacher new issue" --> M["Append directly with fresh key (no pre-read)"]
-    K -- "Case C: teacher status/priority change" --> N{"[memory:ID] tag present?"}
+    K -- "Case C: teacher status/priority change" --> N{"[memory:<category>:<id>] tag present?"}
     N -- Yes --> O["Write directly using id"]
     N -- No --> P["Targeted read to locate id, then write"]
 ```
@@ -246,9 +246,10 @@ Principles:
 - Use a three-case execution model instead of a universal read-before-write:
   - **Case A (student edit):** read the relevant category first, then write/delete as instructed.
   - **Case B (teacher new issue):** append directly using a fresh descriptive key; no pre-read required.
-  - **Case C (teacher status/priority change):** if the teacher embedded a `[memory:ID]` tag, write
-    directly; otherwise do one targeted category-scoped read to locate the item id, then write.
-- The `[memory:ID]` tag is a temporary bridge carried in the visible teacher reply text until
+  - **Case C (teacher status/priority change):** if the teacher embedded a
+    `[memory:<category>:<id>]` tag, write directly using that category/id pair; otherwise do one
+    targeted category-scoped read to locate the item id, then write.
+- The `[memory:<category>:<id>]` tag is a temporary bridge carried in the visible teacher reply text until
   the structured-output follow-up replaces this mechanism.
 - Temporary duplicate `area_to_improve` items from append-first writes are an accepted tradeoff;
   broad duplicate cleanup belongs to `memory_maintainer`.
