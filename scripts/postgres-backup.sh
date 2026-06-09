@@ -17,6 +17,15 @@ log() {
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"
 }
 
+validate_retention_days() {
+  case "${BACKUP_RETENTION_DAYS}" in
+    ''|0|*[!0-9]*|0[0-9]*)
+      log "POSTGRES_BACKUP_RETENTION_DAYS must be a positive integer without leading zeros"
+      exit 1
+      ;;
+  esac
+}
+
 wait_for_postgres() {
   until pg_isready -h "${PGHOST}" -p "${PGPORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" >/dev/null 2>&1; do
     log "waiting for postgres at ${PGHOST}:${PGPORT}/${POSTGRES_DB}"
@@ -58,6 +67,7 @@ prune_backups() {
 }
 
 mkdir -p "${BACKUP_DIR}"
+validate_retention_days
 wait_for_postgres
 
 while true; do
