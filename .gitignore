@@ -24,6 +24,7 @@ user_*_memory_items.csv
 .codex/
 
 # Frontend
+node_modules/
 frontend/node_modules
 frontend/dist
 frontend/dist-ssr
