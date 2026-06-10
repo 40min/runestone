@@ -6,6 +6,8 @@ import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 
 def _write_executable(path: Path, content: str) -> None:
     path.write_text(content)
@@ -83,12 +85,13 @@ def test_backup_script_prunes_dumps_older_than_retention_window(tmp_path: Path) 
     assert any(path.name.startswith("runestone-") and path.suffix == ".dump" for path in backup_dir.iterdir())
 
 
-def test_backup_script_rejects_invalid_retention_days(tmp_path: Path) -> None:
+@pytest.mark.parametrize("retention_days", ["0", "07"])
+def test_backup_script_rejects_invalid_retention_days(tmp_path: Path, retention_days: str) -> None:
     """Invalid retention settings should fail fast before the backup loop starts."""
     backup_dir = tmp_path / "backups"
     backup_dir.mkdir()
     script_path = Path(__file__).resolve().parents[1] / "scripts" / "postgres-backup.sh"
-    env = _build_script_env(tmp_path, backup_dir, retention_days="07")
+    env = _build_script_env(tmp_path, backup_dir, retention_days=retention_days)
 
     result = subprocess.run(
         ["/bin/sh", str(script_path)],
