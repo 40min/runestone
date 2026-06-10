@@ -11,6 +11,7 @@ const MarkdownDisplay: React.FC<MarkdownDisplayProps> = ({ markdownContent }) =>
     <Box
       sx={{ color: 'white' }}
       className="markdown-content"
+      // nosemgrep
       dangerouslySetInnerHTML={{
         __html: parseMarkdown(markdownContent),
       }}

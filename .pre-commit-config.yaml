@@ -1,8 +1,29 @@
-# Pre-commit configuration for Runestone
-# Run 'pre-commit install' to set up git hooks
+# Pre-commit configuration for Runestone.
+# Run `make setup` to install hooks and `make security-check` for a full sweep.
+
+default_stages: [pre-commit]
+fail_fast: false
+minimum_pre_commit_version: "3.0.0"
+default_language_version:
+  python: python3.13
+
+exclude: |
+  (?x)^(
+    \.git/|
+    \.uv-cache/|
+    \.venv/|
+    build/|
+    dist/|
+    htmlcov/|
+    node_modules/|
+    frontend/node_modules/|
+    frontend/dist/|
+    docs/assets/|
+    frontend/src/assets/|
+    res/
+  )
 
 repos:
-  # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
@@ -11,58 +32,125 @@ repos:
       - id: check-yaml
       - id: check-toml
       - id: check-json
+        exclude: ^frontend/tsconfig\.(app|node)\.json$
       - id: check-merge-conflict
       - id: check-added-large-files
       - id: debug-statements
 
-  # Python code formatting
   - repo: https://github.com/psf/black
-    rev: 24.1.1
+    rev: 25.1.0
     hooks:
       - id: black
-        language_version: python3
-        args: ["--line-length=120", "--target-version=py312"]
+        language_version: python3.13
+        args: ["--line-length=120", "--target-version=py313"]
 
-  # Import sorting
   - repo: https://github.com/pycqa/isort
     rev: 5.13.2
     hooks:
       - id: isort
         args: ["--profile", "black", "--line-length=120"]
 
-  # Linting
   - repo: https://github.com/pycqa/flake8
     rev: 7.0.0
     hooks:
       - id: flake8
         args: ["--max-line-length=120", "--extend-ignore=E203,W503"]
 
-  # Type checking (optional - uncomment if you add type hints)
-  # - repo: https://github.com/pre-commit/mirrors-mypy
-  #   rev: v1.8.0
-  #   hooks:
-  #     - id: mypy
-  #       additional_dependencies: [types-requests]
-  # Frontend linting
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        args: ["--config=.gitleaks.toml", "--redact"]
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.3
+    hooks:
+      - id: bandit
+        name: bandit-sast
+        files: ^src/runestone/.*\.py$
+        args: ["-c", "pyproject.toml", "-ll", "-ii"]
+        additional_dependencies: ["bandit[toml]"]
+
   - repo: https://github.com/pre-commit/mirrors-eslint
     rev: v9.17.0
     hooks:
       - id: eslint
-        files: \.(js|ts|jsx|tsx)$
+        name: eslint-frontend
+        files: ^frontend/src/.*\.(ts|tsx)$
         types: [file]
         additional_dependencies:
-          - eslint@^9.33.0
-          - "@eslint/js@^9.33.0"
-          - typescript-eslint@^8.39.1
+          - eslint@^9.39.4
+          - "@eslint/js@^9.39.4"
+          - typescript-eslint@^8.61.0
           - eslint-plugin-react-hooks@^5.2.0
-          - eslint-plugin-react-refresh@^0.4.20
-          - globals@^16.3.0
-        args: ["--config", "frontend/eslint.config.js", "frontend/"]
+          - eslint-plugin-react-refresh@^0.4.26
+          - globals@^16.5.0
+        args:
+          [
+            "--config",
+            "frontend/eslint.config.js",
+            "--cache",
+            "--cache-location",
+            "frontend/.eslintcache",
+          ]
+      - id: eslint
+        name: eslint-security
+        files: ^frontend/src/.*\.(ts|tsx)$
+        types: [file]
+        additional_dependencies:
+          - eslint@^9.39.4
+          - "@eslint/js@^9.39.4"
+          - typescript-eslint@^8.61.0
+          - eslint-plugin-react-hooks@^5.2.0
+          - eslint-plugin-react-refresh@^0.4.26
+          - eslint-plugin-security@^3.0.1
+          - globals@^16.5.0
+        args:
+          [
+            "--config",
+            "frontend/eslint.security.config.js",
+            "--cache",
+            "--cache-location",
+            "frontend/.eslintcache-security",
+          ]
 
+  - repo: https://github.com/semgrep/pre-commit
+    rev: v1.164.0
+    hooks:
+      - id: semgrep
+        name: semgrep-sast
+        files: ^(src/runestone/.*\.py|frontend/src/.*\.(ts|tsx))$
+        exclude: ^(tests/|alembic/versions/|frontend/src/.*\.test\.(ts|tsx)$)
+        pass_filenames: false
+        args:
+          [
+            "--config",
+            "p/python",
+            "--config",
+            "p/typescript",
+            "--config",
+            "p/react",
+            "--config",
+            "p/owasp-top-ten",
+            "--error",
+            "--skip-unknown-extensions",
+            "--exclude",
+            "tests",
+            "--exclude",
+            "alembic/versions",
+            "--jobs",
+            "0",
+            "--metrics=off",
+            "src/runestone",
+            "frontend/src",
+          ]
 
-# Configure pre-commit to run on specific events
-default_stages: [pre-commit]
-fail_fast: false
-
-# Additional configuration
-minimum_pre_commit_version: "3.0.0"
+  - repo: local
+    hooks:
+      - id: safety
+        name: safety-dependency-scan
+        language: python
+        entry: python scripts/run_safety_precommit.py
+        additional_dependencies: ["safety==3.8.1"]
+        pass_filenames: false
+        files: ^(pyproject\.toml|uv\.lock|requirements.*\.txt)$

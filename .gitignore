@@ -28,6 +28,8 @@ node_modules/
 frontend/node_modules
 frontend/dist
 frontend/dist-ssr
+frontend/.eslintcache
+frontend/.eslintcache-security
 frontend/*.local
 
 # Editor directories and files

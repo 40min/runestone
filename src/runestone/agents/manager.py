@@ -1002,27 +1002,34 @@ class AgentsManager:
         return sources or None
 
     def _is_safe_url(self, url: str) -> bool:
+        def _log_rejected_url(reason: str, parsed_url=None) -> None:
+            """Log rejection reasons without echoing full URLs or embedded credentials."""
+            host = ""
+            if parsed_url is not None:
+                host = parsed_url.hostname or parsed_url.netloc or ""
+            logger.info("source url rejected reason=%s host=%s", reason, host)
+
         try:
             parsed = urlparse(url)
         except ValueError:
-            logger.info("source url rejected reason=parse_error url=%s", url)
+            _log_rejected_url("parse_error")
             return False
         if parsed.username or parsed.password:
-            logger.info("source url rejected reason=credentials_not_allowed url=%s", url)
+            _log_rejected_url("credentials_not_allowed", parsed)
             return False
         try:
             port = parsed.port
         except ValueError:
-            logger.info("source url rejected reason=invalid_port url=%s", url)
+            _log_rejected_url("invalid_port", parsed)
             return False
         if parsed.scheme not in {"http", "https"}:
-            logger.info("source url rejected reason=scheme_not_allowed url=%s", url)
+            _log_rejected_url("scheme_not_allowed", parsed)
             return False
 
         if port is not None and port not in self.allowed_ports:
-            logger.info("source url rejected reason=port_not_allowed url=%s", url)
+            _log_rejected_url("port_not_allowed", parsed)
             return False
         if not parsed.netloc:
-            logger.info("source url rejected reason=missing_netloc url=%s", url)
+            _log_rejected_url("missing_netloc", parsed)
             return False
         return True

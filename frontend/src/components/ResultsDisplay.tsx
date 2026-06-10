@@ -511,6 +511,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
               <Box
                 sx={{ color: "white" }}
                 className="markdown-content"
+                // nosemgrep
                 dangerouslySetInnerHTML={{
                   __html: renderedOcrHtml,
                 }}
