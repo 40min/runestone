@@ -3,7 +3,7 @@
 
 .PHONY: help setup clean info
 .PHONY: install install-dev install-backend install-frontend install-all
-.PHONY: lint lint-check backend-lint frontend-lint
+.PHONY: lint lint-check backend-lint frontend-lint security-check
 .PHONY: test test-coverage backend-test frontend-test
 .PHONY: run run-backend run-frontend run-dev run-recall load-vocab
 .PHONY: test-prompts-ocr test-prompts-analysis test-prompts-vocabulary test-grammar-search
@@ -38,6 +38,7 @@ help:
 	@echo "  lint-check       - Run linting checks only (no fixes)"
 	@echo "  backend-lint     - Run backend linting and formatting"
 	@echo "  frontend-lint    - Run frontend linting"
+	@echo "  security-check   - Run security-focused pre-commit hooks across the repo"
 	@echo ""
 	@echo "Testing:"
 	@echo "  test             - Run all test suites"
@@ -170,6 +171,16 @@ frontend-lint:
 	@echo "🔧 Running frontend linting..."
 	@cd frontend && npm run lint
 	@echo "✅ Frontend linting complete!"
+
+# Run security-focused pre-commit hooks across the repository
+security-check:
+	@echo "🔒 Running security-focused pre-commit hooks..."
+	@uv run pre-commit run gitleaks --all-files
+	@uv run pre-commit run bandit --all-files
+	@uv run pre-commit run eslint-security --all-files
+	@uv run pre-commit run semgrep --all-files
+	@uv run pre-commit run safety --all-files
+	@echo "✅ Security checks complete!"
 
 # =============================================================================
 # TESTING

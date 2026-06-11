@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box } from '@mui/material';
+import DOMPurify from 'dompurify';
 import { parseMarkdown } from '../../utils/markdownParser';
 
 interface MarkdownDisplayProps {
@@ -12,7 +13,7 @@ const MarkdownDisplay: React.FC<MarkdownDisplayProps> = ({ markdownContent }) =>
       sx={{ color: 'white' }}
       className="markdown-content"
       dangerouslySetInnerHTML={{
-        __html: parseMarkdown(markdownContent),
+        __html: DOMPurify.sanitize(parseMarkdown(markdownContent)),
       }}
     />
   );

@@ -156,7 +156,7 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "runestone.api.main:app",
-        host="0.0.0.0",
+        host="0.0.0.0",  # nosec B104 - local development entrypoint must listen on all interfaces in containers
         port=8010,
         reload=True,
     )

@@ -1,0 +1,7 @@
+# Keep Semgrep focused on live application code during local commits.
+tests/
+alembic/versions/
+docs/
+res/
+frontend/src/**/*.test.ts
+frontend/src/**/*.test.tsx

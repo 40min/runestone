@@ -46,6 +46,7 @@ class VocabularyRepository:
             "min_priority": VOCABULARY_PRIORITY_HIGH,
             **{f"word_phrase_{index}": word_phrase for index, word_phrase in enumerate(word_phrases)},
         }
+        # nosemgrep
         stmt = text(
             f"""
             WITH requested(word_phrase, ordinal) AS (
@@ -181,6 +182,7 @@ class VocabularyRepository:
                 }
             )
 
+        # nosemgrep
         stmt = text(
             f"""
             WITH requested(word_phrase, translation, example_phrase, extra_info, ordinal) AS (

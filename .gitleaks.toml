@@ -1,0 +1,12 @@
+title = "Runestone Gitleaks Config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Skip binary and generated asset directories that create noise in secret scans."
+paths = [
+  '''^docs/assets/''',
+  '''^frontend/src/assets/''',
+  '''^res/''',
+]

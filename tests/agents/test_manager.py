@@ -2011,6 +2011,7 @@ def test_is_safe_url(mock_settings):
     assert manager._is_safe_url("http://localhost:5173/?view=grammar") is True
     assert manager._is_safe_url("http://localhost:8080") is False
     assert manager._is_safe_url("http://[invalid-ip]") is False
+    assert manager._is_safe_url("http://example.com:abc") is False
     assert manager._is_safe_url("http://user:pass@example.com") is False
 
 
