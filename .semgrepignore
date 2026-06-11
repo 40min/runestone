@@ -5,5 +5,3 @@ docs/
 res/
 frontend/src/**/*.test.ts
 frontend/src/**/*.test.tsx
-frontend/src/components/ResultsDisplay.tsx
-frontend/src/components/ui/MarkdownDisplay.tsx

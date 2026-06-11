@@ -8,6 +8,7 @@ import {
   CircularProgress,
 } from "@mui/material";
 import type { AlertColor } from "@mui/material";
+import DOMPurify from "dompurify";
 import { ArrowRight, Copy, Save, Sparkles } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -511,9 +512,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
               <Box
                 sx={{ color: "white" }}
                 className="markdown-content"
-                // nosemgrep
                 dangerouslySetInnerHTML={{
-                  __html: renderedOcrHtml,
+                  __html: DOMPurify.sanitize(renderedOcrHtml),
                 }}
               />
             </SurfaceCard>

@@ -1002,25 +1002,30 @@ class AgentsManager:
         return sources or None
 
     def _is_safe_url(self, url: str) -> bool:
+        def _extract_loggable_host(parsed_url) -> str:
+            """Return a safe host label for logs even when netloc parsing is malformed."""
+            if parsed_url is not None:
+                try:
+                    return parsed_url.hostname or parsed_url.netloc or ""
+                except ValueError:
+                    return parsed_url.netloc or ""
+            return ""
+
         def _log_rejected_url(reason: str, parsed_url=None) -> None:
             """Log rejection reasons without echoing full URLs or embedded credentials."""
-            host = ""
-            if parsed_url is not None:
-                host = parsed_url.hostname or parsed_url.netloc or ""
-            logger.info("source url rejected reason=%s host=%s", reason, host)
+            logger.info("source url rejected reason=%s host=%s", reason, _extract_loggable_host(parsed_url))
 
         try:
             parsed = urlparse(url)
+            # Accessing these parsed properties can raise ValueError for malformed netlocs.
+            username = parsed.username
+            password = parsed.password
+            port = parsed.port
         except ValueError:
             _log_rejected_url("parse_error")
             return False
-        if parsed.username or parsed.password:
+        if username or password:
             _log_rejected_url("credentials_not_allowed", parsed)
-            return False
-        try:
-            port = parsed.port
-        except ValueError:
-            _log_rejected_url("invalid_port", parsed)
             return False
         if parsed.scheme not in {"http", "https"}:
             _log_rejected_url("scheme_not_allowed", parsed)

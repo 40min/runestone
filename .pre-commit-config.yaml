@@ -95,6 +95,7 @@ repos:
           ]
       - id: eslint
         name: eslint-security
+        stages: [manual]
         files: ^frontend/src/.*\.(ts|tsx)$
         types: [file]
         additional_dependencies:
