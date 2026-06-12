@@ -177,7 +177,7 @@ security-check:
 	@echo "🔒 Running security-focused pre-commit hooks..."
 	@uv run pre-commit run gitleaks --all-files
 	@uv run pre-commit run bandit --all-files
-	@uv run pre-commit run eslint-security --all-files
+	@uv run pre-commit run eslint --hook-stage manual --all-files
 	@uv run pre-commit run semgrep --all-files
 	@uv run pre-commit run safety --all-files
 	@echo "✅ Security checks complete!"
