@@ -47,6 +47,7 @@ interface UseChatReturn {
   isLoading: boolean;
   isFetchingHistory: boolean;
   isSyncingHistory: boolean;
+  memoryRefreshToken: number;
   historySyncNotice: string | null;
   isBackendAvailable: boolean;
   error: string | null;
@@ -95,6 +96,7 @@ export const useChat = (): UseChatReturn => {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
   const [isSyncingHistory, setIsSyncingHistory] = useState(false);
+  const [memoryRefreshToken, setMemoryRefreshToken] = useState(0);
   const [historySyncNotice, setHistorySyncNotice] = useState<string | null>(null);
   const [isBackendAvailable, setIsBackendAvailable] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -430,6 +432,7 @@ export const useChat = (): UseChatReturn => {
       setHistorySyncNotice(null);
       currentChatIdRef.current = null;
       lastMessageIdRef.current = 0;
+      setMemoryRefreshToken((previous) => previous + 1);
       resetPollingInterval();
       broadcastChange();
     } catch (err) {
@@ -455,6 +458,7 @@ export const useChat = (): UseChatReturn => {
     isLoading,
     isFetchingHistory,
     isSyncingHistory,
+    memoryRefreshToken,
     historySyncNotice,
     isBackendAvailable,
     error,
