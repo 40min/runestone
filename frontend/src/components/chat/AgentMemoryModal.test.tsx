@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
 import AgentMemoryModal from './AgentMemoryModal';
 import * as useMemoryItemsModule from '../../hooks/useMemoryItems';
 
@@ -40,8 +40,13 @@ const setMatchMedia = (matches: boolean) => {
 describe('AgentMemoryModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
     setMatchMedia(false);
     (useMemoryItemsModule.default as Mock).mockReturnValue(mockUseMemoryItems);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('renders correctly when open', () => {
@@ -57,6 +62,34 @@ describe('AgentMemoryModal', () => {
   it('fetches items on mount when open', () => {
     render(<AgentMemoryModal open={true} onClose={() => {}} />);
     expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledWith('personal_info', undefined, true, 'updated_at', 'desc');
+  });
+
+  it('re-fetches memory for a short window after a new chat refresh token changes', async () => {
+    const { rerender } = render(
+      <AgentMemoryModal open={true} onClose={() => {}} refreshToken={0} />
+    );
+
+    mockUseMemoryItems.fetchItems.mockClear();
+
+    rerender(<AgentMemoryModal open={true} onClose={() => {}} refreshToken={1} />);
+
+    expect(screen.getByText('Teacher memory is refreshing after the new chat reset.')).toBeInTheDocument();
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000);
+    });
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledTimes(3);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(8000);
+    });
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledTimes(4);
   });
 
   it('changes category when tab is clicked', () => {
@@ -392,5 +425,46 @@ describe('AgentMemoryModal', () => {
     });
 
     expect(mockUseMemoryItems.deleteItem).toHaveBeenCalledWith(1);
+  });
+
+  it('refreshes the list when delete fails because the item went stale', async () => {
+    const mockDeleteItem = vi.fn().mockRejectedValueOnce(new Error('Memory item with id 1 not found'));
+    const mockItems = [
+      {
+        id: 1,
+        key: 'verb-tense',
+        content: 'Struggles with verb tense',
+        category: 'area_to_improve',
+        status: 'struggling',
+        priority: 2,
+        updated_at: new Date().toISOString(),
+      },
+    ];
+    (useMemoryItemsModule.default as Mock).mockReturnValue({
+      ...mockUseMemoryItems,
+      items: mockItems,
+      deleteItem: mockDeleteItem,
+    });
+
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Delete item'));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Confirm delete'));
+    });
+
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenLastCalledWith(
+      'personal_info',
+      undefined,
+      true,
+      'updated_at',
+      'desc'
+    );
+    expect(
+      screen.getByText('That memory item changed during background cleanup. Refreshed the list.')
+    ).toBeInTheDocument();
   });
 });

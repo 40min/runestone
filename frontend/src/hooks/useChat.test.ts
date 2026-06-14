@@ -416,6 +416,48 @@ describe('useChat', () => {
     });
   });
 
+  it('increments memory refresh token after starting a new chat', async () => {
+    mockFetch.mockImplementation((url, options) => {
+      if (options?.method === 'GET' || !options?.method) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve(
+              buildHistoryPayload([{ id: 1, role: 'assistant', content: 'Hej' }], 'chat-1', 1)
+            ),
+        });
+      }
+
+      if (options?.method === 'DELETE') {
+        return Promise.resolve({
+          ok: true,
+          status: 204,
+          json: () => Promise.resolve({}),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+
+    const { result } = renderHook(() => useChat());
+
+    await waitFor(() => {
+      expect(result.current.messages).toHaveLength(1);
+    });
+
+    expect(result.current.memoryRefreshToken).toBe(0);
+
+    await act(async () => {
+      await result.current.startNewChat();
+    });
+
+    expect(result.current.messages).toEqual([]);
+    expect(result.current.memoryRefreshToken).toBe(1);
+  });
+
   it('should show initial history error when first history fetch fails', async () => {
     mockFetch.mockImplementation((url, options) => {
       if (options?.method === 'GET' || !options?.method) {
