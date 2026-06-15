@@ -22,7 +22,8 @@ def test_downgrade_removes_duplicate_personal_info_rows_before_restoring_constra
     assert execute_calls, "expected duplicate-cleanup SQL before recreating the unique constraint"
     cleanup_sql = execute_calls[0].args[0]
     assert "ROW_NUMBER()" in cleanup_sql
-    assert "category = 'personal_info'" in cleanup_sql
+    assert "PARTITION BY user_id, category, key" in cleanup_sql
+    assert "category = 'personal_info'" not in cleanup_sql
     assert (
         call.create_unique_constraint(
             "uq_memory_items_user_category_key",

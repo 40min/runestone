@@ -48,7 +48,6 @@ def downgrade() -> None:
                         ORDER BY updated_at DESC, id DESC
                     ) AS row_num
                 FROM memory_items
-                WHERE category = 'personal_info'
             ) duplicate_rows
             WHERE row_num > 1
         )
