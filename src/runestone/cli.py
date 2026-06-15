@@ -19,7 +19,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from runestone.agents.specialists.base import SpecialistResult
-from runestone.agents.specialists.memory_maintainer import MemoryMaintainerSpecialist
+from runestone.agents.specialists.memory_maintainer.area_to_improve import AreaToImproveMemoryMaintainer
+from runestone.agents.specialists.memory_maintainer.personal_info import PersonalInfoMemoryMaintainer
 from runestone.agents.tools.read_url import read_url
 from runestone.api.schemas import VocabularyItemCreate
 from runestone.config import Settings
@@ -265,15 +266,20 @@ def read_url_cli(url: str):
         sys.exit(1)
 
 
-async def _run_memory_maintainer_cli(user_id: int, dry_run: bool, with_priority_review: bool) -> SpecialistResult:
-    """Load a real user and run the memory maintainer in CLI mode."""
+async def _load_cli_user(user_id: int) -> User:
+    """Load one user for CLI-owned specialist workflows."""
     async with provide_db_session() as session:
         user_repo = UserRepository(session)
         user = await user_repo.get_by_id(user_id)
         if user is None:
             raise RunestoneError(f"User {user_id} not found")
+        return user
 
-    specialist = MemoryMaintainerSpecialist(settings)
+
+async def _run_area_memory_maintainer_cli(user_id: int, dry_run: bool, with_priority_review: bool) -> SpecialistResult:
+    """Load a real user and run the area_to_improve maintainer in CLI mode."""
+    user = await _load_cli_user(user_id)
+    specialist = AreaToImproveMemoryMaintainer(settings)
     return await specialist.run_cli_for_user(
         user,
         dry_run=dry_run,
@@ -281,9 +287,17 @@ async def _run_memory_maintainer_cli(user_id: int, dry_run: bool, with_priority_
     )
 
 
+async def _run_personal_info_memory_maintainer_cli(user_id: int, dry_run: bool) -> SpecialistResult:
+    """Load a real user and run the personal_info maintainer in CLI mode."""
+    user = await _load_cli_user(user_id)
+    specialist = PersonalInfoMemoryMaintainer(settings)
+    return await specialist.run_cli_for_user(user, dry_run=dry_run)
+
+
 def _print_memory_maintainer_summary(result: SpecialistResult) -> None:
     """Render a readable CLI summary for a maintainer run."""
     artifacts = result.artifacts if isinstance(result.artifacts, dict) else {}
+    maintenance_type = artifacts.get("maintenance_type", "memory_maintenance")
     merged_groups = artifacts.get("merged_groups", [])
     failed_merges = len(artifacts.get("failed_groups", []))
     applied_priorities = len(
@@ -297,15 +311,22 @@ def _print_memory_maintainer_summary(result: SpecialistResult) -> None:
     priority_mode = "enabled" if artifacts.get("priority_review_enabled") else "disabled"
 
     console.print("[bold cyan]Memory Maintainer Summary[/bold cyan]")
+    console.print(f"Type: {maintenance_type}")
     console.print(f"Status: {result.status}")
     console.print(f"Mode: {mode}")
     console.print(f"Priority review: {priority_mode}")
     console.print(f"Reviewed items: {artifacts.get('reviewed_item_count', 0)}")
-    console.print(f"Buckets: {len(artifacts.get('buckets', []))}")
-    console.print(f"Merged groups: {len(merged_groups)}")
-    console.print(f"Failed merges: {failed_merges}")
-    console.print(f"Applied priorities: {applied_priorities}")
-    console.print(f"Suggested priorities: {suggested_priorities}")
+    if "buckets" in artifacts:
+        console.print(f"Buckets: {len(artifacts.get('buckets', []))}")
+        console.print(f"Merged groups: {len(merged_groups)}")
+        console.print(f"Failed merges: {failed_merges}")
+        console.print(f"Applied priorities: {applied_priorities}")
+        console.print(f"Suggested priorities: {suggested_priorities}")
+    if "decisions" in artifacts:
+        console.print(f"Decisions: {len(artifacts.get('decisions', []))}")
+        console.print(f"Kept active: {len(artifacts.get('kept_active_item_ids', []))}")
+        console.print(f"Marked outdated: {len(artifacts.get('outdated_item_ids', []))}")
+        console.print(f"Deleted: {len(artifacts.get('deleted_item_ids', []))}")
     console.print(f"Summary: {artifacts.get('summary', '')}")
     if artifacts.get("no_change_reason"):
         console.print(f"No-change reason: {artifacts['no_change_reason']}")
@@ -337,13 +358,21 @@ def _print_memory_maintainer_summary(result: SpecialistResult) -> None:
             mode_label = update.get("mode", "applied")
             console.print(f"- {mode_label}: {key} -> priority {to_priority}")
 
+    if artifacts.get("decisions"):
+        console.print("\n[bold]Personal-info decisions[/bold]")
+        for decision in artifacts["decisions"]:
+            console.print(f"- item {decision['item_id']}: {decision['action']} ({decision['why']})")
+        if artifacts.get("persisted_summary") is not None:
+            console.print("\n[bold]Personal-info summary[/bold]")
+            console.print(artifacts["persisted_summary"])
+
     if artifacts.get("step_errors"):
         console.print("\n[bold]Step errors[/bold]")
         for error in artifacts["step_errors"]:
             console.print(f"- {error}")
 
 
-@cli.command("maintain-memory")
+@cli.command("maintain-area-memory")
 @click.argument("user_id", type=int)
 @click.option(
     "--dry-run",
@@ -357,10 +386,36 @@ def _print_memory_maintainer_summary(result: SpecialistResult) -> None:
     default=False,
     help="Run the optional CLI-only priority review step.",
 )
-def maintain_memory(user_id: int, dry_run: bool, with_priority_review: bool):
-    """Run the structured memory maintainer for one user."""
+def maintain_area_memory(user_id: int, dry_run: bool, with_priority_review: bool):
+    """Run the structured area_to_improve maintainer for one user."""
     try:
-        result = asyncio.run(_run_memory_maintainer_cli(user_id, dry_run, with_priority_review))
+        result = asyncio.run(_run_area_memory_maintainer_cli(user_id, dry_run, with_priority_review))
+        _print_memory_maintainer_summary(result)
+        console.print("\n[bold cyan]Memory Maintainer JSON[/bold cyan]")
+        console.print(json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2))
+    except RunestoneError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Operation cancelled by user.[/yellow]")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+
+@cli.command("maintain-personal-info-memory")
+@click.argument("user_id", type=int)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Plan and validate personal-info maintenance without writing changes.",
+)
+def maintain_personal_info_memory(user_id: int, dry_run: bool):
+    """Run the structured personal_info maintainer for one user."""
+    try:
+        result = asyncio.run(_run_personal_info_memory_maintainer_cli(user_id, dry_run))
         _print_memory_maintainer_summary(result)
         console.print("\n[bold cyan]Memory Maintainer JSON[/bold cyan]")
         console.print(json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2))

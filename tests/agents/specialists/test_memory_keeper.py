@@ -214,10 +214,8 @@ def test_memory_keeper_prompt_three_case_model():
     assert "Mandatory Execution Pipeline" not in MEMORY_KEEPER_SYSTEM_PROMPT
     # Case B: teacher-driven new issue must say no pre-read required
     assert "Do NOT call `read_memory` first" in MEMORY_KEEPER_SYSTEM_PROMPT
-    # Case C: category-aware tag format
-    assert "[memory:<category>:<id>]" in MEMORY_KEEPER_SYSTEM_PROMPT
-    # Old bare-id tag must not appear
-    assert "[memory:ID]" not in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "[memory:area_to_improve:<id>]" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "[memory:<category>:<id>]" not in MEMORY_KEEPER_SYSTEM_PROMPT
 
 
 def test_memory_keeper_prompt_delete_tool_in_case_a():
@@ -263,6 +261,7 @@ def test_memory_keeper_builds_agent_with_expected_tools(mock_settings):
     tool_names = [tool.name for tool in create_agent_mock.call_args.kwargs["tools"]]
     assert tool_names == [
         "read_memory",
+        "append_personal_info_item",
         "upsert_memory_item",
         "update_memory_item_content",
         "update_memory_status",
@@ -330,3 +329,22 @@ def test_memory_keeper_prompt_terminal_noop_on_wrong_category_priority():
     # No retry or repair flow after the guardrail fires
     assert "retry with another write tool" in MEMORY_KEEPER_SYSTEM_PROMPT
     assert "continue any broader repair flow this turn" in MEMORY_KEEPER_SYSTEM_PROMPT
+
+
+def test_memory_keeper_prompt_does_not_emit_personal_info_tags():
+    assert "[memory:personal_info:" not in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "append_personal_info_item" in MEMORY_KEEPER_SYSTEM_PROMPT
+
+
+def test_memory_keeper_prompt_derives_personal_info_from_explicit_student_facts():
+    assert "clear, durable, first-person personal fact or correction" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert 'even when the student did not literally say "remember"' in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert '"my native language is Finnish"' in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert '"my goal is to speak Swedish more confidently"' in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "read personal_info, then append or correct" in MEMORY_KEEPER_SYSTEM_PROMPT
+
+
+def test_memory_keeper_prompt_rejects_transient_or_vague_personal_info_inference():
+    assert "Do not derive `personal_info` from fleeting emotions" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert '"today I feel tired"' in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert '"maybe I should study more"' in MEMORY_KEEPER_SYSTEM_PROMPT

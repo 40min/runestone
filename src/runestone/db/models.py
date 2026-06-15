@@ -17,6 +17,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -41,6 +42,7 @@ class User(Base):
     timezone = Column(String, default="UTC", nullable=False)
     pages_recognised_count = Column(Integer, default=0, nullable=False)
     mother_tongue = Column(String, nullable=True)  # User's preferred language
+    personal_info_summary = Column(Text, nullable=True)
     current_chat_id = Column(String, nullable=False, default=lambda: str(uuid4()))
     active = Column(Boolean, default=False, server_default=false(), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -65,7 +67,15 @@ class MemoryItem(Base):
     priority: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (
-        UniqueConstraint("user_id", "category", "key", name="uq_memory_items_user_category_key"),
+        Index(
+            "ix_memory_items_user_area_key_unique",
+            "user_id",
+            "category",
+            "key",
+            unique=True,
+            postgresql_where=text("category = 'area_to_improve'"),
+            sqlite_where=text("category = 'area_to_improve'"),
+        ),
         CheckConstraint("priority IS NULL OR (priority >= 0 AND priority <= 9)", name="ck_memory_items_priority_range"),
     )
 

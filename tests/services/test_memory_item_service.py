@@ -233,7 +233,7 @@ async def test_update_item_content_in_category_rejects_mismatched_category(db_wi
         )
 
 
-async def test_list_start_student_info_items_uses_single_query_and_applies_bucket_limits(db_with_test_user):
+async def test_list_start_area_to_improve_items_uses_single_query_and_applies_limit(db_with_test_user):
     db, user = db_with_test_user
     repo = MemoryItemRepository(db)
     service = MemoryItemService(repo)
@@ -242,24 +242,6 @@ async def test_list_start_student_info_items_uses_single_query_and_applies_bucke
 
     db.add_all(
         [
-            MemoryItem(
-                user_id=user.id,
-                category=MemoryCategory.PERSONAL_INFO.value,
-                key="goal",
-                content="Practice speaking",
-                status=PersonalInfoStatus.ACTIVE.value,
-                updated_at=base_time + timedelta(minutes=1),
-            ),
-            MemoryItem(
-                user_id=user.id,
-                category=MemoryCategory.PERSONAL_INFO.value,
-                key="old_goal",
-                content="Outdated goal",
-                status=PersonalInfoStatus.OUTDATED.value,
-                updated_at=base_time + timedelta(minutes=4),
-            ),
-        ]
-        + [
             MemoryItem(
                 user_id=user.id,
                 category=MemoryCategory.AREA_TO_IMPROVE.value,
@@ -283,24 +265,16 @@ async def test_list_start_student_info_items_uses_single_query_and_applies_bucke
 
     db.execute = _counting_execute
     try:
-        items = await service.list_start_student_info_items(
+        items = await service.list_start_area_to_improve_items(
             user.id,
-            personal_limit=50,
             area_limit=5,
         )
     finally:
         db.execute = execute_spy
 
     assert calls["count"] == 1
-    assert [item.category for item in items] == [
-        MemoryCategory.PERSONAL_INFO.value,
-        MemoryCategory.AREA_TO_IMPROVE.value,
-        MemoryCategory.AREA_TO_IMPROVE.value,
-        MemoryCategory.AREA_TO_IMPROVE.value,
-        MemoryCategory.AREA_TO_IMPROVE.value,
-        MemoryCategory.AREA_TO_IMPROVE.value,
-    ]
-    assert [item.key for item in items if item.category == MemoryCategory.AREA_TO_IMPROVE.value] == [
+    assert [item.category for item in items] == [MemoryCategory.AREA_TO_IMPROVE.value] * 5
+    assert [item.key for item in items] == [
         "topic_0",
         "topic_1",
         "topic_2",
@@ -309,51 +283,30 @@ async def test_list_start_student_info_items_uses_single_query_and_applies_bucke
     ]
 
 
-async def test_list_start_student_info_items_respects_personal_limit(db_with_test_user):
+async def test_append_personal_info_item_always_creates_new_rows(db_with_test_user):
     db, user = db_with_test_user
     repo = MemoryItemRepository(db)
     service = MemoryItemService(repo)
 
-    base_time = datetime(2026, 2, 11, tzinfo=timezone.utc)
-    db.add_all(
-        [
-            MemoryItem(
-                user_id=user.id,
-                category=MemoryCategory.PERSONAL_INFO.value,
-                key=f"personal_{idx}",
-                content=f"Personal {idx}",
-                status=PersonalInfoStatus.ACTIVE.value,
-                updated_at=base_time + timedelta(minutes=idx),
-            )
-            for idx in range(3)
-        ]
-        + [
-            MemoryItem(
-                user_id=user.id,
-                category=MemoryCategory.AREA_TO_IMPROVE.value,
-                key="articles",
-                content="Needs article practice",
-                status=AreaToImproveStatus.STRUGGLING.value,
-                priority=1,
-                updated_at=base_time,
-            )
-        ]
-    )
-    await db.commit()
-
-    items = await service.list_start_student_info_items(
+    first = await service.append_personal_info_item(
         user.id,
-        personal_limit=2,
-        area_limit=1,
+        key="goal",
+        content="Practice speaking",
+        status=PersonalInfoStatus.ACTIVE.value,
+    )
+    second = await service.append_personal_info_item(
+        user.id,
+        key="goal",
+        content="Practice speaking",
+        status=PersonalInfoStatus.ACTIVE.value,
     )
 
-    assert [item.key for item in items if item.category == MemoryCategory.PERSONAL_INFO.value] == [
-        "personal_2",
-        "personal_1",
-    ]
+    assert first.id != second.id
+    rows = await repo.list_items(user.id, category=MemoryCategory.PERSONAL_INFO.value, sort_by="updated_at")
+    assert [row.key for row in rows] == ["goal", "goal"]
 
 
-async def test_list_start_student_info_items_orders_area_items_by_priority_then_recency(db_with_test_user):
+async def test_list_start_area_to_improve_items_orders_by_priority_then_recency(db_with_test_user):
     db, user = db_with_test_user
     repo = MemoryItemRepository(db)
     service = MemoryItemService(repo)
@@ -401,13 +354,12 @@ async def test_list_start_student_info_items_orders_area_items_by_priority_then_
     )
     await db.commit()
 
-    items = await service.list_start_student_info_items(
+    items = await service.list_start_area_to_improve_items(
         user.id,
-        personal_limit=50,
         area_limit=4,
     )
 
-    assert [item.key for item in items if item.category == MemoryCategory.AREA_TO_IMPROVE.value] == [
+    assert [item.key for item in items] == [
         "priority_zero",
         "priority_one_newer",
         "priority_one_older",

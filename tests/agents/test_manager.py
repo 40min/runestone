@@ -132,7 +132,7 @@ async def test_process_turn_returns_teacher_reply_and_starts_background_post(
 ):
     manager = _make_manager(mock_settings)
     manager.handle_stale_post_task = AsyncMock()
-    manager.prepare_pre_turn = AsyncMock(return_value=(_make_plan(), [{"name": "pre"}], "", [], []))
+    manager.prepare_pre_turn = AsyncMock(return_value=(_make_plan(), [{"name": "pre"}], "", "", [], []))
     manager.generate_teacher_response = AsyncMock(
         return_value=(
             "Teacher says hi",
@@ -182,7 +182,7 @@ async def test_process_turn_skips_stale_check_on_first_turn(
 ):
     manager = _make_manager(mock_settings)
     manager.handle_stale_post_task = AsyncMock()
-    manager.prepare_pre_turn = AsyncMock(return_value=(_make_plan(), [], "", [], []))
+    manager.prepare_pre_turn = AsyncMock(return_value=(_make_plan(), [], "", "", [], []))
     manager.generate_teacher_response = AsyncMock(return_value=("Teacher says hi", None, "neutral", []))
     manager.start_background_post_turn = AsyncMock()
 
@@ -280,7 +280,11 @@ async def test_start_background_memory_maintenance_clears_registry_on_timeout(mo
 
 def test_memory_maintenance_timeout_budget_matches_multi_step_flow(mock_settings):
     manager = _make_manager(mock_settings)
-    assert manager.MEMORY_MAINTENANCE_TIMEOUT_SECONDS >= manager.memory_maintainer.MODEL_TIMEOUT_SECONDS * 3
+    longest_domain_timeout = max(
+        manager.memory_maintainer.area_to_improve.MODEL_TIMEOUT_SECONDS,
+        manager.memory_maintainer.personal_info.MODEL_TIMEOUT_SECONDS,
+    )
+    assert manager.MEMORY_MAINTENANCE_TIMEOUT_SECONDS >= longest_domain_timeout * 3
 
 
 # ---------------------------------------------------------------------------
@@ -295,20 +299,23 @@ async def test_prepare_pre_turn_delegates_to_coordinator(
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
     manager.teacher = AsyncMock()
-    mock_memory_item_service.list_start_student_info_items.return_value = []
+    mock_memory_item_service.list_start_area_to_improve_items.return_value = []
 
-    plan, pre_results, starter_memory, recent_effects, current_recall_words = await manager.prepare_pre_turn(
-        message="Hello",
-        chat_id="chat-1",
-        history=[],
-        user=mock_user,
-        memory_item_service=mock_memory_item_service,
-        side_effect_service=mock_side_effect_service,
+    plan, pre_results, active_learning_focus_memory, personal_info_summary, recent_effects, current_recall_words = (
+        await manager.prepare_pre_turn(
+            message="Hello",
+            chat_id="chat-1",
+            history=[],
+            user=mock_user,
+            memory_item_service=mock_memory_item_service,
+            side_effect_service=mock_side_effect_service,
+        )
     )
 
     manager.coordinator.plan_pre_turn.assert_awaited_once()
     assert pre_results == []
-    assert starter_memory == ""
+    assert active_learning_focus_memory == ""
+    assert personal_info_summary == ""
     assert recent_effects is not None
     assert current_recall_words == []
 
@@ -467,7 +474,7 @@ async def test_prepare_pre_turn_passes_bounded_history_into_news_agent(
         ChatMessage(role="assistant", content="old2"),
         ChatMessage(role="user", content="old3"),
     ]
-    mock_memory_item_service.list_start_student_info_items.return_value = []
+    mock_memory_item_service.list_start_area_to_improve_items.return_value = []
 
     await manager.prepare_pre_turn(
         message="Show me sports news",
@@ -498,7 +505,7 @@ async def test_generate_teacher_response_returns_text_and_sources(mock_settings,
         history=[],
         user=mock_user,
         pre_results=[],
-        starter_memory="",
+        active_learning_focus_memory="",
         recent_side_effects=[],
     )
 
@@ -521,7 +528,7 @@ async def test_generate_teacher_response_returns_teacher_emotion(mock_settings, 
         history=[],
         user=mock_user,
         pre_results=[],
-        starter_memory="",
+        active_learning_focus_memory="",
         recent_side_effects=[],
     )
 
@@ -547,7 +554,7 @@ async def test_generate_teacher_response_returns_vocabulary_candidates(mock_sett
         history=[],
         user=mock_user,
         pre_results=[],
-        starter_memory="",
+        active_learning_focus_memory="",
         recent_side_effects=[],
     )
 
@@ -580,7 +587,7 @@ async def test_generate_teacher_response_extracts_news_sources(mock_settings, mo
         history=[],
         user=mock_user,
         pre_results=[],
-        starter_memory="",
+        active_learning_focus_memory="",
         recent_side_effects=[],
     )
 
@@ -622,7 +629,7 @@ async def test_generate_teacher_response_combines_news_sources_from_pre_results(
                 },
             }
         ],
-        starter_memory="",
+        active_learning_focus_memory="",
         recent_side_effects=[],
     )
 
@@ -668,7 +675,7 @@ async def test_generate_teacher_response_fallback_to_news_agent_results_if_sourc
                 },
             }
         ],
-        starter_memory="",
+        active_learning_focus_memory="",
         recent_side_effects=[],
     )
 
@@ -713,7 +720,7 @@ async def test_generate_teacher_response_deduplicates_sources_across_pre_results
                 },
             }
         ],
-        starter_memory="",
+        active_learning_focus_memory="",
         recent_side_effects=[],
     )
 
@@ -743,7 +750,12 @@ async def test_generate_teacher_response_filters_unsafe_urls(mock_settings, mock
     )
 
     _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Nyheter", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
+        message="Nyheter",
+        history=[],
+        user=mock_user,
+        pre_results=[],
+        active_learning_focus_memory="",
+        recent_side_effects=[],
     )
 
     assert sources == [{"title": "Safe", "url": "https://example.com", "date": "2026-02-05"}]
@@ -764,7 +776,12 @@ async def test_generate_teacher_response_rejects_grammar_sources_missing_from_se
     )
 
     _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
+        message="Grammatik",
+        history=[],
+        user=mock_user,
+        pre_results=[],
+        active_learning_focus_memory="",
+        recent_side_effects=[],
     )
 
     assert sources is None
@@ -801,7 +818,7 @@ async def test_generate_teacher_response_accepts_grammar_sources_from_history(mo
         history=history,
         user=mock_user,
         pre_results=[],
-        starter_memory="",
+        active_learning_focus_memory="",
         recent_side_effects=[],
     )
 
@@ -841,7 +858,12 @@ async def test_generate_teacher_response_caps_search_grammar_selected_sources(mo
     )
 
     _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
+        message="Grammatik",
+        history=[],
+        user=mock_user,
+        pre_results=[],
+        active_learning_focus_memory="",
+        recent_side_effects=[],
     )
 
     assert sources == [
@@ -883,7 +905,12 @@ async def test_generate_teacher_response_uses_selected_grammar_sources(mock_sett
     )
 
     _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
+        message="Grammatik",
+        history=[],
+        user=mock_user,
+        pre_results=[],
+        active_learning_focus_memory="",
+        recent_side_effects=[],
     )
 
     assert sources == [
@@ -923,7 +950,12 @@ async def test_generate_teacher_response_rejects_grammar_sources_not_returned_by
     )
 
     _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
+        message="Grammatik",
+        history=[],
+        user=mock_user,
+        pre_results=[],
+        active_learning_focus_memory="",
+        recent_side_effects=[],
     )
 
     assert sources == [
@@ -958,7 +990,12 @@ async def test_generate_teacher_response_rejects_same_host_invented_grammar_sour
     )
 
     _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
+        message="Grammatik",
+        history=[],
+        user=mock_user,
+        pre_results=[],
+        active_learning_focus_memory="",
+        recent_side_effects=[],
     )
 
     assert sources == [
@@ -986,7 +1023,12 @@ async def test_generate_teacher_response_rejects_unsafe_search_grammar_source(mo
     )
 
     _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
+        message="Grammatik",
+        history=[],
+        user=mock_user,
+        pre_results=[],
+        active_learning_focus_memory="",
+        recent_side_effects=[],
     )
 
     assert sources is None
@@ -1012,7 +1054,12 @@ async def test_generate_teacher_response_rejects_disallowed_port_search_grammar_
     )
 
     _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
+        message="Grammatik",
+        history=[],
+        user=mock_user,
+        pre_results=[],
+        active_learning_focus_memory="",
+        recent_side_effects=[],
     )
 
     assert sources is None
@@ -1029,7 +1076,12 @@ async def test_generate_teacher_response_can_hide_irrelevant_grammar_sources(moc
     )
 
     _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Grammatik", history=[], user=mock_user, pre_results=[], starter_memory="", recent_side_effects=[]
+        message="Grammatik",
+        history=[],
+        user=mock_user,
+        pre_results=[],
+        active_learning_focus_memory="",
+        recent_side_effects=[],
     )
 
     assert sources is None
@@ -1047,13 +1099,13 @@ async def test_generate_teacher_response_passes_pre_results(mock_settings, mock_
         history=[],
         user=mock_user,
         pre_results=pre_results,
-        starter_memory="starter",
+        active_learning_focus_memory="focus",
         recent_side_effects=[],
     )
 
     _args, kwargs = manager.teacher.generate_response.call_args
     assert kwargs["pre_results"] == pre_results
-    assert kwargs["starter_memory"] == "starter"
+    assert kwargs["active_learning_focus_memory"] == "focus"
     assert kwargs["current_recall_words"] == []
 
 
@@ -1884,13 +1936,15 @@ async def test_recent_side_effects_loaded_in_pre_turn(
     ]
     mock_side_effect_service.load_recent_for_teacher.return_value = side_effects
 
-    _plan, _pre, _starter_memory, recent, _current_recall_words = await manager.prepare_pre_turn(
-        message="Hello",
-        chat_id="chat-1",
-        history=[],
-        user=mock_user,
-        memory_item_service=mock_memory_item_service,
-        side_effect_service=mock_side_effect_service,
+    _plan, _pre, _active_learning_focus_memory, _personal_info_summary, recent, _current_recall_words = (
+        await manager.prepare_pre_turn(
+            message="Hello",
+            chat_id="chat-1",
+            history=[],
+            user=mock_user,
+            memory_item_service=mock_memory_item_service,
+            side_effect_service=mock_side_effect_service,
+        )
     )
 
     assert recent == side_effects
@@ -1898,7 +1952,7 @@ async def test_recent_side_effects_loaded_in_pre_turn(
 
 
 @pytest.mark.anyio
-async def test_prepare_pre_turn_loads_starter_memory_on_first_turn(
+async def test_prepare_pre_turn_loads_active_learning_focus_memory_on_first_turn(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
     manager = _make_manager(mock_settings)
@@ -1906,7 +1960,7 @@ async def test_prepare_pre_turn_loads_starter_memory_on_first_turn(
     starter_items = [
         MagicMock(
             id=1,
-            category="personal_info",
+            category="area_to_improve",
             key="goal",
             content="Practice",
             status="active",
@@ -1916,44 +1970,49 @@ async def test_prepare_pre_turn_loads_starter_memory_on_first_turn(
             status_changed_at=None,
         )
     ]
-    mock_memory_item_service.list_start_student_info_items.return_value = starter_items
+    mock_memory_item_service.list_start_area_to_improve_items.return_value = starter_items
 
-    _plan, _pre_results, starter_memory, _recent, _current_recall_words = await manager.prepare_pre_turn(
-        message="Hello",
-        chat_id="chat-1",
-        history=[],
-        user=mock_user,
-        memory_item_service=mock_memory_item_service,
-        side_effect_service=mock_side_effect_service,
+    _plan, _pre_results, active_learning_focus_memory, personal_info_summary, _recent, _current_recall_words = (
+        await manager.prepare_pre_turn(
+            message="Hello",
+            chat_id="chat-1",
+            history=[],
+            user=mock_user,
+            memory_item_service=mock_memory_item_service,
+            side_effect_service=mock_side_effect_service,
+        )
     )
 
-    mock_memory_item_service.list_start_student_info_items.assert_awaited_once_with(
+    mock_memory_item_service.list_start_area_to_improve_items.assert_awaited_once_with(
         mock_user.id,
-        personal_limit=manager.STARTER_MEMORY_PERSONAL_LIMIT,
         area_limit=manager.STARTER_MEMORY_AREA_LIMIT,
     )
-    assert starter_memory.startswith("UNTRUSTED_MEMORY_DATA")
-    assert 'category="personal_info"' in starter_memory
+    assert active_learning_focus_memory.startswith("UNTRUSTED_MEMORY_DATA")
+    assert 'category="area_to_improve"' in active_learning_focus_memory
+    assert personal_info_summary == ""
 
 
 @pytest.mark.anyio
-async def test_prepare_pre_turn_skips_starter_memory_with_history(
+async def test_prepare_pre_turn_skips_active_learning_focus_memory_with_history(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
 
-    _plan, _pre_results, starter_memory, _recent, _current_recall_words = await manager.prepare_pre_turn(
-        message="Hello",
-        chat_id="chat-1",
-        history=[ChatMessage(role="user", content="prev")],
-        user=mock_user,
-        memory_item_service=mock_memory_item_service,
-        side_effect_service=mock_side_effect_service,
+    _plan, _pre_results, active_learning_focus_memory, personal_info_summary, _recent, _current_recall_words = (
+        await manager.prepare_pre_turn(
+            message="Hello",
+            chat_id="chat-1",
+            history=[ChatMessage(role="user", content="prev")],
+            user=mock_user,
+            memory_item_service=mock_memory_item_service,
+            side_effect_service=mock_side_effect_service,
+        )
     )
 
-    mock_memory_item_service.list_start_student_info_items.assert_not_called()
-    assert starter_memory == ""
+    mock_memory_item_service.list_start_area_to_improve_items.assert_not_called()
+    assert active_learning_focus_memory == ""
+    assert personal_info_summary == ""
 
 
 @pytest.mark.anyio
@@ -1963,13 +2022,15 @@ async def test_prepare_pre_turn_loads_current_recall_words_on_first_turn(
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
     with patch.object(manager, "_load_current_recall_words", return_value=["hej", "tack"]) as mock_loader:
-        _plan, _pre_results, _starter_memory, _recent, current_recall_words = await manager.prepare_pre_turn(
-            message="Hello",
-            chat_id="chat-1",
-            history=[],
-            user=mock_user,
-            memory_item_service=mock_memory_item_service,
-            side_effect_service=mock_side_effect_service,
+        _plan, _pre_results, _active_learning_focus_memory, _personal_info_summary, _recent, current_recall_words = (
+            await manager.prepare_pre_turn(
+                message="Hello",
+                chat_id="chat-1",
+                history=[],
+                user=mock_user,
+                memory_item_service=mock_memory_item_service,
+                side_effect_service=mock_side_effect_service,
+            )
         )
 
     mock_loader.assert_called_once_with(mock_user)
@@ -1983,13 +2044,15 @@ async def test_prepare_pre_turn_skips_current_recall_words_with_history(
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
     with patch.object(manager, "_load_current_recall_words", return_value=["hej"]) as mock_loader:
-        _plan, _pre_results, _starter_memory, _recent, current_recall_words = await manager.prepare_pre_turn(
-            message="Hello",
-            chat_id="chat-1",
-            history=[ChatMessage(role="user", content="prev")],
-            user=mock_user,
-            memory_item_service=mock_memory_item_service,
-            side_effect_service=mock_side_effect_service,
+        _plan, _pre_results, _active_learning_focus_memory, _personal_info_summary, _recent, current_recall_words = (
+            await manager.prepare_pre_turn(
+                message="Hello",
+                chat_id="chat-1",
+                history=[ChatMessage(role="user", content="prev")],
+                user=mock_user,
+                memory_item_service=mock_memory_item_service,
+                side_effect_service=mock_side_effect_service,
+            )
         )
 
     mock_loader.assert_not_called()

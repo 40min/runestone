@@ -84,7 +84,7 @@ class MemoryItemService:
         statuses: list[str] | tuple[str, ...] | None = None,
         sort_by: Optional[MemorySortBy] = None,
         sort_direction: SortDirection = SortDirection.DESC,
-        limit: int = 100,
+        limit: int | None = 100,
         offset: int = 0,
     ) -> list[MemoryItemResponse]:
         """
@@ -96,7 +96,7 @@ class MemoryItemService:
             statuses: Optional status filters
             sort_by: Optional explicit sort field
             sort_direction: Sort direction for explicit sort field
-            limit: Maximum number of items (default 100 for initial load)
+            limit: Maximum number of items (default 100 for initial load), or `None` for no limit
             offset: Number of items to skip (for infinite scroll)
 
         Returns:
@@ -118,19 +118,45 @@ class MemoryItemService:
         )
         return [MemoryItemResponse.model_validate(item) for item in items]
 
-    async def list_start_student_info_items(
+    async def list_start_area_to_improve_items(
         self,
         user_id: int,
-        personal_limit: int,
         area_limit: int,
     ) -> list[MemoryItemResponse]:
-        """Return the compact starter memory bundle used at the start of a chat."""
-        items = await self.repo.list_start_student_info_items(
+        """Return the compact starter learning-focus bundle used at the start of a chat."""
+        items = await self.repo.list_start_area_to_improve_items(
             user_id,
-            personal_limit=personal_limit,
             area_limit=area_limit,
         )
         return [MemoryItemResponse.model_validate(item) for item in items]
+
+    async def append_personal_info_item(
+        self,
+        user_id: int,
+        *,
+        key: str,
+        content: str,
+        status: str,
+    ) -> MemoryItemResponse:
+        """Create a new personal_info memory row without checking for an existing key."""
+        category = MemoryCategory.PERSONAL_INFO
+        self.validate_status(category, status)
+
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("key must not be empty")
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("content must not be empty")
+
+        new_item = MemoryItem(
+            user_id=user_id,
+            category=category.value,
+            key=key,
+            content=content,
+            status=status,
+            status_changed_at=self._utc_now(),
+        )
+        created_item = await self.repo.create(new_item)
+        return MemoryItemResponse.model_validate(created_item)
 
     async def upsert_memory_item(
         self,
@@ -448,6 +474,25 @@ class MemoryItemService:
             user_id,
         )
         return await self.repo.delete_mastered_older_than(user_id=user_id, cutoff=cutoff)
+
+    async def cleanup_stale_personal_info_outdated(
+        self,
+        user_id: int,
+        older_than_days: int,
+        *,
+        dry_run: bool = False,
+    ) -> int:
+        """Count or delete outdated personal_info rows older than the retention window."""
+        cutoff = self._utc_now() - timedelta(days=older_than_days)
+        logger.info(
+            "Cleaning up outdated personal_info items older than %s for user %s (dry_run=%s)",
+            cutoff,
+            user_id,
+            dry_run,
+        )
+        if dry_run:
+            return await self.repo.count_personal_info_outdated_older_than(user_id=user_id, cutoff=cutoff)
+        return await self.repo.delete_personal_info_outdated_older_than(user_id=user_id, cutoff=cutoff)
 
     async def clear_category(self, user_id: int, category: MemoryCategory) -> int:
         """

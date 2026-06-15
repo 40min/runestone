@@ -155,3 +155,7 @@ class UserService:
         user.current_chat_id = str(uuid4())
         await self.user_repo.update(user)
         return user.current_chat_id
+
+    async def set_personal_info_summary(self, user_id: int, summary: str | None) -> None:
+        """Persist the derived personal-info summary for one user."""
+        await self.user_repo.set_personal_info_summary(user_id, summary)

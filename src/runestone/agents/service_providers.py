@@ -7,9 +7,11 @@ from runestone.config import settings
 from runestone.db.agent_side_effect_repository import AgentSideEffectRepository
 from runestone.db.database import provide_db_session
 from runestone.db.memory_item_repository import MemoryItemRepository
+from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.services.agent_side_effect_service import AgentSideEffectService
 from runestone.services.memory_item_service import MemoryItemService
+from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 
 
@@ -76,4 +78,19 @@ async def provide_agent_side_effect_service() -> AsyncIterator[AgentSideEffectSe
     async with provide_db_session() as session:
         repo = AgentSideEffectRepository(session)
         service = AgentSideEffectService(repo)
+        yield service
+
+
+@asynccontextmanager
+async def provide_user_service() -> AsyncIterator[UserService]:
+    """
+    Context manager for user writes in agent/background runtime paths.
+
+    Agent-side tasks that need to persist derived user state should go through
+    the user service boundary rather than reaching into ORM sessions directly.
+    """
+    async with provide_db_session() as session:
+        user_repo = UserRepository(session)
+        vocab_repo = VocabularyRepository(session)
+        service = UserService(user_repo, vocab_repo)
         yield service

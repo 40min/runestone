@@ -36,7 +36,7 @@ Implemented now:
 - `memory_maintainer` specialist running in background after chat reset for scoped startup cleanup
 - `NewsAgent` specialist running in pre stage for topic-based news retrieval
 - teacher-side memory model narrowed to read-only lookup (`read_active_learning_focus`) during response generation
-- compact first-turn starter memory injection (`personal_info` active, top-priority `area_to_improve` struggling/improving)
+- first-turn startup memory uses `personal_info_summary` plus top-priority `area_to_improve` starter items
 
 Explicit non-goals for the current design:
 
@@ -202,7 +202,7 @@ flowchart TD
     C -- No --> D["Continue response generation"]
     C -- Yes --> E["read_active_learning_focus (read-only, includes item ids)"]
     E --> D
-    D --> F["Teacher response returned to user (may temporarily include [memory:<category>:<id>] tags)"]
+    D --> F["Teacher response returned to user (may temporarily include [memory:area_to_improve:<id>] tags)"]
     F --> G["Post-response coordinator"]
     G --> H{"Memory maintenance needed?"}
     H -- No --> I["No memory change"]
@@ -210,7 +210,7 @@ flowchart TD
     J --> K{"Which case?"}
     K -- "Case A: student edit" --> L["Read relevant memory, then write/delete"]
     K -- "Case B: teacher new issue" --> M["Append directly with fresh key (no pre-read)"]
-    K -- "Case C: teacher status/priority change" --> N{"[memory:<category>:<id>] tag present?"}
+    K -- "Case C: teacher status/priority change" --> N{"[memory:area_to_improve:<id>] tag present?"}
     N -- Yes --> O["Write directly using id"]
     N -- No --> P["Targeted read to locate id, then write"]
 ```
@@ -226,12 +226,12 @@ Principles:
 - Let the teacher inspect active-learning memory on demand through `read_active_learning_focus` when the turn needs it.
 - Treat memory access during response generation as read-only; the teacher should not claim direct persistence.
 
-Current starter-memory shape:
+Current startup-memory shape:
 
-- active `personal_info`
+- `personal_info_summary` when available
 - top 5 `area_to_improve` items across `struggling` and `improving`
 - ranking by priority first, then recency
-- serialized as untrusted quoted-data text (not raw JSON envelope)
+- `area_to_improve` starter items serialized as untrusted quoted-data text
 
 #### Post-phase memory maintenance
 
@@ -247,9 +247,9 @@ Principles:
   - **Case A (student edit):** read the relevant category first, then write/delete as instructed.
   - **Case B (teacher new issue):** append directly using a fresh descriptive key; no pre-read required.
   - **Case C (teacher status/priority change):** if the teacher embedded a
-    `[memory:<category>:<id>]` tag, write directly using that category/id pair; otherwise do one
-    targeted category-scoped read to locate the item id, then write.
-- The `[memory:<category>:<id>]` tag is a temporary bridge carried in the visible teacher reply text until
+  `[memory:area_to_improve:<id>]` tag, write directly using that id; otherwise do one
+  targeted category-scoped read to locate the item id, then write.
+- The `[memory:area_to_improve:<id>]` tag is a temporary bridge carried in the visible teacher reply text until
   the structured-output follow-up replaces this mechanism.
 - Temporary duplicate `area_to_improve` items from append-first writes are an accepted tradeoff;
   broad duplicate cleanup belongs to `memory_maintainer`.
