@@ -53,7 +53,8 @@ whether memory tools should be called.
 
 ## Three-Case Execution Model
 
-When a trigger is detected, apply one of the three cases below.
+When a trigger is detected, apply exactly one of the three cases below (the one that best matches the trigger signal).
+Do not combine cases, and do not execute steps or call tools (such as `read_memory`) from other cases.
 If no trigger is detected → return `no_action` immediately. Do not call any tools.
 
 ### Case A — Student explicitly asks to edit memory
@@ -96,19 +97,19 @@ Execution:
 Examples: "You are improving with X", "You have now mastered Y", "You are still struggling with Z".
 
 Execution:
-- If `teacher_response` contains a `[memory:area_to_improve:<id>]` tag, use that numeric id
-  directly: call `update_memory_item_content`, `update_memory_status`, or
-  `update_memory_priority` for that `area_to_improve` item without a pre-read.
-- If the targeted write tool returns an error matching any of the terminal guardrail
-  conditions below, stop immediately — do **not** retry, create, or do anything else.
-- If no `[memory:area_to_improve:<id>]` tag is present, do a single targeted `read_memory`
-  with a category filter to locate the item ID, then write. Do not perform a broad
-  unsorted scan.
-- **If the targeted read returns no matching item, treat it as a terminal no-op.**
-  The item was never tracked; there is nothing to update. Log the reason in
-  `artifacts.notes` and return `status="no_action"` immediately. Do NOT upsert,
-  create a duplicate, or make a second broader read.
-- Prefer one targeted read over creating a duplicate.
+- **IF ID TAG PRESENT**: If `teacher_response` contains a `[memory:area_to_improve:<id>]` tag:
+  1. Do NOT call `read_memory` at all (neither for `area_to_improve` nor for `personal_info`).
+  2. Use that numeric id directly: call `update_memory_item_content`, `update_memory_status`, or
+     `update_memory_priority` for that `area_to_improve` item without a pre-read.
+  3. If the targeted write tool returns an error matching any of the terminal guardrail conditions below,
+     stop immediately — do **not** retry, create, or do anything else.
+- **IF NO ID TAG PRESENT**: If no `[memory:area_to_improve:<id>]` tag is present:
+  1. Do a single targeted `read_memory` with a category filter to locate the item ID, then write.
+     Do not perform a broad unsorted scan.
+  2. **If the targeted read returns no matching item, treat it as a terminal no-op.** The item was
+     never tracked; there is nothing to update. Log the reason in `artifacts.notes` and return
+     `status="no_action"` immediately. Do NOT upsert, create a duplicate, or make a second broader read.
+  3. Prefer one targeted read over creating a duplicate.
 
 ## Terminal No-Op Conditions
 
@@ -157,6 +158,8 @@ On a terminal no-op:
   that work to `memory_maintainer`.
 - Never call `read_memory` without filters unless a broad inspection is explicitly required.
 - Never call `read_memory` as a standalone action — it must be followed by a write.
+- Never call `read_memory` (in any category) if the `teacher_response` contains a
+  `[memory:area_to_improve:<id>]` tag; you must write directly using that ID.
 - Treat spelling corrections, nonexistent-word feedback, and one-off wrong vocabulary forms as
   vocabulary events, not durable memory. Do not create `area_to_improve` items for misspelled
   or invalid word forms such as "no such word", "that word is wrong", or "use X instead of Y".

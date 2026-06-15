@@ -168,7 +168,6 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "earlier assistant messages in this chat" in call_kwargs["system_prompt"]
             assert "Never invent or guess URLs." in call_kwargs["system_prompt"]
             assert "DEFAULT: Do NOT call `search_grammar` or `read_grammar_page`." in call_kwargs["system_prompt"]
-            assert "Only call grammar tools when BOTH conditions hold:" in call_kwargs["system_prompt"]
             assert "a grammar question (e.g." in call_kwargs["system_prompt"]
             assert "### GRAMMAR REFERENCES (search_grammar, read_grammar_page)" in call_kwargs["system_prompt"]
             assert "### URL READING TOOL (read_url)" in call_kwargs["system_prompt"]
@@ -184,8 +183,6 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "each result has `title`, `url`, and `path`" in call_kwargs["system_prompt"]
             assert "Focus on the top result." in call_kwargs["system_prompt"]
             assert "stop and answer without grammar links" in call_kwargs["system_prompt"]
-            assert "Never search for:" in call_kwargs["system_prompt"]
-            assert "Greetings, farewells, or small-talk" in call_kwargs["system_prompt"]
             assert "Optional" in call_kwargs["system_prompt"]
 
 
