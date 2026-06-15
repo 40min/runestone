@@ -3,7 +3,7 @@
 
 .PHONY: help setup clean info
 .PHONY: install install-dev install-backend install-frontend install-all
-.PHONY: lint lint-check backend-lint frontend-lint security-check
+.PHONY: lint lint-check backend-lint frontend-lint frontend-lockfile-check security-check
 .PHONY: test test-coverage backend-test frontend-test
 .PHONY: run run-backend run-frontend run-dev run-recall load-vocab
 .PHONY: test-prompts-ocr test-prompts-analysis test-prompts-vocabulary test-grammar-search
@@ -38,6 +38,7 @@ help:
 	@echo "  lint-check       - Run linting checks only (no fixes)"
 	@echo "  backend-lint     - Run backend linting and formatting"
 	@echo "  frontend-lint    - Run frontend linting"
+	@echo "  frontend-lockfile-check - Verify frontend package-lock.json matches package.json"
 	@echo "  security-check   - Run security-focused pre-commit hooks across the repo"
 	@echo ""
 	@echo "Testing:"
@@ -171,6 +172,12 @@ frontend-lint:
 	@echo "🔧 Running frontend linting..."
 	@cd frontend && npm run lint
 	@echo "✅ Frontend linting complete!"
+
+# Verify frontend lockfile and package manifest stay in sync for npm ci.
+frontend-lockfile-check:
+	@echo "🔍 Validating frontend lockfile sync..."
+	@python3 scripts/check_frontend_lockfile_sync.py
+	@echo "✅ Frontend lockfile sync complete!"
 
 # Run security-focused pre-commit hooks across the repository
 security-check:
