@@ -74,7 +74,6 @@ class MemoryItem(Base):
             "key",
             unique=True,
             postgresql_where=text("category = 'area_to_improve'"),
-            sqlite_where=text("category = 'area_to_improve'"),
         ),
         CheckConstraint("priority IS NULL OR (priority >= 0 AND priority <= 9)", name="ck_memory_items_priority_range"),
     )

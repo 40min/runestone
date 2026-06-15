@@ -16,7 +16,7 @@ from runestone.agents.service_providers import provide_memory_item_service, prov
 from runestone.agents.specialists.base import BaseSpecialist, SpecialistAction, SpecialistContext, SpecialistResult
 from runestone.api.memory_item_schemas import MemoryCategory, PersonalInfoStatus
 from runestone.config import Settings
-from runestone.core.exceptions import MemoryItemNotFoundError, PermissionDeniedError, UserNotFoundError
+from runestone.core.exceptions import MemoryItemNotFoundError, PermissionDeniedError
 
 logger = logging.getLogger(__name__)
 
@@ -154,92 +154,96 @@ class PersonalInfoMemoryMaintainer(BaseSpecialist):
         items_by_id = {item.id: item for item in scope_items}
         if not scope_items:
             current_summary = getattr(user, "personal_info_summary", None)
-            if not dry_run and current_summary:
-                async with provide_user_service() as user_service:
-                    await user_service.set_personal_info_summary(user_id, None)
-                artifacts["summary"] = "cleared_empty_summary"
+            if current_summary:
+                if not dry_run:
+                    async with provide_user_service() as user_service:
+                        await user_service.set_personal_info_summary(user_id, None)
+                artifacts["summary"] = "cleared_empty_summary" if not dry_run else "dry_run cleared_empty_summary"
                 artifacts["persisted_summary"] = None
-                return self._action_result("cleared_empty_summary", artifacts)
+                return self._action_result(artifacts["summary"], artifacts)
 
             artifacts["summary"] = "noop"
             artifacts["no_change_reason"] = "no_personal_info_items"
             return self._no_action_result(artifacts)
 
-        review = await self._review_items(scope_items=scope_items)
-        if review is None:
-            artifacts["summary"] = "review_failed"
-            artifacts["step_errors"].append("review_failed")
-            return self._error_result("Failed to review personal_info items", artifacts)
-
-        decisions = self._validate_review_plan(review, items_by_id)
-        if decisions is None:
-            artifacts["summary"] = "invalid_review_plan"
-            artifacts["step_errors"].append("invalid_review_plan")
-            return self._error_result("Personal-info review plan was invalid", artifacts)
-
-        artifacts["decisions"] = [
-            {"item_id": decision.item_id, "action": decision.action, "why": decision.why} for decision in decisions
-        ]
-        active_items = [items_by_id[decision.item_id] for decision in decisions if decision.action == "keep_active"]
-        artifacts["summary_source_item_ids"] = [item.id for item in active_items]
-        artifacts["summary_excluded_item_ids"] = []
-
-        summary_text: str | None = None
-        if active_items:
-            summary_plan = await self._synthesize_summary(active_items=active_items)
-            if summary_plan is None:
-                artifacts["summary"] = "summary_failed"
-                artifacts["step_errors"].append("summary_failed")
-                return self._error_result("Failed to synthesize personal_info summary", artifacts)
-            summary_text = summary_plan.summary.strip() or None
-        artifacts["summary_preview"] = summary_text
-
-        if dry_run:
-            artifacts["kept_active_item_ids"] = [item.id for item in active_items]
-            artifacts["outdated_item_ids"] = [
-                decision.item_id for decision in decisions if decision.action == "mark_outdated"
-            ]
-            artifacts["deleted_item_ids"] = [decision.item_id for decision in decisions if decision.action == "delete"]
-            artifacts["persisted_summary"] = summary_text
-            artifacts["summary"] = (
-                f"dry_run kept_active={len(artifacts['kept_active_item_ids'])} "
-                f"outdated={len(artifacts['outdated_item_ids'])} deleted={len(artifacts['deleted_item_ids'])}"
-            )
-            return self._action_result(artifacts["summary"], artifacts)
-
         try:
+            review = await self._review_items(scope_items=scope_items)
+            if review is None:
+                artifacts["summary"] = "review_failed"
+                artifacts["step_errors"].append("review_failed")
+                return self._error_result("Failed to review personal_info items", artifacts)
+
+            decisions = self._validate_review_plan(review, items_by_id)
+            if decisions is None:
+                artifacts["summary"] = "invalid_review_plan"
+                artifacts["step_errors"].append("invalid_review_plan")
+                return self._error_result("Personal-info review plan was invalid", artifacts)
+
+            artifacts["decisions"] = [
+                {"item_id": decision.item_id, "action": decision.action, "why": decision.why} for decision in decisions
+            ]
+            active_items = [items_by_id[decision.item_id] for decision in decisions if decision.action == "keep_active"]
+            artifacts["summary_source_item_ids"] = [item.id for item in active_items]
+            artifacts["summary_excluded_item_ids"] = []
+
+            summary_text: str | None = None
+            if active_items:
+                summary_plan = await self._synthesize_summary(active_items=active_items)
+                if summary_plan is None:
+                    artifacts["summary"] = "summary_failed"
+                    artifacts["step_errors"].append("summary_failed")
+                    return self._error_result("Failed to synthesize personal_info summary", artifacts)
+                summary_text = summary_plan.summary.strip() or None
+            artifacts["summary_preview"] = summary_text
+
+            if dry_run:
+                artifacts["kept_active_item_ids"] = [item.id for item in active_items]
+                artifacts["outdated_item_ids"] = [
+                    decision.item_id for decision in decisions if decision.action == "mark_outdated"
+                ]
+                artifacts["deleted_item_ids"] = [
+                    decision.item_id for decision in decisions if decision.action == "delete"
+                ]
+                artifacts["persisted_summary"] = summary_text
+                artifacts["summary"] = (
+                    f"dry_run kept_active={len(artifacts['kept_active_item_ids'])} "
+                    f"outdated={len(artifacts['outdated_item_ids'])} deleted={len(artifacts['deleted_item_ids'])}"
+                )
+                return self._action_result(artifacts["summary"], artifacts)
+
             report = await self._apply_plan(
                 user_id=user_id,
                 decisions=decisions,
+                items_by_id=items_by_id,
                 target_summary=summary_text,
             )
-        except (MemoryItemNotFoundError, PermissionDeniedError, UserNotFoundError, ValueError) as exc:
-            logger.warning("[agents:memorymaintainer] personal_info apply failed: %s", exc, exc_info=True)
-            artifacts["summary"] = "apply_failed"
-            artifacts["step_errors"].append(f"apply_failed:{type(exc).__name__}")
-            return self._error_result("Failed to apply personal_info maintenance", artifacts)
 
-        artifacts["kept_active_item_ids"] = report.kept_active_item_ids
-        artifacts["outdated_item_ids"] = report.outdated_item_ids
-        artifacts["deleted_item_ids"] = report.deleted_item_ids
-        artifacts["persisted_summary"] = report.summary
-        artifacts["summary"] = (
-            f"kept_active={len(report.kept_active_item_ids)} "
-            f"outdated={len(report.outdated_item_ids)} deleted={len(report.deleted_item_ids)}"
-        )
-        logger.info(
-            "[agents:memorymaintainer] personal_info run finished user_id=%s elapsed_s=%.2f",
-            user_id,
-            perf_counter() - started_at,
-        )
-        if (
-            report.kept_active_item_ids
-            or report.outdated_item_ids
-            or report.deleted_item_ids
-            or report.summary is not None
-        ):
-            return self._action_result(artifacts["summary"], artifacts)
-        return self._no_action_result(artifacts)
+            artifacts["kept_active_item_ids"] = report.kept_active_item_ids
+            artifacts["outdated_item_ids"] = report.outdated_item_ids
+            artifacts["deleted_item_ids"] = report.deleted_item_ids
+            artifacts["persisted_summary"] = report.summary
+            artifacts["summary"] = (
+                f"kept_active={len(report.kept_active_item_ids)} "
+                f"outdated={len(report.outdated_item_ids)} deleted={len(report.deleted_item_ids)}"
+            )
+            logger.info(
+                "[agents:memorymaintainer] personal_info run finished user_id=%s elapsed_s=%.2f",
+                user_id,
+                perf_counter() - started_at,
+            )
+            if (
+                report.kept_active_item_ids
+                or report.outdated_item_ids
+                or report.deleted_item_ids
+                or report.summary is not None
+            ):
+                return self._action_result(artifacts["summary"], artifacts)
+            return self._no_action_result(artifacts)
+        except Exception as exc:
+            logger.warning("[agents:memorymaintainer] personal_info execution failed: %s", exc, exc_info=True)
+            artifacts["summary"] = "execution_failed"
+            artifacts["step_errors"].append(f"execution_failed:{type(exc).__name__}")
+            return self._error_result("Failed to execute personal_info maintenance", artifacts)
 
     async def _cleanup_and_load_scope_items(self, *, user_id: int, dry_run: bool) -> tuple[int, list[Any]]:
         """Delete stale outdated rows first, then load the remaining full personal-info scope."""
@@ -352,6 +356,7 @@ class PersonalInfoMemoryMaintainer(BaseSpecialist):
         *,
         user_id: int,
         decisions: list[PersonalInfoDecision],
+        items_by_id: dict[int, Any],
         target_summary: str | None,
     ) -> PersonalInfoExecutionReport:
         kept_active_item_ids: list[int] = []
@@ -360,21 +365,17 @@ class PersonalInfoMemoryMaintainer(BaseSpecialist):
 
         async with provide_memory_item_service() as service:
             for decision in decisions:
+                item = items_by_id.get(decision.item_id)
+                if item is None:
+                    raise MemoryItemNotFoundError(f"Memory item with id {decision.item_id} not found")
+                if item.user_id != user_id:
+                    raise PermissionDeniedError("You don't have permission to update this item")
+
                 if decision.action == "keep_active":
-                    item = await service.get_item_by_id(decision.item_id)
-                    if item is None:
-                        raise MemoryItemNotFoundError(f"Memory item with id {decision.item_id} not found")
-                    if item.user_id != user_id:
-                        raise PermissionDeniedError("You don't have permission to update this item")
                     if item.status != PersonalInfoStatus.ACTIVE.value:
                         await service.update_item_status(decision.item_id, PersonalInfoStatus.ACTIVE.value, user_id)
                     kept_active_item_ids.append(decision.item_id)
                 elif decision.action == "mark_outdated":
-                    item = await service.get_item_by_id(decision.item_id)
-                    if item is None:
-                        raise MemoryItemNotFoundError(f"Memory item with id {decision.item_id} not found")
-                    if item.user_id != user_id:
-                        raise PermissionDeniedError("You don't have permission to update this item")
                     if item.status != PersonalInfoStatus.OUTDATED.value:
                         await service.update_item_status(decision.item_id, PersonalInfoStatus.OUTDATED.value, user_id)
                     outdated_item_ids.append(decision.item_id)

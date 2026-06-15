@@ -358,3 +358,67 @@ async def test_personal_info_maintainer_precleanup_runs_in_apply_mode(mock_setti
         dry_run=False,
     )
     assert result.artifacts["stale_outdated_deleted_count"] == 2
+
+
+@pytest.mark.anyio
+async def test_personal_info_maintainer_dry_run_clears_empty_summary(mock_settings):
+    user_with_summary = SimpleNamespace(id=5, personal_info_summary="Existing summary text")
+    service = MagicMock()
+    service.cleanup_stale_personal_info_outdated = AsyncMock(return_value=0)
+    service.list_memory_items = AsyncMock(return_value=[])
+    service.set_personal_info_summary = AsyncMock()
+
+    @asynccontextmanager
+    async def fake_provider():
+        yield service
+
+    with (
+        patch(
+            "runestone.agents.specialists.memory_maintainer.personal_info.build_chat_model", return_value=MagicMock()
+        ),
+        patch(
+            "runestone.agents.specialists.memory_maintainer.personal_info.provide_memory_item_service", fake_provider
+        ),
+        patch("runestone.agents.specialists.memory_maintainer.personal_info.provide_user_service", fake_provider),
+    ):
+        specialist = PersonalInfoMemoryMaintainer(mock_settings)
+        result = await specialist.run_cli_for_user(user_with_summary, dry_run=True)
+
+    assert result.status == "action_taken"
+    assert result.artifacts["summary"] == "dry_run cleared_empty_summary"
+    assert result.artifacts["persisted_summary"] is None
+    # User service must not be called during dry run
+    service.set_personal_info_summary.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_personal_info_maintainer_handles_execution_exceptions(mock_settings, mock_user):
+    item = _make_item(
+        1,
+        key="fact",
+        content="Some fact.",
+        status="active",
+    )
+    service = MagicMock()
+    service.cleanup_stale_personal_info_outdated = AsyncMock(return_value=0)
+    service.list_memory_items = AsyncMock(return_value=[item])
+
+    @asynccontextmanager
+    async def fake_provider():
+        yield service
+
+    with (
+        patch(
+            "runestone.agents.specialists.memory_maintainer.personal_info.build_chat_model", return_value=MagicMock()
+        ),
+        patch(
+            "runestone.agents.specialists.memory_maintainer.personal_info.provide_memory_item_service", fake_provider
+        ),
+    ):
+        specialist = PersonalInfoMemoryMaintainer(mock_settings)
+        specialist._review_items = AsyncMock(side_effect=Exception("Unexpected execution error"))
+        result = await specialist.run_cli_for_user(mock_user, dry_run=False)
+
+    assert result.status == "error"
+    assert result.artifacts["summary"] == "execution_failed"
+    assert "execution_failed:Exception" in result.artifacts["step_errors"]

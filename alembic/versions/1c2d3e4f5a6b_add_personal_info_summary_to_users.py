@@ -29,7 +29,6 @@ def upgrade() -> None:
         ["user_id", "category", "key"],
         unique=True,
         postgresql_where=sa.text("category = 'area_to_improve'"),
-        sqlite_where=sa.text("category = 'area_to_improve'"),
     )
 
 
