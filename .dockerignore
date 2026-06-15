@@ -48,5 +48,4 @@ test_*
 # Development files
 .pre-commit-config.yaml
 Makefile
-uv.lock
 .python-version
