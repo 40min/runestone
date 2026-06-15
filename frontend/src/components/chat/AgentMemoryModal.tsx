@@ -251,6 +251,11 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
     );
   }, [activeTab, fetchItems, sortBy, sortDirection, statusFilter]);
 
+  const refreshActiveItemsRef = useRef(refreshActiveItems);
+  useEffect(() => {
+    refreshActiveItemsRef.current = refreshActiveItems;
+  }, [refreshActiveItems]);
+
   useEffect(() => {
     if (open) {
       void refreshActiveItems();
@@ -278,7 +283,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
         return;
       }
 
-      await refreshActiveItems();
+      await refreshActiveItemsRef.current();
 
       if (attemptIndex >= refreshDelaysMs.length - 1) {
         if (!cancelled) {
@@ -301,7 +306,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
         refreshTimerRef.current = null;
       }
     };
-  }, [open, refreshActiveItems, refreshToken]);
+  }, [open, refreshToken]);
 
   useEffect(() => {
     if (!open) {
