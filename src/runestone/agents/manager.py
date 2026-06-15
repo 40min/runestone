@@ -18,7 +18,7 @@ from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem, 
 from runestone.agents.service_providers import provide_agent_side_effect_service
 from runestone.agents.specialists.base import SpecialistContext, SpecialistResult
 from runestone.agents.specialists.memory_keeper import MemoryKeeperSpecialist
-from runestone.agents.specialists.memory_maintainer import MemoryMaintainerSpecialist
+from runestone.agents.specialists.memory_maintainer.specialist import CombinedMemoryMaintainerSpecialist
 from runestone.agents.specialists.news_agent import NewsAgentSpecialist
 from runestone.agents.specialists.registry import SpecialistRegistry
 from runestone.agents.specialists.teacher import TeacherAgent
@@ -50,7 +50,6 @@ class AgentsManager:
     POST_TASK_TIMEOUT_SECONDS = 25
     # Multi-step structured maintenance can require multiple serial model calls.
     MEMORY_MAINTENANCE_TIMEOUT_SECONDS = 240
-    STARTER_MEMORY_PERSONAL_LIMIT = 50
     STARTER_MEMORY_AREA_LIMIT = 5
     NO_CHAT_HISTORY_SPECIALISTS = frozenset({"word_keeper", "memory_keeper"})
 
@@ -79,7 +78,7 @@ class AgentsManager:
         self.registry.register(MemoryKeeperSpecialist(settings))
         self.registry.register(NewsAgentSpecialist(settings))
         self.registry.register(WordKeeperSpecialist(settings))
-        self.memory_maintainer = MemoryMaintainerSpecialist(settings)
+        self.memory_maintainer = CombinedMemoryMaintainerSpecialist(settings)
 
         self._post_task_registry = BackgroundTaskRegistry(logger=logger, key_name="chat_id")
         self._memory_maintenance_registry = BackgroundTaskRegistry(
@@ -133,14 +132,22 @@ class AgentsManager:
         user: User,
         memory_item_service,
         side_effect_service: AgentSideEffectService,
-    ) -> tuple[CoordinatorPlan, list[dict], str, list[TeacherSideEffect], list[str]]:
+    ) -> tuple[CoordinatorPlan, list[dict], str, str, list[TeacherSideEffect], list[str]]:
         """
         Run pre-stage: coordinator planning, pre specialists, side effect loading.
 
         Returns:
-            (plan, pre_results, starter_memory, recent_side_effects, current_recall_words)
+            (
+                plan,
+                pre_results,
+                active_learning_focus_memory,
+                personal_info_summary,
+                recent_side_effects,
+                current_recall_words,
+            )
         """
-        starter_memory = ""
+        active_learning_focus_memory = ""
+        personal_info_summary = ""
         current_recall_words: list[str] = []
         if not history:
             try:
@@ -157,15 +164,16 @@ class AgentsManager:
             except (SQLAlchemyError, ValueError, RuntimeError) as e:
                 logger.warning("old mastered memory cleanup failed user_id=%s error=%s", user.id, e)
             try:
-                starter_items = await memory_item_service.list_start_student_info_items(
+                starter_items = await memory_item_service.list_start_area_to_improve_items(
                     user.id,
-                    personal_limit=self.STARTER_MEMORY_PERSONAL_LIMIT,
                     area_limit=self.STARTER_MEMORY_AREA_LIMIT,
                 )
                 if starter_items:
-                    starter_memory = serialize_memory_items(starter_items)
+                    active_learning_focus_memory = serialize_memory_items(starter_items)
             except (SQLAlchemyError, ValueError, RuntimeError) as e:
-                logger.warning("starter memory load failed user_id=%s error=%s", user.id, e)
+                logger.warning("active learning focus memory load failed user_id=%s error=%s", user.id, e)
+            raw_personal_info_summary = getattr(user, "personal_info_summary", None)
+            personal_info_summary = raw_personal_info_summary if isinstance(raw_personal_info_summary, str) else ""
             current_recall_words = self._load_current_recall_words(user)
 
         coordinator_history = history[-self.COORDINATOR_MAX_HISTORY_MESSAGES :] if history else []
@@ -210,7 +218,14 @@ class AgentsManager:
             chat_id=chat_id,
         )
 
-        return plan, pre_results, starter_memory, recent_side_effects, current_recall_words
+        return (
+            plan,
+            pre_results,
+            active_learning_focus_memory,
+            personal_info_summary,
+            recent_side_effects,
+            current_recall_words,
+        )
 
     async def generate_teacher_response(
         self,
@@ -218,8 +233,9 @@ class AgentsManager:
         history: list[ChatMessage],
         user: User,
         pre_results: list[dict],
-        starter_memory: str,
-        recent_side_effects: list[TeacherSideEffect],
+        active_learning_focus_memory: str,
+        personal_info_summary: str = "",
+        recent_side_effects: list[TeacherSideEffect] | None = None,
         current_recall_words: list[str] | None = None,
     ) -> tuple[str, Optional[list[dict[str, str]]], TeacherEmotion, list[WordSaveCandidate]]:
         """
@@ -231,7 +247,8 @@ class AgentsManager:
                 history=history,
                 user=user,
                 pre_results=pre_results,
-                starter_memory=starter_memory,
+                active_learning_focus_memory=active_learning_focus_memory,
+                personal_info_summary=personal_info_summary,
                 recent_side_effects=recent_side_effects,
                 current_recall_words=current_recall_words or [],
             )
@@ -275,7 +292,7 @@ class AgentsManager:
                 side_effect_service=side_effect_service,
             )
 
-        _plan, pre_results, starter_memory, recent_side_effects, current_recall_words = await self.prepare_pre_turn(
+        prepared = await self.prepare_pre_turn(
             message=message,
             chat_id=chat_id,
             history=history,
@@ -283,13 +300,22 @@ class AgentsManager:
             memory_item_service=memory_item_service,
             side_effect_service=side_effect_service,
         )
+        (
+            _plan,
+            pre_results,
+            active_learning_focus_memory,
+            personal_info_summary,
+            recent_side_effects,
+            current_recall_words,
+        ) = prepared
 
         assistant_text, sources, teacher_emotion, vocabulary_candidates = await self.generate_teacher_response(
             message=message,
             history=history,
             user=user,
             pre_results=pre_results,
-            starter_memory=starter_memory,
+            active_learning_focus_memory=active_learning_focus_memory,
+            personal_info_summary=personal_info_summary,
             recent_side_effects=recent_side_effects,
             current_recall_words=current_recall_words,
         )

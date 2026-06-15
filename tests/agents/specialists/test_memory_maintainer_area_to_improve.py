@@ -43,7 +43,7 @@ def mock_user():
 @pytest.fixture
 def specialist(mock_settings):
     model = MagicMock()
-    with patch("runestone.agents.specialists.memory_maintainer.build_chat_model", return_value=model):
+    with patch("runestone.agents.specialists.memory_maintainer.area_to_improve.build_chat_model", return_value=model):
         specialist = MemoryMaintainerSpecialist(mock_settings)
     specialist.model = model
     return specialist
@@ -248,7 +248,9 @@ async def test_memory_maintainer_uses_structured_output_and_skips_priority_revie
     async def fake_provider():
         yield service
 
-    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+    with patch(
+        "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+    ):
         result = await specialist.run(
             SpecialistContext(
                 message="start_new_chat",
@@ -294,7 +296,9 @@ async def test_memory_maintainer_fails_safely_when_bucket_step_cannot_parse(spec
     async def fake_provider():
         yield service
 
-    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+    with patch(
+        "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+    ):
         result = await specialist.run(
             SpecialistContext(
                 message="start_new_chat",
@@ -399,7 +403,9 @@ async def test_memory_maintainer_merges_near_duplicates_and_latest_status_wins(
 
     fake_provider = _memory_service_provider(db_session_factory)
 
-    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+    with patch(
+        "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+    ):
         result = await specialist.run(
             SpecialistContext(
                 message="start_new_chat",
@@ -479,7 +485,9 @@ async def test_memory_maintainer_normalizes_group_status_to_latest_source_status
 
     fake_provider = _memory_service_provider(db_session_factory)
 
-    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+    with patch(
+        "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+    ):
         result = await specialist.run(
             SpecialistContext(
                 message="start_new_chat",
@@ -555,7 +563,9 @@ async def test_memory_maintainer_leaves_singleton_groups_unmodified(
 
     fake_provider = _memory_service_provider(db_session_factory)
 
-    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+    with patch(
+        "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+    ):
         result = await specialist.run(
             SpecialistContext(
                 message="start_new_chat",
@@ -670,7 +680,9 @@ async def test_memory_maintainer_applies_partial_results_when_one_group_fails(
 
     fake_provider = _memory_service_provider(db_session_factory)
 
-    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+    with patch(
+        "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+    ):
         result = await specialist.run(
             SpecialistContext(
                 message="start_new_chat",
@@ -760,7 +772,9 @@ async def test_memory_maintainer_repairs_bucket_duplicates_and_missing_ids_in_ru
 
     fake_provider = _memory_service_provider(db_session_factory)
 
-    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+    with patch(
+        "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+    ):
         result = await specialist.run(
             SpecialistContext(
                 message="start_new_chat",
@@ -845,7 +859,9 @@ async def test_memory_maintainer_skips_merge_when_validator_rejects_it(
 
     fake_provider = _memory_service_provider(db_session_factory)
 
-    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+    with patch(
+        "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+    ):
         result = await specialist.run(
             SpecialistContext(
                 message="start_new_chat",
@@ -926,7 +942,9 @@ async def test_memory_maintainer_dry_run_bumps_version_past_existing_key(
 
     fake_provider = _memory_service_provider(db_session_factory)
 
-    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+    with patch(
+        "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+    ):
         result = await specialist.run_cli_for_user(
             user,
             dry_run=True,
@@ -994,7 +1012,9 @@ async def test_memory_maintainer_dry_run_rejects_invalid_generated_final_key(
 
     fake_provider = _memory_service_provider(db_session_factory)
 
-    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+    with patch(
+        "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+    ):
         result = await specialist.run_cli_for_user(
             user,
             dry_run=True,
@@ -1062,7 +1082,9 @@ async def test_memory_maintainer_normalizes_unversioned_generated_final_key(
 
     fake_provider = _memory_service_provider(db_session_factory)
 
-    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+    with patch(
+        "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+    ):
         result = await specialist.run_cli_for_user(
             user,
             dry_run=True,
@@ -1130,7 +1152,9 @@ async def test_memory_maintainer_ignores_model_supplied_version_suffix(
 
     fake_provider = _memory_service_provider(db_session_factory)
 
-    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+    with patch(
+        "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+    ):
         result = await specialist.run_cli_for_user(
             user,
             dry_run=True,
@@ -1207,7 +1231,9 @@ async def test_memory_maintainer_assigns_next_version_from_existing_keys(
 
     fake_provider = _memory_service_provider(db_session_factory)
 
-    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+    with patch(
+        "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+    ):
         result = await specialist.run_cli_for_user(
             user,
             dry_run=True,
@@ -1312,7 +1338,9 @@ async def test_memory_maintainer_dry_run_assigns_distinct_versions_within_plan(
 
     fake_provider = _memory_service_provider(db_session_factory)
 
-    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+    with patch(
+        "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+    ):
         result = await specialist.run_cli_for_user(
             user,
             dry_run=True,
@@ -1391,7 +1419,9 @@ async def test_memory_maintainer_rolls_back_merge_group_when_delete_fails(
     fake_provider = _memory_service_provider(db_session_factory)
 
     with (
-        patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider),
+        patch(
+            "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+        ),
         patch.object(AsyncSession, "delete", flaky_delete),
     ):
         result = await specialist.run(
@@ -1449,7 +1479,9 @@ async def test_priority_review_skips_out_of_scope_status_drift(specialist, db_wi
 
     fake_provider = _memory_service_provider(db_session_factory)
 
-    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+    with patch(
+        "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+    ):
         report = await specialist._apply_priority_review(
             user_id=user.id,
             planned_groups=[planned_group],
@@ -1525,7 +1557,9 @@ async def test_memory_maintainer_cli_priority_review_can_apply_existing_priority
 
     fake_provider = _memory_service_provider(db_session_factory)
 
-    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+    with patch(
+        "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+    ):
         result = await specialist.run_cli_for_user(
             user,
             dry_run=False,
@@ -1609,7 +1643,9 @@ async def test_memory_maintainer_cli_dry_run_priority_review_does_not_count_sugg
 
     fake_provider = _memory_service_provider(db_session_factory)
 
-    with patch("runestone.agents.specialists.memory_maintainer.provide_memory_item_service", fake_provider):
+    with patch(
+        "runestone.agents.specialists.memory_maintainer.area_to_improve.provide_memory_item_service", fake_provider
+    ):
         result = await specialist.run_cli_for_user(
             user,
             dry_run=True,

@@ -121,12 +121,19 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "prefer to include one short" in call_kwargs["system_prompt"]
             assert "explicit sentence" in call_kwargs["system_prompt"]
             assert "This is a recurring issue to remember" in call_kwargs["system_prompt"]
+            assert "For `personal_info`, do not try to emit special persistence phrasing." in (
+                call_kwargs["system_prompt"]
+            )
+            assert "can derive new personal facts from clear student statements" in call_kwargs["system_prompt"]
             assert "not by a tool you call directly" in call_kwargs["system_prompt"]
             assert "Choosing between" not in call_kwargs["system_prompt"]
             assert "You are improving with" in call_kwargs["system_prompt"]
             assert "You have now mastered" in call_kwargs["system_prompt"]
             assert "Actively assess mastery every time you notice progress" in call_kwargs["system_prompt"]
             assert "stay stuck at `improving` indefinitely" in call_kwargs["system_prompt"]
+            assert "If you want post-phase `area_to_improve` maintenance to happen from your reply" in (
+                call_kwargs["system_prompt"]
+            )
 
             assert "Word-saving is handled by an internal helper specialist called `WordKeeper`" in (
                 call_kwargs["system_prompt"]
@@ -169,15 +176,10 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "only live memory lookup tool" in call_kwargs["system_prompt"]
             assert "cannot look up `personal_info`" in call_kwargs["system_prompt"]
             assert "content, status, or priority change" in call_kwargs["system_prompt"]
-            assert "[memory:<category>:<id>]" in call_kwargs["system_prompt"]
-            assert "[memory:personal_info:5]" in call_kwargs["system_prompt"]
-            assert (
-                "Copy both `<category>` and `<id>` from the same exact memory item line" in call_kwargs["system_prompt"]
-            )
-            assert "Never combine an `<id>` from one memory item with a `<category>` from another memory item." in (
-                call_kwargs["system_prompt"]
-            )
-            assert "If the exact `<category>` + `<id>` pair is not present" in call_kwargs["system_prompt"]
+            assert "[memory:area_to_improve:<id>]" in call_kwargs["system_prompt"]
+            assert "[memory:personal_info:5]" not in call_kwargs["system_prompt"]
+            assert "Copy the `<id>` from the same exact memory item line" in call_kwargs["system_prompt"]
+            assert "If the exact `area_to_improve` id is not present" in call_kwargs["system_prompt"]
             assert "Use `search_grammar` at most once with one focused query." in call_kwargs["system_prompt"]
             assert "each result has `title`, `url`, and `path`" in call_kwargs["system_prompt"]
             assert "Focus on the top result." in call_kwargs["system_prompt"]
@@ -216,7 +218,7 @@ def test_build_agent_without_tools(mock_settings, mock_chat_model):
             assert "Never invent or guess URLs." in call_kwargs["system_prompt"]
             assert "inspect it on-demand" not in call_kwargs["system_prompt"]
             assert "without reading the memory" not in call_kwargs["system_prompt"]
-            assert "use only injected starter memory, recent side effects, and conversation context" in (
+            assert "use only injected active learning focus memory, recent side effects, and conversation context" in (
                 call_kwargs["system_prompt"].lower()
             )
 
@@ -404,22 +406,39 @@ async def test_run_with_mother_tongue(teacher_agent, mock_user):
 
 
 @pytest.mark.anyio
-async def test_run_with_starter_memory(teacher_agent, mock_user):
+async def test_run_with_active_learning_focus_memory(teacher_agent, mock_user):
     teacher_agent.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
 
     await teacher_agent.generate_response(
         message="msg",
         history=[],
         user=mock_user,
-        starter_memory=(
+        active_learning_focus_memory=(
             "UNTRUSTED_MEMORY_DATA\n"
-            '- id=1 category="personal_info" key="goal" content="Practice" status="active" priority=null'
+            '- id=1 category="area_to_improve" key="articles" '
+            'content="Needs article practice" status="struggling" priority=1'
         ),
     )
 
     invoke_args = teacher_agent.agent.ainvoke.call_args[0][0]
     messages = invoke_args["messages"]
-    assert any(isinstance(m, SystemMessage) and "[STARTER_MEMORY]" in m.content for m in messages)
+    assert any(isinstance(m, SystemMessage) and "[ACTIVE_LEARNING_FOCUS]" in m.content for m in messages)
+
+
+@pytest.mark.anyio
+async def test_run_with_personal_info_summary(teacher_agent, mock_user):
+    teacher_agent.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
+
+    await teacher_agent.generate_response(
+        message="msg",
+        history=[],
+        user=mock_user,
+        personal_info_summary="The student wants speaking practice.",
+    )
+
+    invoke_args = teacher_agent.agent.ainvoke.call_args[0][0]
+    messages = invoke_args["messages"]
+    assert any(isinstance(m, SystemMessage) and "[PERSONAL_INFO_SUMMARY]" in m.content for m in messages)
 
 
 @pytest.mark.anyio
@@ -588,7 +607,7 @@ async def test_generate_response_logs_timing_metadata(teacher_agent, mock_user, 
             history=[ChatMessage(role="user", content="Tidigare")],
             user=mock_user,
             pre_results=[{"name": "memory_keeper", "result": {"status": "action_taken"}}],
-            starter_memory="starter",
+            active_learning_focus_memory="focus",
             recent_side_effects=[
                 TeacherSideEffect(
                     name="word_keeper",
@@ -606,7 +625,7 @@ async def test_generate_response_logs_timing_metadata(teacher_agent, mock_user, 
     assert "user_id=1" in caplog.text
     assert "history_messages=1" in caplog.text
     assert "pre_results=1" in caplog.text
-    assert "starter_memory_chars=7" in caplog.text
+    assert "active_learning_focus_memory_chars=5" in caplog.text
     assert "recent_side_effects=1" in caplog.text
     assert "outcome=success" in caplog.text
 

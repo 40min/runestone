@@ -1,4 +1,4 @@
-"""Structured multi-pass background specialist for start-of-session memory maintenance."""
+"""Structured multi-pass maintainer for area_to_improve memory cleanup."""
 
 import json
 import logging
@@ -248,8 +248,8 @@ class PlannedGroup:
     target_key: str | None = None
 
 
-class MemoryMaintainerSpecialist(BaseSpecialist):
-    """Background specialist that consolidates start-of-session learner memory."""
+class AreaToImproveMemoryMaintainer(BaseSpecialist):
+    """Background specialist that consolidates start-of-session learning-focus memory."""
 
     MODEL_TIMEOUT_SECONDS = 30.0
 
@@ -258,7 +258,7 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
         self.settings = settings
         self.model = build_chat_model(settings, "memory_maintainer", timeout_seconds=self.MODEL_TIMEOUT_SECONDS)
         logger.info(
-            "[agents:memorymaintainer] Initialized MemoryMaintainerSpecialist with provider=%s, model=%s",
+            "[agents:memorymaintainer] Initialized AreaToImproveMemoryMaintainer with provider=%s, model=%s",
             settings.memory_maintainer_provider,
             settings.memory_maintainer_model,
         )
@@ -1229,8 +1229,8 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
             "content": item.content,
             "status": item.status,
             "priority": item.priority,
-            "updated_at": MemoryMaintainerSpecialist._serialize_datetime(getattr(item, "updated_at", None)),
-            "status_changed_at": MemoryMaintainerSpecialist._serialize_datetime(
+            "updated_at": AreaToImproveMemoryMaintainer._serialize_datetime(getattr(item, "updated_at", None)),
+            "status_changed_at": AreaToImproveMemoryMaintainer._serialize_datetime(
                 getattr(item, "status_changed_at", None)
             ),
         }
@@ -1247,7 +1247,7 @@ class MemoryMaintainerSpecialist(BaseSpecialist):
     @staticmethod
     def _latest_status(items: list[MemoryItem]) -> str:
         """Return the latest status across a group using status-changed time first."""
-        latest_item = max(items, key=MemoryMaintainerSpecialist._status_order_key)
+        latest_item = max(items, key=AreaToImproveMemoryMaintainer._status_order_key)
         return latest_item.status
 
     @staticmethod

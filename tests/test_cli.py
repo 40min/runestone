@@ -45,14 +45,22 @@ class TestCLI:
         assert "IMAGE_PATH" in result.output
         assert "gemini" in result.output
 
-    def test_maintain_memory_command_help(self):
-        """Test maintain-memory command help message."""
-        result = self.runner.invoke(cli, ["maintain-memory", "--help"])
+    def test_maintain_area_memory_command_help(self):
+        """Test maintain-area-memory command help message."""
+        result = self.runner.invoke(cli, ["maintain-area-memory", "--help"])
 
         assert result.exit_code == 0
-        assert "Run the structured memory maintainer for one user" in result.output
+        assert "Run the structured area_to_improve maintainer for one user" in result.output
         assert "--dry-run" in result.output
         assert "--with-priority-review" in result.output
+
+    def test_maintain_personal_info_memory_command_help(self):
+        """Test maintain-personal-info-memory command help message."""
+        result = self.runner.invoke(cli, ["maintain-personal-info-memory", "--help"])
+
+        assert result.exit_code == 0
+        assert "Run the structured personal_info maintainer for one user" in result.output
+        assert "--dry-run" in result.output
 
     @patch("runestone.cli.ContentAnalyzer")
     @patch("runestone.cli.OCRProcessor")
@@ -252,8 +260,8 @@ class TestCLI:
         assert result.exit_code == 0
         assert "0.1.0" in result.output
 
-    @patch("runestone.cli._run_memory_maintainer_cli", new_callable=AsyncMock)
-    def test_maintain_memory_dry_run_prints_summary_and_json(self, mock_run):
+    @patch("runestone.cli._run_area_memory_maintainer_cli", new_callable=AsyncMock)
+    def test_maintain_area_memory_dry_run_prints_summary_and_json(self, mock_run):
         """Test dry-run memory maintenance output."""
         mock_run.return_value = Mock(
             status="action_taken",
@@ -284,7 +292,7 @@ class TestCLI:
             ),
         )
 
-        result = self.runner.invoke(cli, ["maintain-memory", "7", "--dry-run"])
+        result = self.runner.invoke(cli, ["maintain-area-memory", "7", "--dry-run"])
 
         assert result.exit_code == 0
         assert "Memory Maintainer Summary" in result.output
@@ -293,8 +301,8 @@ class TestCLI:
         assert "Memory Maintainer JSON" in result.output
         assert '"status": "action_taken"' in result.output
 
-    @patch("runestone.cli._run_memory_maintainer_cli", new_callable=AsyncMock)
-    def test_maintain_memory_with_priority_review_passes_flag(self, mock_run):
+    @patch("runestone.cli._run_area_memory_maintainer_cli", new_callable=AsyncMock)
+    def test_maintain_area_memory_with_priority_review_passes_flag(self, mock_run):
         """Test that the CLI forwards the priority-review flag."""
         mock_run.return_value = Mock(
             status="no_action",
@@ -313,20 +321,52 @@ class TestCLI:
             model_dump=Mock(return_value={"status": "no_action", "artifacts": {"summary": "noop"}}),
         )
 
-        result = self.runner.invoke(cli, ["maintain-memory", "7", "--with-priority-review"])
+        result = self.runner.invoke(cli, ["maintain-area-memory", "7", "--with-priority-review"])
 
         assert result.exit_code == 0
         mock_run.assert_awaited_once_with(7, False, True)
 
-    @patch("runestone.cli._run_memory_maintainer_cli", new_callable=AsyncMock)
-    def test_maintain_memory_reports_runestone_errors(self, mock_run):
-        """Test maintain-memory error handling."""
+    @patch("runestone.cli._run_area_memory_maintainer_cli", new_callable=AsyncMock)
+    def test_maintain_area_memory_reports_runestone_errors(self, mock_run):
+        """Test maintain-area-memory error handling."""
         mock_run.side_effect = RunestoneError("User 404 not found")
 
-        result = self.runner.invoke(cli, ["maintain-memory", "404"])
+        result = self.runner.invoke(cli, ["maintain-area-memory", "404"])
 
         assert result.exit_code == 1
         assert "User 404 not found" in result.output
+
+    @patch("runestone.cli._run_personal_info_memory_maintainer_cli", new_callable=AsyncMock)
+    def test_maintain_personal_info_memory_dry_run_prints_summary_and_json(self, mock_run):
+        """Test personal-info dry-run output."""
+        mock_run.return_value = Mock(
+            status="action_taken",
+            artifacts={
+                "maintenance_type": "personal_info_memory_maintenance",
+                "dry_run": True,
+                "reviewed_item_count": 2,
+                "decisions": [{"item_id": 1, "action": "keep_active", "why": "latest fact"}],
+                "kept_active_item_ids": [1],
+                "outdated_item_ids": [],
+                "deleted_item_ids": [2],
+                "persisted_summary": "The student wants speaking practice.",
+                "summary": "dry_run kept_active=1 outdated=0 deleted=1",
+                "no_change_reason": None,
+                "step_errors": [],
+            },
+            model_dump=Mock(
+                return_value={
+                    "status": "action_taken",
+                    "artifacts": {"summary": "dry_run kept_active=1 outdated=0 deleted=1"},
+                }
+            ),
+        )
+
+        result = self.runner.invoke(cli, ["maintain-personal-info-memory", "7", "--dry-run"])
+
+        assert result.exit_code == 0
+        assert "Personal-info decisions" in result.output
+        assert "Deleted: 1" in result.output
 
     @patch("runestone.cli.settings")
     @patch("runestone.cli.build_service_llm_model")

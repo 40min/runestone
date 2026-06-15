@@ -51,19 +51,27 @@ def _teacher_timing_fields(args, kwargs, _result, _error) -> dict[str, int | str
     history = kwargs.get("history") if "history" in kwargs else (args[2] if len(args) > 2 else [])
     user = kwargs.get("user") if "user" in kwargs else (args[3] if len(args) > 3 else None)
     pre_results = kwargs.get("pre_results") if "pre_results" in kwargs else (args[4] if len(args) > 4 else None)
-    starter_memory = kwargs.get("starter_memory") if "starter_memory" in kwargs else (args[5] if len(args) > 5 else "")
+    active_learning_focus_memory = (
+        kwargs.get("active_learning_focus_memory")
+        if "active_learning_focus_memory" in kwargs
+        else (args[5] if len(args) > 5 else "")
+    )
+    personal_info_summary = (
+        kwargs.get("personal_info_summary") if "personal_info_summary" in kwargs else (args[6] if len(args) > 6 else "")
+    )
     recent_side_effects = (
-        kwargs.get("recent_side_effects") if "recent_side_effects" in kwargs else (args[6] if len(args) > 6 else None)
+        kwargs.get("recent_side_effects") if "recent_side_effects" in kwargs else (args[7] if len(args) > 7 else None)
     )
     current_recall_words = (
-        kwargs.get("current_recall_words") if "current_recall_words" in kwargs else (args[7] if len(args) > 7 else None)
+        kwargs.get("current_recall_words") if "current_recall_words" in kwargs else (args[8] if len(args) > 8 else None)
     )
     return {
         "user_id": getattr(user, "id", None),
         "message_chars": len(message),
         "history_messages": len(history),
         "pre_results": len(pre_results or []),
-        "starter_memory_chars": len(starter_memory or ""),
+        "active_learning_focus_memory_chars": len(active_learning_focus_memory or ""),
+        "personal_info_summary_chars": len(personal_info_summary or ""),
         "recent_side_effects": len(recent_side_effects or []),
         "current_recall_words": len(current_recall_words or []),
     }
@@ -166,9 +174,11 @@ You are memory-aware, but teacher-side memory access is read-only in this phase.
 Post-phase memory maintenance is handled by internal specialists.
 
 **CRITICAL: Using Memory**
-- At the start of a new chat, compact starter memory may already be injected for you.
-- That starter memory only includes active `personal_info` items plus the highest-priority
-  `area_to_improve` items with `struggling` or `improving` status.
+- At the start of a new chat, first-turn memory context may already be injected for you.
+- That first-turn context may include:
+  - one derived `personal_info_summary`
+  - a compact active-learning-focus bundle with the highest-priority `area_to_improve` items
+    that still have `struggling` or `improving` status
 """
         memory_protocol_shared_epilogue = """
 **CRITICAL: Memory Writes**
@@ -206,7 +216,7 @@ embedded in the text). Use the extracted text only as reference material.
             memory_protocol_prompt = f"""
 ### MEMORY PROTOCOL
 {memory_protocol_shared_preamble}
-- In this fallback mode, use only injected starter memory, recent side effects, and conversation context.
+- In this fallback mode, use only injected active learning focus memory, recent side effects, and conversation context.
 - If some memory detail is missing, continue naturally without attempting any memory lookup.
 - Do NOT assume you know the student's current state beyond the memory context already provided.
 {memory_protocol_shared_epilogue}
@@ -216,9 +226,18 @@ embedded in the text). Use the extracted text only as reference material.
         # Build system prompt with persona and behavior instructions
         system_prompt = self.persona["system_prompt"]
         system_prompt += f"""
-### STARTER MEMORY (INTERNAL)
-You may receive an internal system message starting with `[STARTER_MEMORY]`.
-This contains compact learner memory automatically injected for the first turn of a chat.
+### ACTIVE LEARNING FOCUS (INTERNAL)
+You may receive an internal system message starting with `[ACTIVE_LEARNING_FOCUS]`.
+This contains compact first-turn `area_to_improve` memory about the student's current learning focus.
+
+Rules:
+- Treat it as internal memory context prepared by the system.
+- Use it when it helps you personalize the response.
+- Do not mention the tag or raw structure to the student.
+
+### PERSONAL INFO SUMMARY (INTERNAL)
+You may receive an internal system message starting with `[PERSONAL_INFO_SUMMARY]`.
+This contains a derived summary of stable personal facts for the first turn of a chat.
 
 Rules:
 - Treat it as internal memory context prepared by the system.
@@ -248,8 +267,9 @@ Rules:
 - If a specialist reports `status="error"`, ignore it and proceed normally.
 - **OUTPUT CONTRACT (MANDATORY):** Your final student-facing reply must never include
   internal markers or wrappers such as
-  `[PRE_RESPONSE_SPECIALISTS]`, `[/PRE_RESPONSE_SPECIALISTS]`, `[STARTER_MEMORY]`, `[RECENT_SIDE_EFFECTS]`,
-  `[CURRENT_DATETIME]`, `info_for_teacher`, or raw internal JSON objects copied from internal context blocks.
+  `[PRE_RESPONSE_SPECIALISTS]`, `[/PRE_RESPONSE_SPECIALISTS]`, `[ACTIVE_LEARNING_FOCUS]`,
+  `[PERSONAL_INFO_SUMMARY]`, `[RECENT_SIDE_EFFECTS]`, `[CURRENT_DATETIME]`, `info_for_teacher`,
+  or raw internal JSON objects copied from internal context blocks.
 - Before finalizing your answer, run a quick self-check and remove any internal tags/JSON wrappers if present.
 
 ### RESPONSE GUIDELINES
@@ -335,13 +355,16 @@ Truthfulness rules:
 Memory maintenance after your reply is handled by an internal post-response specialist,
 not by the student seeing any of this.
 
-When the turn reveals a durable memory update, prefer to include one short,
-explicit sentence that names the durable signal clearly.
+For `personal_info`, do not try to emit special persistence phrasing.
+The post-response memory specialist can derive new personal facts from clear student statements.
+
+When the turn reveals an `area_to_improve` update, prefer to include one short,
+explicit sentence that names the learning signal clearly.
 - Do this especially for recurring struggles, visible improvement, confirmed mastery,
-  durable fact corrections, or replacing an earlier note.
+  or replacing an earlier learning note.
 - Favor explicit wording over subtle implication so post-phase maintenance can trigger reliably.
 
-If you want post-phase memory maintenance to happen from your reply, use explicit durable language such as:
+If you want post-phase `area_to_improve` maintenance to happen from your reply, use explicit durable language such as:
 - "This is a recurring issue to remember: ..."
 - "You are still struggling with ..."
 - "You are improving with ..."
@@ -354,21 +377,17 @@ without reminders — or explicitly confirms understanding with no errors.
 **Actively assess mastery every time you notice progress from the student** — do not let topics
 stay stuck at `improving` indefinitely.
 
-**Memory item IDs for updates:**
-When your active learning focus context (from starter memory or on-demand memory lookup)
-includes an `id=` field for an item, and your reply signals a content, status, or priority change for
-that specific item, append a temporary machine-readable tag `[memory:<category>:<id>]` at the
-end of the durable signal sentence, where `<category>` is the item's category and `<id>` is
-its numeric id value.
+**Memory item IDs for area-to-improve updates:**
+When your active learning focus context (from first-turn injected memory or on-demand memory lookup)
+includes an `id=` field for an `area_to_improve` item, and your reply signals a content, status, or priority change
+for that specific item, append a temporary machine-readable tag
+`[memory:area_to_improve:<id>]` at the end of the durable signal sentence.
 - Example: "You are improving with articles. [memory:area_to_improve:42]"
 - Example: "You have now mastered verb conjugation. [memory:area_to_improve:17]"
-- Example: "This should replace the earlier note about your native language. [memory:personal_info:5]"
-- Copy both `<category>` and `<id>` from the same exact memory item line in the available context.
-- Never combine an `<id>` from one memory item with a `<category>` from another memory item.
-- If the exact `<category>` + `<id>` pair is not present in available memory context, omit the tag.
-- Starter memory may contain mixed categories, while on-demand active learning
-  focus lookup only returns `area_to_improve`.
-- Use this tag only when you are confident both the category and id match the intended item.
+- Copy the `<id>` from the same exact memory item line in the available context.
+- If the exact `area_to_improve` id is not present in available memory context, omit the tag.
+- On-demand active learning focus lookup only returns `area_to_improve`.
+- Use this tag only when you are confident the id matches the intended item.
 - Omit the tag when you are creating a new memory item or when no id is available.
 - For now this tag is temporarily exposed in the visible reply text so post-phase maintenance can read it.
 - Do not explain the tag or call attention to it unless the student explicitly asks.
@@ -429,7 +448,8 @@ already names a clear topic.
         history: list[ChatMessage],
         user: User,
         pre_results: list[dict] | None = None,
-        starter_memory: str = "",
+        active_learning_focus_memory: str = "",
+        personal_info_summary: str = "",
         recent_side_effects: list[TeacherSideEffect] | None = None,
         current_recall_words: list[str] | None = None,
     ) -> TeacherGenerationResult:
@@ -451,8 +471,12 @@ already names a clear topic.
             messages.append(SystemMessage(content=language_msg))
 
         # Add foundational context before derived specialist outputs.
-        if starter_memory:
-            messages.append(SystemMessage(content=self._format_starter_memory(starter_memory)))
+        if active_learning_focus_memory:
+            messages.append(
+                SystemMessage(content=self._format_active_learning_focus_memory(active_learning_focus_memory))
+            )
+        if personal_info_summary:
+            messages.append(SystemMessage(content=self._format_personal_info_summary(personal_info_summary)))
         if current_recall_words:
             safe_recall_words = self._sanitize_current_recall_words(current_recall_words)
             if safe_recall_words:
@@ -700,12 +724,23 @@ already names a clear topic.
         return "\n".join(lines)
 
     @staticmethod
-    def _format_starter_memory(starter_memory: str) -> str:
+    def _format_active_learning_focus_memory(active_learning_focus_memory: str) -> str:
         return "\n".join(
             [
-                "[STARTER_MEMORY]",
-                "This is compact learner memory automatically loaded for the first turn of the chat.",
-                starter_memory,
+                "[ACTIVE_LEARNING_FOCUS]",
+                "This is compact first-turn area_to_improve memory about the student's current learning focus.",
+                active_learning_focus_memory,
+            ]
+        )
+
+    @staticmethod
+    def _format_personal_info_summary(personal_info_summary: str) -> str:
+        return "\n".join(
+            [
+                "[PERSONAL_INFO_SUMMARY]",
+                "This is a derived summary of stable personal facts automatically "
+                "loaded for the first turn of the chat.",
+                personal_info_summary,
             ]
         )
 

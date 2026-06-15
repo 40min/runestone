@@ -1,7 +1,7 @@
 # Memory Maintainer
 
-`memory_maintainer` is an internal background specialist that performs routine
-memory cleanup when a student starts a new chat session.
+`memory_maintainer` is an internal background specialist package that performs
+routine memory cleanup when a student starts a new chat session.
 
 It exists to keep long-lived learner memory usable without adding latency to the
 student-facing reset flow.
@@ -36,16 +36,16 @@ should move to a shared store or durable job system.
 
 ## Scope
 
-The maintainer only works on:
+The background reset entrypoint now runs two separate maintenance domains:
 
-- category: `area_to_improve`
-- statuses: `struggling`, `improving`
+- `area_to_improve`
+- `personal_info`
 
-It does not inspect or rewrite unrelated memory categories.
+The domains use different logic and have separate CLI commands.
 
-## Structured Multi-Pass Flow
+## Area-To-Improve Flow
 
-The maintainer no longer uses a tool-calling agent. Instead it runs a
+The `area_to_improve` maintainer no longer uses a tool-calling agent. Instead it runs a
 deterministic structured-output pipeline and executes the resulting plan in
 plain Python.
 
@@ -132,14 +132,37 @@ The bucketing phase also has a deterministic repair layer before step 2 begins:
 This keeps the flow moving when the model is slightly sloppy, while still
 avoiding unsafe writes.
 
+## Personal-Info Flow
+
+The `personal_info` maintainer is a separate structured flow.
+
+It reviews raw append-only fact rows, decides which rows should remain active,
+which should be marked outdated, and which clear duplicates can be deleted.
+After row-level review, it synthesizes one derived `users.personal_info_summary`
+for Teacher startup context.
+
+Before model review begins, the maintainer deterministically deletes stale
+`personal_info` rows that have been in `outdated` status for 14 days. The
+retention clock uses `status_changed_at` when available and falls back to
+`updated_at` otherwise. This pre-cleanup keeps expired historical rows out of
+the prompt and is reported in maintainer artifacts as a deleted-count field.
+
+Both the review step and the summary step then receive the current datetime.
+This gives the model explicit temporal context when deciding whether a fact is
+expired short-lived state, current durable information, or historically useful
+background. Duplicate bucketing and bucket resolution for similar personal facts
+are model-owned.
+
+The flow does not inject raw `personal_info` rows into Teacher startup memory.
+
 ## CLI Mode
 
-The maintainer can be run manually:
+The maintainers can be run manually:
 
 ```bash
-runestone maintain-memory USER_ID --dry-run
-runestone maintain-memory USER_ID --with-priority-review
-runestone maintain-memory USER_ID --dry-run --with-priority-review
+runestone maintain-area-memory USER_ID --dry-run
+runestone maintain-area-memory USER_ID --with-priority-review
+runestone maintain-personal-info-memory USER_ID --dry-run
 ```
 
 CLI output always includes:
@@ -149,9 +172,9 @@ CLI output always includes:
 
 `--dry-run` performs planning and validation without writing changes.
 
-`--with-priority-review` enables the optional third step. In dry-run it reports
-priority suggestions only. In apply mode it writes priority changes after merge
-execution.
+`--with-priority-review` applies only to `maintain-area-memory`. In dry-run it
+reports priority suggestions only. In apply mode it writes priority changes
+after merge execution.
 
 ## Output And Logging
 
@@ -175,12 +198,16 @@ background runs.
 
 `memory_maintainer` and `MemoryKeeper` intentionally solve different problems.
 
-`memory_maintainer` runs at chat reset and owns broad cleanup across existing
-in-scope weakness memory.
+`memory_maintainer` runs at chat reset and owns:
+
+- broad cleanup across existing `area_to_improve` weakness memory
+- reconciliation of raw `personal_info` fact rows plus synthesis of
+  `personal_info_summary`
 
 `MemoryKeeper` runs from normal conversation flow and owns per-turn durable
 memory updates based on the current student message, final teacher response, or
-explicit student memory-edit request.
+explicit student memory-edit request. New `personal_info` facts are append-only
+raw evidence; duplicate cleanup belongs to `memory_maintainer`.
 
 `WordKeeper` remains vocabulary-specific and does not participate in memory
 consolidation.

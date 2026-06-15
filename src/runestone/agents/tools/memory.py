@@ -19,6 +19,7 @@ from runestone.api.memory_item_schemas import (
     MemoryCategory,
     MemoryItemCreate,
     MemorySortBy,
+    PersonalInfoStatus,
     SortDirection,
 )
 from runestone.core.exceptions import PermissionDeniedError, UserNotFoundError
@@ -57,6 +58,17 @@ class MemoryContentUpdate(BaseModel):
     item_id: int = Field(..., description="ID of the memory item to update")
     category: MemoryCategory = Field(..., description="Expected category of the memory item")
     content: str = Field(..., min_length=1, description="Replacement content for the memory item")
+
+
+class PersonalInfoAppendInput(BaseModel):
+    """Input for appending a raw personal_info memory item."""
+
+    key: str = Field(..., min_length=1, max_length=100, description="Descriptive personal_info key")
+    content: str = Field(..., min_length=1, description="Raw personal fact to append")
+    status: str = Field(
+        default=PersonalInfoStatus.ACTIVE.value,
+        description="personal_info status, defaults to active",
+    )
 
 
 def _format_tool_error(tool_name: str, exc: Exception) -> str:
@@ -182,6 +194,29 @@ async def upsert_memory_item(
     return (
         f"Memory item saved: [ID:{result.id}] {result.key} in {result.category} (status: {result.status}{priority_str})"
     )
+
+
+@tool
+async def append_personal_info_item(
+    runtime: ToolRuntime[AgentContext],
+    item: Annotated[PersonalInfoAppendInput, Field(description="Raw personal_info fact to append")],
+) -> str:
+    """Append a raw personal_info memory item without deduplicating by key."""
+    logger.info("Agent tool call: append_personal_info_item (key=%s, status=%s)", item.key, item.status)
+    user = runtime.context.user
+
+    try:
+        async with provide_memory_item_service() as service:
+            result = await service.append_personal_info_item(
+                user_id=user.id,
+                key=item.key,
+                content=item.content,
+                status=item.status,
+            )
+    except (PermissionDeniedError, UserNotFoundError, ValueError) as exc:
+        return _format_tool_error("append_personal_info_item", exc)
+
+    return f"Personal info appended: [ID:{result.id}] {result.key} (status: {result.status})"
 
 
 @tool

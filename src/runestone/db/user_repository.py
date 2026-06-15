@@ -55,3 +55,11 @@ class UserRepository:
         if result.rowcount == 0:
             raise UserNotFoundError(f"User with id {user_id} not found")
         await self.db.commit()
+
+    async def set_personal_info_summary(self, user_id: int, summary: str | None) -> None:
+        """Persist the derived personal-info summary for one user."""
+        stmt = update(User).where(User.id == user_id).values(personal_info_summary=summary)
+        result = await self.db.execute(stmt)
+        if result.rowcount == 0:
+            raise UserNotFoundError(f"User with id {user_id} not found")
+        await self.db.commit()
