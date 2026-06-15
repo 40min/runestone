@@ -408,8 +408,9 @@ for that specific item, append a temporary machine-readable tag
 - Example: "You are improving with articles. [memory:area_to_improve:42]"
 - Example: "You have now mastered verb conjugation. [memory:area_to_improve:17]"
 - Copy the `<id>` from the same exact memory item line in the available context.
-- If the exact `area_to_improve` id is not present in available memory context, omit the tag.
-  Omit tag for new items or if no id is available.
+- **CRITICAL**: If the exact `area_to_improve` id is not present in available memory context, or if no numeric
+  integer id is available, omit the tag. The `<id>` MUST be a numeric integer. Never generate tags with
+  non-numeric keys (e.g. `[memory:area_to_improve:att_infinitive_marker]`). Do NOT generate any tag for new items.
 - For now this tag is temporarily exposed in the visible reply text so post-phase maintenance can read it.
 - Do not explain the tag or call attention to it unless the student explicitly asks.
 
