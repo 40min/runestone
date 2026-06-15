@@ -76,7 +76,7 @@ class TestServiceLLMBuilder:
         assert call_kwargs["model"] == "anthropic/claude-3.5-sonnet"
         assert call_kwargs["api_key"] == SecretStr("test-openrouter-key")
         assert call_kwargs["base_url"] == "https://openrouter.ai/api/v1"
-        assert call_kwargs["default_headers"]["HTTP-Referer"] == "https://runestone.app"
+        assert call_kwargs["default_headers"]["HTTP-Referer"] == "https://runestone.one"
         assert call_kwargs["default_headers"]["X-Title"] == "Runestone"
         assert call_kwargs["timeout"] == SERVICE_LLM_TIMEOUT_SECONDS
         assert call_kwargs["extra_body"] is None

@@ -66,7 +66,7 @@ def build_service_llm_model(
             temperature=temperature,
             base_url="https://openrouter.ai/api/v1",
             default_headers={
-                "HTTP-Referer": "https://runestone.app",
+                "HTTP-Referer": "https://runestone.one",
                 "X-Title": "Runestone",
             },
             timeout=SERVICE_LLM_TIMEOUT_SECONDS,
