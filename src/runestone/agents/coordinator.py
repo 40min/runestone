@@ -126,6 +126,9 @@ COORDINATOR_POST_RESPONSE_PROMPT = (
   without an explicit durable signal.
 - The teacher only says a student-written word is misspelled, invalid, nonexistent, or should be replaced
   by another vocabulary item. That is a vocabulary correction, not a durable memory update.
+- The teacher response merely explains general grammar rules or introduces language guidelines using Swedish
+  or English instructional verbs like "kom ihåg" (remember) or "tänk på" (keep in mind) (e.g., explaining
+  that modal verbs do not take "att"). These are generic instructions, not a durable learning signal.
 - The plan would rely on inferred intent rather than explicit wording in the current turn.
 
 Examples that SHOULD route:

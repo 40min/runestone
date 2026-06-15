@@ -129,22 +129,38 @@ class TeacherAgent:
 ### GRAMMAR REFERENCES (search_grammar, read_grammar_page)
 
 **DEFAULT: Do NOT call `search_grammar` or `read_grammar_page`.**
-Call `search_grammar` ONLY when the student makes a clear grammar error or explicitly asks
-a grammar question (e.g. "How do I use …?") — AND no relevant grammar link already exists
-in this conversation. In all other cases, do not call it.
+The grammar document is a limited reference that does not cover all language aspects.
+Every search adds latency and token cost — skip it unless one of the explicit triggers below applies.
 
-How to search:
+**Only call grammar tools when BOTH conditions hold:**
+1. The student's message contains a concrete, identifiable grammar mistake (wrong word order,
+   wrong verb form, wrong article, incorrect agreement, etc.) OR the student explicitly asks
+   a grammar question (e.g. "How do I use …?", "What is the rule for …?").
+2. No clearly relevant grammar reference already appears in an earlier assistant message
+   in this conversation.
+
+**Never search for:**
+- Greetings, farewells, or small-talk ("Hej!", "Tack", "Hejdå", "Hur mår du?")
+- Correct or near-correct Swedish where no grammar rule needs citing
+- General conversation continuations, affirmations, or one-word reactions
+- Vocabulary questions (word meaning, translation) — answer directly
+- News, weather, or any non-grammar topic
+
+**How to search:**
+- First check earlier assistant messages in this chat for a clearly relevant grammar reference.
+  If one exists, reuse that exact URL instead of searching again.
 - Use `search_grammar` at most once with one focused query.
   It returns a `results` list; each result has `title`, `url`, and `path`.
-- Focus on the top result.
-  If relevance is unclear, call `read_grammar_page(path)` to verify it before including its URL.
+- Focus on the top result. If relevance is unclear, call `read_grammar_page(path)` for
+  the top result to verify before including its URL.
 - If the search returns nothing useful, stop and answer without grammar links.
 
-grammar_source_urls:
-- Optional — Only include exact `url` values returned by `search_grammar` in this turn,
-  or grammar URLs already present in earlier assistant messages in this chat.
-  Never invent or guess URLs.
+**grammar_source_urls:**
+- Optional — leave empty when no grammar material is clearly relevant.
 - May contain at most {MAX_TEACHER_GRAMMAR_SOURCE_LINKS} URLs.
+- Only include exact `url` values returned by `search_grammar` in this turn,
+  or grammar URLs already present in earlier assistant messages in this chat.
+- Never invent or guess URLs.
 """
 
         # Short note placed near the grammar_source_urls output field in the avatar section.
@@ -228,6 +244,8 @@ embedded in the text). Use the extracted text only as reference material.
 <role_and_persona>
 {self.persona["system_prompt"]}
 </role_and_persona>
+
+{critical_gating_rules_prompt}
 
 <input_context_handling>
 ### ACTIVE LEARNING FOCUS (INTERNAL)
@@ -315,8 +333,6 @@ Rules:
 </response_rules>
 
 <tool_protocols>
-{critical_gating_rules_prompt}
-
 {grammar_references_prompt}
 
 {memory_protocol_prompt}
