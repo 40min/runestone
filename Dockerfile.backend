@@ -18,12 +18,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy dependency metadata into the build context so remote builders do not
+# depend on BuildKit bind mounts resolving repository files.
+COPY pyproject.toml uv.lock ./
+
 # Install locked dependencies using uv.
 # torch is pinned to the PyTorch CPU index in pyproject.toml, while the
 # remaining packages resolve from the lockfile's default PyPI sources.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen --no-dev --no-editable --no-install-project
 
 # Production stage
