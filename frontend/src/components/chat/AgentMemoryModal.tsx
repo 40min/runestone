@@ -45,6 +45,7 @@ import useMemoryItems, {
 interface AgentMemoryModalProps {
   open: boolean;
   onClose: () => void;
+  refreshToken?: number;
 }
 
 const CATEGORIES: { id: MemoryCategory; label: string }[] = [
@@ -167,6 +168,7 @@ const textFieldStyles = {
 const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
   open,
   onClose,
+  refreshToken = 0,
 }) => {
   const dialogPaperRef = useRef<HTMLDivElement | null>(null);
   const [isCompactLayout, setIsCompactLayout] = useState(false);
@@ -192,6 +194,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [editingPriorityId, setEditingPriorityId] = useState<number | null>(null);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [formData, setFormData] = useState<MemoryItemCreate>({
     category: "personal_info",
     key: "",
@@ -201,6 +204,8 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
   });
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const refreshTimerRef = useRef<number | null>(null);
+  const lastHandledRefreshTokenRef = useRef<number>(refreshToken);
   const displayedCountLabel = `${items.length} item${items.length === 1 ? "" : "s"}`;
   const sortSummaryLabel =
     sortBy === "priority"
@@ -236,17 +241,72 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
     }
   };
 
+  const refreshActiveItems = useCallback(async () => {
+    await fetchItems(
+      activeTab,
+      statusFilter === "all" ? undefined : statusFilter,
+      true,
+      sortBy,
+      sortDirection,
+    );
+  }, [activeTab, fetchItems, sortBy, sortDirection, statusFilter]);
+
+  const refreshActiveItemsRef = useRef(refreshActiveItems);
+  useEffect(() => {
+    refreshActiveItemsRef.current = refreshActiveItems;
+  }, [refreshActiveItems]);
+
   useEffect(() => {
     if (open) {
-      fetchItems(
-        activeTab,
-        statusFilter === "all" ? undefined : statusFilter,
-        true,
-        sortBy,
-        sortDirection,
-      );
+      void refreshActiveItems();
     }
-  }, [open, activeTab, statusFilter, sortBy, sortDirection, fetchItems]);
+  }, [open, activeTab, statusFilter, sortBy, sortDirection, refreshActiveItems]);
+
+  useEffect(() => {
+    if (!open || lastHandledRefreshTokenRef.current === refreshToken) {
+      return;
+    }
+
+    lastHandledRefreshTokenRef.current = refreshToken;
+    setSyncNotice("Teacher memory is refreshing after the new chat reset.");
+
+    if (refreshTimerRef.current !== null) {
+      window.clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+
+    let cancelled = false;
+    const refreshDelaysMs = [0, 1500, 4000, 8000];
+
+    const runRefresh = async (attemptIndex: number) => {
+      if (cancelled) {
+        return;
+      }
+
+      await refreshActiveItemsRef.current();
+
+      if (attemptIndex >= refreshDelaysMs.length - 1) {
+        if (!cancelled) {
+          setSyncNotice(null);
+        }
+        return;
+      }
+
+      refreshTimerRef.current = window.setTimeout(() => {
+        void runRefresh(attemptIndex + 1);
+      }, refreshDelaysMs[attemptIndex + 1]);
+    };
+
+    void runRefresh(0);
+
+    return () => {
+      cancelled = true;
+      if (refreshTimerRef.current !== null) {
+        window.clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    };
+  }, [open, refreshToken]);
 
   useEffect(() => {
     if (!open) {
@@ -254,6 +314,11 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
       setConfirmClear(false);
       setEditingPriorityId(null);
       setIsFiltersOpen(false);
+      setSyncNotice(null);
+      if (refreshTimerRef.current !== null) {
+        window.clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
     }
   }, [open]);
 
@@ -340,6 +405,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
   const handleSaveItem = async () => {
     try {
       await createItem(formData);
+      setSyncNotice(null);
       setIsFormOpen(false);
     } catch (err) {
       console.error("Failed to save memory item", err);
@@ -357,7 +423,14 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
   const handlePriorityChange = async (id: number, value: string) => {
     const priority = value === "" ? null : Number(value);
     setEditingPriorityId(null);
-    await updatePriority(id, priority);
+    try {
+      await updatePriority(id, priority);
+      setSyncNotice(null);
+    } catch (err) {
+      console.error("Failed to update memory priority", err);
+      setSyncNotice("That memory item changed during background cleanup. Refreshed the list.");
+      await refreshActiveItems();
+    }
   };
 
   const renderStatusMenuItems = (category: MemoryCategory) =>
@@ -793,6 +866,19 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
               </Box>
             )}
 
+            {syncNotice && (
+              <Box
+                sx={{
+                  p: 2,
+                  bgcolor: "rgba(56, 224, 123, 0.08)",
+                  border: "1px solid rgba(56, 224, 123, 0.18)",
+                  borderRadius: 1,
+                }}
+              >
+                <Typography sx={{ color: "#d1fae5" }}>{syncNotice}</Typography>
+              </Box>
+            )}
+
             {items.length === 0 && !loading && (
               <Box sx={{ py: 8, textAlign: "center", color: "#6b7280" }}>
                 <Typography variant="body1">
@@ -1008,8 +1094,18 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                             <IconButton
                               size="small"
                               onClick={async () => {
-                                await deleteItem(item.id);
-                                setConfirmDeleteId(null);
+                                try {
+                                  await deleteItem(item.id);
+                                  setSyncNotice(null);
+                                  setConfirmDeleteId(null);
+                                } catch (err) {
+                                  console.error("Failed to delete memory item", err);
+                                  setConfirmDeleteId(null);
+                                  setSyncNotice(
+                                    "That memory item changed during background cleanup. Refreshed the list.",
+                                  );
+                                  await refreshActiveItems();
+                                }
                               }}
                               aria-label="Confirm delete"
                               sx={{ color: "#ef4444" }}

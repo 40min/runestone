@@ -56,6 +56,7 @@ const ChatView: React.FC = () => {
     messages,
     isLoading,
     isSyncingHistory,
+    memoryRefreshToken,
     historySyncNotice,
     isBackendAvailable,
     error,
@@ -625,6 +626,7 @@ const ChatView: React.FC = () => {
       <AgentMemoryModal
         open={isMemoryModalOpen}
         onClose={() => setIsMemoryModalOpen(false)}
+        refreshToken={memoryRefreshToken}
       />
     </Box>
   );
