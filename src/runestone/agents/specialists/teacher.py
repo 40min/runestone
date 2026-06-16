@@ -482,10 +482,10 @@ already names a clear topic.
         messages = [SystemMessage(content=self._format_current_datetime(user))]
 
         # Add user's mother tongue if available
-        if user.mother_tongue:
-            explanation_language = user.mother_tongue.strip()
+        explanation_language = user.mother_tongue.strip() if user.mother_tongue else ""
+        if explanation_language:
             language_msg = (
-                f"[IMPORTANT] STUDENT'S MOTHER TONGUE: {user.mother_tongue}\n\n"
+                f"[IMPORTANT] STUDENT'S MOTHER TONGUE: {explanation_language}\n\n"
                 f"Use {explanation_language} as the default language for all student-facing interaction. "
                 "Switch to Swedish if the student asks for it, and keep using Swedish naturally in examples, "
                 "exercises, and quoted language material."

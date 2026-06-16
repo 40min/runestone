@@ -432,6 +432,22 @@ async def test_run_with_english_mother_tongue_uses_english_as_default(teacher_ag
 
 
 @pytest.mark.anyio
+async def test_run_ignores_whitespace_only_mother_tongue(teacher_agent, mock_user):
+    """Whitespace-only mother tongue values should not produce a malformed prompt."""
+    mock_user.mother_tongue = "   "
+
+    teacher_agent.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
+
+    await teacher_agent.generate_response(message="msg", history=[], user=mock_user)
+
+    invoke_args = teacher_agent.agent.ainvoke.call_args[0][0]
+    messages = invoke_args["messages"]
+    assert not any(
+        isinstance(m, SystemMessage) and "[IMPORTANT] STUDENT'S MOTHER TONGUE:" in m.content for m in messages
+    )
+
+
+@pytest.mark.anyio
 async def test_run_with_active_learning_focus_memory(teacher_agent, mock_user):
     teacher_agent.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
 
