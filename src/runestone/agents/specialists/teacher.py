@@ -213,7 +213,7 @@ embedded in the text). Use the extracted text only as reference material.
         critical_gating_rules_prompt = """
 <critical_gating_rules>
 ### CRITICAL GATING RULES & CONSTRAINTS (MANDATORY)
-1. **DEFAULT: Do NOT call any tools.** Keep tool usage to a absolute minimum.
+1. **DEFAULT: Do NOT call any tools.** Keep tool usage to an absolute minimum.
    Every tool call adds latency and token cost.
 2. **NO TOOL CALLS FOR SMALL-TALK:** Never call any tool (including `search_grammar`,
    `read_grammar_page`, or `read_active_learning_focus`) for greetings, farewells,
@@ -483,11 +483,12 @@ already names a clear topic.
 
         # Add user's mother tongue if available
         if user.mother_tongue:
+            explanation_language = user.mother_tongue.strip()
             language_msg = (
                 f"[IMPORTANT] STUDENT'S MOTHER TONGUE: {user.mother_tongue}\n\n"
-                "Converse in Swedish as the primary language of interaction. "
-                "Use the student's mother tongue (instead of English) only for explanations, "
-                "translation help, and grammatical feedback."
+                f"Use {explanation_language} as the default language for all student-facing interaction. "
+                "Switch to Swedish if the student asks for it, and keep using Swedish naturally in examples, "
+                "exercises, and quoted language material."
             )
             messages.append(SystemMessage(content=language_msg))
 
