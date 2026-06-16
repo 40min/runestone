@@ -323,6 +323,23 @@ def test_memory_keeper_prompt_terminal_noop_on_not_found():
     assert "create a duplicate item" in MEMORY_KEEPER_SYSTEM_PROMPT
 
 
+def test_memory_keeper_prompt_case_c_without_id_is_strict_noop():
+    """Teacher-driven Case C updates without an ID must not read, guess, or create items."""
+    assert "- **IF NO ID TAG PRESENT**: If no `[memory:area_to_improve:<id>]` tag is present:" in (
+        MEMORY_KEEPER_SYSTEM_PROMPT
+    )
+    assert "Do NOT call `read_memory` at all." in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "teacher signaled an update without a usable memory ID" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "Do NOT guess the target item, do NOT perform lookups" in MEMORY_KEEPER_SYSTEM_PROMPT
+    assert 'Teacher: "You have now mastered verb conjugation" (no id) → Case C: terminal no-op' in (
+        MEMORY_KEEPER_SYSTEM_PROMPT
+    )
+    assert 'Teacher: "You are visibly improving with X" (no id) → Case C: terminal no-op' in (
+        MEMORY_KEEPER_SYSTEM_PROMPT
+    )
+    assert "do NOT read, do NOT upsert" in MEMORY_KEEPER_SYSTEM_PROMPT
+
+
 def test_memory_keeper_prompt_terminal_noop_on_wrong_category_priority():
     """Prompt must make wrong-category priority errors a terminal stop."""
     assert "priority is only applicable to category 'area_to_improve'" in MEMORY_KEEPER_SYSTEM_PROMPT

@@ -110,18 +110,10 @@ Execution:
   3. If the targeted write tool returns an error matching any of the terminal guardrail conditions below,
      stop immediately — do **not** retry, create, or do anything else.
 - **IF NO ID TAG PRESENT**: If no `[memory:area_to_improve:<id>]` tag is present:
-  1. Do a single targeted `read_memory` with a category filter to locate the item ID. Do not perform a
-     broad unsorted scan.
-  2. If a matching item is found: write to that item ID.
-  3. If no matching item is found (due to missing ID in context, a completely new grammar topic,
-     or a parsing/tagging error):
-     - If the signal represents a learning need, struggle, or improvement (e.g. "struggling with X",
-       "improving with X"), directly call `upsert_memory_item` using a fresh descriptive English key
-       to create a new memory item.
-     - Otherwise (e.g. if the teacher is marking a completely unknown topic as mastered), treat it
-       as a terminal no-op: log the reason in `artifacts.notes`, return `status="no_action"`
-       immediately, and stop. Do NOT create a duplicate.
-  4. Prefer one targeted read over creating a duplicate.
+  1. Do NOT call `read_memory` at all.
+  2. Treat the turn as a terminal no-op: log that the teacher signaled an update without a usable memory ID,
+     return `status="no_action"`, and stop immediately.
+  3. Do NOT guess the target item, do NOT perform lookups, and do NOT create a replacement or duplicate item.
 
 ## Terminal No-Op Conditions
 
@@ -220,9 +212,9 @@ Return valid JSON matching this exact shape and nothing else:
 - Teacher: "This is a recurring issue to remember: articles" → Case B: create/update `area_to_improve` directly
 - Teacher: "Remember that the student's goal is speaking fluency" → Case B: append `personal_info` directly
 - Teacher: "You are improving with articles. [memory:area_to_improve:42]" → Case C: update status for id=42 directly
-- Teacher: "You have now mastered verb conjugation" (no id) → Case C: targeted read, then update
-- Teacher: "You are visibly improving with X" (no id, item not in memory) → Case C: targeted
-  read returns empty → terminal no-op, return `no_action`, stop; do NOT upsert
+- Teacher: "You have now mastered verb conjugation" (no id) → Case C: terminal no-op, return `no_action`, stop
+- Teacher: "You are visibly improving with X" (no id) → Case C: terminal no-op, return `no_action`, stop;
+  do NOT read, do NOT upsert
 - Case C targeted write returns "Memory item with id ... not found" → terminal no-op,
   return `no_action`, stop
 - Case C targeted write returns "content update category mismatch: expected '...',
