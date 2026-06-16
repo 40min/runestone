@@ -7,7 +7,7 @@ Use this for time-sensitive answers, but do not mention this internal context un
 [SYSTEM]
 [IMPORTANT] STUDENT'S MOTHER TONGUE: Spanish
 
-Converse in Swedish as the primary language of interaction. Use the student's mother tongue (instead of English) only for explanations, translation help, and grammatical feedback.
+Use Spanish as the default language for all student-facing interaction. Switch to Swedish if the student asks for it, and keep using Swedish naturally in examples, exercises, and quoted language material.
 
 [SYSTEM]
 [PRE_RESPONSE_SPECIALISTS]
