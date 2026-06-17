@@ -405,6 +405,19 @@ The Docker setup automatically handles SQLite database permissions to prevent "a
 
 This clean solution eliminates the need for complex user ID mapping while maintaining security and portability.
 
+### Coolify Volume Permissions
+
+When deploying the application in Coolify, the backend and recall services run as non-root user `runestone` with UID/GID `10001:10001` (to prevent conflicts with host system users like `ollama` or `systemd-journal`).
+
+Since the `state` directory is bind-mounted on the host under `/data/coolify/applications/<uuid>/state`, the container might experience permission denied errors (e.g., when accessing `hf-cache` or `state.json`) unless the host directory ownership matches.
+
+To resolve this, run the following command on the host machine:
+
+```bash
+sudo chown -R 10001:10001 /data/coolify/applications/<uuid>/state
+```
+Replace `<uuid>` with your Coolify application's UUID.
+
 ### Running Tests
 
 ```bash
