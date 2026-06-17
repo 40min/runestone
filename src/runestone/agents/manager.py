@@ -163,18 +163,20 @@ class AgentsManager:
                     )
             except (SQLAlchemyError, ValueError, RuntimeError) as e:
                 logger.warning("old mastered memory cleanup failed user_id=%s error=%s", user.id, e)
-            try:
-                starter_items = await memory_item_service.list_start_area_to_improve_items(
-                    user.id,
-                    area_limit=self.STARTER_MEMORY_AREA_LIMIT,
-                )
-                if starter_items:
-                    active_learning_focus_memory = serialize_memory_items(starter_items)
-            except (SQLAlchemyError, ValueError, RuntimeError) as e:
-                logger.warning("active learning focus memory load failed user_id=%s error=%s", user.id, e)
-            raw_personal_info_summary = getattr(user, "personal_info_summary", None)
-            personal_info_summary = raw_personal_info_summary if isinstance(raw_personal_info_summary, str) else ""
-            current_recall_words = self._load_current_recall_words(user)
+
+        try:
+            starter_items = await memory_item_service.list_start_area_to_improve_items(
+                user.id,
+                area_limit=self.STARTER_MEMORY_AREA_LIMIT,
+            )
+            if starter_items:
+                active_learning_focus_memory = serialize_memory_items(starter_items)
+        except (SQLAlchemyError, ValueError, RuntimeError) as e:
+            logger.warning("active learning focus memory load failed user_id=%s error=%s", user.id, e)
+
+        raw_personal_info_summary = getattr(user, "personal_info_summary", None)
+        personal_info_summary = raw_personal_info_summary if isinstance(raw_personal_info_summary, str) else ""
+        current_recall_words = self._load_current_recall_words(user)
 
         coordinator_history = history[-self.COORDINATOR_MAX_HISTORY_MESSAGES :] if history else []
         if history and len(history) > self.COORDINATOR_MAX_HISTORY_MESSAGES:

@@ -1993,11 +1993,12 @@ async def test_prepare_pre_turn_loads_active_learning_focus_memory_on_first_turn
 
 
 @pytest.mark.anyio
-async def test_prepare_pre_turn_skips_active_learning_focus_memory_with_history(
+async def test_prepare_pre_turn_loads_active_learning_focus_memory_with_history(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
+    mock_user.personal_info_summary = "Likes chess."
 
     _plan, _pre_results, active_learning_focus_memory, personal_info_summary, _recent, _current_recall_words = (
         await manager.prepare_pre_turn(
@@ -2010,9 +2011,10 @@ async def test_prepare_pre_turn_skips_active_learning_focus_memory_with_history(
         )
     )
 
-    mock_memory_item_service.list_start_area_to_improve_items.assert_not_called()
-    assert active_learning_focus_memory == ""
-    assert personal_info_summary == ""
+    mock_memory_item_service.list_start_area_to_improve_items.assert_called_once_with(
+        mock_user.id, area_limit=manager.STARTER_MEMORY_AREA_LIMIT
+    )
+    assert personal_info_summary == "Likes chess."
 
 
 @pytest.mark.anyio
@@ -2038,7 +2040,7 @@ async def test_prepare_pre_turn_loads_current_recall_words_on_first_turn(
 
 
 @pytest.mark.anyio
-async def test_prepare_pre_turn_skips_current_recall_words_with_history(
+async def test_prepare_pre_turn_loads_current_recall_words_with_history(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
     manager = _make_manager(mock_settings)
@@ -2055,8 +2057,8 @@ async def test_prepare_pre_turn_skips_current_recall_words_with_history(
             )
         )
 
-    mock_loader.assert_not_called()
-    assert current_recall_words == []
+    mock_loader.assert_called_once_with(mock_user)
+    assert current_recall_words == ["hej"]
 
 
 # ---------------------------------------------------------------------------
