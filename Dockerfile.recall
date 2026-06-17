@@ -52,8 +52,10 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # Create non-root user and state directory
-RUN groupadd -g 10001 runestone \
-    && useradd -u 10001 -g runestone -d /home/runestone -m runestone \
+ARG USER_UID=10001
+ARG USER_GID=10001
+RUN groupadd -g ${USER_GID} runestone \
+    && useradd -u ${USER_UID} -g runestone -d /home/runestone -m -s /usr/sbin/nologin runestone \
     && mkdir -p /app/state/hf-cache \
     && chown -R runestone:runestone /app /home/runestone
 
