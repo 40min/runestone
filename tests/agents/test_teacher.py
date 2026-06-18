@@ -456,15 +456,19 @@ async def test_run_trims_mother_tongue_before_prompt_injection(teacher_agent, mo
 
     await teacher_agent.generate_response(message="msg", history=[], user=mock_user)
 
+    teacher_agent.agent.ainvoke.assert_called_once()
     invoke_args = teacher_agent.agent.ainvoke.call_args[0][0]
     messages = invoke_args["messages"]
-    assert any(
-        isinstance(m, SystemMessage)
-        and "[IMPORTANT] STUDENT'S MOTHER TONGUE: Spanish" in m.content
-        and "  Spanish  " not in m.content
-        and "Use Spanish as the default language for all student-facing interaction." in m.content
-        for m in messages
+    system_messages = [message for message in messages if isinstance(message, SystemMessage)]
+    mother_tongue_msg = next(
+        (message for message in system_messages if "[IMPORTANT] STUDENT'S MOTHER TONGUE:" in message.content),
+        None,
     )
+
+    assert mother_tongue_msg is not None, "Mother tongue system message was not injected"
+    assert "[IMPORTANT] STUDENT'S MOTHER TONGUE: Spanish" in mother_tongue_msg.content
+    assert "  Spanish  " not in mother_tongue_msg.content
+    assert "Use Spanish as the default language for all student-facing interaction." in mother_tongue_msg.content
 
 
 @pytest.mark.anyio
