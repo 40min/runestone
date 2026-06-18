@@ -42,6 +42,7 @@ __all__ = [
     "VocabularyStatsResponse",
     "UserProfileResponse",
     "UserProfileUpdate",
+    "MemoryMaintenanceStatusResponse",
 ]
 
 
@@ -220,3 +221,9 @@ class UserProfileUpdate(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+
+class MemoryMaintenanceStatusResponse(BaseModel):
+    """Schema for memory maintenance status response."""
+
+    running: bool

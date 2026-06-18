@@ -18,6 +18,7 @@ from runestone.api.memory_item_schemas import (
     MemorySortBy,
     SortDirection,
 )
+from runestone.api.schemas import MemoryMaintenanceStatusResponse
 from runestone.auth.dependencies import get_current_user
 from runestone.core.exceptions import PermissionDeniedError, UserNotFoundError
 from runestone.core.logging_config import get_logger
@@ -229,6 +230,7 @@ async def clear_memory_category(
 
 @router.get(
     "/memory/maintenance-status",
+    response_model=MemoryMaintenanceStatusResponse,
     responses={
         200: {"description": "Memory maintenance status retrieved successfully"},
         401: {"description": "Not authenticated"},
@@ -237,13 +239,13 @@ async def clear_memory_category(
 async def get_memory_maintenance_status(
     current_user: Annotated[User, Depends(get_current_user)],
     agents_manager: Annotated[AgentsManager, Depends(get_agents_manager)],
-) -> dict:
+) -> MemoryMaintenanceStatusResponse:
     """
     Check if memory maintenance is currently running for the current user.
     """
     try:
         running = agents_manager.is_memory_maintenance_running(current_user.id)
-        return {"running": running}
+        return MemoryMaintenanceStatusResponse(running=running)
     except Exception as e:
         logger.error(f"Failed to check memory maintenance status for user {current_user.id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to check memory maintenance status")

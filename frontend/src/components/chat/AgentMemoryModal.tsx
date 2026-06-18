@@ -289,12 +289,20 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
     };
 
     const getMaintenanceStatusWithTimeout = async (): Promise<boolean | null> => {
-      return Promise.race<boolean | null>([
-        Promise.resolve(checkMaintenanceStatus()).catch(() => null),
-        new Promise<null>((resolve) => {
-          window.setTimeout(() => resolve(null), STATUS_REQUEST_TIMEOUT_MS);
-        }),
-      ]);
+      let timeoutId: number | undefined;
+      const timeoutPromise = new Promise<null>((resolve) => {
+        timeoutId = window.setTimeout(() => resolve(null), STATUS_REQUEST_TIMEOUT_MS);
+      });
+      try {
+        return await Promise.race<boolean | null>([
+          Promise.resolve(checkMaintenanceStatus()).catch(() => null),
+          timeoutPromise,
+        ]);
+      } finally {
+        if (timeoutId !== undefined) {
+          window.clearTimeout(timeoutId);
+        }
+      }
     };
 
     const checkStatusAndSchedule = async () => {
