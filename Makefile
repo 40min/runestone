@@ -146,6 +146,8 @@ install-all:
 # CODE QUALITY AND LINTING
 # =============================================================================
 
+PYTHON_FILES := src/ tests/ scripts/ alembic/ recall_main.py
+
 # Run all linting and formatting (with fixes)
 lint: backend-lint frontend-lint
 	@echo "✅ All linting complete!"
@@ -153,18 +155,18 @@ lint: backend-lint frontend-lint
 # Run linting checks only (no fixes)
 lint-check:
 	@echo "🔍 Checking code formatting and linting..."
-	@uv run black --check src/ tests/
-	@uv run isort --check-only src/ tests/
-	@uv run flake8 --max-line-length=120 --extend-ignore=E203,W503 src/ tests/
+	@uv run black --check $(PYTHON_FILES)
+	@uv run isort --check-only $(PYTHON_FILES)
+	@uv run flake8 --max-line-length=120 --extend-ignore=E203,W503 $(PYTHON_FILES)
 	@cd frontend && npm run lint
 	@echo "✅ Linting checks complete!"
 
 # Run backend linting and formatting
 backend-lint:
 	@echo "🔧 Running backend code formatting and linting..."
-	@uv run black src/ tests/
-	@uv run isort src/ tests/
-	@uv run flake8 --max-line-length=120 --extend-ignore=E203,W503 src/ tests/
+	@uv run black $(PYTHON_FILES)
+	@uv run isort $(PYTHON_FILES)
+	@uv run flake8 --max-line-length=120 --extend-ignore=E203,W503 $(PYTHON_FILES)
 	@echo "✅ Backend linting complete!"
 
 # Run frontend linting
