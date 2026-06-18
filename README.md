@@ -405,6 +405,21 @@ The Docker setup automatically handles SQLite database permissions to prevent "a
 
 This clean solution eliminates the need for complex user ID mapping while maintaining security and portability.
 
+### Docker Volume Permissions
+
+When deploying the application inside Docker containers (using `docker compose` or orchestrators like Coolify), the backend and recall services run as a non-root user `runestone` with UID/GID `10001:10001`. This ensures security and avoids namespace conflicts with standard system accounts on the host.
+
+If you bind-mount a host directory to `/app/state` (for example, the default `./state` directory in raw Docker Compose, or `/data/coolify/applications/<uuid>/state` under Coolify), the container processes may encounter "Permission Denied" errors when trying to write to files (like `state.json`) or create directories (like `hf-cache`).
+
+To resolve this, ensure the host directory is owned by the container's UID/GID. You can update the ownership of your state directory on the host by running:
+
+```bash
+sudo chown -R 10001:10001 /path/to/host/state
+```
+
+* **For raw Docker Compose:** `/path/to/host/state` is typically the `./state` directory in your local project directory.
+* **For Coolify:** `/path/to/host/state` is typically `/data/coolify/applications/<uuid>/state` on the host server.
+
 ### Running Tests
 
 ```bash
