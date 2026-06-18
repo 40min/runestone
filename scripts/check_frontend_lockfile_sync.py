@@ -9,7 +9,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = REPO_ROOT / "frontend"
 PACKAGE_FILES = ("package.json", "package-lock.json")
