@@ -17,6 +17,8 @@ from runestone.rag.loader import load_grammar_documents
 
 logger = logging.getLogger(__name__)
 
+EMBEDDING_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+
 
 class GrammarIndex:
     """
@@ -60,11 +62,7 @@ class GrammarIndex:
 
             # Build FAISS vector store from vector docs (annotations)
             logger.info("Building FAISS index from %d vector documents (this may take a minute...)", len(vector_docs))
-            Path(settings.hf_cache_dir).mkdir(parents=True, exist_ok=True)
-            embeddings = HuggingFaceEmbeddings(
-                model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-                cache_folder=settings.hf_cache_dir,
-            )
+            embeddings = self._load_embeddings()
             self.vector_store = FAISS.from_documents(vector_docs, embeddings)
             self.vector_retriever = self.vector_store.as_retriever(search_kwargs={"k": 10})
 
@@ -76,6 +74,35 @@ class GrammarIndex:
 
             self._initialized = True
             logger.info("Grammar index initialized successfully")
+
+    def _load_embeddings(self) -> HuggingFaceEmbeddings:
+        """Load HuggingFaceEmbeddings model, attempting local cache first."""
+        Path(settings.hf_cache_dir).mkdir(parents=True, exist_ok=True)
+
+        # First try loading from cache only, avoiding any online HEAD requests
+        try:
+            model_kwargs = {"local_files_only": True}
+            if settings.hf_token:
+                model_kwargs["token"] = settings.hf_token
+            return HuggingFaceEmbeddings(
+                model_name=EMBEDDING_MODEL_NAME,
+                cache_folder=settings.hf_cache_dir,
+                model_kwargs=model_kwargs,
+            )
+        except Exception as e:
+            logger.info(
+                "Local model not found or failed to load (%s: %s). Downloading from Hugging Face...",
+                type(e).__name__,
+                e,
+            )
+            model_kwargs = {"local_files_only": False}
+            if settings.hf_token:
+                model_kwargs["token"] = settings.hf_token
+            return HuggingFaceEmbeddings(
+                model_name=EMBEDDING_MODEL_NAME,
+                cache_folder=settings.hf_cache_dir,
+                model_kwargs=model_kwargs,
+            )
 
     def search(self, query: str, top_k: int = 5) -> list[Document]:
         """

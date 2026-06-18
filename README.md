@@ -558,6 +558,7 @@ Design docs:
 
 **General Settings:**
 - `VERBOSE`: Enable verbose logging (`true` or `false`, default: `false`)
+- `HF_TOKEN`: Hugging Face Hub token to speed up downloads and avoid API rate limits when downloading embedding models (optional)
 
 **Telegram Configuration:**
 - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token from @BotFather (required for Rune Recall)

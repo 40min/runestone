@@ -83,3 +83,26 @@ def test_grammar_index_search_empty(mock_grammar_files, mock_embeddings):
     index = GrammarIndex(str(mock_grammar_files), "http://test-host")
     results = index.search("  ")
     assert results == []
+
+
+def test_grammar_index_init_fallback(mock_grammar_files):
+    """Test that GrammarIndex falls back to local_files_only=False if local_files_only=True fails."""
+    with patch("runestone.rag.index.HuggingFaceEmbeddings") as mock_class:
+        # Side effect: first call raises OSError, second call succeeds
+        mock_instance = MagicMock()
+        mock_instance.embed_documents.side_effect = lambda texts: [[0.1] * 128 for _ in texts]
+        mock_class.side_effect = [OSError("Local files not found"), mock_instance]
+
+        index = GrammarIndex(str(mock_grammar_files), "http://test-host:5173")
+        index._initialize()
+
+        # Verify that mock_class was called twice
+        assert mock_class.call_count == 2
+
+        # Verify first call kwargs had local_files_only = True
+        first_call_kwargs = mock_class.call_args_list[0][1]
+        assert first_call_kwargs["model_kwargs"]["local_files_only"] is True
+
+        # Verify second call kwargs had local_files_only = False
+        second_call_kwargs = mock_class.call_args_list[1][1]
+        assert second_call_kwargs["model_kwargs"]["local_files_only"] is False

@@ -72,6 +72,7 @@ class Settings(BaseSettings):
 
     # HuggingFace / sentence-transformers cache (must be writable in containers)
     hf_cache_dir: str = "state/hf-cache"
+    hf_token: Optional[str] = None
     # Telegram Configuration
     telegram_bot_token: str
     verbose: bool = False
