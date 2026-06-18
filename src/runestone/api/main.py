@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.grammar_service = GrammarService(settings.cheatsheets_dir)
     app.state.grammar_index = GrammarIndex(settings.cheatsheets_dir, settings.frontend_url)
     app.state.recall_state_manager = StateManager(settings.state_file_path)
-    app.state.agent_service = AgentsManager(
+    app.state.agents_manager = AgentsManager(
         settings,
         grammar_index=app.state.grammar_index,
         grammar_service=app.state.grammar_service,

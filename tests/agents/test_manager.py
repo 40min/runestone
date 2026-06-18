@@ -210,12 +210,16 @@ async def test_start_background_memory_maintenance_runs_specialist_and_clears_re
         )
     )
 
+    assert manager.is_memory_maintenance_running(mock_user.id) is False
+
     scheduled = await manager.start_background_memory_maintenance(mock_user)
 
     assert scheduled is True
+    assert manager.is_memory_maintenance_running(mock_user.id) is True
     task = manager._memory_maintenance_registry.tasks[str(mock_user.id)]
     await task
     manager.memory_maintainer.run_for_user.assert_awaited_once_with(mock_user)
+    assert manager.is_memory_maintenance_running(mock_user.id) is False
     assert str(mock_user.id) not in manager._memory_maintenance_registry.tasks
 
 

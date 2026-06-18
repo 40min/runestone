@@ -44,6 +44,7 @@ interface UseMemoryItemsReturn {
   updatePriority: (id: number, priority: number | null) => Promise<MemoryItem>;
   deleteItem: (id: number) => Promise<void>;
   clearCategory: (category: MemoryCategory) => Promise<void>;
+  checkMaintenanceStatus: () => Promise<boolean | null>;
 }
 
 const useMemoryItems = (): UseMemoryItemsReturn => {
@@ -171,6 +172,16 @@ const useMemoryItems = (): UseMemoryItemsReturn => {
     [apiDelete]
   );
 
+  const checkMaintenanceStatus = useCallback(async (): Promise<boolean | null> => {
+    try {
+      const data = await get<{ running: boolean }>("/api/memory/maintenance-status");
+      return data.running;
+    } catch (err) {
+      console.error("Failed to check memory maintenance status", err);
+      return null;
+    }
+  }, [get]);
+
   return {
     items,
     loading,
@@ -182,6 +193,7 @@ const useMemoryItems = (): UseMemoryItemsReturn => {
     updatePriority,
     deleteItem,
     clearCategory,
+    checkMaintenanceStatus,
   };
 };
 

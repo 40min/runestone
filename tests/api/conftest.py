@@ -151,9 +151,9 @@ def client_with_overrides(mock_llm_model, db_with_test_user):
         overrides[get_runestone_processor] = lambda: processor_instance
 
         if agent_service:
-            agent_service_instance = agent_service
+            agents_manager_instance = agent_service
         else:
-            agent_service_instance = Mock()
+            agents_manager_instance = Mock()
 
         # Always mock TTSService
         from runestone.dependencies import get_tts_service, get_voice_service
@@ -165,12 +165,12 @@ def client_with_overrides(mock_llm_model, db_with_test_user):
 
         # Always provide AgentsManager via dependency + app.state so callers that
         # access request.app.state.* directly don't explode.
-        from runestone.dependencies import get_agent_service
+        from runestone.dependencies import get_agents_manager
 
-        overrides[get_agent_service] = lambda: agent_service_instance
+        overrides[get_agents_manager] = lambda: agents_manager_instance
 
         # Also inject into app.state to avoid attribute errors
-        app.state.agent_service = agent_service_instance
+        app.state.agents_manager = agents_manager_instance
         app.state.tts_service = tts_service_instance
         app.state.voice_service = voice_service_instance
 
@@ -202,7 +202,7 @@ def client_with_overrides(mock_llm_model, db_with_test_user):
                 "processor": processor,
                 "llm_model": llm_model or mock_llm_model,
                 "current_user": current_user or test_user,
-                "agent_service": agent_service_instance,
+                "agents_manager": agents_manager_instance,
                 "tts_service": tts_service_instance,
                 "voice_service": voice_service_instance,
             }

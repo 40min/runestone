@@ -34,6 +34,24 @@ process-local and is acceptable for the current single-process deployment.
 If the backend later runs multiple worker processes or instances, this guard
 should move to a shared store or durable job system.
 
+## Checking Maintenance Status and Frontend Sync
+
+To prevent the frontend from displaying outdated or incomplete memory items while the background task is running, the backend exposes the task status, and the frontend polls for completion.
+
+### Status Endpoint
+
+- **Route**: `GET /api/memory/maintenance-status`
+- **Controller**: `get_memory_maintenance_status()` in [memory_endpoints.py](file:///Users/40min/www/runestone/src/runestone/api/memory_endpoints.py).
+- **Logic**: Inspects the `AgentsManager` in-memory `_memory_maintenance_registry` to see if a background task for `user.id` is currently active (registered and not `done()`). Returns `{"running": true}` or `{"running": false}`.
+
+### Frontend Polling Flow
+
+When the user initiates a new chat reset:
+1. The frontend hook increments `memoryRefreshToken` and the `AgentMemoryModal` sets a sync notice: `"Teacher memory is refreshing after the new chat reset."`
+2. It waits **5 seconds** (since the backend maintenance task does not finish immediately) before making the first `GET /api/memory/maintenance-status` check.
+3. It polls the status endpoint every **5 seconds**.
+4. When `running` becomes `false` (or the safety timeout of **240 seconds** is reached), it refreshes the active memory items list one final time to fetch the reconciled database records, and hides the sync notice.
+
 ## Scope
 
 The background reset entrypoint now runs two separate maintenance domains:

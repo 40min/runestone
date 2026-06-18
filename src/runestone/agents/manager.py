@@ -569,6 +569,11 @@ class AgentsManager:
         """Run the memory maintainer directly for chat-reset startup hygiene."""
         return await self.memory_maintainer.run_for_user(user)
 
+    def is_memory_maintenance_running(self, user_id: int) -> bool:
+        """Check if a memory maintenance task is currently active for the user."""
+        task = self._memory_maintenance_registry.tasks.get(str(user_id))
+        return task is not None and not task.done()
+
     async def start_background_post_turn(
         self,
         message: str,

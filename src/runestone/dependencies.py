@@ -273,17 +273,17 @@ def get_grammar_service(request: Request) -> GrammarService:
     return request.app.state.grammar_service
 
 
-def get_agent_service(request: Request) -> AgentsManager:
+def get_agents_manager(request: Request) -> AgentsManager:
     """
-    Dependency injection for agent service.
+    Dependency injection for the shared agents manager.
 
     Args:
         request: FastAPI request object
 
     Returns:
-        AgentsManager: Cached service instance for chat agent operations
+        AgentsManager: Cached orchestration manager for chat agent operations
     """
-    return request.app.state.agent_service
+    return request.app.state.agents_manager
 
 
 def get_tts_service(request: Request) -> TTSService:
@@ -317,7 +317,7 @@ def get_chat_service(
     repo: Annotated[ChatRepository, Depends(get_chat_repository)],
     side_effect_service: Annotated[AgentSideEffectService, Depends(get_agent_side_effect_service)],
     user_service: Annotated[UserService, Depends(get_user_service)],
-    agent_service: Annotated[AgentsManager, Depends(get_agent_service)],
+    agents_manager: Annotated[AgentsManager, Depends(get_agents_manager)],
     processor: Annotated[RunestoneProcessor, Depends(get_runestone_processor)],
     vocabulary_service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
     tts_service: Annotated[TTSService, Depends(get_tts_service)],
@@ -330,7 +330,7 @@ def get_chat_service(
         settings: Application settings from dependency injection
         repo: ChatRepository from dependency injection
         user_service: UserService from dependency injection
-        agent_service: AgentsManager from dependency injection
+        agents_manager: AgentsManager from dependency injection
         processor: RunestoneProcessor from dependency injection
         vocabulary_service: VocabularyService from dependency injection
         tts_service: TTSService from dependency injection
@@ -343,7 +343,7 @@ def get_chat_service(
         repo,
         side_effect_service,
         user_service,
-        agent_service,
+        agents_manager,
         processor,
         vocabulary_service,
         tts_service,

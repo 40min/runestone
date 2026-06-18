@@ -19,6 +19,7 @@ const mockUseMemoryItems = {
   updatePriority: mockUpdatePriority,
   deleteItem: vi.fn().mockResolvedValue(undefined),
   clearCategory: vi.fn().mockResolvedValue(undefined),
+  checkMaintenanceStatus: vi.fn().mockResolvedValue(false),
 };
 
 const setMatchMedia = (matches: boolean) => {
@@ -42,6 +43,8 @@ describe('AgentMemoryModal', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     setMatchMedia(false);
+    mockUseMemoryItems.checkMaintenanceStatus.mockReset();
+    mockUseMemoryItems.checkMaintenanceStatus.mockResolvedValue(false);
     (useMemoryItemsModule.default as Mock).mockReturnValue(mockUseMemoryItems);
   });
 
@@ -64,72 +67,253 @@ describe('AgentMemoryModal', () => {
     expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledWith('personal_info', undefined, true, 'updated_at', 'desc');
   });
 
-  it('re-fetches memory for a short window after a new chat refresh token changes', async () => {
+  it('re-fetches memory when maintenance completes after a new chat reset', async () => {
+    // Start with maintenance running
+    mockUseMemoryItems.checkMaintenanceStatus.mockResolvedValue(true);
+
     const { rerender } = render(
       <AgentMemoryModal open={true} onClose={() => {}} refreshToken={0} />
     );
 
     mockUseMemoryItems.fetchItems.mockClear();
+    mockUseMemoryItems.checkMaintenanceStatus.mockClear();
 
     rerender(<AgentMemoryModal open={true} onClose={() => {}} refreshToken={1} />);
 
+    // Sync notice should be displayed immediately
     expect(screen.getByText('Teacher memory is refreshing after the new chat reset.')).toBeInTheDocument();
+    // No status check or items fetch should happen synchronously
+    expect(mockUseMemoryItems.checkMaintenanceStatus).not.toHaveBeenCalled();
+    expect(mockUseMemoryItems.fetchItems).not.toHaveBeenCalled();
+
+    // Advance by 5s to trigger the first status check
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    // It should check status, see it is still running, and keep notice without fetching items
+    expect(mockUseMemoryItems.checkMaintenanceStatus).toHaveBeenCalledTimes(1);
+    expect(mockUseMemoryItems.fetchItems).not.toHaveBeenCalled();
+    expect(screen.getByText('Teacher memory is refreshing after the new chat reset.')).toBeInTheDocument();
+
+    // Now pretend maintenance completes
+    mockUseMemoryItems.checkMaintenanceStatus.mockResolvedValue(false);
+
+    // Advance by another 5s
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    // It should check status, see it has finished, fetch the items one last time, and clear the notice
+    expect(mockUseMemoryItems.checkMaintenanceStatus).toHaveBeenCalledTimes(2);
     expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1500);
-    });
-    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledTimes(2);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(4000);
-    });
-    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledTimes(3);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(8000);
-    });
-    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledTimes(4);
+    expect(screen.queryByText('Teacher memory is refreshing after the new chat reset.')).not.toBeInTheDocument();
   });
 
-  it('does not cancel the refresh loop when tab is switched during the refresh window', async () => {
+  it('stops polling and clears notice after safety timeout if maintenance hangs', async () => {
+    // Keep maintenance running indefinitely
+    mockUseMemoryItems.checkMaintenanceStatus.mockResolvedValue(true);
+
     const { rerender } = render(
       <AgentMemoryModal open={true} onClose={() => {}} refreshToken={0} />
     );
 
     mockUseMemoryItems.fetchItems.mockClear();
+    mockUseMemoryItems.checkMaintenanceStatus.mockClear();
 
     rerender(<AgentMemoryModal open={true} onClose={() => {}} refreshToken={1} />);
 
     expect(screen.getByText('Teacher memory is refreshing after the new chat reset.')).toBeInTheDocument();
+
+    // Advance timers by 240 seconds (which is the MAX_DURATION_MS)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(240000);
+    });
+
+    // The safety timeout should trigger. It fetches items once and clears the notice.
+    expect(mockUseMemoryItems.checkMaintenanceStatus.mock.calls.length).toBeLessThanOrEqual(48);
     expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Teacher memory is refreshing after the new chat reset.')).not.toBeInTheDocument();
+  });
+
+  it('keeps polling when a maintenance status check fails', async () => {
+    mockUseMemoryItems.checkMaintenanceStatus
+      .mockRejectedValueOnce(new Error('temporary status failure'))
+      .mockResolvedValueOnce(false);
+
+    const { rerender } = render(
+      <AgentMemoryModal open={true} onClose={() => {}} refreshToken={0} />
+    );
+
+    mockUseMemoryItems.fetchItems.mockClear();
+    mockUseMemoryItems.checkMaintenanceStatus.mockClear();
+
+    rerender(<AgentMemoryModal open={true} onClose={() => {}} refreshToken={1} />);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(mockUseMemoryItems.checkMaintenanceStatus).toHaveBeenCalledTimes(1);
+    expect(mockUseMemoryItems.fetchItems).not.toHaveBeenCalled();
+    expect(screen.getByText('Teacher memory is refreshing after the new chat reset.')).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9000);
+    });
+
+    expect(mockUseMemoryItems.checkMaintenanceStatus).toHaveBeenCalledTimes(2);
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Teacher memory is refreshing after the new chat reset.')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the safety timeout when a maintenance status check never resolves', async () => {
+    mockUseMemoryItems.checkMaintenanceStatus.mockImplementation(
+      () => new Promise<boolean>(() => {})
+    );
+
+    const { rerender } = render(
+      <AgentMemoryModal open={true} onClose={() => {}} refreshToken={0} />
+    );
+
+    mockUseMemoryItems.fetchItems.mockClear();
+    mockUseMemoryItems.checkMaintenanceStatus.mockClear();
+
+    rerender(<AgentMemoryModal open={true} onClose={() => {}} refreshToken={1} />);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(244000);
+    });
+
+    expect(mockUseMemoryItems.checkMaintenanceStatus.mock.calls.length).toBeGreaterThan(1);
+    expect(mockUseMemoryItems.checkMaintenanceStatus.mock.calls.length).toBeLessThan(30);
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Teacher memory is refreshing after the new chat reset.')).not.toBeInTheDocument();
+  });
+
+  it('does not cancel the status checks when tab is switched during the refresh window', async () => {
+    mockUseMemoryItems.checkMaintenanceStatus.mockResolvedValue(true);
+
+    const { rerender } = render(
+      <AgentMemoryModal open={true} onClose={() => {}} refreshToken={0} />
+    );
+
+    mockUseMemoryItems.fetchItems.mockClear();
+    mockUseMemoryItems.checkMaintenanceStatus.mockClear();
+
+    rerender(<AgentMemoryModal open={true} onClose={() => {}} refreshToken={1} />);
+
+    expect(screen.getByText('Teacher memory is refreshing after the new chat reset.')).toBeInTheDocument();
 
     // Switch tab/category to 'Areas to Improve'
     const areasTab = screen.getByText('Areas to Improve');
-    fireEvent.click(areasTab);
+    await act(async () => {
+      fireEvent.click(areasTab);
+    });
 
-    // The fetchItems call from switching tab immediately is expected
-    // Let's clear mock calls to isolate the timer callbacks
+    // Switch tab should trigger fetchItems for the new category immediately
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalled();
     mockUseMemoryItems.fetchItems.mockClear();
 
-    // Now advance timers to check if the loop is still running
+    // Now advance timers to check if the status check loop is still running
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1500);
+      await vi.advanceTimersByTimeAsync(5000);
     });
-    // It should call fetchItems again as part of the refresh loop
-    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalled();
+    expect(mockUseMemoryItems.checkMaintenanceStatus).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Teacher memory is refreshing after the new chat reset.')).toBeInTheDocument();
+
+    // Resolve maintenance
+    mockUseMemoryItems.checkMaintenanceStatus.mockResolvedValue(false);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    // The notice should disappear, and fetchItems should be called one final time
+    expect(screen.queryByText('Teacher memory is refreshing after the new chat reset.')).not.toBeInTheDocument();
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let an older refresh cycle clear the notice for a newer reset', async () => {
+    let resolvePendingRefresh: (() => void) | null = null;
+    mockUseMemoryItems.checkMaintenanceStatus.mockResolvedValue(false);
+
+    const { rerender } = render(
+      <AgentMemoryModal open={true} onClose={() => {}} refreshToken={0} />
+    );
+
+    mockUseMemoryItems.fetchItems.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvePendingRefresh = resolve;
+        })
+    );
+    mockUseMemoryItems.fetchItems.mockClear();
+    mockUseMemoryItems.checkMaintenanceStatus.mockClear();
+
+    rerender(<AgentMemoryModal open={true} onClose={() => {}} refreshToken={1} />);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(mockUseMemoryItems.checkMaintenanceStatus).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Teacher memory is refreshing after the new chat reset.')).toBeInTheDocument();
+
+    mockUseMemoryItems.checkMaintenanceStatus.mockResolvedValue(true);
+    rerender(<AgentMemoryModal open={true} onClose={() => {}} refreshToken={2} />);
+
+    await act(async () => {
+      resolvePendingRefresh?.();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('Teacher memory is refreshing after the new chat reset.')).toBeInTheDocument();
+  });
+
+  it('resumes maintenance polling after closing and reopening the modal', async () => {
+    mockUseMemoryItems.checkMaintenanceStatus.mockResolvedValue(true);
+
+    const { rerender } = render(
+      <AgentMemoryModal open={true} onClose={() => {}} refreshToken={0} />
+    );
+
+    mockUseMemoryItems.fetchItems.mockClear();
+    mockUseMemoryItems.checkMaintenanceStatus.mockClear();
+
+    rerender(<AgentMemoryModal open={true} onClose={() => {}} refreshToken={1} />);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(mockUseMemoryItems.checkMaintenanceStatus).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Teacher memory is refreshing after the new chat reset.')).toBeInTheDocument();
+
+    rerender(<AgentMemoryModal open={false} onClose={() => {}} refreshToken={1} />);
+    expect(screen.queryByText('Teacher memory is refreshing after the new chat reset.')).not.toBeInTheDocument();
+
+    mockUseMemoryItems.checkMaintenanceStatus.mockResolvedValue(false);
+    rerender(<AgentMemoryModal open={true} onClose={() => {}} refreshToken={1} />);
+
     expect(screen.getByText('Teacher memory is refreshing after the new chat reset.')).toBeInTheDocument();
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(4000);
+      await vi.advanceTimersByTimeAsync(5000);
+      await Promise.resolve();
     });
-    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalled();
-
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(8000);
+      await Promise.resolve();
     });
-    // After the last attempt, the sync notice should disappear
-    expect(screen.queryByText('Teacher memory is refreshing after the new chat reset.')).not.toBeInTheDocument();
+
+    expect(mockUseMemoryItems.checkMaintenanceStatus).toHaveBeenCalledTimes(2);
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledTimes(2);
+
+    rerender(<AgentMemoryModal open={true} onClose={() => {}} refreshToken={1} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(mockUseMemoryItems.checkMaintenanceStatus).toHaveBeenCalledTimes(2);
   });
 
   it('changes category when tab is clicked', () => {

@@ -29,3 +29,25 @@ async def test_list_memory_items_supports_legacy_status_query_param(client):
 
     assert response.status_code == 200
     assert [item["key"] for item in response.json()] == ["goal"]
+
+
+async def test_get_memory_maintenance_status_running(client):
+    # Mock the behavior of is_memory_maintenance_running
+    client.app.state.agents_manager.is_memory_maintenance_running.return_value = True
+
+    response = await client.get("/api/memory/maintenance-status")
+
+    assert response.status_code == 200
+    assert response.json() == {"running": True}
+    client.app.state.agents_manager.is_memory_maintenance_running.assert_called_once_with(client.user.id)
+
+
+async def test_get_memory_maintenance_status_not_running(client):
+    # Mock the behavior of is_memory_maintenance_running
+    client.app.state.agents_manager.is_memory_maintenance_running.return_value = False
+
+    response = await client.get("/api/memory/maintenance-status")
+
+    assert response.status_code == 200
+    assert response.json() == {"running": False}
+    client.app.state.agents_manager.is_memory_maintenance_running.assert_called_once_with(client.user.id)
