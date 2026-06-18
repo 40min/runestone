@@ -8,6 +8,7 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from runestone.agents.manager import AgentsManager
 from runestone.api.memory_item_schemas import (
     MemoryCategory,
     MemoryItemCreate,
@@ -17,11 +18,12 @@ from runestone.api.memory_item_schemas import (
     MemorySortBy,
     SortDirection,
 )
+from runestone.api.schemas import MemoryMaintenanceStatusResponse
 from runestone.auth.dependencies import get_current_user
 from runestone.core.exceptions import PermissionDeniedError, UserNotFoundError
 from runestone.core.logging_config import get_logger
 from runestone.db.models import User
-from runestone.dependencies import get_memory_item_service
+from runestone.dependencies import get_agents_manager, get_memory_item_service
 from runestone.services.memory_item_service import MemoryItemService
 
 router = APIRouter()
@@ -224,3 +226,26 @@ async def clear_memory_category(
     except Exception as e:
         logger.error(f"Failed to clear category {category} for user {current_user.id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to clear category")
+
+
+@router.get(
+    "/memory/maintenance-status",
+    response_model=MemoryMaintenanceStatusResponse,
+    responses={
+        200: {"description": "Memory maintenance status retrieved successfully"},
+        401: {"description": "Not authenticated"},
+    },
+)
+async def get_memory_maintenance_status(
+    current_user: Annotated[User, Depends(get_current_user)],
+    agents_manager: Annotated[AgentsManager, Depends(get_agents_manager)],
+) -> MemoryMaintenanceStatusResponse:
+    """
+    Check if memory maintenance is currently running for the current user.
+    """
+    try:
+        running = agents_manager.is_memory_maintenance_running(current_user.id)
+        return MemoryMaintenanceStatusResponse(running=running)
+    except Exception as e:
+        logger.error(f"Failed to check memory maintenance status for user {current_user.id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to check memory maintenance status")

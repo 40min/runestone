@@ -267,7 +267,7 @@ async def test_clear_history_schedules_background_maintenance(chat_service, db_w
     chat_service.user_service.get_user_by_id = AsyncMock(return_value=user)
     await chat_service.clear_history(user.id)
     chat_service.user_service.rotate_current_chat_id.assert_awaited_once_with(user.id)
-    chat_service.agent_service.start_background_memory_maintenance.assert_awaited_once_with(user)
+    chat_service.agents_manager.start_background_memory_maintenance.assert_awaited_once_with(user)
 
 
 @pytest.mark.anyio
@@ -277,7 +277,7 @@ async def test_start_new_chat_skips_maintenance_when_user_missing(chat_service):
 
     await chat_service.start_new_chat(user_id=123)
 
-    chat_service.agent_service.start_background_memory_maintenance.assert_not_called()
+    chat_service.agents_manager.start_background_memory_maintenance.assert_not_called()
 
 
 @pytest.mark.anyio
@@ -286,7 +286,7 @@ async def test_start_new_chat_logs_and_keeps_success_when_scheduling_fails(chat_
     next_chat_id = str(uuid4())
     chat_service.user_service.rotate_current_chat_id = AsyncMock(return_value=next_chat_id)
     chat_service.user_service.get_user_by_id = AsyncMock(return_value=user)
-    chat_service.agent_service.start_background_memory_maintenance = AsyncMock(side_effect=RuntimeError("boom"))
+    chat_service.agents_manager.start_background_memory_maintenance = AsyncMock(side_effect=RuntimeError("boom"))
 
     with caplog.at_level("ERROR"):
         returned_chat_id = await chat_service.start_new_chat(user.id)

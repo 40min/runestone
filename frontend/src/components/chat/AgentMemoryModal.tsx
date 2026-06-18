@@ -186,6 +186,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
     updatePriority,
     deleteItem,
     clearCategory,
+    checkMaintenanceStatus,
   } = useMemoryItems();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -205,6 +206,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const refreshTimerRef = useRef<number | null>(null);
+  const maintenancePollCycleRef = useRef(0);
   const lastHandledRefreshTokenRef = useRef<number>(refreshToken);
   const displayedCountLabel = `${items.length} item${items.length === 1 ? "" : "s"}`;
   const sortSummaryLabel =
@@ -267,7 +269,6 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
       return;
     }
 
-    lastHandledRefreshTokenRef.current = refreshToken;
     setSyncNotice("Teacher memory is refreshing after the new chat reset.");
 
     if (refreshTimerRef.current !== null) {
@@ -276,28 +277,97 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
     }
 
     let cancelled = false;
-    const refreshDelaysMs = [0, 1500, 4000, 8000];
+    const cycleId = maintenancePollCycleRef.current + 1;
+    maintenancePollCycleRef.current = cycleId;
+    const POLL_INTERVAL_MS = 5000;
+    const STATUS_REQUEST_TIMEOUT_MS = 4000;
+    const MAX_DURATION_MS = 240000; // 240 seconds backend timeout
+    const startTime = Date.now();
+    const isCurrentCycle = () => !cancelled && maintenancePollCycleRef.current === cycleId;
+    const markRefreshHandled = () => {
+      lastHandledRefreshTokenRef.current = refreshToken;
+    };
 
-    const runRefresh = async (attemptIndex: number) => {
-      if (cancelled) {
+    const getMaintenanceStatusWithTimeout = async (): Promise<boolean | null> => {
+      let timeoutId: number | undefined;
+      const timeoutPromise = new Promise<null>((resolve) => {
+        timeoutId = window.setTimeout(() => resolve(null), STATUS_REQUEST_TIMEOUT_MS);
+      });
+      try {
+        return await Promise.race<boolean | null>([
+          Promise.resolve(checkMaintenanceStatus()).catch(() => null),
+          timeoutPromise,
+        ]);
+      } finally {
+        if (timeoutId !== undefined) {
+          window.clearTimeout(timeoutId);
+        }
+      }
+    };
+
+    const checkStatusAndSchedule = async () => {
+      if (!isCurrentCycle()) {
         return;
       }
 
-      await refreshActiveItemsRef.current();
+      const isRunning = await getMaintenanceStatusWithTimeout();
+      if (!isCurrentCycle()) {
+        return;
+      }
 
-      if (attemptIndex >= refreshDelaysMs.length - 1) {
-        if (!cancelled) {
+      if (!isRunning) {
+        if (isRunning === null) {
+          const elapsedAfterError = Date.now() - startTime;
+          if (elapsedAfterError >= MAX_DURATION_MS) {
+            if (isCurrentCycle()) {
+              await refreshActiveItemsRef.current();
+            }
+            if (isCurrentCycle()) {
+              markRefreshHandled();
+              setSyncNotice(null);
+            }
+            return;
+          }
+
+          refreshTimerRef.current = window.setTimeout(() => {
+            void checkStatusAndSchedule();
+          }, POLL_INTERVAL_MS);
+          return;
+        }
+
+        if (isCurrentCycle()) {
+          await refreshActiveItemsRef.current();
+        }
+        if (isCurrentCycle()) {
+          markRefreshHandled();
           setSyncNotice(null);
         }
         return;
       }
 
+      const elapsed = Date.now() - startTime;
+      if (elapsed >= MAX_DURATION_MS) {
+        if (isCurrentCycle()) {
+          // Safety timeout reached: fetch items one last time and hide notice
+          await refreshActiveItemsRef.current();
+        }
+        if (isCurrentCycle()) {
+          markRefreshHandled();
+          setSyncNotice(null);
+        }
+        return;
+      }
+
+      // Schedule next check
       refreshTimerRef.current = window.setTimeout(() => {
-        void runRefresh(attemptIndex + 1);
-      }, refreshDelaysMs[attemptIndex + 1]);
+        void checkStatusAndSchedule();
+      }, POLL_INTERVAL_MS);
     };
 
-    void runRefresh(0);
+    // Wait 5 seconds before checking status for the first time
+    refreshTimerRef.current = window.setTimeout(() => {
+      void checkStatusAndSchedule();
+    }, POLL_INTERVAL_MS);
 
     return () => {
       cancelled = true;
@@ -306,7 +376,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
         refreshTimerRef.current = null;
       }
     };
-  }, [open, refreshToken]);
+  }, [open, refreshToken, checkMaintenanceStatus]);
 
   useEffect(() => {
     if (!open) {

@@ -48,7 +48,7 @@ class ChatService:
         repository: ChatRepository,
         side_effect_service: AgentSideEffectService,
         user_service: UserService,
-        agent_service: AgentsManager,
+        agents_manager: AgentsManager,
         processor: RunestoneProcessor,
         vocabulary_service: VocabularyService,
         tts_service: TTSService,
@@ -65,7 +65,7 @@ class ChatService:
         self.repository = repository
         self.side_effect_service = side_effect_service
         self.user_service = user_service
-        self.agent_service = agent_service
+        self.agents_manager = agents_manager
         self.processor = processor
         self.vocabulary_service = vocabulary_service
         self.tts_service = tts_service
@@ -126,7 +126,7 @@ class ChatService:
             raise ValueError(f"User {user_id} not found")
 
         # 5. Generate response using agents
-        assistant_text, sources, teacher_emotion = await self.agent_service.process_turn(
+        assistant_text, sources, teacher_emotion = await self.agents_manager.process_turn(
             message=message_text,
             chat_id=chat_id,
             history=history[:-1],
@@ -211,7 +211,7 @@ Instructions:
 2. Then provide phrase-by-phrase translation in format: "Swedish phrase (translation). Next phrase (translation)."
 3. Use {mother_tongue} for all translations."""
 
-        assistant_text, _sources, teacher_emotion = await self.agent_service.process_turn(
+        assistant_text, _sources, teacher_emotion = await self.agents_manager.process_turn(
             message=translation_prompt,
             chat_id=chat_id,
             history=history,
@@ -252,7 +252,7 @@ Instructions:
             return chat_id
 
         try:
-            await self.agent_service.start_background_memory_maintenance(user)
+            await self.agents_manager.start_background_memory_maintenance(user)
         except Exception:
             logger.error(
                 "[chat:service] Failed to schedule background memory maintenance for user %s",
