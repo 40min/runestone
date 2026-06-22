@@ -17,9 +17,10 @@ from runestone.agents.coordinator import CoordinatorAgent
 from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem, TeacherEmotion, TeacherSideEffect
 from runestone.agents.service_providers import provide_agent_side_effect_service
 from runestone.agents.specialists.base import SpecialistContext, SpecialistResult
-from runestone.agents.specialists.memory_keeper import MemoryKeeperSpecialist
+from runestone.agents.specialists.learning_memory_keeper import LearningMemoryKeeperSpecialist
 from runestone.agents.specialists.memory_maintainer.specialist import CombinedMemoryMaintainerSpecialist
 from runestone.agents.specialists.news_agent import NewsAgentSpecialist
+from runestone.agents.specialists.personal_memory_keeper import PersonalMemoryKeeperSpecialist
 from runestone.agents.specialists.registry import SpecialistRegistry
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.agents.specialists.word_keeper import WordKeeperSpecialist
@@ -51,7 +52,7 @@ class AgentsManager:
     # Multi-step structured maintenance can require multiple serial model calls.
     MEMORY_MAINTENANCE_TIMEOUT_SECONDS = 240
     STARTER_MEMORY_AREA_LIMIT = 5
-    NO_CHAT_HISTORY_SPECIALISTS = frozenset({"word_keeper", "memory_keeper"})
+    NO_CHAT_HISTORY_SPECIALISTS = frozenset({"word_keeper", "learning_memory_keeper"})
 
     def __init__(
         self,
@@ -75,7 +76,8 @@ class AgentsManager:
             grammar_service=grammar_service,
         )
         self.registry = SpecialistRegistry()
-        self.registry.register(MemoryKeeperSpecialist(settings))
+        self.registry.register(LearningMemoryKeeperSpecialist(settings))
+        self.registry.register(PersonalMemoryKeeperSpecialist(settings))
         self.registry.register(NewsAgentSpecialist(settings))
         self.registry.register(WordKeeperSpecialist(settings))
         self.memory_maintainer = CombinedMemoryMaintainerSpecialist(settings)
@@ -113,8 +115,12 @@ class AgentsManager:
         trigger inputs are already passed through dedicated context fields:
         - `word_keeper` uses the current save request plus the immediately previous
           teacher message when needed.
-        - `memory_keeper` should act only on the current student message and the
-          current turn's teacher response, not on older teacher durability signals.
+        - `learning_memory_keeper` acts only on the current student message and the
+          current turn's teacher response — chat history is always forced to zero.
+        - `personal_memory_keeper` receives `chat_history_size=2` so its `run()` method
+          can extract the immediately preceding teacher message (`previous_teacher_message`)
+          to detect and filter out drill/exercise responses. It does NOT expose raw history
+          to the agent — only the extracted field reaches the LLM payload.
         """
         if specialist_name in cls.NO_CHAT_HISTORY_SPECIALISTS:
             return 0
@@ -191,7 +197,9 @@ class AgentsManager:
                 message=message,
                 history=coordinator_history,
                 available_specialists=[
-                    name for name in self.registry.list_names() if name not in {"teacher", "memory_keeper"}
+                    name
+                    for name in self.registry.list_names()
+                    if name not in {"teacher", "learning_memory_keeper", "personal_memory_keeper"}
                 ],
             )
         except (RunestoneError, ValueError, RuntimeError) as e:

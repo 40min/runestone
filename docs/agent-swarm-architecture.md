@@ -32,7 +32,8 @@ Implemented now:
 - coordinator-row ownership guard for post-result persistence and terminal status writes
 - in-memory post-task registry with stale next-turn cancellation
 - image flow using the same async-post pattern
-- `MemoryKeeper` specialist running in post stage for durable memory maintenance
+- `LearningMemoryKeeper` specialist running in post stage for `area_to_improve` maintenance
+- `PersonalMemoryKeeper` specialist running in post stage for append-only `personal_info` capture
 - `memory_maintainer` specialist running in background after chat reset for scoped startup cleanup
 - `NewsAgent` specialist running in pre stage for topic-based news retrieval
 - teacher-side memory model narrowed to read-only lookup (`read_active_learning_focus`) during response generation
@@ -170,18 +171,32 @@ Does not do:
 - inspect distant chat history to resolve vague earlier-turn save requests
 - receive post-stage routing from the post coordinator
 
-#### MemoryKeeper
+#### LearningMemoryKeeper
 
 Owns:
 
-- post-stage memory maintenance when the final teacher reply provides the signal
-- explicit student-requested memory edits in the current turn when routed by post coordinator
-- review and update `area_to_improve` status and priority when the turn shows progress or regression
+- post-stage `area_to_improve` maintenance when the teacher reply provides an explicit learning signal
+- explicit student-requested edits to learning topics (reprioritize, mark mastered, correct description)
+- uses `ToolCallLimitMiddleware` to cap `read_areas_to_improve` at one call per turn
 
 Does not own:
 
+- personal facts (native language, hometown, goals) — that is `PersonalMemoryKeeper`'s domain
 - broad startup compaction or duplicate cleanup sweeps; those belong to
   [`memory_maintainer`](memory-maintainer.md)
+
+#### PersonalMemoryKeeper
+
+Owns:
+
+- post-stage append-only capture of durable personal facts (`personal_info`)
+- filtering out drill/exercise responses by inspecting `previous_teacher_message`
+- explicit student corrections or deletion requests (appended with `status="outdated"`)
+
+Does not own:
+
+- reading or deduplicating personal info — duplicates are reconciled by `memory_maintainer`
+- learning progress signals (`area_to_improve`) — that is `LearningMemoryKeeper`'s domain
 
 #### NewsAgent
 
@@ -204,15 +219,21 @@ flowchart TD
     E --> D
     D --> F["Teacher response returned to user (may temporarily include [memory:area_to_improve:<id>] tags)"]
     F --> G["Post-response coordinator"]
-    G --> H{"Memory maintenance needed?"}
-    H -- No --> I["No memory change"]
-    H -- Yes --> J["MemoryKeeper"]
-    J --> K{"Which case?"}
-    K -- "Case A: student edit" --> L["Read relevant memory, then write/delete"]
-    K -- "Case B: teacher new issue" --> M["Append directly with fresh key (no pre-read)"]
-    K -- "Case C: teacher status/priority change" --> N{"[memory:area_to_improve:<id>] tag present?"}
+    G --> H1{"Learning signal?"}
+    G --> H2{"Personal fact?"}
+    H1 -- No --> I1["No area_to_improve change"]
+    H1 -- Yes --> J1["LearningMemoryKeeper"]
+    J1 --> K{"Which case?"}
+    K -- "Case A: student edit" --> L["Read areas, then write"]
+    K -- "Case B: teacher new issue (no tag)" --> M["upsert directly (no pre-read)"]
+    K -- "Case C: status/priority change" --> N{"[memory:area_to_improve:<id>] tag?"}
     N -- Yes --> O["Write directly using id"]
-    N -- No --> P["Targeted read to locate id, then write"]
+    N -- No --> P["Targeted read, then write"]
+    H2 -- No --> I2["No personal_info change"]
+    H2 -- Yes --> J2["PersonalMemoryKeeper"]
+    J2 --> Q["Check previous_teacher_message for drill context"]
+    Q -- "Practice sentence" --> R["no_action"]
+    Q -- "Real fact" --> S["append_personal_info_item (no reads)"]
 ```
 
 #### Teacher-side memory reads
@@ -235,24 +256,30 @@ Current startup-memory shape:
 
 #### Post-phase memory maintenance
 
-`MemoryKeeper` owns durable memory maintenance after the actual teacher reply is known.
+`LearningMemoryKeeper` and `PersonalMemoryKeeper` together own durable memory maintenance after the actual teacher reply is known.
 
-Principles:
+**LearningMemoryKeeper** principles:
 
 - Run maintenance only in `post_response`, not on the synchronous user-visible path.
 - Use the actual `teacher_response` as the strongest teacher-driven signal for durable updates.
-- Allow explicit student memory-edit instructions from the current turn to trigger maintenance as well.
+- Allow explicit student learning-topic edits to trigger maintenance as well.
 - Default to `no_action`; avoid additive or corrective writes without clear evidence.
 - Use a three-case execution model instead of a universal read-before-write:
-  - **Case A (student edit):** read the relevant category first, then write/delete as instructed.
-  - **Case B (teacher new issue):** append directly using a fresh descriptive key; no pre-read required.
+  - **Case A (student edit):** read `area_to_improve` items first, then write as instructed.
+  - **Case B (teacher new issue):** call `upsert_memory_item` directly using a fresh descriptive key; no pre-read required.
   - **Case C (teacher status/priority change):** if the teacher embedded a
   `[memory:area_to_improve:<id>]` tag, write directly using that id; otherwise do one
-  targeted category-scoped read to locate the item id, then write.
+  targeted read via `read_areas_to_improve` to locate the item id, then write.
 - The `[memory:area_to_improve:<id>]` tag is a temporary bridge carried in the visible teacher reply text until
   the structured-output follow-up replaces this mechanism.
-- Temporary duplicate `area_to_improve` items from append-first writes are an accepted tradeoff;
-  broad duplicate cleanup belongs to `memory_maintainer`.
+- `ToolCallLimitMiddleware` caps `read_areas_to_improve` at one call per turn.
+
+**PersonalMemoryKeeper** principles:
+
+- Append-only: uses only `append_personal_info_item`, never reads memory.
+- Receives `chat_history_size=2` so `run()` can extract `previous_teacher_message` to detect drill/exercise context; raw history is not exposed to the LLM.
+- Filters out practice sentences by comparing `student_message` against `previous_teacher_message`.
+- Duplicate `personal_info` rows from append-first writes are an accepted tradeoff; reconciliation belongs to `memory_maintainer`.
 
 Scope of maintenance:
 
@@ -401,7 +428,8 @@ To prevent infinite ReAct/LangGraph loop executions (particularly when using hig
 
 The limits are adjusted based on each specialist's responsibilities:
 - **TeacherAgent**: **30** steps (highly constrained to prevent runaway grammar lookup loops)
-- **MemoryKeeper**: **50** steps (supports multiple read/write actions for memory items)
+- **LearningMemoryKeeper**: **15** steps (capped read + targeted writes; `ToolCallLimitMiddleware` further bounds reads to 1)
+- **PersonalMemoryKeeper**: **10** steps (append-only, single-tool specialist)
 - **NewsAgent**: **10** steps (conservatively bounded search and read sequence)
 - **MemoryMaintainer**: no LangGraph recursion limit, because it now uses bounded structured-output passes
 
@@ -539,20 +567,32 @@ Priority behavior:
 - WordKeeper/`prioritize_words_for_learning` decrements existing/restored words (`max(priority-1, 0)`)
 - brand-new agent-created words start at `priority_learn=4`
 
-### MemoryKeeper Contract
+### LearningMemoryKeeper Contract
 
 Input:
 
-- latest user message (explicit student memory-edit signal)
-- recent chat history (context only, not trigger source)
-- teacher response (primary teacher-driven durability signal)
-- routing reason from coordinator
+- `student_message`: explicit student learning-topic edit signal
+- `teacher_response`: primary teacher-driven durability signal (may contain `[memory:area_to_improve:<id>]` tags)
 
 Output:
 
 - specialist result with:
   - `status` (`no_action` | `action_taken` | `error`)
-  - `actions` summary
+  - `info_for_teacher`
+  - `artifacts` (`trigger_source`, summary, notes)
+
+### PersonalMemoryKeeper Contract
+
+Input:
+
+- `student_message`: student's current message
+- `teacher_response`: teacher's current response
+- `previous_teacher_message`: immediately preceding teacher message (extracted from `chat_history_size=2`; not exposed directly to the LLM)
+
+Output:
+
+- specialist result with:
+  - `status` (`no_action` | `action_taken` | `error`)
   - `info_for_teacher`
   - `artifacts` (`trigger_source`, summary, notes)
 
@@ -606,3 +646,15 @@ Decisions:
 - Trigger memory maintenance conservatively from explicit durable teacher signals or explicit student memory-edit instructions.
 - Keep memory updates evidence-driven (`no_action` bias); avoid blind churn on status/priority without clear turn evidence.
 - Keep mastered topics represented as `area_to_improve` items with status `mastered`.
+
+### 2026-06-22: MemoryKeeper Split into LearningMemoryKeeper and PersonalMemoryKeeper
+
+Decisions:
+
+- Split the single `MemoryKeeper` into two focused specialists to reduce prompt complexity and tool surface.
+- `LearningMemoryKeeper` owns all `area_to_improve` writes; receives zero chat history.
+- `PersonalMemoryKeeper` is append-only (single tool: `append_personal_info_item`); never reads memory.
+- `PersonalMemoryKeeper` receives `chat_history_size=2` so `run()` can extract `previous_teacher_message` for drill detection — raw history is not forwarded to the LLM.
+- Both specialists share `MEMORY_KEEPER_*` config; no new env vars needed.
+- Recursion limits tightened: `learning_memory_keeper=15`, `personal_memory_keeper=10`.
+- `ToolCallLimitMiddleware` added to `LearningMemoryKeeper` to cap `read_areas_to_improve` at one call per turn.

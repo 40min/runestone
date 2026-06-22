@@ -128,6 +128,39 @@ async def read_memory(
 
 
 @tool
+async def read_areas_to_improve(
+    runtime: ToolRuntime[AgentContext],
+    statuses: Annotated[
+        Optional[list[str]],
+        Field(description="Optional status filters (struggling, improving, mastered)"),
+    ] = None,
+) -> str:
+    """Read area_to_improve memory items.
+
+    Returns structured memory items representing areas where the user needs improvement,
+    including IDs, status, key, and content.
+    """
+    logger.info("Agent tool call: read_areas_to_improve (statuses=%s)", statuses)
+    user = runtime.context.user
+
+    async with provide_memory_item_service() as service:
+        items = await service.list_memory_items(
+            user_id=user.id,
+            category=MemoryCategory.AREA_TO_IMPROVE,
+            statuses=statuses,
+            sort_by=MemorySortBy.UPDATED_AT,
+            sort_direction=SortDirection.DESC,
+            limit=100,
+            offset=0,
+        )
+
+    if not items:
+        return "No memory items found."
+
+    return serialize_memory_items(items)
+
+
+@tool
 async def read_active_learning_focus(runtime: ToolRuntime[AgentContext]) -> str:
     """Read the student's current high-priority learning focus for Teacher."""
     logger.info("Agent tool call: read_active_learning_focus")

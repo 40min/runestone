@@ -110,41 +110,36 @@ COORDINATOR_POST_RESPONSE_PROMPT = (
 
 ## Specialist Routing Rules
 
-### memory_keeper (post)
+### learning_memory_keeper (post)
 **Route when:**
-- The `teacher_response` explicitly identifies a durable learning signal worth persisting,
-  such as a repeated struggle, visible improvement, confirmed mastery, a new recurring issue,
-  or a stable fact/strength correction.
-- OR the latest student `message` explicitly asks to change memory in this turn
-  (for example: remember, forget, remove, correct, change, reprioritize, mark mastered).
-- Student-driven memory edits take priority over teacher-driven maintenance if both are present.
-- Use only the latest student `message` as the active student intent signal.
+- The `teacher_response` explicitly identifies a durable **learning progress** signal:
+  repeated struggle, visible improvement, confirmed mastery, or a new recurring learning issue.
+- OR the student explicitly asks to edit a **learning topic** (area_to_improve):
+  reprioritize, mark mastered, correct a learning area description.
 
 **Do NOT route when:**
-- The student only hints at a fact or preference without explicitly asking to change memory.
-- The teacher response is routine praise, a normal correction, a drill prompt, or a generic explanation
-  without an explicit durable signal.
-- The teacher only says a student-written word is misspelled, invalid, nonexistent, or should be replaced
-  by another vocabulary item. That is a vocabulary correction, not a durable memory update.
-- The teacher response merely explains general grammar rules or introduces language guidelines using Swedish
-  or English instructional verbs like "kom ihåg" (remember) or "tänk på" (keep in mind) (e.g., explaining
-  that modal verbs do not take "att"). These are generic instructions, not a durable learning signal.
-- The plan would rely on inferred intent rather than explicit wording in the current turn.
+- The signal is about personal facts (native language, hometown, goals) — route
+  `personal_memory_keeper` instead.
+- The teacher gives routine praise, normal corrections, drill prompts, or generic explanations.
+- The teacher merely explains grammar rules using instructional verbs like "kom ihåg" or "tänk på".
+- The teacher only corrects a misspelled/invalid word (vocabulary event, not learning memory).
 
-Examples that SHOULD route:
-- Student: "Forget my old goal."
-- Student: "Change my goal to speaking practice."
-- Teacher: "You are still repeatedly missing article agreement, so this remains a study priority."
-- Teacher: "You have now clearly mastered this tense."
+Set `chat_history_size` to `0` for `learning_memory_keeper`.
 
-Examples that should NOT route:
-- Student: "I guess I like speaking more than writing."
-- Student: "We talked about this before."
-- Teacher: "Good job."
-- Teacher: "Write one more sentence with these words."
-- Teacher: "There is no such word as 'varen'; use 'våren' for spring."
+### personal_memory_keeper (post)
+**Route when:**
+- The student's `message` contains a clear, durable personal fact (for example: native language,
+  hometown, occupation, long-term goal, stable preference, background).
+- OR the student explicitly corrects, replaces, or asks to forget a personal fact.
+- OR the `teacher_response` explicitly signals a personal fact to persist.
 
-Set `chat_history_size` to `0` for `memory_keeper`.
+**Do NOT route when:**
+- The student expresses transient emotions, vague wishes, or one-off plans.
+- The student is just practicing sentences or doing drills.
+- The student is writing fictional examples or translating practice sentences (e.g. in response to a teacher exercise).
+- The signal is about learning progress (area_to_improve) — route `learning_memory_keeper`.
+
+Set `chat_history_size` to `2` for `personal_memory_keeper`.
 """
 )
 
