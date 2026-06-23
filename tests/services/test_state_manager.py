@@ -155,3 +155,27 @@ def test_singleton_different_paths():
         manager1 = StateManager(path1)
         manager2 = StateManager(path2)
         assert manager1 is manager2
+
+
+def test_auto_reload_on_disk_change(state_manager, temp_state_file):
+    # Retrieve user first to load it into memory cache
+    user = state_manager.get_user("user1")
+    assert user.db_user_id == 1
+
+    # Simulate another process updating state.json on disk
+    with open(temp_state_file, "r") as f:
+        data = json.load(f)
+
+    data["users"]["user1"]["db_user_id"] = 999
+
+    # Sleep slightly to ensure modification time changes
+    import time
+
+    time.sleep(0.01)
+
+    with open(temp_state_file, "w") as f:
+        json.dump(data, f)
+
+    # Get user again; it should reload from disk automatically and see db_user_id = 999
+    updated_user = state_manager.get_user("user1")
+    assert updated_user.db_user_id == 999
