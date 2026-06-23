@@ -58,7 +58,7 @@ class StateManager:
         self.state_file_path = state_file_path
         self.config = config or StateManagerConfig()
         self._state: Optional[StateData] = None
-        self._state_mtime: Optional[float] = None
+        self._state_version: Optional[tuple[int, int]] = None
         self._lock = threading.RLock()
 
         # Initialize components
@@ -72,11 +72,12 @@ class StateManager:
 
         logger.info(f"StateManager initialized with file: {self.state_file_path}")
 
-    def _get_file_mtime(self) -> Optional[float]:
-        """Get the modification time of the state file if it exists."""
+    def _get_file_version(self) -> Optional[tuple[int, int]]:
+        """Get a lightweight file version tuple for cache invalidation."""
         try:
             if os.path.exists(self.state_file_path):
-                return os.path.getmtime(self.state_file_path)
+                stat_result = os.stat(self.state_file_path)
+                return (stat_result.st_mtime_ns, stat_result.st_size)
         except OSError:
             pass
         return None
@@ -87,15 +88,15 @@ class StateManager:
             logger.info(f"Creating new state file: {self.state_file_path}")
             with self._lock:
                 self._state = self.file_handler.create_default_state()
-                self._state_mtime = self._get_file_mtime()
+                self._state_version = self._get_file_version()
 
     @with_lock
     @logged_operation("state load")
     def _get_state(self) -> StateData:
         """Get current state, loading from file if necessary."""
-        current_mtime = self._get_file_mtime()
+        current_version = self._get_file_version()
 
-        if self._state is None or current_mtime != self._state_mtime:
+        if self._state is None or current_version != self._state_version:
             if self._state is not None:
                 logger.info("State file on disk has changed. Reloading state.")
             try:
@@ -115,7 +116,7 @@ class StateManager:
 
                 # Pydantic will validate the structure automatically
                 self._state = StateData(**raw_state)
-                self._state_mtime = current_mtime
+                self._state_version = current_version
             except (StateAccessError, StateCorruptionError, ValueError) as e:
                 logger.error(f"Failed to load state: {e}")
                 raise
@@ -139,7 +140,7 @@ class StateManager:
             # Save state (Pydantic handles validation)
             self.file_handler.save_state(self._state)
 
-            self._state_mtime = self._get_file_mtime()
+            self._state_version = self._get_file_version()
 
         except Exception as e:
             logger.error(f"Failed to save state: {e}")
