@@ -5,7 +5,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from runestone.agents.specialists.memory_maintainer.personal_info import PersonalInfoMemoryMaintainer
+from runestone.agents.specialists.memory_maintainer.personal_info import (
+    PERSONAL_INFO_BAKE_GROUP_PROMPT,
+    PERSONAL_INFO_BUCKET_TOPICS_PROMPT,
+    PERSONAL_INFO_REVIEW_BUCKET_PROMPT,
+    BakeGroupPlan,
+    BucketReviewGroup,
+    BucketReviewPlan,
+    BucketTopicGroup,
+    BucketTopicsPlan,
+    PersonalInfoMemoryMaintainer,
+    PersonalInfoSummaryPlan,
+)
 
 
 @pytest.fixture
@@ -21,62 +32,6 @@ def mock_user():
     return SimpleNamespace(id=1, mother_tongue="Finnish")
 
 
-@pytest.mark.anyio
-async def test_personal_info_maintainer_loads_full_scope_in_one_call(mock_settings, mock_user):
-    items = [
-        SimpleNamespace(
-            id=idx,
-            key=f"fact_{idx}",
-            content=f"Fact {idx}",
-            status="active",
-            updated_at=datetime(2026, 5, 29, tzinfo=timezone.utc),
-            status_changed_at=datetime(2026, 5, 29, tzinfo=timezone.utc),
-        )
-        for idx in range(1, 201)
-    ]
-    service = MagicMock()
-    service.cleanup_stale_personal_info_outdated = AsyncMock(return_value=0)
-    service.list_memory_items = AsyncMock(return_value=items)
-
-    @asynccontextmanager
-    async def fake_provider():
-        yield service
-
-    model = MagicMock()
-    review_plan = MagicMock()
-    review_plan.decisions = [
-        SimpleNamespace(item_id=item.id, action="keep_active", why="Keep active") for item in items
-    ]
-    summary_plan = SimpleNamespace(summary="Summary")
-
-    review_model = MagicMock()
-    review_model.ainvoke = AsyncMock(return_value=review_plan)
-    summary_model = MagicMock()
-    summary_model.ainvoke = AsyncMock(return_value=summary_plan)
-
-    def _structured(schema):
-        if schema.__name__ == "PersonalInfoReviewPlan":
-            return review_model
-        return summary_model
-
-    model.with_structured_output.side_effect = _structured
-
-    with (
-        patch("runestone.agents.specialists.memory_maintainer.personal_info.build_chat_model", return_value=model),
-        patch(
-            "runestone.agents.specialists.memory_maintainer.personal_info.provide_memory_item_service", fake_provider
-        ),
-    ):
-        specialist = PersonalInfoMemoryMaintainer(mock_settings)
-        result = await specialist.run_cli_for_user(mock_user, dry_run=True)
-
-    assert result.status == "action_taken"
-    service.cleanup_stale_personal_info_outdated.assert_awaited_once()
-    service.list_memory_items.assert_awaited_once()
-    assert service.list_memory_items.await_args.kwargs["limit"] is None
-    assert result.artifacts["reviewed_item_count"] == 200
-
-
 def _make_item(
     item_id: int,
     *,
@@ -87,43 +42,117 @@ def _make_item(
 ):
     return SimpleNamespace(
         id=item_id,
+        user_id=1,
+        category="personal_info",
         key=key,
         content=content,
         status=status,
         updated_at=updated_at or datetime(2026, 5, 29, tzinfo=timezone.utc),
-        status_changed_at=datetime(2026, 5, 29, tzinfo=timezone.utc),
+        status_changed_at=updated_at or datetime(2026, 5, 29, tzinfo=timezone.utc),
     )
 
 
+def _build_model(*, bucket_plan, summary_plan, review_plan=None, bake_plan=None):
+    bucket_model = MagicMock()
+    bucket_model.ainvoke = AsyncMock(return_value=bucket_plan)
+
+    summary_model = MagicMock()
+    summary_model.ainvoke = AsyncMock(return_value=summary_plan)
+
+    review_model = MagicMock()
+    review_model.ainvoke = AsyncMock(return_value=review_plan)
+
+    bake_model = MagicMock()
+    bake_model.ainvoke = AsyncMock(return_value=bake_plan)
+
+    model = MagicMock()
+
+    def _structured(schema):
+        if schema.__name__ == "BucketTopicsPlan":
+            return bucket_model
+        if schema.__name__ == "BucketReviewPlan":
+            return review_model
+        if schema.__name__ == "BakeGroupPlan":
+            return bake_model
+        if schema.__name__ == "PersonalInfoSummaryPlan":
+            return summary_model
+        raise AssertionError(f"Unexpected schema: {schema.__name__}")
+
+    model.with_structured_output.side_effect = _structured
+    return model, bucket_model, review_model, bake_model, summary_model
+
+
 @pytest.mark.anyio
-async def test_personal_info_maintainer_injects_current_datetime_into_review_and_summary(mock_settings, mock_user):
-    items = [
-        _make_item(1, key="current_status_working_20260526", content="The student is off work today (2026-05-26)."),
-        _make_item(2, key="preferred_explanation_language", content="Prefers Russian for explanations."),
-    ]
+async def test_personal_info_maintainer_loads_full_scope_in_one_call(mock_settings, mock_user):
+    items = [_make_item(idx, key=f"fact_{idx}", content=f"Fact {idx}") for idx in range(1, 201)]
     service = MagicMock()
-    service.cleanup_stale_personal_info_outdated = AsyncMock(return_value=0)
     service.list_memory_items = AsyncMock(return_value=items)
 
     @asynccontextmanager
     async def fake_provider():
         yield service
 
-    review_plan = MagicMock()
-    review_plan.decisions = [
-        SimpleNamespace(item_id=1, action="keep_active", why="model kept temp fact"),
-        SimpleNamespace(item_id=2, action="keep_active", why="stable fact"),
+    bucket_plan = BucketTopicsPlan(
+        buckets=[BucketTopicGroup(bucket_label=f"fact_{item.id}", item_ids=[item.id]) for item in items]
+    )
+    summary_plan = PersonalInfoSummaryPlan(summary="Summary")
+    model, *_ = _build_model(bucket_plan=bucket_plan, summary_plan=summary_plan)
+
+    with (
+        patch("runestone.agents.specialists.memory_maintainer.personal_info.build_chat_model", return_value=model),
+        patch(
+            "runestone.agents.specialists.memory_maintainer.personal_info.provide_memory_item_service", fake_provider
+        ),
+    ):
+        specialist = PersonalInfoMemoryMaintainer(mock_settings)
+        result = await specialist.run_cli_for_user(mock_user, dry_run=True)
+
+    assert result.status == "action_taken"
+    service.list_memory_items.assert_awaited_once()
+    assert service.list_memory_items.await_args.kwargs["limit"] is None
+    assert result.artifacts["reviewed_item_count"] == 200
+    assert result.artifacts["kept_active_item_ids"] == [item.id for item in items]
+
+
+@pytest.mark.anyio
+async def test_personal_info_maintainer_injects_current_datetime_into_bucket_review_bake_and_summary(
+    mock_settings, mock_user
+):
+    items = [
+        _make_item(
+            1, key="lives_in", content="Lives in Stockholm.", updated_at=datetime(2026, 5, 1, tzinfo=timezone.utc)
+        ),
+        _make_item(
+            2,
+            key="lives_in",
+            content="Lives in Uppsala.",
+            status="correction",
+            updated_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        ),
     ]
-    summary_plan = SimpleNamespace(summary="Prefers Russian for explanations.")
+    service = MagicMock()
+    service.list_memory_items = AsyncMock(return_value=items)
 
-    review_model = MagicMock()
-    review_model.ainvoke = AsyncMock(return_value=review_plan)
-    summary_model = MagicMock()
-    summary_model.ainvoke = AsyncMock(return_value=summary_plan)
+    @asynccontextmanager
+    async def fake_provider():
+        yield service
 
-    model = MagicMock()
-    model.with_structured_output.side_effect = lambda schema: (
-        review_model if schema.__name__ == "PersonalInfoReviewPlan" else summary_model
+    bucket_plan = BucketTopicsPlan(
+        buckets=[BucketTopicGroup(bucket_label="location", item_ids=[1, 2], why="same location fact")]
+    )
+    review_plan = BucketReviewPlan(groups=[BucketReviewGroup(item_ids=[1, 2], why="same fact over time")])
+    bake_plan = BakeGroupPlan(
+        outcome="bake_active",
+        final_key="lives_in",
+        final_content="Lives in Uppsala.",
+        why="newer correction wins",
+    )
+    summary_plan = PersonalInfoSummaryPlan(summary="The student lives in Uppsala.")
+    model, bucket_model, review_model, bake_model, summary_model = _build_model(
+        bucket_plan=bucket_plan,
+        review_plan=review_plan,
+        bake_plan=bake_plan,
+        summary_plan=summary_plan,
     )
 
     with (
@@ -140,152 +169,59 @@ async def test_personal_info_maintainer_injects_current_datetime_into_review_and
         specialist = PersonalInfoMemoryMaintainer(mock_settings)
         result = await specialist.run_cli_for_user(mock_user, dry_run=True)
 
-    assert result.artifacts["kept_active_item_ids"] == [1, 2]
+    assert result.artifacts["deleted_item_ids"] == [1, 2]
     assert result.artifacts["summary_source_item_ids"] == [1, 2]
-    assert result.artifacts["summary_excluded_item_ids"] == []
-    assert result.artifacts["stale_outdated_deleted_count"] == 0
 
+    bucket_messages = bucket_model.ainvoke.await_args.args[0]
     review_messages = review_model.ainvoke.await_args.args[0]
+    bake_messages = bake_model.ainvoke.await_args.args[0]
     summary_messages = summary_model.ainvoke.await_args.args[0]
+
+    assert "Current datetime: 2026-06-14T10:30:00+00:00" in bucket_messages[0].content
+    assert '"current_datetime": "2026-06-14T10:30:00+00:00"' in bucket_messages[1].content
     assert "Current datetime: 2026-06-14T10:30:00+00:00" in review_messages[0].content
     assert '"current_datetime": "2026-06-14T10:30:00+00:00"' in review_messages[1].content
+    assert "Current datetime: 2026-06-14T10:30:00+00:00" in bake_messages[0].content
+    assert '"current_datetime": "2026-06-14T10:30:00+00:00"' in bake_messages[1].content
     assert "Current datetime: 2026-06-14T10:30:00+00:00" in summary_messages[0].content
     assert '"current_datetime": "2026-06-14T10:30:00+00:00"' in summary_messages[1].content
 
 
 @pytest.mark.anyio
-async def test_personal_info_maintainer_respects_model_duplicate_resolution(mock_settings, mock_user):
-    items = [
-        _make_item(10, key="name", content="Andrey", updated_at=datetime(2026, 5, 26, 13, 13, tzinfo=timezone.utc)),
-        _make_item(
-            11,
-            key="student_name",
-            content="Andrey",
-            updated_at=datetime(2026, 5, 26, 13, 14, tzinfo=timezone.utc),
-        ),
-    ]
-    service = MagicMock()
-    service.cleanup_stale_personal_info_outdated = AsyncMock(return_value=0)
-    service.list_memory_items = AsyncMock(return_value=items)
-
-    @asynccontextmanager
-    async def fake_provider():
-        yield service
-
-    review_plan = MagicMock()
-    review_plan.decisions = [
-        SimpleNamespace(item_id=10, action="keep_active", why="same"),
-        SimpleNamespace(item_id=11, action="keep_active", why="same"),
-    ]
-    summary_plan = SimpleNamespace(summary="The student's name is Andrey.")
-
-    review_model = MagicMock()
-    review_model.ainvoke = AsyncMock(return_value=review_plan)
-    summary_model = MagicMock()
-    summary_model.ainvoke = AsyncMock(return_value=summary_plan)
-
-    model = MagicMock()
-    model.with_structured_output.side_effect = lambda schema: (
-        review_model if schema.__name__ == "PersonalInfoReviewPlan" else summary_model
-    )
-
-    with (
-        patch("runestone.agents.specialists.memory_maintainer.personal_info.build_chat_model", return_value=model),
-        patch(
-            "runestone.agents.specialists.memory_maintainer.personal_info.provide_memory_item_service", fake_provider
-        ),
-    ):
-        specialist = PersonalInfoMemoryMaintainer(mock_settings)
-        result = await specialist.run_cli_for_user(mock_user, dry_run=True)
-
-    decisions = {decision["item_id"]: decision for decision in result.artifacts["decisions"]}
-    assert decisions[10]["action"] == "keep_active"
-    assert decisions[11]["action"] == "keep_active"
-    assert result.artifacts["deleted_item_ids"] == []
-    assert result.artifacts["kept_active_item_ids"] == [10, 11]
-
-
-@pytest.mark.anyio
-async def test_personal_info_maintainer_passes_dated_background_fact_to_model(mock_settings, mock_user):
-    items = [
-        _make_item(21, key="background_sweden_2020", content="The student lived in Sweden in 2020."),
-    ]
-    service = MagicMock()
-    service.cleanup_stale_personal_info_outdated = AsyncMock(return_value=0)
-    service.list_memory_items = AsyncMock(return_value=items)
-
-    @asynccontextmanager
-    async def fake_provider():
-        yield service
-
-    review_plan = MagicMock()
-    review_plan.decisions = [SimpleNamespace(item_id=21, action="keep_active", why="background fact")]
-    summary_plan = SimpleNamespace(summary="The student lived in Sweden in 2020.")
-
-    review_model = MagicMock()
-    review_model.ainvoke = AsyncMock(return_value=review_plan)
-    summary_model = MagicMock()
-    summary_model.ainvoke = AsyncMock(return_value=summary_plan)
-
-    model = MagicMock()
-    model.with_structured_output.side_effect = lambda schema: (
-        review_model if schema.__name__ == "PersonalInfoReviewPlan" else summary_model
-    )
-
-    with (
-        patch("runestone.agents.specialists.memory_maintainer.personal_info.build_chat_model", return_value=model),
-        patch(
-            "runestone.agents.specialists.memory_maintainer.personal_info.provide_memory_item_service", fake_provider
-        ),
-        patch(
-            "runestone.agents.specialists.memory_maintainer.personal_info"
-            ".PersonalInfoMemoryMaintainer._current_datetime_iso",
-            return_value="2026-06-14T10:30:00+00:00",
-        ),
-    ):
-        specialist = PersonalInfoMemoryMaintainer(mock_settings)
-        result = await specialist.run_cli_for_user(mock_user, dry_run=True)
-
-    assert result.artifacts["deleted_item_ids"] == []
-    assert result.artifacts["kept_active_item_ids"] == [21]
-    assert result.artifacts["summary_source_item_ids"] == [21]
-    review_messages = review_model.ainvoke.await_args.args[0]
-    assert "Current datetime: 2026-06-14T10:30:00+00:00" in review_messages[0].content
-
-
-@pytest.mark.anyio
-async def test_personal_info_maintainer_reports_precleanup_deleted_outdated_rows(mock_settings, mock_user):
+async def test_personal_info_maintainer_deletes_consumed_outdated_group_in_dry_run(mock_settings, mock_user):
     items = [
         _make_item(
             31,
-            key="fresh_active_fact",
-            content="Fresh active fact.",
-            status="active",
+            key="learning_goal",
+            content="Goal: conversational fluency.",
+            updated_at=datetime(2026, 5, 1, tzinfo=timezone.utc),
+        ),
+        _make_item(
+            32,
+            key="learning_goal",
+            content="Forget the learning goal.",
+            status="outdated",
             updated_at=datetime(2026, 6, 10, tzinfo=timezone.utc),
         ),
     ]
     service = MagicMock()
-    service.cleanup_stale_personal_info_outdated = AsyncMock(return_value=1)
     service.list_memory_items = AsyncMock(return_value=items)
 
     @asynccontextmanager
     async def fake_provider():
         yield service
 
-    review_plan = MagicMock()
-    review_plan.decisions = [
-        SimpleNamespace(item_id=31, action="keep_active", why="current"),
-    ]
-    summary_plan = SimpleNamespace(summary="Fresh active fact.")
-
-    review_model = MagicMock()
-    review_model.ainvoke = AsyncMock(return_value=review_plan)
-    summary_model = MagicMock()
-    summary_model.ainvoke = AsyncMock(return_value=summary_plan)
-
-    model = MagicMock()
-    model.with_structured_output.side_effect = lambda schema: (
-        review_model if schema.__name__ == "PersonalInfoReviewPlan" else summary_model
+    bucket_plan = BucketTopicsPlan(
+        buckets=[BucketTopicGroup(bucket_label="goal", item_ids=[31, 32], why="same goal fact")]
+    )
+    review_plan = BucketReviewPlan(groups=[BucketReviewGroup(item_ids=[31, 32], why="same fact over time")])
+    bake_plan = BakeGroupPlan(outcome="delete_all", why="removal request retires the fact")
+    summary_plan = PersonalInfoSummaryPlan(summary="")
+    model, *_ = _build_model(
+        bucket_plan=bucket_plan,
+        review_plan=review_plan,
+        bake_plan=bake_plan,
+        summary_plan=summary_plan,
     )
 
     with (
@@ -297,110 +233,84 @@ async def test_personal_info_maintainer_reports_precleanup_deleted_outdated_rows
         specialist = PersonalInfoMemoryMaintainer(mock_settings)
         result = await specialist.run_cli_for_user(mock_user, dry_run=True)
 
-    service.cleanup_stale_personal_info_outdated.assert_awaited_once_with(
-        user_id=mock_user.id,
-        older_than_days=14,
-        dry_run=True,
-    )
-    assert result.artifacts["stale_outdated_deleted_count"] == 1
-    assert result.artifacts["deleted_item_ids"] == []
-    assert result.artifacts["summary_source_item_ids"] == [31]
+    assert result.artifacts["deleted_item_ids"] == [31, 32]
+    assert result.artifacts["summary_source_item_ids"] == []
+    assert result.artifacts["summary_excluded_item_ids"] == [31, 32]
+    assert result.artifacts["summary_preview"] is None
 
 
 @pytest.mark.anyio
-async def test_personal_info_maintainer_precleanup_runs_in_apply_mode(mock_settings, mock_user):
-    item = _make_item(
-        41,
-        key="remaining_fact",
-        content="Remaining fact.",
-        status="active",
-        updated_at=datetime(2026, 6, 10, tzinfo=timezone.utc),
-    )
-    service = MagicMock()
-    service.cleanup_stale_personal_info_outdated = AsyncMock(return_value=2)
-    service.list_memory_items = AsyncMock(return_value=[item])
-    service.get_item_by_id = AsyncMock(return_value=SimpleNamespace(id=41, user_id=mock_user.id, status="active"))
-    service.update_item_status = AsyncMock()
-    service.delete_item = AsyncMock()
-    service.set_personal_info_summary = AsyncMock()
+async def test_personal_info_maintainer_bakes_multi_item_bucket_in_apply_mode(mock_settings, mock_user):
+    items = [
+        _make_item(
+            41, key="lives_in", content="Lives in Stockholm.", updated_at=datetime(2026, 5, 1, tzinfo=timezone.utc)
+        ),
+        _make_item(
+            42,
+            key="lives_in",
+            content="Lives in Uppsala.",
+            status="correction",
+            updated_at=datetime(2026, 6, 10, tzinfo=timezone.utc),
+        ),
+    ]
+    listed_service = MagicMock()
+    listed_service.list_memory_items = AsyncMock(return_value=items)
+    listed_service.get_items_by_ids = AsyncMock(return_value=items)
+    listed_service.create_item_and_delete_sources = AsyncMock(return_value=(SimpleNamespace(id=99), [41, 42]))
+
+    user_service = MagicMock()
+    user_service.set_personal_info_summary = AsyncMock()
 
     @asynccontextmanager
-    async def fake_provider():
-        yield service
+    async def fake_memory_provider():
+        yield listed_service
 
-    review_plan = MagicMock()
-    review_plan.decisions = [SimpleNamespace(item_id=41, action="keep_active", why="current")]
-    summary_plan = SimpleNamespace(summary="Remaining fact.")
+    @asynccontextmanager
+    async def fake_user_provider():
+        yield user_service
 
-    review_model = MagicMock()
-    review_model.ainvoke = AsyncMock(return_value=review_plan)
-    summary_model = MagicMock()
-    summary_model.ainvoke = AsyncMock(return_value=summary_plan)
-
-    model = MagicMock()
-    model.with_structured_output.side_effect = lambda schema: (
-        review_model if schema.__name__ == "PersonalInfoReviewPlan" else summary_model
+    bucket_plan = BucketTopicsPlan(
+        buckets=[BucketTopicGroup(bucket_label="location", item_ids=[41, 42], why="same location fact")]
+    )
+    review_plan = BucketReviewPlan(groups=[BucketReviewGroup(item_ids=[41, 42], why="same fact over time")])
+    bake_plan = BakeGroupPlan(
+        outcome="bake_active",
+        final_key="lives_in",
+        final_content="Lives in Uppsala.",
+        why="newer correction wins",
+    )
+    summary_plan = PersonalInfoSummaryPlan(summary="The student lives in Uppsala.")
+    model, *_ = _build_model(
+        bucket_plan=bucket_plan,
+        review_plan=review_plan,
+        bake_plan=bake_plan,
+        summary_plan=summary_plan,
     )
 
     with (
         patch("runestone.agents.specialists.memory_maintainer.personal_info.build_chat_model", return_value=model),
         patch(
-            "runestone.agents.specialists.memory_maintainer.personal_info.provide_memory_item_service", fake_provider
+            "runestone.agents.specialists.memory_maintainer.personal_info.provide_memory_item_service",
+            fake_memory_provider,
         ),
-        patch("runestone.agents.specialists.memory_maintainer.personal_info.provide_user_service", fake_provider),
+        patch("runestone.agents.specialists.memory_maintainer.personal_info.provide_user_service", fake_user_provider),
     ):
         specialist = PersonalInfoMemoryMaintainer(mock_settings)
         result = await specialist.run_cli_for_user(mock_user, dry_run=False)
 
-    service.cleanup_stale_personal_info_outdated.assert_awaited_once_with(
-        user_id=mock_user.id,
-        older_than_days=14,
-        dry_run=False,
+    listed_service.create_item_and_delete_sources.assert_awaited_once()
+    user_service.set_personal_info_summary.assert_awaited_once_with(
+        mock_user.id,
+        "The student lives in Uppsala.",
     )
-    assert result.artifacts["stale_outdated_deleted_count"] == 2
-
-
-@pytest.mark.anyio
-async def test_personal_info_maintainer_dry_run_clears_empty_summary(mock_settings):
-    user_with_summary = SimpleNamespace(id=5, personal_info_summary="Existing summary text")
-    service = MagicMock()
-    service.cleanup_stale_personal_info_outdated = AsyncMock(return_value=0)
-    service.list_memory_items = AsyncMock(return_value=[])
-    service.set_personal_info_summary = AsyncMock()
-
-    @asynccontextmanager
-    async def fake_provider():
-        yield service
-
-    with (
-        patch(
-            "runestone.agents.specialists.memory_maintainer.personal_info.build_chat_model", return_value=MagicMock()
-        ),
-        patch(
-            "runestone.agents.specialists.memory_maintainer.personal_info.provide_memory_item_service", fake_provider
-        ),
-        patch("runestone.agents.specialists.memory_maintainer.personal_info.provide_user_service", fake_provider),
-    ):
-        specialist = PersonalInfoMemoryMaintainer(mock_settings)
-        result = await specialist.run_cli_for_user(user_with_summary, dry_run=True)
-
-    assert result.status == "action_taken"
-    assert result.artifacts["summary"] == "dry_run cleared_empty_summary"
-    assert result.artifacts["persisted_summary"] is None
-    # User service must not be called during dry run
-    service.set_personal_info_summary.assert_not_called()
+    assert result.artifacts["kept_active_item_ids"] == [99]
+    assert result.artifacts["deleted_item_ids"] == [41, 42]
 
 
 @pytest.mark.anyio
 async def test_personal_info_maintainer_handles_execution_exceptions(mock_settings, mock_user):
-    item = _make_item(
-        1,
-        key="fact",
-        content="Some fact.",
-        status="active",
-    )
+    item = _make_item(1, key="fact", content="Some fact.")
     service = MagicMock()
-    service.cleanup_stale_personal_info_outdated = AsyncMock(return_value=0)
     service.list_memory_items = AsyncMock(return_value=[item])
 
     @asynccontextmanager
@@ -414,11 +324,111 @@ async def test_personal_info_maintainer_handles_execution_exceptions(mock_settin
         patch(
             "runestone.agents.specialists.memory_maintainer.personal_info.provide_memory_item_service", fake_provider
         ),
+        patch(
+            "runestone.agents.specialists.memory_maintainer.personal_info.PersonalInfoMemoryMaintainer._bucket_topics",
+            AsyncMock(side_effect=Exception("Unexpected execution error")),
+        ),
     ):
         specialist = PersonalInfoMemoryMaintainer(mock_settings)
-        specialist._review_items = AsyncMock(side_effect=Exception("Unexpected execution error"))
         result = await specialist.run_cli_for_user(mock_user, dry_run=False)
 
     assert result.status == "error"
     assert result.artifacts["summary"] == "execution_failed"
     assert "execution_failed:Exception" in result.artifacts["step_errors"]
+
+
+@pytest.mark.anyio
+async def test_personal_info_maintainer_bakes_singleton_correction_bucket_deterministically(mock_settings, mock_user):
+    """A singleton bucket with status=correction must be baked to active without an LLM call."""
+    item = _make_item(
+        10,
+        key="name",
+        content="Name is Anna.",
+        status="correction",
+        updated_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+    )
+    service = MagicMock()
+    service.list_memory_items = AsyncMock(return_value=[item])
+
+    @asynccontextmanager
+    async def fake_provider():
+        yield service
+
+    bucket_plan = BucketTopicsPlan(buckets=[BucketTopicGroup(bucket_label="name", item_ids=[10])])
+    summary_plan = PersonalInfoSummaryPlan(summary="The student's name is Anna.")
+    model, bucket_model, review_model, bake_model, summary_model = _build_model(
+        bucket_plan=bucket_plan, summary_plan=summary_plan
+    )
+
+    with (
+        patch("runestone.agents.specialists.memory_maintainer.personal_info.build_chat_model", return_value=model),
+        patch(
+            "runestone.agents.specialists.memory_maintainer.personal_info.provide_memory_item_service", fake_provider
+        ),
+    ):
+        specialist = PersonalInfoMemoryMaintainer(mock_settings)
+        result = await specialist.run_cli_for_user(mock_user, dry_run=True)
+
+    # Bake and review models must NOT have been called — singleton is resolved deterministically.
+    bake_model.ainvoke.assert_not_awaited()
+    review_model.ainvoke.assert_not_awaited()
+
+    assert result.status == "action_taken"
+    # Source item is consumed by the bake resolution (queued for deletion).
+    assert 10 in result.artifacts["deleted_item_ids"]
+    # The baked synthetic item is counted as a summary source.
+    assert 10 in result.artifacts["summary_source_item_ids"]
+    baked_groups = result.artifacts["baked_groups"]
+    assert len(baked_groups) == 1
+    assert baked_groups[0]["outcome"] == "bake_active"
+    assert baked_groups[0]["final_key"] == "name"
+    assert baked_groups[0]["final_content"] == "Name is Anna."
+
+
+@pytest.mark.anyio
+async def test_personal_info_maintainer_deletes_singleton_outdated_bucket_deterministically(mock_settings, mock_user):
+    """A singleton bucket with status=outdated must be deleted without an LLM call."""
+    item = _make_item(
+        20,
+        key="work_schedule",
+        content="Off work today.",
+        status="outdated",
+        updated_at=datetime(2026, 6, 1, tzinfo=timezone.utc),
+    )
+    service = MagicMock()
+    service.list_memory_items = AsyncMock(return_value=[item])
+
+    @asynccontextmanager
+    async def fake_provider():
+        yield service
+
+    bucket_plan = BucketTopicsPlan(buckets=[BucketTopicGroup(bucket_label="work_schedule", item_ids=[20])])
+    summary_plan = PersonalInfoSummaryPlan(summary="")
+    model, bucket_model, review_model, bake_model, summary_model = _build_model(
+        bucket_plan=bucket_plan, summary_plan=summary_plan
+    )
+
+    with (
+        patch("runestone.agents.specialists.memory_maintainer.personal_info.build_chat_model", return_value=model),
+        patch(
+            "runestone.agents.specialists.memory_maintainer.personal_info.provide_memory_item_service", fake_provider
+        ),
+    ):
+        specialist = PersonalInfoMemoryMaintainer(mock_settings)
+        result = await specialist.run_cli_for_user(mock_user, dry_run=True)
+
+    # Neither bake nor review models should be called for a singleton outdated bucket.
+    bake_model.ainvoke.assert_not_awaited()
+    review_model.ainvoke.assert_not_awaited()
+
+    assert result.status == "action_taken"
+    assert result.artifacts["deleted_item_ids"] == [20]
+    assert result.artifacts["summary_source_item_ids"] == []
+    assert result.artifacts["summary_excluded_item_ids"] == [20]
+    assert result.artifacts["summary_preview"] is None
+
+
+def test_personal_info_prompts_require_bucket_review_and_baking_contract():
+    assert "group the provided `personal_info` rows into candidate topic buckets" in PERSONAL_INFO_BUCKET_TOPICS_PROMPT
+    assert "reason chronologically" in PERSONAL_INFO_REVIEW_BUCKET_PROMPT
+    assert "produce one final active fact or no surviving fact" in PERSONAL_INFO_BAKE_GROUP_PROMPT

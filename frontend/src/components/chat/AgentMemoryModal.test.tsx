@@ -15,6 +15,7 @@ const mockUseMemoryItems = {
   hasMore: false,
   fetchItems: vi.fn(),
   createItem: vi.fn(),
+  updateItem: vi.fn(),
   updateStatus: vi.fn(),
   updatePriority: mockUpdatePriority,
   deleteItem: vi.fn().mockResolvedValue(undefined),
@@ -379,7 +380,7 @@ describe('AgentMemoryModal', () => {
     render(<AgentMemoryModal open={true} onClose={() => {}} />);
 
     expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument();
-    expect(screen.getAllByText('All statuses').length).toBeGreaterThan(0);
+    expect(screen.queryByText('All statuses')).not.toBeInTheDocument();
     expect(screen.getAllByText('Newest first').length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
@@ -436,7 +437,7 @@ describe('AgentMemoryModal', () => {
 
     expect(screen.getAllByText('test-key').length).toBeGreaterThan(0);
     expect(screen.getByText('test-content')).toBeInTheDocument();
-    expect(screen.getByText('Active')).toBeInTheDocument();
+    expect(screen.queryByText('Active')).not.toBeInTheDocument();
     expect(screen.getByText('1 item')).toBeInTheDocument();
   });
 
@@ -557,7 +558,43 @@ describe('AgentMemoryModal', () => {
     // personal_info is the default tab
     fireEvent.click(screen.getByText('Add Item'));
 
+    expect(screen.queryByLabelText(/Status/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Priority/i)).not.toBeInTheDocument();
+  });
+
+  it('updates personal_info through the generic update-by-id path', async () => {
+    const mockItems = [
+      {
+        id: 1,
+        key: 'goal',
+        content: 'Practice speaking',
+        category: 'personal_info',
+        status: 'active',
+        priority: null,
+        updated_at: new Date().toISOString(),
+      },
+    ];
+    (useMemoryItemsModule.default as Mock).mockReturnValue({
+      ...mockUseMemoryItems,
+      items: mockItems,
+    });
+
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+
+    fireEvent.click(screen.getByLabelText('Edit item'));
+    fireEvent.change(screen.getByLabelText(/Content/i), { target: { value: 'Practice reading' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Save'));
+    });
+
+    expect(mockUseMemoryItems.updateItem).toHaveBeenCalledWith(1, {
+      key: 'goal',
+      content: 'Practice reading',
+      status: undefined,
+      priority: undefined,
+    });
+    expect(mockUseMemoryItems.createItem).not.toHaveBeenCalled();
   });
 
   // ---------------------------------------------------------------------------

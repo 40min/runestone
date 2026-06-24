@@ -40,6 +40,7 @@ interface UseMemoryItemsReturn {
     sortDirection?: SortDirection
   ) => Promise<void>;
   createItem: (data: MemoryItemCreate) => Promise<MemoryItem>;
+  updateItem: (id: number, data: Pick<MemoryItemCreate, "key" | "content" | "status" | "priority">) => Promise<MemoryItem>;
   updateStatus: (id: number, status: string) => Promise<MemoryItem>;
   updatePriority: (id: number, priority: number | null) => Promise<MemoryItem>;
   deleteItem: (id: number) => Promise<void>;
@@ -105,21 +106,26 @@ const useMemoryItems = (): UseMemoryItemsReturn => {
     async (data: MemoryItemCreate) => {
       try {
         const newItem = await post<MemoryItem>("/api/memory", data);
-        setItems((prev) => {
-          const index = prev.findIndex((item) => item.category === newItem.category && item.key === newItem.key);
-          if (index !== -1) {
-            const newItems = [...prev];
-            newItems[index] = newItem;
-            return newItems;
-          }
-          return [newItem, ...prev];
-        });
+        setItems((prev) => [newItem, ...prev]);
         return newItem;
       } catch (err) {
         throw err instanceof Error ? err : new Error("Failed to create memory item");
       }
     },
     [post]
+  );
+
+  const updateItem = useCallback(
+    async (id: number, data: Pick<MemoryItemCreate, "key" | "content" | "status" | "priority">) => {
+      try {
+        const updatedItem = await put<MemoryItem>(`/api/memory/${id}`, data);
+        setItems((prev) => prev.map((item) => (item.id === id ? updatedItem : item)));
+        return updatedItem;
+      } catch (err) {
+        throw err instanceof Error ? err : new Error("Failed to update memory item");
+      }
+    },
+    [put]
   );
 
   const updateStatus = useCallback(
@@ -189,6 +195,7 @@ const useMemoryItems = (): UseMemoryItemsReturn => {
     hasMore,
     fetchItems,
     createItem,
+    updateItem,
     updateStatus,
     updatePriority,
     deleteItem,

@@ -7,6 +7,7 @@ This module defines the data models for chat requests and responses.
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
@@ -43,6 +44,14 @@ class NewsSpecialistArticle(BaseModel):
     date: str = Field(..., description="Published date string as returned by search")
     snippet: str = Field("", description="Short summary or snippet used for teacher composition")
     article_text: str = Field("", description="Optional extracted article text when NewsAgent read the article")
+
+
+class AgentPersonalInfoStatus(str, Enum):
+    """Internal personal-info workflow statuses used by keeper and maintainer."""
+
+    ACTIVE = "active"
+    CORRECTION = "correction"
+    OUTDATED = "outdated"
 
 
 class ChatMessage(BaseModel):

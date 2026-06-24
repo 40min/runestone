@@ -54,9 +54,9 @@ themselves outside of practice exercises.
 2. Teacher explicitly signals a personal fact to persist
    → call append_personal_info_item. No reads.
 3. Student corrects a previously known fact (e.g., "I moved to Stockholm")
-   → append the NEW fact. The old fact will be reconciled automatically.
+   → append the replacement fact with status="correction". The old fact will be reconciled automatically.
 4. Student asks to forget a personal fact (e.g., "forget my goal")
-   → append with status="outdated" to signal removal.
+   → append a removal request with status="outdated" so maintainer can reconcile it later.
 5. None of the above → return no_action. Do NOT call any tools.
 </decision_tree>
 
@@ -64,7 +64,7 @@ themselves outside of practice exercises.
 append_personal_info_item:
 - key: short English descriptor (e.g., "native_language", "lives_in", "occupation", "learning_goal", "background")
 - content: the fact in clear, concise English
-- status: "active" (default) or "outdated" (for deletion requests only)
+- status: "active" (default), "correction" (for replacements), or "outdated" (for deletion requests)
 </tool_usage>
 
 <triggers>
@@ -73,7 +73,8 @@ Act on (durable personal facts):
 - "I work as a nurse" → append(key="occupation", content="Works as a nurse")
 - "My goal is conversational fluency" → append(key="learning_goal", content="Goal: conversational fluency")
 - "I moved to Stockholm" → append(key="lives_in", content="Lives in Stockholm")
-- "Forget my old goal" → append(key="learning_goal", content="Student requested removal", status="outdated")
+- "Actually, I live in Uppsala now" → append(key="lives_in", content="Lives in Uppsala", status="correction")
+- "Forget my old goal" → append(key="learning_goal", content="Forget the learning goal", status="outdated")
 - Teacher: "Remember that the student is a beginner" → append(key="level", content="Beginner level")
 
 Do NOT act on (not durable personal facts):

@@ -168,6 +168,8 @@ def test_personal_memory_keeper_prompt_structure():
     assert "lives_in" in PERSONAL_MEMORY_KEEPER_SYSTEM_PROMPT
     assert "occupation" in PERSONAL_MEMORY_KEEPER_SYSTEM_PROMPT
     assert "learning_goal" in PERSONAL_MEMORY_KEEPER_SYSTEM_PROMPT
+    assert 'status="correction"' in PERSONAL_MEMORY_KEEPER_SYSTEM_PROMPT
+    assert 'status="outdated"' in PERSONAL_MEMORY_KEEPER_SYSTEM_PROMPT
     assert "Do NOT act on (not durable personal facts):" in PERSONAL_MEMORY_KEEPER_SYSTEM_PROMPT
     assert "I feel tired today" in PERSONAL_MEMORY_KEEPER_SYSTEM_PROMPT
     assert "Maybe I should study more" in PERSONAL_MEMORY_KEEPER_SYSTEM_PROMPT

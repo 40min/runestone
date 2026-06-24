@@ -10,12 +10,14 @@ from typing import Optional
 
 from sqlalchemy.exc import IntegrityError
 
+from runestone.agents.schemas import AgentPersonalInfoStatus
 from runestone.api.memory_item_schemas import (
     DEFAULT_STATUS_BY_CATEGORY,
     VALID_STATUSES_BY_CATEGORY,
     MemoryCategory,
     MemoryItemResponse,
     MemorySortBy,
+    PersonalInfoStatus,
     SortDirection,
 )
 from runestone.constants import MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY
@@ -33,6 +35,8 @@ class MemoryItemService:
     # Re-exported for local use; the canonical definitions live in memory_item_schemas.
     DEFAULT_STATUS = DEFAULT_STATUS_BY_CATEGORY
     VALID_STATUSES = VALID_STATUSES_BY_CATEGORY
+    PERSONAL_INFO_ACTIVE = AgentPersonalInfoStatus.ACTIVE.value
+    PERSONAL_INFO_AGENT_STATUSES = {status.value for status in AgentPersonalInfoStatus}
 
     def __init__(self, memory_item_repository: MemoryItemRepository):
         """Initialize service with memory item repository."""
@@ -140,7 +144,8 @@ class MemoryItemService:
     ) -> MemoryItemResponse:
         """Create a new personal_info memory row without checking for an existing key."""
         category = MemoryCategory.PERSONAL_INFO
-        self.validate_status(category, status)
+        if status not in self.PERSONAL_INFO_AGENT_STATUSES:
+            raise ValueError(f"Invalid agent personal_info status '{status}'")
 
         if not isinstance(key, str) or not key.strip():
             raise ValueError("key must not be empty")
@@ -153,6 +158,47 @@ class MemoryItemService:
             key=key,
             content=content,
             status=status,
+            status_changed_at=self._utc_now(),
+        )
+        created_item = await self.repo.create(new_item)
+        return MemoryItemResponse.model_validate(created_item)
+
+    async def create_item(
+        self,
+        user_id: int,
+        category: MemoryCategory,
+        key: str,
+        content: str,
+        status: Optional[str] = None,
+        priority: Optional[int] = None,
+    ) -> MemoryItemResponse:
+        """Create a new public memory item."""
+        if not status:
+            status = self.DEFAULT_STATUS[category]
+
+        self.validate_status(category, status)
+
+        if category == MemoryCategory.AREA_TO_IMPROVE:
+            if priority is not None and not (0 <= priority <= 9):
+                raise ValueError(f"priority must be between 0 and 9, got {priority}")
+        elif priority is not None:
+            raise ValueError("priority is only applicable to category 'area_to_improve'")
+
+        existing_item = await self.repo.get_by_user_category_key(user_id, category.value, key)
+        if existing_item:
+            raise ValueError(f"Memory item with key '{key}' already exists in category '{category.value}'")
+
+        create_priority = priority
+        if category == MemoryCategory.AREA_TO_IMPROVE and create_priority is None:
+            create_priority = MEMORY_DEFAULT_AREA_TO_IMPROVE_PRIORITY
+
+        new_item = MemoryItem(
+            user_id=user_id,
+            category=category.value,
+            key=key,
+            content=content,
+            status=status,
+            priority=create_priority,
             status_changed_at=self._utc_now(),
         )
         created_item = await self.repo.create(new_item)
@@ -183,11 +229,9 @@ class MemoryItemService:
         Raises:
             ValueError: If status is invalid for category
         """
-        # Use default status if not provided
         if not status:
             status = self.DEFAULT_STATUS[category]
 
-        # Validate status
         self.validate_status(category, status)
 
         # Check if item exists
@@ -257,6 +301,8 @@ class MemoryItemService:
             category = MemoryCategory(item.category)
         except Exception as e:
             raise ValueError(f"Invalid category '{item.category}' on memory item {item.id}") from e
+        if category == MemoryCategory.PERSONAL_INFO:
+            raise ValueError("status updates are not supported for category 'personal_info'")
         self.validate_status(category, new_status)
 
         # Update status
@@ -266,6 +312,31 @@ class MemoryItemService:
             item.status_changed_at = self._utc_now()
         item.updated_at = self._utc_now()
 
+        updated_item = await self.repo.update(item)
+        return MemoryItemResponse.model_validate(updated_item)
+
+    async def update_personal_info_status_for_maintenance(
+        self,
+        item_id: int,
+        new_status: str,
+        user_id: int,
+    ) -> MemoryItemResponse:
+        """Update personal_info workflow status for internal maintenance only."""
+        item = await self.repo.get_by_id(item_id)
+        if not item:
+            raise MemoryItemNotFoundError(f"Memory item with id {item_id} not found")
+        if item.user_id != user_id:
+            raise PermissionDeniedError("You don't have permission to update this item")
+        if item.category != MemoryCategory.PERSONAL_INFO.value:
+            raise ValueError("maintenance status updates are only supported for category 'personal_info'")
+        if new_status not in self.PERSONAL_INFO_AGENT_STATUSES:
+            raise ValueError(f"Invalid agent personal_info status '{new_status}'")
+
+        old_status = item.status
+        item.status = new_status
+        if old_status != new_status:
+            item.status_changed_at = self._utc_now()
+        item.updated_at = self._utc_now()
         updated_item = await self.repo.update(item)
         return MemoryItemResponse.model_validate(updated_item)
 
@@ -306,6 +377,61 @@ class MemoryItemService:
         if not isinstance(content, str) or not content.strip():
             raise ValueError("content must not be empty")
 
+        if item.category == MemoryCategory.PERSONAL_INFO.value and item.status != self.PERSONAL_INFO_ACTIVE:
+            raise ValueError("personal_info item is no longer active")
+
+        item.content = content
+        item.updated_at = self._utc_now()
+        updated_item = await self.repo.update(item)
+        return MemoryItemResponse.model_validate(updated_item)
+
+    async def update_item(
+        self,
+        item_id: int,
+        *,
+        key: str,
+        content: str,
+        status: Optional[str],
+        priority: Optional[int],
+        user_id: int,
+    ) -> MemoryItemResponse:
+        """Update an existing memory item's editable fields."""
+
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("key must not be empty")
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("content must not be empty")
+
+        item = await self.repo.get_by_id(item_id)
+        if not item:
+            raise MemoryItemNotFoundError(f"Memory item with id {item_id} not found")
+        if item.user_id != user_id:
+            raise PermissionDeniedError("You don't have permission to update this item")
+
+        category = MemoryCategory(item.category)
+        if category == MemoryCategory.PERSONAL_INFO and item.status != PersonalInfoStatus.ACTIVE.value:
+            raise ValueError("personal_info items can only be edited while active")
+
+        existing_item = await self.repo.get_by_user_category_key(item.user_id, item.category, key)
+        if existing_item and existing_item.id != item.id:
+            raise ValueError(f"Memory item with key '{key}' already exists in category '{item.category}'")
+
+        if status is not None:
+            self.validate_status(category, status)
+            old_status = item.status
+            item.status = status
+            if old_status != status:
+                item.status_changed_at = self._utc_now()
+
+        if category == MemoryCategory.AREA_TO_IMPROVE:
+            if priority is not None and not (0 <= priority <= 9):
+                raise ValueError(f"priority must be between 0 and 9, got {priority}")
+            if priority is not None:
+                item.priority = priority
+        elif priority is not None:
+            raise ValueError("priority is only applicable to category 'area_to_improve'")
+
+        item.key = key
         item.content = content
         item.updated_at = self._utc_now()
         updated_item = await self.repo.update(item)

@@ -11,6 +11,7 @@ from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
+from runestone.agents.schemas import AgentPersonalInfoStatus
 from runestone.agents.service_providers import provide_memory_item_service
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.utils import serialize_active_learning_focus, serialize_memory_items
@@ -19,7 +20,6 @@ from runestone.api.memory_item_schemas import (
     MemoryCategory,
     MemoryItemCreate,
     MemorySortBy,
-    PersonalInfoStatus,
     SortDirection,
 )
 from runestone.core.exceptions import PermissionDeniedError, UserNotFoundError
@@ -65,8 +65,8 @@ class PersonalInfoAppendInput(BaseModel):
 
     key: str = Field(..., min_length=1, max_length=100, description="Descriptive personal_info key")
     content: str = Field(..., min_length=1, description="Raw personal fact to append")
-    status: str = Field(
-        default=PersonalInfoStatus.ACTIVE.value,
+    status: AgentPersonalInfoStatus = Field(
+        default=AgentPersonalInfoStatus.ACTIVE,
         description="personal_info status, defaults to active",
     )
 
@@ -244,7 +244,7 @@ async def append_personal_info_item(
                 user_id=user.id,
                 key=item.key,
                 content=item.content,
-                status=item.status,
+                status=item.status.value,
             )
     except (PermissionDeniedError, UserNotFoundError, ValueError) as exc:
         return _format_tool_error("append_personal_info_item", exc)
@@ -260,10 +260,9 @@ async def update_memory_status(
     """
     Update the status of a memory item.
 
-    Use this to track progress on areas to improve or mark information as outdated.
+    Use this to track progress on areas to improve.
 
     Valid status transitions:
-    - personal_info: active, outdated
     - area_to_improve: struggling, improving, mastered
 
     Args:
