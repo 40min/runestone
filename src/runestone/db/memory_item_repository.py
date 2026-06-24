@@ -198,17 +198,20 @@ class MemoryItemRepository:
         await self.db.refresh(item)
         return item
 
-    async def delete(self, item_id: int) -> None:
+    async def delete(self, item_id: int, *, commit: bool = True) -> None:
         """
         Delete a memory item by ID.
 
         Args:
             item_id: ID of the item to delete
+            commit: Whether to commit immediately. Pass ``False`` when batching
+                multiple deletes so a single commit can be issued afterwards.
         """
         item = await self.get_by_id(item_id)
         if item:
             await self.db.delete(item)
-            await self.db.commit()
+            if commit:
+                await self.db.commit()
 
     async def delete_by_category(self, user_id: int, category: str) -> int:
         """

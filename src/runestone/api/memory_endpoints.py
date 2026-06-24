@@ -168,6 +168,8 @@ async def update_memory_item_status(
         item = await service.get_item_by_id(item_id)
         if not item:
             raise MemoryItemNotFoundError(f"Memory item with id {item_id} not found")
+        if item.user_id != current_user.id:
+            raise PermissionDeniedError("You don't have permission to update this item")
         if item.category == MemoryCategory.PERSONAL_INFO.value:
             raise ValueError("status updates are not supported for category 'personal_info'")
         return await service.update_item_status(item_id, status_data.status, current_user.id)

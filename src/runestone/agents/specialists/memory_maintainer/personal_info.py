@@ -349,11 +349,19 @@ class PersonalInfoMemoryMaintainer(BaseSpecialist):
                 )
                 if review is None:
                     artifacts["step_errors"].append(f"bucket_review_failed:{bucket.bucket_label}")
+                    # Fallback: preserve existing active items so they are not lost from the summary.
+                    for item in bucket_items:
+                        if item.status == AgentPersonalInfoStatus.ACTIVE.value:
+                            untouched_active_items.append(item)
                     continue
 
                 validated_groups = self._validate_bucket_review_plan(review, bucket_items)
                 if validated_groups is None:
                     artifacts["step_errors"].append(f"invalid_bucket_review:{bucket.bucket_label}")
+                    # Fallback: preserve existing active items so they are not lost from the summary.
+                    for item in bucket_items:
+                        if item.status == AgentPersonalInfoStatus.ACTIVE.value:
+                            untouched_active_items.append(item)
                     continue
 
                 for group in validated_groups:
@@ -836,9 +844,13 @@ class PersonalInfoMemoryMaintainer(BaseSpecialist):
         deleted_item_ids: list[int] = []
 
         async with provide_memory_item_service() as service:
-            for plan in planned_resolutions:
-                current_items = await service.get_items_by_ids(plan.source_item_ids)
+            all_source_ids = [item_id for plan in planned_resolutions for item_id in plan.source_item_ids]
+            current_by_id = {}
+            if all_source_ids:
+                current_items = await service.get_items_by_ids(all_source_ids)
                 current_by_id = {item.id: item for item in current_items}
+
+            for plan in planned_resolutions:
                 missing_ids = [item_id for item_id in plan.source_item_ids if item_id not in current_by_id]
                 if missing_ids:
                     raise MemoryItemNotFoundError(f"Memory items with ids {missing_ids} not found")
@@ -868,11 +880,10 @@ class PersonalInfoMemoryMaintainer(BaseSpecialist):
                     kept_active_item_ids.append(created_item.id)
                     deleted_item_ids.extend(deleted_ids)
                 else:
-                    db = service.repo.db
                     for item in ordered_items:
-                        await db.delete(item)
+                        await service.delete_item(item.id, user_id, commit=False)
                         deleted_item_ids.append(item.id)
-                    await db.commit()
+                    await service.repo.db.commit()
 
         async with provide_user_service() as user_service:
             await user_service.set_personal_info_summary(user_id, target_summary)

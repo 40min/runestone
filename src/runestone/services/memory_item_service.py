@@ -417,6 +417,8 @@ class MemoryItemService:
             raise ValueError(f"Memory item with key '{key}' already exists in category '{item.category}'")
 
         if status is not None:
+            if category == MemoryCategory.PERSONAL_INFO:
+                raise ValueError("status updates are not supported for category 'personal_info'")
             self.validate_status(category, status)
             old_status = item.status
             item.status = status
@@ -566,13 +568,15 @@ class MemoryItemService:
 
         return created_response, deleted_ids
 
-    async def delete_item(self, item_id: int, user_id: int) -> None:
+    async def delete_item(self, item_id: int, user_id: int, *, commit: bool = True) -> None:
         """
         Delete a memory item.
 
         Args:
             item_id: Item ID
             user_id: User ID (for authorization)
+            commit: Whether to commit immediately. Pass ``False`` when batching
+                multiple deletes so a single commit can be issued afterwards.
 
         Raises:
             MemoryItemNotFoundError: If item not found
@@ -585,7 +589,7 @@ class MemoryItemService:
         if item.user_id != user_id:
             raise PermissionDeniedError("You don't have permission to delete this item")
 
-        await self.repo.delete(item_id)
+        await self.repo.delete(item_id, commit=commit)
 
     async def cleanup_old_mastered_areas(self, user_id: int, older_than_days: int) -> int:
         """
