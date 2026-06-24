@@ -36,6 +36,7 @@ class PersonalInfoStatus(str, Enum):
     """Status values for personal_info category."""
 
     ACTIVE = "active"
+    CORRECTION = "correction"
     OUTDATED = "outdated"
 
 
@@ -97,6 +98,20 @@ class MemoryItemStatusUpdate(BaseModel):
     """Schema for updating memory item status."""
 
     status: str = Field(..., description="New status value")
+
+
+class MemoryItemUpdate(BaseModel):
+    """Schema for updating a memory item by id."""
+
+    key: str = Field(..., min_length=1, max_length=100, description="Unique key within category")
+    content: str = Field(..., min_length=1, description="Content/description of the memory item")
+    status: Optional[str] = Field(None, description="Optional updated status")
+    priority: Optional[int] = Field(
+        None,
+        ge=0,
+        le=9,
+        description="Optional updated priority for area_to_improve",
+    )
 
 
 class MemoryItemPriorityUpdate(BaseModel):

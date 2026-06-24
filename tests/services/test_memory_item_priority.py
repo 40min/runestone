@@ -3,13 +3,7 @@ from typing import Optional
 
 import pytest
 
-from runestone.api.memory_item_schemas import (
-    AreaToImproveStatus,
-    MemoryCategory,
-    MemorySortBy,
-    PersonalInfoStatus,
-    SortDirection,
-)
+from runestone.api.memory_item_schemas import AreaToImproveStatus, MemoryCategory, MemorySortBy, SortDirection
 from runestone.core.exceptions import PermissionDeniedError
 from runestone.db.memory_item_repository import MemoryItemRepository
 from runestone.db.models import MemoryItem
@@ -100,7 +94,7 @@ async def test_updated_at_ordering_asc(db_with_test_user):
                 category=MemoryCategory.PERSONAL_INFO.value,
                 key="newer",
                 content="newer",
-                status=PersonalInfoStatus.ACTIVE.value,
+                status="active",
                 updated_at=base.replace(minute=10),
             ),
             MemoryItem(
@@ -108,7 +102,7 @@ async def test_updated_at_ordering_asc(db_with_test_user):
                 category=MemoryCategory.PERSONAL_INFO.value,
                 key="older",
                 content="older",
-                status=PersonalInfoStatus.ACTIVE.value,
+                status="active",
                 updated_at=base.replace(minute=1),
             ),
         ]
@@ -130,7 +124,7 @@ async def test_updated_at_ordering_desc(db_with_test_user):
                 category=MemoryCategory.PERSONAL_INFO.value,
                 key="older",
                 content="older",
-                status=PersonalInfoStatus.ACTIVE.value,
+                status="active",
                 updated_at=base.replace(minute=1),
             ),
             MemoryItem(
@@ -138,7 +132,7 @@ async def test_updated_at_ordering_desc(db_with_test_user):
                 category=MemoryCategory.PERSONAL_INFO.value,
                 key="newer",
                 content="newer",
-                status=PersonalInfoStatus.ACTIVE.value,
+                status="active",
                 updated_at=base.replace(minute=10),
             ),
         ]
@@ -348,7 +342,7 @@ async def test_update_item_priority_wrong_category(db_with_test_user):
         category=MemoryCategory.PERSONAL_INFO.value,
         key="name",
         content="Alice",
-        status=PersonalInfoStatus.ACTIVE.value,
+        status="active",
     )
     db.add(item)
     await db.commit()

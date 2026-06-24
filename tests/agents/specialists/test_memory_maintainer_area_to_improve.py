@@ -10,12 +10,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from runestone.agents.specialists.base import SpecialistContext
-from runestone.agents.specialists.memory_maintainer import (
+from runestone.agents.specialists.memory_maintainer.area_to_improve import (
+    AreaToImproveMemoryMaintainer as MemoryMaintainerSpecialist,
+)
+from runestone.agents.specialists.memory_maintainer.area_to_improve import (
     BucketReviewGroup,
     BucketReviewPlan,
     BucketTopicGroup,
     BucketTopicsPlan,
-    MemoryMaintainerSpecialist,
     MergeGeneration,
     MergeValidation,
     PlannedGroup,

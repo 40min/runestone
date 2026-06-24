@@ -183,6 +183,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
     hasMore,
     fetchItems,
     createItem,
+    updateItem,
     updatePriority,
     deleteItem,
     clearCategory,
@@ -209,6 +210,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
   const maintenancePollCycleRef = useRef(0);
   const lastHandledRefreshTokenRef = useRef<number>(refreshToken);
   const displayedCountLabel = `${items.length} item${items.length === 1 ? "" : "s"}`;
+  const showStatusControls = activeTab === "area_to_improve";
   const sortSummaryLabel =
     sortBy === "priority"
       ? sortDirection === "asc"
@@ -474,9 +476,19 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
 
   const handleSaveItem = async () => {
     try {
-      await createItem(formData);
+      if (editingItem) {
+        await updateItem(editingItem.id, {
+          key: formData.key,
+          content: formData.content,
+          status: formData.category === "area_to_improve" ? formData.status : undefined,
+          priority: formData.category === "area_to_improve" ? formData.priority : undefined,
+        });
+      } else {
+        await createItem(formData);
+      }
       setSyncNotice(null);
       setIsFormOpen(false);
+      setEditingItem(null);
     } catch (err) {
       console.error("Failed to save memory item", err);
     }
@@ -755,15 +767,17 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
 
             {isCompactLayout && (
               <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", mt: 1.25 }}>
-                <Chip
-                  label={statusSummaryLabel}
-                  size="small"
-                  sx={{
-                    bgcolor: "rgba(15, 23, 42, 0.5)",
-                    color: "#cbd5e1",
-                    border: "1px solid rgba(148, 163, 184, 0.16)",
-                  }}
-                />
+                {showStatusControls && (
+                  <Chip
+                    label={statusSummaryLabel}
+                    size="small"
+                    sx={{
+                      bgcolor: "rgba(15, 23, 42, 0.5)",
+                      color: "#cbd5e1",
+                      border: "1px solid rgba(148, 163, 184, 0.16)",
+                    }}
+                  />
+                )}
                 <Chip
                   label={sortSummaryLabel}
                   size="small"
@@ -795,23 +809,25 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                     minWidth: 0,
                   }}
                 >
-                  <FormControl size="small" sx={{ minWidth: 0, ...textFieldStyles }}>
-                    <Typography
-                      id="status-filter-label"
-                      component="label"
-                      sx={{ mb: 0.5, color: "#cbd5e1", fontSize: "0.9rem", fontWeight: 500 }}
-                    >
-                      Status
-                    </Typography>
-                    <Select
-                      labelId="status-filter-label"
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                    >
-                      <MenuItem value="all">All statuses</MenuItem>
-                      {renderStatusMenuItems(activeTab)}
-                    </Select>
-                  </FormControl>
+                  {showStatusControls && (
+                    <FormControl size="small" sx={{ minWidth: 0, ...textFieldStyles }}>
+                      <Typography
+                        id="status-filter-label"
+                        component="label"
+                        sx={{ mb: 0.5, color: "#cbd5e1", fontSize: "0.9rem", fontWeight: 500 }}
+                      >
+                        Status
+                      </Typography>
+                      <Select
+                        labelId="status-filter-label"
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                      >
+                        <MenuItem value="all">All statuses</MenuItem>
+                        {renderStatusMenuItems(activeTab)}
+                      </Select>
+                    </FormControl>
+                  )}
 
                   <FormControl size="small" sx={{ minWidth: 0, ...textFieldStyles }}>
                     <Typography
@@ -1109,19 +1125,19 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                             </Tooltip>
                           )
                         )}
-                        <Chip
-                          label={
-                            STATUS_OPTIONS[item.status]?.label || item.status
-                          }
-                          size="small"
-                          sx={{
-                            height: 28,
-                            fontSize: "0.8rem",
-                            fontWeight: "bold",
-                            borderRadius: "999px",
-                            ...getStatusChipStyles(item.status),
-                          }}
-                        />
+                        {item.category === "area_to_improve" && (
+                          <Chip
+                            label={STATUS_OPTIONS[item.status]?.label || item.status}
+                            size="small"
+                            sx={{
+                              height: 28,
+                              fontSize: "0.8rem",
+                              fontWeight: "bold",
+                              borderRadius: "999px",
+                              ...getStatusChipStyles(item.status),
+                            }}
+                          />
+                        )}
                       </Box>
                     </Box>
                     <Typography
@@ -1155,6 +1171,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                         <IconButton
                           size="small"
                           onClick={() => handleOpenForm(item)}
+                          aria-label="Edit item"
                           sx={{ color: "#9ca3af" }}
                         >
                           <EditIcon fontSize="small" />
@@ -1287,23 +1304,25 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
             placeholder="Describe what the agent should remember..."
             sx={textFieldStyles}
           />
-          <FormControl fullWidth sx={textFieldStyles}>
-            <InputLabel id="form-status-label">Status</InputLabel>
-            <Select
-              labelId="form-status-label"
-              value={formData.status ?? ""}
-              label="Status"
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  status: e.target.value ? String(e.target.value) : undefined,
-                })
-              }
-            >
-              <MenuItem value="">Default</MenuItem>
-              {renderStatusMenuItems(formData.category)}
-            </Select>
-          </FormControl>
+          {formData.category === "area_to_improve" && (
+            <FormControl fullWidth sx={textFieldStyles}>
+              <InputLabel id="form-status-label">Status</InputLabel>
+              <Select
+                labelId="form-status-label"
+                value={formData.status ?? ""}
+                label="Status"
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    status: e.target.value ? String(e.target.value) : undefined,
+                  })
+                }
+              >
+                <MenuItem value="">Default</MenuItem>
+                {renderStatusMenuItems(formData.category)}
+              </Select>
+            </FormControl>
+          )}
           {/* Priority — only for area_to_improve */}
           {formData.category === "area_to_improve" && (
             <FormControl fullWidth sx={textFieldStyles}>
