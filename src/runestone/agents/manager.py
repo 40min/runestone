@@ -53,6 +53,7 @@ class AgentsManager:
     MEMORY_MAINTENANCE_TIMEOUT_SECONDS = 240
     STARTER_MEMORY_AREA_LIMIT = 5
     NO_CHAT_HISTORY_SPECIALISTS = frozenset({"word_keeper", "learning_memory_keeper"})
+    PERSONAL_MEMORY_KEEPER_HISTORY_SIZE = 2
 
     def __init__(
         self,
@@ -124,6 +125,8 @@ class AgentsManager:
         """
         if specialist_name in cls.NO_CHAT_HISTORY_SPECIALISTS:
             return 0
+        if specialist_name == "personal_memory_keeper":
+            return cls.PERSONAL_MEMORY_KEEPER_HISTORY_SIZE
         return requested_history_size
 
     # ------------------------------------------------------------------

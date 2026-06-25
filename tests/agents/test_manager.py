@@ -1387,6 +1387,49 @@ async def test_run_post_turn_forces_learning_memory_keeper_history_to_zero(
 
 
 @pytest.mark.anyio
+async def test_run_post_turn_forces_personal_memory_keeper_history_to_two(
+    mock_settings, mock_user, mock_side_effect_service
+):
+    manager = _make_manager(mock_settings)
+
+    class _PersonalMemoryKeeperCaptureSpecialist(BaseSpecialist):
+        def __init__(self):
+            super().__init__(name="personal_memory_keeper")
+            self.seen_history = None
+
+        async def run(self, context: SpecialistContext) -> SpecialistResult:
+            self.seen_history = context.history
+            return SpecialistResult(status="no_action")
+
+    capture = _PersonalMemoryKeeperCaptureSpecialist()
+    manager.registry.register(capture, overwrite=True)
+    manager.coordinator.plan_post_turn = AsyncMock(
+        return_value=_make_plan(post=[RoutingItem(name="personal_memory_keeper", reason="memory", chat_history_size=0)])
+    )
+
+    history = [
+        ChatMessage(role="assistant", content="Older assistant message"),
+        ChatMessage(role="user", content="Older user reply"),
+        ChatMessage(role="assistant", content="Write a sentence about where you live."),
+        ChatMessage(role="user", content="Jag bor i Stockholm."),
+    ]
+
+    await manager.run_post_turn(
+        message="I live in Stockholm.",
+        chat_id="chat-1",
+        history=history,
+        user=mock_user,
+        teacher_response="Bra jobbat!",
+        vocabulary_candidates=[],
+        pre_results=[],
+        side_effect_service=mock_side_effect_service,
+        coordinator_row_id=99,
+    )
+
+    assert capture.seen_history == history[-2:]
+
+
+@pytest.mark.anyio
 async def test_run_post_turn_does_not_route_word_keeper_without_candidates(
     mock_settings, mock_user, mock_side_effect_service
 ):
