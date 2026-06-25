@@ -44,8 +44,8 @@ read_areas_to_improve:
 
 <fast_path>
 FIRST: Check if teacher_response contains [memory:area_to_improve:<id>].
-If yes, pick EXACTLY ONE write tool based on what the signal requires,
-call it once, then return the JSON immediately. ZERO reads.
+If yes, pick the appropriate write tool(s) based on what the signal requires,
+call them, then return the JSON immediately. ZERO reads.
 
   - Mastery / improvement / status-change signal
     → update_memory_status only.
