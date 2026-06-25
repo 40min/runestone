@@ -55,6 +55,10 @@ call them, then return the JSON immediately. ZERO reads.
     → call update_memory_status first, then update_memory_item_content once.
     Two calls maximum. Return immediately after.
 
+STALE ID RULE: If any write tool returns "Memory item with id ... not found"
+for the ID from the tag, the tag is stale. Return no_action immediately.
+Do NOT read, upsert, use the same ID again, or attempt any recovery.
+
 This is the most common case. Do NOT call read_areas_to_improve.
 Do NOT call any write tool more than once per intent.
 </fast_path>
