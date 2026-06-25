@@ -11,6 +11,7 @@ from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
+from runestone.agents.schemas import AgentPersonalInfoStatus
 from runestone.agents.service_providers import provide_memory_item_service
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.utils import serialize_active_learning_focus, serialize_memory_items
@@ -19,7 +20,6 @@ from runestone.api.memory_item_schemas import (
     MemoryCategory,
     MemoryItemCreate,
     MemorySortBy,
-    PersonalInfoStatus,
     SortDirection,
 )
 from runestone.core.exceptions import PermissionDeniedError, UserNotFoundError
@@ -65,8 +65,8 @@ class PersonalInfoAppendInput(BaseModel):
 
     key: str = Field(..., min_length=1, max_length=100, description="Descriptive personal_info key")
     content: str = Field(..., min_length=1, description="Raw personal fact to append")
-    status: str = Field(
-        default=PersonalInfoStatus.ACTIVE.value,
+    status: AgentPersonalInfoStatus = Field(
+        default=AgentPersonalInfoStatus.ACTIVE,
         description="personal_info status, defaults to active",
     )
 
@@ -114,6 +114,39 @@ async def read_memory(
         items = await service.list_memory_items(
             user_id=user.id,
             category=category,
+            statuses=statuses,
+            sort_by=MemorySortBy.UPDATED_AT,
+            sort_direction=SortDirection.DESC,
+            limit=100,
+            offset=0,
+        )
+
+    if not items:
+        return "No memory items found."
+
+    return serialize_memory_items(items)
+
+
+@tool
+async def read_areas_to_improve(
+    runtime: ToolRuntime[AgentContext],
+    statuses: Annotated[
+        Optional[list[str]],
+        Field(description="Optional status filters (struggling, improving, mastered)"),
+    ] = None,
+) -> str:
+    """Read area_to_improve memory items.
+
+    Returns structured memory items representing areas where the user needs improvement,
+    including IDs, status, key, and content.
+    """
+    logger.info("Agent tool call: read_areas_to_improve (statuses=%s)", statuses)
+    user = runtime.context.user
+
+    async with provide_memory_item_service() as service:
+        items = await service.list_memory_items(
+            user_id=user.id,
+            category=MemoryCategory.AREA_TO_IMPROVE,
             statuses=statuses,
             sort_by=MemorySortBy.UPDATED_AT,
             sort_direction=SortDirection.DESC,
@@ -211,7 +244,7 @@ async def append_personal_info_item(
                 user_id=user.id,
                 key=item.key,
                 content=item.content,
-                status=item.status,
+                status=item.status.value,
             )
     except (PermissionDeniedError, UserNotFoundError, ValueError) as exc:
         return _format_tool_error("append_personal_info_item", exc)
@@ -227,10 +260,9 @@ async def update_memory_status(
     """
     Update the status of a memory item.
 
-    Use this to track progress on areas to improve or mark information as outdated.
+    Use this to track progress on areas to improve.
 
     Valid status transitions:
-    - personal_info: active, outdated
     - area_to_improve: struggling, improving, mastered
 
     Args:

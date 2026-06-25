@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select
 
+from runestone.agents.schemas import AgentPersonalInfoStatus
 from runestone.api.memory_item_schemas import AreaToImproveStatus, MemoryCategory, PersonalInfoStatus
 from runestone.core.exceptions import PermissionDeniedError
 from runestone.db.memory_item_repository import MemoryItemRepository
@@ -100,7 +101,7 @@ async def test_upsert_memory_item_creates_with_default_status(db_with_test_user,
         content="Wants to practice Swedish daily",
     )
 
-    assert response.status == PersonalInfoStatus.ACTIVE.value
+    assert response.status == "active"
     item = await repo.get_by_user_category_key(user.id, MemoryCategory.PERSONAL_INFO.value, "learning_goal")
     assert item is not None
     assert item.content == "Wants to practice Swedish daily"
@@ -118,7 +119,7 @@ async def test_upsert_memory_item_updates_and_tracks_status_change(db_with_test_
         category=MemoryCategory.PERSONAL_INFO.value,
         key="timezone",
         content="UTC",
-        status=PersonalInfoStatus.ACTIVE.value,
+        status="active",
         status_changed_at=old_time,
         updated_at=old_time,
     )
@@ -134,10 +135,10 @@ async def test_upsert_memory_item_updates_and_tracks_status_change(db_with_test_
         category=MemoryCategory.PERSONAL_INFO,
         key="timezone",
         content="CET",
-        status=PersonalInfoStatus.OUTDATED.value,
+        status="outdated",
     )
 
-    assert response.status == PersonalInfoStatus.OUTDATED.value
+    assert response.status == "outdated"
     await db.refresh(item)
     assert item.content == "CET"
     assert item.status_changed_at.replace(tzinfo=timezone.utc) == fixed_now
@@ -157,7 +158,7 @@ async def test_update_item_content_in_category_updates_existing_item_without_cha
         category=MemoryCategory.PERSONAL_INFO.value,
         key="mother_tongue",
         content="Finnish",
-        status=PersonalInfoStatus.ACTIVE.value,
+        status="active",
         status_changed_at=old_time,
         updated_at=old_time,
     )
@@ -178,7 +179,7 @@ async def test_update_item_content_in_category_updates_existing_item_without_cha
     assert response.content == "Estonian"
     await db.refresh(item)
     assert item.content == "Estonian"
-    assert item.status == PersonalInfoStatus.ACTIVE.value
+    assert item.status == "active"
     assert item.status_changed_at.replace(tzinfo=timezone.utc) == old_time
     assert item.updated_at.replace(tzinfo=timezone.utc) == fixed_now
 
@@ -193,7 +194,7 @@ async def test_update_item_content_rejects_blank_content(db_with_test_user):
         category=MemoryCategory.PERSONAL_INFO.value,
         key="goal",
         content="Practice speaking",
-        status=PersonalInfoStatus.ACTIVE.value,
+        status="active",
     )
     db.add(item)
     await db.commit()
@@ -204,6 +205,118 @@ async def test_update_item_content_rejects_blank_content(db_with_test_user):
             item_id=item.id,
             category=MemoryCategory.PERSONAL_INFO,
             content="   ",
+            user_id=user.id,
+        )
+
+
+async def test_update_item_content_rejects_non_active_personal_info_item(db_with_test_user):
+    db, user = db_with_test_user
+    repo = MemoryItemRepository(db)
+    service = MemoryItemService(repo)
+
+    item = MemoryItem(
+        user_id=user.id,
+        category=MemoryCategory.PERSONAL_INFO.value,
+        key="goal",
+        content="Practice speaking",
+        status=AgentPersonalInfoStatus.CORRECTION.value,
+    )
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+
+    with pytest.raises(ValueError, match="no longer active"):
+        await service.update_item_content_in_category(
+            item_id=item.id,
+            category=MemoryCategory.PERSONAL_INFO,
+            content="Practice reading",
+            user_id=user.id,
+        )
+
+
+async def test_create_item_rejects_duplicate_key(db_with_test_user):
+    db, user = db_with_test_user
+    repo = MemoryItemRepository(db)
+    service = MemoryItemService(repo)
+
+    await service.create_item(
+        user_id=user.id,
+        category=MemoryCategory.PERSONAL_INFO,
+        key="goal",
+        content="Practice speaking",
+    )
+
+    with pytest.raises(ValueError, match="already exists"):
+        await service.create_item(
+            user_id=user.id,
+            category=MemoryCategory.PERSONAL_INFO,
+            key="goal",
+            content="Practice grammar",
+        )
+
+
+async def test_update_item_allows_key_and_content_change_for_active_personal_info(db_with_test_user, monkeypatch):
+    db, user = db_with_test_user
+    repo = MemoryItemRepository(db)
+    service = MemoryItemService(repo)
+
+    old_time = datetime(2026, 2, 1, tzinfo=timezone.utc)
+    item = MemoryItem(
+        user_id=user.id,
+        category=MemoryCategory.PERSONAL_INFO.value,
+        key="old_goal",
+        content="Practice speaking",
+        status=PersonalInfoStatus.ACTIVE.value,
+        status_changed_at=old_time,
+        updated_at=old_time,
+    )
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+
+    fixed_now = datetime(2026, 2, 11, tzinfo=timezone.utc)
+    monkeypatch.setattr(service, "_utc_now", lambda: fixed_now)
+
+    response = await service.update_item(
+        item.id,
+        key="new_goal",
+        content="Practice grammar",
+        status=None,
+        priority=None,
+        user_id=user.id,
+    )
+
+    assert response.key == "new_goal"
+    assert response.content == "Practice grammar"
+    await db.refresh(item)
+    assert item.key == "new_goal"
+    assert item.content == "Practice grammar"
+    assert item.updated_at.replace(tzinfo=timezone.utc) == fixed_now
+
+
+async def test_update_item_rejects_non_active_personal_info(db_with_test_user):
+    db, user = db_with_test_user
+    repo = MemoryItemRepository(db)
+    service = MemoryItemService(repo)
+
+    item = MemoryItem(
+        user_id=user.id,
+        category=MemoryCategory.PERSONAL_INFO.value,
+        key="goal",
+        content="Practice speaking",
+        status=PersonalInfoStatus.OUTDATED.value,
+    )
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+
+    with pytest.raises(ValueError, match="only be edited while active"):
+        await service.update_item(
+            item.id,
+            key="goal",
+            content="Practice grammar",
+            status=None,
+            priority=None,
             user_id=user.id,
         )
 
@@ -292,13 +405,13 @@ async def test_append_personal_info_item_always_creates_new_rows(db_with_test_us
         user.id,
         key="goal",
         content="Practice speaking",
-        status=PersonalInfoStatus.ACTIVE.value,
+        status=AgentPersonalInfoStatus.ACTIVE.value,
     )
     second = await service.append_personal_info_item(
         user.id,
         key="goal",
         content="Practice speaking",
-        status=PersonalInfoStatus.ACTIVE.value,
+        status=AgentPersonalInfoStatus.ACTIVE.value,
     )
 
     assert first.id != second.id
@@ -377,17 +490,20 @@ async def test_update_item_status_validates_and_enforces_permissions(db_with_tes
         category=MemoryCategory.PERSONAL_INFO.value,
         key="goal",
         content="Practice",
-        status=PersonalInfoStatus.ACTIVE.value,
+        status="active",
     )
     db.add(item)
     await db.commit()
     await db.refresh(item)
 
     with pytest.raises(PermissionDeniedError):
-        await service.update_item_status(item.id, PersonalInfoStatus.OUTDATED.value, user_id=user.id + 1)
+        await service.update_item_status(item.id, "outdated", user_id=user.id + 1)
 
     with pytest.raises(ValueError):
         await service.update_item_status(item.id, AreaToImproveStatus.MASTERED.value, user_id=user.id)
+
+    with pytest.raises(ValueError, match="status updates are not supported"):
+        await service.update_item_status(item.id, "outdated", user_id=user.id)
 
 
 async def test_update_item_status_updates_timestamp(db_with_test_user, monkeypatch):
@@ -429,7 +545,7 @@ async def test_delete_item_enforces_permissions(db_with_test_user):
         category=MemoryCategory.PERSONAL_INFO.value,
         key="timezone",
         content="UTC",
-        status=PersonalInfoStatus.ACTIVE.value,
+        status="active",
     )
     db.add(item)
     await db.commit()
@@ -437,6 +553,26 @@ async def test_delete_item_enforces_permissions(db_with_test_user):
 
     with pytest.raises(PermissionDeniedError):
         await service.delete_item(item.id, user_id=user.id + 1)
+
+    await service.delete_item(item.id, user_id=user.id)
+    assert await repo.get_by_id(item.id) is None
+
+
+async def test_delete_item_allows_non_active_personal_info_item(db_with_test_user):
+    db, user = db_with_test_user
+    repo = MemoryItemRepository(db)
+    service = MemoryItemService(repo)
+
+    item = MemoryItem(
+        user_id=user.id,
+        category=MemoryCategory.PERSONAL_INFO.value,
+        key="goal",
+        content="Practice",
+        status=AgentPersonalInfoStatus.OUTDATED.value,
+    )
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
 
     await service.delete_item(item.id, user_id=user.id)
     assert await repo.get_by_id(item.id) is None
@@ -454,14 +590,14 @@ async def test_clear_category_removes_only_matching_items(db_with_test_user):
                 category=MemoryCategory.PERSONAL_INFO.value,
                 key="goal",
                 content="Daily practice",
-                status=PersonalInfoStatus.ACTIVE.value,
+                status="active",
             ),
             MemoryItem(
                 user_id=user.id,
                 category=MemoryCategory.PERSONAL_INFO.value,
                 key="timezone",
                 content="UTC",
-                status=PersonalInfoStatus.ACTIVE.value,
+                status="active",
             ),
             MemoryItem(
                 user_id=user.id,

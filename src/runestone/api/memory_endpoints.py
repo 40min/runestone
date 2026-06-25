@@ -15,12 +15,13 @@ from runestone.api.memory_item_schemas import (
     MemoryItemPriorityUpdate,
     MemoryItemResponse,
     MemoryItemStatusUpdate,
+    MemoryItemUpdate,
     MemorySortBy,
     SortDirection,
 )
 from runestone.api.schemas import MemoryMaintenanceStatusResponse
 from runestone.auth.dependencies import get_current_user
-from runestone.core.exceptions import PermissionDeniedError, UserNotFoundError
+from runestone.core.exceptions import MemoryItemNotFoundError, PermissionDeniedError
 from runestone.core.logging_config import get_logger
 from runestone.db.models import User
 from runestone.dependencies import get_agents_manager, get_memory_item_service
@@ -56,6 +57,8 @@ async def list_memory_items(
     """
     try:
         normalized_statuses = statuses if statuses is not None else ([status] if status else None)
+        if category == MemoryCategory.PERSONAL_INFO and normalized_statuses is None:
+            normalized_statuses = ["active"]
         return await service.list_memory_items(
             current_user.id,
             category,
@@ -76,7 +79,7 @@ async def list_memory_items(
     "/memory",
     response_model=MemoryItemResponse,
     responses={
-        200: {"description": "Memory item created/updated successfully"},
+        200: {"description": "Memory item created successfully"},
         400: {"description": "Invalid input data"},
         401: {"description": "Not authenticated"},
     },
@@ -87,12 +90,10 @@ async def create_memory_item(
     service: Annotated[MemoryItemService, Depends(get_memory_item_service)],
 ) -> MemoryItemResponse:
     """
-    Create or update a memory item.
-
-    Uses upsert logic based on (user_id, category, key) uniqueness.
+    Create a new memory item.
     """
     try:
-        return await service.upsert_memory_item(
+        return await service.create_item(
             user_id=current_user.id,
             category=item_data.category,
             key=item_data.key,
@@ -105,6 +106,44 @@ async def create_memory_item(
     except Exception as e:
         logger.error(f"Failed to create memory item for user {current_user.id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to create memory item")
+
+
+@router.put(
+    "/memory/{item_id}",
+    response_model=MemoryItemResponse,
+    responses={
+        200: {"description": "Memory item updated successfully"},
+        400: {"description": "Invalid input data"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Not authorized"},
+        404: {"description": "Item not found"},
+    },
+)
+async def update_memory_item(
+    item_id: int,
+    item_data: MemoryItemUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[MemoryItemService, Depends(get_memory_item_service)],
+) -> MemoryItemResponse:
+    """Update a memory item by id."""
+    try:
+        return await service.update_item(
+            item_id,
+            key=item_data.key,
+            content=item_data.content,
+            status=item_data.status,
+            priority=item_data.priority,
+            user_id=current_user.id,
+        )
+    except MemoryItemNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionDeniedError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to update memory item {item_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update memory item")
 
 
 @router.put(
@@ -128,8 +167,15 @@ async def update_memory_item_status(
     Update the status of a memory item.
     """
     try:
+        item = await service.get_item_by_id(item_id)
+        if not item:
+            raise MemoryItemNotFoundError(f"Memory item with id {item_id} not found")
+        if item.user_id != current_user.id:
+            raise PermissionDeniedError("You don't have permission to update this item")
+        if item.category == MemoryCategory.PERSONAL_INFO.value:
+            raise ValueError("status updates are not supported for category 'personal_info'")
         return await service.update_item_status(item_id, status_data.status, current_user.id)
-    except UserNotFoundError as e:
+    except MemoryItemNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except PermissionDeniedError as e:
         raise HTTPException(status_code=403, detail=str(e))
@@ -162,7 +208,7 @@ async def update_memory_item_priority(
     """
     try:
         return await service.update_item_priority(item_id, priority_data.priority, current_user.id)
-    except UserNotFoundError as e:
+    except MemoryItemNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except PermissionDeniedError as e:
         raise HTTPException(status_code=403, detail=str(e))
@@ -193,7 +239,7 @@ async def delete_memory_item(
     """
     try:
         await service.delete_item(item_id, current_user.id)
-    except UserNotFoundError as e:
+    except MemoryItemNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except PermissionDeniedError as e:
         raise HTTPException(status_code=403, detail=str(e))

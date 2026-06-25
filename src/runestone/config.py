@@ -231,7 +231,14 @@ class Settings(BaseSettings):
     def get_agent_llm_settings(
         self,
         agent_name: Literal[
-            "teacher", "coordinator", "word_keeper", "news_agent", "memory_keeper", "memory_maintainer"
+            "teacher",
+            "coordinator",
+            "word_keeper",
+            "news_agent",
+            "memory_keeper",
+            "memory_maintainer",
+            "learning_memory_keeper",
+            "personal_memory_keeper",
         ],
     ) -> AgentLLMSettings:
         """Return resolved model settings for the requested agent."""
@@ -268,6 +275,22 @@ class Settings(BaseSettings):
             )
 
         if agent_name == "memory_keeper":
+            return AgentLLMSettings(
+                provider=self.memory_keeper_provider,
+                model=self.memory_keeper_model,
+                temperature=self.memory_keeper_temperature,
+                reasoning_level=self.memory_keeper_reasoning_level,
+            )
+
+        if agent_name == "learning_memory_keeper":
+            return AgentLLMSettings(
+                provider=self.memory_keeper_provider,
+                model=self.memory_keeper_model,
+                temperature=self.memory_keeper_temperature,
+                reasoning_level=self.memory_keeper_reasoning_level,
+            )
+
+        if agent_name == "personal_memory_keeper":
             return AgentLLMSettings(
                 provider=self.memory_keeper_provider,
                 model=self.memory_keeper_model,

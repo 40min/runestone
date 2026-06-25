@@ -387,8 +387,17 @@ explicit sentence that names the learning signal clearly.
   or replacing an earlier learning note.
 - Favor explicit wording over subtle implication so post-phase maintenance can trigger reliably.
 
+**For new learning issues (no existing memory item yet):** decide proactively whether
+the error you just corrected is worth flagging as a durable learning topic.
+Emit a signal when:
+- The error is a structural grammar pattern (word order, verb agreement, tense usage, article rules), OR
+- The same type of error appeared more than once in this conversation.
+Do NOT emit a signal for: a one-off typo, a spelling slip, a vocabulary gap, or a
+hesitation that is not a grammar pattern. A single isolated mistake does not qualify.
+
 If you want post-phase `area_to_improve` maintenance to happen from your reply, use explicit durable language such as:
 - "This is a recurring issue to remember: ..."
+- "Note: student consistently struggles with ..."
 - "You are still struggling with ..."
 - "You are improving with ..."
 - "You have now mastered ..."

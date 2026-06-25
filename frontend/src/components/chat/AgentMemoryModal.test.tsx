@@ -15,6 +15,7 @@ const mockUseMemoryItems = {
   hasMore: false,
   fetchItems: vi.fn(),
   createItem: vi.fn(),
+  updateItem: vi.fn(),
   updateStatus: vi.fn(),
   updatePriority: mockUpdatePriority,
   deleteItem: vi.fn().mockResolvedValue(undefined),
@@ -64,7 +65,20 @@ describe('AgentMemoryModal', () => {
 
   it('fetches items on mount when open', () => {
     render(<AgentMemoryModal open={true} onClose={() => {}} />);
-    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledWith('personal_info', undefined, true, 'updated_at', 'desc');
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledWith('personal_info', 'active', true, 'updated_at', 'desc');
+  });
+
+  it('keeps personal info requests active-only even though status filters are hidden', async () => {
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+
+    expect(screen.queryByLabelText('Status')).not.toBeInTheDocument();
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledWith(
+      'personal_info',
+      'active',
+      true,
+      'updated_at',
+      'desc'
+    );
   });
 
   it('re-fetches memory when maintenance completes after a new chat reset', async () => {
@@ -355,7 +369,7 @@ describe('AgentMemoryModal', () => {
     fireEvent.click(screen.getByText('Priority'));
 
     fireEvent.click(screen.getByText('Personal Info'));
-    expect(mockUseMemoryItems.fetchItems).toHaveBeenLastCalledWith('personal_info', undefined, true, 'updated_at', 'desc');
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenLastCalledWith('personal_info', 'active', true, 'updated_at', 'desc');
 
     const personalSortBySelect = document.querySelector('[aria-labelledby="sort-by-label"]') as HTMLElement;
     fireEvent.mouseDown(personalSortBySelect);
@@ -379,7 +393,7 @@ describe('AgentMemoryModal', () => {
     render(<AgentMemoryModal open={true} onClose={() => {}} />);
 
     expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument();
-    expect(screen.getAllByText('All statuses').length).toBeGreaterThan(0);
+    expect(screen.queryByText('All statuses')).not.toBeInTheDocument();
     expect(screen.getAllByText('Newest first').length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
@@ -436,7 +450,7 @@ describe('AgentMemoryModal', () => {
 
     expect(screen.getAllByText('test-key').length).toBeGreaterThan(0);
     expect(screen.getByText('test-content')).toBeInTheDocument();
-    expect(screen.getByText('Active')).toBeInTheDocument();
+    expect(screen.queryByText('Active')).not.toBeInTheDocument();
     expect(screen.getByText('1 item')).toBeInTheDocument();
   });
 
@@ -557,7 +571,43 @@ describe('AgentMemoryModal', () => {
     // personal_info is the default tab
     fireEvent.click(screen.getByText('Add Item'));
 
+    expect(screen.queryByLabelText(/Status/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Priority/i)).not.toBeInTheDocument();
+  });
+
+  it('updates personal_info through the generic update-by-id path', async () => {
+    const mockItems = [
+      {
+        id: 1,
+        key: 'goal',
+        content: 'Practice speaking',
+        category: 'personal_info',
+        status: 'active',
+        priority: null,
+        updated_at: new Date().toISOString(),
+      },
+    ];
+    (useMemoryItemsModule.default as Mock).mockReturnValue({
+      ...mockUseMemoryItems,
+      items: mockItems,
+    });
+
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+
+    fireEvent.click(screen.getByLabelText('Edit item'));
+    fireEvent.change(screen.getByLabelText(/Content/i), { target: { value: 'Practice reading' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Save'));
+    });
+
+    expect(mockUseMemoryItems.updateItem).toHaveBeenCalledWith(1, {
+      key: 'goal',
+      content: 'Practice reading',
+      status: undefined,
+      priority: undefined,
+    });
+    expect(mockUseMemoryItems.createItem).not.toHaveBeenCalled();
   });
 
   // ---------------------------------------------------------------------------
@@ -682,7 +732,7 @@ describe('AgentMemoryModal', () => {
 
     expect(mockUseMemoryItems.fetchItems).toHaveBeenLastCalledWith(
       'personal_info',
-      undefined,
+      'active',
       true,
       'updated_at',
       'desc'

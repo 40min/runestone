@@ -214,7 +214,7 @@ background runs.
 
 ## Ownership Boundary
 
-`memory_maintainer` and `MemoryKeeper` intentionally solve different problems.
+`memory_maintainer`, `LearningMemoryKeeper`, and `PersonalMemoryKeeper` intentionally solve different problems.
 
 `memory_maintainer` runs at chat reset and owns:
 
@@ -222,10 +222,13 @@ background runs.
 - reconciliation of raw `personal_info` fact rows plus synthesis of
   `personal_info_summary`
 
-`MemoryKeeper` runs from normal conversation flow and owns per-turn durable
-memory updates based on the current student message, final teacher response, or
-explicit student memory-edit request. New `personal_info` facts are append-only
-raw evidence; duplicate cleanup belongs to `memory_maintainer`.
+`LearningMemoryKeeper` runs from normal conversation flow and owns per-turn
+`area_to_improve` updates: new recurring issues, status changes (struggling →
+improving → mastered), and explicit student learning-topic edits.
+
+`PersonalMemoryKeeper` runs from normal conversation flow and owns per-turn
+append-only capture of durable personal facts (`personal_info`). It never reads
+memory; duplicates are reconciled by `memory_maintainer` on the next chat reset.
 
 `WordKeeper` remains vocabulary-specific and does not participate in memory
 consolidation.

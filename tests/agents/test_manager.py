@@ -75,6 +75,18 @@ def mock_settings():
             temperature=0.0,
             reasoning_level=ReasoningLevel.NONE,
         ),
+        "learning_memory_keeper": AgentLLMSettings(
+            provider="openrouter",
+            model="test-model",
+            temperature=0.0,
+            reasoning_level=ReasoningLevel.NONE,
+        ),
+        "personal_memory_keeper": AgentLLMSettings(
+            provider="openrouter",
+            model="test-model",
+            temperature=0.0,
+            reasoning_level=ReasoningLevel.NONE,
+        ),
         "memory_maintainer": AgentLLMSettings(
             provider="openrouter",
             model="test-memory-maintainer-model",
@@ -410,7 +422,7 @@ async def test_coordinator_history_is_truncated(
 
 
 @pytest.mark.anyio
-async def test_prepare_pre_turn_excludes_memory_keeper_from_coordinator_available_specialists(
+async def test_prepare_pre_turn_excludes_memory_keepers_from_coordinator_available_specialists(
     mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
 ):
     manager = _make_manager(mock_settings)
@@ -426,7 +438,8 @@ async def test_prepare_pre_turn_excludes_memory_keeper_from_coordinator_availabl
     )
 
     _args, kwargs = manager.coordinator.plan_pre_turn.call_args
-    assert "memory_keeper" not in kwargs["available_specialists"]
+    assert "learning_memory_keeper" not in kwargs["available_specialists"]
+    assert "personal_memory_keeper" not in kwargs["available_specialists"]
     assert "news_agent" in kwargs["available_specialists"]
     assert "word_keeper" in kwargs["available_specialists"]
 
@@ -1169,12 +1182,14 @@ def test_load_current_recall_words_returns_empty_on_user_mismatch(mock_settings,
 async def test_run_post_turn_runs_post_specialists(mock_settings, mock_user, mock_side_effect_service):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_post_turn = AsyncMock(
-        return_value=_make_plan(post=[RoutingItem(name="memory_keeper", reason="save memory", chat_history_size=0)])
+        return_value=_make_plan(
+            post=[RoutingItem(name="learning_memory_keeper", reason="save memory", chat_history_size=0)]
+        )
     )
 
     class _ActionSpecialist(BaseSpecialist):
         def __init__(self):
-            super().__init__(name="memory_keeper")
+            super().__init__(name="learning_memory_keeper")
 
         async def run(self, context: SpecialistContext) -> SpecialistResult:
             return SpecialistResult(status="action_taken", info_for_teacher="Saved memory.")
@@ -1199,7 +1214,7 @@ async def test_run_post_turn_runs_post_specialists(mock_settings, mock_user, moc
     assert kwargs["user_id"] == mock_user.id
     assert kwargs["chat_id"] == "chat-1"
     assert kwargs["coordinator_row_id"] == 99
-    assert kwargs["results"][0]["name"] == "memory_keeper"
+    assert kwargs["results"][0]["name"] == "learning_memory_keeper"
     assert kwargs["results"][0]["result"]["status"] == "action_taken"
     manager.coordinator.plan_post_turn.assert_awaited_once()
     mock_side_effect_service.mark_coordinator_done_if_current.assert_awaited_once_with(
@@ -1228,7 +1243,8 @@ async def test_run_post_turn_excludes_word_keeper_from_coordinator_available_spe
 
     _args, kwargs = manager.coordinator.plan_post_turn.call_args
     assert "word_keeper" not in kwargs["available_specialists"]
-    assert "memory_keeper" in kwargs["available_specialists"]
+    assert "learning_memory_keeper" in kwargs["available_specialists"]
+    assert "personal_memory_keeper" in kwargs["available_specialists"]
     assert kwargs["history"] == []
 
 
@@ -1305,14 +1321,14 @@ async def test_run_post_turn_persists_coordinator_and_direct_word_keeper_results
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_post_turn = AsyncMock(
-        return_value=_make_plan(post=[RoutingItem(name="memory_keeper", reason="memory", chat_history_size=0)])
+        return_value=_make_plan(post=[RoutingItem(name="learning_memory_keeper", reason="memory", chat_history_size=0)])
     )
 
     class _NamedSpecialist(BaseSpecialist):
         async def run(self, context: SpecialistContext) -> SpecialistResult:
             return SpecialistResult(status="action_taken", info_for_teacher=f"{self.name} done.")
 
-    manager.registry.register(_NamedSpecialist("memory_keeper"), overwrite=True)
+    manager.registry.register(_NamedSpecialist("learning_memory_keeper"), overwrite=True)
     manager.registry.register(_NamedSpecialist("word_keeper"), overwrite=True)
 
     await manager.run_post_turn(
@@ -1328,26 +1344,28 @@ async def test_run_post_turn_persists_coordinator_and_direct_word_keeper_results
     )
 
     kwargs = mock_side_effect_service.replace_post_specialist_results.call_args.kwargs
-    assert [item["name"] for item in kwargs["results"]] == ["memory_keeper", "word_keeper"]
+    assert [item["name"] for item in kwargs["results"]] == ["learning_memory_keeper", "word_keeper"]
 
 
 @pytest.mark.anyio
-async def test_run_post_turn_forces_memory_keeper_history_to_zero(mock_settings, mock_user, mock_side_effect_service):
+async def test_run_post_turn_forces_learning_memory_keeper_history_to_zero(
+    mock_settings, mock_user, mock_side_effect_service
+):
     manager = _make_manager(mock_settings)
 
-    class _MemoryKeeperCaptureSpecialist(BaseSpecialist):
+    class _LearningMemoryKeeperCaptureSpecialist(BaseSpecialist):
         def __init__(self):
-            super().__init__(name="memory_keeper")
+            super().__init__(name="learning_memory_keeper")
             self.seen_history = None
 
         async def run(self, context: SpecialistContext) -> SpecialistResult:
             self.seen_history = context.history
             return SpecialistResult(status="no_action")
 
-    capture = _MemoryKeeperCaptureSpecialist()
+    capture = _LearningMemoryKeeperCaptureSpecialist()
     manager.registry.register(capture, overwrite=True)
     manager.coordinator.plan_post_turn = AsyncMock(
-        return_value=_make_plan(post=[RoutingItem(name="memory_keeper", reason="memory", chat_history_size=2)])
+        return_value=_make_plan(post=[RoutingItem(name="learning_memory_keeper", reason="memory", chat_history_size=2)])
     )
 
     await manager.run_post_turn(
@@ -1366,6 +1384,49 @@ async def test_run_post_turn_forces_memory_keeper_history_to_zero(mock_settings,
     )
 
     assert capture.seen_history == []
+
+
+@pytest.mark.anyio
+async def test_run_post_turn_forces_personal_memory_keeper_history_to_two(
+    mock_settings, mock_user, mock_side_effect_service
+):
+    manager = _make_manager(mock_settings)
+
+    class _PersonalMemoryKeeperCaptureSpecialist(BaseSpecialist):
+        def __init__(self):
+            super().__init__(name="personal_memory_keeper")
+            self.seen_history = None
+
+        async def run(self, context: SpecialistContext) -> SpecialistResult:
+            self.seen_history = context.history
+            return SpecialistResult(status="no_action")
+
+    capture = _PersonalMemoryKeeperCaptureSpecialist()
+    manager.registry.register(capture, overwrite=True)
+    manager.coordinator.plan_post_turn = AsyncMock(
+        return_value=_make_plan(post=[RoutingItem(name="personal_memory_keeper", reason="memory", chat_history_size=0)])
+    )
+
+    history = [
+        ChatMessage(role="assistant", content="Older assistant message"),
+        ChatMessage(role="user", content="Older user reply"),
+        ChatMessage(role="assistant", content="Write a sentence about where you live."),
+        ChatMessage(role="user", content="Jag bor i Stockholm."),
+    ]
+
+    await manager.run_post_turn(
+        message="I live in Stockholm.",
+        chat_id="chat-1",
+        history=history,
+        user=mock_user,
+        teacher_response="Bra jobbat!",
+        vocabulary_candidates=[],
+        pre_results=[],
+        side_effect_service=mock_side_effect_service,
+        coordinator_row_id=99,
+    )
+
+    assert capture.seen_history == history[-2:]
 
 
 @pytest.mark.anyio
@@ -2086,4 +2147,9 @@ def test_is_safe_url(mock_settings):
 
 def test_manager_registers_default_specialists(mock_settings):
     manager = _make_manager(mock_settings)
-    assert manager.registry.list_names() == ["memory_keeper", "news_agent", "word_keeper"]
+    assert manager.registry.list_names() == [
+        "learning_memory_keeper",
+        "personal_memory_keeper",
+        "news_agent",
+        "word_keeper",
+    ]

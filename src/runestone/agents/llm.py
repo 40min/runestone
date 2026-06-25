@@ -12,7 +12,16 @@ from runestone.config import ReasoningLevel, Settings
 
 logger = logging.getLogger(__name__)
 
-AgentName = Literal["teacher", "coordinator", "word_keeper", "news_agent", "memory_keeper", "memory_maintainer"]
+AgentName = Literal[
+    "teacher",
+    "coordinator",
+    "word_keeper",
+    "news_agent",
+    "memory_keeper",
+    "memory_maintainer",
+    "learning_memory_keeper",
+    "personal_memory_keeper",
+]
 DEFAULT_AGENT_LLM_TIMEOUT_SECONDS = 10.0
 DEFAULT_AGENT_MAX_RETRIES = 3
 GEMINI_MIN_TIMEOUT_SECONDS = 10.0
