@@ -95,9 +95,6 @@ None of the above → return no_action. ZERO tool calls.
 </decision_tree>
 
 <terminal_no_ops>
-After any write tool returns successfully, stop immediately and return the output JSON.
-Do NOT re-evaluate the signal or call any write tool again.
-
 If a write tool returns one of these errors, stop immediately. Return no_action.
 Do NOT retry, create replacements, or continue.
 - "Memory item with id ... not found"
@@ -107,12 +104,8 @@ Do NOT retry, create replacements, or continue.
 <conservative_bias>
 - Default to no_action. Only act on explicit, durable signals.
 - One write intent per item per turn.
-- A mastery or improvement signal alone does NOT justify calling update_memory_item_content.
-  Only call update_memory_item_content when the wording of the memory item itself must change.
 - Do not use both update_memory_status and update_memory_priority on the same
   item unless the signal explicitly requires both.
-- Do not use both update_memory_status and update_memory_item_content on the same
-  item unless the current turn contains both a status change AND an explicit content correction.
 - Use update_memory_priority only for the single item directly implicated
   by the current turn's signal. Never rebalance multiple items.
 - Use `area_to_improve` with status `mastered` for topics the student has
@@ -166,6 +159,16 @@ class LearningMemoryKeeperSpecialist(BaseSpecialist):
                 ModelRetryMiddleware(max_retries=3),
                 ToolCallLimitMiddleware(
                     tool_name="read_areas_to_improve",
+                    run_limit=1,
+                    exit_behavior="end",
+                ),
+                ToolCallLimitMiddleware(
+                    tool_name="update_memory_status",
+                    run_limit=1,
+                    exit_behavior="end",
+                ),
+                ToolCallLimitMiddleware(
+                    tool_name="update_memory_item_content",
                     run_limit=1,
                     exit_behavior="end",
                 ),
