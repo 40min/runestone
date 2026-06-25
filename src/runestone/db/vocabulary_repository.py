@@ -393,6 +393,30 @@ class VocabularyRepository:
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
+    async def select_new_daily_words_for_bump(
+        self, user_id: int, cooldown_days: int = 7, limit: int = 100, excluded_word_ids: Optional[List[int]] = None
+    ) -> List[Vocabulary]:
+        """Select eligible bump replacements by priority with randomized ordering inside each priority tier."""
+        cutoff_date = datetime.now() - timedelta(days=cooldown_days)
+
+        base_filter = [
+            Vocabulary.user_id == user_id,
+            Vocabulary.in_learn.is_(True),
+            or_(Vocabulary.last_learned.is_(None), Vocabulary.last_learned < cutoff_date),
+        ]
+
+        if excluded_word_ids:
+            base_filter.append(~Vocabulary.id.in_(excluded_word_ids))
+
+        stmt = (
+            select(Vocabulary)
+            .filter(*base_filter)
+            .order_by(Vocabulary.priority_learn.asc(), func.random())
+            .limit(limit)
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
     async def get_vocabulary_item_for_recall(self, item_id: int, user_id: int) -> Vocabulary:
         """Get a vocabulary item by ID and user_id, ensuring it's in learning."""
         stmt = select(Vocabulary).filter(

@@ -252,6 +252,10 @@ class RuneRecallService:
             db_user_id, self.cooldown_days, limit=self.words_per_day
         )
 
+        return self._serialize_daily_portion_words(words)
+
+    def _serialize_daily_portion_words(self, words) -> list[dict]:
+        """Convert repository vocabulary rows into the daily selection wire format."""
         return [
             {
                 "id": word.id,
@@ -261,6 +265,19 @@ class RuneRecallService:
             }
             for word in words
         ]
+
+    async def _select_bumped_daily_portion(
+        self, db_user_id: int, excluded_word_ids: list[int] | None = None, limit: int | None = None
+    ) -> list[dict]:
+        """Select bump replacements while preserving priority ordering and randomizing inside priority tiers."""
+        words = await self.vocabulary_repository.select_new_daily_words_for_bump(
+            db_user_id,
+            self.cooldown_days,
+            limit=self.words_per_day if limit is None else limit,
+            excluded_word_ids=excluded_word_ids,
+        )
+
+        return self._serialize_daily_portion_words(words)
 
     async def _send_word_message(self, chat_id: int, word: dict) -> bool:
         """
@@ -464,11 +481,26 @@ class RuneRecallService:
         """
         logger.info(f"User {username} requested to bump words")
 
-        user_data.daily_selection = []
+        bumped_word_ids = [word.id_ for word in user_data.daily_selection]
         user_data.next_word_index = 0
 
-        portion_words = await self._select_daily_portion(user_data.db_user_id)
+        portion_words = await self._select_bumped_daily_portion(
+            user_data.db_user_id,
+            excluded_word_ids=bumped_word_ids or None,
+            limit=self.words_per_day,
+        )
 
+        if len(portion_words) < self.words_per_day:
+            needed = self.words_per_day - len(portion_words)
+            fallback_excluded_ids = [word["id"] for word in portion_words]
+            fallback_words = await self._select_bumped_daily_portion(
+                user_data.db_user_id,
+                excluded_word_ids=fallback_excluded_ids or None,
+                limit=needed,
+            )
+            portion_words.extend(fallback_words)
+
+        user_data.daily_selection = []
         if portion_words:
             user_data.daily_selection = [
                 WordOfDay(id_=word["id"], word_phrase=word["word_phrase"]) for word in portion_words

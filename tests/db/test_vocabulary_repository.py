@@ -1348,6 +1348,91 @@ class TestVocabularyRepository:
         assert vocab1.id not in selected_ids
         assert len(selected_words) == 2  # Should get goodbye and thank you
 
+    async def test_select_new_daily_words_for_bump_with_exclusions(self, repo, db_session):
+        """Test that bump-specific selection excludes specified word IDs."""
+        vocab1 = VocabularyModel(
+            user_id=1,
+            word_phrase="hello",
+            translation="hej",
+            in_learn=True,
+            last_learned=datetime.now() - timedelta(days=10),
+            priority_learn=0,
+        )
+        vocab2 = VocabularyModel(
+            user_id=1,
+            word_phrase="goodbye",
+            translation="hej då",
+            in_learn=True,
+            last_learned=datetime.now() - timedelta(days=10),
+            priority_learn=0,
+        )
+        vocab3 = VocabularyModel(
+            user_id=1,
+            word_phrase="thank you",
+            translation="tack",
+            in_learn=True,
+            last_learned=datetime.now() - timedelta(days=10),
+            priority_learn=1,
+        )
+        vocab4 = VocabularyModel(
+            user_id=1,
+            word_phrase="recent",
+            translation="nyligen",
+            in_learn=True,
+            last_learned=datetime.now() - timedelta(days=1),
+            priority_learn=0,
+        )
+        db_session.add_all([vocab1, vocab2, vocab3, vocab4])
+        await db_session.commit()
+
+        selected_words = await repo.select_new_daily_words_for_bump(
+            user_id=1,
+            cooldown_days=7,
+            limit=5,
+            excluded_word_ids=[vocab1.id],
+        )
+
+        selected_ids = [w.id for w in selected_words]
+        assert vocab1.id not in selected_ids
+        assert vocab4.id not in selected_ids
+        assert set(selected_ids) == {vocab2.id, vocab3.id}
+
+    async def test_select_new_daily_words_for_bump_prioritizes_before_randomization(self, repo, db_session):
+        """Test that bump selection preserves priority ordering while randomizing ties."""
+        high_a = VocabularyModel(
+            user_id=1,
+            word_phrase="prio-0-a",
+            translation="a",
+            in_learn=True,
+            last_learned=datetime.now() - timedelta(days=10),
+            priority_learn=0,
+        )
+        high_b = VocabularyModel(
+            user_id=1,
+            word_phrase="prio-0-b",
+            translation="b",
+            in_learn=True,
+            last_learned=datetime.now() - timedelta(days=10),
+            priority_learn=0,
+        )
+        lower = VocabularyModel(
+            user_id=1,
+            word_phrase="prio-1",
+            translation="c",
+            in_learn=True,
+            last_learned=datetime.now() - timedelta(days=10),
+            priority_learn=1,
+        )
+        db_session.add_all([high_a, high_b, lower])
+        await db_session.commit()
+
+        result = await repo.select_new_daily_words_for_bump(user_id=1, cooldown_days=7, limit=3)
+
+        assert len(result) == 3
+        assert [row.priority_learn for row in result] == [0, 0, 1]
+        assert {result[0].word_phrase, result[1].word_phrase} == {"prio-0-a", "prio-0-b"}
+        assert result[2].word_phrase == "prio-1"
+
     async def test_update_last_learned_increments_learned_times_none(self, repo, db_session):
         """Test that update_last_learned handles None learned_times gracefully."""
         vocab_with_none = VocabularyModel(
