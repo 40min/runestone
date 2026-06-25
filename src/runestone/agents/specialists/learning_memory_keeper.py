@@ -18,6 +18,7 @@ from runestone.agents.specialists.base import (
 )
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.memory import (
+    delete_memory_item,
     read_areas_to_improve,
     update_memory_item_content,
     update_memory_priority,
@@ -51,8 +52,11 @@ This is the most common case. Do NOT call read_areas_to_improve.
 If no [memory:area_to_improve:<id>] tag found, classify into exactly ONE case:
 
 Case A — Student explicitly asks to edit a learning topic.
-  Examples: "mark this as mastered", "reprioritize my learning areas".
+  Examples: "mark this as mastered", "reprioritize my learning areas",
+  "forget this old learning topic", "remove that old grammar issue".
   → Call read_areas_to_improve once, then write. One read allowed.
+  → If the student explicitly asks to forget/remove a learning topic, use
+    delete_memory_item after the read identifies the correct item.
 
 Case B — Teacher explicitly identifies a durable learning issue (without an ID tag).
   The teacher signal must indicate the issue is structural, repeated, or worth tracking.
@@ -138,6 +142,7 @@ class LearningMemoryKeeperSpecialist(BaseSpecialist):
                 update_memory_item_content,
                 update_memory_status,
                 update_memory_priority,
+                delete_memory_item,
             ],
             middleware=[
                 ModelRetryMiddleware(max_retries=3),

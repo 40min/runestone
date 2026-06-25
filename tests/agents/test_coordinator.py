@@ -93,6 +93,7 @@ def test_learning_and_personal_memory_keeper_prompts():
     assert "Set `chat_history_size` to `0` for `learning_memory_keeper`." in COORDINATOR_POST_RESPONSE_PROMPT
     assert "Set `chat_history_size` to `2` for `personal_memory_keeper`." in COORDINATOR_POST_RESPONSE_PROMPT
     assert "The student's `message` contains a clear, durable personal fact" in COORDINATOR_POST_RESPONSE_PROMPT
+    assert "forget/remove" in COORDINATOR_POST_RESPONSE_PROMPT
 
 
 def test_news_prompt_requires_known_topic():

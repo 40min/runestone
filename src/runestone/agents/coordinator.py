@@ -115,7 +115,8 @@ COORDINATOR_POST_RESPONSE_PROMPT = (
 - The `teacher_response` explicitly identifies a durable **learning progress** signal:
   repeated struggle, visible improvement, confirmed mastery, or a new recurring learning issue.
 - OR the student explicitly asks to edit a **learning topic** (area_to_improve):
-  reprioritize, mark mastered, correct a learning area description.
+  reprioritize, mark mastered, correct a learning area description, or forget/remove
+  an old learning topic.
 
 **Do NOT route when:**
 - The signal is about personal facts (native language, hometown, goals) — route

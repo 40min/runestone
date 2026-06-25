@@ -10,7 +10,7 @@ from runestone.agents.specialists.learning_memory_keeper import (
     LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT,
     LearningMemoryKeeperSpecialist,
 )
-from runestone.agents.tools.memory import update_memory_item_content
+from runestone.agents.tools.memory import delete_memory_item, update_memory_item_content
 from runestone.constants import RECURSION_LIMIT_LEARNING_MEMORY_KEEPER
 
 
@@ -211,6 +211,8 @@ def test_learning_memory_keeper_prompt_three_case_model():
     assert "Case C" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
     assert "Do NOT call read_areas_to_improve" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
     assert "[memory:area_to_improve:<id>]" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "forget this old learning topic" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "delete_memory_item" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
 
 
 def test_learning_memory_keeper_prompt_rejects_misspelled_word_pollution():
@@ -241,6 +243,7 @@ def test_learning_memory_keeper_builds_agent_with_expected_tools(mock_settings):
         "update_memory_item_content",
         "update_memory_status",
         "update_memory_priority",
+        "delete_memory_item",
     ]
     middleware = create_agent_mock.call_args.kwargs["middleware"]
     assert len(middleware) == 2
@@ -255,6 +258,11 @@ def test_learning_memory_keeper_builds_agent_with_expected_tools(mock_settings):
 def test_update_memory_item_content_tool_is_accessible():
     """update_memory_item_content must exist at the tool layer and be wired into MemoryKeeper."""
     assert update_memory_item_content.name == "update_memory_item_content"
+
+
+def test_delete_memory_item_tool_is_accessible():
+    """delete_memory_item must exist at the tool layer and be wired into LearningMemoryKeeper."""
+    assert delete_memory_item.name == "delete_memory_item"
 
 
 @pytest.mark.anyio
