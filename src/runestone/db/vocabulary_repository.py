@@ -397,7 +397,7 @@ class VocabularyRepository:
         self, user_id: int, cooldown_days: int = 7, limit: int = 100, excluded_word_ids: Optional[List[int]] = None
     ) -> List[Vocabulary]:
         """Select eligible bump replacements by priority with randomized ordering inside each priority tier."""
-        cutoff_date = datetime.now() - timedelta(days=cooldown_days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=cooldown_days)
 
         base_filter = [
             Vocabulary.user_id == user_id,
