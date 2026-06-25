@@ -1062,8 +1062,8 @@ async def test_bump_words_success(rune_recall_service, state_manager):
     user_data.daily_selection = [WordOfDay(id_=1, word_phrase="old_word")]
     user_data.next_word_index = 1
     user_data.db_user_id = 1
+    rune_recall_service.words_per_day = 2
 
-    # Mock new portion selection
     mock_portion = [
         {"id": 2, "word_phrase": "new_word1"},
         {"id": 3, "word_phrase": "new_word2"},
@@ -1071,12 +1071,14 @@ async def test_bump_words_success(rune_recall_service, state_manager):
 
     with patch.object(
         rune_recall_service,
-        "_select_daily_portion",
+        "_select_bumped_daily_portion",
         new_callable=AsyncMock,
-        return_value=mock_portion,
-    ):
+        side_effect=[mock_portion],
+    ) as mock_select:
         # Success case - no exception raised
         await rune_recall_service.bump_words("active_user", user_data)
+
+    mock_select.assert_awaited_once_with(1, excluded_word_ids=[1], limit=2)
 
     # Verify daily selection was replaced
     assert len(user_data.daily_selection) == 2
@@ -1098,15 +1100,16 @@ async def test_bump_words_no_words_available(rune_recall_service, state_manager)
     user_data.daily_selection = [WordOfDay(id_=1, word_phrase="old_word")]
     user_data.db_user_id = 1
 
-    # Mock empty portion selection
     with patch.object(
         rune_recall_service,
-        "_select_daily_portion",
+        "_select_bumped_daily_portion",
         new_callable=AsyncMock,
-        return_value=[],
-    ):
+        side_effect=[[], []],
+    ) as mock_select:
         # Success case - no exception raised
         await rune_recall_service.bump_words("active_user", user_data)
+
+    assert mock_select.await_count == 2
 
     # Verify daily selection was cleared
     assert len(user_data.daily_selection) == 0
@@ -1127,10 +1130,9 @@ async def test_bump_words_error_handling(rune_recall_service, state_manager):
     user_data.daily_selection = [WordOfDay(id_=1, word_phrase="old_word")]
     user_data.db_user_id = 1
 
-    # Mock _select_daily_portion to raise an exception
     with patch.object(
         rune_recall_service,
-        "_select_daily_portion",
+        "_select_bumped_daily_portion",
         new_callable=AsyncMock,
         side_effect=Exception("Database error"),
     ):
@@ -1138,6 +1140,66 @@ async def test_bump_words_error_handling(rune_recall_service, state_manager):
             await rune_recall_service.bump_words("active_user", user_data)
 
     assert "Database error" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_bump_words_backfills_after_partial_excluded_selection(rune_recall_service, state_manager):
+    """Test that bump_words backfills the remainder when exclusion-first results are partial."""
+
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [
+        WordOfDay(id_=1, word_phrase="old_word_1"),
+        WordOfDay(id_=2, word_phrase="old_word_2"),
+    ]
+    user_data.db_user_id = 1
+    rune_recall_service.words_per_day = 3
+
+    first_pass = [{"id": 3, "word_phrase": "new_word"}]
+    second_pass = [
+        {"id": 1, "word_phrase": "old_word_1"},
+        {"id": 4, "word_phrase": "another_word"},
+    ]
+
+    with patch.object(
+        rune_recall_service,
+        "_select_bumped_daily_portion",
+        new_callable=AsyncMock,
+        side_effect=[first_pass, second_pass],
+    ) as mock_select:
+        await rune_recall_service.bump_words("active_user", user_data)
+
+    assert mock_select.await_args_list[0].kwargs == {"excluded_word_ids": [1, 2], "limit": 3}
+    assert mock_select.await_args_list[0].args == (1,)
+    assert mock_select.await_args_list[1].kwargs == {"excluded_word_ids": [3], "limit": 2}
+    assert mock_select.await_args_list[1].args == (1,)
+    assert [word.id_ for word in user_data.daily_selection] == [3, 1, 4]
+
+
+@pytest.mark.asyncio
+async def test_bump_words_falls_back_when_exclusion_first_returns_zero(rune_recall_service, state_manager):
+    """Test that bump_words retries without the old selection when exclusion-first returns nothing."""
+
+    user_data = state_manager.get_user("active_user")
+    user_data.daily_selection = [WordOfDay(id_=1, word_phrase="old_word")]
+    user_data.db_user_id = 1
+    rune_recall_service.words_per_day = 2
+
+    fallback_words = [
+        {"id": 1, "word_phrase": "old_word"},
+        {"id": 5, "word_phrase": "new_word"},
+    ]
+
+    with patch.object(
+        rune_recall_service,
+        "_select_bumped_daily_portion",
+        new_callable=AsyncMock,
+        side_effect=[[], fallback_words],
+    ) as mock_select:
+        await rune_recall_service.bump_words("active_user", user_data)
+
+    assert mock_select.await_args_list[0].kwargs == {"excluded_word_ids": [1], "limit": 2}
+    assert mock_select.await_args_list[1].kwargs == {"excluded_word_ids": None, "limit": 2}
+    assert [word.id_ for word in user_data.daily_selection] == [1, 5]
 
 
 @patch("runestone.services.rune_recall_service.httpx.AsyncClient")
@@ -1198,13 +1260,14 @@ async def test_process_user_recall_word_all_words_invalid_bumps_and_retries(
     user_data.next_word_index = 0
     user_data.chat_id = 123
     user_data.db_user_id = 1
+    rune_recall_service.words_per_day = 1
 
     # Mock new words selection - return a valid word from test_vocabulary
     mock_new_words = [{"id": 1, "word_phrase": "hello"}]
 
     with patch.object(
         rune_recall_service,
-        "_select_daily_portion",
+        "_select_bumped_daily_portion",
         new_callable=AsyncMock,
         return_value=mock_new_words,
     ):
