@@ -1260,13 +1260,14 @@ async def test_process_user_recall_word_all_words_invalid_bumps_and_retries(
     user_data.next_word_index = 0
     user_data.chat_id = 123
     user_data.db_user_id = 1
+    rune_recall_service.words_per_day = 1
 
     # Mock new words selection - return a valid word from test_vocabulary
     mock_new_words = [{"id": 1, "word_phrase": "hello"}]
 
     with patch.object(
         rune_recall_service,
-        "_select_daily_portion",
+        "_select_bumped_daily_portion",
         new_callable=AsyncMock,
         return_value=mock_new_words,
     ):
