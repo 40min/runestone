@@ -246,9 +246,15 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
   };
 
   const refreshActiveItems = useCallback(async () => {
+    const requestedStatus =
+      activeTab === "personal_info"
+        ? "active"
+        : statusFilter === "all"
+          ? undefined
+          : statusFilter;
     await fetchItems(
       activeTab,
-      statusFilter === "all" ? undefined : statusFilter,
+      requestedStatus,
       true,
       sortBy,
       sortDirection,

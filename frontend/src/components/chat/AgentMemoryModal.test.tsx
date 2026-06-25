@@ -65,7 +65,20 @@ describe('AgentMemoryModal', () => {
 
   it('fetches items on mount when open', () => {
     render(<AgentMemoryModal open={true} onClose={() => {}} />);
-    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledWith('personal_info', undefined, true, 'updated_at', 'desc');
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledWith('personal_info', 'active', true, 'updated_at', 'desc');
+  });
+
+  it('keeps personal info requests active-only even though status filters are hidden', async () => {
+    render(<AgentMemoryModal open={true} onClose={() => {}} />);
+
+    expect(screen.queryByLabelText('Status')).not.toBeInTheDocument();
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenCalledWith(
+      'personal_info',
+      'active',
+      true,
+      'updated_at',
+      'desc'
+    );
   });
 
   it('re-fetches memory when maintenance completes after a new chat reset', async () => {
@@ -356,7 +369,7 @@ describe('AgentMemoryModal', () => {
     fireEvent.click(screen.getByText('Priority'));
 
     fireEvent.click(screen.getByText('Personal Info'));
-    expect(mockUseMemoryItems.fetchItems).toHaveBeenLastCalledWith('personal_info', undefined, true, 'updated_at', 'desc');
+    expect(mockUseMemoryItems.fetchItems).toHaveBeenLastCalledWith('personal_info', 'active', true, 'updated_at', 'desc');
 
     const personalSortBySelect = document.querySelector('[aria-labelledby="sort-by-label"]') as HTMLElement;
     fireEvent.mouseDown(personalSortBySelect);
@@ -719,7 +732,7 @@ describe('AgentMemoryModal', () => {
 
     expect(mockUseMemoryItems.fetchItems).toHaveBeenLastCalledWith(
       'personal_info',
-      undefined,
+      'active',
       true,
       'updated_at',
       'desc'

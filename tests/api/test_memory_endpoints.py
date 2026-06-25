@@ -31,6 +31,59 @@ async def test_list_memory_items_supports_legacy_status_query_param(client):
     assert [item["key"] for item in response.json()] == ["goal"]
 
 
+async def test_list_memory_items_defaults_personal_info_to_active_only(client):
+    db = client.db
+    user = client.user
+    db.add_all(
+        [
+            MemoryItem(
+                user_id=user.id,
+                category=MemoryCategory.PERSONAL_INFO.value,
+                key="goal",
+                content="Practice speaking",
+                status="active",
+            ),
+            MemoryItem(
+                user_id=user.id,
+                category=MemoryCategory.PERSONAL_INFO.value,
+                key="goal_correction",
+                content="Correction draft",
+                status="correction",
+            ),
+            MemoryItem(
+                user_id=user.id,
+                category=MemoryCategory.PERSONAL_INFO.value,
+                key="old_goal",
+                content="Old practice goal",
+                status="outdated",
+            ),
+        ]
+    )
+    await db.commit()
+
+    default_response = await client.get("/api/memory", params={"category": "personal_info"})
+
+    assert default_response.status_code == 200
+    assert [item["key"] for item in default_response.json()] == ["goal"]
+
+    explicit_response = await client.get(
+        "/api/memory",
+        params=[
+            ("category", "personal_info"),
+            ("statuses", "active"),
+            ("statuses", "correction"),
+            ("statuses", "outdated"),
+        ],
+    )
+
+    assert explicit_response.status_code == 200
+    assert {item["key"] for item in explicit_response.json()} == {
+        "goal",
+        "goal_correction",
+        "old_goal",
+    }
+
+
 async def test_create_memory_item_is_create_only_and_update_uses_id_endpoint(client):
     create_response = await client.post(
         "/api/memory",

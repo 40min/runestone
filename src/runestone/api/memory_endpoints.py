@@ -57,6 +57,8 @@ async def list_memory_items(
     """
     try:
         normalized_statuses = statuses if statuses is not None else ([status] if status else None)
+        if category == MemoryCategory.PERSONAL_INFO and normalized_statuses is None:
+            normalized_statuses = ["active"]
         return await service.list_memory_items(
             current_user.id,
             category,
