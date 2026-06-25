@@ -44,8 +44,19 @@ read_areas_to_improve:
 
 <fast_path>
 FIRST: Check if teacher_response contains [memory:area_to_improve:<id>].
-If yes → call the appropriate write tool directly using that ID. ZERO reads. Done.
+If yes, pick the appropriate write tool(s) based on what the signal requires,
+call them, then return the JSON immediately. ZERO reads.
+
+  - Mastery / improvement / status-change signal
+    → update_memory_status only.
+  - Explicit content correction (the wording of the memory item should change)
+    → update_memory_item_content only.
+  - Both a status change AND a content correction are clearly present
+    → call update_memory_status first, then update_memory_item_content once.
+    Two calls maximum. Return immediately after.
+
 This is the most common case. Do NOT call read_areas_to_improve.
+Do NOT call any write tool more than once per intent.
 </fast_path>
 
 <decision_tree>
@@ -148,6 +159,16 @@ class LearningMemoryKeeperSpecialist(BaseSpecialist):
                 ModelRetryMiddleware(max_retries=3),
                 ToolCallLimitMiddleware(
                     tool_name="read_areas_to_improve",
+                    run_limit=1,
+                    exit_behavior="end",
+                ),
+                ToolCallLimitMiddleware(
+                    tool_name="update_memory_status",
+                    run_limit=1,
+                    exit_behavior="end",
+                ),
+                ToolCallLimitMiddleware(
+                    tool_name="update_memory_item_content",
                     run_limit=1,
                     exit_behavior="end",
                 ),
