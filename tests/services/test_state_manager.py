@@ -179,3 +179,24 @@ def test_auto_reload_on_disk_change(state_manager, temp_state_file):
     # Get user again; it should reload from disk automatically and see db_user_id = 999
     updated_user = state_manager.get_user("user1")
     assert updated_user.db_user_id == 999
+
+
+def test_auto_reload_when_file_size_changes_but_mtime_is_restored(state_manager, temp_state_file):
+    original_user = state_manager.get_user("user1")
+    assert original_user.db_user_id == 1
+
+    original_stat = os.stat(temp_state_file)
+
+    with open(temp_state_file, "r") as f:
+        data = json.load(f)
+
+    data["users"]["user1"]["daily_selection"].append([22, "expanded-entry"])
+
+    with open(temp_state_file, "w") as f:
+        json.dump(data, f)
+
+    os.utime(temp_state_file, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
+
+    reloaded_user = state_manager.get_user("user1")
+    assert len(reloaded_user.daily_selection) == 2
+    assert reloaded_user.daily_selection[1] == WordOfDay(id_=22, word_phrase="expanded-entry")
