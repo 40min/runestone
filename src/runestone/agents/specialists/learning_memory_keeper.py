@@ -162,16 +162,6 @@ class LearningMemoryKeeperSpecialist(BaseSpecialist):
                     run_limit=1,
                     exit_behavior="end",
                 ),
-                ToolCallLimitMiddleware(
-                    tool_name="update_memory_status",
-                    run_limit=1,
-                    exit_behavior="end",
-                ),
-                ToolCallLimitMiddleware(
-                    tool_name="update_memory_item_content",
-                    run_limit=1,
-                    exit_behavior="end",
-                ),
             ],
             system_prompt=LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT,
             response_format=SpecialistResult,

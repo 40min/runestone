@@ -2,7 +2,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langchain.agents.middleware import ModelRetryMiddleware
+from langchain.agents.middleware import ModelRetryMiddleware, ToolCallLimitMiddleware
 from langchain_core.messages import AIMessage
 
 from runestone.agents.specialists.base import SpecialistContext, SpecialistResult, parse_specialist_result
@@ -246,16 +246,13 @@ def test_learning_memory_keeper_builds_agent_with_expected_tools(mock_settings):
         "delete_memory_item",
     ]
     middleware = create_agent_mock.call_args.kwargs["middleware"]
-    assert len(middleware) == 4
+    assert len(middleware) == 2
     assert isinstance(middleware[0], ModelRetryMiddleware)
     assert middleware[0].max_retries == 3
-
-    limit_by_tool = {m.tool_name: m for m in middleware[1:]}
-    for tool_name in ("read_areas_to_improve", "update_memory_status", "update_memory_item_content"):
-        assert tool_name in limit_by_tool, f"Missing ToolCallLimitMiddleware for {tool_name}"
-        m = limit_by_tool[tool_name]
-        assert m.run_limit == 1
-        assert m.exit_behavior == "end"
+    assert isinstance(middleware[1], ToolCallLimitMiddleware)
+    assert middleware[1].tool_name == "read_areas_to_improve"
+    assert middleware[1].run_limit == 1
+    assert middleware[1].exit_behavior == "end"
 
 
 def test_update_memory_item_content_tool_is_accessible():
