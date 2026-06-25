@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     llm_model_name: Optional[str] = None
 
     # OpenAI Configuration
-    openai_api_key: str
+    openai_api_key: Optional[str] = None
 
     # Gemini Configuration
     gemini_api_key: Optional[str] = None
