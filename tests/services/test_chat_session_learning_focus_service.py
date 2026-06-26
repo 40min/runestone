@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from runestone.api.memory_item_schemas import AreaToImproveStatus, MemoryCategory
+from runestone.api.memory_item_schemas import AreaToImproveStatus, MemoryCategory, MemoryItemResponse
 from runestone.db.chat_session_learning_focus_repository import ChatSessionLearningFocusRepository
 from runestone.db.memory_item_repository import MemoryItemRepository
 from runestone.db.models import ChatSessionLearningFocus, MemoryItem
@@ -149,6 +149,76 @@ async def test_get_chat_session_learning_focus_trims_missing_ids_without_replaci
     )
     assert focus_row is not None
     assert focus_row.memory_item_ids_json == f"[{survivor.id}]"
+
+
+async def test_get_chat_session_learning_focus_reseed_returns_persisted_batch_after_race(
+    db_with_test_user, monkeypatch
+):
+    db, user = db_with_test_user
+    memory_repo = MemoryItemRepository(db)
+    focus_repo = ChatSessionLearningFocusRepository(db)
+    memory_item_service = MemoryItemService(memory_repo)
+    service = ChatSessionLearningFocusService(focus_repo, memory_item_service)
+
+    locally_selected = [
+        MemoryItem(
+            user_id=user.id,
+            category=MemoryCategory.AREA_TO_IMPROVE.value,
+            key="local-first",
+            content="Locally selected first",
+            status=AreaToImproveStatus.STRUGGLING.value,
+            priority=1,
+        ),
+        MemoryItem(
+            user_id=user.id,
+            category=MemoryCategory.AREA_TO_IMPROVE.value,
+            key="local-second",
+            content="Locally selected second",
+            status=AreaToImproveStatus.IMPROVING.value,
+            priority=2,
+        ),
+    ]
+    persisted_batch = [
+        MemoryItem(
+            user_id=user.id,
+            category=MemoryCategory.AREA_TO_IMPROVE.value,
+            key="persisted-first",
+            content="Persisted first",
+            status=AreaToImproveStatus.STRUGGLING.value,
+            priority=0,
+        ),
+        MemoryItem(
+            user_id=user.id,
+            category=MemoryCategory.AREA_TO_IMPROVE.value,
+            key="persisted-second",
+            content="Persisted second",
+            status=AreaToImproveStatus.IMPROVING.value,
+            priority=1,
+        ),
+    ]
+    db.add_all([*locally_selected, *persisted_batch])
+    await db.commit()
+    for item in [*locally_selected, *persisted_batch]:
+        await db.refresh(item)
+
+    async def _return_local_selection(user_id: int, area_limit: int):
+        assert user_id == user.id
+        assert area_limit == 2
+        return [MemoryItemResponse.model_validate(item) for item in locally_selected]
+
+    real_upsert = focus_repo.upsert_item_ids
+
+    async def _persist_competing_batch(user_id: int, chat_id: str, item_ids: list[int]):
+        assert item_ids == [item.id for item in locally_selected]
+        return await real_upsert(user_id, chat_id, [item.id for item in persisted_batch])
+
+    monkeypatch.setattr(memory_item_service, "list_start_area_to_improve_items", _return_local_selection)
+    monkeypatch.setattr(focus_repo, "upsert_item_ids", _persist_competing_batch)
+
+    items, was_reseeded = await service.get_chat_session_learning_focus(user.id, "chat-1", area_limit=2)
+
+    assert [item.id for item in items] == [item.id for item in persisted_batch]
+    assert was_reseeded is False
 
 
 async def test_cleanup_old_chat_session_learning_focus_deletes_rows_for_older_chat_ids(db_with_test_user):

@@ -133,9 +133,17 @@ class ChatSessionLearningFocusService:
     ) -> tuple[list[MemoryItemResponse], bool]:
         """Select and persist a fresh ordered batch for the active chat session."""
         starter_items = await self.memory_item_service.list_start_area_to_improve_items(user_id, area_limit)
-        await self.repo.upsert_item_ids(
+        focus = await self.repo.upsert_item_ids(
             user_id=user_id,
             chat_id=chat_id,
             item_ids=[item.id for item in starter_items],
         )
-        return starter_items, reseeded
+        stored_item_ids = self._decode_focus_item_ids(focus.memory_item_ids_json)
+        if not stored_item_ids:
+            return [], reseeded
+
+        hydrated_items, _ = await self._hydrate_chat_session_learning_focus(
+            user_id=user_id,
+            stored_item_ids=stored_item_ids,
+        )
+        return [MemoryItemResponse.model_validate(item) for item in hydrated_items], reseeded
