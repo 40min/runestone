@@ -15,6 +15,8 @@ from runestone.core.observability import timed_operation
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.chat_repository import ChatRepository
 from runestone.services.agent_side_effect_service import AgentSideEffectService
+from runestone.services.chat_session_learning_focus_service import ChatSessionLearningFocusService
+from runestone.services.memory_item_service import MemoryItemService
 from runestone.services.tts_service import TTSService
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
@@ -52,7 +54,8 @@ class ChatService:
         processor: RunestoneProcessor,
         vocabulary_service: VocabularyService,
         tts_service: TTSService,
-        memory_item_service,
+        memory_item_service: MemoryItemService,
+        chat_session_learning_focus_service: ChatSessionLearningFocusService,
     ):
         """
         Wire together the collaborators needed for a full chat turn.
@@ -70,6 +73,7 @@ class ChatService:
         self.vocabulary_service = vocabulary_service
         self.tts_service = tts_service
         self.memory_item_service = memory_item_service
+        self.chat_session_learning_focus_service = chat_session_learning_focus_service
 
     @timed_operation(logger, "[chat:service] Message turn completed", fields_factory=_process_message_timing_fields)
     async def process_message(
@@ -132,6 +136,7 @@ class ChatService:
             history=history[:-1],
             user=user,
             memory_item_service=self.memory_item_service,
+            chat_session_learning_focus_service=self.chat_session_learning_focus_service,
             side_effect_service=self.side_effect_service,
         )
 
@@ -217,6 +222,7 @@ Instructions:
             history=history,
             user=user,
             memory_item_service=self.memory_item_service,
+            chat_session_learning_focus_service=self.chat_session_learning_focus_service,
             side_effect_service=self.side_effect_service,
         )
 
@@ -243,6 +249,10 @@ Instructions:
         Rotate the user onto a fresh chat session id.
         """
         chat_id = await self.user_service.rotate_current_chat_id(user_id)
+        await self.chat_session_learning_focus_service.cleanup_old_chat_session_learning_focus(
+            user_id=user_id,
+            preserve_chat_id=chat_id,
+        )
 
         user = await self.user_service.get_user_by_id(user_id)
         if user is None:

@@ -5,11 +5,13 @@ from typing import AsyncIterator
 
 from runestone.config import settings
 from runestone.db.agent_side_effect_repository import AgentSideEffectRepository
+from runestone.db.chat_session_learning_focus_repository import ChatSessionLearningFocusRepository
 from runestone.db.database import provide_db_session
 from runestone.db.memory_item_repository import MemoryItemRepository
 from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.services.agent_side_effect_service import AgentSideEffectService
+from runestone.services.chat_session_learning_focus_service import ChatSessionLearningFocusService
 from runestone.services.memory_item_service import MemoryItemService
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
@@ -40,6 +42,17 @@ async def provide_memory_item_service() -> AsyncIterator[MemoryItemService]:
     async with provide_db_session() as session:
         repo = MemoryItemRepository(session)
         service = MemoryItemService(repo)
+        yield service
+
+
+@asynccontextmanager
+async def provide_chat_session_learning_focus_service() -> AsyncIterator[ChatSessionLearningFocusService]:
+    """Context manager for chat-session learning-focus service in agent runtime paths."""
+    async with provide_db_session() as session:
+        memory_repo = MemoryItemRepository(session)
+        focus_repo = ChatSessionLearningFocusRepository(session)
+        memory_item_service = MemoryItemService(memory_repo)
+        service = ChatSessionLearningFocusService(focus_repo, memory_item_service)
         yield service
 
 

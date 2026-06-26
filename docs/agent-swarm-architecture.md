@@ -250,9 +250,49 @@ Principles:
 Current startup-memory shape:
 
 - `personal_info_summary` when available
-- top 5 `area_to_improve` items across `struggling` and `improving`
-- ranking by priority first, then recency
+- chat-session-scoped `area_to_improve` focus loaded from a frozen ordered id set
+- initial batch selected from top 5 `area_to_improve` items across `struggling`
+  and `improving`
+- initial ranking by priority first, then recency
 - `area_to_improve` starter items serialized as untrusted quoted-data text
+
+#### Chat session learning focus freeze
+
+Teacher startup focus for `area_to_improve` is intentionally stable within a
+single chat session.
+
+Why:
+
+- the teacher may start drilling one batch of topics early in the chat
+- `LearningMemoryKeeper` or `memory_maintainer` may later update item statuses
+- reselecting a fresh top-5 slice every turn can silently swap ids and reorder
+  topics mid-session
+- the teacher then loses continuity and may refer to stale or mismatched item
+  ids
+
+Current behavior:
+
+- on first use for a `chat_id`, the backend selects the ordered focus batch
+  from the current highest-priority `area_to_improve` items in `struggling` or
+  `improving`
+- that ordered id set is persisted in `chat_session_learning_focus`
+- on later turns, teacher startup memory reuses the same stored ids in the same
+  order, but hydrates them from live memory rows so current `content`, `status`,
+  and `priority` are still fresh
+- the batch stays frozen while at least one stored item is not `mastered`
+- when all stored items are now `mastered`, the backend reseeds a new ordered
+  batch and injects an explicit teacher-facing note so the teacher can
+  acknowledge completion and move on cleanly
+- if some stored ids drift away because rows were deleted or merged, the system
+  keeps the remaining stored ids instead of silently refilling the batch
+  mid-session; reseeding happens only when the stored batch is no longer viable
+- when a new chat session starts and `current_chat_id` rotates, old
+  `chat_session_learning_focus` rows for prior chat ids are deleted as part of
+  chat-start cleanup
+
+This freeze is intentionally not a second per-session status machine. Durable
+learning state still lives only in the normal memory-item statuses such as
+`struggling`, `improving`, and `mastered`.
 
 #### Post-phase memory maintenance
 
@@ -501,6 +541,9 @@ Decision split:
 
 - reading is teacher-owned via `read_active_learning_focus` plus first-turn starter memory
 - writing and maintenance are post-phase specialist work (`MemoryKeeper`)
+- starter-memory reads for `area_to_improve` are stable per `chat_id`, while
+  maintenance agents remain free to update the live rows that are rehydrated on
+  later turns
 
 ## Contracts
 
