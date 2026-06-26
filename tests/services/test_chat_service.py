@@ -62,6 +62,14 @@ def mock_memory_item_service():
 
 
 @pytest.fixture
+def mock_chat_session_learning_focus_service():
+    """Create a mock chat-session learning-focus service."""
+    mock = Mock()
+    mock.cleanup_old_chat_session_learning_focus = AsyncMock(return_value=0)
+    return mock
+
+
+@pytest.fixture
 def mock_processor():
     """Create a mock RunestoneProcessor."""
     mock = AsyncMock()
@@ -81,6 +89,7 @@ def chat_service(
     mock_vocabulary_service,
     mock_tts_service,
     mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
 ):
     """Create a ChatService instance with real repository and mock agent/user services."""
     repository = ChatRepository(db_session)
@@ -102,6 +111,7 @@ def chat_service(
         mock_vocabulary_service,
         mock_tts_service,
         mock_memory_item_service,
+        mock_chat_session_learning_focus_service,
     )
 
 
@@ -267,16 +277,22 @@ async def test_clear_history_schedules_background_maintenance(chat_service, db_w
     chat_service.user_service.get_user_by_id = AsyncMock(return_value=user)
     await chat_service.clear_history(user.id)
     chat_service.user_service.rotate_current_chat_id.assert_awaited_once_with(user.id)
+    chat_service.chat_session_learning_focus_service.cleanup_old_chat_session_learning_focus.assert_awaited_once()
     chat_service.agents_manager.start_background_memory_maintenance.assert_awaited_once_with(user)
 
 
 @pytest.mark.anyio
 async def test_start_new_chat_skips_maintenance_when_user_missing(chat_service):
-    chat_service.user_service.rotate_current_chat_id = AsyncMock(return_value=str(uuid4()))
+    next_chat_id = str(uuid4())
+    chat_service.user_service.rotate_current_chat_id = AsyncMock(return_value=next_chat_id)
     chat_service.user_service.get_user_by_id = AsyncMock(return_value=None)
 
     await chat_service.start_new_chat(user_id=123)
 
+    chat_service.chat_session_learning_focus_service.cleanup_old_chat_session_learning_focus.assert_awaited_once_with(
+        user_id=123,
+        preserve_chat_id=next_chat_id,
+    )
     chat_service.agents_manager.start_background_memory_maintenance.assert_not_called()
 
 
@@ -292,6 +308,10 @@ async def test_start_new_chat_logs_and_keeps_success_when_scheduling_fails(chat_
         returned_chat_id = await chat_service.start_new_chat(user.id)
 
     assert returned_chat_id == next_chat_id
+    chat_service.chat_session_learning_focus_service.cleanup_old_chat_session_learning_focus.assert_awaited_once_with(
+        user_id=user.id,
+        preserve_chat_id=next_chat_id,
+    )
     assert "Failed to schedule background memory maintenance" in caplog.text
 
 

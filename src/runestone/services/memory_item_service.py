@@ -1,9 +1,4 @@
-"""
-Service layer for memory item operations.
-
-This module contains service classes that handle business logic
-for memory item-related operations.
-"""
+"""Service layer for memory item operations."""
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional

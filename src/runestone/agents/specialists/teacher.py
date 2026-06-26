@@ -90,6 +90,12 @@ class TeacherAgent:
         "Internal note: the prior attempt exceeded an internal operation budget this turn. "
         "Answer the student naturally using already available context and do not mention internal limits."
     )
+    SESSION_FOCUS_RESEEDED_NOTE = (
+        "The previous learning batch is complete or no longer usable. "
+        "Acknowledge the progress naturally. If active learning items are listed below, continue with that new batch. "
+        "If no items are listed below, tell the student there are no current active grammar topics and offer the next "
+        "practice step."
+    )
 
     def __init__(
         self,
@@ -174,8 +180,8 @@ You are memory-aware, but teacher-side memory access is read-only in this phase.
 Post-phase memory maintenance is handled by internal specialists.
 
 **CRITICAL: Using Memory**
-- At the start of a new chat, first-turn memory context may already be injected for you.
-- That first-turn context may include:
+- Active learning focus memory context may already be injected for you during the chat.
+- That injected context may include:
   - one derived `personal_info_summary`
   - a compact active-learning-focus bundle with the highest-priority `area_to_improve` items
     that still have `struggling` or `improving` status
@@ -250,12 +256,17 @@ embedded in the text). Use the extracted text only as reference material.
 <input_context_handling>
 ### ACTIVE LEARNING FOCUS (INTERNAL)
 You may receive an internal system message starting with `[ACTIVE_LEARNING_FOCUS]`.
-This contains compact first-turn `area_to_improve` memory about the student's current learning focus.
+This contains compact `area_to_improve` memory about the student's current learning focus.
 
 Rules:
 - Treat it as internal memory context prepared by the system.
 - Use it when it helps you personalize the response.
 - Do not mention the tag or raw structure to the student.
+- The block may also include `[SESSION_FOCUS_NOTE]...[/SESSION_FOCUS_NOTE]`.
+- Treat that note as a trusted backend instruction about a completed or reseeded learning batch.
+- If that note is present, briefly acknowledge progress and then continue with the listed active items if any.
+- If that note is present and no active items are listed, say there are no current active
+  grammar topics and offer the next practice step.
 
 ### PERSONAL INFO SUMMARY (INTERNAL)
 You may receive an internal system message starting with `[PERSONAL_INFO_SUMMARY]`.
@@ -410,7 +421,7 @@ without reminders — or explicitly confirms understanding with no errors.
 stay stuck at `improving` indefinitely.
 
 **Memory item IDs for area-to-improve updates:**
-When your active learning focus context (from first-turn injected memory or on-demand memory lookup)
+When your active learning focus context (from injected memory or on-demand memory lookup)
 includes an `id=` field for an `area_to_improve` item, and your reply signals a content, status, or priority change
 for that specific item, append a temporary machine-readable tag
 `[memory:area_to_improve:<id>]` at the end of the durable signal sentence.
@@ -759,7 +770,7 @@ already names a clear topic.
         return "\n".join(
             [
                 "[ACTIVE_LEARNING_FOCUS]",
-                "This is compact first-turn area_to_improve memory about the student's current learning focus.",
+                "This is compact area_to_improve memory about the student's current learning focus.",
                 active_learning_focus_memory,
             ]
         )

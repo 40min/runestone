@@ -112,6 +112,13 @@ def mock_memory_item_service():
 
 
 @pytest.fixture
+def mock_chat_session_learning_focus_service():
+    service = AsyncMock()
+    service.get_chat_session_learning_focus.return_value = ([], False)
+    return service
+
+
+@pytest.fixture
 def mock_side_effect_service():
     service = MagicMock(spec=AgentSideEffectService)
     service.load_recent_for_teacher = AsyncMock(return_value=[])
@@ -140,7 +147,11 @@ def _make_manager(mock_settings):
 
 @pytest.mark.anyio
 async def test_process_turn_returns_teacher_reply_and_starts_background_post(
-    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
 ):
     manager = _make_manager(mock_settings)
     manager.handle_stale_post_task = AsyncMock()
@@ -161,6 +172,7 @@ async def test_process_turn_returns_teacher_reply_and_starts_background_post(
         history=[ChatMessage(role="assistant", content="Earlier")],
         user=mock_user,
         memory_item_service=mock_memory_item_service,
+        chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
         side_effect_service=mock_side_effect_service,
     )
 
@@ -190,7 +202,11 @@ async def test_process_turn_returns_teacher_reply_and_starts_background_post(
 
 @pytest.mark.anyio
 async def test_process_turn_skips_stale_check_on_first_turn(
-    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
 ):
     manager = _make_manager(mock_settings)
     manager.handle_stale_post_task = AsyncMock()
@@ -204,6 +220,7 @@ async def test_process_turn_skips_stale_check_on_first_turn(
         history=[],
         user=mock_user,
         memory_item_service=mock_memory_item_service,
+        chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
         side_effect_service=mock_side_effect_service,
     )
 
@@ -310,13 +327,15 @@ def test_memory_maintenance_timeout_budget_matches_multi_step_flow(mock_settings
 
 @pytest.mark.anyio
 async def test_prepare_pre_turn_delegates_to_coordinator(
-    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
     manager.teacher = AsyncMock()
-    mock_memory_item_service.list_start_area_to_improve_items.return_value = []
-
     plan, pre_results, active_learning_focus_memory, personal_info_summary, recent_effects, current_recall_words = (
         await manager.prepare_pre_turn(
             message="Hello",
@@ -324,6 +343,7 @@ async def test_prepare_pre_turn_delegates_to_coordinator(
             history=[],
             user=mock_user,
             memory_item_service=mock_memory_item_service,
+            chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
             side_effect_service=mock_side_effect_service,
         )
     )
@@ -338,7 +358,11 @@ async def test_prepare_pre_turn_delegates_to_coordinator(
 
 @pytest.mark.anyio
 async def test_prepare_pre_turn_runs_cleanup_on_first_turn(
-    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
@@ -350,6 +374,7 @@ async def test_prepare_pre_turn_runs_cleanup_on_first_turn(
         history=[],
         user=mock_user,
         memory_item_service=mock_memory_item_service,
+        chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
         side_effect_service=mock_side_effect_service,
     )
 
@@ -361,7 +386,11 @@ async def test_prepare_pre_turn_runs_cleanup_on_first_turn(
 
 @pytest.mark.anyio
 async def test_prepare_pre_turn_uses_configured_cleanup_days(
-    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
 ):
     mock_settings.memory_mastered_cleanup_days = 3
     manager = _make_manager(mock_settings)
@@ -374,6 +403,7 @@ async def test_prepare_pre_turn_uses_configured_cleanup_days(
         history=[],
         user=mock_user,
         memory_item_service=mock_memory_item_service,
+        chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
         side_effect_service=mock_side_effect_service,
     )
 
@@ -382,7 +412,11 @@ async def test_prepare_pre_turn_uses_configured_cleanup_days(
 
 @pytest.mark.anyio
 async def test_prepare_pre_turn_skips_cleanup_with_history(
-    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
@@ -394,6 +428,7 @@ async def test_prepare_pre_turn_skips_cleanup_with_history(
         history=[ChatMessage(role="user", content="prev")],
         user=mock_user,
         memory_item_service=mock_memory_item_service,
+        chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
         side_effect_service=mock_side_effect_service,
     )
 
@@ -402,7 +437,11 @@ async def test_prepare_pre_turn_skips_cleanup_with_history(
 
 @pytest.mark.anyio
 async def test_coordinator_history_is_truncated(
-    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
@@ -414,6 +453,7 @@ async def test_coordinator_history_is_truncated(
         history=history,
         user=mock_user,
         memory_item_service=mock_memory_item_service,
+        chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
         side_effect_service=mock_side_effect_service,
     )
 
@@ -423,7 +463,11 @@ async def test_coordinator_history_is_truncated(
 
 @pytest.mark.anyio
 async def test_prepare_pre_turn_excludes_memory_keepers_from_coordinator_available_specialists(
-    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
@@ -434,6 +478,7 @@ async def test_prepare_pre_turn_excludes_memory_keepers_from_coordinator_availab
         history=[],
         user=mock_user,
         memory_item_service=mock_memory_item_service,
+        chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
         side_effect_service=mock_side_effect_service,
     )
 
@@ -446,7 +491,12 @@ async def test_prepare_pre_turn_excludes_memory_keepers_from_coordinator_availab
 
 @pytest.mark.anyio
 async def test_coordinator_history_truncation_logs_warning(
-    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service, caplog
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
+    caplog,
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
@@ -459,6 +509,7 @@ async def test_coordinator_history_truncation_logs_warning(
             history=history,
             user=mock_user,
             memory_item_service=mock_memory_item_service,
+            chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
             side_effect_service=mock_side_effect_service,
         )
 
@@ -467,7 +518,11 @@ async def test_coordinator_history_truncation_logs_warning(
 
 @pytest.mark.anyio
 async def test_prepare_pre_turn_passes_bounded_history_into_news_agent(
-    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(
@@ -499,6 +554,7 @@ async def test_prepare_pre_turn_passes_bounded_history_into_news_agent(
         history=history,
         user=mock_user,
         memory_item_service=mock_memory_item_service,
+        chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
         side_effect_service=mock_side_effect_service,
     )
 
@@ -1824,7 +1880,9 @@ class _CaptureHistorySpecialist(BaseSpecialist):
 
 
 @pytest.mark.anyio
-async def test_specialist_history_is_truncated(mock_settings, mock_user, mock_memory_item_service):
+async def test_specialist_history_is_truncated(
+    mock_settings, mock_user, mock_memory_item_service, mock_chat_session_learning_focus_service
+):
     manager = _make_manager(mock_settings)
     capture = _CaptureHistorySpecialist()
     manager.registry.register(capture)
@@ -1846,6 +1904,7 @@ async def test_specialist_history_is_truncated(mock_settings, mock_user, mock_me
         history=history,
         user=mock_user,
         memory_item_service=mock_memory_item_service,
+        chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
         side_effect_service=side_effect_service,
     )
 
@@ -1855,7 +1914,9 @@ async def test_specialist_history_is_truncated(mock_settings, mock_user, mock_me
 
 
 @pytest.mark.anyio
-async def test_specialist_history_truncation_logs_warning(mock_settings, mock_user, mock_memory_item_service, caplog):
+async def test_specialist_history_truncation_logs_warning(
+    mock_settings, mock_user, mock_memory_item_service, mock_chat_session_learning_focus_service, caplog
+):
     manager = _make_manager(mock_settings)
     capture = _CaptureHistorySpecialist()
     manager.registry.register(capture)
@@ -1878,6 +1939,7 @@ async def test_specialist_history_truncation_logs_warning(mock_settings, mock_us
             history=history,
             user=mock_user,
             memory_item_service=mock_memory_item_service,
+            chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
             side_effect_service=side_effect_service,
         )
 
@@ -1886,7 +1948,11 @@ async def test_specialist_history_truncation_logs_warning(mock_settings, mock_us
 
 @pytest.mark.anyio
 async def test_word_keeper_receives_latest_teacher_message_without_history(
-    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
 ):
     manager = _make_manager(mock_settings)
     capture = _CaptureHistorySpecialist()
@@ -1909,6 +1975,7 @@ async def test_word_keeper_receives_latest_teacher_message_without_history(
         history=history,
         user=mock_user,
         memory_item_service=mock_memory_item_service,
+        chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
         side_effect_service=mock_side_effect_service,
     )
 
@@ -1919,7 +1986,11 @@ async def test_word_keeper_receives_latest_teacher_message_without_history(
 
 @pytest.mark.anyio
 async def test_word_keeper_does_not_receive_non_adjacent_teacher_message(
-    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
 ):
     manager = _make_manager(mock_settings)
     capture = _CaptureHistorySpecialist()
@@ -1940,6 +2011,7 @@ async def test_word_keeper_does_not_receive_non_adjacent_teacher_message(
         history=history,
         user=mock_user,
         memory_item_service=mock_memory_item_service,
+        chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
         side_effect_service=mock_side_effect_service,
     )
 
@@ -1983,7 +2055,11 @@ async def test_run_post_turn_passes_candidates_without_chat_history_or_teacher_r
 
 @pytest.mark.anyio
 async def test_recent_side_effects_loaded_in_pre_turn(
-    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
@@ -2008,6 +2084,7 @@ async def test_recent_side_effects_loaded_in_pre_turn(
             history=[],
             user=mock_user,
             memory_item_service=mock_memory_item_service,
+            chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
             side_effect_service=mock_side_effect_service,
         )
     )
@@ -2018,7 +2095,11 @@ async def test_recent_side_effects_loaded_in_pre_turn(
 
 @pytest.mark.anyio
 async def test_prepare_pre_turn_loads_active_learning_focus_memory_on_first_turn(
-    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
@@ -2035,7 +2116,7 @@ async def test_prepare_pre_turn_loads_active_learning_focus_memory_on_first_turn
             status_changed_at=None,
         )
     ]
-    mock_memory_item_service.list_start_area_to_improve_items.return_value = starter_items
+    mock_chat_session_learning_focus_service.get_chat_session_learning_focus.return_value = (starter_items, False)
 
     _plan, _pre_results, active_learning_focus_memory, personal_info_summary, _recent, _current_recall_words = (
         await manager.prepare_pre_turn(
@@ -2044,22 +2125,28 @@ async def test_prepare_pre_turn_loads_active_learning_focus_memory_on_first_turn
             history=[],
             user=mock_user,
             memory_item_service=mock_memory_item_service,
+            chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
             side_effect_service=mock_side_effect_service,
         )
     )
 
-    mock_memory_item_service.list_start_area_to_improve_items.assert_awaited_once_with(
-        mock_user.id,
+    mock_chat_session_learning_focus_service.get_chat_session_learning_focus.assert_awaited_once_with(
+        user_id=mock_user.id,
+        chat_id="chat-1",
         area_limit=manager.STARTER_MEMORY_AREA_LIMIT,
     )
-    assert active_learning_focus_memory.startswith("UNTRUSTED_MEMORY_DATA")
+    assert active_learning_focus_memory.startswith("UNTRUSTED_ACTIVE_LEARNING_FOCUS")
     assert 'category="area_to_improve"' in active_learning_focus_memory
     assert personal_info_summary == ""
 
 
 @pytest.mark.anyio
 async def test_prepare_pre_turn_loads_active_learning_focus_memory_with_history(
-    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
@@ -2072,19 +2159,52 @@ async def test_prepare_pre_turn_loads_active_learning_focus_memory_with_history(
             history=[ChatMessage(role="user", content="prev")],
             user=mock_user,
             memory_item_service=mock_memory_item_service,
+            chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
             side_effect_service=mock_side_effect_service,
         )
     )
 
-    mock_memory_item_service.list_start_area_to_improve_items.assert_called_once_with(
-        mock_user.id, area_limit=manager.STARTER_MEMORY_AREA_LIMIT
+    mock_chat_session_learning_focus_service.get_chat_session_learning_focus.assert_called_once_with(
+        user_id=mock_user.id,
+        chat_id="chat-1",
+        area_limit=manager.STARTER_MEMORY_AREA_LIMIT,
     )
     assert personal_info_summary == "Likes chess."
 
 
 @pytest.mark.anyio
+async def test_prepare_pre_turn_includes_session_focus_note_when_batch_reseeded(
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
+):
+    manager = _make_manager(mock_settings)
+    manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
+    mock_chat_session_learning_focus_service.get_chat_session_learning_focus.return_value = ([], True)
+
+    _plan, _pre_results, active_learning_focus_memory, _summary, _recent, _words = await manager.prepare_pre_turn(
+        message="Hello",
+        chat_id="chat-1",
+        history=[],
+        user=mock_user,
+        memory_item_service=mock_memory_item_service,
+        chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
+        side_effect_service=mock_side_effect_service,
+    )
+
+    assert "[SESSION_FOCUS_NOTE]" in active_learning_focus_memory
+    assert "The previous learning batch is complete" in active_learning_focus_memory
+
+
+@pytest.mark.anyio
 async def test_prepare_pre_turn_loads_current_recall_words_on_first_turn(
-    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
@@ -2096,6 +2216,7 @@ async def test_prepare_pre_turn_loads_current_recall_words_on_first_turn(
                 history=[],
                 user=mock_user,
                 memory_item_service=mock_memory_item_service,
+                chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
                 side_effect_service=mock_side_effect_service,
             )
         )
@@ -2106,7 +2227,11 @@ async def test_prepare_pre_turn_loads_current_recall_words_on_first_turn(
 
 @pytest.mark.anyio
 async def test_prepare_pre_turn_loads_current_recall_words_with_history(
-    mock_settings, mock_user, mock_memory_item_service, mock_side_effect_service
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
@@ -2118,6 +2243,7 @@ async def test_prepare_pre_turn_loads_current_recall_words_with_history(
                 history=[ChatMessage(role="user", content="prev")],
                 user=mock_user,
                 memory_item_service=mock_memory_item_service,
+                chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
                 side_effect_service=mock_side_effect_service,
             )
         )

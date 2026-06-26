@@ -19,6 +19,7 @@ from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.agent_side_effect_repository import AgentSideEffectRepository
 from runestone.db.chat_repository import ChatRepository
+from runestone.db.chat_session_learning_focus_repository import ChatSessionLearningFocusRepository
 from runestone.db.database import get_db
 from runestone.db.memory_item_repository import MemoryItemRepository
 from runestone.db.user_repository import UserRepository
@@ -26,6 +27,7 @@ from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.rag.index import GrammarIndex
 from runestone.services.agent_side_effect_service import AgentSideEffectService
 from runestone.services.chat_service import ChatService
+from runestone.services.chat_session_learning_focus_service import ChatSessionLearningFocusService
 from runestone.services.grammar_service import GrammarService
 from runestone.services.memory_item_service import MemoryItemService
 from runestone.services.tts_service import TTSService
@@ -96,6 +98,21 @@ def get_memory_item_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> 
     return MemoryItemRepository(db)
 
 
+def get_chat_session_learning_focus_repository(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ChatSessionLearningFocusRepository:
+    """
+    Dependency injection for chat-session learning-focus repository.
+
+    Args:
+        db: Database session from FastAPI dependency injection
+
+    Returns:
+        ChatSessionLearningFocusRepository: Repository instance with database session
+    """
+    return ChatSessionLearningFocusRepository(db)
+
+
 def get_agent_side_effect_repository(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AgentSideEffectRepository:
@@ -156,6 +173,14 @@ def get_memory_item_service(
         MemoryItemService: Service instance with repository dependency
     """
     return MemoryItemService(repo)
+
+
+def get_chat_session_learning_focus_service(
+    repository: Annotated[ChatSessionLearningFocusRepository, Depends(get_chat_session_learning_focus_repository)],
+    memory_item_service: Annotated[MemoryItemService, Depends(get_memory_item_service)],
+) -> ChatSessionLearningFocusService:
+    """Dependency injection for chat-session learning-focus service."""
+    return ChatSessionLearningFocusService(repository, memory_item_service)
 
 
 def get_llm_model(request: Request) -> BaseChatModel:
@@ -322,6 +347,9 @@ def get_chat_service(
     vocabulary_service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
     tts_service: Annotated[TTSService, Depends(get_tts_service)],
     memory_item_service: Annotated[MemoryItemService, Depends(get_memory_item_service)],
+    chat_session_learning_focus_service: Annotated[
+        ChatSessionLearningFocusService, Depends(get_chat_session_learning_focus_service)
+    ],
 ) -> ChatService:
     """
     Get chat service instance.
@@ -348,6 +376,7 @@ def get_chat_service(
         vocabulary_service,
         tts_service,
         memory_item_service,
+        chat_session_learning_focus_service,
     )
 
 

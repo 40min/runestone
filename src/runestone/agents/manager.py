@@ -24,7 +24,7 @@ from runestone.agents.specialists.personal_memory_keeper import PersonalMemoryKe
 from runestone.agents.specialists.registry import SpecialistRegistry
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.agents.specialists.word_keeper import WordKeeperSpecialist
-from runestone.agents.tools.utils import serialize_memory_items
+from runestone.agents.tools.utils import serialize_active_learning_focus
 from runestone.config import Settings
 from runestone.constants import MAX_TEACHER_GRAMMAR_SOURCE_LINKS
 from runestone.core.exceptions import RunestoneError
@@ -33,7 +33,9 @@ from runestone.db.models import User
 from runestone.rag.index import GrammarIndex
 from runestone.schemas.vocabulary_save import WordSaveCandidate
 from runestone.services.agent_side_effect_service import AgentSideEffectService
+from runestone.services.chat_session_learning_focus_service import ChatSessionLearningFocusService
 from runestone.services.grammar_service import GrammarService
+from runestone.services.memory_item_service import MemoryItemService
 from runestone.state.state_manager import StateManager
 from runestone.utils.telegram import normalize_telegram_username
 
@@ -139,8 +141,9 @@ class AgentsManager:
         chat_id: str,
         history: list[ChatMessage],
         user: User,
-        memory_item_service,
+        memory_item_service: MemoryItemService,
         side_effect_service: AgentSideEffectService,
+        chat_session_learning_focus_service: ChatSessionLearningFocusService,
     ) -> tuple[CoordinatorPlan, list[dict], str, str, list[TeacherSideEffect], list[str]]:
         """
         Run pre-stage: coordinator planning, pre specialists, side effect loading.
@@ -174,12 +177,26 @@ class AgentsManager:
                 logger.warning("old mastered memory cleanup failed user_id=%s error=%s", user.id, e)
 
         try:
-            starter_items = await memory_item_service.list_start_area_to_improve_items(
-                user.id,
+            starter_items, was_reseeded = await chat_session_learning_focus_service.get_chat_session_learning_focus(
+                user_id=user.id,
+                chat_id=chat_id,
                 area_limit=self.STARTER_MEMORY_AREA_LIMIT,
             )
+            if was_reseeded:
+                active_learning_focus_memory = "\n".join(
+                    [
+                        "[SESSION_FOCUS_NOTE]",
+                        TeacherAgent.SESSION_FOCUS_RESEEDED_NOTE,
+                        "[/SESSION_FOCUS_NOTE]",
+                    ]
+                )
             if starter_items:
-                active_learning_focus_memory = serialize_memory_items(starter_items)
+                serialized_items = serialize_active_learning_focus(starter_items)
+                active_learning_focus_memory = (
+                    f"{active_learning_focus_memory}\n{serialized_items}"
+                    if active_learning_focus_memory
+                    else serialized_items
+                )
         except (SQLAlchemyError, ValueError, RuntimeError) as e:
             logger.warning("active learning focus memory load failed user_id=%s error=%s", user.id, e)
 
@@ -283,8 +300,9 @@ class AgentsManager:
         chat_id: str,
         history: list[ChatMessage],
         user: User,
-        memory_item_service,
+        memory_item_service: MemoryItemService,
         side_effect_service: AgentSideEffectService,
+        chat_session_learning_focus_service: ChatSessionLearningFocusService,
     ) -> tuple[str, Optional[list[dict[str, str]]], TeacherEmotion]:
         """
         Run the agent-owned portion of a prepared chat turn.
@@ -311,6 +329,7 @@ class AgentsManager:
             history=history,
             user=user,
             memory_item_service=memory_item_service,
+            chat_session_learning_focus_service=chat_session_learning_focus_service,
             side_effect_service=side_effect_service,
         )
         (

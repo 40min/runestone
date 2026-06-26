@@ -154,6 +154,26 @@ class AgentSideEffect(Base):
     )
 
 
+class ChatSessionLearningFocus(Base):
+    """Persist ordered area_to_improve item ids for one active chat session."""
+
+    __tablename__ = "chat_session_learning_focus"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    chat_id: Mapped[str] = mapped_column(String, nullable=False)
+    memory_item_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (UniqueConstraint("user_id", "chat_id", name="uq_chat_session_learning_focus_user_chat"),)
+
+
 class ChatSummary(Base):
     """Chat summary table model for future compression."""
 
