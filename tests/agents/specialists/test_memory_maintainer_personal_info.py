@@ -210,6 +210,17 @@ def test_personal_info_summary_normalization_prefers_sentence_boundary_when_avai
     assert normalized.endswith(".")
 
 
+def test_personal_info_summary_normalization_skips_early_sentence_boundary():
+    early_sentence = "A" * int(PERSONAL_INFO_SUMMARY_MAX_CHARS * 0.7) + ". "
+    trailing_text = "B" * PERSONAL_INFO_SUMMARY_MAX_CHARS
+
+    normalized = PersonalInfoMemoryMaintainer._normalize_summary_text(early_sentence + trailing_text)
+
+    assert normalized is not None
+    assert len(normalized) == PERSONAL_INFO_SUMMARY_MAX_CHARS
+    assert normalized.endswith("...")
+
+
 @pytest.mark.anyio
 async def test_personal_info_maintainer_deletes_consumed_outdated_group_in_dry_run(mock_settings, mock_user):
     items = [

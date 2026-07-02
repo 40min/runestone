@@ -213,6 +213,7 @@ class PersonalInfoMemoryMaintainer(BaseSpecialist):
 
     MODEL_TIMEOUT_SECONDS = 30.0
     SUMMARY_MAX_CHARS = PERSONAL_INFO_SUMMARY_MAX_CHARS
+    SUMMARY_SENTENCE_BOUNDARY_MIN_RATIO = 0.8
 
     def __init__(self, settings: Settings):
         super().__init__(name="memory_maintainer")
@@ -947,7 +948,7 @@ class PersonalInfoMemoryMaintainer(BaseSpecialist):
 
         trimmed = normalized[: cls.SUMMARY_MAX_CHARS].rstrip()
         sentence_end = max(trimmed.rfind("."), trimmed.rfind("!"), trimmed.rfind("?"))
-        if sentence_end >= cls.SUMMARY_MAX_CHARS // 2:
+        if sentence_end >= int(cls.SUMMARY_MAX_CHARS * cls.SUMMARY_SENTENCE_BOUNDARY_MIN_RATIO):
             trimmed = trimmed[: sentence_end + 1].rstrip()
         else:
             trimmed = trimmed[: cls.SUMMARY_MAX_CHARS - 3].rstrip() + "..."
