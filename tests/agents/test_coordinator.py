@@ -53,7 +53,6 @@ def test_init_uses_coordinator_model(mock_settings, mock_chat_model):
         mock_build.assert_called_once_with(
             mock_settings,
             "coordinator",
-            timeout_seconds=CoordinatorAgent.MODEL_TIMEOUT_SECONDS,
         )
 
 
@@ -65,7 +64,6 @@ def test_init_coordinator_model(mock_settings, mock_chat_model):
         mock_build.assert_called_once_with(
             mock_settings,
             "coordinator",
-            timeout_seconds=CoordinatorAgent.MODEL_TIMEOUT_SECONDS,
         )
 
 

@@ -13,6 +13,7 @@ For chat-reset memory cleanup details, see
 ## Index
 
 - [Current Status](#current-status)
+- [LLM Configuration](#llm-configuration)
 - [Architecture](#architecture)
 - [Memory Maintainer](#memory-maintainer)
 - [Tool Cases](#tool-cases)
@@ -45,6 +46,33 @@ Explicit non-goals for the current design:
 - no durable queue or worker system
 - no retry/replay loops for failed post stages
 - no multiple user-facing reply agents
+
+## LLM Configuration
+
+`Settings.get_agent_llm_settings()` is the single resolution boundary for chat
+model configuration. It returns an `AgentLLMSettings` value containing the
+provider, model, temperature, reasoning level, request timeout, and maximum
+retry count. `build_chat_model()` consumes that value directly; callers do not
+carry their own timeout constants or overrides.
+
+Teacher, coordinator, WordKeeper, NewsAgent, and MemoryMaintainer each have
+their own timeout and retry environment variables. LearningMemoryKeeper and
+PersonalMemoryKeeper share the `MEMORY_KEEPER_*` provider, model, temperature,
+and reasoning settings, but use separate
+`LEARNING_MEMORY_KEEPER_LLM_TIMEOUT_SECONDS` /
+`LEARNING_MEMORY_KEEPER_MAX_RETRIES` and
+`PERSONAL_MEMORY_KEEPER_LLM_TIMEOUT_SECONDS` /
+`PERSONAL_MEMORY_KEEPER_MAX_RETRIES` budgets. The internal `memory_keeper`
+settings alias resolves to the learning-memory budget.
+
+Timeouts are validated as positive and retry counts as non-negative. The
+resolved values are passed to both `ChatOpenAI` (for OpenAI and OpenRouter) and
+`ChatGoogleGenerativeAI` (for Gemini). In particular, Gemini uses the configured
+timeout as-is; the model factory does not impose a minimum timeout.
+
+For tool-using memory keepers, the same per-agent retry count also configures
+their existing `ModelRetryMiddleware`. Tool-call run limits and LangGraph
+recursion limits remain fixed safety bounds rather than environment settings.
 
 ## Architecture
 

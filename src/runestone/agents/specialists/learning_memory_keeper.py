@@ -134,12 +134,10 @@ Return valid JSON matching this exact shape and nothing else:
 class LearningMemoryKeeperSpecialist(BaseSpecialist):
     """Tool-using post-response specialist for learning memory (area_to_improve) maintenance."""
 
-    MODEL_TIMEOUT_SECONDS = 15.0
-
     def __init__(self, settings: Settings):
         super().__init__(name="learning_memory_keeper")
         self.settings = settings
-        self.model = build_chat_model(settings, "learning_memory_keeper", timeout_seconds=self.MODEL_TIMEOUT_SECONDS)
+        self.model = build_chat_model(settings, "learning_memory_keeper")
         self.agent = self._build_agent()
         logger.info(
             "[agents:learning_memory_keeper] Initialized LearningMemoryKeeperSpecialist with provider=%s, model=%s",
@@ -149,6 +147,7 @@ class LearningMemoryKeeperSpecialist(BaseSpecialist):
 
     def _build_agent(self):
         """Build the internal tool-using agent for learning memory maintenance."""
+        agent_settings = self.settings.get_agent_llm_settings("learning_memory_keeper")
         return create_agent(
             model=self.model,
             tools=[
@@ -160,7 +159,7 @@ class LearningMemoryKeeperSpecialist(BaseSpecialist):
                 delete_memory_item,
             ],
             middleware=[
-                ModelRetryMiddleware(max_retries=3),
+                ModelRetryMiddleware(max_retries=agent_settings.max_retries),
                 ToolCallLimitMiddleware(
                     tool_name="read_areas_to_improve",
                     run_limit=1,

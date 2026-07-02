@@ -16,9 +16,19 @@ from runestone.constants import RECURSION_LIMIT_PERSONAL_MEMORY_KEEPER
 
 @pytest.fixture
 def mock_settings():
+    from runestone.config import AgentLLMSettings, ReasoningLevel
+
     settings = MagicMock()
     settings.memory_keeper_provider = "openrouter"
     settings.memory_keeper_model = "test-model"
+    settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+        provider="openrouter",
+        model="test-model",
+        temperature=0.0,
+        reasoning_level=ReasoningLevel.NONE,
+        timeout_seconds=8.0,
+        max_retries=2,
+    )
     return settings
 
 

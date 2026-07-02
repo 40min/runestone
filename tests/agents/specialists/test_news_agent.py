@@ -11,9 +11,19 @@ from runestone.constants import RECURSION_LIMIT_NEWS_AGENT
 
 @pytest.fixture
 def mock_settings():
+    from runestone.config import AgentLLMSettings, ReasoningLevel
+
     settings = MagicMock()
     settings.news_agent_provider = "openrouter"
     settings.news_agent_model = "test-model"
+    settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+        provider="openrouter",
+        model="test-model",
+        temperature=0.0,
+        reasoning_level=ReasoningLevel.NONE,
+        timeout_seconds=10.0,
+        max_retries=3,
+    )
     return settings
 
 
@@ -55,7 +65,6 @@ def test_news_agent_uses_news_agent_model_profile(mock_settings):
     mock_build.assert_called_once_with(
         mock_settings,
         "news_agent",
-        timeout_seconds=NewsAgentSpecialist.MODEL_TIMEOUT_SECONDS,
     )
 
 

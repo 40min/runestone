@@ -39,6 +39,7 @@ def mock_settings():
     settings.memory_maintainer_provider = "openrouter"
     settings.memory_maintainer_model = "test-memory-maintainer-model"
     settings.memory_mastered_cleanup_days = 7
+    settings.memory_maintenance_timeout_seconds = 240.0
     settings.agent_persona = "default"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
@@ -50,48 +51,64 @@ def mock_settings():
             model="test-model",
             temperature=1.0,
             reasoning_level=ReasoningLevel.NONE,
+            timeout_seconds=10.0,
+            max_retries=3,
         ),
         "coordinator": AgentLLMSettings(
             provider="openrouter",
             model="test-coordinator-model",
             temperature=0.0,
             reasoning_level=ReasoningLevel.NONE,
+            timeout_seconds=3.0,
+            max_retries=3,
         ),
         "word_keeper": AgentLLMSettings(
             provider="openrouter",
             model="test-model",
             temperature=0.0,
             reasoning_level=ReasoningLevel.NONE,
+            timeout_seconds=15.0,
+            max_retries=3,
         ),
         "news_agent": AgentLLMSettings(
             provider="openrouter",
             model="test-model",
             temperature=0.0,
             reasoning_level=ReasoningLevel.NONE,
+            timeout_seconds=10.0,
+            max_retries=3,
         ),
         "memory_keeper": AgentLLMSettings(
             provider="openrouter",
             model="test-model",
             temperature=0.0,
             reasoning_level=ReasoningLevel.NONE,
+            timeout_seconds=15.0,
+            max_retries=3,
         ),
         "learning_memory_keeper": AgentLLMSettings(
             provider="openrouter",
             model="test-model",
             temperature=0.0,
             reasoning_level=ReasoningLevel.NONE,
+            timeout_seconds=15.0,
+            max_retries=3,
         ),
         "personal_memory_keeper": AgentLLMSettings(
             provider="openrouter",
             model="test-model",
             temperature=0.0,
             reasoning_level=ReasoningLevel.NONE,
+            timeout_seconds=8.0,
+            max_retries=2,
         ),
         "memory_maintainer": AgentLLMSettings(
             provider="openrouter",
             model="test-memory-maintainer-model",
             temperature=0.0,
             reasoning_level=ReasoningLevel.NONE,
+            timeout_seconds=30.0,
+            max_retries=3,
         ),
     }[agent_name]
     return settings
@@ -294,7 +311,7 @@ async def test_start_background_memory_maintenance_clears_registry_on_failure(mo
 @pytest.mark.anyio
 async def test_start_background_memory_maintenance_clears_registry_on_timeout(mock_settings, mock_user, caplog):
     manager = _make_manager(mock_settings)
-    manager.MEMORY_MAINTENANCE_TIMEOUT_SECONDS = 0.01
+    mock_settings.memory_maintenance_timeout_seconds = 0.01
 
     async def _slow_run(_user):
         await asyncio.sleep(0.05)
@@ -309,15 +326,6 @@ async def test_start_background_memory_maintenance_clears_registry_on_timeout(mo
 
     assert str(mock_user.id) not in manager._memory_maintenance_registry.tasks
     assert "memory maintenance timed out" in caplog.text
-
-
-def test_memory_maintenance_timeout_budget_matches_multi_step_flow(mock_settings):
-    manager = _make_manager(mock_settings)
-    longest_domain_timeout = max(
-        manager.memory_maintainer.area_to_improve.MODEL_TIMEOUT_SECONDS,
-        manager.memory_maintainer.personal_info.MODEL_TIMEOUT_SECONDS,
-    )
-    assert manager.MEMORY_MAINTENANCE_TIMEOUT_SECONDS >= longest_domain_timeout * 3
 
 
 # ---------------------------------------------------------------------------

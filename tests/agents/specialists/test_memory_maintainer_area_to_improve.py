@@ -31,9 +31,19 @@ from runestone.services.memory_item_service import MemoryItemService
 
 @pytest.fixture
 def mock_settings():
+    from runestone.config import AgentLLMSettings, ReasoningLevel
+
     settings = MagicMock()
     settings.memory_maintainer_provider = "openrouter"
     settings.memory_maintainer_model = "test-model"
+    settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+        provider="openrouter",
+        model="test-model",
+        temperature=0.0,
+        reasoning_level=ReasoningLevel.NONE,
+        timeout_seconds=30.0,
+        max_retries=3,
+    )
     return settings
 
 

@@ -34,6 +34,8 @@ def mock_settings():
         model="test-model",
         temperature=1.0,
         reasoning_level=ReasoningLevel.NONE,
+        timeout_seconds=10.0,
+        max_retries=3,
     )
     return settings
 
@@ -872,6 +874,8 @@ def test_openai_provider_configuration(mock_settings):
         model="test-model",
         temperature=1.0,
         reasoning_level=ReasoningLevel.NONE,
+        timeout_seconds=10.0,
+        max_retries=3,
     )
 
     with patch("runestone.agents.llm.ChatOpenAI") as mock_chat_openai:

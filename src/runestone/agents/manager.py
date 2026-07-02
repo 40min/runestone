@@ -51,8 +51,6 @@ class AgentsManager:
 
     COORDINATOR_MAX_HISTORY_MESSAGES = 5
     POST_TASK_TIMEOUT_SECONDS = 25
-    # Multi-step structured maintenance can require multiple serial model calls.
-    MEMORY_MAINTENANCE_TIMEOUT_SECONDS = 240
     STARTER_MEMORY_AREA_LIMIT = 5
     NO_CHAT_HISTORY_SPECIALISTS = frozenset({"word_keeper", "learning_memory_keeper"})
     PERSONAL_MEMORY_KEEPER_HISTORY_SIZE = 2
@@ -558,7 +556,7 @@ class AgentsManager:
             try:
                 result = await asyncio.wait_for(
                     self.run_memory_maintenance(user),
-                    timeout=self.MEMORY_MAINTENANCE_TIMEOUT_SECONDS,
+                    timeout=self.settings.memory_maintenance_timeout_seconds,
                 )
                 artifacts = result.artifacts if isinstance(result.artifacts, dict) else {}
                 logger.info(
@@ -578,7 +576,7 @@ class AgentsManager:
             except asyncio.TimeoutError:
                 logger.error(
                     "memory maintenance timed out timeout_s=%s user_id=%s",
-                    self.MEMORY_MAINTENANCE_TIMEOUT_SECONDS,
+                    self.settings.memory_maintenance_timeout_seconds,
                     user.id,
                 )
             except Exception:

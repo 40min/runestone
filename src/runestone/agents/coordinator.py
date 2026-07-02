@@ -148,11 +148,9 @@ Set `chat_history_size` to `2` for `personal_memory_keeper`.
 class CoordinatorAgent:
     """LLM-based coordinator that produces structured routing plans."""
 
-    MODEL_TIMEOUT_SECONDS = 3.0
-
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.model = build_chat_model(settings, "coordinator", timeout_seconds=self.MODEL_TIMEOUT_SECONDS)
+        self.model = build_chat_model(settings, "coordinator")
 
         logger.info(
             "[agents:coordinator] Initialized CoordinatorAgent with provider=%s, model=%s",

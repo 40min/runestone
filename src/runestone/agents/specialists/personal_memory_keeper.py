@@ -103,12 +103,10 @@ Return valid JSON matching this exact shape and nothing else:
 class PersonalMemoryKeeperSpecialist(BaseSpecialist):
     """Tool-using post-response specialist for personal info maintenance (append-only)."""
 
-    MODEL_TIMEOUT_SECONDS = 8.0
-
     def __init__(self, settings: Settings):
         super().__init__(name="personal_memory_keeper")
         self.settings = settings
-        self.model = build_chat_model(settings, "personal_memory_keeper", timeout_seconds=self.MODEL_TIMEOUT_SECONDS)
+        self.model = build_chat_model(settings, "personal_memory_keeper")
         self.agent = self._build_agent()
         logger.info(
             "[agents:personal_memory_keeper] Initialized PersonalMemoryKeeperSpecialist with provider=%s, model=%s",
@@ -118,10 +116,11 @@ class PersonalMemoryKeeperSpecialist(BaseSpecialist):
 
     def _build_agent(self):
         """Build the internal tool-using agent for personal memory maintenance."""
+        agent_settings = self.settings.get_agent_llm_settings("personal_memory_keeper")
         return create_agent(
             model=self.model,
             tools=[append_personal_info_item],
-            middleware=[ModelRetryMiddleware(max_retries=2)],
+            middleware=[ModelRetryMiddleware(max_retries=agent_settings.max_retries)],
             system_prompt=PERSONAL_MEMORY_KEEPER_SYSTEM_PROMPT,
             response_format=SpecialistResult,
             context_schema=AgentContext,
