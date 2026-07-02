@@ -544,5 +544,22 @@
     ],
     "annotation": "A guide to the three combinations of Swedish Adjective + Substantive: Quantity, Definite, and Possessive.",
     "path": "adjectives/adjectiv_plus_substantive.md"
+  },
+  {
+    "url": "{HOST}/?view=grammar&cheatsheet=prepositions%2Fprepositioner_med_tid",
+    "tags": [
+      "prepositions",
+      "time",
+      "tidsprepositioner",
+      "för sedan",
+      "om",
+      "i",
+      "på",
+      "per",
+      "duration",
+      "frequency"
+    ],
+    "annotation": "Guide to Swedish time prepositions: för…sedan (past), om (future), i (duration), på (negation & completion time), and om/i/per (frequency).",
+    "path": "prepositions/prepositioner_med_tid.md"
   }
 ]
