@@ -20,11 +20,21 @@ from runestone.schemas.vocabulary_save import VocabularyPrioritizationAction, Wo
 
 @pytest.fixture
 def mock_settings():
+    from runestone.config import AgentLLMSettings, ReasoningLevel
+
     settings = MagicMock(spec=Settings)
     settings.word_keeper_provider = "openrouter"
     settings.word_keeper_model = "test-model"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
+    settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+        provider="openrouter",
+        model="test-model",
+        temperature=0.0,
+        reasoning_level=ReasoningLevel.NONE,
+        timeout_seconds=15.0,
+        max_retries=3,
+    )
     return settings
 
 
@@ -109,7 +119,6 @@ def test_word_keeper_uses_structured_specialist_purpose(mock_settings, mock_chat
     mock_build.assert_called_once_with(
         mock_settings,
         "word_keeper",
-        timeout_seconds=WordKeeperSpecialist.MODEL_TIMEOUT_SECONDS,
     )
 
 

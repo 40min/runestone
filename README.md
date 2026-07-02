@@ -532,6 +532,29 @@ Design docs:
 - `OCR_LLM_PROVIDER`: OCR provider override (`openrouter` keeps OCR on OpenRouter while other service and agent flows use another provider)
 - `OCR_LLM_MODEL_NAME`: OCR model override for the OCR provider
 
+**Chat Agent Configuration:**
+
+Each chat agent resolves a provider, model, temperature, reasoning level, request
+timeout, and retry budget. Provider/model settings use the existing agent
+prefixes. `LearningMemoryKeeper` and `PersonalMemoryKeeper` share the
+`MEMORY_KEEPER_*` provider/model/temperature/reasoning settings but have
+independent timeout and retry budgets.
+
+| Agent | Timeout variable (default) | Retry variable (default) |
+|---|---|---|
+| Teacher | `TEACHER_LLM_TIMEOUT_SECONDS` (`10.0`) | `TEACHER_MAX_RETRIES` (`3`) |
+| Coordinator | `COORDINATOR_LLM_TIMEOUT_SECONDS` (`3.0`) | `COORDINATOR_MAX_RETRIES` (`3`) |
+| WordKeeper | `WORD_KEEPER_LLM_TIMEOUT_SECONDS` (`15.0`) | `WORD_KEEPER_MAX_RETRIES` (`3`) |
+| NewsAgent | `NEWS_AGENT_LLM_TIMEOUT_SECONDS` (`10.0`) | `NEWS_AGENT_MAX_RETRIES` (`3`) |
+| LearningMemoryKeeper | `LEARNING_MEMORY_KEEPER_LLM_TIMEOUT_SECONDS` (`15.0`) | `LEARNING_MEMORY_KEEPER_MAX_RETRIES` (`3`) |
+| PersonalMemoryKeeper | `PERSONAL_MEMORY_KEEPER_LLM_TIMEOUT_SECONDS` (`8.0`) | `PERSONAL_MEMORY_KEEPER_MAX_RETRIES` (`2`) |
+| MemoryMaintainer | `MEMORY_MAINTAINER_LLM_TIMEOUT_SECONDS` (`30.0`) | `MEMORY_MAINTAINER_MAX_RETRIES` (`3`) |
+
+Timeouts must be greater than zero. Retry budgets must be non-negative; `0`
+disables retries after the initial request. The configured values are passed to
+the OpenAI/OpenRouter or Gemini LangChain client. Gemini receives the configured
+timeout exactly, without a hidden minimum-timeout clamp.
+
 **Voice Configuration:**
 - `VOICE_TRANSCRIPTION_PROVIDER`: Voice transcription provider (`openai` or `elevenlabs`, default: `openai`)
 - `VOICE_TRANSCRIPTION_MODEL`: Provider-specific transcription model name (`whisper-1` for OpenAI, `scribe_v2` for ElevenLabs; default: `whisper-1`)

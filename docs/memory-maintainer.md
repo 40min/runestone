@@ -23,6 +23,13 @@ The maintenance task is fire-and-forget. New chat startup does not wait for the
 agent to finish, and students can begin the next session using the memory state
 that existed before the background cleanup completed.
 
+The full background run has an outer watchdog configured by
+`MEMORY_MAINTENANCE_TIMEOUT_SECONDS` (default `240.0`). The value must be
+positive. This budget covers the complete multi-domain maintenance run and is
+independent of `MEMORY_MAINTAINER_LLM_TIMEOUT_SECONDS` (default `30.0`), which
+applies to each maintainer model request. A watchdog timeout is logged and the
+in-memory run registry is cleared.
+
 ## Duplicate Run Guard
 
 `AgentsManager` keeps an in-memory per-user maintenance registry.

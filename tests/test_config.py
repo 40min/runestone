@@ -7,7 +7,13 @@ import pytest
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings
 
-from runestone.config import DEFAULT_GEMINI_SERVICE_LLM_MODEL, DEFAULT_SERVICE_LLM_MODEL, ReasoningLevel, Settings
+from runestone.config import (
+    DEFAULT_GEMINI_SERVICE_LLM_MODEL,
+    DEFAULT_SERVICE_LLM_MODEL,
+    MEMORY_MAINTENANCE_TIMEOUT_SECONDS_DEFAULT,
+    ReasoningLevel,
+    Settings,
+)
 
 
 class TestSettings:
@@ -142,6 +148,89 @@ class TestSettings:
         with patch.dict(os.environ, env_vars, clear=True):
             with pytest.raises(ValidationError):
                 Settings()
+
+    @pytest.mark.parametrize(
+        "env_name",
+        [
+            "TEACHER_LLM_TIMEOUT_SECONDS",
+            "COORDINATOR_LLM_TIMEOUT_SECONDS",
+            "WORD_KEEPER_LLM_TIMEOUT_SECONDS",
+            "NEWS_AGENT_LLM_TIMEOUT_SECONDS",
+            "LEARNING_MEMORY_KEEPER_LLM_TIMEOUT_SECONDS",
+            "PERSONAL_MEMORY_KEEPER_LLM_TIMEOUT_SECONDS",
+            "MEMORY_MAINTAINER_LLM_TIMEOUT_SECONDS",
+            "MEMORY_MAINTENANCE_TIMEOUT_SECONDS",
+        ],
+    )
+    def test_timeout_env_values_must_be_positive(self, env_name):
+        """Timeout environment values must provide a usable positive budget."""
+        env_vars = {
+            "LLM_PROVIDER": "openai",
+            "OPENAI_API_KEY": "test-key",
+            "ALLOWED_ORIGINS": "http://localhost:3000",
+            "DATABASE_URL": "sqlite:///./test.db",
+            "TELEGRAM_BOT_TOKEN": "test-token",
+            "FRONTEND_URL": "http://localhost:5173",
+            "JWT_SECRET_KEY": "secret",
+            "TEACHER_MODEL": "teacher-model",
+            "COORDINATOR_MODEL": "coordinator-model",
+            env_name: "0",
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            with pytest.raises(ValidationError):
+                Settings()
+
+    @pytest.mark.parametrize(
+        "env_name",
+        [
+            "TEACHER_MAX_RETRIES",
+            "COORDINATOR_MAX_RETRIES",
+            "WORD_KEEPER_MAX_RETRIES",
+            "NEWS_AGENT_MAX_RETRIES",
+            "LEARNING_MEMORY_KEEPER_MAX_RETRIES",
+            "PERSONAL_MEMORY_KEEPER_MAX_RETRIES",
+            "MEMORY_MAINTAINER_MAX_RETRIES",
+        ],
+    )
+    def test_retry_env_values_must_be_non_negative(self, env_name):
+        """Retry environment values may disable retries but cannot be negative."""
+        env_vars = {
+            "LLM_PROVIDER": "openai",
+            "OPENAI_API_KEY": "test-key",
+            "ALLOWED_ORIGINS": "http://localhost:3000",
+            "DATABASE_URL": "sqlite:///./test.db",
+            "TELEGRAM_BOT_TOKEN": "test-token",
+            "FRONTEND_URL": "http://localhost:5173",
+            "JWT_SECRET_KEY": "secret",
+            "TEACHER_MODEL": "teacher-model",
+            "COORDINATOR_MODEL": "coordinator-model",
+            env_name: "-1",
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            with pytest.raises(ValidationError):
+                Settings()
+
+    def test_zero_retries_is_valid(self):
+        """A zero retry budget means only the initial request is attempted."""
+        env_vars = {
+            "LLM_PROVIDER": "openai",
+            "OPENAI_API_KEY": "test-key",
+            "ALLOWED_ORIGINS": "http://localhost:3000",
+            "DATABASE_URL": "sqlite:///./test.db",
+            "TELEGRAM_BOT_TOKEN": "test-token",
+            "FRONTEND_URL": "http://localhost:5173",
+            "JWT_SECRET_KEY": "secret",
+            "TEACHER_MODEL": "teacher-model",
+            "COORDINATOR_MODEL": "coordinator-model",
+            "TEACHER_MAX_RETRIES": "0",
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            settings = Settings()
+
+        assert settings.teacher_max_retries == 0
 
     def test_teacher_env_names_configure_teacher_model_settings(self):
         """Test TEACHER_* env names configure teacher model settings."""
@@ -377,3 +466,72 @@ class TestSettings:
         assert test_settings.tts_provider == "openai"
         assert test_settings.elevenlabs_tts_model == "eleven_multilingual_v2"
         assert test_settings.elevenlabs_tts_output_format == "mp3_44100_128"
+
+    def _base_settings(self, **kwargs):
+        """Return a minimal Settings object for get_agent_llm_settings tests."""
+        return Settings.model_construct(
+            llm_provider="openrouter",
+            openai_api_key="key",
+            gemini_api_key="gkey",
+            openrouter_api_key="orkey",
+            allowed_origins="http://localhost",
+            database_url="sqlite:///./test.db",
+            telegram_bot_token="tok",
+            frontend_url="http://localhost:5173",
+            jwt_secret_key="secret",
+            teacher_model="teacher-model",
+            coordinator_model="coordinator-model",
+            **kwargs,
+        )
+
+    def test_get_agent_llm_settings_teacher_returns_configured_timeout_and_retries(self):
+        """teacher timeout and max_retries are passed through to AgentLLMSettings."""
+        s = self._base_settings(
+            teacher_provider="openrouter",
+            teacher_llm_timeout_seconds=20.0,
+            teacher_max_retries=5,
+        )
+        result = s.get_agent_llm_settings("teacher")
+        assert result.timeout_seconds == 20.0
+        assert result.max_retries == 5
+
+    def test_get_agent_llm_settings_coordinator_uses_default_timeout(self):
+        """coordinator uses its built-in default when no env override is given."""
+        from runestone.config import DEFAULT_AGENT_MAX_RETRIES
+
+        s = self._base_settings(coordinator_provider="openrouter")
+        result = s.get_agent_llm_settings("coordinator")
+        assert result.timeout_seconds == 3.0
+        assert result.max_retries == DEFAULT_AGENT_MAX_RETRIES
+
+    def test_get_agent_llm_settings_memory_keeper_variants_have_independent_budgets(self):
+        """learning_memory_keeper and personal_memory_keeper have distinct timeout/retry defaults."""
+        s = self._base_settings(
+            memory_keeper_provider="openrouter",
+            memory_keeper_model="mk-model",
+        )
+        learning = s.get_agent_llm_settings("learning_memory_keeper")
+        personal = s.get_agent_llm_settings("personal_memory_keeper")
+        assert learning.timeout_seconds != personal.timeout_seconds or learning.max_retries != personal.max_retries
+        assert learning.timeout_seconds == 15.0
+        assert personal.timeout_seconds == 8.0
+        assert personal.max_retries == 2
+
+    def test_get_agent_llm_settings_memory_maintainer_has_long_timeout(self):
+        """memory_maintainer gets a long timeout to accommodate multi-step consolidation."""
+        s = self._base_settings(
+            memory_maintainer_provider="openrouter",
+            memory_maintainer_model="mm-model",
+            memory_maintainer_temperature=0.0,
+            memory_maintainer_reasoning_level=ReasoningLevel.NONE,
+        )
+        result = s.get_agent_llm_settings("memory_maintainer")
+        assert result.timeout_seconds == 30.0
+
+    def test_memory_maintenance_timeout_uses_default_and_override(self):
+        """memory-maintenance watchdog timeout is configurable independently of LLM call timeouts."""
+        default_settings = self._base_settings()
+        assert default_settings.memory_maintenance_timeout_seconds == MEMORY_MAINTENANCE_TIMEOUT_SECONDS_DEFAULT
+
+        overridden_settings = self._base_settings(memory_maintenance_timeout_seconds=360.0)
+        assert overridden_settings.memory_maintenance_timeout_seconds == 360.0

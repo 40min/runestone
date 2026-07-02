@@ -2,18 +2,38 @@
 Tests for the LLM factory.
 """
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import SecretStr
 
-from runestone.agents.llm import (
+from runestone.agents.llm import build_chat_model
+from runestone.config import (
     DEFAULT_AGENT_LLM_TIMEOUT_SECONDS,
     DEFAULT_AGENT_MAX_RETRIES,
-    GEMINI_MIN_TIMEOUT_SECONDS,
-    build_chat_model,
+    AgentLLMSettings,
+    ReasoningLevel,
+    Settings,
 )
-from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
+
+
+def _make_settings(
+    provider="openrouter",
+    model="test-chat-model",
+    temperature=0.3,
+    reasoning_level=ReasoningLevel.NONE,
+    timeout_seconds=DEFAULT_AGENT_LLM_TIMEOUT_SECONDS,
+    max_retries=DEFAULT_AGENT_MAX_RETRIES,
+) -> AgentLLMSettings:
+    return AgentLLMSettings(
+        provider=provider,
+        model=model,
+        temperature=temperature,
+        reasoning_level=reasoning_level,
+        timeout_seconds=timeout_seconds,
+        max_retries=max_retries,
+    )
 
 
 @pytest.fixture
@@ -24,12 +44,7 @@ def mock_settings():
     settings.openai_api_key = "test-openai-key"
     settings.gemini_api_key = "test-gemini-key"
     settings.resolve_openrouter_disallowed_providers.return_value = []
-    settings.get_agent_llm_settings.return_value = AgentLLMSettings(
-        provider="openrouter",
-        model="test-chat-model",
-        temperature=0.3,
-        reasoning_level=ReasoningLevel.NONE,
-    )
+    settings.get_agent_llm_settings.return_value = _make_settings()
     return settings
 
 
@@ -52,11 +67,10 @@ def test_build_chat_model_openrouter(mock_settings):
 
 def test_build_chat_model_openai(mock_settings):
     """Test building a model with OpenAI provider."""
-    mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+    mock_settings.get_agent_llm_settings.return_value = _make_settings(
         provider="openai",
         model="test-chat-model",
         temperature=0.1,
-        reasoning_level=ReasoningLevel.NONE,
     )
 
     with patch("runestone.agents.llm.ChatOpenAI") as mock_chat_openai:
@@ -74,11 +88,10 @@ def test_build_chat_model_openai(mock_settings):
 
 def test_build_chat_model_gemini(mock_settings):
     """Test building a model with Gemini provider."""
-    mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+    mock_settings.get_agent_llm_settings.return_value = _make_settings(
         provider="gemini",
         model="gemini-2.5-flash",
         temperature=0.2,
-        reasoning_level=ReasoningLevel.NONE,
     )
 
     with patch("runestone.agents.llm.ChatGoogleGenerativeAI") as mock_chat_gemini:
@@ -97,7 +110,7 @@ def test_build_chat_model_gemini(mock_settings):
 
 def test_build_chat_model_gemini_25_ignores_thinking_level_when_reasoning_configured(mock_settings):
     """Gemini 2.5 should not receive thinking_level."""
-    mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+    mock_settings.get_agent_llm_settings.return_value = _make_settings(
         provider="gemini",
         model="gemini-2.5-flash",
         temperature=0.2,
@@ -113,7 +126,7 @@ def test_build_chat_model_gemini_25_ignores_thinking_level_when_reasoning_config
 
 def test_build_chat_model_gemini_3_adds_thinking_level_when_reasoning_configured(mock_settings):
     """Gemini 3 models should map reasoning_level to thinking_level."""
-    mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+    mock_settings.get_agent_llm_settings.return_value = _make_settings(
         provider="gemini",
         model="gemini-3-flash-preview",
         temperature=0.2,
@@ -129,7 +142,7 @@ def test_build_chat_model_gemini_3_adds_thinking_level_when_reasoning_configured
 
 def test_build_chat_model_adds_openrouter_reasoning_when_configured(mock_settings):
     """Test reasoning is derived from config instead of hardcoded model logic."""
-    mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+    mock_settings.get_agent_llm_settings.return_value = _make_settings(
         provider="openrouter",
         model="google/gemini-3-flash-preview",
         temperature=0.0,
@@ -179,37 +192,54 @@ def test_build_chat_model_supports_memory_maintainer(mock_settings):
     mock_settings.get_agent_llm_settings.assert_called_once_with("memory_maintainer")
 
 
-def test_build_chat_model_allows_timeout_override(mock_settings):
-    """Test build_chat_model allows callers to override the default timeout."""
-    mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+def test_build_chat_model_uses_agent_settings_timeout(mock_settings):
+    """Timeout applied to the LLM client comes from AgentLLMSettings.timeout_seconds."""
+    mock_settings.get_agent_llm_settings.return_value = _make_settings(
         provider="openai",
         model="gpt-4o-mini",
         temperature=0.2,
-        reasoning_level=ReasoningLevel.NONE,
+        timeout_seconds=3.0,
     )
 
     with patch("runestone.agents.llm.ChatOpenAI") as mock_chat_openai:
-        build_chat_model(mock_settings, "teacher", timeout_seconds=3.0)
+        build_chat_model(mock_settings, "coordinator")
 
         call_kwargs = mock_chat_openai.call_args[1]
         assert call_kwargs["timeout"] == 3.0
-        assert call_kwargs["max_retries"] == DEFAULT_AGENT_MAX_RETRIES
 
 
-def test_build_chat_model_clamps_gemini_timeout_to_provider_minimum(mock_settings):
-    """Test Gemini timeouts are clamped to the provider minimum deadline."""
-    mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings(
+def test_build_chat_model_uses_agent_settings_max_retries(mock_settings):
+    """max_retries applied to the LLM client comes from AgentLLMSettings.max_retries."""
+    mock_settings.get_agent_llm_settings.return_value = _make_settings(
+        provider="openai",
+        model="gpt-4o-mini",
+        temperature=0.2,
+        max_retries=5,
+    )
+
+    with patch("runestone.agents.llm.ChatOpenAI") as mock_chat_openai:
+        build_chat_model(mock_settings, "coordinator")
+
+        call_kwargs = mock_chat_openai.call_args[1]
+        assert call_kwargs["max_retries"] == 5
+
+
+def test_build_chat_model_uses_configured_gemini_timeout(mock_settings, caplog):
+    """Gemini receives and logs the configured per-agent timeout."""
+    mock_settings.get_agent_llm_settings.return_value = _make_settings(
         provider="gemini",
         model="gemini-2.5-flash",
         temperature=0.2,
-        reasoning_level=ReasoningLevel.NONE,
+        timeout_seconds=3.0,
     )
 
     with patch("runestone.agents.llm.ChatGoogleGenerativeAI") as mock_chat_gemini:
-        build_chat_model(mock_settings, "teacher", timeout_seconds=3.0)
+        with caplog.at_level(logging.DEBUG, logger="runestone.agents.llm"):
+            build_chat_model(mock_settings, "teacher")
 
         call_kwargs = mock_chat_gemini.call_args[1]
-        assert call_kwargs["timeout"] == GEMINI_MIN_TIMEOUT_SECONDS
+        assert call_kwargs["timeout"] == 3.0
+        assert "timeout=3.0s" in caplog.text
 
 
 def test_build_chat_model_unsupported_provider(mock_settings):
@@ -219,6 +249,8 @@ def test_build_chat_model_unsupported_provider(mock_settings):
         model="test-chat-model",
         temperature=0.0,
         reasoning_level=ReasoningLevel.NONE,
+        timeout_seconds=10.0,
+        max_retries=3,
     )
     with pytest.raises(ValueError, match="Unsupported chat provider: unsupported"):
         build_chat_model(mock_settings, "teacher")
@@ -231,12 +263,7 @@ def test_build_chat_model_missing_api_key(mock_settings):
         ("openrouter", "openrouter_api_key"),
         ("gemini", "gemini_api_key"),
     ):
-        mock_settings.get_agent_llm_settings.return_value = AgentLLMSettings(
-            provider=provider_name,
-            model="test-chat-model",
-            temperature=0.0,
-            reasoning_level=ReasoningLevel.NONE,
-        )
+        mock_settings.get_agent_llm_settings.return_value = _make_settings(provider=provider_name)
         setattr(mock_settings, attr_name, None)
         with pytest.raises(ValueError, match=f"API key for {provider_name} is not configured"):
             build_chat_model(mock_settings, "teacher")

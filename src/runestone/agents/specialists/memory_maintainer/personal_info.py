@@ -211,14 +211,13 @@ class PlannedGroupResolution:
 class PersonalInfoMemoryMaintainer(BaseSpecialist):
     """Background specialist that reconciles raw personal-info facts."""
 
-    MODEL_TIMEOUT_SECONDS = 30.0
     SUMMARY_MAX_CHARS = PERSONAL_INFO_SUMMARY_MAX_CHARS
     SUMMARY_SENTENCE_BOUNDARY_MIN_RATIO = 0.8
 
     def __init__(self, settings: Settings):
         super().__init__(name="memory_maintainer")
         self.settings = settings
-        self.model = build_chat_model(settings, "memory_maintainer", timeout_seconds=self.MODEL_TIMEOUT_SECONDS)
+        self.model = build_chat_model(settings, "memory_maintainer")
 
     async def run(self, context: SpecialistContext) -> SpecialistResult:
         """Run the personal-info maintainer through the shared specialist contract."""

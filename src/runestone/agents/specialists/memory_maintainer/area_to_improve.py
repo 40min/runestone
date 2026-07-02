@@ -251,12 +251,10 @@ class PlannedGroup:
 class AreaToImproveMemoryMaintainer(BaseSpecialist):
     """Background specialist that consolidates start-of-session learning-focus memory."""
 
-    MODEL_TIMEOUT_SECONDS = 30.0
-
     def __init__(self, settings: Settings):
         super().__init__(name="memory_maintainer")
         self.settings = settings
-        self.model = build_chat_model(settings, "memory_maintainer", timeout_seconds=self.MODEL_TIMEOUT_SECONDS)
+        self.model = build_chat_model(settings, "memory_maintainer")
         logger.info(
             "[agents:memorymaintainer] Initialized AreaToImproveMemoryMaintainer with provider=%s, model=%s",
             settings.memory_maintainer_provider,

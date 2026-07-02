@@ -11,7 +11,7 @@ from enum import Enum
 from typing import Literal, Optional
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings
 
 DEFAULT_SERVICE_LLM_MODEL = "gpt-5.4-nano"
@@ -37,6 +37,12 @@ class ReasoningLevel(str, Enum):
     HIGH = "high"
 
 
+# Hard-coded baseline values – agents that don't override these env vars get them.
+DEFAULT_AGENT_LLM_TIMEOUT_SECONDS = 10.0
+DEFAULT_AGENT_MAX_RETRIES = 3
+MEMORY_MAINTENANCE_TIMEOUT_SECONDS_DEFAULT = 240.0
+
+
 class AgentLLMSettings(BaseModel):
     """Resolved LLM settings for a specific agent."""
 
@@ -44,6 +50,8 @@ class AgentLLMSettings(BaseModel):
     model: str
     temperature: float
     reasoning_level: ReasoningLevel
+    timeout_seconds: float
+    max_retries: int
 
 
 class Settings(BaseSettings):
@@ -109,37 +117,57 @@ class Settings(BaseSettings):
     teacher_model: str
     teacher_temperature: float = 1.0
     teacher_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
+    teacher_llm_timeout_seconds: float = Field(default=10.0, gt=0)
+    teacher_max_retries: int = Field(default=DEFAULT_AGENT_MAX_RETRIES, ge=0)
 
     coordinator_provider: Optional[Literal["openrouter", "openai", "gemini"]] = None
     coordinator_model: str
     coordinator_temperature: float = 0.0
     coordinator_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
+    coordinator_llm_timeout_seconds: float = Field(default=3.0, gt=0)
+    coordinator_max_retries: int = Field(default=DEFAULT_AGENT_MAX_RETRIES, ge=0)
 
     word_keeper_provider: Optional[Literal["openrouter", "openai", "gemini"]] = None
     word_keeper_model: Optional[str] = None
     word_keeper_temperature: float = 0.0
     word_keeper_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
+    word_keeper_llm_timeout_seconds: float = Field(default=15.0, gt=0)
+    word_keeper_max_retries: int = Field(default=DEFAULT_AGENT_MAX_RETRIES, ge=0)
 
     news_agent_provider: Optional[Literal["openrouter", "openai", "gemini"]] = None
     news_agent_model: Optional[str] = None
     news_agent_temperature: float = 0.0
     news_agent_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
+    news_agent_llm_timeout_seconds: float = Field(default=10.0, gt=0)
+    news_agent_max_retries: int = Field(default=DEFAULT_AGENT_MAX_RETRIES, ge=0)
 
     memory_keeper_provider: Optional[Literal["openrouter", "openai", "gemini"]] = None
     memory_keeper_model: Optional[str] = None
     memory_keeper_temperature: float = 0.0
     memory_keeper_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
+    # learning_memory_keeper and personal_memory_keeper share the memory_keeper model/provider
+    # but have their own timeout and retry budgets.
+    learning_memory_keeper_llm_timeout_seconds: float = Field(default=15.0, gt=0)
+    learning_memory_keeper_max_retries: int = Field(default=3, ge=0)
+    personal_memory_keeper_llm_timeout_seconds: float = Field(default=8.0, gt=0)
+    personal_memory_keeper_max_retries: int = Field(default=2, ge=0)
 
     memory_maintainer_provider: Optional[Literal["openrouter", "openai", "gemini"]] = None
     memory_maintainer_model: Optional[str] = None
     memory_maintainer_temperature: Optional[float] = None
     memory_maintainer_reasoning_level: Optional[ReasoningLevel] = None
+    memory_maintainer_llm_timeout_seconds: float = Field(default=30.0, gt=0)
+    memory_maintainer_max_retries: int = Field(default=DEFAULT_AGENT_MAX_RETRIES, ge=0)
 
     agent_persona: str = "default"
 
     # Chat History Configuration
     chat_history_retention_days: int = 7
     memory_mastered_cleanup_days: int = 3
+    memory_maintenance_timeout_seconds: float = Field(
+        default=MEMORY_MAINTENANCE_TIMEOUT_SECONDS_DEFAULT,
+        gt=0,
+    )
 
     # Image Upload Configuration
     chat_image_max_size_mb: int = 10
@@ -248,6 +276,8 @@ class Settings(BaseSettings):
                 model=self.teacher_model,
                 temperature=self.teacher_temperature,
                 reasoning_level=self.teacher_reasoning_level,
+                timeout_seconds=self.teacher_llm_timeout_seconds,
+                max_retries=self.teacher_max_retries,
             )
 
         if agent_name == "coordinator":
@@ -256,6 +286,8 @@ class Settings(BaseSettings):
                 model=self.coordinator_model,
                 temperature=self.coordinator_temperature,
                 reasoning_level=self.coordinator_reasoning_level,
+                timeout_seconds=self.coordinator_llm_timeout_seconds,
+                max_retries=self.coordinator_max_retries,
             )
 
         if agent_name == "word_keeper":
@@ -264,6 +296,8 @@ class Settings(BaseSettings):
                 model=self.word_keeper_model,
                 temperature=self.word_keeper_temperature,
                 reasoning_level=self.word_keeper_reasoning_level,
+                timeout_seconds=self.word_keeper_llm_timeout_seconds,
+                max_retries=self.word_keeper_max_retries,
             )
 
         if agent_name == "news_agent":
@@ -272,14 +306,19 @@ class Settings(BaseSettings):
                 model=self.news_agent_model,
                 temperature=self.news_agent_temperature,
                 reasoning_level=self.news_agent_reasoning_level,
+                timeout_seconds=self.news_agent_llm_timeout_seconds,
+                max_retries=self.news_agent_max_retries,
             )
 
         if agent_name == "memory_keeper":
+            # memory_keeper is an internal alias; resolved via memory_keeper_* fields.
             return AgentLLMSettings(
                 provider=self.memory_keeper_provider,
                 model=self.memory_keeper_model,
                 temperature=self.memory_keeper_temperature,
                 reasoning_level=self.memory_keeper_reasoning_level,
+                timeout_seconds=self.learning_memory_keeper_llm_timeout_seconds,
+                max_retries=self.learning_memory_keeper_max_retries,
             )
 
         if agent_name == "learning_memory_keeper":
@@ -288,6 +327,8 @@ class Settings(BaseSettings):
                 model=self.memory_keeper_model,
                 temperature=self.memory_keeper_temperature,
                 reasoning_level=self.memory_keeper_reasoning_level,
+                timeout_seconds=self.learning_memory_keeper_llm_timeout_seconds,
+                max_retries=self.learning_memory_keeper_max_retries,
             )
 
         if agent_name == "personal_memory_keeper":
@@ -296,6 +337,8 @@ class Settings(BaseSettings):
                 model=self.memory_keeper_model,
                 temperature=self.memory_keeper_temperature,
                 reasoning_level=self.memory_keeper_reasoning_level,
+                timeout_seconds=self.personal_memory_keeper_llm_timeout_seconds,
+                max_retries=self.personal_memory_keeper_max_retries,
             )
 
         if agent_name == "memory_maintainer":
@@ -304,6 +347,8 @@ class Settings(BaseSettings):
                 model=self.memory_maintainer_model,
                 temperature=self.memory_maintainer_temperature,
                 reasoning_level=self.memory_maintainer_reasoning_level,
+                timeout_seconds=self.memory_maintainer_llm_timeout_seconds,
+                max_retries=self.memory_maintainer_max_retries,
             )
 
         raise ValueError(f"Unsupported agent name: {agent_name}")
