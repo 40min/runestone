@@ -9,6 +9,8 @@ from runestone.agents.specialists.memory_maintainer.personal_info import (
     PERSONAL_INFO_BAKE_GROUP_PROMPT,
     PERSONAL_INFO_BUCKET_TOPICS_PROMPT,
     PERSONAL_INFO_REVIEW_BUCKET_PROMPT,
+    PERSONAL_INFO_SUMMARY_MAX_CHARS,
+    PERSONAL_INFO_SUMMARY_PROMPT,
     BakeGroupPlan,
     BucketReviewGroup,
     BucketReviewPlan,
@@ -185,6 +187,38 @@ async def test_personal_info_maintainer_injects_current_datetime_into_bucket_rev
     assert '"current_datetime": "2026-06-14T10:30:00+00:00"' in bake_messages[1].content
     assert "Current datetime: 2026-06-14T10:30:00+00:00" in summary_messages[0].content
     assert '"current_datetime": "2026-06-14T10:30:00+00:00"' in summary_messages[1].content
+
+
+def test_personal_info_summary_normalization_caps_long_output_deterministically():
+    long_sentence = "A" * (PERSONAL_INFO_SUMMARY_MAX_CHARS + 25)
+
+    normalized = PersonalInfoMemoryMaintainer._normalize_summary_text(f"  {long_sentence}\n\n")
+
+    assert normalized is not None
+    assert len(normalized) == PERSONAL_INFO_SUMMARY_MAX_CHARS
+    assert normalized.endswith("...")
+
+
+def test_personal_info_summary_normalization_prefers_sentence_boundary_when_available():
+    sentence = "Andrei is a B1 Swedish learner who prefers independent practice. "
+    summary = sentence * 20
+
+    normalized = PersonalInfoMemoryMaintainer._normalize_summary_text(summary)
+
+    assert normalized is not None
+    assert len(normalized) <= PERSONAL_INFO_SUMMARY_MAX_CHARS
+    assert normalized.endswith(".")
+
+
+def test_personal_info_summary_normalization_skips_early_sentence_boundary():
+    early_sentence = "A" * int(PERSONAL_INFO_SUMMARY_MAX_CHARS * 0.7) + ". "
+    trailing_text = "B" * PERSONAL_INFO_SUMMARY_MAX_CHARS
+
+    normalized = PersonalInfoMemoryMaintainer._normalize_summary_text(early_sentence + trailing_text)
+
+    assert normalized is not None
+    assert len(normalized) == PERSONAL_INFO_SUMMARY_MAX_CHARS
+    assert normalized.endswith("...")
 
 
 @pytest.mark.anyio
@@ -432,3 +466,5 @@ def test_personal_info_prompts_require_bucket_review_and_baking_contract():
     assert "group the provided `personal_info` rows into candidate topic buckets" in PERSONAL_INFO_BUCKET_TOPICS_PROMPT
     assert "reason chronologically" in PERSONAL_INFO_REVIEW_BUCKET_PROMPT
     assert "produce one final active fact or no surviving fact" in PERSONAL_INFO_BAKE_GROUP_PROMPT
+    assert f"at most {PERSONAL_INFO_SUMMARY_MAX_CHARS} characters" in PERSONAL_INFO_SUMMARY_PROMPT
+    assert "Omit low-value or overly narrow details" in PERSONAL_INFO_SUMMARY_PROMPT

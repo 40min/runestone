@@ -21,6 +21,8 @@ from runestone.core.exceptions import MemoryItemNotFoundError, PermissionDeniedE
 
 logger = logging.getLogger(__name__)
 
+PERSONAL_INFO_SUMMARY_MAX_CHARS = 690
+
 PERSONAL_INFO_BUCKET_TOPICS_PROMPT = """
 You are Bjorn, an internal learner-memory maintenance specialist.
 You do not interact with the student.
@@ -110,7 +112,7 @@ Rules:
 Return valid JSON matching the provided schema.
 """
 
-PERSONAL_INFO_SUMMARY_PROMPT = """
+PERSONAL_INFO_SUMMARY_PROMPT = f"""
 You are Bjorn, an internal learner-memory maintenance specialist.
 You do not interact with the student.
 
@@ -121,10 +123,18 @@ Rules:
 - The supplied list already represents the final active fact set for this run, even if some
   rows still carry a pre-apply workflow status such as `correction`.
 - Write a compact third-person summary for internal teacher use across future chats.
+- Keep only durable context that is broadly useful across future teacher turns.
 - Keep it factual and stable. Do not include speculation.
 - Exclude transient expired daily-state details such as "today", "tomorrow", or expired
   date-specific work/rest status by comparing facts against the provided current datetime.
 - Mention the student's current goals, preferences, or background only when present in the source facts.
+- Prefer major stable teaching context such as proficiency, long-term goals, language preference,
+  enduring study preferences, and durable background.
+- Omit low-value or overly narrow details that are not generally useful in future chats, such as
+  one-off assignment constraints, temporary formatting requirements, narrow exercise tactics, or
+  flavor facts that do not materially change how the teacher should teach.
+- Do not try to include every fact when a shorter summary is clearer.
+- The final summary must be at most {PERSONAL_INFO_SUMMARY_MAX_CHARS} characters.
 - Omit raw ids, keys, and status labels.
 - If the active facts are empty, return an empty summary.
 
@@ -202,6 +212,8 @@ class PersonalInfoMemoryMaintainer(BaseSpecialist):
     """Background specialist that reconciles raw personal-info facts."""
 
     MODEL_TIMEOUT_SECONDS = 30.0
+    SUMMARY_MAX_CHARS = PERSONAL_INFO_SUMMARY_MAX_CHARS
+    SUMMARY_SENTENCE_BOUNDARY_MIN_RATIO = 0.8
 
     def __init__(self, settings: Settings):
         super().__init__(name="memory_maintainer")
@@ -450,7 +462,7 @@ class PersonalInfoMemoryMaintainer(BaseSpecialist):
                     artifacts["summary"] = "summary_failed"
                     artifacts["step_errors"].append("summary_failed")
                     return self._error_result("Failed to synthesize personal_info summary", artifacts)
-                summary_text = summary_plan.summary.strip() or None
+                summary_text = self._normalize_summary_text(summary_plan.summary)
             artifacts["summary_preview"] = summary_text
 
             if dry_run:
@@ -921,6 +933,32 @@ class PersonalInfoMemoryMaintainer(BaseSpecialist):
             status=AgentPersonalInfoStatus.ACTIVE.value,
             status_changed_at=self._current_datetime(),
         )
+
+    @classmethod
+    def _normalize_summary_text(cls, summary: str | None) -> str | None:
+        """Normalize and cap the persisted teacher-memory summary deterministically."""
+        if not isinstance(summary, str):
+            return None
+
+        normalized = " ".join(summary.split()).strip()
+        if not normalized:
+            return None
+        if len(normalized) <= cls.SUMMARY_MAX_CHARS:
+            return normalized
+
+        trimmed = normalized[: cls.SUMMARY_MAX_CHARS].rstrip()
+        sentence_end = max(trimmed.rfind("."), trimmed.rfind("!"), trimmed.rfind("?"))
+        if sentence_end >= int(cls.SUMMARY_MAX_CHARS * cls.SUMMARY_SENTENCE_BOUNDARY_MIN_RATIO):
+            trimmed = trimmed[: sentence_end + 1].rstrip()
+        else:
+            trimmed = trimmed[: cls.SUMMARY_MAX_CHARS - 3].rstrip() + "..."
+
+        logger.warning(
+            "[agents:memorymaintainer] Truncated personal_info summary from %s to %s chars",
+            len(normalized),
+            len(trimmed),
+        )
+        return trimmed or None
 
     @staticmethod
     def _serialize_datetime(value: Any) -> str | None:
