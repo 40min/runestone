@@ -495,6 +495,29 @@ class TestSettings:
         assert result.timeout_seconds == 20.0
         assert result.max_retries == 5
 
+    def test_get_agent_llm_settings_teacher_backup_returns_configured_values(self):
+        """teacher backup provider, model, timeout, and max_retries are passed through to AgentLLMSettings."""
+        s = self._base_settings(
+            teacher_backup_provider="gemini",
+            teacher_backup_model="gemini-2.5-flash",
+            teacher_backup_temperature=1.0,
+            teacher_backup_llm_timeout_seconds=5.0,
+            teacher_backup_max_retries=1,
+        )
+        result = s.get_agent_llm_settings("teacher_backup")
+        assert result.provider == "gemini"
+        assert result.model == "gemini-2.5-flash"
+        assert result.temperature == 1.0
+        assert result.timeout_seconds == 5.0
+        assert result.max_retries == 1
+
+    def test_get_agent_llm_settings_teacher_backup_rejects_disabled_profile(self):
+        """Resolving the optional backup profile requires an explicitly configured model."""
+        s = self._base_settings(teacher_backup_provider="gemini", teacher_backup_model=None)
+
+        with pytest.raises(ValueError, match="Teacher backup model is not configured"):
+            s.get_agent_llm_settings("teacher_backup")
+
     def test_get_agent_llm_settings_coordinator_uses_default_timeout(self):
         """coordinator uses its built-in default when no env override is given."""
         from runestone.config import DEFAULT_AGENT_MAX_RETRIES

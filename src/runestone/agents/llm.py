@@ -1,27 +1,15 @@
 """LLM factory for agent models."""
 
 import logging
-from typing import Literal
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
-from runestone.config import ReasoningLevel, Settings
+from runestone.config import AgentName, ReasoningLevel, Settings
 
 logger = logging.getLogger(__name__)
-
-AgentName = Literal[
-    "teacher",
-    "coordinator",
-    "word_keeper",
-    "news_agent",
-    "memory_keeper",
-    "memory_maintainer",
-    "learning_memory_keeper",
-    "personal_memory_keeper",
-]
 
 
 def build_chat_model(settings: Settings, agent_name: AgentName) -> BaseChatModel:

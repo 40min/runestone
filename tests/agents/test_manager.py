@@ -28,6 +28,8 @@ def mock_settings():
     settings = MagicMock(spec=Settings)
     settings.teacher_provider = "openrouter"
     settings.teacher_model = "test-model"
+    settings.teacher_backup_provider = "gemini"
+    settings.teacher_backup_model = None
     settings.coordinator_model = "test-coordinator-model"
     settings.coordinator_provider = "openrouter"
     settings.word_keeper_provider = "openrouter"

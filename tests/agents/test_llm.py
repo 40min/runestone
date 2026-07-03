@@ -192,6 +192,23 @@ def test_build_chat_model_supports_memory_maintainer(mock_settings):
     mock_settings.get_agent_llm_settings.assert_called_once_with("memory_maintainer")
 
 
+def test_build_chat_model_supports_teacher_backup(mock_settings):
+    """Test teacher_backup uses the standard per-agent config path."""
+    with patch("runestone.agents.llm.ChatOpenAI"):
+        build_chat_model(mock_settings, "teacher_backup")
+
+    mock_settings.get_agent_llm_settings.assert_called_once_with("teacher_backup")
+
+
+def test_build_chat_model_teacher_backup_requires_provider_api_key(mock_settings):
+    """An enabled backup profile requires the API key for its selected provider."""
+    mock_settings.get_agent_llm_settings.return_value = _make_settings(provider="gemini")
+    mock_settings.gemini_api_key = None
+
+    with pytest.raises(ValueError, match="API key for gemini is not configured"):
+        build_chat_model(mock_settings, "teacher_backup")
+
+
 def test_build_chat_model_uses_agent_settings_timeout(mock_settings):
     """Timeout applied to the LLM client comes from AgentLLMSettings.timeout_seconds."""
     mock_settings.get_agent_llm_settings.return_value = _make_settings(
