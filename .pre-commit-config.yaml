@@ -155,3 +155,10 @@ repos:
         additional_dependencies: ["safety==3.8.1"]
         pass_filenames: false
         files: ^(pyproject\.toml|uv\.lock|requirements.*\.txt)$
+
+      - id: frontend-lockfile-check
+        name: frontend-lockfile-check
+        language: python
+        entry: python scripts/check_frontend_lockfile_sync.py
+        pass_filenames: false
+        files: ^frontend/package(-lock)?\.json$

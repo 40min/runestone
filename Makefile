@@ -3,7 +3,7 @@
 
 .PHONY: help setup clean info
 .PHONY: install install-dev install-backend install-frontend install-all
-.PHONY: lint lint-check backend-lint frontend-lint frontend-lockfile-check security-check
+.PHONY: lint lint-check backend-lint frontend-lint frontend-lockfile-check frontend-lockfile-sync security-check
 .PHONY: test test-coverage backend-test frontend-test
 .PHONY: run run-backend run-frontend run-dev run-recall load-vocab
 .PHONY: test-prompts-ocr test-prompts-analysis test-prompts-vocabulary test-grammar-search
@@ -39,6 +39,7 @@ help:
 	@echo "  backend-lint     - Run backend linting and formatting"
 	@echo "  frontend-lint    - Run frontend linting"
 	@echo "  frontend-lockfile-check - Verify frontend package-lock.json matches package.json"
+	@echo "  frontend-lockfile-sync - Sync/regenerate frontend package-lock.json"
 	@echo "  security-check   - Run security-focused pre-commit hooks across the repo"
 	@echo ""
 	@echo "Testing:"
@@ -133,6 +134,11 @@ install-backend:
 install-frontend:
 	@echo "📦 Installing frontend dependencies..."
 	@cd frontend && npm install
+
+# Regenerate package-lock.json to match package.json dependencies
+frontend-lockfile-sync:
+	@echo "🔄 Syncing frontend package-lock.json with package.json..."
+	@cd frontend && npm install --package-lock-only
 
 # Install all dependencies concurrently
 install-all:
@@ -318,7 +324,7 @@ dev-full: install-dev lint test-coverage
 	@echo "✅ Full development workflow complete!"
 
 # Check readiness before commit (linting, tests, and frontend build dry-run)
-check-readiness: lint-check test
+check-readiness: lint-check test frontend-lockfile-check
 	@echo "🏗️  Dry run for frontend build..."
 	@cd frontend && npm run build
 	@echo "✅ Readiness check complete! Code is ready for commit."
