@@ -162,3 +162,4 @@ repos:
         entry: python scripts/check_frontend_lockfile_sync.py
         pass_filenames: false
         files: ^frontend/package(-lock)?\.json$
+        stages: [pre-push]
