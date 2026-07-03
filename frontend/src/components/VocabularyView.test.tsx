@@ -34,6 +34,7 @@ vi.mock('../hooks/useVocabulary', () => ({
     deleteVocabularyItem: vi.fn(),
     lookupVocabularyItem: vi.fn(),
   })),
+  useVocabularyDistribution: vi.fn(() => ({ data: null, loading: false, error: null })),
 }));
 
 // Mock the useApi hook
@@ -88,6 +89,16 @@ vi.mock("./AddEditVocabularyModal", () => ({
       </div>
     ) : null,
 }));
+
+// Track open prop of VocabularyStatsModal for assertion
+let lastStatsModalOpen = false;
+vi.mock("./VocabularyStatsModal", () => ({
+  default: ({ open, onClose }: { open: boolean; onClose: () => void }) => {
+    lastStatsModalOpen = open;
+    return open ? <div data-testid="stats-modal"><button onClick={onClose}>Close Stats</button></div> : null;
+  },
+}));
+
 
 import VocabularyView from "./VocabularyView";
 import { useRecentVocabulary, useVocabularyStats } from '../hooks/useVocabulary';
@@ -1090,6 +1101,76 @@ describe("VocabularyView", () => {
         word_phrase: "hej",
         translation: "hello",
       })
+    );
+  });
+});
+describe("VocabularyView — stats button", () => {
+  beforeEach(() => {
+    lastStatsModalOpen = false;
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [],
+      loading: false,
+      loadingMore: false,
+      error: null,
+      refetch: vi.fn(),
+      loadMore: vi.fn(),
+      hasMore: false,
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal: vi.fn(),
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn(),
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
+    });
+    mockUseVocabularyStats.mockReturnValue({
+      stats: {
+        words_in_learn_count: 0,
+        words_skipped_count: 0,
+        overall_words_count: 0,
+        words_prioritized_count: 0,
+      },
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+  });
+
+  it("renders the stats icon button with accessible label", () => {
+    renderWithAuthProvider(<VocabularyView />);
+    expect(
+      screen.getByRole("button", { name: "Open vocabulary statistics" })
+    ).toBeInTheDocument();
+  });
+
+  it("opens the stats modal when the stats button is clicked", async () => {
+    renderWithAuthProvider(<VocabularyView />);
+    expect(screen.queryByTestId("stats-modal")).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open vocabulary statistics" })
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("stats-modal")).toBeInTheDocument();
+    });
+    expect(lastStatsModalOpen).toBe(true);
+  });
+
+  it("closes the stats modal when onClose is called", async () => {
+    renderWithAuthProvider(<VocabularyView />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open vocabulary statistics" })
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("stats-modal")).toBeInTheDocument()
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Close Stats" }));
+    await waitFor(() =>
+      expect(screen.queryByTestId("stats-modal")).not.toBeInTheDocument()
     );
   });
 });

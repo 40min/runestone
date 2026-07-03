@@ -565,3 +565,29 @@ class VocabularyRepository:
         result = await self.db.execute(stmt)
         stats = result.mappings().one()
         return VocabularyStatsResponse(**stats)
+
+    async def get_vocabulary_distribution(self, user_id: int) -> tuple[dict[int, int], dict[str, int]]:
+        """Aggregate active vocabulary counts by priority and learned-times bucket."""
+        active_filter = and_(Vocabulary.user_id == user_id, Vocabulary.in_learn.is_(True))
+
+        priority_stmt = (
+            select(Vocabulary.priority_learn, func.count(Vocabulary.id).label("cnt"))
+            .where(active_filter)
+            .group_by(Vocabulary.priority_learn)
+        )
+        priority_result = await self.db.execute(priority_stmt)
+        priority_counts: dict[int, int] = {row.priority_learn: row.cnt for row in priority_result.all()}
+
+        bucket_expr = case(
+            (Vocabulary.learned_times == 0, "Never"),
+            (Vocabulary.learned_times <= 10, "1\u201310"),
+            (Vocabulary.learned_times <= 30, "11\u201330"),
+            else_=">30",
+        ).label("bucket")
+        learned_stmt = (
+            select(bucket_expr, func.count(Vocabulary.id).label("cnt")).where(active_filter).group_by(bucket_expr)
+        )
+        learned_result = await self.db.execute(learned_stmt)
+        learned_counts: dict[str, int] = {row.bucket: row.cnt for row in learned_result.all()}
+
+        return priority_counts, learned_counts

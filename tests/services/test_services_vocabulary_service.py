@@ -1442,3 +1442,66 @@ class TestVocabularyService:
         actions = {result1[0]["action"], result2[0]["action"]}
         assert "created" in actions
         assert actions.issubset({"created", "already_prioritized", "prioritized", "restored"})
+
+
+class TestGetVocabularyDistribution:
+    """Tests for VocabularyService.get_vocabulary_distribution."""
+
+    pytestmark = pytest.mark.anyio
+
+    @pytest.fixture(autouse=True)
+    async def _seed_user(self, db_session):
+        """Seed a user so FK constraints are satisfied."""
+        user = UserModel(
+            name="Dist",
+            surname="User",
+            email="dist@example.com",
+            hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYQmP7XzL6",
+            timezone="UTC",
+            pages_recognised_count=0,
+        )
+        db_session.add(user)
+        await db_session.commit()
+        self._user_id = user.id
+
+    @pytest.fixture
+    def service(self, vocabulary_repository):
+        """Create a VocabularyService instance."""
+        from runestone.config import Settings
+
+        mock_settings = Mock(spec=Settings)
+        mock_settings.llm_provider = "openai"
+        mock_llm_model = AsyncMock()
+        mock_llm_model.ainvoke.return_value = AIMessage(content='{"translation": "mock"}')
+        return VocabularyService(vocabulary_repository, mock_settings, mock_llm_model)
+
+    async def test_delegates_to_repo(self, service, vocabulary_repository):
+        """Service completes and labels the repository's sparse aggregate data."""
+        from runestone.constants import VOCABULARY_PRIORITY_LABELS
+
+        vocabulary_repository.get_vocabulary_distribution = AsyncMock(
+            return_value=({0: 2, 9: 1}, {"Never": 3, ">30": 1})
+        )
+
+        result = await service.get_vocabulary_distribution(user_id=self._user_id)
+
+        assert [item.priority for item in result.priority_distribution] == list(range(10))
+        assert [item.label for item in result.priority_distribution] == [
+            VOCABULARY_PRIORITY_LABELS[priority] for priority in range(10)
+        ]
+        assert [item.count for item in result.priority_distribution] == [2, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+        assert [item.label for item in result.learned_times_distribution] == [
+            "Never",
+            "1\u201310",
+            "11\u201330",
+            ">30",
+        ]
+        assert [item.count for item in result.learned_times_distribution] == [3, 0, 0, 1]
+        vocabulary_repository.get_vocabulary_distribution.assert_awaited_once_with(self._user_id)
+
+    async def test_repo_exception_propagates(self, service, vocabulary_repository):
+        """RuntimeError raised by the repo propagates out of the service unchanged."""
+        vocabulary_repository.get_vocabulary_distribution = AsyncMock(side_effect=RuntimeError("db failure"))
+
+        with pytest.raises(RuntimeError, match="db failure"):
+            await service.get_vocabulary_distribution(user_id=self._user_id)

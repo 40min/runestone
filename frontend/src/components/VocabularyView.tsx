@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Box, IconButton, Tooltip, Typography } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
+import BarChartIcon from "@mui/icons-material/BarChart";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import { useRecentVocabulary, useVocabularyStats } from "../hooks/useVocabulary";
 import {
@@ -13,6 +14,7 @@ import {
   CustomButton,
 } from "./ui";
 import AddEditVocabularyModal from "./AddEditVocabularyModal";
+import VocabularyStatsModal from "./VocabularyStatsModal";
 
 const statCards = [
   { key: "words_in_learn_count", label: "Words Studied" },
@@ -29,6 +31,7 @@ const VocabularyView: React.FC = () => {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [boostingItemIds, setBoostingItemIds] = useState<Set<number>>(new Set());
   const [boostError, setBoostError] = useState<string | null>(null);
+  const [statsModalOpen, setStatsModalOpen] = useState(false);
   const boostingItemIdsRef = useRef<Set<number>>(new Set());
   const {
     stats,
@@ -163,7 +166,34 @@ const VocabularyView: React.FC = () => {
 
   return (
     <Box sx={{ py: 8 }}>
-      <SectionTitle>Recent Vocabulary</SectionTitle>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 2,
+          mb: 4,
+        }}
+      >
+        <SectionTitle marginBottom={0}>Recent Vocabulary</SectionTitle>
+        <Tooltip title="Vocabulary statistics">
+          <IconButton
+            aria-label="Open vocabulary statistics"
+            onClick={() => setStatsModalOpen(true)}
+            sx={{
+              color: "rgba(255,255,255,0.6)",
+              border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: 1.5,
+              "&:hover": {
+                color: "white",
+                borderColor: "rgba(255,255,255,0.35)",
+              },
+            }}
+          >
+            <BarChartIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
 
       {statsError ? (
         <ErrorAlert message={statsError} />
@@ -433,6 +463,10 @@ const VocabularyView: React.FC = () => {
         onDelete={handleDelete}
         onLookup={lookupVocabularyItem}
         onLookupFound={openEditModal}
+      />
+      <VocabularyStatsModal
+        open={statsModalOpen}
+        onClose={() => setStatsModalOpen(false)}
       />
     </Box>
   );

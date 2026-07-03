@@ -19,6 +19,7 @@ from runestone.api.schemas import (
     GrammarSearchResult,
     OCRResult,
     Vocabulary,
+    VocabularyDistributionResponse,
     VocabularyImproveRequest,
     VocabularyImproveResponse,
     VocabularyItemCreate,
@@ -284,6 +285,29 @@ async def get_vocabulary_stats(
         raise HTTPException(
             status_code=500,
             detail="An error occurred while retrieving vocabulary stats. Please try again later.",
+        )
+
+
+@router.get(
+    "/vocabulary/distribution",
+    response_model=VocabularyDistributionResponse,
+    responses={
+        200: {"description": "Vocabulary distribution retrieved successfully"},
+        500: {"model": ErrorResponse, "description": "Database error"},
+    },
+)
+async def get_vocabulary_distribution(
+    service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> VocabularyDistributionResponse:
+    """Return priority and learned-times distributions for the current user's active vocabulary."""
+    try:
+        return await service.get_vocabulary_distribution(current_user.id)
+    except Exception:
+        logger.exception("retrieve vocabulary distribution failed")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while retrieving vocabulary distribution. Please try again later.",
         )
 
 

@@ -40,6 +40,9 @@ __all__ = [
     "GrammarSearchResult",
     "GrammarSearchResponse",
     "VocabularyStatsResponse",
+    "VocabularyDistributionResponse",
+    "PriorityDistributionItem",
+    "LearnedTimesDistributionItem",
     "UserProfileResponse",
     "UserProfileUpdate",
     "MemoryMaintenanceStatusResponse",
@@ -183,6 +186,32 @@ class VocabularyStatsResponse(BaseModel):
     words_skipped_count: int
     overall_words_count: int
     words_prioritized_count: int
+
+
+class PriorityDistributionItem(BaseModel):
+    """One bucket in the priority distribution (one per priority value 0–9)."""
+
+    priority: int
+    label: str  # resolved by the repository from VOCABULARY_PRIORITY_LABELS
+    count: int
+
+
+class LearnedTimesDistributionItem(BaseModel):
+    """One bucket in the learned-times distribution."""
+
+    label: str  # "Never" | "1–10" | "11–30" | ">30"
+    count: int
+
+
+class VocabularyDistributionResponse(BaseModel):
+    """Distribution of active vocabulary words by priority and learned-times buckets.
+
+    Both lists always contain the full fixed set of buckets (including zero-count entries)
+    so that chart colours and legend order remain stable regardless of data sparsity.
+    """
+
+    priority_distribution: list[PriorityDistributionItem]  # 10 items, ordered 0→9
+    learned_times_distribution: list[LearnedTimesDistributionItem]  # 4 items, fixed order
 
 
 class UserProfileResponse(BaseModel):

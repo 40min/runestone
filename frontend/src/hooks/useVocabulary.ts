@@ -2,6 +2,22 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useApi } from "../utils/api";
 import type { VocabularyImprovementMode } from "../constants";
 
+export interface PriorityDistributionItem {
+  priority: number;
+  label: string;
+  count: number;
+}
+
+export interface LearnedTimesDistributionItem {
+  label: string;
+  count: number;
+}
+
+export interface VocabularyDistribution {
+  priority_distribution: PriorityDistributionItem[];
+  learned_times_distribution: LearnedTimesDistributionItem[];
+}
+
 export interface SavedVocabularyItem {
   id: number;
   user_id: number;
@@ -342,4 +358,54 @@ export const improveVocabularyItem = async (
     word_phrase: wordPhrase,
     mode: mode,
   });
+};
+
+/**
+ * Fetch vocabulary distribution (priority + learned-times) lazily.
+ *
+ * Fetches only when `open` is true, and fires a fresh request on every
+ * false→true transition. Uses a request-ID counter so stale responses
+ * (from a request started before the modal was closed and reopened) are
+ * silently discarded, preventing them from overwriting newer data.
+ */
+export const useVocabularyDistribution = (open: boolean) => {
+  const [data, setData] = useState<VocabularyDistribution | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+  const { get } = useApi();
+
+  useEffect(() => {
+    if (!open) {
+      requestIdRef.current += 1;
+      setLoading(false);
+      return;
+    }
+    const id = ++requestIdRef.current;
+    setLoading(true);
+    setError(null);
+    get<VocabularyDistribution>("/api/vocabulary/distribution")
+      .then((result) => {
+        if (id === requestIdRef.current) setData(result);
+      })
+      .catch((err: unknown) => {
+        if (id === requestIdRef.current)
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load vocabulary statistics"
+          );
+      })
+      .finally(() => {
+        if (id === requestIdRef.current) setLoading(false);
+      });
+
+    return () => {
+      if (id === requestIdRef.current) {
+        requestIdRef.current += 1;
+      }
+    };
+  }, [open, get]);
+
+  return { data, loading, error };
 };
