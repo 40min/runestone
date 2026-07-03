@@ -471,9 +471,9 @@ already names a clear topic.
                     ),
                 ]
             )
-            if settings.teacher_backup_model is not None:
-                backup_model = build_chat_model(settings, "teacher_backup")
-                middleware.append(ModelFallbackMiddleware(backup_model))
+        if settings.teacher_backup_model is not None:
+            backup_model = build_chat_model(settings, "teacher_backup")
+            middleware.append(ModelFallbackMiddleware(backup_model))
 
         agent = create_agent(
             model=chat_model,

@@ -1006,8 +1006,8 @@ def test_teacher_build_agent_without_backup_middleware(mock_settings, mock_chat_
             assert not any(isinstance(item, ModelFallbackMiddleware) for item in middleware)
 
 
-def test_teacher_build_agent_without_tools_excludes_backup_middleware(mock_settings, mock_chat_model):
-    """Verify ModelFallbackMiddleware is not added when include_tools=False."""
+def test_teacher_build_agent_without_tools_includes_backup_middleware(mock_settings, mock_chat_model):
+    """Verify ModelFallbackMiddleware is added even when include_tools=False."""
     mock_settings.teacher_backup_provider = "gemini"
     mock_settings.teacher_backup_model = "gemini-2.5-flash"
 
@@ -1020,7 +1020,8 @@ def test_teacher_build_agent_without_tools_excludes_backup_middleware(mock_setti
             call_kwargs = mock_create_agent.call_args[1]
             middleware = call_kwargs["middleware"]
 
-            assert len(middleware) == 0
+            assert len(middleware) == 1
+            assert isinstance(middleware[0], ModelFallbackMiddleware)
 
 
 @pytest.mark.anyio
