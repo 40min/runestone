@@ -578,10 +578,11 @@ class VocabularyRepository:
         priority_result = await self.db.execute(priority_stmt)
         priority_counts: dict[int, int] = {row.priority_learn: row.cnt for row in priority_result.all()}
 
+        learned_times = func.coalesce(Vocabulary.learned_times, 0)
         bucket_expr = case(
-            (Vocabulary.learned_times == 0, "Never"),
-            (Vocabulary.learned_times <= 10, "1\u201310"),
-            (Vocabulary.learned_times <= 30, "11\u201330"),
+            (learned_times == 0, "Never"),
+            (learned_times <= 10, "1\u201310"),
+            (learned_times <= 30, "11\u201330"),
             else_=">30",
         ).label("bucket")
         learned_stmt = (

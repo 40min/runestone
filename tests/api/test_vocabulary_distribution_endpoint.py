@@ -201,10 +201,13 @@ class TestVocabularyDistributionEndpoint:
 
             # Temporarily switch the authenticated user to user B
             client_a.app.dependency_overrides[get_current_user] = lambda: user_b
-            response_b = await client_a.get("/api/vocabulary/distribution")
-            assert response_b.status_code == 200
-            data_b = response_b.json()
-            # User B has no words → all zeros
-            assert all(item["count"] == 0 for item in data_b["priority_distribution"])
-            assert all(item["count"] == 0 for item in data_b["learned_times_distribution"])
+            try:
+                response_b = await client_a.get("/api/vocabulary/distribution")
+                assert response_b.status_code == 200
+                data_b = response_b.json()
+                # User B has no words → all zeros
+                assert all(item["count"] == 0 for item in data_b["priority_distribution"])
+                assert all(item["count"] == 0 for item in data_b["learned_times_distribution"])
+            finally:
+                client_a.app.dependency_overrides.pop(get_current_user, None)
             break

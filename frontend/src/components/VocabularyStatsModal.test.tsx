@@ -92,6 +92,17 @@ describe("VocabularyStatsModal", () => {
     expect(screen.queryByTestId("pie-chart")).not.toBeInTheDocument();
   });
 
+  it("shows loading spinner before the initial request updates loading state", () => {
+    mockUseDistribution.mockReturnValue({
+      data: null,
+      loading: false,
+      error: null,
+    });
+    renderModal();
+    expect(document.querySelector("[role='progressbar']")).toBeInTheDocument();
+    expect(screen.queryByTestId("pie-chart")).not.toBeInTheDocument();
+  });
+
   it("shows error message on fetch failure", () => {
     mockUseDistribution.mockReturnValue({
       data: null,

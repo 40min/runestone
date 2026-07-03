@@ -251,6 +251,7 @@ const VocabularyStatsModal: React.FC<VocabularyStatsModalProps> = ({
     data !== null &&
     priorityItems.every((i) => i.count === 0) &&
     learnedItems.every((i) => i.count === 0);
+  const showLoading = loading || (!data && !error);
 
   return (
     <Dialog
@@ -293,11 +294,11 @@ const VocabularyStatsModal: React.FC<VocabularyStatsModalProps> = ({
       </DialogTitle>
 
       <DialogContent>
-        {loading && <LoadingSpinner />}
+        {showLoading && <LoadingSpinner />}
 
-        {!loading && error && <ErrorAlert message={error} />}
+        {!showLoading && error && <ErrorAlert message={error} />}
 
-        {!loading && !error && allEmpty && (
+        {!showLoading && !error && allEmpty && (
           <Box sx={{ textAlign: "center", py: 6 }}>
             <Typography sx={{ color: "rgba(255,255,255,0.5)", mb: 1 }}>
               No vocabulary data yet
@@ -310,7 +311,7 @@ const VocabularyStatsModal: React.FC<VocabularyStatsModalProps> = ({
           </Box>
         )}
 
-        {!loading && !error && !allEmpty && data && (
+        {!showLoading && !error && !allEmpty && data && (
           <Box
             sx={{
               display: "flex",
