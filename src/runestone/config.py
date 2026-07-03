@@ -43,6 +43,19 @@ DEFAULT_AGENT_MAX_RETRIES = 3
 MEMORY_MAINTENANCE_TIMEOUT_SECONDS_DEFAULT = 240.0
 
 
+AgentName = Literal[
+    "teacher",
+    "teacher_backup",
+    "coordinator",
+    "word_keeper",
+    "news_agent",
+    "memory_keeper",
+    "memory_maintainer",
+    "learning_memory_keeper",
+    "personal_memory_keeper",
+]
+
+
 class AgentLLMSettings(BaseModel):
     """Resolved LLM settings for a specific agent."""
 
@@ -118,7 +131,14 @@ class Settings(BaseSettings):
     teacher_temperature: float = 1.0
     teacher_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
     teacher_llm_timeout_seconds: float = Field(default=10.0, gt=0)
-    teacher_max_retries: int = Field(default=DEFAULT_AGENT_MAX_RETRIES, ge=0)
+    teacher_max_retries: int = Field(default=1, ge=0)
+
+    teacher_backup_provider: Literal["openrouter", "openai", "gemini"] = "gemini"
+    teacher_backup_model: Optional[str] = None
+    teacher_backup_temperature: float = 1.0
+    teacher_backup_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
+    teacher_backup_llm_timeout_seconds: float = Field(default=5.0, gt=0)
+    teacher_backup_max_retries: int = Field(default=1, ge=0)
 
     coordinator_provider: Optional[Literal["openrouter", "openai", "gemini"]] = None
     coordinator_model: str
@@ -258,16 +278,7 @@ class Settings(BaseSettings):
 
     def get_agent_llm_settings(
         self,
-        agent_name: Literal[
-            "teacher",
-            "coordinator",
-            "word_keeper",
-            "news_agent",
-            "memory_keeper",
-            "memory_maintainer",
-            "learning_memory_keeper",
-            "personal_memory_keeper",
-        ],
+        agent_name: AgentName,
     ) -> AgentLLMSettings:
         """Return resolved model settings for the requested agent."""
         if agent_name == "teacher":
@@ -278,6 +289,18 @@ class Settings(BaseSettings):
                 reasoning_level=self.teacher_reasoning_level,
                 timeout_seconds=self.teacher_llm_timeout_seconds,
                 max_retries=self.teacher_max_retries,
+            )
+
+        if agent_name == "teacher_backup":
+            if self.teacher_backup_model is None:
+                raise ValueError("Teacher backup model is not configured")
+            return AgentLLMSettings(
+                provider=self.teacher_backup_provider,
+                model=self.teacher_backup_model,
+                temperature=self.teacher_backup_temperature,
+                reasoning_level=self.teacher_backup_reasoning_level,
+                timeout_seconds=self.teacher_backup_llm_timeout_seconds,
+                max_retries=self.teacher_backup_max_retries,
             )
 
         if agent_name == "coordinator":

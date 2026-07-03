@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from langchain.agents import create_agent
-from langchain.agents.middleware import ToolCallLimitMiddleware
+from langchain.agents.middleware import ModelFallbackMiddleware, ToolCallLimitMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.errors import GraphRecursionError
 from pydantic import ValidationError
@@ -453,13 +453,9 @@ already names a clear topic.
 </specialist_coordination>
 """
 
-        agent = create_agent(
-            model=chat_model,
-            tools=tools,
-            system_prompt=system_prompt,
-            response_format=TeacherOutput,
-            context_schema=AgentContext,
-            middleware=(
+        middleware = []
+        if include_tools:
+            middleware.extend(
                 [
                     ToolCallLimitMiddleware(
                         tool_name="search_grammar",
@@ -474,9 +470,18 @@ already names a clear topic.
                         exit_behavior="end",
                     ),
                 ]
-                if include_tools
-                else []
-            ),
+            )
+            if settings.teacher_backup_model is not None:
+                backup_model = build_chat_model(settings, "teacher_backup")
+                middleware.append(ModelFallbackMiddleware(backup_model))
+
+        agent = create_agent(
+            model=chat_model,
+            tools=tools,
+            system_prompt=system_prompt,
+            response_format=TeacherOutput,
+            context_schema=AgentContext,
+            middleware=middleware,
         )
 
         return agent

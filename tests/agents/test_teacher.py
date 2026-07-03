@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langchain.agents.middleware import ToolCallLimitMiddleware
+from langchain.agents.middleware import ModelFallbackMiddleware, ToolCallLimitMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.errors import GraphRecursionError
 
@@ -28,7 +28,10 @@ def mock_settings():
     settings.agent_persona = "default"
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
+    settings.gemini_api_key = "test-gemini-key"
     settings.allowed_origins = "http://localhost:5173"
+    settings.teacher_backup_provider = "gemini"
+    settings.teacher_backup_model = None
     settings.get_agent_llm_settings.return_value = AgentLLMSettings(
         provider="openrouter",
         model="test-model",
@@ -37,6 +40,20 @@ def mock_settings():
         timeout_seconds=10.0,
         max_retries=3,
     )
+
+    def get_agent_settings(agent_name):
+        if agent_name == "teacher_backup":
+            return AgentLLMSettings(
+                provider="gemini",
+                model="gemini-2.5-flash",
+                temperature=1.0,
+                reasoning_level=ReasoningLevel.NONE,
+                timeout_seconds=5.0,
+                max_retries=1,
+            )
+        return settings.get_agent_llm_settings.return_value
+
+    settings.get_agent_llm_settings.side_effect = get_agent_settings
     return settings
 
 
@@ -940,6 +957,210 @@ def test_teacher_output_defaults_and_preserves_vocabulary_candidates():
     assert payload.vocabulary_candidates == [
         WordSaveCandidate(word_phrase="begripa", context_phrase="Jag begriper inte."),
     ]
+
+
+def test_teacher_build_agent_with_backup_middleware(mock_settings, mock_chat_model):
+    """Verify ModelFallbackMiddleware is appended to middleware list if backup config is present."""
+    mock_settings.teacher_backup_provider = "gemini"
+    mock_settings.teacher_backup_model = "gemini-2.5-flash"
+
+    mock_primary_model = MagicMock()
+    mock_backup_model = MagicMock()
+
+    def mock_build(settings, agent_name):
+        if agent_name == "teacher":
+            return mock_primary_model
+        if agent_name == "teacher_backup":
+            return mock_backup_model
+        return MagicMock()
+
+    with patch("runestone.agents.specialists.teacher.build_chat_model", side_effect=mock_build):
+        with patch("runestone.agents.specialists.teacher.create_agent") as mock_create_agent:
+            agent = TeacherAgent(mock_settings)
+            agent._build_agent(include_tools=True)
+
+            mock_create_agent.assert_called()
+            call_kwargs = mock_create_agent.call_args[1]
+            middleware = call_kwargs["middleware"]
+
+            # 2 ToolCallLimitMiddleware + 1 ModelFallbackMiddleware = 3
+            assert len(middleware) == 3
+            assert isinstance(middleware[-1], ModelFallbackMiddleware)
+            assert middleware[-1].models[0] == mock_backup_model
+
+
+def test_teacher_build_agent_without_backup_middleware(mock_settings, mock_chat_model):
+    """Verify ModelFallbackMiddleware is not present if backup is not configured."""
+    mock_settings.teacher_backup_model = None
+
+    with patch("runestone.agents.specialists.teacher.build_chat_model", return_value=mock_chat_model):
+        with patch("runestone.agents.specialists.teacher.create_agent") as mock_create_agent:
+            agent = TeacherAgent(mock_settings)
+            agent._build_agent(include_tools=True)
+
+            mock_create_agent.assert_called()
+            call_kwargs = mock_create_agent.call_args[1]
+            middleware = call_kwargs["middleware"]
+
+            assert len(middleware) == 2
+            assert not any(isinstance(item, ModelFallbackMiddleware) for item in middleware)
+
+
+def test_teacher_build_agent_without_tools_excludes_backup_middleware(mock_settings, mock_chat_model):
+    """Verify ModelFallbackMiddleware is not added when include_tools=False."""
+    mock_settings.teacher_backup_provider = "gemini"
+    mock_settings.teacher_backup_model = "gemini-2.5-flash"
+
+    with patch("runestone.agents.specialists.teacher.build_chat_model", return_value=mock_chat_model):
+        with patch("runestone.agents.specialists.teacher.create_agent") as mock_create_agent:
+            agent = TeacherAgent(mock_settings)
+            agent._build_agent(include_tools=False)
+
+            mock_create_agent.assert_called()
+            call_kwargs = mock_create_agent.call_args[1]
+            middleware = call_kwargs["middleware"]
+
+            assert len(middleware) == 0
+
+
+@pytest.mark.anyio
+async def test_teacher_agent_behavior_primary_success(mock_settings):
+    """Test that primary model is called and succeeds, and backup is never invoked."""
+    mock_settings.teacher_backup_provider = "gemini"
+    mock_settings.teacher_backup_model = "gemini-2.5-flash"
+
+    mock_primary = MagicMock()
+    mock_backup = MagicMock()
+
+    mock_primary.bind_tools.return_value = mock_primary
+    mock_primary.with_structured_output.return_value = mock_primary
+    mock_backup.bind_tools.return_value = mock_backup
+    mock_backup.with_structured_output.return_value = mock_backup
+
+    mock_primary.ainvoke = AsyncMock(
+        return_value=AIMessage(content='{"message": "Primary success", "emotion": "neutral"}')
+    )
+    mock_backup.ainvoke = AsyncMock()
+
+    def mock_build(settings, agent_name):
+        if agent_name == "teacher":
+            return mock_primary
+        if agent_name == "teacher_backup":
+            return mock_backup
+        return MagicMock()
+
+    with patch("runestone.agents.specialists.teacher.build_chat_model", side_effect=mock_build):
+        agent = TeacherAgent(mock_settings)
+        res = await agent.agent.ainvoke({"messages": [HumanMessage("test")]})
+        assert "Primary success" in str(res)
+        mock_primary.ainvoke.assert_called_once()
+        mock_backup.ainvoke.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_teacher_agent_behavior_primary_failure_backup_success(mock_settings):
+    """Test that if primary model fails with timeout, it falls back to backup model."""
+    mock_settings.teacher_backup_provider = "gemini"
+    mock_settings.teacher_backup_model = "gemini-2.5-flash"
+
+    mock_primary = MagicMock()
+    mock_backup = MagicMock()
+
+    mock_primary.bind_tools.return_value = mock_primary
+    mock_primary.with_structured_output.return_value = mock_primary
+    mock_backup.bind_tools.return_value = mock_backup
+    mock_backup.with_structured_output.return_value = mock_backup
+
+    mock_primary.ainvoke = AsyncMock(side_effect=TimeoutError("Primary Timeout"))
+    mock_backup.ainvoke = AsyncMock(
+        return_value=AIMessage(content='{"message": "Hello from backup!", "emotion": "happy"}')
+    )
+
+    def mock_build(settings, agent_name):
+        if agent_name == "teacher":
+            return mock_primary
+        if agent_name == "teacher_backup":
+            return mock_backup
+        return MagicMock()
+
+    with patch("runestone.agents.specialists.teacher.build_chat_model", side_effect=mock_build):
+        agent = TeacherAgent(mock_settings)
+        res = await agent.agent.ainvoke({"messages": [HumanMessage("test")]})
+        assert "Hello from backup!" in str(res)
+        mock_primary.ainvoke.assert_called_once()
+        mock_backup.ainvoke.assert_called_once()
+
+
+@pytest.mark.anyio
+async def test_teacher_agent_behavior_dual_failure_timeout(mock_settings, mock_user):
+    """Test that if both models fail with timeout, it triggers the top-level no-tools fallback."""
+    mock_settings.teacher_backup_provider = "gemini"
+    mock_settings.teacher_backup_model = "gemini-2.5-flash"
+
+    mock_primary = MagicMock()
+    mock_backup = MagicMock()
+
+    mock_primary.bind_tools.return_value = mock_primary
+    mock_primary.with_structured_output.return_value = mock_primary
+    mock_backup.bind_tools.return_value = mock_backup
+    mock_backup.with_structured_output.return_value = mock_backup
+
+    mock_primary.ainvoke = AsyncMock(side_effect=TimeoutError("Primary Timeout"))
+    mock_backup.ainvoke = AsyncMock(side_effect=TimeoutError("Backup Timeout"))
+
+    def mock_build(settings, agent_name):
+        if agent_name == "teacher":
+            return mock_primary
+        if agent_name == "teacher_backup":
+            return mock_backup
+        return MagicMock()
+
+    with patch("runestone.agents.specialists.teacher.build_chat_model", side_effect=mock_build):
+        agent = TeacherAgent(mock_settings)
+        fallback_agent = AsyncMock()
+        fallback_agent.ainvoke.return_value = {"messages": [AIMessage(content="Fallback answer.")]}
+        agent._get_tool_limit_fallback_agent = MagicMock(return_value=fallback_agent)
+
+        res = await agent.generate_response(message="test", history=[], user=mock_user)
+        assert res.message == "Fallback answer."
+        mock_primary.ainvoke.assert_called()
+        mock_backup.ainvoke.assert_called()
+        fallback_agent.ainvoke.assert_called_once()
+
+
+@pytest.mark.anyio
+async def test_teacher_agent_behavior_dual_failure_other_exception(mock_settings, mock_user):
+    """Test that if both models fail with a non-deadline error, it is re-raised."""
+    mock_settings.teacher_backup_provider = "gemini"
+    mock_settings.teacher_backup_model = "gemini-2.5-flash"
+
+    mock_primary = MagicMock()
+    mock_backup = MagicMock()
+
+    mock_primary.bind_tools.return_value = mock_primary
+    mock_primary.with_structured_output.return_value = mock_primary
+    mock_backup.bind_tools.return_value = mock_backup
+    mock_backup.with_structured_output.return_value = mock_backup
+
+    mock_primary.ainvoke = AsyncMock(side_effect=ValueError("API key invalid"))
+    mock_backup.ainvoke = AsyncMock(side_effect=ValueError("Backup key invalid"))
+
+    def mock_build(settings, agent_name):
+        if agent_name == "teacher":
+            return mock_primary
+        if agent_name == "teacher_backup":
+            return mock_backup
+        return MagicMock()
+
+    with patch("runestone.agents.specialists.teacher.build_chat_model", side_effect=mock_build):
+        agent = TeacherAgent(mock_settings)
+        fallback_agent = AsyncMock()
+        agent._get_tool_limit_fallback_agent = MagicMock(return_value=fallback_agent)
+
+        with pytest.raises(ValueError, match="Backup key invalid"):
+            await agent.generate_response(message="test", history=[], user=mock_user)
+
+        fallback_agent.ainvoke.assert_not_called()
 
 
 def _serialize_messages(messages: list) -> str:
