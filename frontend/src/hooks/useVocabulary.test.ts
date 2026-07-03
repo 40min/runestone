@@ -1406,3 +1406,153 @@ describe('improveVocabularyItem', () => {
     await expect(improveVocabularyItem(mockApi, 'hej', VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS)).rejects.toThrow('Network error');
   });
 });
+
+// ─── useVocabularyDistribution ────────────────────────────────────────────────
+
+import { useVocabularyDistribution } from './useVocabulary';
+
+const makeDistributionResponse = () => ({
+  priority_distribution: Array.from({ length: 10 }, (_, i) => ({
+    priority: i,
+    label: `Priority ${i}`,
+    count: i === 0 ? 3 : 0,
+  })),
+  learned_times_distribution: [
+    { label: 'Never', count: 5 },
+    { label: '1\u201310', count: 2 },
+    { label: '11\u201330', count: 0 },
+    { label: '>30', count: 0 },
+  ],
+});
+
+describe('useVocabularyDistribution', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  it('does not fetch when open is false', () => {
+    renderHook(() => useVocabularyDistribution(false));
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('fetches once when open transitions to true', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(makeDistributionResponse()),
+    });
+
+    const { result } = renderHook(() => useVocabularyDistribution(true));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/vocabulary/distribution'),
+      expect.any(Object)
+    );
+    expect(result.current.data).not.toBeNull();
+  });
+
+  it('refetches when open transitions from false to true again', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(makeDistributionResponse()),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(makeDistributionResponse()),
+      });
+
+    const { result, rerender } = renderHook(
+      ({ open }: { open: boolean }) => useVocabularyDistribution(open),
+      { initialProps: { open: true } }
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    rerender({ open: false });
+    rerender({ open: true });
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+  });
+
+  it('discards stale response when reopen occurs before first request resolves', async () => {
+    const { promise: slowPromise, resolve: resolveFirst } = createDeferred<object>();
+
+    mockFetch
+      .mockReturnValueOnce(
+        // Request 1 — will resolve late (stale)
+        { ok: true, json: () => slowPromise }
+      )
+      .mockResolvedValueOnce({
+        // Request 2 — resolves immediately
+        ok: true,
+        json: () => Promise.resolve(makeDistributionResponse()),
+      });
+
+    const { result, rerender } = renderHook(
+      ({ open }: { open: boolean }) => useVocabularyDistribution(open),
+      { initialProps: { open: true } }
+    );
+
+    // Close and reopen before request 1 finishes
+    rerender({ open: false });
+    rerender({ open: true });
+
+    // Wait for request 2 to finish
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    // Now resolve request 1 with different data
+    const staleData = {
+      priority_distribution: Array.from({ length: 10 }, (_, i) => ({
+        priority: i, label: `Stale ${i}`, count: 99,
+      })),
+      learned_times_distribution: [
+        { label: 'Never', count: 99 },
+        { label: '1\u201310', count: 99 },
+        { label: '11\u201330', count: 99 },
+        { label: '>30', count: 99 },
+      ],
+    };
+    await act(async () => { resolveFirst(staleData); });
+
+    // Data should NOT have been overwritten by the stale response
+    expect(result.current.data?.priority_distribution[0]?.count).not.toBe(99);
+  });
+
+  it('does not update state when a request resolves after the modal closes', async () => {
+    const { promise, resolve } = createDeferred<object>();
+    mockFetch.mockReturnValueOnce({ ok: true, json: () => promise });
+
+    const { result, rerender } = renderHook(
+      ({ open }: { open: boolean }) => useVocabularyDistribution(open),
+      { initialProps: { open: true } }
+    );
+    expect(result.current.loading).toBe(true);
+
+    rerender({ open: false });
+    await act(async () => { resolve(makeDistributionResponse()); });
+
+    expect(result.current.data).toBeNull();
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('sets error on network failure and clears loading', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+    const { result } = renderHook(() => useVocabularyDistribution(true));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toBe('Network error');
+    expect(result.current.data).toBeNull();
+  });
+
+  it('sets generic error message on non-Error rejection', async () => {
+    mockFetch.mockRejectedValueOnce('plain string failure');
+
+    const { result } = renderHook(() => useVocabularyDistribution(true));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toBe('Failed to load vocabulary statistics');
+  });
+});

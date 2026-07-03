@@ -21,6 +21,21 @@ VOCABULARY_PRIORITY_LEGACY_TRUE_BACKFILL = 5
 VOCABULARY_PRIORITY_LOW = 9
 VOCABULARY_PRIORITY_DEFAULT = VOCABULARY_PRIORITY_LOW
 
+# Human-readable labels for vocabulary priority values (0 = highest, 9 = lowest/default).
+# The service layer uses this mapping when building distribution responses.
+VOCABULARY_PRIORITY_LABELS: dict[int, str] = {
+    0: "Highest (0)",
+    1: "Very High (1)",
+    2: "High (2)",
+    3: "Above Average (3)",
+    4: "Average (4)",
+    5: "Below Average (5)",
+    6: "Low (6)",
+    7: "Very Low (7)",
+    8: "Minimal (8)",
+    9: "Default (9)",
+}
+
 
 class TeacherEmotion(str, Enum):
     """Canonical teacher avatar emotions shared across backend layers."""

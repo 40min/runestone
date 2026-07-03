@@ -10,9 +10,10 @@ from typing import List
 from langchain_core.exceptions import OutputParserException
 from langchain_core.language_models.chat_models import BaseChatModel
 
-from ..api.schemas import ImprovementMode
+from ..api.schemas import ImprovementMode, LearnedTimesDistributionItem, PriorityDistributionItem
 from ..api.schemas import Vocabulary as VocabularySchema
 from ..api.schemas import (
+    VocabularyDistributionResponse,
     VocabularyImproveRequest,
     VocabularyImproveResponse,
     VocabularyItemCreate,
@@ -20,6 +21,7 @@ from ..api.schemas import (
     VocabularyUpdate,
 )
 from ..config import Settings
+from ..constants import VOCABULARY_PRIORITY_LABELS
 from ..core.constants import VOCABULARY_BATCH_SIZE
 from ..core.exceptions import VocabularyItemExists
 from ..core.logging_config import get_logger
@@ -136,6 +138,26 @@ class VocabularyService:
     async def get_vocabulary_stats(self, user_id: int) -> VocabularyStatsResponse:
         """Return active vocabulary counters for the Vocabulary tab."""
         return await self.repo.get_vocabulary_stats(user_id)
+
+    async def get_vocabulary_distribution(self, user_id: int) -> VocabularyDistributionResponse:
+        """Return priority and learned-times distributions for active vocabulary."""
+        priority_counts, learned_counts = await self.repo.get_vocabulary_distribution(user_id)
+        learned_bucket_order = ("Never", "1\u201310", "11\u201330", ">30")
+
+        return VocabularyDistributionResponse(
+            priority_distribution=[
+                PriorityDistributionItem(
+                    priority=priority,
+                    label=VOCABULARY_PRIORITY_LABELS[priority],
+                    count=priority_counts.get(priority, 0),
+                )
+                for priority in range(10)
+            ],
+            learned_times_distribution=[
+                LearnedTimesDistributionItem(label=label, count=learned_counts.get(label, 0))
+                for label in learned_bucket_order
+            ],
+        )
 
     async def update_vocabulary_item(self, item_id: int, update: VocabularyUpdate, user_id: int) -> VocabularySchema:
         """Update a vocabulary item and return the updated record."""

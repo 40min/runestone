@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from runestone.api.schemas import VocabularyItemCreate
 from runestone.db.models import User
 from runestone.db.models import Vocabulary as VocabularyModel
+from runestone.db.vocabulary_repository import VocabularyRepository
 
 
 @pytest.fixture
@@ -1842,3 +1843,99 @@ class TestVocabularyRepositoryStats:
         assert stats.words_skipped_count == 1
         assert stats.overall_words_count == 3
         assert stats.words_prioritized_count == 1
+
+
+class TestGetVocabularyDistribution:
+    """Tests for VocabularyRepository.get_vocabulary_distribution."""
+
+    pytestmark = pytest.mark.anyio
+
+    async def test_empty_vocabulary(self, db_with_test_user):
+        """No active words produce empty aggregate mappings."""
+        db, test_user = db_with_test_user
+        repo = VocabularyRepository(db)
+
+        priority_counts, learned_counts = await repo.get_vocabulary_distribution(test_user.id)
+
+        assert priority_counts == {}
+        assert learned_counts == {}
+
+    async def test_in_learn_false_excluded(self, db_with_test_user):
+        """Words with in_learn=False are not counted in any bucket."""
+        db, test_user = db_with_test_user
+        repo = VocabularyRepository(db)
+
+        db.add(
+            VocabularyModel(user_id=test_user.id, word_phrase="w1", translation="t", in_learn=False, priority_learn=0)
+        )
+        db.add(
+            VocabularyModel(user_id=test_user.id, word_phrase="w2", translation="t", in_learn=False, priority_learn=9)
+        )
+        await db.commit()
+
+        priority_counts, learned_counts = await repo.get_vocabulary_distribution(test_user.id)
+
+        assert priority_counts == {}
+        assert learned_counts == {}
+
+    async def test_priority_extremes_and_learned_times_boundaries(self, db_with_test_user):
+        """Repository returns only observed priority and learned-times aggregates."""
+        db, test_user = db_with_test_user
+        repo = VocabularyRepository(db)
+
+        learned_times_values = (0, 1, 10, 11, 30, 31)
+        for index, learned_times in enumerate(learned_times_values):
+            db.add(
+                VocabularyModel(
+                    user_id=test_user.id,
+                    word_phrase=f"w{index}",
+                    translation="t",
+                    in_learn=True,
+                    priority_learn=0 if index == 0 else 9,
+                    learned_times=learned_times,
+                )
+            )
+        await db.commit()
+
+        priority_counts, learned_counts = await repo.get_vocabulary_distribution(test_user.id)
+
+        assert priority_counts == {0: 1, 9: 5}
+        assert learned_counts == {"Never": 1, "1\u201310": 2, "11\u201330": 2, ">30": 1}
+
+    async def test_user_isolation(self, db_with_test_user):
+        """User B sees all-zero distribution even when user A has words."""
+        db, user_a = db_with_test_user
+        repo = VocabularyRepository(db)
+
+        from runestone.auth.security import hash_password
+
+        user_b = User(email="user-b-isolation@example.com", hashed_password=hash_password("pw"), name="User B")
+        db.add(user_b)
+        db.add(VocabularyModel(user_id=user_a.id, word_phrase="w1", translation="t", in_learn=True, priority_learn=3))
+        await db.commit()
+
+        priority_counts, learned_counts = await repo.get_vocabulary_distribution(user_b.id)
+
+        assert priority_counts == {}
+        assert learned_counts == {}
+
+    async def test_mixed_in_learn(self, db_with_test_user):
+        """2 in_learn=True + 1 in_learn=False → total active count is 2."""
+        db, test_user = db_with_test_user
+        repo = VocabularyRepository(db)
+
+        db.add(
+            VocabularyModel(user_id=test_user.id, word_phrase="w1", translation="t", in_learn=True, priority_learn=0)
+        )
+        db.add(
+            VocabularyModel(user_id=test_user.id, word_phrase="w2", translation="t", in_learn=True, priority_learn=9)
+        )
+        db.add(
+            VocabularyModel(user_id=test_user.id, word_phrase="w3", translation="t", in_learn=False, priority_learn=5)
+        )
+        await db.commit()
+
+        priority_counts, learned_counts = await repo.get_vocabulary_distribution(test_user.id)
+
+        assert sum(priority_counts.values()) == 2
+        assert sum(learned_counts.values()) == 2
