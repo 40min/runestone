@@ -138,7 +138,7 @@ install-frontend:
 # Regenerate package-lock.json to match package.json dependencies
 frontend-lockfile-sync:
 	@echo "🔄 Syncing frontend package-lock.json with package.json..."
-	@cd frontend && npm install --package-lock-only
+	@python3 scripts/check_frontend_lockfile_sync.py --sync
 
 # Install all dependencies concurrently
 install-all:

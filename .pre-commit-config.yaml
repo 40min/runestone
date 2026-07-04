@@ -159,7 +159,7 @@ repos:
       - id: frontend-lockfile-check
         name: frontend-lockfile-check
         language: python
-        entry: python scripts/check_frontend_lockfile_sync.py
+        entry: python scripts/check_frontend_lockfile_sync.py --require-committed
         pass_filenames: false
-        files: ^frontend/package(-lock)?\.json$
+        files: ^(frontend/package(-lock)?\.json|scripts/check_frontend_lockfile_sync\.py)$
         stages: [pre-push]
