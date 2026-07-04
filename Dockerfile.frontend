@@ -13,8 +13,10 @@ WORKDIR /app
 # Copy package files
 COPY frontend/package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies with the npm version declared by the package
+RUN NPM_VERSION="$(node -p "require('./package.json').packageManager.split('@').pop()")" \
+    && npm install --global "npm@${NPM_VERSION}" \
+    && npm ci
 
 # Copy source code
 COPY frontend/ ./
