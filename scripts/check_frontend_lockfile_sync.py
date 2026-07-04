@@ -44,24 +44,50 @@ def package_files_are_committed() -> bool:
             str(PACKAGE_LOCK.relative_to(REPO_ROOT)),
         ],
         cwd=REPO_ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         check=False,
     )
-    if result.returncode != 0:
+    if result.returncode == 1:
         print(
             "Commit frontend/package.json and frontend/package-lock.json before pushing.",
             file=sys.stderr,
         )
         return False
+    if result.returncode != 0:
+        print("Unable to verify committed frontend package files.", file=sys.stderr)
+        return False
     return True
+
+
+def npm_command(pinned_version: str) -> list[str] | None:
+    """Use matching local npm when available, otherwise return a pinned npx command."""
+    npm_executable = shutil.which("npm")
+    if npm_executable is not None:
+        try:
+            version_result = subprocess.run(
+                [npm_executable, "--version"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError:
+            version_result = None
+        if (
+            version_result is not None
+            and version_result.returncode == 0
+            and version_result.stdout.strip() == pinned_version
+        ):
+            return [npm_executable]
+
+    npx_executable = shutil.which("npx")
+    if npx_executable is None:
+        return None
+    return [npx_executable, "--yes", f"npm@{pinned_version}"]
 
 
 def sync_lockfile(*, fail_on_change: bool, require_committed: bool = False) -> int:
     """Regenerate the lockfile and enforce the requested consistency checks."""
-    npx_executable = shutil.which("npx")
-    if npx_executable is None:
-        print("npx is required to synchronize the frontend lockfile.", file=sys.stderr)
-        return 1
-
     try:
         npm_version = pinned_npm_version()
         original_lockfile = PACKAGE_LOCK.read_bytes() if PACKAGE_LOCK.exists() else None
@@ -69,11 +95,14 @@ def sync_lockfile(*, fail_on_change: bool, require_committed: bool = False) -> i
         print(str(error), file=sys.stderr)
         return 1
 
+    command = npm_command(npm_version)
+    if command is None:
+        print("npm or npx is required to synchronize the frontend lockfile.", file=sys.stderr)
+        return 1
+
     result = subprocess.run(
-        [
-            npx_executable,
-            "--yes",
-            f"npm@{npm_version}",
+        command
+        + [
             "install",
             "--package-lock-only",
             "--ignore-scripts",
@@ -85,6 +114,10 @@ def sync_lockfile(*, fail_on_change: bool, require_committed: bool = False) -> i
     )
     if result.returncode != 0:
         return result.returncode
+
+    if not PACKAGE_LOCK.exists():
+        print("npm did not generate frontend/package-lock.json.", file=sys.stderr)
+        return 1
 
     if fail_on_change and PACKAGE_LOCK.read_bytes() != original_lockfile:
         print(
