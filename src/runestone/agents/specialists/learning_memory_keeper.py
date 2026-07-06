@@ -345,14 +345,6 @@ class LearningMemoryKeeperSpecialist(BaseSpecialist):
                     continue
 
                 mutation = operation
-                current = await service.get_item_by_id(mutation.target_id)
-                if (
-                    current is None
-                    or current.user_id != user_id
-                    or current.category != MemoryCategory.AREA_TO_IMPROVE.value
-                ):
-                    logger.warning("[agents:learning_memory_keeper] reason=stale_target")
-                    continue
                 if mutation.delete:
                     await service.delete_item(mutation.target_id, user_id)
                     counts["deleted"] += 1
