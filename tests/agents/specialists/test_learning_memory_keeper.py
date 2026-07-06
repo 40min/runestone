@@ -1,316 +1,248 @@
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
-from langchain.agents.middleware import ModelRetryMiddleware, ToolCallLimitMiddleware
-from langchain_core.messages import AIMessage
+from langchain_core.exceptions import OutputParserException
+from pydantic import ValidationError
 
-from runestone.agents.specialists.base import SpecialistContext, SpecialistResult, parse_specialist_result
+from runestone.agents.specialists.base import SpecialistContext
 from runestone.agents.specialists.learning_memory_keeper import (
     LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT,
+    LearningMemoryCreate,
+    LearningMemoryKeeperExtraction,
     LearningMemoryKeeperSpecialist,
+    LearningMemoryMutation,
+    parse_learning_memory_tag_ids,
 )
-from runestone.agents.tools.memory import delete_memory_item, update_memory_item_content
-from runestone.constants import RECURSION_LIMIT_LEARNING_MEMORY_KEEPER
+from runestone.api.memory_item_schemas import MemoryCategory, MemorySortBy, SortDirection
 
 
 @pytest.fixture
-def mock_settings():
-    from runestone.config import AgentLLMSettings, ReasoningLevel
+def specialist():
+    raw_model = MagicMock()
+    structured_model = MagicMock()
+    structured_model.ainvoke = AsyncMock()
+    raw_model.with_structured_output.return_value = structured_model
+    settings = MagicMock(memory_keeper_provider="test", memory_keeper_model="test")
+    with patch("runestone.agents.specialists.learning_memory_keeper.build_chat_model", return_value=raw_model):
+        instance = LearningMemoryKeeperSpecialist(settings)
+    instance.structured_model = structured_model
+    return instance
 
-    settings = MagicMock()
-    settings.memory_keeper_provider = "openrouter"
-    settings.memory_keeper_model = "test-model"
-    settings.get_agent_llm_settings.return_value = AgentLLMSettings(
-        provider="openrouter",
-        model="test-model",
-        temperature=0.0,
-        reasoning_level=ReasoningLevel.NONE,
-        timeout_seconds=15.0,
-        max_retries=3,
+
+def context(teacher_response="Good progress."):
+    return SpecialistContext(
+        message="Okay",
+        history=[],
+        user=MagicMock(id=7),
+        teacher_response=teacher_response,
     )
-    return settings
 
 
-@pytest.fixture
-def specialist(mock_settings):
-    with patch("runestone.agents.specialists.learning_memory_keeper.build_chat_model", return_value=MagicMock()):
-        with patch("runestone.agents.specialists.learning_memory_keeper.create_agent"):
-            specialist = LearningMemoryKeeperSpecialist(mock_settings)
-            specialist.agent = AsyncMock()
-            return specialist
+def item(item_id=3, user_id=7, category="area_to_improve"):
+    return MagicMock(
+        id=item_id,
+        user_id=user_id,
+        category=category,
+        key="articles",
+        content="Article selection",
+        status="struggling",
+        priority=2,
+    )
 
 
-@pytest.fixture
-def mock_user():
-    user = MagicMock()
-    user.id = 1
-    return user
+def service_provider(service):
+    @asynccontextmanager
+    async def provider():
+        yield service
+
+    return provider
+
+
+def test_tag_parser_ignores_malformed_and_deduplicates():
+    assert parse_learning_memory_tag_ids(None) == []
+    assert parse_learning_memory_tag_ids("[memory:area_to_improve:x]") == []
+    assert parse_learning_memory_tag_ids(
+        "[memory:area_to_improve:3] [memory:area_to_improve:4] [memory:area_to_improve:3]"
+    ) == [3, 4]
+
+
+def test_learning_models_reject_invalid_and_conflicting_operations():
+    with pytest.raises(ValidationError):
+        LearningMemoryMutation(target_id="3", status="mastered")
+    with pytest.raises(ValidationError, match="delete_not_exclusive"):
+        LearningMemoryMutation(target_id=3, delete=True, status="mastered")
+    with pytest.raises(ValidationError, match="empty_mutation"):
+        LearningMemoryMutation(target_id=3)
+    with pytest.raises(ValidationError, match="conflicting_operations"):
+        LearningMemoryKeeperExtraction(
+            decision="update_memory",
+            creates=[
+                LearningMemoryCreate(key=" articles ", content="First"),
+                LearningMemoryCreate(key="articles", content="Second"),
+            ],
+        )
+    with pytest.raises(ValidationError, match="over_limit"):
+        LearningMemoryKeeperExtraction(
+            decision="update_memory",
+            creates=[LearningMemoryCreate(key=f"k{i}", content="x") for i in range(4)],
+        )
+
+
+def test_learning_prompt_keeps_decision_structure():
+    assert "<role>" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "<fast_path>" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "<decision_tree>" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "<conservative_bias>" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
+    assert "never call tools and never claim that data was persisted" not in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
 
 
 @pytest.mark.anyio
-async def test_learning_memory_keeper_returns_parsed_specialist_result(specialist, mock_user):
-    specialist.agent.ainvoke.return_value = {
-        "messages": [
-            AIMessage(
-                content=(
-                    '{"status":"action_taken","actions":[{"tool":"update_memory_status","status":"success",'
-                    '"summary":"Marked topic as improving"}],"info_for_teacher":"Updated 1 memory item.",'
-                    '"artifacts":{"trigger_source":"teacher","summary":"updated",'
-                    '"notes":["status changed"]}}'
-                )
-            )
-        ]
-    }
-
-    result = await specialist.run(
-        SpecialistContext(
-            message="Ok",
-            history=[],
-            user=mock_user,
-            teacher_response="You have clearly improved with articles.",
-            routing_reason="teacher signaled improvement",
-        )
+async def test_tagged_path_loads_only_tags_and_executes_in_order(specialist):
+    specialist.structured_model.ainvoke.return_value = LearningMemoryKeeperExtraction(
+        decision="update_memory",
+        trigger_source="teacher",
+        mutations=[LearningMemoryMutation(target_id=3, status="improving", content="Better articles", priority=4)],
     )
+    service = MagicMock()
+    service.get_item_by_id = AsyncMock(return_value=item())
+    service.list_memory_items = AsyncMock()
+    service.update_item_status = AsyncMock()
+    service.update_item_content_in_category = AsyncMock()
+    service.update_item_priority = AsyncMock()
+    manager = MagicMock()
+    manager.attach_mock(service.update_item_status, "status")
+    manager.attach_mock(service.update_item_content_in_category, "content")
+    manager.attach_mock(service.update_item_priority, "priority")
+
+    with patch(
+        "runestone.agents.specialists.learning_memory_keeper.provide_memory_item_service",
+        service_provider(service),
+    ):
+        result = await specialist.run(context("Great [memory:area_to_improve:3]"))
 
     assert result.status == "action_taken"
-    assert result.actions[0].tool == "update_memory_status"
-    assert result.artifacts["trigger_source"] == "teacher"
-
-
-@pytest.mark.anyio
-async def test_learning_memory_keeper_uses_current_student_message_for_payload(specialist, mock_user):
-    specialist.agent.ainvoke.return_value = {
-        "messages": [
-            AIMessage(
-                content=(
-                    '{"status":"no_action","actions":[],"info_for_teacher":"",'
-                    '"artifacts":{"trigger_source":"student","summary":"noop","notes":[]}}'
-                )
-            )
-        ]
-    }
-
-    await specialist.run(
-        SpecialistContext(
-            message="Forget my old learning topic.",
-            history=[],
-            user=mock_user,
-            teacher_response="Let's keep practicing.",
-            routing_reason="student asked to forget memory",
-        )
-    )
-
-    args, kwargs = specialist.agent.ainvoke.call_args
-    payload_json = args[0]["messages"][0].content
-    payload = json.loads(payload_json)
-    assert payload == {
-        "student_message": "Forget my old learning topic.",
-        "teacher_response": "Let's keep practicing.",
-    }
-    assert payload["student_message"] == "Forget my old learning topic."
-    assert "message" not in payload
-    assert kwargs["context"].user == mock_user
-
-
-@pytest.mark.anyio
-async def test_learning_memory_keeper_returns_error_when_agent_output_is_invalid(specialist, mock_user):
-    specialist.agent.ainvoke.return_value = {"messages": [AIMessage(content="not json")]}
-
-    result = await specialist.run(
-        SpecialistContext(
-            message="Remember this.",
-            history=[],
-            user=mock_user,
-            teacher_response="The key issue is article usage.",
-            routing_reason="teacher signaled durable issue",
-        )
-    )
-
-    assert result.status == "error"
-    assert result.artifacts["summary"] == "invalid_agent_output"
-
-
-@pytest.mark.anyio
-async def test_learning_memory_keeper_parses_fenced_json_output(specialist, mock_user):
-    specialist.agent.ainvoke.return_value = {
-        "messages": [
-            AIMessage(
-                content=(
-                    "```json\n"
-                    '{"status":"no_action","actions":[],"info_for_teacher":"",'
-                    '"artifacts":{"trigger_source":"none","summary":"noop","notes":[]}}'
-                    "\n```"
-                )
-            )
-        ]
-    }
-
-    result = await specialist.run(
-        SpecialistContext(
-            message="Ok",
-            history=[],
-            user=mock_user,
-            teacher_response="Good effort.",
-            routing_reason="no durable signal",
-        )
-    )
-
-    assert result.status == "no_action"
-    assert result.artifacts["trigger_source"] == "none"
-
-
-@pytest.mark.anyio
-async def test_learning_memory_keeper_parses_content_blocks_with_text_and_tool_use(specialist, mock_user):
-    specialist.agent.ainvoke.return_value = {
-        "messages": [
-            AIMessage(
-                content=[
-                    {
-                        "type": "text",
-                        "text": (
-                            "```json\n"
-                            '{"status":"no_action","actions":[],"info_for_teacher":"",'
-                            '"artifacts":{"trigger_source":"none","summary":"noop","notes":[]}}'
-                            "\n```"
-                        ),
-                    },
-                    {"type": "tool_use", "name": "noop", "input": {}},
-                ]
-            )
-        ]
-    }
-
-    result = await specialist.run(
-        SpecialistContext(
-            message="Ok",
-            history=[],
-            user=mock_user,
-            teacher_response="Good effort.",
-            routing_reason="no durable signal",
-        )
-    )
-
-    assert result.status == "no_action"
-    assert result.artifacts["summary"] == "noop"
-
-
-def test_parse_specialist_result_prefers_structured_response():
-    structured = SpecialistResult(
-        status="action_taken",
-        actions=[],
-        info_for_teacher="Updated memory.",
-        artifacts={"trigger_source": "teacher", "summary": "updated", "notes": []},
-    )
-
-    parsed = parse_specialist_result({"structured_response": structured, "messages": []})
-
-    assert parsed == structured
-
-
-def test_learning_memory_keeper_prompt_uses_mastered_area_items_without_promotion():
-    assert "Use `area_to_improve` with status `mastered`" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
-    assert "Do not create a separate strength item" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
-    assert "promote_to_strength" not in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
-
-
-def test_learning_memory_keeper_prompt_three_case_model():
-    """Prompt must describe all three cases without a universal mandatory read-before-write."""
-    assert "Case A" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
-    assert "Case B" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
-    assert "Case C" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
-    assert "Do NOT call read_areas_to_improve" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
-    assert "[memory:area_to_improve:<id>]" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
-    assert "forget this old learning topic" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
-    assert "delete_memory_item" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
-
-
-def test_learning_memory_keeper_prompt_rejects_misspelled_word_pollution():
-    assert (
-        "A routine one-off correction, a typo, a spelling slip, or a vocabulary gap alone is NOT enough"
-        in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
-    )
-    assert "durable learning issue" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
-
-
-def test_learning_memory_keeper_prompt_separates_status_and_priority_roles():
-    assert "Do not use both update_memory_status and update_memory_priority" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
-    assert (
-        "Use update_memory_priority only for the single item directly implicated"
-        in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
-    )
-
-
-def test_learning_memory_keeper_builds_agent_with_expected_tools(mock_settings):
-    with patch("runestone.agents.specialists.learning_memory_keeper.build_chat_model", return_value=MagicMock()):
-        with patch("runestone.agents.specialists.learning_memory_keeper.create_agent") as create_agent_mock:
-            LearningMemoryKeeperSpecialist(mock_settings)
-
-    tool_names = [tool.name for tool in create_agent_mock.call_args.kwargs["tools"]]
-    assert tool_names == [
-        "read_areas_to_improve",
-        "upsert_memory_item",
-        "update_memory_item_content",
-        "update_memory_status",
-        "update_memory_priority",
-        "delete_memory_item",
+    service.list_memory_items.assert_not_awaited()
+    assert manager.mock_calls == [
+        call.status(3, "improving", 7),
+        call.content(3, MemoryCategory.AREA_TO_IMPROVE, "Better articles", 7),
+        call.priority(3, 4, 7),
     ]
-    middleware = create_agent_mock.call_args.kwargs["middleware"]
-    assert len(middleware) == 4
-    assert isinstance(middleware[0], ModelRetryMiddleware)
-    assert middleware[0].max_retries == 3
-
-    for m in middleware[1:]:
-        assert isinstance(m, ToolCallLimitMiddleware)
-        assert m.exit_behavior == "end"
-
-    limit_by_tool = {m.tool_name: m for m in middleware[1:]}
-    assert limit_by_tool["read_areas_to_improve"].run_limit == 1
-    assert limit_by_tool["update_memory_status"].run_limit == 3
-    assert limit_by_tool["update_memory_item_content"].run_limit == 3
-
-
-def test_update_memory_item_content_tool_is_accessible():
-    """update_memory_item_content must exist at the tool layer and be wired into MemoryKeeper."""
-    assert update_memory_item_content.name == "update_memory_item_content"
-
-
-def test_delete_memory_item_tool_is_accessible():
-    """delete_memory_item must exist at the tool layer and be wired into LearningMemoryKeeper."""
-    assert delete_memory_item.name == "delete_memory_item"
 
 
 @pytest.mark.anyio
-async def test_learning_memory_keeper_passes_recursion_limit(specialist, mock_user):
-    specialist.agent.ainvoke.return_value = {
-        "messages": [
-            AIMessage(
-                content=(
-                    '{"status":"no_action","actions":[],"info_for_teacher":"",'
-                    '"artifacts":{"trigger_source":"student","summary":"noop","notes":[]}}'
-                )
-            )
-        ]
-    }
-
-    await specialist.run(
-        SpecialistContext(
-            message="Forget my old learning topic.",
-            history=[],
-            user=mock_user,
-            teacher_response="Let's keep practicing.",
-            routing_reason="student asked to forget memory",
-        )
+async def test_untagged_path_supplies_bounded_allowlist(specialist):
+    specialist.structured_model.ainvoke.return_value = LearningMemoryKeeperExtraction(decision="no_action")
+    service = MagicMock()
+    service.list_memory_items = AsyncMock(return_value=[item()])
+    with patch(
+        "runestone.agents.specialists.learning_memory_keeper.provide_memory_item_service",
+        service_provider(service),
+    ):
+        result = await specialist.run(context())
+    assert result.status == "no_action"
+    service.list_memory_items.assert_awaited_once_with(
+        7,
+        category=MemoryCategory.AREA_TO_IMPROVE,
+        statuses=["struggling", "improving", "mastered"],
+        sort_by=MemorySortBy.UPDATED_AT,
+        sort_direction=SortDirection.DESC,
+        limit=100,
     )
+    messages = specialist.structured_model.ainvoke.await_args.args[0]
+    payload = json.loads(messages[1].content)
+    assert payload["existing_targets"][0]["id"] == 3
 
-    _, kwargs = specialist.agent.ainvoke.call_args
-    assert "config" in kwargs
-    assert kwargs["config"] == {"recursion_limit": RECURSION_LIMIT_LEARNING_MEMORY_KEEPER}
+
+@pytest.mark.anyio
+async def test_stale_tag_is_terminal_without_model_or_general_read(specialist):
+    service = MagicMock()
+    service.get_item_by_id = AsyncMock(return_value=None)
+    service.list_memory_items = AsyncMock()
+    with patch(
+        "runestone.agents.specialists.learning_memory_keeper.provide_memory_item_service",
+        service_provider(service),
+    ):
+        result = await specialist.run(context("[memory:area_to_improve:99]"))
+    assert result.status == "no_action"
+    assert result.artifacts["reason"] == "stale_target"
+    specialist.structured_model.ainvoke.assert_not_awaited()
+    service.list_memory_items.assert_not_awaited()
 
 
-def test_learning_memory_keeper_prompt_terminal_noop_on_not_found():
-    """Prompt must make missing-item failures a terminal stop, not a fallback."""
-    assert "terminal_no_ops" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
-    assert "Memory item with id ... not found" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
-    assert "content update category mismatch" in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
-    assert "Do NOT retry, create replacements, or continue." in LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT
+@pytest.mark.anyio
+async def test_non_allowlisted_target_rejects_all_writes(specialist):
+    specialist.structured_model.ainvoke.return_value = LearningMemoryKeeperExtraction(
+        decision="update_memory", mutations=[LearningMemoryMutation(target_id=99, status="mastered")]
+    )
+    service = MagicMock()
+    service.list_memory_items = AsyncMock(return_value=[item()])
+    with patch(
+        "runestone.agents.specialists.learning_memory_keeper.provide_memory_item_service",
+        service_provider(service),
+    ):
+        result = await specialist.run(context())
+    assert result.status == "error"
+    assert result.artifacts["reason"] == "target_not_allowed"
+    service.update_item_status.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_upsert_and_partial_failure_report_actual_actions(specialist):
+    specialist.structured_model.ainvoke.return_value = LearningMemoryKeeperExtraction(
+        decision="update_memory",
+        creates=[
+            LearningMemoryCreate(key="articles", content="Recurring issue"),
+            LearningMemoryCreate(key="word order", content="Recurring issue"),
+        ],
+    )
+    service = MagicMock()
+    service.list_memory_items = AsyncMock(return_value=[])
+    service.upsert_memory_item = AsyncMock(side_effect=[item(), RuntimeError("private payload")])
+    with patch(
+        "runestone.agents.specialists.learning_memory_keeper.provide_memory_item_service",
+        service_provider(service),
+    ):
+        result = await specialist.run(context())
+    assert result.status == "error"
+    assert [action.status for action in result.actions] == ["success", "error"]
+    assert result.artifacts["upserted"] == 1
+    assert service.upsert_memory_item.await_count == 2
+
+
+@pytest.mark.anyio
+async def test_exact_key_recurrence_is_reported_as_upsert_not_creation(specialist):
+    specialist.structured_model.ainvoke.return_value = LearningMemoryKeeperExtraction(
+        decision="update_memory",
+        creates=[LearningMemoryCreate(key="articles", content="Recurring issue", status="struggling")],
+    )
+    existing = item()
+    existing.status = "mastered"
+    service = MagicMock()
+    service.list_memory_items = AsyncMock(return_value=[existing])
+    service.upsert_memory_item = AsyncMock(return_value=item())
+    with patch(
+        "runestone.agents.specialists.learning_memory_keeper.provide_memory_item_service",
+        service_provider(service),
+    ):
+        result = await specialist.run(context())
+
+    assert result.status == "action_taken"
+    assert result.artifacts["upserted"] == 1
+    assert "created" not in result.artifacts
+    assert result.actions[0].summary == "Upserted articles"
+
+
+@pytest.mark.anyio
+async def test_learning_keeper_returns_bounded_schema_error(specialist):
+    specialist.structured_model.ainvoke.side_effect = OutputParserException("raw private output")
+    service = MagicMock()
+    service.list_memory_items = AsyncMock(return_value=[])
+    with patch(
+        "runestone.agents.specialists.learning_memory_keeper.provide_memory_item_service",
+        service_provider(service),
+    ):
+        result = await specialist.run(context())
+    assert result.status == "error"
+    assert result.artifacts["reason"] == "schema_validation_failed"

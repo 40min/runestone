@@ -1,218 +1,414 @@
-"""
-Post-response specialist that maintains learning progress memory (areas to improve).
-"""
+"""Deterministic structured-output pipeline for learning-progress memory."""
 
 import json
 import logging
+import re
+from dataclasses import dataclass
+from typing import Literal, Self
 
-from langchain.agents import create_agent
-from langchain.agents.middleware import ModelRetryMiddleware, ToolCallLimitMiddleware
-from langchain_core.messages import HumanMessage
+from langchain_core.exceptions import OutputParserException
+from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 
 from runestone.agents.llm import build_chat_model
-from runestone.agents.specialists.base import (
-    BaseSpecialist,
-    SpecialistContext,
-    SpecialistResult,
-    parse_specialist_result,
-)
-from runestone.agents.tools.context import AgentContext
-from runestone.agents.tools.memory import (
-    delete_memory_item,
-    read_areas_to_improve,
-    update_memory_item_content,
-    update_memory_priority,
-    update_memory_status,
-    upsert_memory_item,
-)
+from runestone.agents.service_providers import provide_memory_item_service
+from runestone.agents.specialists.base import BaseSpecialist, SpecialistAction, SpecialistContext, SpecialistResult
+from runestone.api.memory_item_schemas import MemoryCategory, MemorySortBy, SortDirection
 from runestone.config import Settings
-from runestone.constants import RECURSION_LIMIT_LEARNING_MEMORY_KEEPER
 
 logger = logging.getLogger(__name__)
+MEMORY_TAG_PATTERN = re.compile(r"\[memory:area_to_improve:(\d+)\]")
+LEARNING_STATUSES = ("struggling", "improving", "mastered")
 
 LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT = """
-You are LearningMemoryKeeper, an internal agent that maintains area_to_improve memory
-about a student's learning progress.
+<role>
+You are LearningMemoryKeeper, an internal agent that maintains `area_to_improve`
+memory about a student's learning progress.
 You do not interact with the student. You observe a single turn and decide whether
 learning memory should be updated.
+</role>
 
-<tool_usage>
-read_areas_to_improve:
-- Only call when your case logic requires a pre-read (Case A or Case C without ID tag).
-- Never call if you already have the target item ID from a [memory:area_to_improve:<id>] tag.
-</tool_usage>
+<context_analysis>
+You receive:
+- `student_message`: the student's message in the current turn
+- `teacher_response`: the teacher's response in the current turn
+- `tagged_target_ids`: teacher memory tags already parsed and authorized by Python
+- `existing_targets`: the current allowed `area_to_improve` targets for this turn
+
+Mutations may reference only exact `target_id` values from `existing_targets`.
+</context_analysis>
 
 <fast_path>
-FIRST: Check if teacher_response contains [memory:area_to_improve:<id>].
-If yes, pick the appropriate write tool(s) based on what the signal requires,
-call them, then return the JSON immediately. ZERO reads.
+FIRST: Check `tagged_target_ids`.
+If present, treat those IDs as the direct targets for this turn. Prefer precise mutations
+for those IDs and do not invent replacement creates for the same signal.
 
-  - Mastery / improvement / status-change signal
-    → update_memory_status only.
+  - Mastery, improvement, regression, or status-change signal
+    -> set `status` only.
   - Explicit content correction (the wording of the memory item should change)
-    → update_memory_item_content only.
+    -> set `content` only.
   - Both a status change AND a content correction are clearly present
-    → call update_memory_status first, then update_memory_item_content once.
-    Two calls maximum. Return immediately after.
+    -> set both `status` and `content` in the same mutation.
+  - Explicit reprioritization
+    -> set `priority` only.
+  - Explicit request to remove the stored topic, or confirmation that the stored topic is wrong
+    -> set `delete=true`.
 
-STALE ID RULE: If any write tool returns "Memory item with id ... not found"
-for the ID from the tag, the tag is stale. Return no_action immediately.
-Do NOT read, upsert, use the same ID again, or attempt any recovery.
-
-This is the most common case. Do NOT call read_areas_to_improve.
-Do NOT call any write tool more than once per intent.
+This is the most common case. Do not mutate IDs outside `tagged_target_ids` when they are present.
 </fast_path>
 
 <decision_tree>
-If no [memory:area_to_improve:<id>] tag found, classify into exactly ONE case:
+If `tagged_target_ids` is empty, classify into exactly ONE case:
 
-Case A — Student explicitly asks to edit a learning topic.
+Case A: Student explicitly asks to edit a learning topic.
   Examples: "mark this as mastered", "reprioritize my learning areas",
   "forget this old learning topic", "remove that old grammar issue".
-  → Call read_areas_to_improve once, then write. One read allowed.
-  → If the student explicitly asks to forget/remove a learning topic, use
-    delete_memory_item after the read identifies the correct item.
+  -> use `existing_targets` to identify the matching item, then return a mutation.
+  -> if the student explicitly asks to forget or remove a learning topic, return `delete=true`.
+  -> if no clear existing target matches the student's request, return `decision="no_action"`.
 
-Case B — Teacher explicitly identifies a durable learning issue (without an ID tag).
+Case B: Teacher explicitly identifies a durable learning issue (without an ID tag).
   The teacher signal must indicate the issue is structural, repeated, or worth tracking.
   A routine one-off correction, a typo, a spelling slip, or a vocabulary gap alone is NOT enough.
   Examples:
     "Note: student repeatedly struggles with articles"
     "This is a recurring issue: word order in questions"
-    "Word order error — this keeps coming up"
-  → Call upsert_memory_item directly. ZERO reads.
+    "Word order error. This keeps coming up"
+  -> return one create plan.
   Provide thorough details:
-  - key: concise English descriptor of the grammar/language concept
-  - content: clear explanation of what the student struggles with,
+  - `key`: concise English descriptor of the grammar or language concept
+  - `content`: clear explanation of what the student struggles with,
     including examples from the conversation when available
-  - status: "struggling" (default for new issues)
-  - priority: set based on severity (0=critical, 9=minor)
+  - `status`: `struggling` by default for new issues
+  - `priority`: set based on severity (`0` critical, `9` minor)
 
-Case C — Teacher signals improvement, mastery, or status change, but NO ID tag.
-  Examples: "You have now mastered verb conjugation" (without [memory:...] tag).
-  → Call read_areas_to_improve once to find the item, then write.
-  → If no matching item found and the signal is a learning need, fall back to
-    upsert_memory_item to create it.
-  → If the signal marks mastery of an unknown topic, return no_action.
+Case C: Teacher signals improvement, mastery, regression, content correction, or priority change, but NO ID tag.
+  Examples: "You have now mastered verb conjugation" (without `[memory:...]` tag).
+  -> use `existing_targets` to find the matching item, then return a mutation.
+  -> if no matching item is found and the signal is a learning need, fall back to a create plan.
+  -> if the signal marks mastery of an unknown topic, return `decision="no_action"`.
 
-None of the above → return no_action. ZERO tool calls.
+None of the above
+  -> return `decision="no_action"`.
 </decision_tree>
 
 <terminal_no_ops>
-If a write tool returns one of these errors, stop immediately. Return no_action.
-Do NOT retry, create replacements, or continue.
-- "Memory item with id ... not found"
-- "content update category mismatch"
+- If `tagged_target_ids` are present, do not invent replacement creates for those tagged topics.
+- Do not mutate an existing target unless the current turn clearly refers to that topic.
+- If multiple existing targets are plausible but the turn does not clearly identify one, return `decision="no_action"`.
 </terminal_no_ops>
 
 <conservative_bias>
-- Default to no_action. Only act on explicit, durable signals.
+- Default to `decision="no_action"`. Only act on explicit, durable signals.
 - One write intent per item per turn.
-- Do not use both update_memory_status and update_memory_priority on the same
-  item unless the signal explicitly requires both.
-- Use update_memory_priority only for the single item directly implicated
-  by the current turn's signal. Never rebalance multiple items.
-- Use `area_to_improve` with status `mastered` for topics the student has
-  resolved or learned. Do not create a separate strength item.
+- Do not use both `status` and `priority` on the same item unless the signal explicitly requires both.
+- Use `priority` only for the single item directly implicated by the
+  current turn's signal. Never rebalance multiple items.
+- Use `area_to_improve` with status `mastered` for topics the student
+  has resolved or learned. Do not create a separate strength item.
+- Represent recurring issues as creates so Python can upsert by key.
 </conservative_bias>
 
-<output_contract>
-Return valid JSON matching this exact shape and nothing else:
-{
-  "status": "no_action" | "action_taken" | "error",
-  "info_for_teacher": string,
-  "artifacts": {
-    "trigger_source": "teacher" | "student" | "none",
-    "summary": string,
-    "notes": [string]
-  }
-}
-</output_contract>
+<extraction_contract>
+- Return `decision="update_memory"` only when `creates` or `mutations` is non-empty.
+- `trigger_source` must be `teacher`, `student`, or `none`.
+- `creates` are for durable new or recurring issues.
+- `mutations` may use only `target_id` values from `existing_targets`.
+- Default to `decision="no_action"`, `trigger_source="none"`, and empty operation lists.
+</extraction_contract>
 """
 
 
+class LearningMemoryCreate(BaseModel):
+    """One proposed area-to-improve upsert."""
+
+    model_config = ConfigDict(extra="forbid")
+    key: str = Field(min_length=1, max_length=100)
+    content: str = Field(min_length=1)
+    status: Literal["struggling", "improving", "mastered"] = "struggling"
+    priority: int | None = Field(None, ge=0, le=9)
+
+    @field_validator("key", "content", mode="before")
+    @classmethod
+    def trim_text(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+
+class LearningMemoryMutation(BaseModel):
+    """One proposed mutation of an allowlisted learning target."""
+
+    model_config = ConfigDict(extra="forbid")
+    target_id: StrictInt = Field(gt=0)
+    content: str | None = Field(None, min_length=1)
+    status: Literal["struggling", "improving", "mastered"] | None = None
+    priority: int | None = Field(None, ge=0, le=9)
+    delete: bool = False
+
+    @field_validator("content", mode="before")
+    @classmethod
+    def trim_content(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def validate_mutation(self) -> Self:
+        changes = (self.content is not None, self.status is not None, self.priority is not None)
+        if self.delete and any(changes):
+            raise ValueError("delete_not_exclusive")
+        if not self.delete and not any(changes):
+            raise ValueError("empty_mutation")
+        return self
+
+
+class LearningMemoryKeeperExtraction(BaseModel):
+    """Bounded extraction plan for one learning-memory run."""
+
+    model_config = ConfigDict(extra="forbid")
+    decision: Literal["no_action", "update_memory"]
+    trigger_source: Literal["teacher", "student", "none"] = "none"
+    creates: list[LearningMemoryCreate] = Field(default_factory=list)
+    mutations: list[LearningMemoryMutation] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_plan(self) -> Self:
+        if (self.decision == "update_memory") != bool(self.creates or self.mutations):
+            raise ValueError("decision_list_mismatch")
+
+        creates: dict[str, LearningMemoryCreate] = {}
+        for operation in self.creates:
+            previous = creates.get(operation.key)
+            if previous is not None and previous != operation:
+                raise ValueError("conflicting_operations")
+            creates.setdefault(operation.key, operation)
+        mutations: dict[int, LearningMemoryMutation] = {}
+        for operation in self.mutations:
+            previous = mutations.get(operation.target_id)
+            if previous is not None and previous != operation:
+                raise ValueError("conflicting_operations")
+            mutations.setdefault(operation.target_id, operation)
+        if len(creates) + len(mutations) > 3:
+            raise ValueError("over_limit")
+        self.creates = list(creates.values())
+        self.mutations = list(mutations.values())
+        return self
+
+
+@dataclass(frozen=True)
+class AllowedLearningTarget:
+    """Sanitized snapshot exposed to the extraction model."""
+
+    id: int
+    key: str
+    content: str
+    status: str
+    priority: int | None
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "key": self.key,
+            "content": self.content,
+            "status": self.status,
+            "priority": self.priority,
+        }
+
+
+def parse_learning_memory_tag_ids(text: str | None) -> list[int]:
+    """Return unique syntactically valid teacher memory tag IDs in source order."""
+    if not text:
+        return []
+    return list(dict.fromkeys(int(match) for match in MEMORY_TAG_PATTERN.findall(text)))
+
+
 class LearningMemoryKeeperSpecialist(BaseSpecialist):
-    """Tool-using post-response specialist for learning memory (area_to_improve) maintenance."""
+    """Extract and apply bounded learning-memory operations deterministically."""
 
     def __init__(self, settings: Settings):
         super().__init__(name="learning_memory_keeper")
         self.settings = settings
         self.model = build_chat_model(settings, "learning_memory_keeper")
-        self.agent = self._build_agent()
         logger.info(
-            "[agents:learning_memory_keeper] Initialized LearningMemoryKeeperSpecialist with provider=%s, model=%s",
+            "[agents:learning_memory_keeper] initialized provider=%s model=%s",
             settings.memory_keeper_provider,
             settings.memory_keeper_model,
         )
 
-    def _build_agent(self):
-        """Build the internal tool-using agent for learning memory maintenance."""
-        agent_settings = self.settings.get_agent_llm_settings("learning_memory_keeper")
-        return create_agent(
-            model=self.model,
-            tools=[
-                read_areas_to_improve,
-                upsert_memory_item,
-                update_memory_item_content,
-                update_memory_status,
-                update_memory_priority,
-                delete_memory_item,
-            ],
-            middleware=[
-                ModelRetryMiddleware(max_retries=agent_settings.max_retries),
-                ToolCallLimitMiddleware(
-                    tool_name="read_areas_to_improve",
-                    run_limit=1,
-                    exit_behavior="end",
-                ),
-                ToolCallLimitMiddleware(
-                    tool_name="update_memory_status",
-                    run_limit=3,
-                    exit_behavior="end",
-                ),
-                ToolCallLimitMiddleware(
-                    tool_name="update_memory_item_content",
-                    run_limit=3,
-                    exit_behavior="end",
-                ),
-            ],
-            system_prompt=LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT,
-            response_format=SpecialistResult,
-            context_schema=AgentContext,
+    async def run(self, context: SpecialistContext) -> SpecialistResult:
+        tagged_ids = parse_learning_memory_tag_ids(context.teacher_response)
+        try:
+            async with provide_memory_item_service() as service:
+                targets = await self._load_targets(service, context.user.id, tagged_ids)
+                if tagged_ids and not targets:
+                    logger.info("[agents:learning_memory_keeper] reason=stale_target")
+                    return self._result("no_action", "none", "stale_target")
+
+                payload = {
+                    "student_message": context.message,
+                    "teacher_response": context.teacher_response,
+                    "tagged_target_ids": tagged_ids,
+                    "existing_targets": [target.as_payload() for target in targets.values()],
+                }
+                extraction = await self._extract(payload)
+                if isinstance(extraction, SpecialistResult):
+                    return extraction
+                if not extraction.creates and not extraction.mutations:
+                    return self._result("no_action", extraction.trigger_source, "empty_plan")
+                disallowed = [m.target_id for m in extraction.mutations if m.target_id not in targets]
+                if disallowed:
+                    logger.warning("[agents:learning_memory_keeper] reason=target_not_allowed")
+                    return self._result("error", extraction.trigger_source, "target_not_allowed")
+                return await self._execute(service, context.user.id, extraction, targets)
+        except Exception as exc:
+            logger.warning(
+                "[agents:learning_memory_keeper] reason=service_failed exception=%s",
+                type(exc).__name__,
+                exc_info=True,
+            )
+            return self._result("error", "none", "service_failed", type(exc).__name__)
+
+    async def _load_targets(self, service, user_id: int, tagged_ids: list[int]) -> dict[int, AllowedLearningTarget]:
+        if tagged_ids:
+            rows = [await service.get_item_by_id(item_id) for item_id in tagged_ids]
+        else:
+            rows = await service.list_memory_items(
+                user_id,
+                category=MemoryCategory.AREA_TO_IMPROVE,
+                statuses=list(LEARNING_STATUSES),
+                sort_by=MemorySortBy.UPDATED_AT,
+                sort_direction=SortDirection.DESC,
+                limit=100,
+            )
+        targets: dict[int, AllowedLearningTarget] = {}
+        for row in rows:
+            if row is None or row.user_id != user_id or row.category != MemoryCategory.AREA_TO_IMPROVE.value:
+                if row is not None:
+                    logger.warning("[agents:learning_memory_keeper] reason=invalid_target")
+                continue
+            targets[row.id] = AllowedLearningTarget(
+                id=row.id,
+                key=row.key,
+                content=row.content,
+                status=row.status,
+                priority=row.priority,
+            )
+        return targets
+
+    async def _extract(self, payload: dict[str, object]) -> LearningMemoryKeeperExtraction | SpecialistResult:
+        model = self.model.with_structured_output(LearningMemoryKeeperExtraction)
+        try:
+            return await model.ainvoke(
+                [
+                    SystemMessage(content=LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT),
+                    HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
+                ]
+            )
+        except OutputParserException as exc:
+            logger.warning(
+                "[agents:learning_memory_keeper] reason=schema_validation_failed exception=%s",
+                type(exc).__name__,
+            )
+            return self._result("error", "none", "schema_validation_failed", type(exc).__name__)
+        except Exception as exc:
+            logger.warning(
+                "[agents:learning_memory_keeper] reason=model_failed exception=%s",
+                type(exc).__name__,
+                exc_info=True,
+            )
+            return self._result("error", "none", "model_failed", type(exc).__name__)
+
+    async def _execute(
+        self,
+        service,
+        user_id: int,
+        extraction: LearningMemoryKeeperExtraction,
+        targets: dict[int, AllowedLearningTarget],
+    ) -> SpecialistResult:
+        actions: list[SpecialistAction] = []
+        counts = {"upserted": 0, "updated": 0, "deleted": 0, "failed": 0}
+        operations: list[tuple[str, object]] = [
+            *(("create", operation) for operation in extraction.creates),
+            *(("mutation", operation) for operation in extraction.mutations),
+        ]
+        for operation_type, operation in operations:
+            try:
+                if operation_type == "create":
+                    create = operation
+                    item = await service.upsert_memory_item(
+                        user_id,
+                        MemoryCategory.AREA_TO_IMPROVE,
+                        create.key,
+                        create.content,
+                        create.status,
+                        create.priority,
+                    )
+                    counts["upserted"] += 1
+                    actions.append(self._action("upsert_memory_item", "success", f"Upserted {item.key}"))
+                    continue
+
+                mutation = operation
+                current = await service.get_item_by_id(mutation.target_id)
+                if (
+                    current is None
+                    or current.user_id != user_id
+                    or current.category != MemoryCategory.AREA_TO_IMPROVE.value
+                ):
+                    logger.warning("[agents:learning_memory_keeper] reason=stale_target")
+                    continue
+                if mutation.delete:
+                    await service.delete_item(mutation.target_id, user_id)
+                    counts["deleted"] += 1
+                    actions.append(self._action("delete_item", "success", f"Deleted item {mutation.target_id}"))
+                    continue
+                for tool, value, call in (
+                    ("update_item_status", mutation.status, service.update_item_status),
+                    ("update_item_content", mutation.content, service.update_item_content_in_category),
+                    ("update_item_priority", mutation.priority, service.update_item_priority),
+                ):
+                    if value is None:
+                        continue
+                    if tool == "update_item_content":
+                        await call(mutation.target_id, MemoryCategory.AREA_TO_IMPROVE, value, user_id)
+                    else:
+                        await call(mutation.target_id, value, user_id)
+                    counts["updated"] += 1
+                    actions.append(self._action(tool, "success", f"Updated item {mutation.target_id}"))
+            except Exception as exc:
+                counts["failed"] += 1
+                logger.warning(
+                    "[agents:learning_memory_keeper] reason=service_failed exception=%s",
+                    type(exc).__name__,
+                    exc_info=True,
+                )
+                actions.append(self._action("memory_item_service", "error", "Memory operation failed"))
+                break
+
+        status = "error" if counts["failed"] else ("action_taken" if actions else "no_action")
+        return SpecialistResult(
+            status=status,
+            actions=actions,
+            info_for_teacher=(
+                f"Applied {len([a for a in actions if a.status == 'success'])} learning memory change(s)."
+                if actions
+                else ""
+            ),
+            artifacts={
+                "trigger_source": extraction.trigger_source,
+                "reason": "service_failed" if counts["failed"] else ("applied" if actions else "stale_target"),
+                **counts,
+            },
         )
 
-    async def run(self, context: SpecialistContext) -> SpecialistResult:
-        payload = {
-            "student_message": context.message,
-            "teacher_response": context.teacher_response,
-        }
+    @staticmethod
+    def _action(tool: str, status: Literal["success", "error"], summary: str) -> SpecialistAction:
+        return SpecialistAction(tool=tool, status=status, summary=summary)
 
-        try:
-            result = await self.agent.ainvoke(
-                {"messages": [HumanMessage(content=json.dumps(payload, ensure_ascii=False))]},
-                config={"recursion_limit": RECURSION_LIMIT_LEARNING_MEMORY_KEEPER},
-                context=AgentContext(user=context.user),
-            )
-        except Exception as exc:
-            logger.warning("[agents:learning_memory_keeper] Agent execution failed: %s", exc, exc_info=True)
-            return SpecialistResult(
-                status="error",
-                actions=[],
-                info_for_teacher="",
-                artifacts={
-                    "trigger_source": "unknown",
-                    "summary": "agent_execution_failed",
-                    "notes": [type(exc).__name__],
-                },
-            )
-
-        parsed = parse_specialist_result(result)
-        if parsed is None:
-            logger.warning("[agents:learning_memory_keeper] Failed to parse final agent result")
-            return SpecialistResult(
-                status="error",
-                actions=[],
-                info_for_teacher="",
-                artifacts={"trigger_source": "unknown", "summary": "invalid_agent_output", "notes": []},
-            )
-        return parsed
+    @staticmethod
+    def _result(
+        status: Literal["no_action", "action_taken", "error"],
+        trigger_source: str,
+        reason: str,
+        exception_type: str | None = None,
+    ) -> SpecialistResult:
+        artifacts: dict[str, object] = {"trigger_source": trigger_source, "reason": reason}
+        if exception_type:
+            artifacts["exception_type"] = exception_type
+        return SpecialistResult(status=status, actions=[], info_for_teacher="", artifacts=artifacts)
