@@ -176,6 +176,8 @@ Rules:
 - for `post_response`, populate only `post_response`
 - never speculate about future teacher behavior during pre-stage planning
 - use the actual teacher reply as a primary signal during post-stage planning
+- return routing items that only explain which specialist should run and why;
+  execution details such as specialist history windows are manager-owned policy
 
 #### WordKeeper
 
@@ -346,7 +348,9 @@ learning state still lives only in the normal memory-item statuses such as
 **PersonalMemoryKeeper** principles:
 
 - Append-only: Python uses only `append_personal_info_item`; the specialist never reads memory.
-- Receives `chat_history_size=2` so `run()` can extract `previous_teacher_message` to detect drill/exercise context; raw history is not exposed to the LLM.
+- Receives a manager-owned two-message history window so `run()` can extract
+  `previous_teacher_message` to detect drill/exercise context; raw history is not
+  exposed to the LLM.
 - Uses one structured extraction call to classify practice responses and extract at
   most five facts; Python validates the plan before appending.
 - Duplicate `personal_info` rows from append-first writes are an accepted tradeoff; reconciliation belongs to `memory_maintainer`.
@@ -591,6 +595,18 @@ Output:
   - `post_response`
   - `audit`
 
+Routing items contain only:
+
+- specialist `name`
+- routing `reason`
+
+`AgentsManager` owns deterministic specialist history policy:
+
+- `news_agent`: 2 messages
+- `word_keeper`: 0 messages
+- `learning_memory_keeper`: 0 messages
+- `personal_memory_keeper`: 2 messages
+
 ### TeacherAgent Contract
 
 Input:
@@ -657,7 +673,8 @@ Input:
 
 - `student_message`: student's current message
 - `teacher_response`: teacher's current response
-- `previous_teacher_message`: immediately preceding teacher message (extracted from `chat_history_size=2`; not exposed directly to the LLM)
+- `previous_teacher_message`: immediately preceding teacher message (extracted from
+  the manager-owned two-message history window; not exposed directly to the LLM)
 
 Output:
 
@@ -724,7 +741,9 @@ Decisions:
 - Split the single `MemoryKeeper` into two focused specialists to reduce prompt complexity and tool surface.
 - `LearningMemoryKeeper` owns all `area_to_improve` writes; receives zero chat history.
 - `PersonalMemoryKeeper` is append-only (single tool: `append_personal_info_item`); never reads memory.
-- `PersonalMemoryKeeper` receives `chat_history_size=2` so `run()` can extract `previous_teacher_message` for drill detection — raw history is not forwarded to the LLM.
+- `PersonalMemoryKeeper` receives a manager-owned two-message window so `run()` can
+  extract `previous_teacher_message` for drill detection — raw history is not
+  forwarded to the LLM.
 - Both specialists share `MEMORY_KEEPER_*` config; no new env vars needed.
 
 ### 2026-07-06: MemoryKeepers moved to deterministic structured output
@@ -733,6 +752,23 @@ Decisions:
 
 - Replace both tool-calling agent loops with one structured extraction per run.
 - Keep all authorization, target allowlisting, cardinality checks, and persistence in Python.
+
+### 2026-07-07: Specialist History Windows Moved Fully Into Manager Policy
+
+Source: superseded `docs/todo/specialist-history-size-determinism.md`
+
+Decisions:
+
+- Remove `chat_history_size` from coordinator prompts and the `RoutingItem` contract.
+- Keep coordinator output focused on specialist selection plus routing reason only.
+- Keep current effective history behavior unchanged by moving the policy fully into
+  `AgentsManager`.
+- Hardcode the current specialist windows as manager-owned constants:
+  `news_agent=2`, `word_keeper=0`, `learning_memory_keeper=0`,
+  `personal_memory_keeper=2`.
+- Continue passing the immediately previous teacher message to `word_keeper` and
+  deriving `previous_teacher_message` for `PersonalMemoryKeeper` without exposing raw
+  history to the model payload.
 - Pre-read only tagged learning targets when tags are present; otherwise supply at
   most 100 sanitized learning targets for semantic reconciliation.
 - Preserve append-only personal memory and classify drill responses from the

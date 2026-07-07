@@ -52,8 +52,13 @@ class AgentsManager:
     COORDINATOR_MAX_HISTORY_MESSAGES = 5
     POST_TASK_TIMEOUT_SECONDS = 25
     STARTER_MEMORY_AREA_LIMIT = 5
-    NO_CHAT_HISTORY_SPECIALISTS = frozenset({"word_keeper", "learning_memory_keeper"})
-    PERSONAL_MEMORY_KEEPER_HISTORY_SIZE = 2
+    DEFAULT_SPECIALIST_HISTORY_SIZE = 0
+    SPECIALIST_HISTORY_SIZES = {
+        "news_agent": 2,
+        "word_keeper": 0,
+        "learning_memory_keeper": 0,
+        "personal_memory_keeper": 2,
+    }
 
     def __init__(
         self,
@@ -108,26 +113,28 @@ class AgentsManager:
             logger.warning("allowed_origins configuration issue: %s", e)
 
     @classmethod
-    def _effective_specialist_history_size(cls, specialist_name: str, requested_history_size: int) -> int:
+    def _effective_specialist_history_size(cls, specialist_name: str) -> int:
         """
-        Apply manager-owned history-window overrides for specialists.
+        Return the manager-owned history-window policy for a specialist.
 
-        Some post/pre specialists should never receive raw chat history because their
-        trigger inputs are already passed through dedicated context fields:
+        Most specialists are deterministic single-turn consumers. The current exceptions
+        are kept as explicit orchestration policy here instead of as coordinator output.
+        That keeps the coordinator contract focused on "which specialist" and "why"
+        while the manager owns execution details.
+
+        Some specialists should never receive raw chat history because their trigger
+        inputs are already passed through dedicated context fields:
         - `word_keeper` uses the current save request plus the immediately previous
           teacher message when needed.
         - `learning_memory_keeper` acts only on the current student message and the
           current turn's teacher response — chat history is always forced to zero.
-        - `personal_memory_keeper` receives `chat_history_size=2` so its `run()` method
+        - `personal_memory_keeper` receives a two-message window so its `run()` method
           can extract the immediately preceding teacher message (`previous_teacher_message`)
           to detect and filter out drill/exercise responses. It does NOT expose raw history
           to the agent — only the extracted field reaches the LLM payload.
+        - `news_agent` keeps a tiny recent window for immediate follow-up news requests.
         """
-        if specialist_name in cls.NO_CHAT_HISTORY_SPECIALISTS:
-            return 0
-        if specialist_name == "personal_memory_keeper":
-            return cls.PERSONAL_MEMORY_KEEPER_HISTORY_SIZE
-        return requested_history_size
+        return cls.SPECIALIST_HISTORY_SIZES.get(specialist_name, cls.DEFAULT_SPECIALIST_HISTORY_SIZE)
 
     # ------------------------------------------------------------------
     # Phase methods (public, individually testable)
@@ -484,7 +491,6 @@ class AgentsManager:
                     RoutingItem(
                         name="word_keeper",
                         reason="teacher emitted vocabulary_candidates",
-                        chat_history_size=0,
                     )
                 ],
                 message=message,
@@ -722,10 +728,7 @@ class AgentsManager:
 
         async def _invoke(item, specialist):
             started = time.monotonic()
-            effective_history_size = self._effective_specialist_history_size(
-                item.name,
-                item.chat_history_size,
-            )
+            effective_history_size = self._effective_specialist_history_size(item.name)
 
             history_window = history[-effective_history_size:] if effective_history_size else []
             if effective_history_size and len(history) > effective_history_size:
