@@ -196,12 +196,6 @@ class RoutingItem(BaseModel):
 
     name: str = Field(..., description="Specialist name to invoke")
     reason: str = Field(..., description="Why this specialist should run")
-    chat_history_size: int = Field(
-        ...,
-        description="Number of most recent chat messages to pass to the specialist",
-        ge=0,
-        le=20,
-    )
 
 
 class CoordinatorPlan(BaseModel):

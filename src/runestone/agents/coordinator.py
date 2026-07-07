@@ -33,11 +33,6 @@ Your sole job is to decide which specialist agents to route to for the current s
 - Never include `teacher` in any routing plan — the teacher is always invoked by the manager.
 - Never invent tool outputs. Tools run after planning.
 - Always emit valid JSON matching the CoordinatorPlan schema. No extra text outside the JSON.
-
-## Chat History Window
-- Set `chat_history_size` to a small non-negative integer
-  (e.g. 0, 2, 4, 6) to keep specialist inputs stable and testable.
-- Default to `2` for most specialists unless a specific routing rule below says otherwise.
 """
 
 
@@ -75,8 +70,6 @@ COORDINATOR_PRE_RESPONSE_PROMPT = (
   (e.g. "next task", "let's continue", "another exercise", "I'm done").
 - Words were already saved in earlier turns — do not re-trigger on later turns.
 
-Set `chat_history_size` to `0` for `word_keeper`.
-
 ### news_agent (pre)
 **Route when:** The student's current message asks about a specific real-time or current-events topic that requires
 live data — such as news about a subject, place, or event, current weather, or any other factual query that cannot
@@ -89,8 +82,6 @@ be answered from static knowledge.
 **Do NOT route when:**
 - The topic is vague or unspecified (e.g. "give me some news", "any news?"). Let the teacher clarify on the next turn.
 - The student is asking a grammar or vocabulary question with no real-time component.
-
-For all normal news_agent cases, set `chat_history_size` to `2`.
 """
 )
 
@@ -125,8 +116,6 @@ COORDINATOR_POST_RESPONSE_PROMPT = (
 - The teacher merely explains grammar rules using instructional verbs like "kom ihåg" or "tänk på".
 - The teacher only corrects a misspelled/invalid word (vocabulary event, not learning memory).
 
-Set `chat_history_size` to `0` for `learning_memory_keeper`.
-
 ### personal_memory_keeper (post)
 **Route when:**
 - The student's `message` contains a clear, durable personal fact (for example: native language,
@@ -139,8 +128,6 @@ Set `chat_history_size` to `0` for `learning_memory_keeper`.
 - The student is just practicing sentences or doing drills.
 - The student is writing fictional examples or translating practice sentences (e.g. in response to a teacher exercise).
 - The signal is about learning progress (area_to_improve) — route `learning_memory_keeper`.
-
-Set `chat_history_size` to `2` for `personal_memory_keeper`.
 """
 )
 

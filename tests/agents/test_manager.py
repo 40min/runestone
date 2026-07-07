@@ -536,7 +536,7 @@ async def test_prepare_pre_turn_passes_bounded_history_into_news_agent(
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(
-        return_value=_make_plan(pre=[RoutingItem(name="news_agent", reason="topic", chat_history_size=2)])
+        return_value=_make_plan(pre=[RoutingItem(name="news_agent", reason="topic")])
     )
 
     class _CaptureSpecialist(BaseSpecialist):
@@ -1248,9 +1248,7 @@ def test_load_current_recall_words_returns_empty_on_user_mismatch(mock_settings,
 async def test_run_post_turn_runs_post_specialists(mock_settings, mock_user, mock_side_effect_service):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_post_turn = AsyncMock(
-        return_value=_make_plan(
-            post=[RoutingItem(name="learning_memory_keeper", reason="save memory", chat_history_size=0)]
-        )
+        return_value=_make_plan(post=[RoutingItem(name="learning_memory_keeper", reason="save memory")])
     )
 
     class _ActionSpecialist(BaseSpecialist):
@@ -1387,7 +1385,7 @@ async def test_run_post_turn_persists_coordinator_and_direct_word_keeper_results
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_post_turn = AsyncMock(
-        return_value=_make_plan(post=[RoutingItem(name="learning_memory_keeper", reason="memory", chat_history_size=0)])
+        return_value=_make_plan(post=[RoutingItem(name="learning_memory_keeper", reason="memory")])
     )
 
     class _NamedSpecialist(BaseSpecialist):
@@ -1431,7 +1429,7 @@ async def test_run_post_turn_forces_learning_memory_keeper_history_to_zero(
     capture = _LearningMemoryKeeperCaptureSpecialist()
     manager.registry.register(capture, overwrite=True)
     manager.coordinator.plan_post_turn = AsyncMock(
-        return_value=_make_plan(post=[RoutingItem(name="learning_memory_keeper", reason="memory", chat_history_size=2)])
+        return_value=_make_plan(post=[RoutingItem(name="learning_memory_keeper", reason="memory")])
     )
 
     await manager.run_post_turn(
@@ -1470,7 +1468,7 @@ async def test_run_post_turn_forces_personal_memory_keeper_history_to_two(
     capture = _PersonalMemoryKeeperCaptureSpecialist()
     manager.registry.register(capture, overwrite=True)
     manager.coordinator.plan_post_turn = AsyncMock(
-        return_value=_make_plan(post=[RoutingItem(name="personal_memory_keeper", reason="memory", chat_history_size=0)])
+        return_value=_make_plan(post=[RoutingItem(name="personal_memory_keeper", reason="memory")])
     )
 
     history = [
@@ -1895,9 +1893,10 @@ async def test_specialist_history_is_truncated(
 ):
     manager = _make_manager(mock_settings)
     capture = _CaptureHistorySpecialist()
-    manager.registry.register(capture)
+    capture.name = "news_agent"
+    manager.registry.register(capture, overwrite=True)
     manager.coordinator.plan_pre_turn = AsyncMock(
-        return_value=_make_plan(pre=[RoutingItem(name="capture_history", reason="test", chat_history_size=1)])
+        return_value=_make_plan(pre=[RoutingItem(name="news_agent", reason="test")])
     )
 
     side_effect_service = MagicMock(spec=AgentSideEffectService)
@@ -1919,8 +1918,7 @@ async def test_specialist_history_is_truncated(
     )
 
     assert capture.seen_history is not None
-    assert len(capture.seen_history) == 1
-    assert capture.seen_history[0].content == "m3"
+    assert [message.content for message in capture.seen_history] == ["m2", "m3"]
 
 
 @pytest.mark.anyio
@@ -1929,9 +1927,10 @@ async def test_specialist_history_truncation_logs_warning(
 ):
     manager = _make_manager(mock_settings)
     capture = _CaptureHistorySpecialist()
-    manager.registry.register(capture)
+    capture.name = "news_agent"
+    manager.registry.register(capture, overwrite=True)
     manager.coordinator.plan_pre_turn = AsyncMock(
-        return_value=_make_plan(pre=[RoutingItem(name="capture_history", reason="test", chat_history_size=1)])
+        return_value=_make_plan(pre=[RoutingItem(name="news_agent", reason="test")])
     )
 
     side_effect_service = MagicMock(spec=AgentSideEffectService)
@@ -1953,7 +1952,7 @@ async def test_specialist_history_truncation_logs_warning(
             side_effect_service=side_effect_service,
         )
 
-    assert "specialist history truncated specialist=capture_history" in caplog.text
+    assert "specialist history truncated specialist=news_agent" in caplog.text
 
 
 @pytest.mark.anyio
@@ -1969,7 +1968,7 @@ async def test_word_keeper_receives_latest_teacher_message_without_history(
     capture.name = "word_keeper"
     manager.registry.register(capture, overwrite=True)
     manager.coordinator.plan_pre_turn = AsyncMock(
-        return_value=_make_plan(pre=[RoutingItem(name="word_keeper", reason="save words", chat_history_size=0)])
+        return_value=_make_plan(pre=[RoutingItem(name="word_keeper", reason="save words")])
     )
 
     history = [
@@ -2007,7 +2006,7 @@ async def test_word_keeper_does_not_receive_non_adjacent_teacher_message(
     capture.name = "word_keeper"
     manager.registry.register(capture, overwrite=True)
     manager.coordinator.plan_pre_turn = AsyncMock(
-        return_value=_make_plan(pre=[RoutingItem(name="word_keeper", reason="save words", chat_history_size=0)])
+        return_value=_make_plan(pre=[RoutingItem(name="word_keeper", reason="save words")])
     )
 
     history = [
