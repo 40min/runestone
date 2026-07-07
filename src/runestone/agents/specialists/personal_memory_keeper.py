@@ -172,6 +172,7 @@ class PersonalMemoryKeeperSpecialist(BaseSpecialist):
 
         actions: list[SpecialistAction] = []
         appended: list[str] = []
+        appended_item_ids: list[int] = []
         failed = 0
         try:
             async with provide_memory_item_service() as service:
@@ -199,6 +200,7 @@ class PersonalMemoryKeeperSpecialist(BaseSpecialist):
                         )
                         break
                     appended.append(fact.key)
+                    appended_item_ids.append(item.id)
                     actions.append(
                         SpecialistAction(
                             tool="append_personal_info_item",
@@ -225,6 +227,7 @@ class PersonalMemoryKeeperSpecialist(BaseSpecialist):
                 "appended_count": len(appended),
                 "failed_count": failed,
                 "keys": appended,
+                "appended_item_ids": appended_item_ids,
             },
         )
 

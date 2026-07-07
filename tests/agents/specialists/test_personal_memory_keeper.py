@@ -94,7 +94,7 @@ async def test_personal_keeper_passes_previous_teacher_message_and_appends(speci
         facts=[PersonalMemoryKeeperFact(key="occupation", content="Works as a nurse")],
     )
     service = MagicMock()
-    service.append_personal_info_item = AsyncMock(return_value=MagicMock(key="occupation"))
+    service.append_personal_info_item = AsyncMock(return_value=MagicMock(id=1, key="occupation"))
     history = [
         ChatMessage(role="assistant", content="Tell me about yourself."),
         ChatMessage(role="user", content="Okay."),
@@ -110,6 +110,7 @@ async def test_personal_keeper_passes_previous_teacher_message_and_appends(speci
     service.append_personal_info_item.assert_awaited_once_with(
         7, key="occupation", content="Works as a nurse", status="active"
     )
+    assert result.artifacts["appended_item_ids"] == [1]
     messages = specialist.structured_model.ainvoke.await_args.args[0]
     payload = json.loads(messages[1].content)
     assert payload["previous_teacher_message"] == "Tell me about yourself."
@@ -137,7 +138,7 @@ async def test_personal_keeper_reports_partial_failure(specialist):
     )
     service = MagicMock()
     service.append_personal_info_item = AsyncMock(
-        side_effect=[MagicMock(key="occupation"), RuntimeError("private payload")]
+        side_effect=[MagicMock(id=11, key="occupation"), RuntimeError("private payload")]
     )
     with patch(
         "runestone.agents.specialists.personal_memory_keeper.provide_memory_item_service",
@@ -147,6 +148,7 @@ async def test_personal_keeper_reports_partial_failure(specialist):
     assert result.status == "error"
     assert [action.status for action in result.actions] == ["success", "error"]
     assert result.artifacts["appended_count"] == 1
+    assert result.artifacts["appended_item_ids"] == [11]
 
 
 @pytest.mark.anyio

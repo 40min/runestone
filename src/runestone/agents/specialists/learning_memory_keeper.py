@@ -324,6 +324,10 @@ class LearningMemoryKeeperSpecialist(BaseSpecialist):
     ) -> SpecialistResult:
         actions: list[SpecialistAction] = []
         counts = {"upserted": 0, "updated": 0, "deleted": 0, "failed": 0}
+        changed_item_ids: list[int] = []
+        upserted_item_ids: list[int] = []
+        updated_item_ids: list[int] = []
+        deleted_item_ids: list[int] = []
         operations: list[tuple[str, object]] = [
             *(("create", operation) for operation in extraction.creates),
             *(("mutation", operation) for operation in extraction.mutations),
@@ -341,6 +345,8 @@ class LearningMemoryKeeperSpecialist(BaseSpecialist):
                         create.priority,
                     )
                     counts["upserted"] += 1
+                    changed_item_ids.append(item.id)
+                    upserted_item_ids.append(item.id)
                     actions.append(self._action("upsert_memory_item", "success", f"Upserted {item.key}"))
                     continue
 
@@ -348,6 +354,8 @@ class LearningMemoryKeeperSpecialist(BaseSpecialist):
                 if mutation.delete:
                     await service.delete_item(mutation.target_id, user_id)
                     counts["deleted"] += 1
+                    changed_item_ids.append(mutation.target_id)
+                    deleted_item_ids.append(mutation.target_id)
                     actions.append(self._action("delete_item", "success", f"Deleted item {mutation.target_id}"))
                     continue
                 for tool, value, call in (
@@ -362,6 +370,10 @@ class LearningMemoryKeeperSpecialist(BaseSpecialist):
                     else:
                         await call(mutation.target_id, value, user_id)
                     counts["updated"] += 1
+                    if mutation.target_id not in updated_item_ids:
+                        updated_item_ids.append(mutation.target_id)
+                    if mutation.target_id not in changed_item_ids:
+                        changed_item_ids.append(mutation.target_id)
                     actions.append(self._action(tool, "success", f"Updated item {mutation.target_id}"))
             except Exception as exc:
                 counts["failed"] += 1
@@ -385,6 +397,10 @@ class LearningMemoryKeeperSpecialist(BaseSpecialist):
             artifacts={
                 "trigger_source": extraction.trigger_source,
                 "reason": "service_failed" if counts["failed"] else ("applied" if actions else "stale_target"),
+                "changed_item_ids": changed_item_ids,
+                "upserted_item_ids": upserted_item_ids,
+                "updated_item_ids": updated_item_ids,
+                "deleted_item_ids": deleted_item_ids,
                 **counts,
             },
         )

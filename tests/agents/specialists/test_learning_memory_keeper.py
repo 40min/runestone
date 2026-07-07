@@ -129,6 +129,10 @@ async def test_tagged_path_loads_only_tags_and_executes_in_order(specialist):
         call.content(3, MemoryCategory.AREA_TO_IMPROVE, "Better articles", 7),
         call.priority(3, 4, 7),
     ]
+    assert result.artifacts["changed_item_ids"] == [3]
+    assert result.artifacts["updated_item_ids"] == [3]
+    assert result.artifacts["upserted_item_ids"] == []
+    assert result.artifacts["deleted_item_ids"] == []
 
 
 @pytest.mark.anyio
@@ -208,6 +212,8 @@ async def test_upsert_and_partial_failure_report_actual_actions(specialist):
     assert result.status == "error"
     assert [action.status for action in result.actions] == ["success", "error"]
     assert result.artifacts["upserted"] == 1
+    assert result.artifacts["changed_item_ids"] == [3]
+    assert result.artifacts["upserted_item_ids"] == [3]
     assert service.upsert_memory_item.await_count == 2
 
 
@@ -230,6 +236,8 @@ async def test_exact_key_recurrence_is_reported_as_upsert_not_creation(specialis
 
     assert result.status == "action_taken"
     assert result.artifacts["upserted"] == 1
+    assert result.artifacts["changed_item_ids"] == [3]
+    assert result.artifacts["upserted_item_ids"] == [3]
     assert "created" not in result.artifacts
     assert result.actions[0].summary == "Upserted articles"
 
