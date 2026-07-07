@@ -205,7 +205,7 @@ Owns:
 
 - post-stage `area_to_improve` maintenance when the teacher reply provides an explicit learning signal
 - explicit student-requested edits to learning topics (reprioritize, mark mastered, correct description)
-- uses `ToolCallLimitMiddleware` to cap `read_areas_to_improve` at one call per turn
+- one structured extraction followed by Python-owned, allowlisted database operations
 
 Does not own:
 
@@ -332,21 +332,23 @@ learning state still lives only in the normal memory-item statuses such as
 - Use the actual `teacher_response` as the strongest teacher-driven signal for durable updates.
 - Allow explicit student learning-topic edits to trigger maintenance as well.
 - Default to `no_action`; avoid additive or corrective writes without clear evidence.
-- Use a three-case execution model instead of a universal read-before-write:
-  - **Case A (student edit):** read `area_to_improve` items first, then write as instructed.
-  - **Case B (teacher new issue):** call `upsert_memory_item` directly using a fresh descriptive key; no pre-read required.
-  - **Case C (teacher status/priority change):** if the teacher embedded a
-  `[memory:area_to_improve:<id>]` tag, write directly using that id; otherwise do one
-  targeted read via `read_areas_to_improve` to locate the item id, then write.
-- The `[memory:area_to_improve:<id>]` tag is a temporary bridge carried in the visible teacher reply text until
-  the structured-output follow-up replaces this mechanism.
-- `ToolCallLimitMiddleware` caps `read_areas_to_improve` at one call per turn.
+- Parse `[memory:area_to_improve:<id>]` tags from teacher output in Python. Tagged
+  turns load only those rows; stale, unauthorized, and wrong-category tags are
+  terminal and never fall back to creation.
+- For untagged turns, load at most 100 fresh `area_to_improve` rows across
+  `struggling`, `improving`, and `mastered`, then expose sanitized snapshots to one
+  structured extraction call.
+- Treat model output as an untrusted plan. Python enforces cardinality, duplicate,
+  mutation, ownership, category, and target-allowlist rules before writes.
+- Execute accepted writes through `MemoryItemService` in deterministic order and
+  build actions and artifacts from service calls that actually completed.
 
 **PersonalMemoryKeeper** principles:
 
-- Append-only: uses only `append_personal_info_item`, never reads memory.
+- Append-only: Python uses only `append_personal_info_item`; the specialist never reads memory.
 - Receives `chat_history_size=2` so `run()` can extract `previous_teacher_message` to detect drill/exercise context; raw history is not exposed to the LLM.
-- Filters out practice sentences by comparing `student_message` against `previous_teacher_message`.
+- Uses one structured extraction call to classify practice responses and extract at
+  most five facts; Python validates the plan before appending.
 - Duplicate `personal_info` rows from append-first writes are an accepted tradeoff; reconciliation belongs to `memory_maintainer`.
 
 Scope of maintenance:
@@ -490,16 +492,13 @@ flowchart TD
     G --> C
 ```
 
-#### Runaway Tool-Use Prevention (Recursion Limits)
+#### Runaway Tool-Use Prevention
 
-To prevent infinite ReAct/LangGraph loop executions (particularly when using highly responsive, direct LLM providers like Gemini that bypass typical slow proxy layers), every specialist agent is configured with a strict `recursion_limit` on every `ainvoke` invocation.
-
-The limits are adjusted based on each specialist's responsibilities:
-- **TeacherAgent**: **30** steps (highly constrained to prevent runaway grammar lookup loops)
-- **LearningMemoryKeeper**: **15** steps (capped read + targeted writes; `ToolCallLimitMiddleware` further bounds reads to 1)
-- **PersonalMemoryKeeper**: **10** steps (append-only, single-tool specialist)
-- **NewsAgent**: **10** steps (conservatively bounded search and read sequence)
-- **MemoryMaintainer**: no LangGraph recursion limit, because it now uses bounded structured-output passes
+Tool-using specialists retain strict `recursion_limit` values. LearningMemoryKeeper
+and PersonalMemoryKeeper no longer construct LangGraph agent loops: each performs
+one bounded structured-output model invocation, followed by deterministic Python
+validation and service calls. MemoryMaintainer likewise uses bounded
+structured-output passes.
 
 ### Observability
 
@@ -727,5 +726,16 @@ Decisions:
 - `PersonalMemoryKeeper` is append-only (single tool: `append_personal_info_item`); never reads memory.
 - `PersonalMemoryKeeper` receives `chat_history_size=2` so `run()` can extract `previous_teacher_message` for drill detection — raw history is not forwarded to the LLM.
 - Both specialists share `MEMORY_KEEPER_*` config; no new env vars needed.
-- Recursion limits tightened: `learning_memory_keeper=15`, `personal_memory_keeper=10`.
-- `ToolCallLimitMiddleware` added to `LearningMemoryKeeper` to cap `read_areas_to_improve` at one call per turn.
+
+### 2026-07-06: MemoryKeepers moved to deterministic structured output
+
+Decisions:
+
+- Replace both tool-calling agent loops with one structured extraction per run.
+- Keep all authorization, target allowlisting, cardinality checks, and persistence in Python.
+- Pre-read only tagged learning targets when tags are present; otherwise supply at
+  most 100 sanitized learning targets for semantic reconciliation.
+- Preserve append-only personal memory and classify drill responses from the
+  previous teacher message before Python appends accepted facts.
+- Report partial persistence accurately with one action per actual service call
+  and privacy-safe reason codes.

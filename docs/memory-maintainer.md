@@ -231,11 +231,15 @@ background runs.
 
 `LearningMemoryKeeper` runs from normal conversation flow and owns per-turn
 `area_to_improve` updates: new recurring issues, status changes (struggling →
-improving → mastered), and explicit student learning-topic edits.
+improving → mastered), and explicit student learning-topic edits. It uses one
+structured extraction over a Python-built target allowlist; Python revalidates
+ownership and category and performs all writes.
 
 `PersonalMemoryKeeper` runs from normal conversation flow and owns per-turn
 append-only capture of durable personal facts (`personal_info`). It never reads
-memory; duplicates are reconciled by `memory_maintainer` on the next chat reset.
+memory. One structured extraction classifies drill responses and proposes facts,
+then Python validates and appends them. Duplicates are reconciled by
+`memory_maintainer` on the next chat reset.
 
 `WordKeeper` remains vocabulary-specific and does not participate in memory
 consolidation.
