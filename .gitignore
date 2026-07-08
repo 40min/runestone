@@ -48,5 +48,4 @@ runestone.db
 vocab_db.md
 *.offset
 
-# agents
-.agent
+.agents
