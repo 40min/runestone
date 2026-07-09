@@ -573,6 +573,7 @@ class TestSettings:
             "TEACHER_PROVIDER": "gemini",
             "TEACHER_MODEL": "gemini-2.5-flash",
             "TEACHER_LLM_TIMEOUT_SECONDS": "5.0",
+            "COORDINATOR_LLM_TIMEOUT_SECONDS": "10.0",
         }
         with patch.dict(os.environ, env_vars, clear=True):
             with pytest.raises(ValidationError) as excinfo:
@@ -592,9 +593,30 @@ class TestSettings:
             "TEACHER_PROVIDER": "gemini",
             "TEACHER_MODEL": "gemini-2.5-flash",
             "TEACHER_LLM_TIMEOUT_SECONDS": "10.0",
+            "COORDINATOR_LLM_TIMEOUT_SECONDS": "10.0",
         }
         with patch.dict(os.environ, env_vars, clear=True):
             s = Settings()
         result = s.get_agent_llm_settings("teacher")
+        assert result.provider == "gemini"
+        assert result.timeout_seconds == 10.0
+
+    def test_coordinator_gemini_timeout_auto_raised(self):
+        """Validate that coordinator timeout is auto-raised to 10.0s if provider is gemini."""
+        env_vars = {
+            "LLM_PROVIDER": "openai",
+            "OPENAI_API_KEY": "test-key",
+            "ALLOWED_ORIGINS": "http://localhost:3000",
+            "DATABASE_URL": "sqlite:///./test.db",
+            "TELEGRAM_BOT_TOKEN": "test-token",
+            "FRONTEND_URL": "http://localhost:5173",
+            "JWT_SECRET_KEY": "secret",
+            "COORDINATOR_PROVIDER": "gemini",
+            "COORDINATOR_MODEL": "gemini-2.5-flash",
+            "COORDINATOR_LLM_TIMEOUT_SECONDS": "3.0",
+        }
+        with patch.dict(os.environ, env_vars, clear=True):
+            s = Settings()
+        result = s.get_agent_llm_settings("coordinator")
         assert result.provider == "gemini"
         assert result.timeout_seconds == 10.0

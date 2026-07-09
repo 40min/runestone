@@ -245,8 +245,12 @@ class Settings(BaseSettings):
         if self.memory_maintainer_reasoning_level is None:
             self.memory_maintainer_reasoning_level = self.memory_keeper_reasoning_level
 
+        # Automatically raise coordinator timeout to 10.0s if Gemini is used to avoid validation failure
+        if self.coordinator_provider == "gemini" and self.coordinator_llm_timeout_seconds < 10.0:
+            self.coordinator_llm_timeout_seconds = 10.0
+
         # Validate that no Gemini provider has a timeout below 10 seconds
-        for name in [
+        names: list[AgentName] = [
             "teacher",
             "teacher_backup",
             "coordinator",
@@ -255,11 +259,12 @@ class Settings(BaseSettings):
             "learning_memory_keeper",
             "personal_memory_keeper",
             "memory_maintainer",
-        ]:
+        ]
+        for name in names:
             if name == "teacher_backup" and self.teacher_backup_model is None:
                 continue
             # Instantiating AgentLLMSettings via get_agent_llm_settings will trigger validation
-            self.get_agent_llm_settings(name)  # type: ignore
+            self.get_agent_llm_settings(name)
 
         return self
 
