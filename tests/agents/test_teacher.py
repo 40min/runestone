@@ -394,6 +394,7 @@ async def test_run_normalizes_invalid_structured_teacher_emotion(teacher_agent, 
     assert generated.emotion == "neutral"
 
 
+@pytest.mark.anyio
 async def test_run_injects_current_datetime_in_user_timezone(teacher_agent, mock_user, monkeypatch):
     mock_user.timezone = "Europe/Helsinki"
     monkeypatch.setattr("runestone.agents.specialists.teacher.datetime", FrozenDatetime)
