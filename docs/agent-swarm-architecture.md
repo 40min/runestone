@@ -247,20 +247,22 @@ flowchart TD
     C -- No --> D["Continue response generation"]
     C -- Yes --> E["read_active_learning_focus (read-only, includes item ids)"]
     E --> D
-    D --> F["Teacher response returned to user (may temporarily include [memory:area_to_improve:<id>] tags)"]
-    F --> G["Post-response coordinator"]
-    G --> H1{"Learning signal?"}
-    G --> H2{"Personal fact?"}
-    H1 -- No --> I1["No area_to_improve change"]
-    H1 -- Yes --> J1["LearningMemoryKeeper"]
-    J1 --> K{"Which case?"}
-    K -- "Case A: student edit" --> L["Read areas, then write"]
-    K -- "Case B: teacher new issue (no tag)" --> M["upsert directly (no pre-read)"]
-    K -- "Case C: status/priority change" --> N{"[memory:area_to_improve:<id>] tag?"}
+    D --> F["Teacher response returned to user"]
+    F --> G["Manager-owned post routing"]
+    G --> H1["Coordinator post plan"]
+    H1 --> H2{"TeacherOutput.learning_memory_signals?"}
+    H2 -- No --> I1["Use coordinator plan as-is"]
+    H2 -- Yes --> I2["Append LearningMemoryKeeper if missing"]
+    I1 --> J1["Run post specialists"]
+    I2 --> J1
+    J1 --> K{"LearningMemoryKeeper case?"}
+    K -- "Case A: teacher new issue (no id)" --> M["upsert directly (no pre-read)"]
+    K -- "Case B: status/content signal" --> N{"structured memory_id?"}
     N -- Yes --> O["Write directly using id"]
     N -- No --> P["Targeted read, then write"]
-    H2 -- No --> I2["No personal_info change"]
-    H2 -- Yes --> J2["PersonalMemoryKeeper"]
+    J1 --> H3{"Coordinator-selected personal fact?"}
+    H3 -- No --> I3["No personal_info change"]
+    H3 -- Yes --> J2["PersonalMemoryKeeper"]
     J2 --> Q["Check previous_teacher_message for drill context"]
     Q -- "Practice sentence" --> R["no_action"]
     Q -- "Real fact" --> S["append_personal_info_item (no reads)"]
@@ -331,12 +333,17 @@ learning state still lives only in the normal memory-item statuses such as
 **LearningMemoryKeeper** principles:
 
 - Run maintenance only in `post_response`, not on the synchronous user-visible path.
-- Use the actual `teacher_response` as the strongest teacher-driven signal for durable updates.
-- Allow explicit student learning-topic edits to trigger maintenance as well.
+- Use `TeacherOutput.learning_memory_signals` as the primary teacher-driven durability signal.
+- Let the post-phase Coordinator route explicit student requests to edit tracked
+  `area_to_improve` items.
+- After Coordinator plans the post phase, manager deterministically appends
+  `learning_memory_keeper` when `learning_memory_signals` is non-empty and the
+  plan did not already include it.
+- Keep `teacher_response` available only as secondary context for interpreting the structured signal.
 - Default to `no_action`; avoid additive or corrective writes without clear evidence.
-- Parse `[memory:area_to_improve:<id>]` tags from teacher output in Python. Tagged
-  turns load only those rows; stale, unauthorized, and wrong-category tags are
-  terminal and never fall back to creation.
+- Parse validated structured `memory_id` values in Python. Targeted turns load only
+  those rows; stale, unauthorized, and wrong-category ids are terminal and never
+  fall back to creation.
 - For untagged turns, load at most 100 fresh `area_to_improve` rows across
   `struggling`, `improving`, and `mastered`, then expose sanitized snapshots to one
   structured extraction call.
@@ -620,6 +627,7 @@ Output:
 
 - final user-facing response
 - optional structured `vocabulary_candidates`
+- optional structured `learning_memory_signals`
 
 ### WordKeeper Contract
 
@@ -657,8 +665,10 @@ Priority behavior:
 
 Input:
 
-- `student_message`: explicit student learning-topic edit signal
-- `teacher_response`: primary teacher-driven durability signal (may contain `[memory:area_to_improve:<id>]` tags)
+- `student_message`: current student message for local context only
+- `teacher_response`: secondary teacher context
+- `learning_memory_signals`: primary structured teacher durability signal
+- `target_memory_ids`: validated ids derived from structured `memory_id` values
 
 Output:
 

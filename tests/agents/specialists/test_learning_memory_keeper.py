@@ -6,6 +6,7 @@ import pytest
 from langchain_core.exceptions import OutputParserException
 from pydantic import ValidationError
 
+from runestone.agents.schemas import LearningMemorySignal
 from runestone.agents.specialists.base import SpecialistContext
 from runestone.agents.specialists.learning_memory_keeper import (
     LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT,
@@ -13,7 +14,7 @@ from runestone.agents.specialists.learning_memory_keeper import (
     LearningMemoryKeeperExtraction,
     LearningMemoryKeeperSpecialist,
     LearningMemoryMutation,
-    parse_learning_memory_tag_ids,
+    parse_learning_memory_ids,
 )
 from runestone.api.memory_item_schemas import MemoryCategory, MemorySortBy, SortDirection
 
@@ -31,12 +32,13 @@ def specialist():
     return instance
 
 
-def context(teacher_response="Good progress."):
+def context(teacher_response="Good progress.", learning_memory_signals=None):
     return SpecialistContext(
         message="Okay",
         history=[],
         user=MagicMock(id=7),
         teacher_response=teacher_response,
+        learning_memory_signals=learning_memory_signals or [],
     )
 
 
@@ -60,11 +62,25 @@ def service_provider(service):
     return provider
 
 
-def test_tag_parser_ignores_malformed_and_deduplicates():
-    assert parse_learning_memory_tag_ids(None) == []
-    assert parse_learning_memory_tag_ids("[memory:area_to_improve:x]") == []
-    assert parse_learning_memory_tag_ids(
-        "[memory:area_to_improve:3] [memory:area_to_improve:4] [memory:area_to_improve:3]"
+def test_memory_id_parser_deduplicates():
+    assert parse_learning_memory_ids(
+        [
+            LearningMemorySignal(
+                signal_type="improving",
+                summary="Improving with articles.",
+                memory_id=3,
+            ),
+            LearningMemorySignal(
+                signal_type="mastered",
+                summary="Mastered verb order.",
+                memory_id=4,
+            ),
+            LearningMemorySignal(
+                signal_type="improving",
+                summary="Improving with articles.",
+                memory_id=3,
+            ),
+        ]
     ) == [3, 4]
 
 
@@ -120,7 +136,17 @@ async def test_tagged_path_loads_only_tags_and_executes_in_order(specialist):
         "runestone.agents.specialists.learning_memory_keeper.provide_memory_item_service",
         service_provider(service),
     ):
-        result = await specialist.run(context("Great [memory:area_to_improve:3]"))
+        result = await specialist.run(
+            context(
+                learning_memory_signals=[
+                    LearningMemorySignal(
+                        signal_type="improving",
+                        summary="The student is improving with articles.",
+                        memory_id=3,
+                    )
+                ]
+            )
+        )
 
     assert result.status == "action_taken"
     service.list_memory_items.assert_not_awaited()
@@ -157,10 +183,11 @@ async def test_untagged_path_supplies_bounded_allowlist(specialist):
     messages = specialist.structured_model.ainvoke.await_args.args[0]
     payload = json.loads(messages[1].content)
     assert payload["existing_targets"][0]["id"] == 3
+    assert payload["learning_memory_signals"] == []
 
 
 @pytest.mark.anyio
-async def test_stale_tag_is_terminal_without_model_or_general_read(specialist):
+async def test_stale_target_id_is_terminal_without_model_or_general_read(specialist):
     service = MagicMock()
     service.get_item_by_id = AsyncMock(return_value=None)
     service.list_memory_items = AsyncMock()
@@ -168,7 +195,17 @@ async def test_stale_tag_is_terminal_without_model_or_general_read(specialist):
         "runestone.agents.specialists.learning_memory_keeper.provide_memory_item_service",
         service_provider(service),
     ):
-        result = await specialist.run(context("[memory:area_to_improve:99]"))
+        result = await specialist.run(
+            context(
+                learning_memory_signals=[
+                    LearningMemorySignal(
+                        signal_type="mastered",
+                        summary="The student has now mastered articles.",
+                        memory_id=99,
+                    )
+                ]
+            )
+        )
     assert result.status == "no_action"
     assert result.artifacts["reason"] == "stale_target"
     specialist.structured_model.ainvoke.assert_not_awaited()

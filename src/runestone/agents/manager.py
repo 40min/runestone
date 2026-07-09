@@ -14,7 +14,14 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from runestone.agents.background_task_registry import BackgroundTaskRegistry
 from runestone.agents.coordinator import CoordinatorAgent
-from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem, TeacherEmotion, TeacherSideEffect
+from runestone.agents.schemas import (
+    ChatMessage,
+    CoordinatorPlan,
+    LearningMemorySignal,
+    RoutingItem,
+    TeacherEmotion,
+    TeacherSideEffect,
+)
 from runestone.agents.service_providers import provide_agent_side_effect_service
 from runestone.agents.specialists.base import SpecialistContext, SpecialistResult
 from runestone.agents.specialists.learning_memory_keeper import LearningMemoryKeeperSpecialist
@@ -272,9 +279,15 @@ class AgentsManager:
         personal_info_summary: str = "",
         recent_side_effects: list[TeacherSideEffect] | None = None,
         current_recall_words: list[str] | None = None,
-    ) -> tuple[str, Optional[list[dict[str, str]]], TeacherEmotion, list[WordSaveCandidate]]:
+    ) -> tuple[
+        str,
+        Optional[list[dict[str, str]]],
+        TeacherEmotion,
+        list[WordSaveCandidate],
+        list[LearningMemorySignal],
+    ]:
         """
-        Run teacher agent synchronously and return visible response data plus vocabulary candidates.
+        Run teacher agent synchronously and return visible response data plus structured side-effect hints.
         """
         try:
             generated = await self.teacher.generate_response(
@@ -297,7 +310,13 @@ class AgentsManager:
             messages=generated.final_messages,
             grammar_source_urls=generated.grammar_source_urls,
         )
-        return generated.message, sources, generated.emotion, generated.vocabulary_candidates
+        return (
+            generated.message,
+            sources,
+            generated.emotion,
+            generated.vocabulary_candidates,
+            generated.learning_memory_signals,
+        )
 
     async def process_turn(
         self,
@@ -346,15 +365,17 @@ class AgentsManager:
             current_recall_words,
         ) = prepared
 
-        assistant_text, sources, teacher_emotion, vocabulary_candidates = await self.generate_teacher_response(
-            message=message,
-            history=history,
-            user=user,
-            pre_results=pre_results,
-            active_learning_focus_memory=active_learning_focus_memory,
-            personal_info_summary=personal_info_summary,
-            recent_side_effects=recent_side_effects,
-            current_recall_words=current_recall_words,
+        assistant_text, sources, teacher_emotion, vocabulary_candidates, learning_memory_signals = (
+            await self.generate_teacher_response(
+                message=message,
+                history=history,
+                user=user,
+                pre_results=pre_results,
+                active_learning_focus_memory=active_learning_focus_memory,
+                personal_info_summary=personal_info_summary,
+                recent_side_effects=recent_side_effects,
+                current_recall_words=current_recall_words,
+            )
         )
 
         coordinator_row_id = await side_effect_service.create_post_coordinator_row(
@@ -369,6 +390,7 @@ class AgentsManager:
             user=user,
             teacher_response=assistant_text,
             vocabulary_candidates=vocabulary_candidates,
+            learning_memory_signals=learning_memory_signals,
             pre_results=pre_results,
             coordinator_row_id=coordinator_row_id,
         )
@@ -383,6 +405,7 @@ class AgentsManager:
         user: User,
         teacher_response: str,
         vocabulary_candidates: list[WordSaveCandidate] | None,
+        learning_memory_signals: list[LearningMemorySignal] | None,
         pre_results: list[dict],
         side_effect_service: AgentSideEffectService,
         coordinator_row_id: int,
@@ -401,6 +424,7 @@ class AgentsManager:
                 user=user,
                 teacher_response=teacher_response,
                 vocabulary_candidates=vocabulary_candidates or [],
+                learning_memory_signals=learning_memory_signals or [],
                 pre_results=pre_results,
             )
             persisted = await side_effect_service.replace_post_specialist_results(
@@ -452,12 +476,24 @@ class AgentsManager:
         user: User,
         teacher_response: str,
         vocabulary_candidates: list[WordSaveCandidate],
+        learning_memory_signals: list[LearningMemorySignal],
         pre_results: list[dict],
     ) -> tuple[list[dict], bool]:
         filtered_vocabulary_candidates = self._filter_post_vocabulary_candidates(
             vocabulary_candidates,
             pre_results=pre_results,
         )
+        target_memory_ids = [
+            str(signal.memory_id) for signal in learning_memory_signals if signal.memory_id is not None
+        ]
+        if learning_memory_signals:
+            logger.info(
+                "teacher emitted learning memory signals count=%s signal_types=%s target_memory_ids=%s user_id=%s",
+                len(learning_memory_signals),
+                ",".join(signal.signal_type for signal in learning_memory_signals),
+                ",".join(target_memory_ids) if target_memory_ids else "none",
+                user.id,
+            )
 
         async def _coordinator_branch() -> list[dict]:
             plan = await self.coordinator.plan_post_turn(
@@ -469,6 +505,18 @@ class AgentsManager:
                 ],
             )
             post_items = [item for item in plan.post_response if item.name != "word_keeper"]
+            if learning_memory_signals and not any(item.name == "learning_memory_keeper" for item in post_items):
+                logger.info(
+                    "manager appended learning memory keeper to coordinator plan target_memory_ids=%s user_id=%s",
+                    ",".join(target_memory_ids) if target_memory_ids else "none",
+                    user.id,
+                )
+                post_items.append(
+                    RoutingItem(
+                        name="learning_memory_keeper",
+                        reason="teacher emitted learning_memory_signals",
+                    )
+                )
             logger.info(
                 "post-phase selection user_id=%s specialists=%s",
                 user.id,
@@ -480,6 +528,7 @@ class AgentsManager:
                 history=history,
                 user=user,
                 teacher_response=teacher_response,
+                learning_memory_signals=learning_memory_signals,
                 pre_results=pre_results,
             )
 
@@ -616,6 +665,7 @@ class AgentsManager:
         user: User,
         teacher_response: str,
         vocabulary_candidates: list[WordSaveCandidate] | None,
+        learning_memory_signals: list[LearningMemorySignal] | None,
         pre_results: list[dict],
         coordinator_row_id: int,
     ) -> None:
@@ -635,6 +685,7 @@ class AgentsManager:
                                 user=user,
                                 teacher_response=teacher_response,
                                 vocabulary_candidates=vocabulary_candidates or [],
+                                learning_memory_signals=learning_memory_signals or [],
                                 pre_results=pre_results,
                                 side_effect_service=background_side_effect_service,
                                 coordinator_row_id=coordinator_row_id,
@@ -719,6 +770,7 @@ class AgentsManager:
         user: User,
         teacher_response: str | None = None,
         vocabulary_candidates: list[WordSaveCandidate] | None = None,
+        learning_memory_signals: list[LearningMemorySignal] | None = None,
         pre_results: list[dict] | None = None,
     ) -> list[dict]:
         if not routing_items:
@@ -748,6 +800,7 @@ class AgentsManager:
                     else previous_teacher_message if item.name == "word_keeper" else teacher_response
                 ),
                 vocabulary_candidates=vocabulary_candidates or [],
+                learning_memory_signals=learning_memory_signals or [],
                 pre_results=pre_results or [],
                 routing_reason=item.reason,
                 chat_history_size=effective_history_size,

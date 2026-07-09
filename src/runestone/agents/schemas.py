@@ -129,6 +129,49 @@ class ImageChatResponse(BaseModel):
     )
 
 
+class LearningMemorySignal(BaseModel):
+    """Teacher-declared structured learning-memory signal for post-phase handling."""
+
+    signal_type: Literal["new_issue", "improving", "mastered", "regressed", "content_correction"]
+    summary: str = Field(..., description="Compact internal summary of the learning-memory signal")
+    memory_id: int | None = Field(
+        default=None,
+        description="Optional existing `area_to_improve` memory item id targeted by this signal",
+    )
+
+    @field_validator("summary", mode="before")
+    @classmethod
+    def normalize_summary(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("summary")
+    @classmethod
+    def require_non_empty_summary(cls, value: str) -> str:
+        if not value:
+            raise ValueError("empty_learning_memory_summary")
+        return value
+
+    @field_validator("memory_id", mode="before")
+    @classmethod
+    def validate_memory_id(cls, value):
+        if value is None or value == "":
+            return None
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return None
+        return value
+
+    @field_validator("memory_id")
+    @classmethod
+    def require_positive_memory_id(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if value <= 0:
+            raise ValueError("invalid_memory_id")
+        return value
+
+
 class TeacherOutput(BaseModel):
     """Structured Teacher response envelope; only `message` is visible to students."""
 
@@ -144,6 +187,10 @@ class TeacherOutput(BaseModel):
     vocabulary_candidates: list[WordSaveCandidate] = Field(
         default_factory=list,
         description="Teacher-proposed Swedish vocabulary candidates for post-response WordKeeper handling",
+    )
+    learning_memory_signals: list[LearningMemorySignal] = Field(
+        default_factory=list,
+        description="Teacher-proposed structured learning-memory signals for post-response handling",
     )
 
     @field_validator("emotion", mode="before")
@@ -173,6 +220,23 @@ class TeacherOutput(BaseModel):
             seen_urls.add(url)
         return normalized
 
+    @field_validator("learning_memory_signals")
+    @classmethod
+    def normalize_learning_memory_signals(cls, value: list[LearningMemorySignal]) -> list[LearningMemorySignal]:
+        deduplicated: list[LearningMemorySignal] = []
+        seen: set[tuple[str, str, int | None]] = set()
+        for signal in value:
+            if signal.signal_type == "new_issue" and signal.memory_id is not None:
+                raise ValueError("new_issue_cannot_have_memory_id")
+            key = (signal.signal_type, signal.summary, signal.memory_id)
+            if key in seen:
+                continue
+            deduplicated.append(signal)
+            seen.add(key)
+        if len(deduplicated) > 3:
+            raise ValueError("too_many_learning_memory_signals")
+        return deduplicated
+
 
 @dataclass(slots=True)
 class TeacherGenerationResult:
@@ -182,6 +246,7 @@ class TeacherGenerationResult:
     emotion: TeacherEmotion = DEFAULT_TEACHER_EMOTION
     grammar_source_urls: list[str] | None = None
     vocabulary_candidates: list[WordSaveCandidate] = field(default_factory=list)
+    learning_memory_signals: list[LearningMemorySignal] = field(default_factory=list)
     final_messages: list[Any] = field(default_factory=list)
 
 

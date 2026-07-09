@@ -101,21 +101,6 @@ COORDINATOR_POST_RESPONSE_PROMPT = (
 
 ## Specialist Routing Rules
 
-### learning_memory_keeper (post)
-**Route when:**
-- The `teacher_response` explicitly identifies a durable **learning progress** signal:
-  repeated struggle, visible improvement, confirmed mastery, or a new recurring learning issue.
-- OR the student explicitly asks to edit a **learning topic** (area_to_improve):
-  reprioritize, mark mastered, correct a learning area description, or forget/remove
-  an old learning topic.
-
-**Do NOT route when:**
-- The signal is about personal facts (native language, hometown, goals) — route
-  `personal_memory_keeper` instead.
-- The teacher gives routine praise, normal corrections, drill prompts, or generic explanations.
-- The teacher merely explains grammar rules using instructional verbs like "kom ihåg" or "tänk på".
-- The teacher only corrects a misspelled/invalid word (vocabulary event, not learning memory).
-
 ### personal_memory_keeper (post)
 **Route when:**
 - The student's `message` contains a clear, durable personal fact (for example: native language,
@@ -127,7 +112,23 @@ COORDINATOR_POST_RESPONSE_PROMPT = (
 - The student expresses transient emotions, vague wishes, or one-off plans.
 - The student is just practicing sentences or doing drills.
 - The student is writing fictional examples or translating practice sentences (e.g. in response to a teacher exercise).
-- The signal is about learning progress (area_to_improve) — route `learning_memory_keeper`.
+- The signal is about learning progress (`area_to_improve`) rather than durable personal facts.
+
+### learning_memory_keeper (post)
+**Route when:**
+- The student's `message` explicitly asks to update, forget, remove, correct, change, reprioritize,
+  or mark as mastered a tracked learning issue or learning-focus item.
+- The student's wording clearly refers to stored learning progress rather than `personal_info`.
+
+**Do NOT route when:**
+- The student is only asking for grammar help, correction, explanation, or another exercise.
+- The signal is about personal facts (native language, hometown, goals) — route
+  `personal_memory_keeper` instead.
+- The teacher gives routine praise, normal corrections, drill prompts, or generic explanations.
+- The teacher merely explains grammar rules using instructional verbs like "kom ihåg" or "tänk på".
+- The teacher only corrects a misspelled/invalid word (vocabulary event, not learning memory).
+- The student praises progress without asking to change stored learning memory.
+- The request is really about personal facts rather than `area_to_improve`.
 """
 )
 

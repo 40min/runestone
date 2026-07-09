@@ -101,7 +101,7 @@ class LearningMemorySignal(BaseModel):
         "content_correction",
     ]
     summary: str
-    memory_tag: str | None = None
+    memory_id: int | None = None
 
 
 class TeacherOutput(BaseModel):
@@ -118,8 +118,7 @@ Design intent:
 - `learning_memory_signals` is invisible side-effect metadata
 - the field is bounded and descriptive, not an executable mutation plan
 - Teacher-owned signal types are intentionally non-destructive
-- in this pass, learning-memory writes are exclusively driven by Teacher
-  structured signals
+- student-requested learning-memory edits are still routed by Coordinator
 
 This is intentionally narrower than a full memory-write schema. Teacher declares
 the learning signal; `LearningMemoryKeeper` still interprets and applies it.
@@ -130,78 +129,46 @@ learning-memory edits are intentionally out of scope for this migration.
 
 ## Validator Rules
 
-Use Pydantic validators to enforce the old tag syntax exactly when a tag is present.
-
-Expected format:
-
-- `[memory:area_to_improve:<id>]`
-- `<id>` must be a positive decimal integer
-- full-string match only; no prefixes, suffixes, or multiple tags in one field
-
-Suggested regex:
-
-```python
-MEMORY_TAG_FULL_PATTERN = re.compile(r"^\[memory:area_to_improve:([1-9]\d*)\]$")
-```
-
 Suggested validation rules:
 
 - trim `summary`
 - reject empty `summary`
-- reject malformed `memory_tag`
-- reject `memory_tag` for `signal_type="new_issue"`
+- reject non-positive `memory_id`
+- reject `memory_id` for `signal_type="new_issue"`
 - cap `learning_memory_signals` at 3 per turn
-- deduplicate identical `(signal_type, summary, memory_tag)` entries
-- reject `[memory:area_to_improve:0]` and ids with leading signs or whitespace
-- reject any student-facing `message` containing a legacy memory tag
-
-Important detail:
-
-- keep the validated `memory_tag` as a raw string in the schema
-- extract the integer id in Python after validation
-
-That preserves the legacy contract exactly while still moving the signal into
-structured output.
+- deduplicate identical `(signal_type, summary, memory_id)` entries
 
 ## Manager And Routing Changes
 
 `WordKeeper` currently gets a direct post-response branch when
-`vocabulary_candidates` is non-empty. Learning memory should use a similar
-pattern, but keep `LearningMemoryKeeper` as the executor.
+`vocabulary_candidates` is non-empty. Learning memory should stay
+coordinator-routable for explicit student edit requests, while teacher-emitted
+structured signals remain deterministically enforced by manager.
 
 Recommended behavior:
 
-- if `learning_memory_signals` is non-empty, the manager directly schedules
-  `learning_memory_keeper` in post phase with reason
-  `"teacher emitted learning_memory_signals"`
-- if `learning_memory_signals` is empty, the manager does not schedule
-  `learning_memory_keeper`
-- coordinator post-turn routing should no longer know about or select
-  `learning_memory_keeper`
+- coordinator post-turn routing may select `learning_memory_keeper` for explicit
+  student requests to update stored learning progress
+- if `learning_memory_signals` is non-empty, the manager appends
+  `learning_memory_keeper` to the coordinator post plan if it is not already present
 
 Why this boundary matters:
 
-- direct scheduling makes Teacher-owned structured signals reliable
-- keeping routing Teacher-signal-only avoids ambiguous student-request parsing
-  and prevents duplicate memory interpretation paths
-- deterministic manager activation makes the coordinator prompt and routing
-  contract simpler
+- Coordinator keeps ownership of language understanding for student edit requests
+- manager keeps ownership of the deterministic "teacher emitted signals must run" guarantee
 
-Coordinator simplification:
+Coordinator behavior:
 
-- remove `learning_memory_keeper` from coordinator post-turn availability
-- remove coordinator prompt instructions that ask the model to route
-  `learning_memory_keeper`
-- remove or rewrite coordinator tests that expect learning-memory routing
-- keep `LearningMemoryKeeper` registered in the specialist registry only for the
-  manager-owned direct branch, not for model-selected routing
+- keep `learning_memory_keeper` in coordinator post-turn availability
+- add prompt instructions for explicit student edit requests to tracked learning topics
+- keep manager-side post-plan normalization so teacher signals still run deterministically
 
 Logging:
 
 - when Teacher emits `learning_memory_signals`, log the count and signal types
   at the manager boundary
-- when manager schedules `learning_memory_keeper` from structured signals, log
-  the direct-routing reason and whether any `memory_tag` ids were present
+- when manager appends `learning_memory_keeper` from structured signals, log
+  the normalization reason and whether any `memory_id` values were present
 - when `LearningMemoryKeeper` applies or skips the signals, log the final
   outcome, operation counts, changed ids, and no-op/error reason
 - never log raw student-facing `message` text solely to observe these signals;
@@ -221,20 +188,20 @@ Recommended payload shape:
     {
       "signal_type": "improving",
       "summary": "The student is improving with article choice.",
-      "memory_tag": "[memory:area_to_improve:42]"
+      "memory_id": 42
     }
   ],
-  "tagged_target_ids": [42],
+  "target_memory_ids": [42],
   "existing_targets": [...]
 }
 ```
 
 Behavior:
 
-- derive `tagged_target_ids` from validated structured `memory_tag` values
+- derive `target_memory_ids` from validated structured `memory_id` values
 - keep `teacher_response` available as secondary context, not the primary machine channel
 - keep the existing Python allowlist and ambiguity protections
-- continue loading tagged ids through the current user/category allowlist before
+- continue loading targeted ids through the current user/category allowlist before
   allowing mutations
 
 Interpretation policy:
@@ -255,16 +222,13 @@ New prompt direction:
 - keep writing natural student-facing feedback in `message`
 - when a durable learning-memory event exists, also fill
   `learning_memory_signals`
-- only include `memory_tag` when the exact numeric id is present in available
+- only include `memory_id` when the exact numeric id is present in available
   memory context
-- never expose the tag in `message`
+- never expose internal ids or memory syntax in `message`
 
 Runtime guard:
 
-- reject or sanitize any structured `message` that still contains
-  `[memory:area_to_improve:<id>]`
-- apply the same guard to the fallback raw-message path when structured parsing
-  fails, so prompt drift cannot leak internal tags back to students
+- do not rely on student-facing `message` text for memory routing or id transport
 
 Example:
 
@@ -275,7 +239,7 @@ Example:
     {
       "signal_type": "improving",
       "summary": "The student is improving with Swedish article choice.",
-      "memory_tag": "[memory:area_to_improve:42]"
+      "memory_id": 42
     }
   ]
 }
@@ -329,23 +293,19 @@ Backend tests to add or update:
 
 - `tests/agents/test_teacher.py`
   - `TeacherOutput` accepts valid `learning_memory_signals`
-  - invalid `memory_tag` is rejected
-  - `new_issue` with `memory_tag` is rejected
-  - memory tags in student-facing `message` are rejected or sanitized
-  - fallback raw Teacher messages do not leak memory tags
+  - invalid `memory_id` is rejected
+  - `new_issue` with `memory_id` is rejected
 - `tests/agents/test_manager.py`
   - direct post-turn routing occurs for non-empty `learning_memory_signals`
-  - coordinator post-turn routing does not include `learning_memory_keeper`
-  - `learning_memory_keeper` is not scheduled when structured signals are empty
+  - coordinator post-turn routing includes `learning_memory_keeper` for explicit student edit requests
+  - manager appends `learning_memory_keeper` when structured signals are non-empty
   - `learning_memory_signals` propagate through `generate_teacher_response`,
     `process_turn`, `start_background_post_turn`, and `run_post_turn`
 - `tests/agents/test_coordinator.py`
-  - coordinator prompt no longer describes `learning_memory_keeper`
-  - coordinator plans cannot select `learning_memory_keeper`
+  - coordinator prompt describes `learning_memory_keeper` for explicit student edit requests
 - `tests/agents/specialists/test_learning_memory_keeper.py`
-  - structured tags become `tagged_target_ids`
+  - structured ids become `target_memory_ids`
   - untagged structured signals still allow bounded create/reconcile behavior
-  - malformed structured tags never reach persistence
   - Teacher-emitted destructive or reprioritization signal types are not accepted
   - structured signal runs expose useful outcome artifacts for logging assertions
 
@@ -369,7 +329,7 @@ The key boundary should be:
 
 - Teacher emits bounded structured learning-memory signals
 - `LearningMemoryKeeper` remains the post-response orchestrator and executor
-- Python validates legacy-format tags exactly and owns all id authorization
+- Python validates positive `memory_id` values and owns all id authorization
 
 That gets us the same reliability win we already use for `WordKeeper`, without
 losing the reconciliation layer that learning-memory still needs.

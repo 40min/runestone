@@ -13,6 +13,7 @@ from runestone.agents.manager import AgentsManager
 from runestone.agents.schemas import (
     ChatMessage,
     CoordinatorPlan,
+    LearningMemorySignal,
     RoutingItem,
     TeacherGenerationResult,
     TeacherSideEffect,
@@ -181,6 +182,13 @@ async def test_process_turn_returns_teacher_reply_and_starts_background_post(
             [{"title": "Src"}],
             "happy",
             [WordSaveCandidate(word_phrase="begripa", context_phrase="Jag begriper inte.")],
+            [
+                LearningMemorySignal(
+                    signal_type="improving",
+                    summary="The student is improving with articles.",
+                    memory_id=42,
+                )
+            ],
         )
     )
     manager.start_background_post_turn = AsyncMock()
@@ -214,6 +222,13 @@ async def test_process_turn_returns_teacher_reply_and_starts_background_post(
         user=mock_user,
         teacher_response="Teacher says hi",
         vocabulary_candidates=[WordSaveCandidate(word_phrase="begripa", context_phrase="Jag begriper inte.")],
+        learning_memory_signals=[
+            LearningMemorySignal(
+                signal_type="improving",
+                summary="The student is improving with articles.",
+                memory_id=42,
+            )
+        ],
         pre_results=[{"name": "pre"}],
         coordinator_row_id=42,
     )
@@ -230,7 +245,7 @@ async def test_process_turn_skips_stale_check_on_first_turn(
     manager = _make_manager(mock_settings)
     manager.handle_stale_post_task = AsyncMock()
     manager.prepare_pre_turn = AsyncMock(return_value=(_make_plan(), [], "", "", [], []))
-    manager.generate_teacher_response = AsyncMock(return_value=("Teacher says hi", None, "neutral", []))
+    manager.generate_teacher_response = AsyncMock(return_value=("Teacher says hi", None, "neutral", [], []))
     manager.start_background_post_turn = AsyncMock()
 
     await manager.process_turn(
@@ -583,19 +598,22 @@ async def test_generate_teacher_response_returns_text_and_sources(mock_settings,
     manager.teacher = AsyncMock()
     manager.teacher.generate_response.return_value = TeacherGenerationResult(message="Hi there!", final_messages=[])
 
-    response, sources, teacher_emotion, vocabulary_candidates = await manager.generate_teacher_response(
-        message="Hello",
-        history=[],
-        user=mock_user,
-        pre_results=[],
-        active_learning_focus_memory="",
-        recent_side_effects=[],
+    response, sources, teacher_emotion, vocabulary_candidates, learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Hello",
+            history=[],
+            user=mock_user,
+            pre_results=[],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
     )
 
     assert response == "Hi there!"
     assert sources is None
     assert teacher_emotion == "neutral"
     assert vocabulary_candidates == []
+    assert learning_memory_signals == []
 
 
 @pytest.mark.anyio
@@ -606,19 +624,22 @@ async def test_generate_teacher_response_returns_teacher_emotion(mock_settings, 
         message="Great work!", emotion="happy", final_messages=[]
     )
 
-    response, sources, teacher_emotion, vocabulary_candidates = await manager.generate_teacher_response(
-        message="Hello",
-        history=[],
-        user=mock_user,
-        pre_results=[],
-        active_learning_focus_memory="",
-        recent_side_effects=[],
+    response, sources, teacher_emotion, vocabulary_candidates, learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Hello",
+            history=[],
+            user=mock_user,
+            pre_results=[],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
     )
 
     assert response == "Great work!"
     assert sources is None
     assert teacher_emotion == "happy"
     assert vocabulary_candidates == []
+    assert learning_memory_signals == []
 
 
 @pytest.mark.anyio
@@ -632,19 +653,55 @@ async def test_generate_teacher_response_returns_vocabulary_candidates(mock_sett
         final_messages=[],
     )
 
-    response, sources, teacher_emotion, vocabulary_candidates = await manager.generate_teacher_response(
-        message="Hello",
-        history=[],
-        user=mock_user,
-        pre_results=[],
-        active_learning_focus_memory="",
-        recent_side_effects=[],
+    response, sources, teacher_emotion, vocabulary_candidates, learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Hello",
+            history=[],
+            user=mock_user,
+            pre_results=[],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
     )
 
     assert response == "Great work!"
     assert sources is None
     assert teacher_emotion == "neutral"
     assert vocabulary_candidates == [candidate]
+    assert learning_memory_signals == []
+
+
+@pytest.mark.anyio
+async def test_generate_teacher_response_returns_learning_memory_signals(mock_settings, mock_user):
+    manager = _make_manager(mock_settings)
+    manager.teacher = AsyncMock()
+    signal = LearningMemorySignal(
+        signal_type="improving",
+        summary="The student is improving with articles.",
+        memory_id=42,
+    )
+    manager.teacher.generate_response.return_value = TeacherGenerationResult(
+        message="Great work!",
+        learning_memory_signals=[signal],
+        final_messages=[],
+    )
+
+    response, sources, teacher_emotion, vocabulary_candidates, learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Hello",
+            history=[],
+            user=mock_user,
+            pre_results=[],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
+    )
+
+    assert response == "Great work!"
+    assert sources is None
+    assert teacher_emotion == "neutral"
+    assert vocabulary_candidates == []
+    assert learning_memory_signals == [signal]
 
 
 @pytest.mark.anyio
@@ -665,13 +722,15 @@ async def test_generate_teacher_response_extracts_news_sources(mock_settings, mo
         ],
     )
 
-    response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Nyheter",
-        history=[],
-        user=mock_user,
-        pre_results=[],
-        active_learning_focus_memory="",
-        recent_side_effects=[],
+    response, sources, _teacher_emotion, _vocabulary_candidates, _learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Nyheter",
+            history=[],
+            user=mock_user,
+            pre_results=[],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
     )
 
     assert response == "Svar med källor"
@@ -697,23 +756,25 @@ async def test_generate_teacher_response_combines_news_sources_from_pre_results(
         ],
     )
 
-    response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Nyheter",
-        history=[],
-        user=mock_user,
-        pre_results=[
-            {
-                "name": "news_agent",
-                "result": {
-                    "status": "action_taken",
-                    "artifacts": {
-                        "sources": [{"title": "Nyhet", "url": "https://example.com/article", "date": "2026-02-05"}]
+    response, sources, _teacher_emotion, _vocabulary_candidates, _learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Nyheter",
+            history=[],
+            user=mock_user,
+            pre_results=[
+                {
+                    "name": "news_agent",
+                    "result": {
+                        "status": "action_taken",
+                        "artifacts": {
+                            "sources": [{"title": "Nyhet", "url": "https://example.com/article", "date": "2026-02-05"}]
+                        },
                     },
-                },
-            }
-        ],
-        active_learning_focus_memory="",
-        recent_side_effects=[],
+                }
+            ],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
     )
 
     assert response == "Svar med specialistkällor"
@@ -732,34 +793,36 @@ async def test_generate_teacher_response_fallback_to_news_agent_results_if_sourc
         final_messages=[],
     )
 
-    response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Nyheter",
-        history=[],
-        user=mock_user,
-        pre_results=[
-            {
-                "name": "news_agent",
-                "result": {
-                    "status": "action_taken",
-                    "artifacts": {
-                        "topic": "ekonomi",
-                        "query": "svenska ekonominyheter",
-                        "timelimit": "w",
-                        "results": [
-                            {
-                                "title": "Nyhet från resultat",
-                                "url": "https://example.com/article-from-results",
-                                "date": "2026-02-05",
-                                "snippet": "summary",
-                                "article_text": "",
-                            }
-                        ],
+    response, sources, _teacher_emotion, _vocabulary_candidates, _learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Nyheter",
+            history=[],
+            user=mock_user,
+            pre_results=[
+                {
+                    "name": "news_agent",
+                    "result": {
+                        "status": "action_taken",
+                        "artifacts": {
+                            "topic": "ekonomi",
+                            "query": "svenska ekonominyheter",
+                            "timelimit": "w",
+                            "results": [
+                                {
+                                    "title": "Nyhet från resultat",
+                                    "url": "https://example.com/article-from-results",
+                                    "date": "2026-02-05",
+                                    "snippet": "summary",
+                                    "article_text": "",
+                                }
+                            ],
+                        },
                     },
-                },
-            }
-        ],
-        active_learning_focus_memory="",
-        recent_side_effects=[],
+                }
+            ],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
     )
 
     assert response == "Svar med källor"
@@ -788,23 +851,25 @@ async def test_generate_teacher_response_deduplicates_sources_across_pre_results
         ],
     )
 
-    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Nyheter",
-        history=[],
-        user=mock_user,
-        pre_results=[
-            {
-                "name": "news_agent",
-                "result": {
-                    "status": "action_taken",
-                    "artifacts": {
-                        "sources": [{"title": "Nyhet", "url": "https://example.com/shared", "date": "2026-02-05"}]
+    _response, sources, _teacher_emotion, _vocabulary_candidates, _learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Nyheter",
+            history=[],
+            user=mock_user,
+            pre_results=[
+                {
+                    "name": "news_agent",
+                    "result": {
+                        "status": "action_taken",
+                        "artifacts": {
+                            "sources": [{"title": "Nyhet", "url": "https://example.com/shared", "date": "2026-02-05"}]
+                        },
                     },
-                },
-            }
-        ],
-        active_learning_focus_memory="",
-        recent_side_effects=[],
+                }
+            ],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
     )
 
     assert sources == [
@@ -832,13 +897,15 @@ async def test_generate_teacher_response_filters_unsafe_urls(mock_settings, mock
         ],
     )
 
-    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Nyheter",
-        history=[],
-        user=mock_user,
-        pre_results=[],
-        active_learning_focus_memory="",
-        recent_side_effects=[],
+    _response, sources, _teacher_emotion, _vocabulary_candidates, _learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Nyheter",
+            history=[],
+            user=mock_user,
+            pre_results=[],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
     )
 
     assert sources == [{"title": "Safe", "url": "https://example.com", "date": "2026-02-05"}]
@@ -858,13 +925,15 @@ async def test_generate_teacher_response_rejects_grammar_sources_missing_from_se
         final_messages=[],
     )
 
-    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Grammatik",
-        history=[],
-        user=mock_user,
-        pre_results=[],
-        active_learning_focus_memory="",
-        recent_side_effects=[],
+    _response, sources, _teacher_emotion, _vocabulary_candidates, _learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Grammatik",
+            history=[],
+            user=mock_user,
+            pre_results=[],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
     )
 
     assert sources is None
@@ -896,13 +965,15 @@ async def test_generate_teacher_response_accepts_grammar_sources_from_history(mo
         )
     ]
 
-    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Grammatik",
-        history=history,
-        user=mock_user,
-        pre_results=[],
-        active_learning_focus_memory="",
-        recent_side_effects=[],
+    _response, sources, _teacher_emotion, _vocabulary_candidates, _learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Grammatik",
+            history=history,
+            user=mock_user,
+            pre_results=[],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
     )
 
     assert sources == [
@@ -940,13 +1011,15 @@ async def test_generate_teacher_response_caps_search_grammar_selected_sources(mo
         ],
     )
 
-    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Grammatik",
-        history=[],
-        user=mock_user,
-        pre_results=[],
-        active_learning_focus_memory="",
-        recent_side_effects=[],
+    _response, sources, _teacher_emotion, _vocabulary_candidates, _learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Grammatik",
+            history=[],
+            user=mock_user,
+            pre_results=[],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
     )
 
     assert sources == [
@@ -987,13 +1060,15 @@ async def test_generate_teacher_response_uses_selected_grammar_sources(mock_sett
         ],
     )
 
-    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Grammatik",
-        history=[],
-        user=mock_user,
-        pre_results=[],
-        active_learning_focus_memory="",
-        recent_side_effects=[],
+    _response, sources, _teacher_emotion, _vocabulary_candidates, _learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Grammatik",
+            history=[],
+            user=mock_user,
+            pre_results=[],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
     )
 
     assert sources == [
@@ -1032,13 +1107,15 @@ async def test_generate_teacher_response_rejects_grammar_sources_not_returned_by
         ],
     )
 
-    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Grammatik",
-        history=[],
-        user=mock_user,
-        pre_results=[],
-        active_learning_focus_memory="",
-        recent_side_effects=[],
+    _response, sources, _teacher_emotion, _vocabulary_candidates, _learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Grammatik",
+            history=[],
+            user=mock_user,
+            pre_results=[],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
     )
 
     assert sources == [
@@ -1072,13 +1149,15 @@ async def test_generate_teacher_response_rejects_same_host_invented_grammar_sour
         ],
     )
 
-    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Grammatik",
-        history=[],
-        user=mock_user,
-        pre_results=[],
-        active_learning_focus_memory="",
-        recent_side_effects=[],
+    _response, sources, _teacher_emotion, _vocabulary_candidates, _learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Grammatik",
+            history=[],
+            user=mock_user,
+            pre_results=[],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
     )
 
     assert sources == [
@@ -1105,13 +1184,15 @@ async def test_generate_teacher_response_rejects_unsafe_search_grammar_source(mo
         ],
     )
 
-    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Grammatik",
-        history=[],
-        user=mock_user,
-        pre_results=[],
-        active_learning_focus_memory="",
-        recent_side_effects=[],
+    _response, sources, _teacher_emotion, _vocabulary_candidates, _learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Grammatik",
+            history=[],
+            user=mock_user,
+            pre_results=[],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
     )
 
     assert sources is None
@@ -1136,13 +1217,15 @@ async def test_generate_teacher_response_rejects_disallowed_port_search_grammar_
         ],
     )
 
-    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Grammatik",
-        history=[],
-        user=mock_user,
-        pre_results=[],
-        active_learning_focus_memory="",
-        recent_side_effects=[],
+    _response, sources, _teacher_emotion, _vocabulary_candidates, _learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Grammatik",
+            history=[],
+            user=mock_user,
+            pre_results=[],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
     )
 
     assert sources is None
@@ -1158,13 +1241,15 @@ async def test_generate_teacher_response_can_hide_irrelevant_grammar_sources(moc
         final_messages=[],
     )
 
-    _response, sources, _teacher_emotion, _vocabulary_candidates = await manager.generate_teacher_response(
-        message="Grammatik",
-        history=[],
-        user=mock_user,
-        pre_results=[],
-        active_learning_focus_memory="",
-        recent_side_effects=[],
+    _response, sources, _teacher_emotion, _vocabulary_candidates, _learning_memory_signals = (
+        await manager.generate_teacher_response(
+            message="Grammatik",
+            history=[],
+            user=mock_user,
+            pre_results=[],
+            active_learning_focus_memory="",
+            recent_side_effects=[],
+        )
     )
 
     assert sources is None
@@ -1245,11 +1330,11 @@ def test_load_current_recall_words_returns_empty_on_user_mismatch(mock_settings,
 
 
 @pytest.mark.anyio
-async def test_run_post_turn_runs_post_specialists(mock_settings, mock_user, mock_side_effect_service):
+async def test_run_post_turn_routes_learning_memory_signals_directly(
+    mock_settings, mock_user, mock_side_effect_service
+):
     manager = _make_manager(mock_settings)
-    manager.coordinator.plan_post_turn = AsyncMock(
-        return_value=_make_plan(post=[RoutingItem(name="learning_memory_keeper", reason="save memory")])
-    )
+    manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
 
     class _ActionSpecialist(BaseSpecialist):
         def __init__(self):
@@ -1267,6 +1352,13 @@ async def test_run_post_turn_runs_post_specialists(mock_settings, mock_user, moc
         user=mock_user,
         teacher_response="Great words!",
         vocabulary_candidates=[],
+        learning_memory_signals=[
+            LearningMemorySignal(
+                signal_type="improving",
+                summary="The student is improving with article choice.",
+                memory_id=42,
+            )
+        ],
         pre_results=[],
         side_effect_service=mock_side_effect_service,
         coordinator_row_id=99,
@@ -1300,6 +1392,7 @@ async def test_run_post_turn_excludes_word_keeper_from_coordinator_available_spe
         user=mock_user,
         teacher_response="Hi!",
         vocabulary_candidates=[],
+        learning_memory_signals=[],
         pre_results=[],
         side_effect_service=mock_side_effect_service,
         coordinator_row_id=99,
@@ -1330,6 +1423,7 @@ async def test_run_post_turn_routes_teacher_vocabulary_candidates_directly(
         user=mock_user,
         teacher_response="Good sentence. Let's keep begripa in mind.",
         vocabulary_candidates=[candidate],
+        learning_memory_signals=[],
         pre_results=[],
         side_effect_service=mock_side_effect_service,
         coordinator_row_id=99,
@@ -1365,6 +1459,7 @@ async def test_run_post_turn_persists_direct_word_keeper_when_coordinator_fails(
         user=mock_user,
         teacher_response="Good sentence. Let's keep begripa in mind.",
         vocabulary_candidates=[WordSaveCandidate(word_phrase="begripa")],
+        learning_memory_signals=[],
         pre_results=[],
         side_effect_service=mock_side_effect_service,
         coordinator_row_id=99,
@@ -1385,7 +1480,7 @@ async def test_run_post_turn_persists_coordinator_and_direct_word_keeper_results
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_post_turn = AsyncMock(
-        return_value=_make_plan(post=[RoutingItem(name="learning_memory_keeper", reason="memory")])
+        return_value=_make_plan(post=[RoutingItem(name="personal_memory_keeper", reason="memory")])
     )
 
     class _NamedSpecialist(BaseSpecialist):
@@ -1393,6 +1488,7 @@ async def test_run_post_turn_persists_coordinator_and_direct_word_keeper_results
             return SpecialistResult(status="action_taken", info_for_teacher=f"{self.name} done.")
 
     manager.registry.register(_NamedSpecialist("learning_memory_keeper"), overwrite=True)
+    manager.registry.register(_NamedSpecialist("personal_memory_keeper"), overwrite=True)
     manager.registry.register(_NamedSpecialist("word_keeper"), overwrite=True)
 
     await manager.run_post_turn(
@@ -1402,13 +1498,24 @@ async def test_run_post_turn_persists_coordinator_and_direct_word_keeper_results
         user=mock_user,
         teacher_response="Good sentence. Let's keep begripa in mind.",
         vocabulary_candidates=[WordSaveCandidate(word_phrase="begripa")],
+        learning_memory_signals=[
+            LearningMemorySignal(
+                signal_type="improving",
+                summary="The student is improving with article choice.",
+                memory_id=42,
+            )
+        ],
         pre_results=[],
         side_effect_service=mock_side_effect_service,
         coordinator_row_id=99,
     )
 
     kwargs = mock_side_effect_service.replace_post_specialist_results.call_args.kwargs
-    assert [item["name"] for item in kwargs["results"]] == ["learning_memory_keeper", "word_keeper"]
+    assert [item["name"] for item in kwargs["results"]] == [
+        "personal_memory_keeper",
+        "learning_memory_keeper",
+        "word_keeper",
+    ]
 
 
 @pytest.mark.anyio
@@ -1428,26 +1535,92 @@ async def test_run_post_turn_forces_learning_memory_keeper_history_to_zero(
 
     capture = _LearningMemoryKeeperCaptureSpecialist()
     manager.registry.register(capture, overwrite=True)
-    manager.coordinator.plan_post_turn = AsyncMock(
-        return_value=_make_plan(post=[RoutingItem(name="learning_memory_keeper", reason="memory")])
-    )
+    manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
 
     await manager.run_post_turn(
         message="Ok",
         chat_id="chat-1",
         history=[
-            ChatMessage(role="assistant", content="You have now mastered this tense. [memory:area_to_improve:137]"),
+            ChatMessage(role="assistant", content="You have now mastered this tense."),
             ChatMessage(role="user", content="Thanks"),
         ],
         user=mock_user,
         teacher_response="Good job, let's continue.",
         vocabulary_candidates=[],
+        learning_memory_signals=[
+            LearningMemorySignal(
+                signal_type="mastered",
+                summary="The student has now mastered this tense.",
+                memory_id=137,
+            )
+        ],
         pre_results=[],
         side_effect_service=mock_side_effect_service,
         coordinator_row_id=99,
     )
 
     assert capture.seen_history == []
+
+
+@pytest.mark.anyio
+async def test_run_post_turn_passes_learning_memory_signals_to_learning_memory_keeper(
+    mock_settings, mock_user, mock_side_effect_service
+):
+    manager = _make_manager(mock_settings)
+    capture = _CaptureHistorySpecialist()
+    capture.name = "learning_memory_keeper"
+    manager.registry.register(capture, overwrite=True)
+    manager.coordinator.plan_post_turn = AsyncMock(return_value=_make_plan())
+    signal = LearningMemorySignal(
+        signal_type="improving",
+        summary="The student is improving with article choice.",
+        memory_id=42,
+    )
+
+    await manager.run_post_turn(
+        message="Ok",
+        chat_id="chat-1",
+        history=[],
+        user=mock_user,
+        teacher_response="Good job, let's continue.",
+        vocabulary_candidates=[],
+        learning_memory_signals=[signal],
+        pre_results=[],
+        side_effect_service=mock_side_effect_service,
+        coordinator_row_id=99,
+    )
+
+    assert capture.seen_learning_memory_signals == [signal]
+    assert capture.seen_routing_reason == "teacher emitted learning_memory_signals"
+
+
+@pytest.mark.anyio
+async def test_run_post_turn_keeps_coordinator_selected_learning_memory_keeper(
+    mock_settings, mock_user, mock_side_effect_service
+):
+    manager = _make_manager(mock_settings)
+    capture = _CaptureHistorySpecialist()
+    capture.name = "learning_memory_keeper"
+    manager.registry.register(capture, overwrite=True)
+    manager.coordinator.plan_post_turn = AsyncMock(
+        return_value=_make_plan(post=[RoutingItem(name="learning_memory_keeper", reason="student asked")])
+    )
+
+    await manager.run_post_turn(
+        message="Please forget this old grammar issue.",
+        chat_id="chat-1",
+        history=[],
+        user=mock_user,
+        teacher_response="Okay, we can update your tracked focus if needed.",
+        vocabulary_candidates=[],
+        learning_memory_signals=[],
+        pre_results=[],
+        side_effect_service=mock_side_effect_service,
+        coordinator_row_id=99,
+    )
+
+    assert capture.seen_learning_memory_signals == []
+    assert capture.seen_routing_reason == "student asked"
 
 
 @pytest.mark.anyio
@@ -1485,6 +1658,7 @@ async def test_run_post_turn_forces_personal_memory_keeper_history_to_two(
         user=mock_user,
         teacher_response="Bra jobbat!",
         vocabulary_candidates=[],
+        learning_memory_signals=[],
         pre_results=[],
         side_effect_service=mock_side_effect_service,
         coordinator_row_id=99,
@@ -1510,6 +1684,7 @@ async def test_run_post_turn_does_not_route_word_keeper_without_candidates(
         user=mock_user,
         teacher_response="Hi!",
         vocabulary_candidates=[],
+        learning_memory_signals=[],
         pre_results=[],
         side_effect_service=mock_side_effect_service,
         coordinator_row_id=99,
@@ -1537,6 +1712,7 @@ async def test_run_post_turn_skips_teacher_candidates_already_saved_in_pre_phase
         user=mock_user,
         teacher_response="Let's save begripa for later.",
         vocabulary_candidates=[WordSaveCandidate(word_phrase="begripa", context_phrase="Jag begriper inte.")],
+        learning_memory_signals=[],
         pre_results=[
             {
                 "name": "word_keeper",
@@ -1575,6 +1751,7 @@ async def test_run_post_turn_keeps_teacher_candidates_when_pre_phase_only_extrac
         user=mock_user,
         teacher_response="Let's save begripa for later.",
         vocabulary_candidates=[candidate],
+        learning_memory_signals=[],
         pre_results=[
             {
                 "name": "word_keeper",
@@ -1619,6 +1796,7 @@ async def test_run_post_turn_records_direct_word_keeper_failure_without_raising(
         user=mock_user,
         teacher_response="Good sentence. Let's keep begripa in mind.",
         vocabulary_candidates=[WordSaveCandidate(word_phrase="begripa")],
+        learning_memory_signals=[],
         pre_results=[],
         side_effect_service=mock_side_effect_service,
         coordinator_row_id=99,
@@ -1644,6 +1822,7 @@ async def test_run_post_turn_marks_failed_on_exception(mock_settings, mock_user,
             user=mock_user,
             teacher_response="Hi!",
             vocabulary_candidates=[],
+            learning_memory_signals=[],
             pre_results=[],
             side_effect_service=mock_side_effect_service,
             coordinator_row_id=99,
@@ -1670,6 +1849,7 @@ async def test_run_post_turn_skips_done_mark_when_persistence_is_stale(
         user=mock_user,
         teacher_response="Hi!",
         vocabulary_candidates=[],
+        learning_memory_signals=[],
         pre_results=[],
         side_effect_service=mock_side_effect_service,
         coordinator_row_id=99,
@@ -1786,6 +1966,7 @@ async def test_start_background_post_turn_creates_task(mock_settings, mock_user,
             user=mock_user,
             teacher_response="Hi!",
             vocabulary_candidates=[],
+            learning_memory_signals=[],
             pre_results=[],
             coordinator_row_id=42,
         )
@@ -1822,6 +2003,7 @@ async def test_start_background_post_turn_returns_before_slow_post_finishes(
             user=mock_user,
             teacher_response="Hi!",
             vocabulary_candidates=[],
+            learning_memory_signals=[],
             pre_results=[],
             coordinator_row_id=42,
         )
@@ -1855,6 +2037,7 @@ async def test_start_background_post_turn_marks_failed_on_timeout(mock_settings,
             user=mock_user,
             teacher_response="Hi!",
             vocabulary_candidates=[],
+            learning_memory_signals=[],
             pre_results=[],
             coordinator_row_id=42,
         )
@@ -1877,12 +2060,14 @@ class _CaptureHistorySpecialist(BaseSpecialist):
         self.seen_history = None
         self.seen_teacher_response = None
         self.seen_vocabulary_candidates = None
+        self.seen_learning_memory_signals = None
         self.seen_routing_reason = None
 
     async def run(self, context: SpecialistContext) -> SpecialistResult:
         self.seen_history = context.history
         self.seen_teacher_response = context.teacher_response
         self.seen_vocabulary_candidates = context.vocabulary_candidates
+        self.seen_learning_memory_signals = context.learning_memory_signals
         self.seen_routing_reason = context.routing_reason
         return SpecialistResult(status="no_action")
 
@@ -2051,6 +2236,7 @@ async def test_run_post_turn_passes_candidates_without_chat_history_or_teacher_r
         user=mock_user,
         teacher_response="Let's keep this new word in mind: begripa.",
         vocabulary_candidates=[WordSaveCandidate(word_phrase="begripa")],
+        learning_memory_signals=[],
         pre_results=[],
         side_effect_service=mock_side_effect_service,
         coordinator_row_id=99,
