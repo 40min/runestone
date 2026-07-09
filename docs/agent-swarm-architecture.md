@@ -68,7 +68,7 @@ settings alias resolves to the learning-memory budget.
 Timeouts are validated as positive and retry counts as non-negative. The
 resolved values are passed to both `ChatOpenAI` (for OpenAI and OpenRouter) and
 `ChatGoogleGenerativeAI` (for Gemini). In particular, Gemini uses the configured
-timeout as-is; the model factory does not impose a minimum timeout.
+timeout as-is, but the configuration classes validate that any agent using the Gemini provider has a minimum timeout of 10.0 seconds.
 
 For tool-using memory keepers, the same per-agent retry count also configures
 their existing `ModelRetryMiddleware`. Tool-call run limits and LangGraph

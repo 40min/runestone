@@ -66,6 +66,12 @@ class AgentLLMSettings(BaseModel):
     timeout_seconds: float
     max_retries: int
 
+    @model_validator(mode="after")
+    def _validate_timeout(self) -> "AgentLLMSettings":
+        if self.provider == "gemini" and self.timeout_seconds < 10.0:
+            raise ValueError(f"Gemini requires a minimum timeout of 10.0 seconds, but got {self.timeout_seconds}s")
+        return self
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -137,7 +143,7 @@ class Settings(BaseSettings):
     teacher_backup_model: Optional[str] = None
     teacher_backup_temperature: float = 1.0
     teacher_backup_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
-    teacher_backup_llm_timeout_seconds: float = Field(default=5.0, gt=0)
+    teacher_backup_llm_timeout_seconds: float = Field(default=10.0, gt=0)
     teacher_backup_max_retries: int = Field(default=1, ge=0)
 
     coordinator_provider: Optional[Literal["openrouter", "openai", "gemini"]] = None
@@ -169,7 +175,7 @@ class Settings(BaseSettings):
     # but have their own timeout and retry budgets.
     learning_memory_keeper_llm_timeout_seconds: float = Field(default=15.0, gt=0)
     learning_memory_keeper_max_retries: int = Field(default=3, ge=0)
-    personal_memory_keeper_llm_timeout_seconds: float = Field(default=8.0, gt=0)
+    personal_memory_keeper_llm_timeout_seconds: float = Field(default=10.0, gt=0)
     personal_memory_keeper_max_retries: int = Field(default=2, ge=0)
 
     memory_maintainer_provider: Optional[Literal["openrouter", "openai", "gemini"]] = None
@@ -238,6 +244,23 @@ class Settings(BaseSettings):
             self.memory_maintainer_temperature = self.memory_keeper_temperature
         if self.memory_maintainer_reasoning_level is None:
             self.memory_maintainer_reasoning_level = self.memory_keeper_reasoning_level
+
+        # Validate that no Gemini provider has a timeout below 10 seconds
+        for name in [
+            "teacher",
+            "teacher_backup",
+            "coordinator",
+            "word_keeper",
+            "news_agent",
+            "learning_memory_keeper",
+            "personal_memory_keeper",
+            "memory_maintainer",
+        ]:
+            if name == "teacher_backup" and self.teacher_backup_model is None:
+                continue
+            # Instantiating AgentLLMSettings via get_agent_llm_settings will trigger validation
+            self.get_agent_llm_settings(name)  # type: ignore
+
         return self
 
     def resolve_service_llm_provider(self) -> str:

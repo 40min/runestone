@@ -415,6 +415,7 @@ class TestSettings:
             memory_keeper_model="gemini-3.1-flash-lite-preview",
             memory_keeper_temperature=0.3,
             memory_keeper_reasoning_level=ReasoningLevel.MINIMAL,
+            personal_memory_keeper_llm_timeout_seconds=10.0,
             memory_maintainer_provider=None,
             memory_maintainer_model=None,
         )
@@ -501,14 +502,14 @@ class TestSettings:
             teacher_backup_provider="gemini",
             teacher_backup_model="gemini-2.5-flash",
             teacher_backup_temperature=1.0,
-            teacher_backup_llm_timeout_seconds=5.0,
+            teacher_backup_llm_timeout_seconds=12.0,
             teacher_backup_max_retries=1,
         )
         result = s.get_agent_llm_settings("teacher_backup")
         assert result.provider == "gemini"
         assert result.model == "gemini-2.5-flash"
         assert result.temperature == 1.0
-        assert result.timeout_seconds == 5.0
+        assert result.timeout_seconds == 12.0
         assert result.max_retries == 1
 
     def test_get_agent_llm_settings_teacher_backup_rejects_disabled_profile(self):
@@ -537,7 +538,7 @@ class TestSettings:
         personal = s.get_agent_llm_settings("personal_memory_keeper")
         assert learning.timeout_seconds != personal.timeout_seconds or learning.max_retries != personal.max_retries
         assert learning.timeout_seconds == 15.0
-        assert personal.timeout_seconds == 8.0
+        assert personal.timeout_seconds == 10.0
         assert personal.max_retries == 2
 
     def test_get_agent_llm_settings_memory_maintainer_has_long_timeout(self):
@@ -558,3 +559,42 @@ class TestSettings:
 
         overridden_settings = self._base_settings(memory_maintenance_timeout_seconds=360.0)
         assert overridden_settings.memory_maintenance_timeout_seconds == 360.0
+
+    def test_gemini_timeout_validator_raises_validation_error_when_below_10s(self):
+        """Validate that a ValidationError is raised if an agent provider is gemini and timeout < 10.0s."""
+        env_vars = {
+            "LLM_PROVIDER": "openai",
+            "OPENAI_API_KEY": "test-key",
+            "ALLOWED_ORIGINS": "http://localhost:3000",
+            "DATABASE_URL": "sqlite:///./test.db",
+            "TELEGRAM_BOT_TOKEN": "test-token",
+            "FRONTEND_URL": "http://localhost:5173",
+            "JWT_SECRET_KEY": "secret",
+            "TEACHER_PROVIDER": "gemini",
+            "TEACHER_MODEL": "gemini-2.5-flash",
+            "TEACHER_LLM_TIMEOUT_SECONDS": "5.0",
+        }
+        with patch.dict(os.environ, env_vars, clear=True):
+            with pytest.raises(ValidationError) as excinfo:
+                Settings()
+        assert "Gemini requires a minimum timeout of 10.0 seconds" in str(excinfo.value)
+
+    def test_gemini_timeout_validator_allows_10s_or_greater(self):
+        """Validate that a timeout of 10.0s or more is accepted for Gemini."""
+        env_vars = {
+            "LLM_PROVIDER": "openai",
+            "OPENAI_API_KEY": "test-key",
+            "ALLOWED_ORIGINS": "http://localhost:3000",
+            "DATABASE_URL": "sqlite:///./test.db",
+            "TELEGRAM_BOT_TOKEN": "test-token",
+            "FRONTEND_URL": "http://localhost:5173",
+            "JWT_SECRET_KEY": "secret",
+            "TEACHER_PROVIDER": "gemini",
+            "TEACHER_MODEL": "gemini-2.5-flash",
+            "TEACHER_LLM_TIMEOUT_SECONDS": "10.0",
+        }
+        with patch.dict(os.environ, env_vars, clear=True):
+            s = Settings()
+        result = s.get_agent_llm_settings("teacher")
+        assert result.provider == "gemini"
+        assert result.timeout_seconds == 10.0

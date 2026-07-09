@@ -247,7 +247,7 @@ def test_build_chat_model_uses_configured_gemini_timeout(mock_settings, caplog):
         provider="gemini",
         model="gemini-2.5-flash",
         temperature=0.2,
-        timeout_seconds=3.0,
+        timeout_seconds=12.0,
     )
 
     with patch("runestone.agents.llm.ChatGoogleGenerativeAI") as mock_chat_gemini:
@@ -255,8 +255,8 @@ def test_build_chat_model_uses_configured_gemini_timeout(mock_settings, caplog):
             build_chat_model(mock_settings, "teacher")
 
         call_kwargs = mock_chat_gemini.call_args[1]
-        assert call_kwargs["timeout"] == 3.0
-        assert "timeout=3.0s" in caplog.text
+        assert call_kwargs["timeout"] == 12.0
+        assert "timeout=12.0s" in caplog.text
 
 
 def test_build_chat_model_unsupported_provider(mock_settings):
