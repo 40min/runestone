@@ -10,8 +10,9 @@ import pytest
 from langchain.agents.middleware import ModelFallbackMiddleware, ToolCallLimitMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.errors import GraphRecursionError
+from pydantic import ValidationError
 
-from runestone.agents.schemas import ChatMessage, TeacherOutput, TeacherSideEffect
+from runestone.agents.schemas import ChatMessage, LearningMemorySignal, TeacherOutput, TeacherSideEffect
 from runestone.agents.specialists.base import INFO_FOR_TEACHER_MAX_CHARS
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
@@ -137,22 +138,20 @@ def test_build_agent(mock_settings, mock_chat_model):
                 call_kwargs["system_prompt"]
             )
             assert "MEMORYKEEPER POST-PHASE SIGNALS" in call_kwargs["system_prompt"]
-            assert "prefer to include one short" in call_kwargs["system_prompt"]
-            assert "explicit sentence" in call_kwargs["system_prompt"]
-            assert "This is a recurring issue to remember" in call_kwargs["system_prompt"]
+            assert "keep the visible `message`" in call_kwargs["system_prompt"]
+            assert "place the durable signal in structured" in call_kwargs["system_prompt"]
+            assert "Recurring issue: the student struggles with article choice." in call_kwargs["system_prompt"]
             assert "For `personal_info`, do not try to emit special persistence phrasing." in (
                 call_kwargs["system_prompt"]
             )
             assert "can derive new personal facts from clear student statements" in call_kwargs["system_prompt"]
             assert "not by a tool you call directly" in call_kwargs["system_prompt"]
             assert "Choosing between" not in call_kwargs["system_prompt"]
-            assert "You are improving with" in call_kwargs["system_prompt"]
-            assert "You have now mastered" in call_kwargs["system_prompt"]
+            assert "Signal `improving`" in call_kwargs["system_prompt"]
+            assert "Signal `mastered`" in call_kwargs["system_prompt"]
             assert "Actively assess mastery every time you notice progress" in call_kwargs["system_prompt"]
             assert "stay stuck at `improving` indefinitely" in call_kwargs["system_prompt"]
-            assert "If you want post-phase `area_to_improve` maintenance to happen from your reply" in (
-                call_kwargs["system_prompt"]
-            )
+            assert "Use `learning_memory_signals` only for these bounded signal types" in call_kwargs["system_prompt"]
 
             assert "Word-saving is handled by an internal helper specialist called `WordKeeper`" in (
                 call_kwargs["system_prompt"]
@@ -194,11 +193,12 @@ def test_build_agent(mock_settings, mock_chat_model):
             assert "### MEMORY PROTOCOL (read_active_learning_focus)" in call_kwargs["system_prompt"]
             assert "only live memory lookup tool" in call_kwargs["system_prompt"]
             assert "cannot look up `personal_info`" in call_kwargs["system_prompt"]
-            assert "content, status, or priority change" in call_kwargs["system_prompt"]
-            assert "[memory:area_to_improve:<id>]" in call_kwargs["system_prompt"]
-            assert "[memory:personal_info:5]" not in call_kwargs["system_prompt"]
+            assert "the learning signal refers to" in call_kwargs["system_prompt"]
+            assert "`learning_memory_signals`" in call_kwargs["system_prompt"]
+            assert "`memory_id` field" in call_kwargs["system_prompt"]
             assert "Copy the `<id>` from the same exact memory item line" in call_kwargs["system_prompt"]
             assert "If the exact `area_to_improve` id is not present" in call_kwargs["system_prompt"]
+            assert "Never expose `memory_id`" in call_kwargs["system_prompt"]
             assert "Use `search_grammar` at most once with one focused query." in call_kwargs["system_prompt"]
             assert "each result has `title`, `url`, and `path`" in call_kwargs["system_prompt"]
             assert "Focus on the top result." in call_kwargs["system_prompt"]
@@ -957,6 +957,73 @@ def test_teacher_output_defaults_and_preserves_vocabulary_candidates():
     assert payload.vocabulary_candidates == [
         WordSaveCandidate(word_phrase="begripa", context_phrase="Jag begriper inte."),
     ]
+
+
+def test_teacher_output_accepts_learning_memory_signals_and_deduplicates():
+    payload = TeacherOutput(
+        message="Hej",
+        learning_memory_signals=[
+            LearningMemorySignal(
+                signal_type="improving",
+                summary="  The student is improving with articles.  ",
+                memory_id=42,
+            ),
+            LearningMemorySignal(
+                signal_type="improving",
+                summary="The student is improving with articles.",
+                memory_id=42,
+            ),
+        ],
+    )
+
+    assert payload.learning_memory_signals == [
+        LearningMemorySignal(
+            signal_type="improving",
+            summary="The student is improving with articles.",
+            memory_id=42,
+        )
+    ]
+
+
+def test_teacher_output_rejects_invalid_learning_memory_id():
+    with pytest.raises(ValidationError, match="invalid_memory_id"):
+        TeacherOutput(
+            message="Hej",
+            learning_memory_signals=[
+                LearningMemorySignal(
+                    signal_type="improving",
+                    summary="The student is improving with articles.",
+                    memory_id=0,
+                )
+            ],
+        )
+
+
+def test_teacher_output_rejects_empty_learning_memory_summary():
+    with pytest.raises(ValidationError, match="empty_learning_memory_summary"):
+        TeacherOutput(
+            message="Hej",
+            learning_memory_signals=[
+                LearningMemorySignal(
+                    signal_type="improving",
+                    summary="   ",
+                )
+            ],
+        )
+
+
+def test_teacher_output_rejects_new_issue_memory_id():
+    with pytest.raises(ValidationError, match="new_issue_cannot_have_memory_id"):
+        TeacherOutput(
+            message="Hej",
+            learning_memory_signals=[
+                LearningMemorySignal(
+                    signal_type="new_issue",
+                    summary="Recurring issue: verb-second word order.",
+                    memory_id=42,
+                )
+            ],
+        )
 
 
 def test_teacher_build_agent_with_backup_middleware(mock_settings, mock_chat_model):

@@ -90,7 +90,18 @@ def test_learning_and_personal_memory_keeper_prompts():
     assert "personal_memory_keeper" in COORDINATOR_POST_RESPONSE_PROMPT
     assert "chat_history_size" not in COORDINATOR_POST_RESPONSE_PROMPT
     assert "The student's `message` contains a clear, durable personal fact" in COORDINATOR_POST_RESPONSE_PROMPT
-    assert "forget/remove" in COORDINATOR_POST_RESPONSE_PROMPT
+    assert "asks to forget a personal fact" in COORDINATOR_POST_RESPONSE_PROMPT
+    assert "explicitly asks to update, forget, remove, correct, change, reprioritize" in (
+        COORDINATOR_POST_RESPONSE_PROMPT
+    )
+    assert "The signal is about personal facts (native language, hometown, goals)" in (COORDINATOR_POST_RESPONSE_PROMPT)
+    assert "The teacher gives routine praise, normal corrections, drill prompts, or generic explanations." in (
+        COORDINATOR_POST_RESPONSE_PROMPT
+    )
+    assert 'The teacher merely explains grammar rules using instructional verbs like "kom ihåg" or "tänk på".' in (
+        COORDINATOR_POST_RESPONSE_PROMPT
+    )
+    assert "The teacher only corrects a misspelled/invalid word" in COORDINATOR_POST_RESPONSE_PROMPT
 
 
 def test_news_prompt_requires_known_topic():
@@ -147,7 +158,7 @@ async def test_plan_success(coordinator_agent, mock_chat_model):
     """Test successful plan generation."""
     raw_plan = CoordinatorPlan(
         pre_response=[RoutingItem(name="word_keeper", reason="Test")],
-        post_response=[RoutingItem(name="learning_memory_keeper", reason="Test")],
+        post_response=[RoutingItem(name="personal_memory_keeper", reason="Test")],
         audit={"trace": "ok"},
     )
     mock_llm = mock_chat_model.with_structured_output.return_value
@@ -158,7 +169,7 @@ async def test_plan_success(coordinator_agent, mock_chat_model):
         message="I am John",
         history=history,
         current_stage="pre_response",
-        available_specialists=["word_keeper", "learning_memory_keeper", "personal_memory_keeper"],
+        available_specialists=["word_keeper", "personal_memory_keeper"],
     )
 
     assert plan == CoordinatorPlan(
@@ -177,7 +188,7 @@ async def test_plan_success(coordinator_agent, mock_chat_model):
     assert payload["history"][0]["content"] == "Hello"
     assert payload["current_stage"] == "pre_response"
     assert payload["teacher_response"] is None
-    assert payload["available_specialists"] == ["word_keeper", "learning_memory_keeper", "personal_memory_keeper"]
+    assert payload["available_specialists"] == ["word_keeper", "personal_memory_keeper"]
 
 
 @pytest.mark.anyio
@@ -204,7 +215,7 @@ async def test_plan_pre_turn_only_returns_pre_items(coordinator_agent, mock_chat
 async def test_plan_post_turn_only_returns_post_items_and_passes_teacher_response(coordinator_agent, mock_chat_model):
     expected_plan = CoordinatorPlan(
         pre_response=[RoutingItem(name="word_keeper", reason="Should be dropped")],
-        post_response=[RoutingItem(name="learning_memory_keeper", reason="Teacher confirmed mastery")],
+        post_response=[RoutingItem(name="personal_memory_keeper", reason="Teacher confirmed profile fact")],
         audit={"trace": "ok"},
     )
     mock_llm = mock_chat_model.with_structured_output.return_value
@@ -214,11 +225,11 @@ async def test_plan_post_turn_only_returns_post_items_and_passes_teacher_respons
         message="What does hejda mean?",
         history=[],
         teacher_response="Useful words to remember: hejda",
-        available_specialists=["word_keeper", "learning_memory_keeper", "personal_memory_keeper"],
+        available_specialists=["word_keeper", "personal_memory_keeper"],
     )
 
     assert plan.pre_response == []
-    assert [item.name for item in plan.post_response] == ["learning_memory_keeper"]
+    assert [item.name for item in plan.post_response] == ["personal_memory_keeper"]
 
     call_args = mock_llm.ainvoke.call_args[0][0]
     assert call_args[0].content == COORDINATOR_POST_RESPONSE_PROMPT

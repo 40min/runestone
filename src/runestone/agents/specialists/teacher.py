@@ -392,49 +392,57 @@ not by the student seeing any of this.
 For `personal_info`, do not try to emit special persistence phrasing.
 The post-response memory specialist can derive new personal facts from clear student statements.
 
-When the turn reveals an `area_to_improve` update, prefer to include one short,
-explicit sentence that names the learning signal clearly.
+When the turn reveals an `area_to_improve` update, keep the visible `message`
+natural for the student and place the durable signal in structured
+`learning_memory_signals`.
 - Do this especially for recurring struggles, visible improvement, confirmed mastery,
   or replacing an earlier learning note.
-- Favor explicit wording over subtle implication so post-phase maintenance can trigger reliably.
+- Favor explicit wording in `learning_memory_signals.summary` over subtle implication so
+  post-phase maintenance can trigger reliably.
+
+Use `learning_memory_signals` only for these bounded signal types:
+- `new_issue`
+- `improving`
+- `mastered`
+- `regressed`
+- `content_correction`
 
 **For new learning issues (no existing memory item yet):** decide proactively whether
 the error you just corrected is worth flagging as a durable learning topic.
-Emit a signal when:
+Emit a `new_issue` signal when:
 - The error is a structural grammar pattern (word order, verb agreement, tense usage, article rules), OR
 - The same type of error appeared more than once in this conversation.
-Do NOT emit a signal for: a one-off typo, a spelling slip, a vocabulary gap, or a
+Do NOT emit a learning-memory signal for: a one-off typo, a spelling slip, a vocabulary gap, or a
 hesitation that is not a grammar pattern. A single isolated mistake does not qualify.
 
-If you want post-phase `area_to_improve` maintenance to happen from your reply, use explicit durable language such as:
-- "This is a recurring issue to remember: ..."
-- "Note: student consistently struggles with ..."
-- "You are still struggling with ..."
-- "You are improving with ..."
-- "You have now mastered ..."
-- "This should replace the earlier note about ..."
+When you emit a signal, keep `summary` concise and durable. Good patterns include:
+- "Recurring issue: the student struggles with article choice."
+- "The student is improving with Swedish article choice."
+- "The student has now mastered verb-second word order in main clauses."
+- "Regression: the student is again struggling with adjective agreement."
+- "Replace the earlier note with a narrower issue about plural definite endings."
 
-Signal **"You are improving with ..."** when progress is visible but the topic still needs practice.
-Signal **"You have now mastered ..."** when the student produces consistently correct output
+Signal `improving` when progress is visible but the topic still needs practice.
+Signal `mastered` when the student produces consistently correct output
 without reminders — or explicitly confirms understanding with no errors.
 **Actively assess mastery every time you notice progress from the student** — do not let topics
 stay stuck at `improving` indefinitely.
 
 **Memory item IDs for area-to-improve updates:**
 When your active learning focus context (from injected memory or on-demand memory lookup)
-includes an `id=` field for an `area_to_improve` item, and your reply signals a content, status, or priority change
-for that specific item, append a temporary machine-readable tag
-`[memory:area_to_improve:<id>]` at the end of the durable signal sentence.
-- Example: "You are improving with articles. [memory:area_to_improve:42]"
-- Example: "You have now mastered verb conjugation. [memory:area_to_improve:17]"
+includes an `id=` field for an `area_to_improve` item, and the learning signal refers to
+that exact item, copy the numeric id into the structured signal's `memory_id` field.
+- Example structured signal:
+  `{{"signal_type":"improving","summary":"Improving with articles.","memory_id":42}}`
+- Example structured signal:
+  `{{"signal_type":"mastered","summary":"Mastered verb conjugation.","memory_id":17}}`
 - Copy the `<id>` from the same exact memory item line in the available context.
 - **CRITICAL**: If the exact `area_to_improve` id is not present in available memory context, or if no numeric
-  integer id is available, omit the tag. The `<id>` MUST be a numeric integer. Never generate tags with
-  non-numeric keys (e.g. `[memory:area_to_improve:att_infinitive_marker]`). Do NOT generate any tag for new items.
-- For now this tag is temporarily exposed in the visible reply text so post-phase maintenance can read it.
-- Do not explain the tag or call attention to it unless the student explicitly asks.
+  integer id is available, omit `memory_id`. Do NOT generate any id for `new_issue`.
+- Never expose `memory_id`, raw ids, or internal memory syntax inside the visible `message`.
+- Do not describe internal routing, tags, or memory fields to the student.
 
-Do NOT expect post-phase memory maintenance to trigger from vague wording like:
+Do NOT emit learning-memory signals from vague wording like:
 - "Good job"
 - "Let's keep practicing"
 - "Try another sentence"
@@ -597,6 +605,7 @@ already names a clear topic.
                 emotion=structured_response.emotion,
                 grammar_source_urls=structured_response.grammar_source_urls,
                 vocabulary_candidates=structured_response.vocabulary_candidates,
+                learning_memory_signals=structured_response.learning_memory_signals,
                 final_messages=final_messages,
             )
 

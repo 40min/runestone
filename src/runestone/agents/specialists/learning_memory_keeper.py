@@ -1,8 +1,7 @@
-"""Deterministic structured-output pipeline for learning-progress memory."""
+"""Deterministic structured-output pipeline for teacher-emitted learning-progress memory."""
 
 import json
 import logging
-import re
 from dataclasses import dataclass
 from typing import Literal, Self
 
@@ -11,13 +10,13 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 
 from runestone.agents.llm import build_chat_model
+from runestone.agents.schemas import LearningMemorySignal
 from runestone.agents.service_providers import provide_memory_item_service
 from runestone.agents.specialists.base import BaseSpecialist, SpecialistAction, SpecialistContext, SpecialistResult
 from runestone.api.memory_item_schemas import MemoryCategory, MemorySortBy, SortDirection
 from runestone.config import Settings
 
 logger = logging.getLogger(__name__)
-MEMORY_TAG_PATTERN = re.compile(r"\[memory:area_to_improve:(\d+)\]")
 LEARNING_STATUSES = ("struggling", "improving", "mastered")
 
 LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT = """
@@ -31,15 +30,16 @@ learning memory should be updated.
 <context_analysis>
 You receive:
 - `student_message`: the student's message in the current turn
-- `teacher_response`: the teacher's response in the current turn
-- `tagged_target_ids`: teacher memory tags already parsed and authorized by Python
+- `teacher_response`: the teacher's response in the current turn, as secondary context only
+- `learning_memory_signals`: structured teacher signals for this turn
+- `target_memory_ids`: validated target ids derived from structured `memory_id` values
 - `existing_targets`: the current allowed `area_to_improve` targets for this turn
 
 Mutations may reference only exact `target_id` values from `existing_targets`.
 </context_analysis>
 
 <fast_path>
-FIRST: Check `tagged_target_ids`.
+FIRST: Read `learning_memory_signals`, then check `target_memory_ids`.
 If present, treat those IDs as the direct targets for this turn. Prefer precise mutations
 for those IDs and do not invent replacement creates for the same signal.
 
@@ -54,26 +54,34 @@ for those IDs and do not invent replacement creates for the same signal.
   - Explicit request to remove the stored topic, or confirmation that the stored topic is wrong
     -> set `delete=true`.
 
-This is the most common case. Do not mutate IDs outside `tagged_target_ids` when they are present.
+This is the most common case. Do not mutate IDs outside `target_memory_ids` when they are present.
 </fast_path>
 
 <decision_tree>
-If `tagged_target_ids` is empty, classify into exactly ONE case:
+If `target_memory_ids` is empty, classify into exactly ONE case based on
+`learning_memory_signals` first, then explicit `student_message` edit requests,
+and `teacher_response` only as support context:
 
-Case A: Student explicitly asks to edit a learning topic.
-  Examples: "mark this as mastered", "reprioritize my learning areas",
-  "forget this old learning topic", "remove that old grammar issue".
-  -> use `existing_targets` to identify the matching item, then return a mutation.
-  -> if the student explicitly asks to forget or remove a learning topic, return `delete=true`.
-  -> if no clear existing target matches the student's request, return `decision="no_action"`.
+Case A: Student explicitly asks to edit a tracked learning topic.
+  Examples:
+    - "forget this old grammar issue"
+    - "mark this as mastered"
+    - "remove that problem from my list"
+    - "change that note, it is about articles not prepositions"
+  -> use `existing_targets` to find the single clearly referenced item, then return a mutation.
+  -> prefer `delete=true` for explicit remove/forget requests.
+  -> use `status="mastered"` for explicit mastery requests.
+  -> use `content` only for explicit wording corrections.
+  -> use `priority` only for explicit reprioritization.
+  -> if no single target is clearly identified, return `decision="no_action"`.
+  -> set `trigger_source="student"`.
 
-Case B: Teacher explicitly identifies a durable learning issue (without an ID tag).
+Case B: Teacher explicitly identifies a durable learning issue without an ID tag.
   The teacher signal must indicate the issue is structural, repeated, or worth tracking.
   A routine one-off correction, a typo, a spelling slip, or a vocabulary gap alone is NOT enough.
-  Examples:
-    "Note: student repeatedly struggles with articles"
-    "This is a recurring issue: word order in questions"
-    "Word order error. This keeps coming up"
+  Structured examples:
+    `{"signal_type":"new_issue","summary":"Recurring issue: the student struggles with articles"}`
+    `{"signal_type":"new_issue","summary":"Recurring issue: word order in questions"}`
   -> return one create plan.
   Provide thorough details:
   - `key`: concise English descriptor of the grammar or language concept
@@ -82,8 +90,8 @@ Case B: Teacher explicitly identifies a durable learning issue (without an ID ta
   - `status`: `struggling` by default for new issues
   - `priority`: set based on severity (`0` critical, `9` minor)
 
-Case C: Teacher signals improvement, mastery, regression, content correction, or priority change, but NO ID tag.
-  Examples: "You have now mastered verb conjugation" (without `[memory:...]` tag).
+Case C: Teacher signals improvement, mastery, regression, or content correction, but NO ID tag.
+  Structured example: `{"signal_type":"mastered","summary":"The student has now mastered verb conjugation."}`
   -> use `existing_targets` to find the matching item, then return a mutation.
   -> if no matching item is found and the signal is a learning need, fall back to a create plan.
   -> if the signal marks mastery of an unknown topic, return `decision="no_action"`.
@@ -93,7 +101,7 @@ None of the above
 </decision_tree>
 
 <terminal_no_ops>
-- If `tagged_target_ids` are present, do not invent replacement creates for those tagged topics.
+- If `target_memory_ids` are present, do not invent replacement creates for those targeted topics.
 - Do not mutate an existing target unless the current turn clearly refers to that topic.
 - If multiple existing targets are plausible but the turn does not clearly identify one, return `decision="no_action"`.
 </terminal_no_ops>
@@ -212,11 +220,14 @@ class AllowedLearningTarget:
         }
 
 
-def parse_learning_memory_tag_ids(text: str | None) -> list[int]:
-    """Return unique syntactically valid teacher memory tag IDs in source order."""
-    if not text:
-        return []
-    return list(dict.fromkeys(int(match) for match in MEMORY_TAG_PATTERN.findall(text)))
+def parse_learning_memory_ids(signals: list[LearningMemorySignal]) -> list[int]:
+    """Return unique validated target ids from structured learning-memory signals."""
+    tagged_ids: list[int] = []
+    for signal in signals:
+        if signal.memory_id is None:
+            continue
+        tagged_ids.append(signal.memory_id)
+    return list(dict.fromkeys(tagged_ids))
 
 
 class LearningMemoryKeeperSpecialist(BaseSpecialist):
@@ -233,7 +244,7 @@ class LearningMemoryKeeperSpecialist(BaseSpecialist):
         )
 
     async def run(self, context: SpecialistContext) -> SpecialistResult:
-        tagged_ids = parse_learning_memory_tag_ids(context.teacher_response)
+        tagged_ids = parse_learning_memory_ids(context.learning_memory_signals)
         try:
             async with provide_memory_item_service() as service:
                 targets = await self._load_targets(service, context.user.id, tagged_ids)
@@ -244,7 +255,10 @@ class LearningMemoryKeeperSpecialist(BaseSpecialist):
                 payload = {
                     "student_message": context.message,
                     "teacher_response": context.teacher_response,
-                    "tagged_target_ids": tagged_ids,
+                    "learning_memory_signals": [
+                        signal.model_dump(mode="json") for signal in context.learning_memory_signals
+                    ],
+                    "target_memory_ids": tagged_ids,
                     "existing_targets": [target.as_payload() for target in targets.values()],
                 }
                 extraction = await self._extract(payload)
@@ -256,7 +270,9 @@ class LearningMemoryKeeperSpecialist(BaseSpecialist):
                 if disallowed:
                     logger.warning("[agents:learning_memory_keeper] reason=target_not_allowed")
                     return self._result("error", extraction.trigger_source, "target_not_allowed")
-                return await self._execute(service, context.user.id, extraction, targets)
+                return await self._execute(
+                    service, context.user.id, extraction, targets, context.learning_memory_signals
+                )
         except Exception as exc:
             logger.warning(
                 "[agents:learning_memory_keeper] reason=service_failed exception=%s",
@@ -321,6 +337,7 @@ class LearningMemoryKeeperSpecialist(BaseSpecialist):
         user_id: int,
         extraction: LearningMemoryKeeperExtraction,
         targets: dict[int, AllowedLearningTarget],
+        learning_memory_signals: list[LearningMemorySignal],
     ) -> SpecialistResult:
         actions: list[SpecialistAction] = []
         counts = {"upserted": 0, "updated": 0, "deleted": 0, "failed": 0}
@@ -397,6 +414,9 @@ class LearningMemoryKeeperSpecialist(BaseSpecialist):
             artifacts={
                 "trigger_source": extraction.trigger_source,
                 "reason": "service_failed" if counts["failed"] else ("applied" if actions else "stale_target"),
+                "signal_count": len(learning_memory_signals),
+                "signal_types": [signal.signal_type for signal in learning_memory_signals],
+                "target_memory_ids": parse_learning_memory_ids(learning_memory_signals),
                 "changed_item_ids": changed_item_ids,
                 "upserted_item_ids": upserted_item_ids,
                 "updated_item_ids": updated_item_ids,
