@@ -30,6 +30,10 @@ describe("Login", () => {
     expect(screen.getByLabelText(/^Email\s+\*\s*$/)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Password\s+\*\s*$/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Login" })).toBeInTheDocument();
+    expect(screen.getByText("Sign in. Another rune. Another stone.")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Sign in to continue analyzing textbook pages/)
+    ).not.toBeInTheDocument();
     expect(
       screen.getByText("Don't have an account? Register")
     ).toBeInTheDocument();

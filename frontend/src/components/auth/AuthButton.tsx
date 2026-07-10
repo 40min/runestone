@@ -8,6 +8,7 @@ interface AuthButtonProps {
   type?: 'submit' | 'button';
   variant?: 'primary' | 'secondary';
   loadingText?: string;
+  fullWidth?: boolean;
 }
 
 const AuthButton: React.FC<AuthButtonProps> = ({
@@ -17,54 +18,56 @@ const AuthButton: React.FC<AuthButtonProps> = ({
   type = 'button',
   variant = 'primary',
   loadingText,
+  fullWidth = true,
 }) => {
-  const getSx = () => {
-    if (variant === 'primary') {
-      return {
-        mt: 2,
-        padding: '10px 20px',
-        backgroundColor: 'var(--primary-color)',
-        color: 'white',
-        border: 'none',
-        borderRadius: '6px',
-        cursor: loading ? 'not-allowed' : 'pointer',
-        fontSize: '14px',
-        fontWeight: 'bold',
-        opacity: loading ? 0.6 : 1,
-        '&:hover': {
-          opacity: 0.9,
-        },
-      };
-    }
-    // secondary variant
-    return {
-      mt: 2,
-      padding: '10px 20px',
-      backgroundColor: 'transparent',
-      color: '#9ca3af',
-      border: 'none',
-      borderRadius: '6px',
-      cursor: loading ? 'not-allowed' : 'pointer',
-      fontSize: '14px',
-      fontWeight: 'bold',
-      opacity: loading ? 0.6 : 1,
-      '&:hover': {
-        color: 'white',
-        backgroundColor: 'rgba(156, 163, 175, 0.1)',
-      },
-    };
-  };
+  const getPrimarySx = () => ({
+    backgroundColor: '#38e07b',
+    color: '#0a1a10',
+    fontWeight: 700,
+    fontSize: '0.875rem',
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase' as const,
+    borderRadius: '10px',
+    py: 1.75,
+    cursor: loading ? 'not-allowed' : 'pointer',
+    opacity: loading ? 0.7 : 1,
+    boxShadow: loading ? 'none' : '0 4px 20px rgba(56,224,123,0.35)',
+    '&:hover': {
+      backgroundColor: '#2ecc6e',
+      boxShadow: '0 6px 24px rgba(56,224,123,0.5)',
+    },
+    '&:active': { transform: 'scale(0.98)' },
+    '&.Mui-disabled': { backgroundColor: '#38e07b', color: '#0a1a10', opacity: 0.55 },
+  });
+
+  const getSecondarySx = () => ({
+    backgroundColor: 'transparent',
+    color: '#9ca3af',
+    fontWeight: 500,
+    fontSize: '0.875rem',
+    textTransform: 'none' as const,
+    borderRadius: '8px',
+    cursor: loading ? 'not-allowed' : 'pointer',
+    opacity: loading ? 0.6 : 1,
+    '&:hover': { color: 'white', backgroundColor: 'rgba(156,163,175,0.08)' },
+  });
+
+  const sx = variant === 'primary' ? getPrimarySx() : getSecondarySx();
 
   return (
     <Button
       type={type}
       onClick={onClick}
       disabled={loading}
-      sx={getSx()}
+      fullWidth={fullWidth}
+      sx={sx}
     >
       {loading ? (
         <>
-          <CircularProgress size={24} sx={{ mr: 1, color: variant === 'primary' ? 'white' : '#9ca3af' }} />
+          <CircularProgress
+            size={18}
+            sx={{ mr: 1, color: variant === 'primary' ? '#0a1a10' : '#9ca3af' }}
+          />
           {loadingText || 'Loading...'}
         </>
       ) : (

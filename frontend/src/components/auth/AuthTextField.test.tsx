@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import AuthTextField from './AuthTextField';
 
@@ -116,6 +117,22 @@ describe('AuthTextField', () => {
     render(<AuthTextField label="Password" name="password" type="password" value="" onChange={() => {}} />);
     const input = screen.getByLabelText('Password');
     expect(input).toHaveAttribute('type', 'password');
+  });
+
+  it('lets keyboard users toggle password visibility', async () => {
+    const user = userEvent.setup();
+    render(<AuthTextField label="Password" name="password" type="password" value="secret" onChange={() => {}} />);
+
+    const input = screen.getByLabelText('Password');
+    const toggle = screen.getByRole('button', { name: 'Show password' });
+
+    await user.tab();
+    expect(input).toHaveFocus();
+    await user.tab();
+    expect(toggle).toHaveFocus();
+    await user.keyboard('{Enter}');
+
+    expect(input).toHaveAttribute('type', 'text');
   });
 
   it('renders with full width', () => {

@@ -1,5 +1,6 @@
-import React from "react";
-import { TextField } from "@mui/material";
+import React, { useState } from "react";
+import { TextField, InputAdornment, IconButton } from "@mui/material";
+import { Eye, EyeOff } from "lucide-react";
 
 interface AuthTextFieldProps {
   label: string;
@@ -12,6 +13,8 @@ interface AuthTextFieldProps {
   autoFocus?: boolean;
   error?: boolean;
   helperText?: string;
+  /** Optional leading icon rendered inside the input. */
+  startIcon?: React.ReactNode;
 }
 
 const AuthTextField: React.FC<AuthTextFieldProps> = ({
@@ -25,12 +28,18 @@ const AuthTextField: React.FC<AuthTextFieldProps> = ({
   autoFocus = false,
   error = false,
   helperText,
+  startIcon,
 }) => {
+  const isPassword = type === "password";
+  const [showPassword, setShowPassword] = useState(false);
+
+  const resolvedType = isPassword ? (showPassword ? "text" : "password") : type;
+
   return (
     <TextField
       label={label}
       name={name}
-      type={type}
+      type={resolvedType}
       value={value}
       onChange={onChange}
       required={required}
@@ -39,17 +48,39 @@ const AuthTextField: React.FC<AuthTextFieldProps> = ({
       autoFocus={autoFocus}
       error={error}
       helperText={helperText}
+      slotProps={{
+        input: {
+          startAdornment: startIcon ? (
+            <InputAdornment position="start" sx={{ color: "rgba(255,255,255,0.4)", mr: 0.5 }}>
+              {startIcon}
+            </InputAdornment>
+          ) : undefined,
+          endAdornment: isPassword ? (
+            <InputAdornment position="end">
+              <IconButton
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                onClick={() => setShowPassword((v) => !v)}
+                edge="end"
+                size="small"
+                sx={{ color: "rgba(255,255,255,0.4)", "&:hover": { color: "rgba(255,255,255,0.8)" } }}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </IconButton>
+            </InputAdornment>
+          ) : undefined,
+        },
+      }}
       sx={{
         "& .MuiOutlinedInput-root": {
           color: "white",
-          "& fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-          "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.5)" },
-          "&.Mui-focused fieldset": {
-            borderColor: "rgba(255, 255, 255, 0.8)",
-          },
+          backgroundColor: "rgba(255,255,255,0.05)",
+          borderRadius: "10px",
+          "& fieldset": { borderColor: "rgba(255,255,255,0.15)" },
+          "&:hover fieldset": { borderColor: "rgba(255,255,255,0.35)" },
+          "&.Mui-focused fieldset": { borderColor: "rgba(56,224,123,0.6)", borderWidth: "1.5px" },
         },
-        "& .MuiInputLabel-root": { color: "rgba(255, 255, 255, 0.7)" },
-        "& .MuiInputLabel-root.Mui-focused": { color: "white" },
+        "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.55)" },
+        "& .MuiInputLabel-root.Mui-focused": { color: "rgba(56,224,123,0.9)" },
       }}
     />
   );
