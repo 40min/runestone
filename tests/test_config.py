@@ -10,6 +10,7 @@ from pydantic_settings import BaseSettings
 from runestone.config import (
     DEFAULT_GEMINI_SERVICE_LLM_MODEL,
     DEFAULT_SERVICE_LLM_MODEL,
+    GEMINI_MINIMUM_TIMEOUT_SECONDS,
     MEMORY_MAINTENANCE_TIMEOUT_SECONDS_DEFAULT,
     ReasoningLevel,
     Settings,
@@ -415,6 +416,7 @@ class TestSettings:
             memory_keeper_model="gemini-3.1-flash-lite-preview",
             memory_keeper_temperature=0.3,
             memory_keeper_reasoning_level=ReasoningLevel.MINIMAL,
+            personal_memory_keeper_llm_timeout_seconds=10.0,
             memory_maintainer_provider=None,
             memory_maintainer_model=None,
         )
@@ -501,14 +503,14 @@ class TestSettings:
             teacher_backup_provider="gemini",
             teacher_backup_model="gemini-2.5-flash",
             teacher_backup_temperature=1.0,
-            teacher_backup_llm_timeout_seconds=5.0,
+            teacher_backup_llm_timeout_seconds=12.0,
             teacher_backup_max_retries=1,
         )
         result = s.get_agent_llm_settings("teacher_backup")
         assert result.provider == "gemini"
         assert result.model == "gemini-2.5-flash"
         assert result.temperature == 1.0
-        assert result.timeout_seconds == 5.0
+        assert result.timeout_seconds == 12.0
         assert result.max_retries == 1
 
     def test_get_agent_llm_settings_teacher_backup_rejects_disabled_profile(self):
@@ -537,7 +539,7 @@ class TestSettings:
         personal = s.get_agent_llm_settings("personal_memory_keeper")
         assert learning.timeout_seconds != personal.timeout_seconds or learning.max_retries != personal.max_retries
         assert learning.timeout_seconds == 15.0
-        assert personal.timeout_seconds == 8.0
+        assert personal.timeout_seconds == 10.0
         assert personal.max_retries == 2
 
     def test_get_agent_llm_settings_memory_maintainer_has_long_timeout(self):
@@ -558,3 +560,109 @@ class TestSettings:
 
         overridden_settings = self._base_settings(memory_maintenance_timeout_seconds=360.0)
         assert overridden_settings.memory_maintenance_timeout_seconds == 360.0
+
+    def test_gemini_timeout_is_raised_to_minimum_when_below_10s(self, caplog):
+        """Gemini-backed agents should clamp and log undersized timeouts during loading."""
+        env_vars = {
+            "LLM_PROVIDER": "openai",
+            "OPENAI_API_KEY": "test-key",
+            "ALLOWED_ORIGINS": "http://localhost:3000",
+            "DATABASE_URL": "sqlite:///./test.db",
+            "TELEGRAM_BOT_TOKEN": "test-token",
+            "FRONTEND_URL": "http://localhost:5173",
+            "JWT_SECRET_KEY": "secret",
+            "TEACHER_PROVIDER": "gemini",
+            "TEACHER_MODEL": "gemini-2.5-flash",
+            "TEACHER_LLM_TIMEOUT_SECONDS": "5.0",
+            "COORDINATOR_LLM_TIMEOUT_SECONDS": "10.0",
+        }
+        with caplog.at_level("WARNING", logger="runestone.config"):
+            with patch.dict(os.environ, env_vars, clear=True):
+                s = Settings()
+        result = s.get_agent_llm_settings("teacher")
+        assert result.timeout_seconds == GEMINI_MINIMUM_TIMEOUT_SECONDS
+        assert "Raised Gemini agent timeout to provider minimum" in caplog.text
+        assert "agent=teacher" in caplog.text
+        assert "configured_timeout=5.0s" in caplog.text
+        assert "minimum_timeout=10.0s" in caplog.text
+
+    def test_gemini_timeout_at_minimum_is_not_changed_or_logged(self, caplog):
+        """A valid Gemini timeout should remain unchanged without a warning."""
+        env_vars = {
+            "LLM_PROVIDER": "openai",
+            "OPENAI_API_KEY": "test-key",
+            "ALLOWED_ORIGINS": "http://localhost:3000",
+            "DATABASE_URL": "sqlite:///./test.db",
+            "TELEGRAM_BOT_TOKEN": "test-token",
+            "FRONTEND_URL": "http://localhost:5173",
+            "JWT_SECRET_KEY": "secret",
+            "TEACHER_PROVIDER": "gemini",
+            "TEACHER_MODEL": "gemini-2.5-flash",
+            "TEACHER_LLM_TIMEOUT_SECONDS": "10.0",
+            "COORDINATOR_LLM_TIMEOUT_SECONDS": "10.0",
+        }
+        with caplog.at_level("WARNING", logger="runestone.config"):
+            with patch.dict(os.environ, env_vars, clear=True):
+                s = Settings()
+        result = s.get_agent_llm_settings("teacher")
+        assert result.provider == "gemini"
+        assert result.timeout_seconds == 10.0
+        assert "Raised Gemini agent timeout to provider minimum" not in caplog.text
+
+    def test_coordinator_inherited_gemini_timeout_uses_safe_minimum(self):
+        """Coordinator should lift its legacy default when inheriting Gemini from the teacher."""
+        s = Settings.model_construct(
+            llm_provider="openrouter",
+            openai_api_key="key",
+            gemini_api_key="gkey",
+            openrouter_api_key="orkey",
+            allowed_origins="http://localhost",
+            database_url="sqlite:///./test.db",
+            telegram_bot_token="tok",
+            frontend_url="http://localhost:5173",
+            jwt_secret_key="secret",
+            teacher_provider="gemini",
+            teacher_model="gemini-2.5-flash",
+            coordinator_provider=None,
+            coordinator_model="gemini-2.5-flash",
+        )
+        s = s._apply_agent_defaults()
+        result = s.get_agent_llm_settings("coordinator")
+        assert result.provider == "gemini"
+        assert result.timeout_seconds == GEMINI_MINIMUM_TIMEOUT_SECONDS
+
+    def test_coordinator_explicit_gemini_timeout_below_minimum_is_raised(self):
+        """Explicit Gemini coordinator timeouts below 10s should be raised to the minimum."""
+        env_vars = {
+            "LLM_PROVIDER": "openai",
+            "OPENAI_API_KEY": "test-key",
+            "ALLOWED_ORIGINS": "http://localhost:3000",
+            "DATABASE_URL": "sqlite:///./test.db",
+            "TELEGRAM_BOT_TOKEN": "test-token",
+            "FRONTEND_URL": "http://localhost:5173",
+            "JWT_SECRET_KEY": "secret",
+            "COORDINATOR_PROVIDER": "gemini",
+            "COORDINATOR_MODEL": "gemini-2.5-flash",
+            "COORDINATOR_LLM_TIMEOUT_SECONDS": "3.0",
+        }
+        with patch.dict(os.environ, env_vars, clear=True):
+            s = Settings()
+        result = s.get_agent_llm_settings("coordinator")
+        assert result.provider == "gemini"
+        assert result.timeout_seconds == GEMINI_MINIMUM_TIMEOUT_SECONDS
+
+    def test_memory_keeper_variants_gemini_timeouts_are_raised_independently(self):
+        """Shared Gemini provider should clamp both memory-keeper variant budgets."""
+        s = self._base_settings(
+            memory_keeper_provider="gemini",
+            memory_keeper_model="gemini-2.5-flash",
+            learning_memory_keeper_llm_timeout_seconds=7.0,
+            personal_memory_keeper_llm_timeout_seconds=9.0,
+        )
+        s = s._apply_agent_defaults()
+
+        learning = s.get_agent_llm_settings("learning_memory_keeper")
+        personal = s.get_agent_llm_settings("personal_memory_keeper")
+
+        assert learning.timeout_seconds == GEMINI_MINIMUM_TIMEOUT_SECONDS
+        assert personal.timeout_seconds == GEMINI_MINIMUM_TIMEOUT_SECONDS

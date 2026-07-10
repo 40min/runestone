@@ -547,13 +547,15 @@ independent timeout and retry budgets.
 | WordKeeper | `WORD_KEEPER_LLM_TIMEOUT_SECONDS` (`15.0`) | `WORD_KEEPER_MAX_RETRIES` (`3`) |
 | NewsAgent | `NEWS_AGENT_LLM_TIMEOUT_SECONDS` (`10.0`) | `NEWS_AGENT_MAX_RETRIES` (`3`) |
 | LearningMemoryKeeper | `LEARNING_MEMORY_KEEPER_LLM_TIMEOUT_SECONDS` (`15.0`) | `LEARNING_MEMORY_KEEPER_MAX_RETRIES` (`3`) |
-| PersonalMemoryKeeper | `PERSONAL_MEMORY_KEEPER_LLM_TIMEOUT_SECONDS` (`8.0`) | `PERSONAL_MEMORY_KEEPER_MAX_RETRIES` (`2`) |
+| PersonalMemoryKeeper | `PERSONAL_MEMORY_KEEPER_LLM_TIMEOUT_SECONDS` (`10.0`) | `PERSONAL_MEMORY_KEEPER_MAX_RETRIES` (`2`) |
 | MemoryMaintainer | `MEMORY_MAINTAINER_LLM_TIMEOUT_SECONDS` (`30.0`) | `MEMORY_MAINTAINER_MAX_RETRIES` (`3`) |
 
-Timeouts must be greater than zero. Retry budgets must be non-negative; `0`
-disables retries after the initial request. The configured values are passed to
-the OpenAI/OpenRouter or Gemini LangChain client. Gemini receives the configured
-timeout exactly, without a hidden minimum-timeout clamp.
+Timeouts must be greater than zero. For Gemini-backed agents, values below
+`10.0` seconds are raised to Gemini's minimum during settings loading and a
+warning is logged. Retry budgets must be non-negative; `0`
+disables retries after the initial request. The resolved values are passed to
+the OpenAI/OpenRouter or Gemini LangChain client. Gemini receives the timeout
+after any load-time minimum enforcement.
 
 **Voice Configuration:**
 - `VOICE_TRANSCRIPTION_PROVIDER`: Voice transcription provider (`openai` or `elevenlabs`, default: `openai`)

@@ -5,6 +5,7 @@ This module provides a single source of truth for all application settings,
 loaded from environment variables using Pydantic BaseSettings.
 """
 
+import logging
 import os
 import re
 from enum import Enum
@@ -16,6 +17,9 @@ from pydantic_settings import BaseSettings
 
 DEFAULT_SERVICE_LLM_MODEL = "gpt-5.4-nano"
 DEFAULT_GEMINI_SERVICE_LLM_MODEL = "gemini-2.5-flash"
+GEMINI_MINIMUM_TIMEOUT_SECONDS = 10.0
+
+logger = logging.getLogger(__name__)
 
 
 def _slugify_openrouter_provider(value: str) -> str:
@@ -54,6 +58,27 @@ AgentName = Literal[
     "learning_memory_keeper",
     "personal_memory_keeper",
 ]
+
+# Each entry corresponds to one independently configured agent timeout. Keep this
+# at module scope so settings loading does not recreate the registry.
+AGENT_TIMEOUT_FIELDS: tuple[tuple[AgentName, str, str], ...] = (
+    ("teacher", "teacher_provider", "teacher_llm_timeout_seconds"),
+    ("teacher_backup", "teacher_backup_provider", "teacher_backup_llm_timeout_seconds"),
+    ("coordinator", "coordinator_provider", "coordinator_llm_timeout_seconds"),
+    ("word_keeper", "word_keeper_provider", "word_keeper_llm_timeout_seconds"),
+    ("news_agent", "news_agent_provider", "news_agent_llm_timeout_seconds"),
+    (
+        "learning_memory_keeper",
+        "memory_keeper_provider",
+        "learning_memory_keeper_llm_timeout_seconds",
+    ),
+    (
+        "personal_memory_keeper",
+        "memory_keeper_provider",
+        "personal_memory_keeper_llm_timeout_seconds",
+    ),
+    ("memory_maintainer", "memory_maintainer_provider", "memory_maintainer_llm_timeout_seconds"),
+)
 
 
 class AgentLLMSettings(BaseModel):
@@ -137,7 +162,7 @@ class Settings(BaseSettings):
     teacher_backup_model: Optional[str] = None
     teacher_backup_temperature: float = 1.0
     teacher_backup_reasoning_level: ReasoningLevel = ReasoningLevel.NONE
-    teacher_backup_llm_timeout_seconds: float = Field(default=5.0, gt=0)
+    teacher_backup_llm_timeout_seconds: float = Field(default=10.0, gt=0)
     teacher_backup_max_retries: int = Field(default=1, ge=0)
 
     coordinator_provider: Optional[Literal["openrouter", "openai", "gemini"]] = None
@@ -169,7 +194,7 @@ class Settings(BaseSettings):
     # but have their own timeout and retry budgets.
     learning_memory_keeper_llm_timeout_seconds: float = Field(default=15.0, gt=0)
     learning_memory_keeper_max_retries: int = Field(default=3, ge=0)
-    personal_memory_keeper_llm_timeout_seconds: float = Field(default=8.0, gt=0)
+    personal_memory_keeper_llm_timeout_seconds: float = Field(default=10.0, gt=0)
     personal_memory_keeper_max_retries: int = Field(default=2, ge=0)
 
     memory_maintainer_provider: Optional[Literal["openrouter", "openai", "gemini"]] = None
@@ -238,7 +263,30 @@ class Settings(BaseSettings):
             self.memory_maintainer_temperature = self.memory_keeper_temperature
         if self.memory_maintainer_reasoning_level is None:
             self.memory_maintainer_reasoning_level = self.memory_keeper_reasoning_level
+
+        self._apply_gemini_timeout_floor()
+
         return self
+
+    def _apply_gemini_timeout_floor(self) -> None:
+        """Raise undersized Gemini timeouts after all agent defaults are resolved."""
+        for agent_name, provider_attr, timeout_attr in AGENT_TIMEOUT_FIELDS:
+            if agent_name == "teacher_backup" and self.teacher_backup_model is None:
+                continue
+            if getattr(self, provider_attr) != "gemini":
+                continue
+            configured_timeout = getattr(self, timeout_attr)
+            if configured_timeout >= GEMINI_MINIMUM_TIMEOUT_SECONDS:
+                continue
+
+            logger.warning(
+                "Raised Gemini agent timeout to provider minimum "
+                "agent=%s configured_timeout=%ss minimum_timeout=%ss",
+                agent_name,
+                configured_timeout,
+                GEMINI_MINIMUM_TIMEOUT_SECONDS,
+            )
+            setattr(self, timeout_attr, GEMINI_MINIMUM_TIMEOUT_SECONDS)
 
     def resolve_service_llm_provider(self) -> str:
         """Return the provider used by non-agent service flows."""
