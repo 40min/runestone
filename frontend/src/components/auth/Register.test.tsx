@@ -66,6 +66,7 @@ describe('Register Component', () => {
       renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
 
       expect(screen.getByRole('heading', { name: 'Create Your Account' })).toBeInTheDocument();
+      expect(screen.getByRole('form', { name: 'Create Your Account' })).toBeInTheDocument();
       expect(screen.getByLabelText(/^Email\s+\*\s*$/)).toBeInTheDocument();
       expect(screen.getByLabelText(/^Password\s+\*\s*$/)).toBeInTheDocument();
       expect(screen.getByLabelText(/^Confirm Password\s+\*\s*$/)).toBeInTheDocument();
@@ -450,6 +451,7 @@ describe('Register Component', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Registered!')).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Registered!' })).toBeInTheDocument();
         expect(screen.getByText(/Your account has been created/)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /return to login/i })).toBeInTheDocument();
       });

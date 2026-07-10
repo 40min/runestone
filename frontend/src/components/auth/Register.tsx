@@ -80,8 +80,12 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
         headline="A new rune awaits"
         tagline="Carve your name. Begin the journey."
       >
-        <div className="auth-form" style={{ textAlign: "center" }}>
-          <h2 id="register-heading" className="auth-form-title">
+        <div
+          className="auth-form text-center"
+          role="region"
+          aria-labelledby="register-success-heading"
+        >
+          <h2 id="register-success-heading" className="auth-form-title">
             Registered!
           </h2>
           <p className="auth-form-subtitle">
@@ -101,17 +105,21 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
       headline="A new rune awaits"
       tagline="Carve your name. Begin the journey."
     >
-      <form onSubmit={handleSubmit} className="auth-form">
+      <form
+        onSubmit={handleSubmit}
+        className="auth-form"
+        aria-labelledby="register-heading"
+      >
         {/* Icon + Heading */}
         <div className="auth-register-icon-wrap">
           <UserPlus size={32} className="auth-register-icon" />
         </div>
 
         <div>
-          <h2 id="register-heading" className="auth-form-title" style={{ textAlign: "center" }}>
+          <h2 id="register-heading" className="auth-form-title text-center">
             Create Your Account
           </h2>
-          <p className="auth-form-subtitle" style={{ textAlign: "center" }}>
+          <p className="auth-form-subtitle text-center">
             Join Runestone and start learning smarter.
           </p>
         </div>
@@ -184,7 +192,7 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
             We respect your privacy.
             <br />
             Your data is{" "}
-            <span style={{ color: "var(--primary-color)" }}>secure</span> and
+            <span className="text-[var(--primary-color)]">secure</span> and
             never shared.
           </span>
         </div>
