@@ -20,7 +20,7 @@ const AuthButton: React.FC<AuthButtonProps> = ({
   loadingText,
   fullWidth = true,
 }) => {
-  const getPrimarySx = () => ({
+  const primarySx = {
     backgroundColor: '#38e07b',
     color: '#0a1a10',
     fontWeight: 700,
@@ -38,9 +38,9 @@ const AuthButton: React.FC<AuthButtonProps> = ({
     },
     '&:active': { transform: 'scale(0.98)' },
     '&.Mui-disabled': { backgroundColor: '#38e07b', color: '#0a1a10', opacity: 0.55 },
-  });
+  };
 
-  const getSecondarySx = () => ({
+  const secondarySx = {
     backgroundColor: 'transparent',
     color: '#9ca3af',
     fontWeight: 500,
@@ -50,9 +50,9 @@ const AuthButton: React.FC<AuthButtonProps> = ({
     cursor: loading ? 'not-allowed' : 'pointer',
     opacity: loading ? 0.6 : 1,
     '&:hover': { color: 'white', backgroundColor: 'rgba(156,163,175,0.08)' },
-  });
+  };
 
-  const sx = variant === 'primary' ? getPrimarySx() : getSecondarySx();
+  const sx = variant === 'primary' ? primarySx : secondarySx;
 
   return (
     <Button

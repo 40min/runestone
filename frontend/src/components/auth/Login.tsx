@@ -82,22 +82,19 @@ const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
           type="submit"
           loading={loading}
           loadingText="Logging in..."
-          onClick={(e) => {
-            e.preventDefault();
-            handleSubmit(e);
-          }}
         >
           Login
         </AuthButton>
 
         {/* Switch to register */}
         <p className="auth-switch-text">
+          Don&apos;t have an account?{" "}
           <button
             type="button"
-            className="auth-switch-link auth-switch-register"
+            className="auth-switch-link auth-switch-highlight"
             onClick={onSwitchToRegister}
           >
-            Don&apos;t have an account? Register
+            Register
           </button>
         </p>
 

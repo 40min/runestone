@@ -34,9 +34,8 @@ describe("Login", () => {
     expect(
       screen.queryByText(/Sign in to continue analyzing textbook pages/)
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByText("Don't have an account? Register")
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Don't have an account\?/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Register" })).toBeInTheDocument();
   });
 
   it("handles successful login", async () => {
@@ -212,7 +211,7 @@ describe("Login", () => {
   it("calls onSwitchToRegister when register link is clicked", async () => {
     render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
 
-    const registerLink = screen.getByText("Don't have an account? Register");
+    const registerLink = screen.getByRole("button", { name: "Register" });
     await userEvent.click(registerLink);
 
     expect(mockOnSwitchToRegister).toHaveBeenCalledTimes(1);
@@ -237,15 +236,7 @@ describe("Login", () => {
     expect(passwordInput).toBeRequired();
   });
 
-  it("does not validate empty email field (server-side validation)", async () => {
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: false,
-      json: () => Promise.resolve({ detail: "Email is required" }),
-    } as Response);
-
-    // Spy on console.error to suppress expected error output
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
+  it("blocks submission when the email field is empty", async () => {
     render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
 
     const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
@@ -255,27 +246,10 @@ describe("Login", () => {
     await userEvent.type(passwordInput, "password123");
     await userEvent.click(loginButton);
 
-    // Should attempt login and get server-side validation error
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalled();
-    });
-
-    // Component shows error from server
-    expect(screen.getByText("Email is required")).toBeInTheDocument();
-
-    // Restore console.error
-    consoleSpy.mockRestore();
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it("does not validate email format (server-side validation)", async () => {
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: false,
-      json: () => Promise.resolve({ detail: "Invalid email format" }),
-    } as Response);
-
-    // Spy on console.error to suppress expected error output
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
+  it("blocks submission when the email format is invalid", async () => {
     render(<Login onSwitchToRegister={mockOnSwitchToRegister} />, { wrapper });
 
     const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
@@ -286,16 +260,7 @@ describe("Login", () => {
     await userEvent.type(passwordInput, "password123");
     await userEvent.click(loginButton);
 
-    // Should attempt login and get server-side validation error
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalled();
-    });
-
-    // Component shows error from server
-    expect(screen.getByText("Invalid email format")).toBeInTheDocument();
-
-    // Restore console.error
-    consoleSpy.mockRestore();
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it("handles network timeout gracefully", async () => {
