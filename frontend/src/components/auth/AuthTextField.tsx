@@ -15,6 +15,8 @@ interface AuthTextFieldProps {
   helperText?: string;
   /** Optional leading icon rendered inside the input. */
   startIcon?: React.ReactNode;
+  /** Placeholder text shown inside the input when empty. */
+  placeholder?: string;
 }
 
 const AuthTextField: React.FC<AuthTextFieldProps> = ({
@@ -29,6 +31,7 @@ const AuthTextField: React.FC<AuthTextFieldProps> = ({
   error = false,
   helperText,
   startIcon,
+  placeholder,
 }) => {
   const isPassword = type === "password";
   const [showPassword, setShowPassword] = useState(false);
@@ -46,6 +49,7 @@ const AuthTextField: React.FC<AuthTextFieldProps> = ({
       fullWidth
       autoComplete={autoComplete}
       autoFocus={autoFocus}
+      placeholder={placeholder}
       error={error}
       helperText={helperText}
       slotProps={{

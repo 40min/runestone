@@ -65,14 +65,14 @@ describe('Register Component', () => {
     it('should render registration form with all required fields', () => {
       renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
 
-      expect(screen.getByRole('heading', { name: 'Register' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Create Your Account' })).toBeInTheDocument();
       expect(screen.getByLabelText(/^Email\s+\*\s*$/)).toBeInTheDocument();
-      expect(screen.getByLabelText(/^Password \(min\. 6 characters\)\s+\*\s*$/)).toBeInTheDocument();
+      expect(screen.getByLabelText(/^Password\s+\*\s*$/)).toBeInTheDocument();
       expect(screen.getByLabelText(/^Confirm Password\s+\*\s*$/)).toBeInTheDocument();
-      expect(screen.getByLabelText(/^Name \(optional\)$/)).toBeInTheDocument();
-      expect(screen.getByLabelText(/^Surname \(optional\)$/)).toBeInTheDocument();
+      expect(screen.getByLabelText(/^First Name \(optional\)$/)).toBeInTheDocument();
+      expect(screen.getByLabelText(/^Last Name \(optional\)$/)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /register/i })).toBeInTheDocument();
-      expect(screen.getByText(/already have an account?/i)).toBeInTheDocument();
+      expect(screen.getByText(/already have an account\?/i)).toBeInTheDocument();
     });
   });
 
@@ -82,7 +82,7 @@ describe('Register Component', () => {
       renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
 
       const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
-      const passwordInput = screen.getByLabelText(/^Password \(min\. 6 characters\)\s+\*\s*$/);
+      const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
       const confirmPasswordInput = screen.getByLabelText(/^Confirm Password\s+\*\s*$/);
       const registerButton = screen.getByRole('button', { name: /register/i });
 
@@ -91,7 +91,6 @@ describe('Register Component', () => {
       await user.type(confirmPasswordInput, 'differentpassword');
       await user.click(registerButton);
 
-      // Error should appear in snackbar
       await waitFor(() => {
         expect(screen.getByText("Passwords do not match")).toBeInTheDocument();
       });
@@ -102,7 +101,7 @@ describe('Register Component', () => {
       renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
 
       const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
-      const passwordInput = screen.getByLabelText(/^Password \(min\. 6 characters\)\s+\*\s*$/);
+      const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
       const confirmPasswordInput = screen.getByLabelText(/^Confirm Password\s+\*\s*$/);
       const registerButton = screen.getByRole('button', { name: /register/i });
 
@@ -111,7 +110,6 @@ describe('Register Component', () => {
       await user.type(confirmPasswordInput, '123');
       await user.click(registerButton);
 
-      // Error should appear in snackbar
       await waitFor(() => {
         expect(screen.getByText("Password must be at least 6 characters")).toBeInTheDocument();
       });
@@ -141,7 +139,7 @@ describe('Register Component', () => {
 
       // Verify required fields are marked as required
       const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
-      const passwordInput = screen.getByLabelText(/^Password \(min\. 6 characters\)\s+\*\s*$/);
+      const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
       expect(emailInput).toBeRequired();
       expect(passwordInput).toBeRequired();
       expect(emailInput).toBeInvalid(); // HTML5 validation state
@@ -149,103 +147,103 @@ describe('Register Component', () => {
   });
 
   describe('API Integration', () => {
-      it('should call register API with correct data when form is submitted', async () => {
-        const user = userEvent.setup();
-        const mockRegister = vi.fn().mockResolvedValue({ user: { id: 1, email: 'test@example.com' } });
+    it('should call register API with correct data when form is submitted', async () => {
+      const user = userEvent.setup();
+      const mockRegister = vi.fn().mockResolvedValue({ user: { id: 1, email: 'test@example.com' } });
 
-        const mockUseAuthActions = vi.mocked(useAuthActions);
-        mockUseAuthActions.mockReturnValue({
-          register: mockRegister,
-          login: vi.fn(),
-          updateProfile: vi.fn(),
-          logout: vi.fn(),
-          loading: false,
-          error: null,
-        });
-
-        renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
-
-        const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
-        const passwordInput = screen.getByLabelText(/^Password \(min\. 6 characters\)\s+\*\s*$/);
-        const confirmPasswordInput = screen.getByLabelText(/^Confirm Password\s+\*\s*$/);
-        const registerButton = screen.getByRole('button', { name: /register/i });
-
-        await user.type(emailInput, 'test@example.com');
-        await user.type(passwordInput, 'password123');
-        await user.type(confirmPasswordInput, 'password123');
-        await user.click(registerButton);
-
-        await waitFor(() => {
-          expect(mockRegister).toHaveBeenCalledWith({
-            email: 'test@example.com',
-            password: 'password123',
-            name: undefined,
-            surname: undefined,
-          });
-        });
+      const mockUseAuthActions = vi.mocked(useAuthActions);
+      mockUseAuthActions.mockReturnValue({
+        register: mockRegister,
+        login: vi.fn(),
+        updateProfile: vi.fn(),
+        logout: vi.fn(),
+        loading: false,
+        error: null,
       });
 
-      it('should include optional name and surname if provided', async () => {
-        const user = userEvent.setup();
-        const mockRegister = vi.fn().mockResolvedValue({ user: { id: 1, email: 'test@example.com' } });
+      renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
 
-        const mockUseAuthActions = vi.mocked(useAuthActions);
-        mockUseAuthActions.mockReturnValue({
-          register: mockRegister,
-          login: vi.fn(),
-          updateProfile: vi.fn(),
-          logout: vi.fn(),
-          loading: false,
-          error: null,
+      const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
+      const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
+      const confirmPasswordInput = screen.getByLabelText(/^Confirm Password\s+\*\s*$/);
+      const registerButton = screen.getByRole('button', { name: /register/i });
+
+      await user.type(emailInput, 'test@example.com');
+      await user.type(passwordInput, 'password123');
+      await user.type(confirmPasswordInput, 'password123');
+      await user.click(registerButton);
+
+      await waitFor(() => {
+        expect(mockRegister).toHaveBeenCalledWith({
+          email: 'test@example.com',
+          password: 'password123',
+          name: undefined,
+          surname: undefined,
         });
-
-        renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
-
-        const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
-        const passwordInput = screen.getByLabelText(/^Password \(min\. 6 characters\)\s+\*\s*$/);
-        const confirmPasswordInput = screen.getByLabelText(/^Confirm Password\s+\*\s*$/);
-        const nameInput = screen.getByLabelText(/^Name \(optional\)$/);
-        const surnameInput = screen.getByLabelText(/^Surname \(optional\)$/);
-        const registerButton = screen.getByRole('button', { name: /register/i });
-
-        await user.type(emailInput, 'test@example.com');
-        await user.type(passwordInput, 'password123');
-        await user.type(confirmPasswordInput, 'password123');
-        await user.type(nameInput, 'John');
-        await user.type(surnameInput, 'Doe');
-        await user.click(registerButton);
-
-        await waitFor(() => {
-          expect(mockRegister).toHaveBeenCalledWith({
-            email: 'test@example.com',
-            password: 'password123',
-            name: 'John',
-            surname: 'Doe',
-          });
-        });
-      });
-
-      it('should handle registration loading state', async () => {
-        const mockRegister = vi.fn().mockImplementation(() => new Promise(resolve => setTimeout(resolve, 100)));
-
-        const mockUseAuthActions = vi.mocked(useAuthActions);
-        mockUseAuthActions.mockReturnValue({
-          register: mockRegister,
-          login: vi.fn(),
-          updateProfile: vi.fn(),
-          logout: vi.fn(),
-          loading: true,
-          error: null,
-        });
-
-        renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
-
-        // When loading is true, button should show "Registering..." text
-        expect(screen.getByText("Registering...")).toBeInTheDocument();
-        const registerButton = screen.getByRole('button', { name: /registering/i });
-        expect(registerButton).toBeDisabled();
       });
     });
+
+    it('should include optional name and surname if provided', async () => {
+      const user = userEvent.setup();
+      const mockRegister = vi.fn().mockResolvedValue({ user: { id: 1, email: 'test@example.com' } });
+
+      const mockUseAuthActions = vi.mocked(useAuthActions);
+      mockUseAuthActions.mockReturnValue({
+        register: mockRegister,
+        login: vi.fn(),
+        updateProfile: vi.fn(),
+        logout: vi.fn(),
+        loading: false,
+        error: null,
+      });
+
+      renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
+
+      const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
+      const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
+      const confirmPasswordInput = screen.getByLabelText(/^Confirm Password\s+\*\s*$/);
+      const nameInput = screen.getByLabelText(/^First Name \(optional\)$/);
+      const surnameInput = screen.getByLabelText(/^Last Name \(optional\)$/);
+      const registerButton = screen.getByRole('button', { name: /register/i });
+
+      await user.type(emailInput, 'test@example.com');
+      await user.type(passwordInput, 'password123');
+      await user.type(confirmPasswordInput, 'password123');
+      await user.type(nameInput, 'John');
+      await user.type(surnameInput, 'Doe');
+      await user.click(registerButton);
+
+      await waitFor(() => {
+        expect(mockRegister).toHaveBeenCalledWith({
+          email: 'test@example.com',
+          password: 'password123',
+          name: 'John',
+          surname: 'Doe',
+        });
+      });
+    });
+
+    it('should handle registration loading state', async () => {
+      const mockRegister = vi.fn().mockImplementation(() => new Promise(resolve => setTimeout(resolve, 100)));
+
+      const mockUseAuthActions = vi.mocked(useAuthActions);
+      mockUseAuthActions.mockReturnValue({
+        register: mockRegister,
+        login: vi.fn(),
+        updateProfile: vi.fn(),
+        logout: vi.fn(),
+        loading: true,
+        error: null,
+      });
+
+      renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
+
+      // When loading is true, button should show "Registering..." text
+      expect(screen.getByText("Registering...")).toBeInTheDocument();
+      const registerButton = screen.getByRole('button', { name: /registering/i });
+      expect(registerButton).toBeDisabled();
+    });
+  });
 
   describe('Error Handling', () => {
     it('should display error message when registration fails', async () => {
@@ -262,13 +260,12 @@ describe('Register Component', () => {
         error: null,
       });
 
-      // Spy on console.error to suppress expected error output
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
       renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
 
       const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
-      const passwordInput = screen.getByLabelText(/^Password \(min\. 6 characters\)\s+\*\s*$/);
+      const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
       const confirmPasswordInput = screen.getByLabelText(/^Confirm Password\s+\*\s*$/);
       const registerButton = screen.getByRole('button', { name: /register/i });
 
@@ -281,7 +278,6 @@ describe('Register Component', () => {
         expect(screen.getByText("Registration failed")).toBeInTheDocument();
       });
 
-      // Restore console.error
       consoleSpy.mockRestore();
     });
   });
@@ -291,7 +287,7 @@ describe('Register Component', () => {
       renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
 
       const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/) as HTMLInputElement;
-      const passwordInput = screen.getByLabelText(/^Password \(min\. 6 characters\)\s+\*\s*$/) as HTMLInputElement;
+      const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/) as HTMLInputElement;
       const confirmPasswordInput = screen.getByLabelText(/^Confirm Password\s+\*\s*$/) as HTMLInputElement;
 
       expect(emailInput).toBeRequired();
@@ -305,13 +301,11 @@ describe('Register Component', () => {
       const user = userEvent.setup();
       renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
 
-      const loginButton = screen.getByText(/already have an account?/i).closest('button');
+      const loginButton = screen.getByRole('button', { name: /^Login$/ });
       expect(loginButton).toBeInTheDocument();
 
-      if (loginButton) {
-        await user.click(loginButton);
-        expect(onSwitchToLogin).toHaveBeenCalled();
-      }
+      await user.click(loginButton);
+      expect(onSwitchToLogin).toHaveBeenCalled();
     });
   });
 
@@ -335,7 +329,7 @@ describe('Register Component', () => {
       renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
 
       const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
-      const passwordInput = screen.getByLabelText(/^Password \(min\. 6 characters\)\s+\*\s*$/);
+      const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
       const confirmPasswordInput = screen.getByLabelText(/^Confirm Password\s+\*\s*$/);
       const registerButton = screen.getByRole('button', { name: /register/i });
 
@@ -359,7 +353,7 @@ describe('Register Component', () => {
       renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
 
       const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
-      const passwordInput = screen.getByLabelText(/^Password \(min\. 6 characters\)\s+\*\s*$/);
+      const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
       const confirmPasswordInput = screen.getByLabelText(/^Confirm Password\s+\*\s*$/);
       const registerButton = screen.getByRole('button', { name: /register/i });
 
@@ -400,32 +394,29 @@ describe('Register Component', () => {
         error: null,
       });
 
-      // Spy on console.error to suppress expected error output
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
       renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
 
       const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
-      const passwordInput = screen.getByLabelText(/^Password \(min\. 6 characters\)\s+\*\s*$/);
+      const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
       const confirmPasswordInput = screen.getByLabelText(/^Confirm Password\s+\*\s*$/);
       const registerButton = screen.getByRole('button', { name: /register/i });
 
-      await user.type(emailInput, 'invalid-email');
+      // Use a valid email format so HTML5 allows submission; server rejects it
+      await user.type(emailInput, 'user@example.com');
       await user.type(passwordInput, 'password123');
       await user.type(confirmPasswordInput, 'password123');
       await user.click(registerButton);
 
-      // Component should show error from register function
       await waitFor(() => {
         expect(mockRegister).toHaveBeenCalled();
       });
 
-      // Error message appears in snackbar
       await waitFor(() => {
         expect(screen.getByText(/Invalid email format/)).toBeInTheDocument();
       });
 
-      // Restore console.error
       consoleSpy.mockRestore();
     });
   });
@@ -448,7 +439,7 @@ describe('Register Component', () => {
       renderWithProviders(<Register onSwitchToLogin={onSwitchToLogin} />);
 
       const emailInput = screen.getByLabelText(/^Email\s+\*\s*$/);
-      const passwordInput = screen.getByLabelText(/^Password \(min\. 6 characters\)\s+\*\s*$/);
+      const passwordInput = screen.getByLabelText(/^Password\s+\*\s*$/);
       const confirmPasswordInput = screen.getByLabelText(/^Confirm Password\s+\*\s*$/);
       const registerButton = screen.getByRole('button', { name: /register/i });
 

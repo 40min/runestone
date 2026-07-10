@@ -1,11 +1,13 @@
 import React, { useState } from "react";
 import type { FormEvent } from "react";
-import { Box, Snackbar, Alert } from "@mui/material";
+import { Snackbar, Alert } from "@mui/material";
 import type { AlertColor } from "@mui/material";
+import { Mail, Lock, User, ShieldCheck, UserPlus } from "lucide-react";
 import { useAuthActions } from "../../hooks/useAuth";
 import { CustomButton } from "../ui";
 import AuthButton from "./AuthButton";
 import AuthTextField from "./AuthTextField";
+import AuthLayout from "./AuthLayout";
 
 interface RegisterProps {
   onSwitchToLogin: () => void;
@@ -62,7 +64,6 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
       const errorMessage =
         err instanceof Error ? err.message : "An error occurred";
 
-      // Log technical details to console
       console.error("Registration error:", err);
 
       setSnackbar({
@@ -75,123 +76,131 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
 
   if (isRegistered) {
     return (
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 3,
-          maxWidth: 400,
-          mx: "auto",
-          mt: 8,
-          p: 4,
-          backgroundColor: "rgba(255, 255, 255, 0.05)",
-          borderRadius: 2,
-          backdropFilter: "blur(10px)",
-          textAlign: "center",
-        }}
+      <AuthLayout
+        headline="A new rune awaits"
+        tagline="Carve your name. Begin the journey."
       >
-        <h2 className="text-3xl font-bold text-white mb-2">
-          Registered!
-        </h2>
-        <p className="text-gray-300 leading-relaxed">
-          Your account has been created, but it needs to be activated by an administrator before you can log in.
-        </p>
-        <CustomButton
-          onClick={onSwitchToLogin}
-          variant="primary"
-          sx={{ mt: 2 }}
-        >
-          Return to Login
-        </CustomButton>
-      </Box>
+        <div className="auth-form" style={{ textAlign: "center" }}>
+          <h2 id="register-heading" className="auth-form-title">
+            Registered!
+          </h2>
+          <p className="auth-form-subtitle">
+            Your account has been created, but it needs to be activated by an
+            administrator before you can log in.
+          </p>
+          <CustomButton onClick={onSwitchToLogin} variant="primary" sx={{ mt: 2 }}>
+            Return to Login
+          </CustomButton>
+        </div>
+      </AuthLayout>
     );
   }
 
   return (
-    <Box
-      component="form"
-      onSubmit={handleSubmit}
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 2,
-        maxWidth: 400,
-        mx: "auto",
-        mt: 8,
-        p: 4,
-        backgroundColor: "rgba(255, 255, 255, 0.05)",
-        borderRadius: 2,
-        backdropFilter: "blur(10px)",
-      }}
+    <AuthLayout
+      headline="A new rune awaits"
+      tagline="Carve your name. Begin the journey."
     >
-      <h2 className="text-3xl font-bold text-white text-center mb-4">
-        Register
-      </h2>
+      <form onSubmit={handleSubmit} className="auth-form">
+        {/* Icon + Heading */}
+        <div className="auth-register-icon-wrap">
+          <UserPlus size={32} className="auth-register-icon" />
+        </div>
 
-      <AuthTextField
-        label="Email"
-        name="email"
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        required
-        autoComplete="email"
-        autoFocus
-      />
+        <div>
+          <h2 id="register-heading" className="auth-form-title" style={{ textAlign: "center" }}>
+            Create Your Account
+          </h2>
+          <p className="auth-form-subtitle" style={{ textAlign: "center" }}>
+            Join Runestone and start learning smarter.
+          </p>
+        </div>
 
-      <AuthTextField
-        label="Password (min. 6 characters)"
-        name="password"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        required
-        autoComplete="new-password"
-      />
+        {/* Fields */}
+        <AuthTextField
+          label="Email"
+          name="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          autoComplete="email"
+          autoFocus
+          startIcon={<Mail size={16} />}
+          placeholder="you@example.com"
+        />
 
-      <AuthTextField
-        label="Confirm Password"
-        name="confirmPassword"
-        type="password"
-        value={confirmPassword}
-        onChange={(e) => setConfirmPassword(e.target.value)}
-        required
-        autoComplete="new-password"
-      />
+        <AuthTextField
+          label="Password"
+          name="password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          autoComplete="new-password"
+          startIcon={<Lock size={16} />}
+          placeholder="Min. 6 characters"
+        />
 
-      <AuthTextField
-        label="Name (optional)"
-        name="name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
+        <AuthTextField
+          label="Confirm Password"
+          name="confirmPassword"
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          required
+          autoComplete="new-password"
+          startIcon={<Lock size={16} />}
+          placeholder="Re-enter your password"
+        />
 
-      <AuthTextField
-        label="Surname (optional)"
-        name="surname"
-        value={surname}
-        onChange={(e) => setSurname(e.target.value)}
-      />
+        <AuthTextField
+          label="First Name (optional)"
+          name="name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          startIcon={<User size={16} />}
+          placeholder="Your first name"
+        />
 
-      <AuthButton
-        type="submit"
-        loading={loading}
-        loadingText="Registering..."
-        onClick={(e) => {
-          e.preventDefault();
-          handleSubmit(e);
-        }}
-      >
-        Register
-      </AuthButton>
+        <AuthTextField
+          label="Last Name (optional)"
+          name="surname"
+          value={surname}
+          onChange={(e) => setSurname(e.target.value)}
+          startIcon={<User size={16} />}
+          placeholder="Your last name"
+        />
 
-      <CustomButton
-        onClick={onSwitchToLogin}
-        variant="secondary"
-        sx={{ mt: 1 }}
-      >
-        Already have an account? Login
-      </CustomButton>
+        {/* Submit */}
+        <AuthButton type="submit" loading={loading} loadingText="Registering...">
+          Register
+        </AuthButton>
+
+        {/* Security note */}
+        <div className="auth-security-note">
+          <ShieldCheck size={20} className="auth-security-icon" />
+          <span>
+            We respect your privacy.
+            <br />
+            Your data is{" "}
+            <span style={{ color: "var(--primary-color)" }}>secure</span> and
+            never shared.
+          </span>
+        </div>
+
+        {/* Switch to login */}
+        <p className="auth-switch-text">
+          Already have an account?{" "}
+          <button
+            type="button"
+            className="auth-switch-link auth-switch-highlight"
+            onClick={onSwitchToLogin}
+          >
+            Login
+          </button>
+        </p>
+      </form>
 
       <Snackbar
         open={snackbar.open}
@@ -207,7 +216,7 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
           {snackbar.message}
         </Alert>
       </Snackbar>
-    </Box>
+    </AuthLayout>
   );
 };
 
