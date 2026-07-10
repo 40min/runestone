@@ -5,6 +5,7 @@ This module provides a single source of truth for all application settings,
 loaded from environment variables using Pydantic BaseSettings.
 """
 
+import logging
 import os
 import re
 from enum import Enum
@@ -16,6 +17,9 @@ from pydantic_settings import BaseSettings
 
 DEFAULT_SERVICE_LLM_MODEL = "gpt-5.4-nano"
 DEFAULT_GEMINI_SERVICE_LLM_MODEL = "gemini-2.5-flash"
+GEMINI_MINIMUM_TIMEOUT_SECONDS = 10.0
+
+logger = logging.getLogger(__name__)
 
 
 def _slugify_openrouter_provider(value: str) -> str:
@@ -55,6 +59,27 @@ AgentName = Literal[
     "personal_memory_keeper",
 ]
 
+# Each entry corresponds to one independently configured agent timeout. Keep this
+# at module scope so settings loading does not recreate the registry.
+AGENT_TIMEOUT_FIELDS: tuple[tuple[AgentName, str, str], ...] = (
+    ("teacher", "teacher_provider", "teacher_llm_timeout_seconds"),
+    ("teacher_backup", "teacher_backup_provider", "teacher_backup_llm_timeout_seconds"),
+    ("coordinator", "coordinator_provider", "coordinator_llm_timeout_seconds"),
+    ("word_keeper", "word_keeper_provider", "word_keeper_llm_timeout_seconds"),
+    ("news_agent", "news_agent_provider", "news_agent_llm_timeout_seconds"),
+    (
+        "learning_memory_keeper",
+        "memory_keeper_provider",
+        "learning_memory_keeper_llm_timeout_seconds",
+    ),
+    (
+        "personal_memory_keeper",
+        "memory_keeper_provider",
+        "personal_memory_keeper_llm_timeout_seconds",
+    ),
+    ("memory_maintainer", "memory_maintainer_provider", "memory_maintainer_llm_timeout_seconds"),
+)
+
 
 class AgentLLMSettings(BaseModel):
     """Resolved LLM settings for a specific agent."""
@@ -65,12 +90,6 @@ class AgentLLMSettings(BaseModel):
     reasoning_level: ReasoningLevel
     timeout_seconds: float
     max_retries: int
-
-    @model_validator(mode="after")
-    def _validate_timeout(self) -> "AgentLLMSettings":
-        if self.provider == "gemini" and self.timeout_seconds < 10.0:
-            raise ValueError(f"Gemini requires a minimum timeout of 10.0 seconds, but got {self.timeout_seconds}s")
-        return self
 
 
 class Settings(BaseSettings):
@@ -245,28 +264,29 @@ class Settings(BaseSettings):
         if self.memory_maintainer_reasoning_level is None:
             self.memory_maintainer_reasoning_level = self.memory_keeper_reasoning_level
 
-        # Automatically raise coordinator timeout to 10.0s if Gemini is used to avoid validation failure
-        if self.coordinator_provider == "gemini" and self.coordinator_llm_timeout_seconds < 10.0:
-            self.coordinator_llm_timeout_seconds = 10.0
-
-        # Validate that no Gemini provider has a timeout below 10 seconds
-        names: list[AgentName] = [
-            "teacher",
-            "teacher_backup",
-            "coordinator",
-            "word_keeper",
-            "news_agent",
-            "learning_memory_keeper",
-            "personal_memory_keeper",
-            "memory_maintainer",
-        ]
-        for name in names:
-            if name == "teacher_backup" and self.teacher_backup_model is None:
-                continue
-            # Instantiating AgentLLMSettings via get_agent_llm_settings will trigger validation
-            self.get_agent_llm_settings(name)
+        self._apply_gemini_timeout_floor()
 
         return self
+
+    def _apply_gemini_timeout_floor(self) -> None:
+        """Raise undersized Gemini timeouts after all agent defaults are resolved."""
+        for agent_name, provider_attr, timeout_attr in AGENT_TIMEOUT_FIELDS:
+            if agent_name == "teacher_backup" and self.teacher_backup_model is None:
+                continue
+            if getattr(self, provider_attr) != "gemini":
+                continue
+            configured_timeout = getattr(self, timeout_attr)
+            if configured_timeout >= GEMINI_MINIMUM_TIMEOUT_SECONDS:
+                continue
+
+            logger.warning(
+                "Raised Gemini agent timeout to provider minimum "
+                "agent=%s configured_timeout=%ss minimum_timeout=%ss",
+                agent_name,
+                configured_timeout,
+                GEMINI_MINIMUM_TIMEOUT_SECONDS,
+            )
+            setattr(self, timeout_attr, GEMINI_MINIMUM_TIMEOUT_SECONDS)
 
     def resolve_service_llm_provider(self) -> str:
         """Return the provider used by non-agent service flows."""
