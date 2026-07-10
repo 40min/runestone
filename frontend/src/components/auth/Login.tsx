@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import type { FormEvent } from "react";
-import { Box, TextField, Snackbar, Alert } from "@mui/material";
+import { Snackbar, Alert } from "@mui/material";
 import type { AlertColor } from "@mui/material";
+import { Mail, Lock, ShieldCheck } from "lucide-react";
 import { useAuthActions } from "../../hooks/useAuth";
-import { CustomButton } from "../ui";
 import AuthButton from "./AuthButton";
+import AuthTextField from "./AuthTextField";
+import AuthLayout from "./AuthLayout";
 
 interface LoginProps {
   onSwitchToRegister?: () => void;
@@ -36,94 +38,76 @@ const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
       // Log technical details to console
       console.error("Login error:", err);
 
-      setSnackbar({
-        open: true,
-        message: errorMessage,
-        severity: "error",
-      });
+      setSnackbar({ open: true, message: errorMessage, severity: "error" });
     }
   };
 
   return (
-    <Box
-      component="form"
-      onSubmit={handleSubmit}
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 2,
-        maxWidth: 400,
-        mx: "auto",
-        mt: 8,
-        p: 4,
-        backgroundColor: "rgba(255, 255, 255, 0.05)",
-        borderRadius: 2,
-        backdropFilter: "blur(10px)",
-      }}
-    >
-      <h2 className="text-3xl font-bold text-white text-center mb-4">Login</h2>
+    <AuthLayout>
+      <form onSubmit={handleSubmit} className="auth-form">
+        {/* Heading */}
+        <h2 id="login-heading" className="auth-form-title">
+          Login
+        </h2>
+        <p className="auth-form-subtitle">
+          Enter your credentials to access your account.
+        </p>
 
-      <TextField
-        label="Email"
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        required
-        fullWidth
-        sx={{
-          "& .MuiOutlinedInput-root": {
-            color: "white",
-            "& fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-            "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.5)" },
-            "&.Mui-focused fieldset": {
-              borderColor: "rgba(255, 255, 255, 0.8)",
-            },
-          },
-          "& .MuiInputLabel-root": { color: "rgba(255, 255, 255, 0.7)" },
-          "& .MuiInputLabel-root.Mui-focused": { color: "white" },
-        }}
-      />
+        {/* Fields */}
+        <AuthTextField
+          label="Email"
+          name="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          autoComplete="email"
+          autoFocus
+          startIcon={<Mail size={16} />}
+        />
 
-      <TextField
-        label="Password"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        required
-        fullWidth
-        sx={{
-          "& .MuiOutlinedInput-root": {
-            color: "white",
-            "& fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-            "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.5)" },
-            "&.Mui-focused fieldset": {
-              borderColor: "rgba(255, 255, 255, 0.8)",
-            },
-          },
-          "& .MuiInputLabel-root": { color: "rgba(255, 255, 255, 0.7)" },
-          "& .MuiInputLabel-root.Mui-focused": { color: "white" },
-        }}
-      />
+        <AuthTextField
+          label="Password"
+          name="password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          autoComplete="current-password"
+          startIcon={<Lock size={16} />}
+        />
 
-      <AuthButton
-        type="submit"
-        loading={loading}
-        loadingText="Logging in..."
-        onClick={(e) => {
-          e.preventDefault();
-          handleSubmit(e);
-        }}
-      >
-        Login
-      </AuthButton>
+        {/* Submit */}
+        <AuthButton
+          type="submit"
+          loading={loading}
+          loadingText="Logging in..."
+        >
+          Login
+        </AuthButton>
 
-      <CustomButton
-        onClick={onSwitchToRegister}
-        variant="secondary"
-        sx={{ mt: 1 }}
-      >
-        Don't have an account? Register
-      </CustomButton>
+        {/* Switch to register */}
+        <p className="auth-switch-text">
+          Don&apos;t have an account?{" "}
+          <button
+            type="button"
+            className="auth-switch-link auth-switch-highlight"
+            onClick={onSwitchToRegister}
+          >
+            Register
+          </button>
+        </p>
+
+        {/* Security note */}
+        <div className="auth-security-note">
+          <ShieldCheck size={20} className="auth-security-icon" />
+          <span>
+            Your data is encrypted and secure.
+            <br />
+            We never share your information.
+          </span>
+        </div>
+      </form>
 
       <Snackbar
         open={snackbar.open}
@@ -139,7 +123,7 @@ const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
           {snackbar.message}
         </Alert>
       </Snackbar>
-    </Box>
+    </AuthLayout>
   );
 };
 
