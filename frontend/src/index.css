@@ -373,3 +373,16 @@ body {
     padding: 28px 24px;
   }
 }
+
+/* ─── Register icon header ───────────────────────────────────────────── */
+
+.auth-register-icon-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.auth-register-icon {
+  color: var(--primary-color);
+  filter: drop-shadow(0 0 8px rgba(56, 224, 123, 0.45));
+}

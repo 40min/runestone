@@ -3,6 +3,10 @@ import { Diamond } from "lucide-react";
 
 interface AuthLayoutProps {
   children: React.ReactNode;
+  /** Override the large headline on the left branding panel. */
+  headline?: string;
+  /** Override the tagline below the headline. */
+  tagline?: string;
 }
 
 /** Decorative floating gemstone SVG used in the left panel. */
@@ -65,7 +69,11 @@ const GemstoneIllustration: React.FC = () => (
  * Full-page two-column auth shell. Left side has branded content and an
  * illustration; right side renders the passed form panel.
  */
-const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => (
+const AuthLayout: React.FC<AuthLayoutProps> = ({
+  children,
+  headline = "Welcome back",
+  tagline = "Sign in. Another rune. Another stone.",
+}) => (
   <div className="auth-page">
     <div className="auth-shell">
       {/* ── Left branding panel ─────────────────────────────────── */}
@@ -83,8 +91,8 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => (
             <span>RUNESTONE</span>
           </div>
 
-          <h1 className="auth-welcome">Welcome back</h1>
-          <p className="auth-tagline">Sign in. Another rune. Another stone.</p>
+          <h1 className="auth-welcome">{headline}</h1>
+          <p className="auth-tagline">{tagline}</p>
 
           <div className="auth-illustration">
             <GemstoneIllustration />
