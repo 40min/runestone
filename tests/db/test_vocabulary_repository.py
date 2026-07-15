@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import func, select
 
 from runestone.api.schemas import VocabularyItemCreate
+from runestone.constants import VOCABULARY_PRIORITY_LOW
 from runestone.db.models import User
 from runestone.db.models import Vocabulary as VocabularyModel
 from runestone.db.vocabulary_repository import VocabularyRepository
@@ -653,7 +654,7 @@ class TestVocabularyRepository:
             await repo.get_vocabulary_item(999, user_id=1)
 
     async def test_update_vocabulary_item(self, repo, db_session):
-        """Test committing and refreshing a vocabulary item."""
+        """Test flushing and refreshing a vocabulary item."""
         # Add a test item
         vocab = VocabularyModel(
             user_id=1,
@@ -665,6 +666,7 @@ class TestVocabularyRepository:
         )
         db_session.add(vocab)
         await db_session.commit()
+        vocabulary_id = vocab.id
 
         # Update the item manually
         vocab.word_phrase = "ett rött äpple"
@@ -687,8 +689,14 @@ class TestVocabularyRepository:
         assert db_vocab.translation == "a red apple"
         assert db_vocab.in_learn is False
 
+        await db_session.rollback()
+        persisted_vocab = await db_session.get(VocabularyModel, vocabulary_id)
+        assert persisted_vocab.word_phrase == "ett äpple"
+        assert persisted_vocab.translation == "an apple"
+        assert persisted_vocab.in_learn is True
+
     async def test_update_vocabulary_item_partial(self, repo, db_session):
-        """Test committing and refreshing a vocabulary item with partial changes."""
+        """Test flushing and refreshing a vocabulary item with partial changes."""
         # Add a test item
         vocab = VocabularyModel(
             user_id=1,
@@ -709,6 +717,64 @@ class TestVocabularyRepository:
         assert updated_vocab.word_phrase == "ett äpple"
         assert updated_vocab.translation == "an apple"
         assert updated_vocab.in_learn is False
+
+    async def test_deactivate_item_flushes_without_committing(self, repo, db_session):
+        """Deactivation persists only when the outer transaction commits."""
+        vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            in_learn=True,
+            priority_learn=3,
+        )
+        db_session.add(vocab)
+        await db_session.commit()
+        vocabulary_id = vocab.id
+
+        updated = await repo.deactivate_item(vocabulary_id, user_id=1)
+
+        assert updated.in_learn is False
+        assert updated.priority_learn == 9
+        await db_session.rollback()
+        persisted = await db_session.get(VocabularyModel, vocabulary_id)
+        assert persisted.in_learn is True
+        assert persisted.priority_learn == 3
+
+    async def test_deprioritize_item_flushes_without_committing(self, repo, db_session):
+        """Deprioritization remains reversible by the outer transaction owner."""
+        vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="ett apple",
+            translation="an apple",
+            in_learn=True,
+            priority_learn=3,
+        )
+        db_session.add(vocab)
+        await db_session.commit()
+        vocabulary_id = vocab.id
+
+        updated = await repo.deprioritize_item(vocabulary_id, user_id=1)
+
+        assert updated.priority_learn == 4
+        await db_session.rollback()
+        persisted = await db_session.get(VocabularyModel, vocabulary_id)
+        assert persisted.priority_learn == 3
+
+    async def test_deprioritize_item_caps_low_priority(self, repo, db_session):
+        """Repeated deprioritization cannot exceed the lowest supported priority."""
+        vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="en banan",
+            translation="a banana",
+            in_learn=True,
+            priority_learn=VOCABULARY_PRIORITY_LOW,
+        )
+        db_session.add(vocab)
+        await db_session.commit()
+
+        updated = await repo.deprioritize_item(vocab.id, user_id=1)
+
+        assert updated.priority_learn == VOCABULARY_PRIORITY_LOW
 
     async def test_get_vocabulary_item_not_found_existing(self, repo, db_session):
         """Test getting a non-existent vocabulary item."""
@@ -1052,125 +1118,6 @@ class TestVocabularyRepository:
         # Test wrong user (user 2 looking for user 1's word)
         result = await repo.get_vocabulary_item_by_word_phrase("ett äpple", user_id=2)
         assert result is None
-
-    async def test_delete_vocabulary_item_by_word_phrase(self, repo, db_session):
-        """Test deleting (marking as not in learning) a vocabulary item by word phrase."""
-        # Add test items
-        vocab1 = VocabularyModel(
-            user_id=1,
-            word_phrase="ett äpple",
-            translation="an apple",
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab2 = VocabularyModel(
-            user_id=1,
-            word_phrase="en banan",
-            translation="a banana",
-            in_learn=False,  # Already not in learning
-            last_learned=None,
-        )
-        vocab3 = VocabularyModel(
-            user_id=2,
-            word_phrase="ett päron",  # Different word phrase for user 2
-            translation="a pear",
-            in_learn=True,
-            last_learned=None,
-        )
-
-        db_session.add_all([vocab1, vocab2, vocab3])
-        await db_session.commit()
-
-        # Test successful deletion
-        result = await repo.delete_vocabulary_item_by_word_phrase("ett äpple", user_id=1)
-        assert result is True
-
-        # Verify item is marked as not in learning
-        stmt = select(VocabularyModel).filter(VocabularyModel.id == vocab1.id)
-        result = await db_session.execute(stmt)
-        db_vocab = result.scalars().first()
-        assert db_vocab.in_learn is False
-        assert db_vocab.word_phrase == "ett äpple"  # Other fields unchanged
-
-        # Verify other user's item is unchanged
-        stmt = select(VocabularyModel).filter(VocabularyModel.id == vocab3.id)
-        result = await db_session.execute(stmt)
-        db_vocab_user2 = result.scalars().first()
-        assert db_vocab_user2.in_learn is True
-
-        # Test deleting item already not in learning (should still return True but no change)
-        result = await repo.delete_vocabulary_item_by_word_phrase("en banan", user_id=1)
-        assert result is True
-
-        # Test deleting non-existent word phrase
-        result = await repo.delete_vocabulary_item_by_word_phrase("nonexistent", user_id=1)
-        assert result is False
-
-        # Test deleting with wrong user
-        result = await repo.delete_vocabulary_item_by_word_phrase("ett päron", user_id=1)
-        assert result is False
-
-    async def test_delete_vocabulary_item(self, repo, db_session):
-        """Test deleting (marking as not in learning) a vocabulary item by ID."""
-        # Add test items
-        vocab1 = VocabularyModel(
-            user_id=1,
-            word_phrase="ett äpple",
-            translation="an apple",
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab2 = VocabularyModel(
-            user_id=1,
-            word_phrase="en banan",
-            translation="a banana",
-            in_learn=False,  # Already not in learning
-            last_learned=None,
-        )
-        vocab3 = VocabularyModel(
-            user_id=2,
-            word_phrase="ett päron",
-            translation="a pear",
-            in_learn=True,
-            last_learned=None,
-        )
-
-        db_session.add_all([vocab1, vocab2, vocab3])
-        await db_session.commit()
-
-        # Test successful deletion
-        result = await repo.delete_vocabulary_item(vocab1.id, user_id=1)
-        assert result is True
-
-        # Verify item is marked as not in learning
-        stmt = select(VocabularyModel).filter(VocabularyModel.id == vocab1.id)
-        result = await db_session.execute(stmt)
-        db_vocab = result.scalars().first()
-        assert db_vocab.in_learn is False
-        assert db_vocab.word_phrase == "ett äpple"  # Other fields unchanged
-
-        # Verify other user's item is unchanged
-        stmt = select(VocabularyModel).filter(VocabularyModel.id == vocab3.id)
-        result = await db_session.execute(stmt)
-        db_vocab_user2 = result.scalars().first()
-        assert db_vocab_user2.in_learn is True
-
-        # Test deleting item already not in learning (should still return True)
-        result = await repo.delete_vocabulary_item(vocab2.id, user_id=1)
-        assert result is True
-
-        # Test deleting non-existent item
-        result = await repo.delete_vocabulary_item(999, user_id=1)
-        assert result is False
-
-        # Test deleting with wrong user
-        result = await repo.delete_vocabulary_item(vocab3.id, user_id=1)
-
-        # Verify user 2's item is still in learning
-        stmt = select(VocabularyModel).filter(VocabularyModel.id == vocab3.id)
-        result = await db_session.execute(stmt)
-        db_vocab_user2 = result.scalars().first()
-        assert db_vocab_user2.in_learn is True
 
     async def test_hard_delete_vocabulary_item(self, repo, db_session):
         """Test hard deleting a vocabulary item (complete removal from database)."""

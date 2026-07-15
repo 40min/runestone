@@ -522,19 +522,17 @@ async def test_memory_tool_with_runtime():
 
 Example: Service test
 ```python
-def test_select_daily_portion(rune_recall_service, test_vocabulary):
-    """Test daily portion selection logic."""
-    # Test data is already set up by test_vocabulary fixture
+@pytest.mark.anyio
+async def test_load_current_recall_words(recall_service):
+    recall_service.recall_repository.get_current_recall_words.return_value = [
+        "hello",
+        "goodbye",
+    ]
 
-    # Call the method under test
-    words = rune_recall_service._select_daily_portion(user_id=1)
+    words = await recall_service.load_current_recall_words(user_id=1)
 
-    # Verify results
-    assert len(words) == 3  # All 3 words for user 1
-    word_phrases = [w["word_phrase"] for w in words]
-    assert "hello" in word_phrases
-    assert "goodbye" in word_phrases
-    assert "thank you" in word_phrases
+    assert words == ["hello", "goodbye"]
+    recall_service.recall_repository.rollback.assert_not_awaited()
 ```
 
 Example: Repository test

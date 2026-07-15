@@ -348,7 +348,7 @@ class VocabularyRepository:
         return vocab
 
     async def update_vocabulary_item(self, vocab: Vocabulary) -> Vocabulary:
-        """Update a vocabulary item using explicit UPDATE statement."""
+        """Flush a vocabulary update without committing the caller's transaction."""
         # Use explicit UPDATE statement to ensure we update instead of insert
         stmt = (
             update(Vocabulary)
@@ -363,10 +363,25 @@ class VocabularyRepository:
             )
         )
         await self.db.execute(stmt)
-        await self.db.commit()
-        # Refresh to get updated timestamps
+        await self.db.flush()
+        # Refresh database-managed timestamps while preserving caller ownership.
         await self.db.refresh(vocab)
         return vocab
+
+    async def deactivate_item(self, vocabulary_id: int, user_id: int) -> Vocabulary:
+        """Flush deactivation of an owned item without committing the transaction."""
+        word = await self.get_vocabulary_item(vocabulary_id, user_id)
+        word.priority_learn = VOCABULARY_PRIORITY_LOW
+        word.in_learn = False
+        await self.db.flush()
+        return word
+
+    async def deprioritize_item(self, vocabulary_id: int, user_id: int) -> Vocabulary:
+        """Flush a lower learning priority without committing the transaction."""
+        word = await self.get_vocabulary_item_for_recall(vocabulary_id, user_id)
+        word.priority_learn = min(word.priority_learn + 1, VOCABULARY_PRIORITY_LOW)
+        await self.db.flush()
+        return word
 
     async def select_new_daily_words(
         self, user_id: int, cooldown_days: int = 7, limit: int = 100, excluded_word_ids: Optional[List[int]] = None
@@ -440,7 +455,7 @@ class VocabularyRepository:
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
-    async def update_last_learned(self, vocab: Vocabulary) -> None:
+    async def update_last_learned(self, vocab: Vocabulary, *, commit: bool = True) -> None:
         """Update the last_learned timestamp and increment learned_times for a vocabulary item."""
         stmt = (
             update(Vocabulary)
@@ -451,7 +466,10 @@ class VocabularyRepository:
             )
         )
         await self.db.execute(stmt)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
 
     async def get_vocabulary_item_by_word_phrase(self, word_phrase: str, user_id: int) -> Optional[Vocabulary]:
         """Get a vocabulary item by word_phrase and user_id."""
@@ -459,33 +477,14 @@ class VocabularyRepository:
         result = await self.db.execute(stmt)
         return result.scalars().first()
 
-    async def delete_vocabulary_item_by_word_phrase(self, word_phrase: str, user_id: int) -> bool:
-        """Mark a vocabulary item as not in learning (soft delete) by word phrase."""
-        stmt = (
-            update(Vocabulary)
-            .filter(Vocabulary.word_phrase == word_phrase, Vocabulary.user_id == user_id)
-            .values({"in_learn": False})
-        )
-        result = await self.db.execute(stmt)
-        await self.db.commit()
-        return result.rowcount > 0
-
-    async def delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
-        """Mark a vocabulary item as not in learning (soft delete)."""
-        stmt = (
-            update(Vocabulary)
-            .filter(Vocabulary.id == item_id, Vocabulary.user_id == user_id)
-            .values({"in_learn": False})
-        )
-        result = await self.db.execute(stmt)
-        await self.db.commit()
-        return result.rowcount > 0
-
-    async def hard_delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
+    async def hard_delete_vocabulary_item(self, item_id: int, user_id: int, *, commit: bool = True) -> bool:
         """Completely delete a vocabulary item from the database."""
         stmt = delete(Vocabulary).filter(Vocabulary.id == item_id, Vocabulary.user_id == user_id)
         result = await self.db.execute(stmt)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
         return result.rowcount > 0
 
     async def get_words_in_learn_count(self, user_id: int) -> int:

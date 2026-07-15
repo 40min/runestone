@@ -22,6 +22,7 @@ from runestone.db.chat_repository import ChatRepository
 from runestone.db.chat_session_learning_focus_repository import ChatSessionLearningFocusRepository
 from runestone.db.database import get_db
 from runestone.db.memory_item_repository import MemoryItemRepository
+from runestone.db.recall_repository import RecallRepository
 from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.rag.index import GrammarIndex
@@ -30,6 +31,7 @@ from runestone.services.chat_service import ChatService
 from runestone.services.chat_session_learning_focus_service import ChatSessionLearningFocusService
 from runestone.services.grammar_service import GrammarService
 from runestone.services.memory_item_service import MemoryItemService
+from runestone.services.recall_service import RecallService
 from runestone.services.tts_service import TTSService
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
@@ -57,6 +59,11 @@ def get_user_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> UserRep
         UserRepository: Repository instance with database session
     """
     return UserRepository(db)
+
+
+def get_recall_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> RecallRepository:
+    """Dependency injection for recall persistence."""
+    return RecallRepository(db)
 
 
 def get_vocabulary_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> VocabularyRepository:
@@ -145,19 +152,16 @@ def get_agent_side_effect_service(
 
 def get_user_service(
     user_repo: Annotated[UserRepository, Depends(get_user_repository)],
-    vocab_repo: Annotated[VocabularyRepository, Depends(get_vocabulary_repository)],
 ) -> UserService:
     """
     Dependency injection for user service.
 
     Args:
         user_repo: UserRepository from dependency injection
-        vocab_repo: VocabularyRepository from dependency injection
-
     Returns:
-        UserService: Service instance with repository dependencies
+        UserService: Service instance with its repository dependency
     """
-    return UserService(user_repo, vocab_repo)
+    return UserService(user_repo)
 
 
 def get_memory_item_service(
@@ -226,6 +230,16 @@ def get_vocabulary_service(
         VocabularyService: Service instance with repository and settings dependencies
     """
     return VocabularyService(repo, settings, llm_model)
+
+
+def get_recall_service(
+    recall_repository: Annotated[RecallRepository, Depends(get_recall_repository)],
+    vocabulary_service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+    user_service: Annotated[UserService, Depends(get_user_service)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> RecallService:
+    """Build recall orchestration from services sharing the request session."""
+    return RecallService(recall_repository, vocabulary_service, user_service, settings)
 
 
 def get_ocr_processor(
@@ -342,9 +356,9 @@ def get_chat_service(
     repo: Annotated[ChatRepository, Depends(get_chat_repository)],
     side_effect_service: Annotated[AgentSideEffectService, Depends(get_agent_side_effect_service)],
     user_service: Annotated[UserService, Depends(get_user_service)],
+    recall_service: Annotated[RecallService, Depends(get_recall_service)],
     agents_manager: Annotated[AgentsManager, Depends(get_agents_manager)],
     processor: Annotated[RunestoneProcessor, Depends(get_runestone_processor)],
-    vocabulary_service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
     tts_service: Annotated[TTSService, Depends(get_tts_service)],
     memory_item_service: Annotated[MemoryItemService, Depends(get_memory_item_service)],
     chat_session_learning_focus_service: Annotated[
@@ -358,9 +372,9 @@ def get_chat_service(
         settings: Application settings from dependency injection
         repo: ChatRepository from dependency injection
         user_service: UserService from dependency injection
+        recall_service: Request-scoped RecallService sharing the API database session
         agents_manager: AgentsManager from dependency injection
         processor: RunestoneProcessor from dependency injection
-        vocabulary_service: VocabularyService from dependency injection
         tts_service: TTSService from dependency injection
 
     Returns:
@@ -371,9 +385,9 @@ def get_chat_service(
         repo,
         side_effect_service,
         user_service,
+        recall_service,
         agents_manager,
         processor,
-        vocabulary_service,
         tts_service,
         memory_item_service,
         chat_session_learning_focus_service,

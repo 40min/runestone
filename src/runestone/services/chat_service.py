@@ -17,9 +17,9 @@ from runestone.db.chat_repository import ChatRepository
 from runestone.services.agent_side_effect_service import AgentSideEffectService
 from runestone.services.chat_session_learning_focus_service import ChatSessionLearningFocusService
 from runestone.services.memory_item_service import MemoryItemService
+from runestone.services.recall_service import RecallService
 from runestone.services.tts_service import TTSService
 from runestone.services.user_service import UserService
-from runestone.services.vocabulary_service import VocabularyService
 
 logger = logging.getLogger(__name__)
 
@@ -50,9 +50,9 @@ class ChatService:
         repository: ChatRepository,
         side_effect_service: AgentSideEffectService,
         user_service: UserService,
+        recall_service: RecallService,
         agents_manager: AgentsManager,
         processor: RunestoneProcessor,
-        vocabulary_service: VocabularyService,
         tts_service: TTSService,
         memory_item_service: MemoryItemService,
         chat_session_learning_focus_service: ChatSessionLearningFocusService,
@@ -68,9 +68,9 @@ class ChatService:
         self.repository = repository
         self.side_effect_service = side_effect_service
         self.user_service = user_service
+        self.recall_service = recall_service
         self.agents_manager = agents_manager
         self.processor = processor
-        self.vocabulary_service = vocabulary_service
         self.tts_service = tts_service
         self.memory_item_service = memory_item_service
         self.chat_session_learning_focus_service = chat_session_learning_focus_service
@@ -124,7 +124,10 @@ class ChatService:
             for m in context_models
         ]
 
-        # 4. Get user and build memory context
+        # 4. Build recall context before loading the ORM user. A handled recall
+        # database failure rolls back the shared session and expires loaded ORM
+        # instances, so the user must be fetched after that recovery boundary.
+        current_recall_words = await self._load_current_recall_words(user_id)
         user = await self.user_service.get_user_by_id(user_id)
         if not user:
             raise ValueError(f"User {user_id} not found")
@@ -138,6 +141,7 @@ class ChatService:
             memory_item_service=self.memory_item_service,
             chat_session_learning_focus_service=self.chat_session_learning_focus_service,
             side_effect_service=self.side_effect_service,
+            current_recall_words=current_recall_words,
         )
 
         # 6. Save assistant message
@@ -199,7 +203,9 @@ class ChatService:
             for m in context_models
         ]
 
-        # 4. Get user and build memory context
+        # 4. Build recall context before loading the ORM user. See the text-turn
+        # path above for why this ordering matters after a handled rollback.
+        current_recall_words = await self._load_current_recall_words(user_id)
         user = await self.user_service.get_user_by_id(user_id)
         if not user:
             raise ValueError(f"User {user_id} not found")
@@ -224,6 +230,7 @@ Instructions:
             memory_item_service=self.memory_item_service,
             chat_session_learning_focus_service=self.chat_session_learning_focus_service,
             side_effect_service=self.side_effect_service,
+            current_recall_words=current_recall_words,
         )
 
         await self.repository.add_message(
@@ -235,6 +242,18 @@ Instructions:
         )
 
         return assistant_text, teacher_emotion
+
+    async def _load_current_recall_words(self, user_id: int) -> list[str]:
+        """Load Teacher recall context without leaving the request-scoped session."""
+        try:
+            return await self.recall_service.load_current_recall_words(user_id)
+        except Exception as exc:
+            logger.warning(
+                "current recall words load failed user_id=%s error=%s",
+                user_id,
+                exc,
+            )
+            return []
 
     # ------------------------------------------------------------------
     # Chat session management

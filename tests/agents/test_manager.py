@@ -47,7 +47,7 @@ def mock_settings():
     settings.openrouter_api_key = "test-api-key"
     settings.openai_api_key = "test-openai-key"
     settings.allowed_origins = "http://localhost:5173"
-    settings.state_file_path = "state/state.json"
+    settings.telegram_offset_file_path = "state/offset.txt"
     settings.get_agent_llm_settings.side_effect = lambda agent_name: {
         "teacher": AgentLLMSettings(
             provider="openrouter",
@@ -157,7 +157,7 @@ def _make_plan(pre=None, post=None):
 
 
 def _make_manager(mock_settings):
-    return AgentsManager(mock_settings, state_manager=MagicMock())
+    return AgentsManager(mock_settings)
 
 
 # ---------------------------------------------------------------------------
@@ -1277,53 +1277,6 @@ async def test_generate_teacher_response_passes_pre_results(mock_settings, mock_
     assert kwargs["current_recall_words"] == []
 
 
-def test_load_current_recall_words_returns_words(mock_settings, mock_user):
-    mock_state_manager = MagicMock()
-    manager = AgentsManager(mock_settings, state_manager=mock_state_manager)
-    mock_user.telegram_username = "@TestUser"
-
-    state_user_data = MagicMock()
-    state_user_data.db_user_id = mock_user.id
-    state_user_data.daily_selection = [MagicMock(word_phrase="hej"), MagicMock(word_phrase="  tack  ")]
-    mock_state_manager.get_user_by_normalized_telegram_username.return_value = ("testuser", state_user_data)
-    words = manager._load_current_recall_words(mock_user)
-
-    assert words == ["hej", "tack"]
-    mock_state_manager.get_user_by_normalized_telegram_username.assert_called_once_with("testuser")
-
-
-def test_load_current_recall_words_returns_empty_on_missing_username(mock_settings, mock_user):
-    manager = AgentsManager(mock_settings, state_manager=MagicMock())
-    mock_user.telegram_username = None
-
-    assert manager._load_current_recall_words(mock_user) == []
-
-
-def test_load_current_recall_words_returns_empty_on_state_error(mock_settings, mock_user):
-    mock_state_manager = MagicMock()
-    mock_state_manager.get_user_by_normalized_telegram_username.side_effect = RuntimeError("boom")
-    manager = AgentsManager(mock_settings, state_manager=mock_state_manager)
-    mock_user.telegram_username = "testuser"
-    words = manager._load_current_recall_words(mock_user)
-
-    assert words == []
-
-
-def test_load_current_recall_words_returns_empty_on_user_mismatch(mock_settings, mock_user):
-    mock_state_manager = MagicMock()
-    manager = AgentsManager(mock_settings, state_manager=mock_state_manager)
-    mock_user.telegram_username = "testuser"
-
-    state_user_data = MagicMock()
-    state_user_data.db_user_id = 999
-    state_user_data.daily_selection = [MagicMock(word_phrase="hej")]
-    mock_state_manager.get_user_by_normalized_telegram_username.return_value = ("testuser", state_user_data)
-
-    words = manager._load_current_recall_words(mock_user)
-
-    assert words == []
-
-
 # ---------------------------------------------------------------------------
 # run_post_turn tests
 # ---------------------------------------------------------------------------
@@ -2403,20 +2356,18 @@ async def test_prepare_pre_turn_loads_current_recall_words_on_first_turn(
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
-    with patch.object(manager, "_load_current_recall_words", return_value=["hej", "tack"]) as mock_loader:
-        _plan, _pre_results, _active_learning_focus_memory, _personal_info_summary, _recent, current_recall_words = (
-            await manager.prepare_pre_turn(
-                message="Hello",
-                chat_id="chat-1",
-                history=[],
-                user=mock_user,
-                memory_item_service=mock_memory_item_service,
-                chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
-                side_effect_service=mock_side_effect_service,
-            )
+    _plan, _pre_results, _active_learning_focus_memory, _personal_info_summary, _recent, current_recall_words = (
+        await manager.prepare_pre_turn(
+            message="Hello",
+            chat_id="chat-1",
+            history=[],
+            user=mock_user,
+            memory_item_service=mock_memory_item_service,
+            chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
+            side_effect_service=mock_side_effect_service,
+            current_recall_words=["hej", "tack"],
         )
-
-    mock_loader.assert_called_once_with(mock_user)
+    )
     assert current_recall_words == ["hej", "tack"]
 
 
@@ -2430,20 +2381,18 @@ async def test_prepare_pre_turn_loads_current_recall_words_with_history(
 ):
     manager = _make_manager(mock_settings)
     manager.coordinator.plan_pre_turn = AsyncMock(return_value=_make_plan())
-    with patch.object(manager, "_load_current_recall_words", return_value=["hej"]) as mock_loader:
-        _plan, _pre_results, _active_learning_focus_memory, _personal_info_summary, _recent, current_recall_words = (
-            await manager.prepare_pre_turn(
-                message="Hello",
-                chat_id="chat-1",
-                history=[ChatMessage(role="user", content="prev")],
-                user=mock_user,
-                memory_item_service=mock_memory_item_service,
-                chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
-                side_effect_service=mock_side_effect_service,
-            )
+    _plan, _pre_results, _active_learning_focus_memory, _personal_info_summary, _recent, current_recall_words = (
+        await manager.prepare_pre_turn(
+            message="Hello",
+            chat_id="chat-1",
+            history=[ChatMessage(role="user", content="prev")],
+            user=mock_user,
+            memory_item_service=mock_memory_item_service,
+            chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
+            side_effect_service=mock_side_effect_service,
+            current_recall_words=["hej"],
         )
-
-    mock_loader.assert_called_once_with(mock_user)
+    )
     assert current_recall_words == ["hej"]
 
 

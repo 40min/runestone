@@ -4,6 +4,17 @@
 
 Keep package `__init__.py` files empty unless there is an explicit, reviewed reason to add code.
 
+## Dependency And Service Boundaries
+
+- Treat constructor collaborators as required unless their absence is a deliberate, supported runtime mode. Do not make repositories, services, clients, or other injected collaborators optional merely to simplify tests, and do not construct fallback collaborators inside a service. Assemble the complete dependency graph at composition roots such as FastAPI dependencies, CLI entry points, workers, and test fixtures.
+- A service may access only the repository for the domain it owns. When a workflow crosses domains, call the owning service or introduce an application-level coordinator; do not reach directly into another domain's repository.
+- Keep transport layers such as API endpoints and Telegram workers dependent on services rather than repositories. Prefer a dedicated coordinator or unit of work for cross-service transactions. When endpoint-level orchestration is explicitly accepted as temporary technical debt, the endpoint may coordinate multiple services and commit or roll back their shared injected session, but it must not access repositories or row locks directly.
+- Make transaction ownership explicit at the outer use-case boundary. Collaborating service operations that participate in the same transaction must not commit independently, and the outer service must commit or roll back exactly once.
+- Preserve aggregate invariants in the same transaction as the triggering mutation. For recall queues this includes referential integrity, contiguous ordering, a valid cursor, and best-effort refill to the configured target size when an item is removed.
+- Name repository and service methods for the aggregate or outcome they return. Avoid generic names such as `get_by_id` or `list_enabled` when the returned entity or eligibility rule is not obvious.
+- Distinguish missing aggregates, missing domain entities, and missing collection membership in exception handling. A missing row during `SELECT ... FOR UPDATE` is not a lock-acquisition failure.
+- Remove public methods that have no production callers. Tests alone do not justify retaining a public API.
+
 ## Development Workflows
 
 Prefer the Makefile targets over spelling out raw tool commands; the Makefile also keeps the `uv` cache inside the repo for reproducible local and CI runs.
@@ -38,5 +49,5 @@ Write docstrings and comments to explain intent, invariants, and business rules,
 - Prefer documenting parameters at the first meaningful boundary where another reader would need the explanation; do not repeat the same parameter prose through every downstream helper.
 - Prefer concise prose in sentence case. Keep docstrings current with the actual async/background behavior and collaborator names.
 - Use inline comments sparingly for non-obvious decisions, phase boundaries, truncation/capping rules, persistence order guarantees, or intentionally surprising behavior.
-- Avoid comments that just restate the next line, numbered “step” comments for routine CRUD flow, or stale references to old architecture.
+- Avoid comments that just restate the next line, numbered “step” comments for routine CRUD flow, or stale references to old architecture. Use concise numbered phase comments for genuinely multi-step algorithms when locking, transaction order, retries, or external side effects make the sequence important.
 - When useful, explain why an operation happens in a specific order, especially around persistence, background tasks, and history trimming.

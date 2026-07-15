@@ -409,7 +409,7 @@ This clean solution eliminates the need for complex user ID mapping while mainta
 
 When deploying the application inside Docker containers (using `docker compose` or orchestrators like Coolify), the backend and recall services run as a non-root user `runestone` with UID/GID `10001:10001`. This ensures security and avoids namespace conflicts with standard system accounts on the host.
 
-If you bind-mount a host directory to `/app/state` (for example, the default `./state` directory in raw Docker Compose, or `/data/coolify/applications/<uuid>/state` under Coolify), the container processes may encounter "Permission Denied" errors when trying to write to files (like `state.json`) or create directories (like `hf-cache`).
+If you bind-mount a host directory to `/app/state` (for example, the default `./state` directory in raw Docker Compose, or `/data/coolify/applications/<uuid>/state` under Coolify), the container processes may encounter "Permission Denied" errors when trying to write to files (like `offset.txt`) or create directories (like `hf-cache`).
 
 To resolve this, ensure the host directory is owned by the container's UID/GID. You can update the ownership of your state directory on the host by running:
 
@@ -588,7 +588,7 @@ after any load-time minimum enforcement.
 **Telegram Configuration:**
 - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token from @BotFather (required for Rune Recall)
 - `RECALL_INTERVAL_MINUTES`: Interval between recall messages in minutes (default: 60)
-- `TELEGRAM_OFFSET_FILENAME`: Filename for storing Telegram update offset (default: offset.txt)
+- `TELEGRAM_OFFSET_FILE_PATH`: Path for storing the Telegram update offset (default: state/offset.txt)
 
 ### Configuration File
 

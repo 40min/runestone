@@ -32,12 +32,18 @@ from ..db.models import Vocabulary
 from ..db.vocabulary_repository import VocabularyRepository
 from ..schemas.vocabulary import VocabularyResponse
 from ..schemas.vocabulary_save import PriorityWordSaveItem, VocabularyPrioritizationAction, WordSaveCandidate
+from .recall_types import RecallQueueWord
 
 
 class VocabularyService:
     """Service for vocabulary-related business logic."""
 
-    def __init__(self, vocabulary_repository: VocabularyRepository, settings: Settings, llm_model: BaseChatModel):
+    def __init__(
+        self,
+        vocabulary_repository: VocabularyRepository,
+        settings: Settings,
+        llm_model: BaseChatModel,
+    ):
         """
         Initialize service with vocabulary repository, settings, and LangChain chat model.
 
@@ -415,6 +421,74 @@ class VocabularyService:
         """Insert missing words and prioritize existing ones in one transaction."""
         return await self.repo.insert_or_prioritize_words(items, user_id)
 
-    async def delete_vocabulary_item(self, item_id: int, user_id: int) -> bool:
-        """Completely delete a vocabulary item from the database."""
-        return await self.repo.hard_delete_vocabulary_item(item_id, user_id)
+    async def get_vocabulary_item_by_phrase(self, word_phrase: str, user_id: int) -> RecallQueueWord | None:
+        """Return vocabulary data for an owned item selected by phrase."""
+        word = await self.repo.get_vocabulary_item_by_word_phrase(word_phrase, user_id)
+        return self._to_queue_word(word) if word is not None else None
+
+    async def get_learnable_item(self, vocabulary_id: int, user_id: int) -> RecallQueueWord | None:
+        """Return vocabulary data only when the owned item remains learnable."""
+        try:
+            word = await self.repo.get_vocabulary_item_for_recall(vocabulary_id, user_id)
+        except ValueError:
+            return None
+        return self._to_queue_word(word)
+
+    async def deactivate_item(self, vocabulary_id: int, user_id: int) -> None:
+        """Remove an owned item from learning without committing the caller's transaction."""
+        await self.repo.deactivate_item(vocabulary_id, user_id)
+
+    async def deprioritize_item(self, vocabulary_id: int, user_id: int) -> None:
+        """Lower an owned item's learning urgency without committing the caller's transaction."""
+        await self.repo.deprioritize_item(vocabulary_id, user_id)
+
+    async def select_daily_candidates(
+        self,
+        user_id: int,
+        cooldown_days: int,
+        limit: int,
+        excluded_word_ids: list[int] | None = None,
+    ) -> list[RecallQueueWord]:
+        """Return deterministic learnable candidates for a daily selection."""
+        words = await self.repo.select_new_daily_words(
+            user_id,
+            cooldown_days,
+            limit=limit,
+            excluded_word_ids=excluded_word_ids,
+        )
+        return [self._to_queue_word(word) for word in words]
+
+    async def select_alternative_candidates(
+        self,
+        user_id: int,
+        cooldown_days: int,
+        limit: int,
+        excluded_word_ids: list[int] | None = None,
+    ) -> list[RecallQueueWord]:
+        """Return randomized learnable candidates for replacing a selection."""
+        words = await self.repo.select_new_daily_words_for_bump(
+            user_id,
+            cooldown_days,
+            limit=limit,
+            excluded_word_ids=excluded_word_ids,
+        )
+        return [self._to_queue_word(word) for word in words]
+
+    async def record_learning_event(self, vocabulary_id: int, user_id: int) -> None:
+        """Update learning metadata without committing the caller's transaction."""
+        word = await self.repo.get_vocabulary_item_for_recall(vocabulary_id, user_id)
+        await self.repo.update_last_learned(word, commit=False)
+
+    async def hard_delete_item(self, vocabulary_id: int, user_id: int) -> bool:
+        """Hard-delete an owned item without committing the caller's transaction."""
+        return await self.repo.hard_delete_vocabulary_item(vocabulary_id, user_id, commit=False)
+
+    @staticmethod
+    def _to_queue_word(word: Vocabulary) -> RecallQueueWord:
+        """Project vocabulary persistence data into a stable service contract."""
+        return RecallQueueWord(
+            id=word.id,
+            word_phrase=word.word_phrase,
+            translation=word.translation,
+            example_phrase=word.example_phrase,
+        )

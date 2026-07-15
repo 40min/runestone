@@ -2,14 +2,20 @@
 Tests for ChatService.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, Mock
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import text
 
 from runestone.db.chat_repository import ChatRepository
+from runestone.db.recall_repository import RecallRepository
+from runestone.db.user_repository import UserRepository
 from runestone.services.agent_side_effect_service import AgentSideEffectService
 from runestone.services.chat_service import ChatService
+from runestone.services.recall_service import RecallService
+from runestone.services.user_service import UserService
 
 
 @pytest.fixture
@@ -20,12 +26,6 @@ def mock_agent_service():
     mock.process_turn.side_effect = lambda **_kwargs: mock.process_turn_result
     mock.start_background_memory_maintenance = AsyncMock(return_value=True)
     return mock
-
-
-@pytest.fixture
-def mock_vocabulary_service():
-    """Create a mock VocabularyService."""
-    return Mock()
 
 
 @pytest.fixture
@@ -52,6 +52,14 @@ def mock_user_service():
     mock_profile.personal_info = None
     mock_profile.areas_to_improve = None
     mock.get_user_profile = AsyncMock(return_value=mock_profile)
+    return mock
+
+
+@pytest.fixture
+def mock_recall_service():
+    """Create the request-scoped recall collaborator used for Teacher context."""
+    mock = AsyncMock(spec=RecallService)
+    mock.load_current_recall_words.return_value = []
     return mock
 
 
@@ -85,8 +93,8 @@ def chat_service(
     db_session,
     mock_agent_service,
     mock_user_service,
+    mock_recall_service,
     mock_processor,
-    mock_vocabulary_service,
     mock_tts_service,
     mock_memory_item_service,
     mock_chat_session_learning_focus_service,
@@ -106,9 +114,9 @@ def chat_service(
         repository,
         side_effect_service,
         mock_user_service,
+        mock_recall_service,
         mock_agent_service,
         mock_processor,
-        mock_vocabulary_service,
         mock_tts_service,
         mock_memory_item_service,
         mock_chat_session_learning_focus_service,
@@ -116,9 +124,15 @@ def chat_service(
 
 
 @pytest.mark.anyio
-async def test_process_message_orchestration(chat_service, db_with_test_user, mock_agent_service, mock_user_service):
+async def test_process_message_orchestration(
+    chat_service,
+    db_with_test_user,
+    mock_agent_service,
+    mock_user_service,
+    mock_recall_service,
+):
     """Test the full flow of processing a message with the new stage orchestration."""
-    db, user = db_with_test_user
+    _db, user = db_with_test_user
 
     # Configure mock user service to return the DB user
     user.current_chat_id = str(uuid4())
@@ -145,6 +159,91 @@ async def test_process_message_orchestration(chat_service, db_with_test_user, mo
     kwargs = mock_agent_service.process_turn.call_args.kwargs
     assert "chat_repository" not in kwargs
     assert "tts_service" not in kwargs
+    assert kwargs["current_recall_words"] == []
+    mock_recall_service.load_current_recall_words.assert_awaited_once_with(user.id)
+
+
+@pytest.mark.anyio
+async def test_process_message_passes_request_scoped_recall_words_to_teacher_context(
+    chat_service,
+    db_with_test_user,
+    mock_agent_service,
+    mock_user_service,
+    mock_recall_service,
+):
+    _db, user = db_with_test_user
+    user.current_chat_id = str(uuid4())
+    mock_user_service.get_user_by_id.return_value = user
+    mock_user_service.get_or_create_current_chat_id.return_value = user.current_chat_id
+    mock_recall_service.load_current_recall_words.return_value = ["hej", "tack"]
+
+    await chat_service.process_message(user.id, "Hej Björn")
+
+    mock_recall_service.load_current_recall_words.assert_awaited_once_with(user.id)
+    assert mock_agent_service.process_turn.call_args.kwargs["current_recall_words"] == ["hej", "tack"]
+
+
+@pytest.mark.anyio
+async def test_process_message_keeps_recall_context_best_effort(
+    chat_service,
+    db_with_test_user,
+    mock_agent_service,
+    mock_user_service,
+    mock_recall_service,
+):
+    _db, user = db_with_test_user
+    user.current_chat_id = str(uuid4())
+    mock_user_service.get_user_by_id.return_value = user
+    mock_user_service.get_or_create_current_chat_id.return_value = user.current_chat_id
+    mock_recall_service.load_current_recall_words.side_effect = RuntimeError("recall unavailable")
+
+    await chat_service.process_message(user.id, "Hej Björn")
+
+    assert mock_agent_service.process_turn.call_args.kwargs["current_recall_words"] == []
+
+
+@pytest.mark.anyio
+async def test_process_message_recovers_user_after_real_recall_query_rollback(
+    chat_service,
+    db_with_test_user,
+    mock_agent_service,
+):
+    db, user = db_with_test_user
+    user_id = user.id
+    expected_name = user.name
+    user.current_chat_id = str(uuid4())
+    chat_id = user.current_chat_id
+    await db.commit()
+
+    user_service = UserService(UserRepository(db))
+    recall_repository = RecallRepository(db)
+    recall_service = RecallService(
+        recall_repository,
+        AsyncMock(),
+        user_service,
+        SimpleNamespace(words_per_day=3, cooldown_days=7),
+    )
+
+    async def fail_with_real_database_error(_user_id: int) -> list[str]:
+        await db.execute(text("SELECT * FROM missing_recall_context_regression_table"))
+        return []
+
+    recall_repository.get_current_recall_words = fail_with_real_database_error
+    chat_service.user_service = user_service
+    chat_service.recall_service = recall_service
+
+    async def assert_reloaded_user(**kwargs):
+        assert kwargs["current_recall_words"] == []
+        assert kwargs["user"].name == expected_name
+        return mock_agent_service.process_turn_result
+
+    mock_agent_service.process_turn.side_effect = assert_reloaded_user
+
+    await chat_service.process_message(user_id, "Hej efter rollback")
+
+    history = await chat_service.get_history(user_id, chat_id)
+    assert [message.role for message in history] == ["user", "assistant"]
+    assert history[0].content == "Hej efter rollback"
 
 
 @pytest.mark.anyio
@@ -193,13 +292,19 @@ async def test_process_message_logs_total_turn_timing(
 
 @pytest.mark.anyio
 async def test_process_image_message_success(
-    chat_service, db_with_test_user, mock_agent_service, mock_user_service, mock_processor
+    chat_service,
+    db_with_test_user,
+    mock_agent_service,
+    mock_user_service,
+    mock_processor,
+    mock_recall_service,
 ):
     """Test successful image processing with async post treatment."""
     db, user = db_with_test_user
     user.current_chat_id = str(uuid4())
     mock_user_service.get_user_by_id.return_value = user
     mock_user_service.get_or_create_current_chat_id.return_value = user.current_chat_id
+    mock_recall_service.load_current_recall_words.return_value = ["hej", "tack"]
 
     # Configure processor mock for this test
     ocr_result = Mock()
@@ -215,6 +320,8 @@ async def test_process_image_message_success(
 
     # Verify orchestration
     mock_agent_service.process_turn.assert_called_once()
+    mock_recall_service.load_current_recall_words.assert_awaited_once_with(user.id)
+    assert mock_agent_service.process_turn.call_args.kwargs["current_recall_words"] == ["hej", "tack"]
 
     history = await chat_service.get_history(user.id, user.current_chat_id)
     assert history[-1].role == "assistant"

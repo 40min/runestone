@@ -66,6 +66,30 @@ class VocabularyOperationError(RunestoneError):
     pass
 
 
+class TelegramUsernameConflictError(RunestoneError):
+    """Raised when one Telegram username resolves to multiple users."""
+
+    def __init__(self, username: str):
+        super().__init__(
+            message="Telegram username is linked to multiple Runestone accounts",
+            details=f"Normalized username '{username}' matched multiple users",
+        )
+
+
+class RecallOperationError(RunestoneError):
+    """Base exception for recall workflow failures."""
+
+
+class RecallStateNotFoundError(RecallOperationError):
+    """Raised when a command requires recall state that does not exist."""
+
+    def __init__(self, user_id: int):
+        super().__init__(
+            message="Recall state not found",
+            details=f"User {user_id} has no persisted recall state",
+        )
+
+
 class WordNotFoundError(VocabularyOperationError):
     """Raised when a word is not found in user's vocabulary."""
 
@@ -78,14 +102,12 @@ class WordNotFoundError(VocabularyOperationError):
         )
 
 
-class WordNotInSelectionError(VocabularyOperationError):
+class WordNotInSelectionError(RecallOperationError):
     """Raised when a word is not in today's daily selection."""
 
     def __init__(self, word_phrase: str):
         self.word_phrase = word_phrase
         super().__init__(message=f"Word '{word_phrase}' not in today's selection")
-
-    pass
 
 
 class UserNotFoundError(ValueError):

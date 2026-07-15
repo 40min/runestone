@@ -4,7 +4,7 @@ Standalone Telegram bot worker application for Runestone.
 
 This application runs scheduled tasks for the Telegram bot:
 - Polls for incoming commands via TelegramCommandService
-- Sends daily vocabulary words via RuneRecallService
+- Sends daily vocabulary words via TelegramRecallDeliveryService
 
 Uses APScheduler for task scheduling and proper configuration management.
 """
@@ -13,6 +13,7 @@ import asyncio
 import logging
 import signal
 import sys
+from functools import lru_cache
 from typing import Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -20,46 +21,62 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from runestone.config import settings
 from runestone.core.logging_config import setup_logging
+from runestone.core.service_llm import build_service_llm_model
 from runestone.db.database import SessionLocal, setup_database
+from runestone.db.recall_repository import RecallRepository
 from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
-from runestone.services.rune_recall_service import RuneRecallService
+from runestone.services.recall_service import RecallService
 from runestone.services.telegram_command_service import TelegramCommandService
-from runestone.state.state_manager import StateManager
+from runestone.services.telegram_recall_delivery_service import TelegramRecallDeliveryService
+from runestone.services.user_service import UserService
+from runestone.services.vocabulary_service import VocabularyService
+from runestone.state.telegram_update_offset_store import TelegramUpdateOffsetStore
 
 
-async def process_updates_job(state_manager: StateManager) -> None:
+@lru_cache(maxsize=1)
+def _get_service_llm_model():
+    """Reuse the stateless service model across short-lived worker sessions."""
+    return build_service_llm_model(settings)
+
+
+def _create_recall_service(db) -> RecallService:
+    """Assemble recall collaborators over one worker-scoped database session."""
+    vocabulary_service = VocabularyService(VocabularyRepository(db), settings, _get_service_llm_model())
+    user_service = UserService(UserRepository(db))
+    return RecallService(RecallRepository(db), vocabulary_service, user_service, settings)
+
+
+async def process_updates_job(offset_store: TelegramUpdateOffsetStore) -> None:
     """Wrapper function for processing Telegram updates with fresh session."""
     async with SessionLocal() as db:
         try:
-            vocabulary_repository = VocabularyRepository(db)
-            user_repository = UserRepository(db)
-            recall_service = RuneRecallService(vocabulary_repository, state_manager, settings)
-            telegram_service = TelegramCommandService(state_manager, recall_service, user_repository)
+            recall_service = _create_recall_service(db)
+            telegram_service = TelegramCommandService(offset_store, recall_service)
             await telegram_service.process_updates()
         except Exception:
             logging.getLogger(__name__).exception("Error in process_updates_job")
 
 
-async def send_recall_word_job(state_manager: StateManager) -> None:
+async def send_recall_word_job() -> None:
     """Wrapper function for sending recall words with fresh session."""
     async with SessionLocal() as db:
         try:
-            vocabulary_repository = VocabularyRepository(db)
-            recall_service = RuneRecallService(vocabulary_repository, state_manager, settings)
-            await recall_service.send_next_recall_word()
+            recall_service = _create_recall_service(db)
+            telegram_recall_delivery_service = TelegramRecallDeliveryService(recall_service, settings)
+            await telegram_recall_delivery_service.send_next_recall_word()
         except Exception:
             logging.getLogger(__name__).exception("Error in send_recall_word_job")
 
 
-def create_scheduler(state_manager: StateManager) -> AsyncIOScheduler:
+def create_scheduler(offset_store: TelegramUpdateOffsetStore) -> AsyncIOScheduler:
     """Create and configure the APScheduler instance."""
     scheduler = AsyncIOScheduler()
 
     # Poll for Telegram commands every 5 seconds
     scheduler.add_job(
         process_updates_job,
-        args=[state_manager],
+        args=[offset_store],
         trigger=IntervalTrigger(seconds=5),
         id="poll_commands",
         name="Poll Telegram Commands",
@@ -70,7 +87,6 @@ def create_scheduler(state_manager: StateManager) -> AsyncIOScheduler:
     # Send recall words periodically during the day
     scheduler.add_job(
         send_recall_word_job,
-        args=[state_manager],
         trigger=IntervalTrigger(minutes=settings.recall_interval_minutes),
         id="send_recall_words",
         name="Send Recall Vocabulary Words",
@@ -81,7 +97,7 @@ def create_scheduler(state_manager: StateManager) -> AsyncIOScheduler:
     return scheduler
 
 
-async def main(state_file_path: Optional[str] = None) -> None:
+async def main(offset_file_path: Optional[str] = None) -> None:
     """Main entry point for the recall worker application."""
     # Setup logging
     log_level = "DEBUG" if settings.verbose else "INFO"
@@ -99,11 +115,10 @@ async def main(state_file_path: Optional[str] = None) -> None:
         logger.info("Setting up database...")
         await setup_database()
 
-        # Initialize state manager (no long-lived database session needed)
-        state_manager = StateManager(state_file_path or settings.state_file_path)
+        offset_store = TelegramUpdateOffsetStore(offset_file_path or settings.telegram_offset_file_path)
 
         # Create and configure scheduler with wrapper functions
-        scheduler = create_scheduler(state_manager)
+        scheduler = create_scheduler(offset_store)
 
         # Signal event for graceful shutdown
         shutdown_event = asyncio.Event()

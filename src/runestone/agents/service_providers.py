@@ -104,6 +104,5 @@ async def provide_user_service() -> AsyncIterator[UserService]:
     """
     async with provide_db_session() as session:
         user_repo = UserRepository(session)
-        vocab_repo = VocabularyRepository(session)
-        service = UserService(user_repo, vocab_repo)
+        service = UserService(user_repo)
         yield service

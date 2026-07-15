@@ -132,8 +132,8 @@ class Settings(BaseSettings):
     database_pool_pre_ping: bool = True
     startup_db_check: bool = True
 
-    # State Management Configuration
-    state_file_path: str = "state/state.json"
+    # Telegram polling cursor configuration
+    telegram_offset_file_path: str = "state/offset.txt"
 
     # Recall Configuration
     recall_start_hour: int = 9

@@ -43,8 +43,6 @@ from runestone.services.agent_side_effect_service import AgentSideEffectService
 from runestone.services.chat_session_learning_focus_service import ChatSessionLearningFocusService
 from runestone.services.grammar_service import GrammarService
 from runestone.services.memory_item_service import MemoryItemService
-from runestone.state.state_manager import StateManager
-from runestone.utils.telegram import normalize_telegram_username
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +68,6 @@ class AgentsManager:
     def __init__(
         self,
         settings: Settings,
-        state_manager: StateManager,
         grammar_index: GrammarIndex | None = None,
         grammar_service: GrammarService | None = None,
     ):
@@ -78,9 +75,6 @@ class AgentsManager:
         Initialize the agent manager.
         """
         self.settings = settings
-        # Inject state manager to keep orchestration dependencies explicit.
-        # StateManager itself is a singleton class, so this remains one instance per process.
-        self.state_manager = state_manager
         self._init_allowed_ports()
         self.coordinator = CoordinatorAgent(settings=settings)
         self.teacher = TeacherAgent(
@@ -156,6 +150,7 @@ class AgentsManager:
         memory_item_service: MemoryItemService,
         side_effect_service: AgentSideEffectService,
         chat_session_learning_focus_service: ChatSessionLearningFocusService,
+        current_recall_words: list[str] | None = None,
     ) -> tuple[CoordinatorPlan, list[dict], str, str, list[TeacherSideEffect], list[str]]:
         """
         Run pre-stage: coordinator planning, pre specialists, side effect loading.
@@ -172,7 +167,7 @@ class AgentsManager:
         """
         active_learning_focus_memory = ""
         personal_info_summary = ""
-        current_recall_words: list[str] = []
+        current_recall_words = current_recall_words or []
         if not history:
             try:
                 deleted_count = await memory_item_service.cleanup_old_mastered_areas(
@@ -214,8 +209,6 @@ class AgentsManager:
 
         raw_personal_info_summary = getattr(user, "personal_info_summary", None)
         personal_info_summary = raw_personal_info_summary if isinstance(raw_personal_info_summary, str) else ""
-        current_recall_words = self._load_current_recall_words(user)
-
         coordinator_history = history[-self.COORDINATOR_MAX_HISTORY_MESSAGES :] if history else []
         if history and len(history) > self.COORDINATOR_MAX_HISTORY_MESSAGES:
             logger.warning(
@@ -327,6 +320,7 @@ class AgentsManager:
         memory_item_service: MemoryItemService,
         side_effect_service: AgentSideEffectService,
         chat_session_learning_focus_service: ChatSessionLearningFocusService,
+        current_recall_words: list[str] | None = None,
     ) -> tuple[str, Optional[list[dict[str, str]]], TeacherEmotion]:
         """
         Run the agent-owned portion of a prepared chat turn.
@@ -355,6 +349,7 @@ class AgentsManager:
             memory_item_service=memory_item_service,
             chat_session_learning_focus_service=chat_session_learning_focus_service,
             side_effect_service=side_effect_service,
+            current_recall_words=current_recall_words,
         )
         (
             _plan,
@@ -851,34 +846,6 @@ class AgentsManager:
 
         # Fan-out / fan-in: run specialists concurrently but preserve routing order.
         return await asyncio.gather(*tasks)
-
-    def _load_current_recall_words(self, user: User) -> list[str]:
-        """Best-effort load of today's recall queue words for first-turn teacher context."""
-        telegram_username = normalize_telegram_username(getattr(user, "telegram_username", None))
-        if not telegram_username:
-            return []
-
-        try:
-            _state_username, user_data = self.state_manager.get_user_by_normalized_telegram_username(telegram_username)
-            if not user_data or not user_data.daily_selection:
-                return []
-            if user_data.db_user_id != user.id:
-                logger.warning(
-                    "recall state user mismatch user_id=%s state_db_user_id=%s",
-                    user.id,
-                    user_data.db_user_id,
-                )
-                return []
-
-            words = [word.word_phrase.strip() for word in user_data.daily_selection if word.word_phrase.strip()]
-            return words
-        except Exception as e:
-            logger.warning(
-                "current recall words load failed user_id=%s error=%s",
-                user.id,
-                e,
-            )
-            return []
 
     @staticmethod
     def _previous_teacher_message(history: list[ChatMessage]) -> str | None:

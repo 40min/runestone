@@ -1,202 +1,27 @@
-import json
-import os
-import tempfile
+"""Tests for the file-backed Telegram offset store."""
 
-import pytest
-
-from src.runestone.core.exceptions import UserNotAuthorised
-from src.runestone.state.state_exceptions import StateCorruptionError
-from src.runestone.state.state_manager import StateManager
-from src.runestone.state.state_types import UserData, WordOfDay
+from runestone.state.telegram_update_offset_store import TelegramUpdateOffsetStore
 
 
-@pytest.fixture
-def temp_state_file():
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        offset_file = os.path.join(os.path.dirname(f.name), "offset.txt")
-        if os.path.exists(offset_file):
-            os.unlink(offset_file)
-        default_state = {
-            "users": {
-                "user1": {"db_user_id": 1, "chat_id": 123, "is_active": True, "daily_selection": [[1, "test"]]},
-                "user2": {"db_user_id": 2, "chat_id": None, "is_active": False, "daily_selection": []},
-            },
-        }
-        json.dump(default_state, f)
-        f.flush()
-        yield f.name
-    os.unlink(f.name)
-    if os.path.exists(offset_file):
-        os.unlink(offset_file)
+def test_get_update_offset_defaults_to_zero(tmp_path):
+    store = TelegramUpdateOffsetStore(str(tmp_path / "offset.txt"))
+
+    assert store.get_update_offset() == 0
 
 
-@pytest.fixture
-def state_manager(temp_state_file):
-    StateManager._reset_for_testing()
-    return StateManager(temp_state_file)
+def test_set_update_offset_persists_value(tmp_path):
+    offset_path = tmp_path / "offset.txt"
+    store = TelegramUpdateOffsetStore(str(offset_path))
+
+    store.set_update_offset(42)
+
+    assert store.get_update_offset() == 42
+    assert offset_path.read_text() == "42"
 
 
-def test_get_user_existing(state_manager):
-    user = state_manager.get_user("user1")
-    expected = UserData(
-        db_user_id=1,
-        chat_id=123,
-        is_active=True,
-        daily_selection=[WordOfDay(id_=1, word_phrase="test")],
-        next_word_index=0,
-    )
-    assert user == expected
+def test_get_update_offset_returns_zero_on_invalid_contents(tmp_path):
+    offset_path = tmp_path / "offset.txt"
+    offset_path.write_text("not-an-int")
+    store = TelegramUpdateOffsetStore(str(offset_path))
 
-
-def test_get_user_non_existing(state_manager):
-    user = state_manager.get_user("nonexistent")
-    assert user is None
-
-
-def test_update_user_existing(state_manager, temp_state_file):
-    new_data = {"db_user_id": 1, "chat_id": 456, "is_active": False, "daily_selection": [[2, "updated"]]}
-    state_manager.update_user("user1", new_data)
-    with open(temp_state_file, "r") as f:
-        state = json.load(f)
-    expected = {
-        "db_user_id": 1,
-        "chat_id": 456,
-        "is_active": False,
-        "daily_selection": [{"id_": 2, "word_phrase": "updated"}],
-        "next_word_index": 0,
-    }
-    assert state["users"]["user1"] == expected
-
-
-def test_update_user_new_raises_exception(state_manager):
-    new_data = {"db_user_id": 3, "chat_id": 789, "is_active": True, "daily_selection": []}
-    with pytest.raises(UserNotAuthorised, match="User 'user3' does not exist and cannot be updated."):
-        state_manager.update_user("user3", new_data)
-
-
-def test_get_active_users(state_manager):
-    active_users = state_manager.get_active_users()
-    assert list(active_users.keys()) == ["user1"]
-
-
-def test_get_update_offset(state_manager, temp_state_file):
-    # Initially should be 0 since no offset file exists
-    offset = state_manager.get_update_offset()
-    assert offset == 0
-
-    # Set offset and check it can be retrieved
-    state_manager.set_update_offset(42)
-    offset = state_manager.get_update_offset()
-    assert offset == 42
-
-    # Check offset file was created
-    offset_file = os.path.join(os.path.dirname(temp_state_file), "offset.txt")
-    assert os.path.exists(offset_file)
-    with open(offset_file, "r") as f:
-        assert f.read().strip() == "42"
-
-
-def test_set_update_offset(state_manager, temp_state_file):
-    state_manager.set_update_offset(100)
-
-    # Check offset is not in state.json anymore
-    with open(temp_state_file, "r") as f:
-        state = json.load(f)
-    assert "update_offset" not in state
-
-    # Check offset is in separate file
-    assert state_manager.get_update_offset() == 100
-    offset_file = os.path.join(os.path.dirname(temp_state_file), "offset.txt")
-    assert os.path.exists(offset_file)
-    with open(offset_file, "r") as f:
-        assert f.read().strip() == "100"
-
-
-def test_file_creation():
-    StateManager._reset_for_testing()
-    with tempfile.TemporaryDirectory() as temp_dir:
-        state_file = os.path.join(temp_dir, "state.json")
-        manager = StateManager(state_file)
-        assert os.path.exists(state_file)
-        with open(state_file, "r") as f:
-            state = json.load(f)
-        assert state == {"users": {}}
-
-        # Check offset starts at 0
-        assert manager.get_update_offset() == 0
-
-
-def test_load_state_invalid_json():
-    StateManager._reset_for_testing()
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        f.write("invalid json")
-        f.flush()
-        manager = StateManager(f.name)
-        with pytest.raises(StateCorruptionError, match="Invalid JSON in state file"):
-            manager.get_user("test")
-    os.unlink(f.name)
-
-
-def test_save_state_error():
-    # This is hard to test without mocking, but for now, assume it works
-    pass
-
-
-def test_singleton_same_path(temp_state_file):
-    manager1 = StateManager(temp_state_file)
-    manager2 = StateManager(temp_state_file)
-    assert manager1 is manager2
-
-
-def test_singleton_different_paths():
-    with tempfile.TemporaryDirectory() as temp_dir:
-        path1 = os.path.join(temp_dir, "state1.json")
-        path2 = os.path.join(temp_dir, "state2.json")
-        manager1 = StateManager(path1)
-        manager2 = StateManager(path2)
-        assert manager1 is manager2
-
-
-def test_auto_reload_on_disk_change(state_manager, temp_state_file):
-    # Retrieve user first to load it into memory cache
-    user = state_manager.get_user("user1")
-    assert user.db_user_id == 1
-
-    # Simulate another process updating state.json on disk
-    with open(temp_state_file, "r") as f:
-        data = json.load(f)
-
-    data["users"]["user1"]["db_user_id"] = 999
-
-    # Sleep slightly to ensure modification time changes
-    import time
-
-    time.sleep(0.01)
-
-    with open(temp_state_file, "w") as f:
-        json.dump(data, f)
-
-    # Get user again; it should reload from disk automatically and see db_user_id = 999
-    updated_user = state_manager.get_user("user1")
-    assert updated_user.db_user_id == 999
-
-
-def test_auto_reload_when_file_size_changes_but_mtime_is_restored(state_manager, temp_state_file):
-    original_user = state_manager.get_user("user1")
-    assert original_user.db_user_id == 1
-
-    original_stat = os.stat(temp_state_file)
-
-    with open(temp_state_file, "r") as f:
-        data = json.load(f)
-
-    data["users"]["user1"]["daily_selection"].append([22, "expanded-entry"])
-
-    with open(temp_state_file, "w") as f:
-        json.dump(data, f)
-
-    os.utime(temp_state_file, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
-
-    reloaded_user = state_manager.get_user("user1")
-    assert len(reloaded_user.daily_selection) == 2
-    assert reloaded_user.daily_selection[1] == WordOfDay(id_=22, word_phrase="expanded-entry")
+    assert store.get_update_offset() == 0

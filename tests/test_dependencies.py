@@ -18,9 +18,12 @@ from runestone.dependencies import (
     get_llm_model,
     get_ocr_llm_model,
     get_ocr_processor,
+    get_recall_service,
     get_runestone_processor,
+    get_user_service,
     get_vocabulary_service,
 )
+from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 
 
@@ -131,4 +134,32 @@ class TestDependencyProviders:
             mock_repo,
             mock_settings,
             mock_llm_model,
+        )
+
+    @patch("runestone.dependencies.UserService")
+    def test_get_user_service(self, mock_user_service_class):
+        """User service receives only its owning repository."""
+        user_repository = Mock()
+
+        result = get_user_service(user_repository)
+
+        assert result == mock_user_service_class.return_value
+        mock_user_service_class.assert_called_once_with(user_repository)
+
+    @patch("runestone.dependencies.RecallService")
+    def test_get_recall_service(self, mock_recall_service_class):
+        """Recall provider composes required services explicitly."""
+        recall_repository = Mock()
+        vocabulary_service = Mock(spec=VocabularyService)
+        user_service = Mock(spec=UserService)
+        mock_settings = Mock(spec=Settings)
+
+        result = get_recall_service(recall_repository, vocabulary_service, user_service, mock_settings)
+
+        assert result == mock_recall_service_class.return_value
+        mock_recall_service_class.assert_called_once_with(
+            recall_repository,
+            vocabulary_service,
+            user_service,
+            mock_settings,
         )
