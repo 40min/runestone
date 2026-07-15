@@ -158,10 +158,12 @@ class RecallService:
 
         if len(portion_words) < self.words_per_day:
             needed = self.words_per_day - len(portion_words)
-            fallback_ids = [word.id for word in portion_words]
+            fallback_ids = bumped_word_ids + [word.id for word in portion_words]
             portion_words.extend(
                 await self._select_bumped_daily_portion(
-                    state.user_id, excluded_word_ids=fallback_ids or None, limit=needed
+                    state.user_id,
+                    excluded_word_ids=list(dict.fromkeys(fallback_ids)) or None,
+                    limit=needed,
                 )
             )
 

@@ -1,6 +1,6 @@
 from dataclasses import replace
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, call
 
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
@@ -280,6 +280,43 @@ async def test_bump_words_raises_specific_error_when_state_is_missing(recall_ser
         await recall_service.bump_words(make_state(user_id=7))
 
     recall_service.recall_repository.rollback.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_bump_words_keeps_original_queue_excluded_across_fallback_selection(recall_service):
+    queued_state = make_state(user_id=1, daily_selection=[make_word(7, "hej"), make_word(8, "tack")])
+    replacement = make_word(9, "ny")
+    refreshed_state = make_state(user_id=1, daily_selection=[replacement, make_word(10, "sen")])
+    recall_service.recall_repository.get_recall_state_for_update.return_value = queued_state
+    recall_service.recall_repository.get_recall_state.return_value = refreshed_state
+    recall_service.vocabulary_service.select_alternative_candidates.side_effect = [
+        [replacement],
+        [make_word(10, "sen")],
+    ]
+
+    result = await recall_service.bump_words(queued_state)
+
+    assert result == refreshed_state
+    assert recall_service.vocabulary_service.select_alternative_candidates.await_args_list == [
+        call(
+            1,
+            7,
+            limit=3,
+            excluded_word_ids=[7, 8],
+        ),
+        call(
+            1,
+            7,
+            limit=2,
+            excluded_word_ids=[7, 8, 9],
+        ),
+    ]
+    recall_service.recall_repository.replace_queue.assert_awaited_once_with(
+        1,
+        [replacement, make_word(10, "sen")],
+        next_word_index=0,
+    )
+    recall_service.recall_repository.commit.assert_awaited_once()
 
 
 @pytest.mark.anyio
