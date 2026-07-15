@@ -6,9 +6,19 @@ including OCR, analysis, and vocabulary endpoints.
 """
 
 import io
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 
+import pytest
+from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from runestone.api.endpoints import delete_vocabulary, update_vocabulary
+from runestone.api.schemas import VocabularyUpdate
 from runestone.core.exceptions import RunestoneError
+from runestone.db.models import RecallQueueItemDB, RecallUserStateDB, Vocabulary
+from runestone.services.recall_service import RecallService
+from runestone.services.vocabulary_service import VocabularyService
 
 
 class TestOCREndpoints:
@@ -559,6 +569,223 @@ class TestSettingsDependency:
         assert updated_data["translation"] == "an apple"  # Unchanged
         assert updated_data["in_learn"] is False
 
+    async def test_soft_delete_queued_vocabulary_compacts_cursor_and_refills(self, client):
+        """Soft deletion preserves recall queue invariants in the endpoint transaction."""
+        for word in ("ett äpple", "en banan", "ett päron", "en apelsin"):
+            response = await client.post(
+                "/api/vocabulary",
+                json={"items": [{"word_phrase": word, "translation": word}], "enrich": False},
+            )
+            assert response.status_code == 200
+
+        vocabulary = list(
+            (
+                await client.db.execute(
+                    select(Vocabulary).where(Vocabulary.user_id == client.user.id).order_by(Vocabulary.id.asc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        state = RecallUserStateDB(user_id=client.user.id, is_enabled=True, next_word_index=2)
+        client.db.add(state)
+        await client.db.flush()
+        client.db.add_all(
+            [
+                RecallQueueItemDB(user_id=client.user.id, vocabulary_id=item.id, position=position)
+                for position, item in enumerate(vocabulary[:3])
+            ]
+        )
+        await client.db.commit()
+
+        response = await client.put(f"/api/vocabulary/{vocabulary[0].id}", json={"in_learn": False})
+
+        assert response.status_code == 200
+        queue_rows = list(
+            (
+                await client.db.execute(
+                    select(RecallQueueItemDB)
+                    .where(RecallQueueItemDB.user_id == client.user.id)
+                    .order_by(RecallQueueItemDB.position.asc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        await client.db.refresh(state)
+        await client.db.refresh(vocabulary[0])
+        assert [(row.vocabulary_id, row.position) for row in queue_rows] == [
+            (vocabulary[1].id, 0),
+            (vocabulary[2].id, 1),
+            (vocabulary[3].id, 2),
+        ]
+        assert state.next_word_index == 1
+        assert vocabulary[0].in_learn is False
+
+    async def test_soft_delete_nonqueued_vocabulary_leaves_queue_unchanged(self, client):
+        """A nonqueued deactivation does not trigger unnecessary queue maintenance."""
+        for word in ("ett äpple", "en banan", "ett päron"):
+            response = await client.post(
+                "/api/vocabulary",
+                json={"items": [{"word_phrase": word, "translation": word}], "enrich": False},
+            )
+            assert response.status_code == 200
+        vocabulary = list(
+            (
+                await client.db.execute(
+                    select(Vocabulary).where(Vocabulary.user_id == client.user.id).order_by(Vocabulary.id.asc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        state = RecallUserStateDB(user_id=client.user.id, is_enabled=True, next_word_index=1)
+        client.db.add(state)
+        await client.db.flush()
+        client.db.add_all(
+            [
+                RecallQueueItemDB(user_id=client.user.id, vocabulary_id=item.id, position=position)
+                for position, item in enumerate(vocabulary[:2])
+            ]
+        )
+        await client.db.commit()
+
+        response = await client.put(f"/api/vocabulary/{vocabulary[2].id}", json={"in_learn": False})
+
+        assert response.status_code == 200
+        rows = list(
+            (
+                await client.db.execute(
+                    select(RecallQueueItemDB)
+                    .where(RecallQueueItemDB.user_id == client.user.id)
+                    .order_by(RecallQueueItemDB.position.asc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        await client.db.refresh(state)
+        assert [row.vocabulary_id for row in rows] == [vocabulary[0].id, vocabulary[1].id]
+        assert state.next_word_index == 1
+
+    async def test_soft_delete_rolls_back_real_queue_removal_when_update_fails(self, client_with_overrides):
+        """A failed vocabulary mutation restores the PostgreSQL-backed queue."""
+        vocabulary_service = AsyncMock(spec=VocabularyService)
+        vocabulary_service.update_vocabulary_item.side_effect = RuntimeError("update failed")
+        async for client, _ in client_with_overrides(vocabulary_service=vocabulary_service):
+            item = Vocabulary(user_id=client.user.id, word_phrase="ett ord", translation="a word", in_learn=True)
+            client.db.add(item)
+            await client.db.flush()
+            state = RecallUserStateDB(user_id=client.user.id, is_enabled=True, next_word_index=0)
+            client.db.add(state)
+            await client.db.flush()
+            client.db.add(RecallQueueItemDB(user_id=client.user.id, vocabulary_id=item.id, position=0))
+            await client.db.commit()
+            vocabulary_id = item.id
+
+            response = await client.put(f"/api/vocabulary/{vocabulary_id}", json={"in_learn": False})
+
+            assert response.status_code == 500
+            client.db.expire_all()
+            queue_row = await client.db.scalar(
+                select(RecallQueueItemDB).where(RecallQueueItemDB.vocabulary_id == vocabulary_id)
+            )
+            persisted = await client.db.get(Vocabulary, vocabulary_id)
+            assert queue_row is not None
+            assert persisted.in_learn is True
+
+    async def test_update_vocabulary_rolls_back_when_refill_fails(self):
+        """The endpoint rolls back both services when queue refill fails."""
+        recall_service = AsyncMock(spec=RecallService)
+        recall_service.remove_queue_item.return_value = True
+        recall_service.refill_queue.side_effect = RuntimeError("refill failed")
+        vocabulary_service = AsyncMock(spec=VocabularyService)
+        vocabulary_service.update_vocabulary_item.return_value = Mock()
+        db = AsyncMock(spec=AsyncSession)
+        user = Mock(id=7)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await update_vocabulary(
+                11,
+                VocabularyUpdate(in_learn=False),
+                recall_service,
+                vocabulary_service,
+                db,
+                user,
+            )
+
+        assert exc_info.value.status_code == 500
+        recall_service.remove_queue_item.assert_awaited_once_with(7, 11)
+        vocabulary_service.update_vocabulary_item.assert_awaited_once()
+        recall_service.refill_queue.assert_awaited_once_with(7)
+        db.rollback.assert_awaited_once_with()
+        db.commit.assert_not_awaited()
+
+    async def test_refill_failure_rolls_back_postgresql_vocabulary_update(self, client_with_overrides):
+        """A refill error does not publish the preceding PostgreSQL mutation."""
+        recall_service = AsyncMock(spec=RecallService)
+        recall_service.remove_queue_item.return_value = True
+        recall_service.refill_queue.side_effect = RuntimeError("refill failed")
+        async for client, _ in client_with_overrides(recall_service=recall_service):
+            item = Vocabulary(user_id=client.user.id, word_phrase="ett ord", translation="a word", in_learn=True)
+            client.db.add(item)
+            await client.db.commit()
+            vocabulary_id = item.id
+            user_id = client.user.id
+
+            response = await client.put(f"/api/vocabulary/{vocabulary_id}", json={"in_learn": False})
+
+            assert response.status_code == 500
+            client.db.expire_all()
+            persisted = await client.db.get(Vocabulary, vocabulary_id)
+            assert persisted.in_learn is True
+            recall_service.refill_queue.assert_awaited_once_with(user_id)
+
+    async def test_duplicate_update_rolls_back_speculative_queue_change(self):
+        """A domain conflict rolls back queue maintenance before returning 409."""
+        from runestone.core.exceptions import VocabularyItemExists
+
+        recall_service = AsyncMock(spec=RecallService)
+        recall_service.remove_queue_item.return_value = True
+        vocabulary_service = AsyncMock(spec=VocabularyService)
+        vocabulary_service.update_vocabulary_item.side_effect = VocabularyItemExists("duplicate")
+        db = AsyncMock(spec=AsyncSession)
+        user = Mock(id=7)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await update_vocabulary(
+                11,
+                VocabularyUpdate(word_phrase="duplicate", in_learn=False),
+                recall_service,
+                vocabulary_service,
+                db,
+                user,
+            )
+
+        assert exc_info.value.status_code == 409
+        db.rollback.assert_awaited_once_with()
+        db.commit.assert_not_awaited()
+        recall_service.refill_queue.assert_not_awaited()
+
+    async def test_ordinary_update_commits_once_without_queue_changes(self):
+        """The endpoint owns an ordinary vocabulary update transaction."""
+        recall_service = AsyncMock(spec=RecallService)
+        vocabulary_service = AsyncMock(spec=VocabularyService)
+        updated = Mock()
+        vocabulary_service.update_vocabulary_item.return_value = updated
+        db = AsyncMock(spec=AsyncSession)
+        user = Mock(id=7)
+        request = VocabularyUpdate(translation="new translation")
+
+        result = await update_vocabulary(11, request, recall_service, vocabulary_service, db, user)
+
+        assert result is updated
+        recall_service.remove_queue_item.assert_not_awaited()
+        recall_service.refill_queue.assert_not_awaited()
+        vocabulary_service.update_vocabulary_item.assert_awaited_once_with(11, request, 7)
+        db.commit.assert_awaited_once_with()
+        db.rollback.assert_not_awaited()
+
     async def test_update_vocabulary_not_found(self, client):
         """Test updating a non-existent vocabulary item."""
         update_payload = {"word_phrase": "new phrase"}
@@ -631,6 +858,100 @@ class TestSettingsDependency:
         assert response.status_code == 404
         data = response.json()
         assert "not found" in data["detail"]
+
+    async def test_delete_vocabulary_not_found_rolls_back_queue_removal(self):
+        """A failed owned-item delete rolls back speculative queue maintenance."""
+        recall_service = AsyncMock(spec=RecallService)
+        recall_service.remove_queue_item.return_value = True
+        vocabulary_service = AsyncMock(spec=VocabularyService)
+        vocabulary_service.hard_delete_item.return_value = False
+        db = AsyncMock(spec=AsyncSession)
+        user = Mock(id=7)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await delete_vocabulary(11, recall_service, vocabulary_service, db, user)
+
+        assert exc_info.value.status_code == 404
+        recall_service.remove_queue_item.assert_awaited_once_with(7, 11)
+        vocabulary_service.hard_delete_item.assert_awaited_once_with(11, 7)
+        recall_service.refill_queue.assert_not_awaited()
+        db.rollback.assert_awaited_once_with()
+        db.commit.assert_not_awaited()
+
+    async def test_delete_vocabulary_rolls_back_when_queue_refill_fails(self):
+        """The endpoint does not publish a deletion if queue restoration fails."""
+        recall_service = AsyncMock(spec=RecallService)
+        recall_service.remove_queue_item.return_value = True
+        recall_service.refill_queue.side_effect = RuntimeError("refill failed")
+        vocabulary_service = AsyncMock(spec=VocabularyService)
+        vocabulary_service.hard_delete_item.return_value = True
+        db = AsyncMock(spec=AsyncSession)
+        user = Mock(id=7)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await delete_vocabulary(11, recall_service, vocabulary_service, db, user)
+
+        assert exc_info.value.status_code == 500
+        recall_service.refill_queue.assert_awaited_once_with(7)
+        db.rollback.assert_awaited_once_with()
+        db.commit.assert_not_awaited()
+
+    async def test_delete_queued_vocabulary_compacts_queue_and_preserves_cursor(self, client):
+        """Hard deletion updates its recall queue atomically through production DI."""
+        for word in ("ett äpple", "en banan", "ett päron", "en apelsin"):
+            response = await client.post(
+                "/api/vocabulary",
+                json={"items": [{"word_phrase": word, "translation": word}], "enrich": False},
+            )
+            assert response.status_code == 200
+
+        vocabulary = list(
+            (
+                await client.db.execute(
+                    select(Vocabulary).where(Vocabulary.user_id == client.user.id).order_by(Vocabulary.id.asc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        state = RecallUserStateDB(
+            user_id=client.user.id,
+            telegram_chat_id=123,
+            is_enabled=True,
+            next_word_index=2,
+        )
+        client.db.add(state)
+        await client.db.flush()
+        client.db.add_all(
+            [
+                RecallQueueItemDB(user_id=client.user.id, vocabulary_id=item.id, position=position)
+                for position, item in enumerate(vocabulary[:3])
+            ]
+        )
+        await client.db.commit()
+
+        response = await client.delete(f"/api/vocabulary/{vocabulary[0].id}")
+
+        assert response.status_code == 200
+        queue_rows = list(
+            (
+                await client.db.execute(
+                    select(RecallQueueItemDB)
+                    .where(RecallQueueItemDB.user_id == client.user.id)
+                    .order_by(RecallQueueItemDB.position.asc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        await client.db.refresh(state)
+        assert [(row.vocabulary_id, row.position) for row in queue_rows] == [
+            (vocabulary[1].id, 0),
+            (vocabulary[2].id, 1),
+            (vocabulary[3].id, 2),
+        ]
+        assert state.next_word_index == 1
+        assert await client.db.get(Vocabulary, vocabulary[0].id) is None
 
     async def test_save_vocabulary_with_enrichment_enabled(self, client_with_mock_vocabulary_service):
         """Test saving vocabulary with enrichment enabled."""

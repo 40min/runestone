@@ -20,6 +20,12 @@ class UserRepository:
         result = await self.db.execute(stmt)
         return result.scalars().first()
 
+    async def is_active(self, user_id: int) -> bool:
+        """Read current activation directly without using an identity-mapped entity."""
+        stmt = select(User.active).where(User.id == user_id)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none() is True
+
     async def get_by_email(self, email: str) -> Optional[User]:
         """Get user by email."""
         stmt = select(User).filter(User.email == email)

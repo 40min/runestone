@@ -7,11 +7,13 @@ This module defines the database table models using SQLAlchemy ORM.
 from uuid import uuid4
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Column,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -106,11 +108,62 @@ class Vocabulary(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     __table_args__ = (
+        UniqueConstraint("user_id", "id", name="uq_vocabulary_user_id_id"),
         UniqueConstraint("user_id", "word_phrase", name="uq_user_word_phrase"),
         CheckConstraint(
             f"priority_learn >= {VOCABULARY_PRIORITY_HIGH} AND priority_learn <= {VOCABULARY_PRIORITY_LOW}",
             name="ck_vocabulary_priority_learn_range",
         ),
+    )
+
+
+class RecallUserStateDB(Base):
+    """Recall-delivery settings and cursor state for one user."""
+
+    __tablename__ = "recall_user_states"
+
+    user_id: Mapped[int] = mapped_column(primary_key=True)
+    telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false(), default=False)
+    next_word_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["user_id"],
+            ["users.id"],
+            name="fk_recall_user_states_user_id_users",
+        ),
+        CheckConstraint("next_word_index >= 0", name="ck_recall_user_states_next_word_index_non_negative"),
+    )
+
+
+class RecallQueueItemDB(Base):
+    """One ordered vocabulary row in a user's recall queue."""
+
+    __tablename__ = "recall_queue_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(nullable=False, index=True)
+    vocabulary_id: Mapped[int] = mapped_column(nullable=False, index=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["user_id"],
+            ["recall_user_states.user_id"],
+            name="fk_recall_queue_items_user_id_recall_user_states",
+        ),
+        ForeignKeyConstraint(
+            ["user_id", "vocabulary_id"],
+            ["vocabulary.user_id", "vocabulary.id"],
+            name="fk_recall_queue_items_user_vocabulary_vocabulary",
+        ),
+        CheckConstraint("position >= 0", name="ck_recall_queue_items_position_non_negative"),
+        UniqueConstraint("user_id", "position", name="uq_recall_queue_items_user_position"),
+        UniqueConstraint("user_id", "vocabulary_id", name="uq_recall_queue_items_user_vocabulary"),
     )
 
 

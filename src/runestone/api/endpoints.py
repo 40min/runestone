@@ -8,6 +8,7 @@ and returning structured analysis results.
 from typing import Annotated, List
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from runestone.api.schemas import (
     AnalysisRequest,
@@ -31,15 +32,18 @@ from runestone.auth.dependencies import get_current_user
 from runestone.core.exceptions import RunestoneError, VocabularyItemExists
 from runestone.core.logging_config import get_logger
 from runestone.core.processor import RunestoneProcessor
+from runestone.db.database import get_db
 from runestone.db.models import User
 from runestone.dependencies import (
     get_grammar_index,
     get_grammar_service,
+    get_recall_service,
     get_runestone_processor,
     get_vocabulary_service,
 )
 from runestone.rag.index import GrammarIndex
 from runestone.services.grammar_service import GrammarService
+from runestone.services.recall_service import RecallService
 from runestone.services.vocabulary_service import VocabularyService
 
 router = APIRouter()
@@ -386,7 +390,9 @@ async def get_vocabulary(
 async def update_vocabulary(
     item_id: int,
     request: VocabularyUpdate,
-    service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+    recall_service: Annotated[RecallService, Depends(get_recall_service)],
+    vocabulary_service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+    db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> Vocabulary:
     """
@@ -398,7 +404,9 @@ async def update_vocabulary(
     Args:
         item_id: The ID of the vocabulary item to update
         request: The update data
-        service: Vocabulary service
+        recall_service: Recall service responsible for queue maintenance
+        vocabulary_service: Vocabulary service responsible for item updates
+        db: Shared request session that owns the transaction
 
     Returns:
         Vocabulary: The updated vocabulary item
@@ -407,12 +415,26 @@ async def update_vocabulary(
         HTTPException: For not found or database errors
     """
     try:
-        return await service.update_vocabulary_item(item_id, request, current_user.id)
+        # Deactivation must remove a queued reference before the item becomes
+        # ineligible, then refill from the post-update candidate set.
+        queue_changed = False
+        if "in_learn" in request.model_fields_set and request.in_learn is False:
+            queue_changed = await recall_service.remove_queue_item(current_user.id, item_id)
+
+        updated = await vocabulary_service.update_vocabulary_item(item_id, request, current_user.id)
+
+        if queue_changed:
+            await recall_service.refill_queue(current_user.id)
+
+        await db.commit()
+        return updated
 
     except ValueError as e:
+        await db.rollback()
         raise HTTPException(status_code=404, detail=str(e))
 
     except VocabularyItemExists:
+        await db.rollback()
         raise HTTPException(
             status_code=409,
             detail=(
@@ -422,6 +444,7 @@ async def update_vocabulary(
         )
 
     except Exception as exc:
+        await db.rollback()
         logger.exception("failed to update vocabulary item_id=%s", item_id)
         # Check for specific database integrity errors
         error_str = str(exc).lower()
@@ -455,18 +478,23 @@ async def update_vocabulary(
 )
 async def delete_vocabulary(
     item_id: int,
-    service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+    recall_service: Annotated[RecallService, Depends(get_recall_service)],
+    vocabulary_service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+    db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> dict:
     """
     Delete a vocabulary item completely from the database.
 
-    This endpoint completely removes a vocabulary item by its ID.
-    This is a hard delete operation.
+    This endpoint is the temporary application boundary for a cross-domain
+    workflow. It removes any recall-queue reference, hard-deletes the owned
+    vocabulary item, and restores the queue target size in one transaction.
 
     Args:
         item_id: The ID of the vocabulary item to delete
-        service: Vocabulary service
+        recall_service: Recall service responsible for queue maintenance
+        vocabulary_service: Vocabulary service responsible for the hard delete
+        db: Shared request session that owns the transaction
 
     Returns:
         dict: Success message
@@ -475,19 +503,27 @@ async def delete_vocabulary(
         HTTPException: For not found or database errors
     """
     try:
-        deleted = await service.delete_vocabulary_item(item_id, current_user.id)
+        # 1. Remove the queue reference before deleting the foreign-key target.
+        queue_changed = await recall_service.remove_queue_item(current_user.id, item_id)
+        deleted = await vocabulary_service.hard_delete_item(item_id, current_user.id)
 
         if not deleted:
-            raise ValueError(f"Vocabulary item with id {item_id} not found")
+            await db.rollback()
+            raise HTTPException(status_code=404, detail=f"Vocabulary item with id {item_id} not found")
+
+        # 2. Refill after deletion so the removed item cannot be selected again.
+        if queue_changed:
+            await recall_service.refill_queue(current_user.id)
+
+        # 3. Publish vocabulary and recall mutations atomically.
+        await db.commit()
 
         return {"message": "Vocabulary item deleted successfully"}
 
-    except ValueError as e:
-        raise HTTPException(
-            status_code=404,
-            detail=str(e),
-        )
+    except HTTPException:
+        raise
     except Exception:
+        await db.rollback()
         logger.exception("failed to delete vocabulary item_id=%s", item_id)
         raise HTTPException(
             status_code=500,

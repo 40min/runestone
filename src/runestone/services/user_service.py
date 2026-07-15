@@ -16,17 +16,19 @@ from ..core.exceptions import UserNotFoundError
 from ..core.logging_config import get_logger
 from ..db.models import User
 from ..db.user_repository import UserRepository
-from ..db.vocabulary_repository import VocabularyRepository
 
 
 class UserService:
     """Service for user-related business logic."""
 
-    def __init__(self, user_repository: UserRepository, vocabulary_repository: VocabularyRepository):
-        """Initialize service with user and vocabulary repositories."""
+    def __init__(self, user_repository: UserRepository):
+        """Initialize the service with its user persistence collaborator."""
         self.user_repo = user_repository
-        self.vocab_repo = vocabulary_repository
         self.logger = get_logger(__name__)
+
+    async def get_users_by_telegram_username(self, username: str) -> list[User]:
+        """Return users linked to a normalized Telegram username."""
+        return await self.user_repo.find_by_telegram_username(username)
 
     async def get_user_by_id(self, user_id: int) -> Optional[User]:
         """
@@ -39,6 +41,10 @@ class UserService:
             User model or None if not found
         """
         return await self.user_repo.get_by_id(user_id)
+
+    async def is_user_active(self, user_id: int) -> bool:
+        """Return the user's current activation without an identity-map cache hit."""
+        return await self.user_repo.is_active(user_id)
 
     async def get_user_profile(self, user: User) -> UserProfileResponse:
         """Get user profile."""

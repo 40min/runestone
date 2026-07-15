@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import AIMessage
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from runestone.api.schemas import ImprovementMode
 from runestone.api.schemas import Vocabulary as VocabularySchema
@@ -509,66 +509,40 @@ class TestVocabularyService:
         assert pear_vocab.translation == "a pear"
         assert pear_vocab.example_phrase is None
 
-    async def test_delete_vocabulary_item(self, service, db_session):
-        """Test hard deleting a vocabulary item."""
-        # Add test items
-        vocab1 = VocabularyModel(
-            user_id=1,
-            word_phrase="ett äpple",
-            translation="an apple",
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab2 = VocabularyModel(
-            user_id=1,
-            word_phrase="en banan",
-            translation="a banana",
-            in_learn=True,
-            last_learned=None,
-        )
-        vocab3 = VocabularyModel(
-            user_id=2,
-            word_phrase="ett päron",
-            translation="a pear",
-            in_learn=True,
-            last_learned=None,
+    async def test_learning_mutations_flush_without_committing(self):
+        """RecallService retains transaction ownership over vocabulary mutations."""
+        vocabulary_repository = AsyncMock(spec=VocabularyRepository)
+        word = Mock(id=11, priority_learn=4, in_learn=True)
+        vocabulary_repository.get_vocabulary_item_for_recall.return_value = word
+        service = VocabularyService(
+            vocabulary_repository,
+            Mock(spec=Settings),
+            AsyncMock(),
         )
 
-        db_session.add_all([vocab1, vocab2, vocab3])
-        await db_session.commit()
+        await service.deactivate_item(11, 7)
+        vocabulary_repository.deactivate_item.assert_awaited_once_with(11, 7)
 
-        # Verify initial count
-        initial_count = await db_session.scalar(select(func.count()).select_from(VocabularyModel))
-        assert initial_count == 3
+        await service.deprioritize_item(11, 7)
+        vocabulary_repository.deprioritize_item.assert_awaited_once_with(11, 7)
 
-        # Test successful deletion
-        result = await service.delete_vocabulary_item(vocab1.id, user_id=1)
-        assert result is True
+        await service.record_learning_event(11, 7)
 
-        # Verify item is completely removed from database
-        db_vocab = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == vocab1.id))
-        assert db_vocab is None
+        vocabulary_repository.update_last_learned.assert_awaited_once_with(word, commit=False)
 
-        # Verify other items still exist
-        remaining_count = await db_session.scalar(select(func.count()).select_from(VocabularyModel))
-        assert remaining_count == 2
+    async def test_hard_delete_item_defers_commit_to_transaction_owner(self):
+        """Hard deletion flushes through the repository but does not commit."""
+        vocabulary_repository = AsyncMock(spec=VocabularyRepository)
+        vocabulary_repository.hard_delete_vocabulary_item.return_value = True
+        service = VocabularyService(
+            vocabulary_repository,
+            Mock(spec=Settings),
+            AsyncMock(),
+        )
 
-        # Verify other user's item is unchanged
-        db_vocab_user2 = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == vocab3.id))
-        assert db_vocab_user2 is not None
-        assert db_vocab_user2.in_learn is True
+        assert await service.hard_delete_item(11, 7) is True
 
-        # Test deleting non-existent item
-        result = await service.delete_vocabulary_item(999, user_id=1)
-        assert result is False
-
-        # Test deleting with wrong user (should not delete)
-        result = await service.delete_vocabulary_item(vocab3.id, user_id=1)
-        assert result is False
-
-        # Verify user 2's item still exists
-        db_vocab_user2 = await db_session.scalar(select(VocabularyModel).where(VocabularyModel.id == vocab3.id))
-        assert db_vocab_user2 is not None
+        vocabulary_repository.hard_delete_vocabulary_item.assert_awaited_once_with(11, 7, commit=False)
 
     async def test_improve_item_success(self, service):
         """Test successful vocabulary item improvement with ALL_FIELDS mode."""

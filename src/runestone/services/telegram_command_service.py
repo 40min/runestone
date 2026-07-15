@@ -5,12 +5,15 @@ from typing import Optional
 import httpx
 
 from runestone.config import settings
-from runestone.core.exceptions import VocabularyOperationError, WordNotFoundError, WordNotInSelectionError
-from runestone.db.user_repository import UserRepository
-from runestone.services.rune_recall_service import RuneRecallService
-from runestone.state.state_manager import StateManager
-from runestone.state.state_types import UserData
-from runestone.utils.telegram import normalize_telegram_username
+from runestone.core.exceptions import (
+    RecallOperationError,
+    TelegramUsernameConflictError,
+    WordNotFoundError,
+    WordNotInSelectionError,
+)
+from runestone.services.recall_service import RecallService
+from runestone.services.recall_types import RecallEnableStatus
+from runestone.state.telegram_update_offset_store import TelegramUpdateOffsetStore
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +21,11 @@ logger = logging.getLogger(__name__)
 class TelegramCommandService:
     def __init__(
         self,
-        state_manager: StateManager,
-        rune_recall_service: RuneRecallService,
-        user_repository: UserRepository | None = None,
+        offset_store: TelegramUpdateOffsetStore,
+        recall_service: RecallService,
     ):
-        self.state_manager = state_manager
-        self.rune_recall_service = rune_recall_service
-        self.user_repository = user_repository
+        self.offset_store = offset_store
+        self.recall_service = recall_service
         self.bot_token = settings.telegram_bot_token
         if not self.bot_token:
             raise ValueError("Telegram bot token is required")
@@ -47,7 +48,11 @@ class TelegramCommandService:
         match = re.search(pattern, reply_text)
 
         if match:
-            return match.group(1).strip().strip("*_")
+            word_phrase = match.group(1).strip()
+            for marker in ("**", "__", "*", "_"):
+                if word_phrase.startswith(marker) and word_phrase.endswith(marker):
+                    return word_phrase[len(marker) : -len(marker)].strip()
+            return word_phrase
 
         return None
 
@@ -61,7 +66,7 @@ class TelegramCommandService:
                 response = await client.post(f"{self.base_url}/sendMessage", json=payload)
                 response.raise_for_status()
                 return True
-        except httpx.RequestError as e:
+        except httpx.HTTPError as e:
             logger.error(f"Failed to send message to chat {chat_id}: {e}")
             return False
 
@@ -72,7 +77,12 @@ class TelegramCommandService:
         if not updates:
             return  # Error occurred during fetch or no updates, already logged
 
-        # Process each update individually with isolated error handling
+        # Telegram update IDs define the durable processing order. Sorting also
+        # makes recovery deterministic if a proxy or recorder returns a batch
+        # in an unexpected order.
+        updates = sorted(updates, key=lambda update: update.get("update_id", 0))
+
+        # Process each update individually with isolated error handling.
         for update in updates:
             try:
                 update_id = update.get("update_id")
@@ -82,12 +92,13 @@ class TelegramCommandService:
                 await self._process_single_update(update)
             except Exception as e:
                 logger.error(f"Error processing single update {update.get('update_id', 'unknown')}: {e}")
+                await self._recover_failed_update()
                 # Continue processing other updates even if one fails
 
         # Update offset to the next one if any updates were received
         if updates and max_update_id > 0:
             try:
-                self.state_manager.set_update_offset(max_update_id + 1)
+                self.offset_store.set_update_offset(max_update_id + 1)
             except Exception as e:
                 logger.error(f"Failed to update offset: {e}")
 
@@ -99,7 +110,7 @@ class TelegramCommandService:
             tuple: (updates_list, max_update_id) - empty list if error occurred
         """
         try:
-            offset = self.state_manager.get_update_offset()
+            offset = self.offset_store.get_update_offset()
         except Exception as e:
             logger.error(f"Failed to get update offset: {e}")
             return [], 0
@@ -153,27 +164,40 @@ class TelegramCommandService:
 
         logger.info(f"Processing bot command '{text}' from {username} in chat {chat_id}")
 
-        try:
-            state_username, user_data = self._get_state_user(username)
-        except Exception as e:
-            logger.error(f"Failed to get user data for {username}: {e}")
+        if text == "/start":
+            try:
+                if not await self._try_link_user_from_profile(username, chat_id):
+                    await self._send_start_response(chat_id, "Sorry, you are not authorized to use this bot.")
+            except Exception as e:
+                logger.error(f"Error processing command '/start' for user {username}: {e}")
+                await self._recover_failed_update()
+                if not await self._send_message(chat_id, "Sorry, an error occurred while processing your command."):
+                    logger.error("Failed to send /start error message to user %s", username)
             return
 
-        if user_data:
+        try:
+            normalized_username, user_data = await self.recall_service.get_state_for_telegram_username(username)
+        except TelegramUsernameConflictError:
+            logger.exception("Telegram username %s could not be resolved uniquely", username)
+            return
+        except Exception as e:
+            logger.error(f"Failed to get user data for {username}: {e}")
+            await self._recover_failed_update()
+            return
+
+        if user_data and normalized_username:
             # Authorized user - process commands
             try:
-                await self._handle_authorized_user_command(text, message, state_username, user_data, chat_id)
+                await self._handle_authorized_user_command(text, message, normalized_username, user_data, chat_id)
             except Exception as e:
                 logger.error(f"Error processing command '{text}' for user {username}: {e}")
+                await self._recover_failed_update()
                 # Attempt to notify user of the error
                 try:
                     await self._send_message(chat_id, "Sorry, an error occurred while processing your command.")
                 except Exception as send_error:
                     logger.error(f"Failed to send error message to user {username}: {send_error}")
         else:
-            if text == "/start" and await self._try_link_user_from_profile(username, chat_id):
-                return
-
             # Unauthorized user
             logger.warning(f"Unauthorized user {username} tried to access the bot")
             try:
@@ -181,70 +205,75 @@ class TelegramCommandService:
             except Exception as e:
                 logger.error(f"Failed to send unauthorized message to {username}: {e}")
 
-    def _get_state_user(self, username: str) -> tuple[str, UserData | None]:
-        """Return user state by exact key, then by normalized Telegram username."""
-        user_data = self.state_manager.get_user(username)
-        if user_data:
-            return username, user_data
+    async def _recover_failed_update(self) -> None:
+        """Restore the shared command session after an unexpected update failure."""
+        try:
+            await self.recall_service.rollback_failed_operation()
+        except Exception:
+            logger.exception("Failed to recover the recall session after an update error")
 
-        return self.state_manager.get_user_by_normalized_telegram_username(username)
+    async def _send_start_response(self, chat_id: int, text: str) -> None:
+        """Require an observable response for a consumed `/start` update."""
+        if not await self._send_message(chat_id, text):
+            raise RuntimeError("Telegram rejected the /start response")
 
     async def _try_link_user_from_profile(self, username: str, chat_id: int) -> bool:
-        """Link an active DB user into state.json when /start arrives first."""
-        normalized_username = normalize_telegram_username(username)
-        if not normalized_username:
-            logger.warning("Cannot link Telegram user %s because no username was found in message", username)
+        """Link an active profile through the recall application boundary."""
+        try:
+            result = await self.recall_service.enable_for_username(username, chat_id)
+        except TelegramUsernameConflictError:
+            await self._send_start_response(
+                chat_id,
+                "This Telegram username is linked to multiple Runestone accounts. Please contact an administrator.",
+            )
+            logger.exception("Telegram username %s matched multiple Runestone users", username)
+            return True
+
+        if result.status is RecallEnableStatus.INVALID_USERNAME:
+            logger.warning("Cannot link Telegram user %s because its username is invalid", username)
             return False
 
-        if self.user_repository is None:
-            logger.warning("Cannot link Telegram user %s because no user repository is configured", username)
-            return False
-
-        users = await self.user_repository.find_by_telegram_username(normalized_username)
-        if not users:
-            await self._send_message(
+        if result.status is RecallEnableStatus.USER_NOT_FOUND:
+            await self._send_start_response(
                 chat_id,
                 "I couldn't find a Runestone account linked to this Telegram username. "
                 "Add your Telegram username in Profile, then send /start again.",
             )
             return True
 
-        if len(users) > 1:
-            await self._send_message(
+        if result.status is RecallEnableStatus.USER_INACTIVE:
+            await self._send_start_response(
                 chat_id,
-                "This Telegram username is linked to multiple Runestone accounts. Please contact an administrator.",
+                "Your Runestone account is not active. Please contact an administrator.",
             )
-            logger.error("Telegram username %s matched multiple DB users", normalized_username)
             return True
 
-        user = users[0]
-        if not user.active:
-            await self._send_message(chat_id, "Your Runestone account is not active. Please contact an administrator.")
+        if (
+            result.status is not RecallEnableStatus.ENABLED
+            or result.normalized_username is None
+            or result.user_id is None
+        ):
+            logger.error("Unexpected recall enable result status=%s", result.status)
+            await self._send_start_response(chat_id, "Sorry, an error occurred while starting the bot.")
+            return True
+        if result.was_already_enabled:
+            await self._send_start_response(
+                chat_id,
+                "Bot is already active. You will continue receiving daily vocabulary words.",
+            )
+            logger.info("Telegram user %s sent /start but recall was already enabled", result.normalized_username)
             return True
 
-        user_data = UserData(db_user_id=user.id, chat_id=chat_id, is_active=True, daily_selection=[], next_word_index=0)
-        self.state_manager.create_user(normalized_username, user_data)
-        await self._send_message(chat_id, "Bot started! You will receive daily vocabulary words.")
-        logger.info("Linked Telegram user %s to Runestone user %s", normalized_username, user.id)
+        await self._send_start_response(chat_id, "Bot started! You will receive daily vocabulary words.")
+        logger.info("Linked Telegram user %s to Runestone user %s", result.normalized_username, result.user_id)
         return True
 
     async def _handle_authorized_user_command(
         self, text: str, message: dict, username: str, user_data, chat_id: int
     ) -> None:
         """Handle commands from authorized users."""
-        if text == "/start":
-            was_inactive = not user_data.is_active
-            user_data.is_active = True
-            user_data.chat_id = chat_id
-            self.state_manager.update_user(username, user_data)
-            if was_inactive:
-                await self._send_message(chat_id, "Bot started! You will receive daily vocabulary words.")
-                logger.info(f"User {username} started the bot")
-            else:
-                logger.info(f"User {username} sent /start but was already active")
-        elif text == "/stop":
-            user_data.is_active = False
-            self.state_manager.update_user(username, user_data)
+        if text == "/stop":
+            await self.recall_service.disable_for_user(user_data.user_id, chat_id=user_data.telegram_chat_id)
             await self._send_message(chat_id, "Bot stopped. You will no longer receive vocabulary words.")
             logger.info(f"User {username} stopped the bot")
         elif text == "/remove":
@@ -273,31 +302,31 @@ class TelegramCommandService:
             return
 
         try:
-            await self.rune_recall_service.remove_word_completely(username, word_phrase)
+            await self.recall_service.remove_word_completely(user_data, word_phrase)
             await self._send_message(chat_id, f"Word '{word_phrase}' removed from vocabulary.")
 
         except WordNotFoundError:
             await self._send_message(chat_id, f"Word '{word_phrase}' not found in your vocabulary.")
-        except VocabularyOperationError as e:
+        except RecallOperationError as e:
             await self._send_message(chat_id, f"Error: {e.message}")
             logger.error(f"Failed to remove word for {username}: {e.details}")
 
     async def _handle_bump_words_command(self, username: str, user_data, chat_id: int) -> None:
         """Handle the /bump_words command to replace current daily selection with new words."""
         try:
-            await self.rune_recall_service.bump_words(username, user_data)
+            user_data = await self.recall_service.bump_words(user_data)
             count = len(user_data.daily_selection)
             if count > 0:
                 await self._send_message(chat_id, f"Daily selection updated! Selected {count} new words for today.")
             else:
                 await self._send_message(chat_id, "Daily selection cleared. No new words available at this time.")
 
-        except VocabularyOperationError as e:
+        except RecallOperationError as e:
             await self._send_message(chat_id, f"Error: {e.message}")
 
     async def _handle_state_command(self, username: str, user_data, chat_id: int) -> None:
         """Handle the /state command to show user's current state."""
-        is_active_text = "✅ Yes" if user_data.is_active else "❌ No"
+        is_active_text = "✅ Yes" if user_data.is_enabled else "❌ No"
 
         if user_data.daily_selection:
             words_list = "\n".join(f"- {word.word_phrase}" for word in user_data.daily_selection)
@@ -310,10 +339,6 @@ class TelegramCommandService:
 
     async def _handle_postpone_command(self, message: dict, username: str, user_data, chat_id: int) -> None:
         """Handle the /postpone command to remove a word from daily_selection only."""
-        if not self.rune_recall_service:
-            await self._send_message(chat_id, "Postpone command is not available - no vocabulary service configured.")
-            return
-
         reply_to_message = message.get("reply_to_message")
         if not reply_to_message:
             await self._send_message(chat_id, "Please reply to a word message to postpone it.")
@@ -327,10 +352,10 @@ class TelegramCommandService:
             return
 
         try:
-            await self.rune_recall_service.postpone_word(username, word_phrase)
+            await self.recall_service.postpone_word(user_data, word_phrase)
             await self._send_message(chat_id, f"Word '{word_phrase}' postponed (removed from today's selection).")
 
         except WordNotInSelectionError:
             await self._send_message(chat_id, f"Word '{word_phrase}' was not in today's selection.")
-        except VocabularyOperationError as e:
+        except RecallOperationError as e:
             await self._send_message(chat_id, f"Error: {e.message}")

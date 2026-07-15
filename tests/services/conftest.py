@@ -19,6 +19,7 @@ def mock_user_repo():
 
     mock = Mock()
     mock.get_by_id = AsyncMock()
+    mock.is_active = AsyncMock(return_value=True)
     mock.get_by_email = AsyncMock()
     mock.find_by_telegram_username = AsyncMock(return_value=[])
     mock.update = AsyncMock()
@@ -29,24 +30,11 @@ def mock_user_repo():
 
 
 @pytest.fixture
-def mock_vocab_repo():
-    """Create a mocked VocabularyRepository."""
-    from unittest.mock import AsyncMock, Mock
-
-    mock = Mock()
-    mock.get_words_in_learn_count = AsyncMock(return_value=0)
-    mock.get_words_skipped_count = AsyncMock(return_value=0)
-    mock.get_overall_words_count = AsyncMock(return_value=0)
-    mock.get_words_prioritized_count = AsyncMock(return_value=0)
-    return mock
-
-
-@pytest.fixture
-def user_service(mock_user_repo, mock_vocab_repo):
-    """Create a UserService instance with mocked repositories."""
+def user_service(mock_user_repo):
+    """Create a UserService instance with its mocked repository."""
     from runestone.services.user_service import UserService
 
-    return UserService(mock_user_repo, mock_vocab_repo)
+    return UserService(mock_user_repo)
 
 
 @pytest.fixture

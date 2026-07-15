@@ -211,7 +211,7 @@ def process(
         # Create user service (minimal setup for CLI)
         user_repo = UserRepository.__new__(UserRepository)  # Create without db for minimal functionality
         vocab_repo = VocabularyRepository.__new__(VocabularyRepository)  # Create without db for minimal functionality
-        user_service = UserService(user_repo, vocab_repo)
+        user_service = UserService(user_repo)
 
         # Create vocabulary service with mock LLM
         vocab_service = VocabularyService(vocab_repo, settings, llm_model)
