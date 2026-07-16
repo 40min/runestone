@@ -26,12 +26,12 @@ from runestone.db.recall_repository import RecallRepository
 from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.rag.index import GrammarIndex
+from runestone.recall.service import RecallService
 from runestone.services.agent_side_effect_service import AgentSideEffectService
 from runestone.services.chat_service import ChatService
 from runestone.services.chat_session_learning_focus_service import ChatSessionLearningFocusService
 from runestone.services.grammar_service import GrammarService
 from runestone.services.memory_item_service import MemoryItemService
-from runestone.services.recall_service import RecallService
 from runestone.services.tts_service import TTSService
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService

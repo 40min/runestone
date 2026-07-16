@@ -19,7 +19,7 @@
     "B06": {"status": "grouped", "case": "eligibility", "reason": "Inactive user is excluded and direct delivery is asserted as a no-op."},
     "B07": {"status": "grouped", "case": "delivery-edge", "reason": "One inactive queued fixture is removed/refilled before a valid send."},
     "B08": {"status": "grouped", "case": "delivery-edge", "reason": "All queued fixtures and replacement pool are made inactive."},
-    "B09": {"status": "automated", "case": "pytest:telegram-delivery", "reason": "The production delivery adapter is clock-controlled at before/start/inside/end/after boundary partitions."},
+    "B09": {"status": "automated", "case": "pytest:tests/telegram/test_delivery.py", "reason": "The production delivery adapter is clock-controlled at before/start/inside/end/after boundary partitions."},
 
     "C01": {"status": "grouped", "case": "commands", "reason": "Production command dispatch enables the active linked fixture profile."},
     "C02": {"status": "grouped", "case": "commands", "reason": "Repeated start preserves queue/cursor and one state row."},
@@ -52,8 +52,12 @@
 
     "F01": {"status": "grouped", "case": "offset-recovery", "reason": "Temporary missing, malformed, and valid offset file behavior is checked."},
     "F02": {"status": "grouped", "case": "commands", "reason": "Ordered in-memory batch advances to max update ID plus one."},
-    "F03": {"status": "grouped", "case": "offset-recovery", "reason": "A real PostgreSQL division-by-zero aborts the first update before a later valid update."},
-    "F04": {"status": "grouped", "case": "offset-recovery", "reason": "Synthetic offset write failure follows a committed command and preserves the old cursor."},
+    "F03": {"status": "grouped", "case": "offset-recovery", "reason": "A real PostgreSQL division-by-zero aborts the first update, retains its offset, emits no response, and stops the fetched batch."},
+    "F04": {"status": "grouped", "case": "offset-recovery", "reason": "A later poll retries the failed update in a fresh session and then processes the contiguous suffix in separate fresh sessions."},
+    "F05": {"status": "grouped", "case": "offset-recovery", "reason": "The command recorder asserts that its provider session has closed before every outbound response begins."},
+    "F06": {"status": "automated", "case": "pytest:tests/telegram/test_commands.py", "reason": "A failed Telegram send after successful application still advances the handled offset."},
+    "F07": {"status": "grouped", "case": "offset-recovery", "reason": "Synthetic offset write failure follows a committed command and preserves the old cursor."},
+    "F08": {"status": "automated", "case": "pytest:tests/telegram/test_commands.py", "reason": "A post-commit session-close failure is logged while the prepared response remains sendable and the handled offset advances."},
 
     "G01": {"status": "grouped", "case": "concurrency", "reason": "Two independent sessions deliver with bounded timeout and distinct cursor words."},
     "G02": {"status": "grouped", "case": "delivery-races", "reason": "Independent PostgreSQL sessions hold delivery at transport and prove start, stop, bump, postpone, Telegram remove, web soft delete, and hard delete wait for the aggregate lock."},
@@ -75,11 +79,13 @@
     "J05": {"status": "grouped", "case": "commands", "reason": "State output covers enabled/disabled and persisted queue order."},
     "J06": {"status": "grouped", "case": "commands-edge", "reason": "Missing usernames, unlinked profiles, inactive accounts, malformed updates, and no-op text are covered."},
 
-    "K01": {"status": "automated", "case": "pytest:telegram-delivery", "reason": "MarkdownV2-significant text and optional examples are asserted against the exact production HTTP payload."},
-    "K02": {"status": "automated", "case": "pytest:telegram-delivery", "reason": "Telegram ok false, malformed JSON, HTTP error, timeout, and transport error all reject delivery."},
-    "K03": {"status": "automated", "case": "pytest:telegram-delivery", "reason": "One user's delivery exception is isolated and later users are still invoked in deterministic order."},
+    "K01": {"status": "automated", "case": "pytest:tests/telegram/test_delivery.py", "reason": "MarkdownV2-significant text and optional examples are asserted against the exact production HTTP payload."},
+    "K02": {"status": "automated", "case": "pytest:tests/telegram/test_delivery.py", "reason": "Telegram ok false, malformed JSON, HTTP error, timeout, and transport error all reject delivery."},
+    "K03": {"status": "grouped", "case": "normal-delivery", "reason": "Fresh PostgreSQL sessions isolate a real failed scheduled user operation from a later user operation, while focused delivery tests cover deterministic continuation."},
     "K04": {"status": "grouped", "case": "normal-delivery", "reason": "Accepted delivery advances learning metadata and cursor once through PostgreSQL."},
     "K05": {"status": "grouped", "case": "delivery-edge", "reason": "Absent eligibility partitions and stale/entirely invalid queues send nothing or repair before sending."},
+    "K06": {"status": "automated", "case": "pytest:tests/telegram/test_delivery.py", "reason": "Outside delivery hours the production scheduler transport opens no recall provider."},
+    "K07": {"status": "automated", "case": "pytest:tests/telegram/test_delivery.py", "reason": "Provider lifecycle tests prove one short enumeration scope followed by one fresh scope for every active user."},
 
     "L01": {"status": "grouped", "case": "vocabulary-context", "reason": "Queued phrase, translation, and example edits preserve membership/cursor and reach Teacher and delivery consumers."},
     "L02": {"status": "grouped", "case": "vocabulary-context", "reason": "Production create and reactivation do not rewrite the current queue and the created eligible word is available to the next bump."},
@@ -89,10 +95,10 @@
     "L06": {"status": "automated", "case": "pytest:teacher-chat", "reason": "Text/image forwarding, best-effort context failure, and bounded untrusted-data formatting are covered with deterministic agent and OCR recorders."},
 
     "M01": {"status": "grouped", "case": "worker-lifecycle", "reason": "Unexpectedly unordered responses are processed by ascending update ID and offset uses max ID plus one."},
-    "M02": {"status": "grouped", "case": "offset-recovery", "reason": "Malformed offset, PostgreSQL-aborting update recovery, and offset-write failure are exercised."},
+    "M02": {"status": "grouped", "case": "offset-recovery", "reason": "Malformed offset, stopped-batch PostgreSQL retry with fresh per-update sessions, provider closure before send, and offset-write failure are exercised."},
     "M03": {"status": "grouped", "case": "worker-lifecycle", "reason": "Duplicate idempotent stop after offset failure leaves exact state unchanged."},
     "M04": {"status": "grouped", "case": "worker-lifecycle", "reason": "A new worker instance reads the persisted offset and leaves database recall state intact."},
-    "M05": {"status": "automated", "case": "pytest:telegram-command", "reason": "Polling request, API ok false, malformed JSON, network failure, and empty response preserve offset."},
+    "M05": {"status": "automated", "case": "pytest:tests/telegram/test_commands.py", "reason": "Polling request, API ok false, malformed JSON, network failure, and empty response preserve offset."},
 
     "N01": {"status": "grouped", "case": "delivery-races", "reason": "Delivery is serialized with start, stop, and bump."},
     "N02": {"status": "grouped", "case": "delivery-races", "reason": "Delivery is serialized with postpone and Telegram remove."},

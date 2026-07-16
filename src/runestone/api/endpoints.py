@@ -42,8 +42,8 @@ from runestone.dependencies import (
     get_vocabulary_service,
 )
 from runestone.rag.index import GrammarIndex
+from runestone.recall.service import RecallService
 from runestone.services.grammar_service import GrammarService
-from runestone.services.recall_service import RecallService
 from runestone.services.vocabulary_service import VocabularyService
 
 router = APIRouter()

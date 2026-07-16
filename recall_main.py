@@ -3,8 +3,8 @@
 Standalone Telegram bot worker application for Runestone.
 
 This application runs scheduled tasks for the Telegram bot:
-- Polls for incoming commands via TelegramCommandService
-- Sends daily vocabulary words via TelegramRecallDeliveryService
+- Polls for incoming commands via TelegramCommandProcessor
+- Sends daily vocabulary words via TelegramRecallDelivery
 
 Uses APScheduler for task scheduling and proper configuration management.
 """
@@ -13,7 +13,6 @@ import asyncio
 import logging
 import signal
 import sys
-from functools import lru_cache
 from typing import Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -21,52 +20,29 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from runestone.config import settings
 from runestone.core.logging_config import setup_logging
-from runestone.core.service_llm import build_service_llm_model
-from runestone.db.database import SessionLocal, setup_database
-from runestone.db.recall_repository import RecallRepository
-from runestone.db.user_repository import UserRepository
-from runestone.db.vocabulary_repository import VocabularyRepository
-from runestone.services.recall_service import RecallService
-from runestone.services.telegram_command_service import TelegramCommandService
-from runestone.services.telegram_recall_delivery_service import TelegramRecallDeliveryService
-from runestone.services.user_service import UserService
-from runestone.services.vocabulary_service import VocabularyService
-from runestone.state.telegram_update_offset_store import TelegramUpdateOffsetStore
-
-
-@lru_cache(maxsize=1)
-def _get_service_llm_model():
-    """Reuse the stateless service model across short-lived worker sessions."""
-    return build_service_llm_model(settings)
-
-
-def _create_recall_service(db) -> RecallService:
-    """Assemble recall collaborators over one worker-scoped database session."""
-    vocabulary_service = VocabularyService(VocabularyRepository(db), settings, _get_service_llm_model())
-    user_service = UserService(UserRepository(db))
-    return RecallService(RecallRepository(db), vocabulary_service, user_service, settings)
+from runestone.db.database import setup_database
+from runestone.recall.providers import provide_recall_session, provide_recall_transaction
+from runestone.telegram.commands import TelegramCommandProcessor
+from runestone.telegram.delivery import TelegramRecallDelivery
+from runestone.telegram.offset_store import TelegramUpdateOffsetStore
 
 
 async def process_updates_job(offset_store: TelegramUpdateOffsetStore) -> None:
-    """Wrapper function for processing Telegram updates with fresh session."""
-    async with SessionLocal() as db:
-        try:
-            recall_service = _create_recall_service(db)
-            telegram_service = TelegramCommandService(offset_store, recall_service)
-            await telegram_service.process_updates()
-        except Exception:
-            logging.getLogger(__name__).exception("Error in process_updates_job")
+    """Process Telegram updates with one recall transaction per command."""
+    try:
+        telegram_processor = TelegramCommandProcessor(offset_store, provide_recall_transaction)
+        await telegram_processor.process_updates()
+    except Exception:
+        logging.getLogger(__name__).exception("Error in process_updates_job")
 
 
 async def send_recall_word_job() -> None:
-    """Wrapper function for sending recall words with fresh session."""
-    async with SessionLocal() as db:
-        try:
-            recall_service = _create_recall_service(db)
-            telegram_recall_delivery_service = TelegramRecallDeliveryService(recall_service, settings)
-            await telegram_recall_delivery_service.send_next_recall_word()
-        except Exception:
-            logging.getLogger(__name__).exception("Error in send_recall_word_job")
+    """Send scheduled recall words with isolated per-operation sessions."""
+    try:
+        telegram_recall_delivery = TelegramRecallDelivery(provide_recall_session, settings)
+        await telegram_recall_delivery.send_next_recall_word()
+    except Exception:
+        logging.getLogger(__name__).exception("Error in send_recall_word_job")
 
 
 def create_scheduler(offset_store: TelegramUpdateOffsetStore) -> AsyncIOScheduler:

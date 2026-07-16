@@ -14,7 +14,7 @@ from runestone.core.exceptions import (
 )
 from runestone.db.models import User
 from runestone.db.recall_repository import RecallRepository
-from runestone.services.recall_types import RecallEnableResult, RecallEnableStatus, RecallQueueWord, RecallState
+from runestone.recall.types import RecallEnableResult, RecallEnableStatus, RecallQueueWord, RecallState
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 from runestone.utils.telegram import normalize_telegram_username
@@ -56,7 +56,6 @@ class RecallService:
 
             state = await self.recall_repository.get_recall_state(user.id)
         except SQLAlchemyError as exc:
-            await self.recall_repository.rollback()
             raise RecallOperationError("Failed to load recall state", details=str(exc)) from exc
 
         result = (
@@ -89,14 +88,12 @@ class RecallService:
                     user_id=user.id,
                 )
         except SQLAlchemyError as exc:
-            await self.recall_repository.rollback()
             raise RecallOperationError("Failed to enable recall", details=str(exc)) from exc
 
         try:
             previous_state = await self.recall_repository.get_recall_state_for_update(user.id)
             was_already_enabled = previous_state is not None and previous_state.is_enabled
             state = await self.recall_repository.upsert_for_user(user.id, chat_id=chat_id, is_enabled=True)
-            await self.recall_repository.commit()
             return RecallEnableResult(
                 status=RecallEnableStatus.ENABLED,
                 normalized_username=normalized_username,
@@ -105,24 +102,15 @@ class RecallService:
                 was_already_enabled=was_already_enabled,
             )
         except SQLAlchemyError as exc:
-            await self.recall_repository.rollback()
             raise RecallOperationError("Failed to enable recall", details=str(exc)) from exc
-        except Exception:
-            await self.recall_repository.rollback()
-            raise
 
     async def disable_for_user(self, user_id: int, chat_id: int | None = None) -> RecallState:
         """Disable recall delivery without affecting account activation."""
         try:
             state = await self.recall_repository.upsert_for_user(user_id, chat_id=chat_id, is_enabled=False)
-            await self.recall_repository.commit()
             return state
         except SQLAlchemyError as exc:
-            await self.recall_repository.rollback()
             raise RecallOperationError("Failed to disable recall", details=str(exc)) from exc
-        except Exception:
-            await self.recall_repository.rollback()
-            raise
 
     async def get_active_recall_states(self) -> list[RecallState]:
         """Load recall states eligible for scheduled delivery."""
@@ -130,7 +118,6 @@ class RecallService:
             states = await self.recall_repository.get_active_recall_states()
             return states
         except SQLAlchemyError as exc:
-            await self.recall_repository.rollback()
             raise RecallOperationError("Failed to load active recall states", details=str(exc)) from exc
 
     async def bump_words(self, state: RecallState) -> RecallState:
@@ -140,13 +127,10 @@ class RecallService:
             if current_state is None:
                 raise RecallStateNotFoundError(state.user_id)
             refreshed = await self._bump_words_locked(current_state)
-            await self.recall_repository.commit()
             return refreshed
         except RecallOperationError:
-            await self.recall_repository.rollback()
             raise
         except Exception as exc:
-            await self.recall_repository.rollback()
             raise RecallOperationError("Failed to replace recall queue", details=str(exc)) from exc
 
     async def _bump_words_locked(self, state: RecallState) -> RecallState:
@@ -189,14 +173,11 @@ class RecallService:
             if removal is not None:
                 refreshed = await self._maintain_daily_selection_locked(refreshed)
 
-            # 3. Commit all aggregate changes once after every invariant is restored.
-            await self.recall_repository.commit()
+            # The outer transaction provider commits after every invariant is restored.
             return refreshed
         except (RecallOperationError, WordNotFoundError):
-            await self.recall_repository.rollback()
             raise
         except Exception as exc:
-            await self.recall_repository.rollback()
             raise RecallOperationError("Failed to remove word from recall state", details=str(exc)) from exc
 
     async def postpone_word(self, state: RecallState, word_phrase: str) -> RecallState:
@@ -222,14 +203,11 @@ class RecallService:
                 additionally_excluded_word_ids=[matching_word.id],
             )
 
-            # 3. Persist vocabulary, queue, cursor, and refill as one transaction.
-            await self.recall_repository.commit()
+            # The outer transaction provider persists vocabulary, queue, cursor, and refill together.
             return refreshed
         except RecallOperationError:
-            await self.recall_repository.rollback()
             raise
         except Exception as exc:
-            await self.recall_repository.rollback()
             raise RecallOperationError("Failed to postpone word", details=str(exc)) from exc
 
     async def load_current_recall_words(self, user_id: int) -> list[str]:
@@ -238,12 +216,11 @@ class RecallService:
             words = await self.recall_repository.get_current_recall_words(user_id)
             return words
         except SQLAlchemyError as exc:
+            # ChatService deliberately treats recall context as best effort and
+            # continues on the same request session, so this non-command read
+            # must recover a failed database transaction before returning control.
             await self.recall_repository.rollback()
             raise RecallOperationError("Failed to load current recall words", details=str(exc)) from exc
-
-    async def rollback_failed_operation(self) -> None:
-        """Recover the service session after an unexpected outer-boundary failure."""
-        await self.recall_repository.rollback()
 
     async def deliver_next_word(
         self,

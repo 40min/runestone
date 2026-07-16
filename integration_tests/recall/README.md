@@ -40,6 +40,10 @@ Candidate selection is intentionally isolated by a test-only
 cooldown, priority, and transaction behavior, but adds every non-fixture
 vocabulary ID to selection exclusions. A full fingerprint of all non-fixture
 user-5 vocabulary and all other users' recall rows proves isolation at cleanup.
+Command processing uses a fixture-aware transaction provider that opens a fresh
+PostgreSQL session per relevant update. Scheduled delivery uses a separate
+session-only provider for enumeration and each user operation so its production
+callback-spanning transaction contract remains intact.
 
 ## Invocation
 
@@ -49,7 +53,7 @@ Preview the CLI without permitting mutation:
 UV_CACHE_DIR=.uv-cache uv run --extra dev python integration_tests/recall/run_recall_workflow.py --help
 ```
 
-Print the complete A01-I02 mapping without database access:
+Print the complete A01-N05 mapping without database access:
 
 ```bash
 UV_CACHE_DIR=.uv-cache uv run --extra dev python integration_tests/recall/run_recall_workflow.py --show-coverage
@@ -80,7 +84,10 @@ Available executable groups:
 
 - `selection-pools`: missing-state reads, short/empty candidate pools, cooldown,
   inactivity, and deterministic priority filtering.
-- `normal-delivery`: accepted delivery, learning metadata, and cursor advance.
+- `normal-delivery`: accepted delivery, learning metadata, cursor advance, and
+  scheduled enumeration/user session isolation. A synthetic duplicate target
+  DTO safely proves a real failed PostgreSQL user session cannot poison the
+  later fresh session, and the send callback observes the open row-lock transaction.
 - `delivery-edge`: disabled/null-chat delivery and one/all-invalid queued rows.
 - `hard-delete`: endpoint-equivalent cross-service deletion, FK cleanup, cursor,
   queue compaction, and refill.
@@ -94,8 +101,10 @@ Available executable groups:
 - `postpone-bump`: cursor positions, no-alternative self-refill, alternative
   refill, absent soft remove, and full/short/empty bump pools.
 - `eligibility`: active/enabled, disabled, and inactive delivery eligibility.
-- `offset-recovery`: temporary offset parsing, a real aborted PostgreSQL batch,
-  and synthetic offset-write failure.
+- `offset-recovery`: temporary offset parsing, a real first-update PostgreSQL
+  failure retaining its offset and stopping the batch, fresh-session retry of
+  that update and the later suffix, provider closure before outbound send, and
+  synthetic offset-write failure.
 - `concurrency`: two deliveries, deactivation race, concurrent start, and
   concurrent deletion/refill using independent sessions and bounded timeouts.
 - `isolation`: ordered Teacher reads and cross-user ownership protection.
@@ -106,16 +115,15 @@ Available executable groups:
 - `vocabulary-context`: queued phrase/translation/example edits reflected in
   delivery and Teacher reads, context after postpone/remove, and reactivation
   without current-queue churn.
-- `worker-lifecycle`: update-ID ordering, explicit best-effort batch
-  acknowledgment, duplicate idempotent command replay, and persisted-offset
-  restart behavior.
+- `worker-lifecycle`: update-ID ordering, contiguous-prefix acknowledgment,
+  duplicate idempotent command replay, and persisted-offset restart behavior.
 - `delivery-races`: delivery serialized with start/stop, bump, postpone,
   Telegram remove, and endpoint-equivalent web soft/hard delete in independent
   sessions.
 
 Focused pytest coverage complements the PostgreSQL harness for clock and HTTP
-adapter partitions: `tests/services/test_telegram_recall_delivery_service.py`,
-`tests/services/test_telegram_command_service.py`, and
+adapter partitions: `tests/telegram/test_delivery.py`,
+`tests/telegram/test_commands.py`, and
 `tests/services/test_chat_service.py`, plus Teacher prompt-safety coverage in
 `tests/agents/test_teacher.py`. No real Telegram or LLM request is made.
 
@@ -129,7 +137,8 @@ Four regression assertions cover the final review findings: repeated `/start`
 must preserve its already-enabled response, a postponed word must not be selected
 as its own immediate refill, and delivery must recheck account activation after
 acquiring the recall-state lock. A real PostgreSQL statement failure in one
-Telegram update must also be rolled back before processing the next update.
+Telegram update must retain that update's offset, stop the current batch, and
+then succeed in a fresh session before later fetched updates are processed.
 These scenarios are expected to pass; any regression produces a normal failed
 case while the runner still restores the database.
 
