@@ -12,9 +12,9 @@ from sqlalchemy import text
 from runestone.db.chat_repository import ChatRepository
 from runestone.db.recall_repository import RecallRepository
 from runestone.db.user_repository import UserRepository
+from runestone.recall.service import RecallService
 from runestone.services.agent_side_effect_service import AgentSideEffectService
 from runestone.services.chat_service import ChatService
-from runestone.services.recall_service import RecallService
 from runestone.services.user_service import UserService
 
 

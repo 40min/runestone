@@ -16,7 +16,7 @@ class TelegramUpdateOffsetStore:
         """Return the current Telegram polling offset, defaulting to zero."""
         try:
             if os.path.exists(self.offset_file_path):
-                with open(self.offset_file_path, "r") as file:
+                with open(self.offset_file_path) as file:
                     return int(file.read().strip())
             return 0
         except Exception as exc:
@@ -26,7 +26,9 @@ class TelegramUpdateOffsetStore:
     def set_update_offset(self, offset: int) -> None:
         """Persist the next Telegram polling offset."""
         try:
-            os.makedirs(os.path.dirname(self.offset_file_path), exist_ok=True)
+            parent = os.path.dirname(self.offset_file_path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
             with open(self.offset_file_path, "w") as file:
                 file.write(str(offset))
         except Exception as exc:

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from runestone.db.models import RecallQueueItemDB, RecallUserStateDB, User, Vocabulary
 from runestone.db.recall_repository import QueueRemovalResult, RecallRepository
-from runestone.services.recall_types import RecallQueueWord
+from runestone.recall.types import RecallQueueWord
 
 
 def make_user(suffix: str, *, active: bool = True) -> User:

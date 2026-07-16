@@ -10,8 +10,8 @@ from runestone.db.models import User, Vocabulary
 from runestone.db.recall_repository import RecallRepository
 from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
-from runestone.services.recall_service import RecallService
-from runestone.services.recall_types import RecallEnableStatus, RecallQueueWord, RecallState
+from runestone.recall.service import RecallService
+from runestone.recall.types import RecallEnableStatus, RecallQueueWord, RecallState
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 
@@ -104,7 +104,7 @@ async def test_get_state_for_telegram_username_rejects_duplicate_links(recall_se
 
 
 @pytest.mark.anyio
-async def test_get_state_for_telegram_username_rolls_back_only_database_failures(recall_service):
+async def test_get_state_for_telegram_username_wraps_database_failure_without_owning_transaction(recall_service):
     database_error = SQLAlchemyError("database unavailable")
     recall_service.user_service.get_users_by_telegram_username.side_effect = database_error
 
@@ -112,7 +112,7 @@ async def test_get_state_for_telegram_username_rolls_back_only_database_failures
         await recall_service.get_state_for_telegram_username("linked")
 
     assert exc_info.value.__cause__ is database_error
-    recall_service.recall_repository.rollback.assert_awaited_once()
+    recall_service.recall_repository.rollback.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -138,7 +138,7 @@ async def test_get_active_recall_states_delegates_filtered_batch_load_to_reposit
 
 
 @pytest.mark.anyio
-async def test_get_active_recall_states_rolls_back_database_failure(recall_service):
+async def test_get_active_recall_states_wraps_database_failure_without_owning_transaction(recall_service):
     database_error = SQLAlchemyError("database unavailable")
     recall_service.recall_repository.get_active_recall_states.side_effect = database_error
 
@@ -146,7 +146,7 @@ async def test_get_active_recall_states_rolls_back_database_failure(recall_servi
         await recall_service.get_active_recall_states()
 
     assert exc_info.value.__cause__ is database_error
-    recall_service.recall_repository.rollback.assert_awaited_once()
+    recall_service.recall_repository.rollback.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -160,7 +160,7 @@ async def test_load_current_recall_words_keeps_successful_shared_transaction_neu
 
 
 @pytest.mark.anyio
-async def test_load_current_recall_words_rolls_back_database_failure(recall_service):
+async def test_load_current_recall_words_recovers_best_effort_request_after_database_failure(recall_service):
     database_error = SQLAlchemyError("database unavailable")
     recall_service.recall_repository.get_current_recall_words.side_effect = database_error
 
@@ -168,7 +168,7 @@ async def test_load_current_recall_words_rolls_back_database_failure(recall_serv
         await recall_service.load_current_recall_words(7)
 
     assert exc_info.value.__cause__ is database_error
-    recall_service.recall_repository.rollback.assert_awaited_once()
+    recall_service.recall_repository.rollback.assert_awaited_once_with()
 
 
 @pytest.mark.anyio
@@ -201,7 +201,7 @@ async def test_enable_for_username_duplicate_link_does_not_rollback(recall_servi
 
 
 @pytest.mark.anyio
-async def test_enable_for_username_rolls_back_and_wraps_database_mutation_failure(recall_service):
+async def test_enable_for_username_wraps_database_mutation_failure_without_owning_transaction(recall_service):
     user = SimpleNamespace(id=7, telegram_username="linked", active=True)
     database_error = SQLAlchemyError("write failed")
     recall_service.user_service.get_users_by_telegram_username.return_value = [user]
@@ -211,11 +211,11 @@ async def test_enable_for_username_rolls_back_and_wraps_database_mutation_failur
         await recall_service.enable_for_username("linked", 123)
 
     assert exc_info.value.__cause__ is database_error
-    recall_service.recall_repository.rollback.assert_awaited_once()
+    recall_service.recall_repository.rollback.assert_not_awaited()
 
 
 @pytest.mark.anyio
-async def test_enable_for_username_rolls_back_without_wrapping_programming_failure(recall_service):
+async def test_enable_for_username_propagates_programming_failure_without_owning_transaction(recall_service):
     user = SimpleNamespace(id=7, telegram_username="linked", active=True)
     programming_error = TypeError("broken mutation contract")
     recall_service.user_service.get_users_by_telegram_username.return_value = [user]
@@ -224,22 +224,22 @@ async def test_enable_for_username_rolls_back_without_wrapping_programming_failu
     with pytest.raises(TypeError, match="broken mutation contract"):
         await recall_service.enable_for_username("linked", 123)
 
-    recall_service.recall_repository.rollback.assert_awaited_once()
+    recall_service.recall_repository.rollback.assert_not_awaited()
 
 
 @pytest.mark.anyio
-async def test_disable_for_user_rolls_back_without_wrapping_programming_failure(recall_service):
+async def test_disable_for_user_propagates_programming_failure_without_owning_transaction(recall_service):
     programming_error = TypeError("broken mutation contract")
     recall_service.recall_repository.upsert_for_user.side_effect = programming_error
 
     with pytest.raises(TypeError, match="broken mutation contract"):
         await recall_service.disable_for_user(7)
 
-    recall_service.recall_repository.rollback.assert_awaited_once()
+    recall_service.recall_repository.rollback.assert_not_awaited()
 
 
 @pytest.mark.anyio
-async def test_disable_for_user_rolls_back_and_wraps_database_failure(recall_service):
+async def test_disable_for_user_wraps_database_failure_without_owning_transaction(recall_service):
     database_error = SQLAlchemyError("write failed")
     recall_service.recall_repository.upsert_for_user.side_effect = database_error
 
@@ -247,7 +247,7 @@ async def test_disable_for_user_rolls_back_and_wraps_database_failure(recall_ser
         await recall_service.disable_for_user(7)
 
     assert exc_info.value.__cause__ is database_error
-    recall_service.recall_repository.rollback.assert_awaited_once()
+    recall_service.recall_repository.rollback.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -269,7 +269,8 @@ async def test_enable_for_username_reports_prior_enabled_state_and_refreshes_cha
         chat_id=456,
         is_enabled=True,
     )
-    recall_service.recall_repository.commit.assert_awaited_once()
+    recall_service.recall_repository.commit.assert_not_awaited()
+    recall_service.recall_repository.rollback.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -279,7 +280,8 @@ async def test_bump_words_raises_specific_error_when_state_is_missing(recall_ser
     with pytest.raises(RecallStateNotFoundError, match="Recall state not found"):
         await recall_service.bump_words(make_state(user_id=7))
 
-    recall_service.recall_repository.rollback.assert_awaited_once()
+    recall_service.recall_repository.commit.assert_not_awaited()
+    recall_service.recall_repository.rollback.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -316,7 +318,8 @@ async def test_bump_words_keeps_original_queue_excluded_across_fallback_selectio
         [replacement, make_word(10, "sen")],
         next_word_index=0,
     )
-    recall_service.recall_repository.commit.assert_awaited_once()
+    recall_service.recall_repository.commit.assert_not_awaited()
+    recall_service.recall_repository.rollback.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -326,7 +329,8 @@ async def test_postpone_word_raises_specific_error_when_state_is_missing(recall_
     with pytest.raises(RecallStateNotFoundError, match="Recall state not found"):
         await recall_service.postpone_word(make_state(user_id=7), "hej")
 
-    recall_service.recall_repository.rollback.assert_awaited_once()
+    recall_service.recall_repository.commit.assert_not_awaited()
+    recall_service.recall_repository.rollback.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -335,16 +339,12 @@ async def test_postpone_word_excludes_removed_item_from_immediate_refill(recall_
     shortened_state = make_state(user_id=1)
     persistence_events = []
 
-    async def load_state_before_commit(_user_id):
+    async def load_state(_user_id):
         persistence_events.append("load")
         return shortened_state
 
-    async def commit_last():
-        persistence_events.append("commit")
-
     recall_service.recall_repository.get_recall_state_for_update.return_value = queued_state
-    recall_service.recall_repository.get_recall_state.side_effect = load_state_before_commit
-    recall_service.recall_repository.commit.side_effect = commit_last
+    recall_service.recall_repository.get_recall_state.side_effect = load_state
     recall_service.recall_repository.remove_queue_word.return_value = SimpleNamespace(removed_position=0)
     recall_service.vocabulary_service.get_vocabulary_item_by_phrase.return_value = SimpleNamespace(id=7)
 
@@ -358,26 +358,23 @@ async def test_postpone_word_excludes_removed_item_from_immediate_refill(recall_
         excluded_word_ids=[7],
     )
     recall_service.recall_repository.append_queue_words.assert_not_awaited()
-    recall_service.recall_repository.commit.assert_awaited_once()
-    assert persistence_events == ["load", "commit"]
+    recall_service.recall_repository.commit.assert_not_awaited()
+    recall_service.recall_repository.rollback.assert_not_awaited()
+    assert persistence_events == ["load"]
 
 
 @pytest.mark.anyio
-async def test_remove_word_completely_returns_transaction_snapshot_without_read_after_commit(recall_service):
+async def test_remove_word_completely_returns_transaction_snapshot_without_owning_transaction(recall_service):
     queued_state = make_state(user_id=1, daily_selection=[make_word(7, "hej")])
     shortened_state = make_state(user_id=1)
     persistence_events = []
 
-    async def load_state_before_commit(_user_id):
+    async def load_state(_user_id):
         persistence_events.append("load")
         return shortened_state
 
-    async def commit_last():
-        persistence_events.append("commit")
-
     recall_service.recall_repository.get_recall_state_for_update.return_value = queued_state
-    recall_service.recall_repository.get_recall_state.side_effect = load_state_before_commit
-    recall_service.recall_repository.commit.side_effect = commit_last
+    recall_service.recall_repository.get_recall_state.side_effect = load_state
     recall_service.recall_repository.remove_queue_word.return_value = SimpleNamespace(removed_position=0)
     recall_service.vocabulary_service.get_vocabulary_item_by_phrase.return_value = SimpleNamespace(id=7)
 
@@ -385,8 +382,9 @@ async def test_remove_word_completely_returns_transaction_snapshot_without_read_
 
     assert result == shortened_state
     recall_service.vocabulary_service.deactivate_item.assert_awaited_once_with(7, 1)
-    recall_service.recall_repository.commit.assert_awaited_once()
-    assert persistence_events == ["load", "commit"]
+    recall_service.recall_repository.commit.assert_not_awaited()
+    recall_service.recall_repository.rollback.assert_not_awaited()
+    assert persistence_events == ["load"]
 
 
 @pytest.mark.anyio

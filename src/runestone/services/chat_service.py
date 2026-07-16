@@ -14,10 +14,10 @@ from runestone.core.exceptions import RunestoneError
 from runestone.core.observability import timed_operation
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.chat_repository import ChatRepository
+from runestone.recall.service import RecallService
 from runestone.services.agent_side_effect_service import AgentSideEffectService
 from runestone.services.chat_session_learning_focus_service import ChatSessionLearningFocusService
 from runestone.services.memory_item_service import MemoryItemService
-from runestone.services.recall_service import RecallService
 from runestone.services.tts_service import TTSService
 from runestone.services.user_service import UserService
 

@@ -10,6 +10,8 @@ from typing import List
 from langchain_core.exceptions import OutputParserException
 from langchain_core.language_models.chat_models import BaseChatModel
 
+from runestone.recall.types import RecallQueueWord
+
 from ..api.schemas import ImprovementMode, LearnedTimesDistributionItem, PriorityDistributionItem
 from ..api.schemas import Vocabulary as VocabularySchema
 from ..api.schemas import (
@@ -32,7 +34,6 @@ from ..db.models import Vocabulary
 from ..db.vocabulary_repository import VocabularyRepository
 from ..schemas.vocabulary import VocabularyResponse
 from ..schemas.vocabulary_save import PriorityWordSaveItem, VocabularyPrioritizationAction, WordSaveCandidate
-from .recall_types import RecallQueueWord
 
 
 class VocabularyService:

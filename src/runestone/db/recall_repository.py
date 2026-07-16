@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from runestone.db.models import RecallQueueItemDB, RecallUserStateDB, User, Vocabulary
-from runestone.services.recall_types import RecallQueueWord, RecallState
+from runestone.recall.types import RecallQueueWord, RecallState
 
 
 @dataclass(frozen=True, slots=True)

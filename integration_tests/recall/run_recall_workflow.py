@@ -17,6 +17,7 @@ import os
 import sys
 import tempfile
 import traceback
+from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,13 +38,14 @@ from runestone.db.models import RecallQueueItemDB, RecallUserStateDB, User, Voca
 from runestone.db.recall_repository import RecallRepository
 from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
+from runestone.recall.service import RecallService
+from runestone.recall.types import RecallQueueWord, RecallState
 from runestone.schemas.vocabulary_save import PriorityWordSaveItem
-from runestone.services.recall_service import RecallService
-from runestone.services.recall_types import RecallQueueWord, RecallState
-from runestone.services.telegram_command_service import TelegramCommandService
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
-from runestone.state.telegram_update_offset_store import TelegramUpdateOffsetStore
+from runestone.telegram.commands import TelegramCommandProcessor
+from runestone.telegram.delivery import TelegramRecallDelivery
+from runestone.telegram.offset_store import TelegramUpdateOffsetStore
 
 DEFAULT_USER_ID = 5
 DEFAULT_CHAT_ID = 9_005_005
@@ -168,25 +170,174 @@ class FailFirstRecallProxy:
         return getattr(self.delegate, name)
 
 
-class RecordingTelegramCommandService(TelegramCommandService):
+class FailDeliveryRecallProxy:
+    """Abort one scheduled user session with a real PostgreSQL error."""
+
+    def __init__(self, db: AsyncSession, delegate: Any):
+        self.db = db
+        self.delegate = delegate
+
+    async def deliver_next_word(self, *_args, **_kwargs):
+        await self.db.execute(text("SELECT 1 / 0"))
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.delegate, name)
+
+
+class FixtureRecallTransactionProvider:
+    """Build fixture-restricted recall graphs in fresh owned transactions."""
+
+    def __init__(self, fixture_ids: set[int], *, fail_first: bool = False):
+        self.fixture_ids = fixture_ids
+        self.fail_first = fail_first
+        self.failure_injected = False
+        self.active_sessions = 0
+        self.sessions: list[AsyncSession] = []
+        self.events: list[tuple[str, int]] = []
+
+    @asynccontextmanager
+    async def __call__(self):
+        call_number = len(self.sessions) + 1
+        self.active_sessions += 1
+        self.events.append(("open", call_number))
+        try:
+            async with SessionLocal() as db:
+                self.sessions.append(db)
+                async with db.begin():
+                    service, _, _ = build_recall_service(db, self.fixture_ids)
+                    if self.fail_first and not self.failure_injected:
+                        self.failure_injected = True
+                        yield FailFirstRecallProxy(db, service)
+                    else:
+                        yield service
+        finally:
+            self.active_sessions -= 1
+            self.events.append(("close", call_number))
+
+
+class UserScopedRecallProxy:
+    """Restrict scheduled enumeration to the destructive harness target user."""
+
+    def __init__(self, user_id: int, delegate: RecallService, *, enumeration_copies: int = 1):
+        self.user_id = user_id
+        self.delegate = delegate
+        self.enumeration_copies = enumeration_copies
+
+    async def get_active_recall_states(self) -> list[RecallState]:
+        states = await self.delegate.get_active_recall_states()
+        scoped = [state for state in states if state.user_id == self.user_id]
+        return scoped * self.enumeration_copies
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.delegate, name)
+
+
+class FixtureRecallSessionProvider:
+    """Build target-user-scoped recall graphs in fresh session-only contexts."""
+
+    def __init__(
+        self,
+        fixture_ids: set[int],
+        user_id: int,
+        *,
+        enumeration_copies: int = 1,
+        fail_delivery_call: int | None = None,
+    ):
+        self.fixture_ids = fixture_ids
+        self.user_id = user_id
+        self.enumeration_copies = enumeration_copies
+        self.fail_delivery_call = fail_delivery_call
+        self.active_sessions = 0
+        self.current_session: AsyncSession | None = None
+        self.sessions: list[AsyncSession] = []
+        self.events: list[tuple[str, int]] = []
+        self.recovery_checks = 0
+
+    @asynccontextmanager
+    async def __call__(self):
+        call_number = len(self.sessions) + 1
+        self.active_sessions += 1
+        self.events.append(("open", call_number))
+        try:
+            async with SessionLocal() as db:
+                self.current_session = db
+                self.sessions.append(db)
+                service, _, _ = build_recall_service(db, self.fixture_ids)
+                scoped_service = UserScopedRecallProxy(
+                    self.user_id,
+                    service,
+                    enumeration_copies=self.enumeration_copies,
+                )
+                if call_number == self.fail_delivery_call:
+                    yield FailDeliveryRecallProxy(db, scoped_service)
+                else:
+                    if self.fail_delivery_call is not None and call_number > self.fail_delivery_call:
+                        await db.execute(text("SELECT 1"))
+                        self.recovery_checks += 1
+                    yield scoped_service
+        finally:
+            self.current_session = None
+            self.active_sessions -= 1
+            self.events.append(("close", call_number))
+
+
+class RecordingTelegramCommandProcessor(TelegramCommandProcessor):
     """Use production command dispatch while replacing Telegram I/O in memory."""
 
-    def __init__(self, recall_service: Any, offset_store: MemoryOffsetStore):
+    def __init__(self, provider: FixtureRecallTransactionProvider, offset_store: MemoryOffsetStore):
         # Avoid the production constructor because its bot-token validation is
         # irrelevant when both polling and sending are overridden below.
         self.offset_store = offset_store
-        self.recall_service = recall_service
+        self.provide_recall_transaction = provider
+        self.provider = provider
         self.bot_token = "integration-test-no-network"
         self.base_url = "network-is-forbidden"
         self.outbox: list[dict[str, Any]] = []
         self.pending_updates: list[dict[str, Any]] = []
 
     async def _send_message(self, chat_id: int, message_text: str, parse_mode: str | None = None) -> bool:
-        self.outbox.append({"chat_id": chat_id, "text": message_text, "parse_mode": parse_mode})
+        require(self.provider.active_sessions == 0, "command HTTP send started before provider session closed")
+        self.outbox.append(
+            {
+                "chat_id": chat_id,
+                "text": message_text,
+                "parse_mode": parse_mode,
+                "provider_closed": True,
+            }
+        )
         return True
 
-    async def _fetch_updates(self) -> tuple[list, int]:
-        return list(self.pending_updates), 0
+    async def _fetch_updates(self) -> list[dict]:
+        return list(self.pending_updates)
+
+    async def _process_single_update(self, update: dict[str, Any]) -> None:
+        """Run one update through production polling/application sequencing."""
+        self.pending_updates = [update]
+        try:
+            await self.process_updates()
+        finally:
+            self.pending_updates = []
+
+
+class RecordingTelegramRecallDelivery(TelegramRecallDelivery):
+    """Run production scheduled-delivery orchestration without Telegram I/O."""
+
+    def __init__(self, provider: FixtureRecallSessionProvider):
+        self.recall_session_provider = provider
+        self.provider = provider
+        self.bot_token = "integration-test-no-network"
+        self.base_url = "network-is-forbidden"
+        self.recall_start_hour = 0
+        self.recall_end_hour = 24
+        self.sent: list[int] = []
+        self.callback_transactions: list[bool] = []
+
+    async def _send_queue_word(self, _chat_id: int, word: RecallQueueWord) -> bool:
+        session = self.provider.current_session
+        require(self.provider.active_sessions == 1 and session is not None, "delivery callback lost its user session")
+        self.callback_transactions.append(session.in_transaction())
+        self.sent.append(word.id)
+        return True
 
 
 @dataclass(frozen=True)
@@ -600,6 +751,7 @@ class RecallWorkflow:
         recall_service: RecallService,
         recall_repository: RecallRepository,
         vocabulary_service: VocabularyService,
+        fixture_ids: set[int],
     ):
         self.db = db
         self.user_id = user_id
@@ -608,6 +760,8 @@ class RecallWorkflow:
         self.recall_service = recall_service
         self.recall_repository = recall_repository
         self.vocabulary_service = vocabulary_service
+        self.fixture_ids = fixture_ids
+        self.command_provider = FixtureRecallTransactionProvider(fixture_ids)
         self.case_before: dict[str, Any] | None = None
 
     async def evidence(self) -> dict[str, Any]:
@@ -756,7 +910,36 @@ class RecallWorkflow:
             require(learned["learned_times"] == 1, f"fixture {vocabulary_id} learning count is not 1")
             require(learned["last_learned"] is not None, f"fixture {vocabulary_id} lacks last_learned")
         require(after["recall_state"]["next_word_index"] == 0, "full delivery cycle did not wrap cursor to zero")
-        return f"populated empty queue, delivered {len(sent)} words in order, and wrapped cursor"
+
+        await self.reset(cursor=0)
+        # Duplicate the target DTO only inside the harness: the first user
+        # operation aborts with a real PostgreSQL error, while the second uses a
+        # fresh session and completes against the same fixture-owned aggregate.
+        scheduled_provider = FixtureRecallSessionProvider(
+            self.fixture_ids,
+            self.user_id,
+            enumeration_copies=2,
+            fail_delivery_call=2,
+        )
+        scheduled_delivery = RecordingTelegramRecallDelivery(scheduled_provider)
+        await scheduled_delivery.send_next_recall_word()
+        require(len(scheduled_provider.sessions) == 3, "scheduled delivery did not isolate enumeration and user work")
+        require(
+            len({id(session) for session in scheduled_provider.sessions}) == 3,
+            "scheduled delivery reused an enumeration or user session",
+        )
+        require(
+            scheduled_provider.events
+            == [("open", 1), ("close", 1), ("open", 2), ("close", 2), ("open", 3), ("close", 3)],
+            "scheduled delivery session lifecycle was not enumeration-then-isolated-users",
+        )
+        require(scheduled_provider.recovery_checks == 1, "later scheduled user session was not PostgreSQL-usable")
+        require(scheduled_delivery.callback_transactions == [True], "row-lock transaction ended before callback")
+        require(len(scheduled_delivery.sent) == 1, "scheduled delivery did not send exactly one target-user word")
+        return (
+            f"populated empty queue, delivered {len(sent)} words in order, wrapped cursor, and verified "
+            "fresh scheduled enumeration/user sessions, failed-user isolation, and callback-spanning transaction"
+        )
 
     async def delivery_edge(self) -> str:
         await self.reset()
@@ -769,6 +952,7 @@ class RecallWorkflow:
             return True
 
         await self.recall_service.disable_for_user(self.user_id, chat_id=DEFAULT_CHAT_ID)
+        await self.db.commit()
         disabled_before = await self.evidence()
         require(await self.recall_service.deliver_next_word(self.user_id, record) is None, "disabled state delivered")
         require(await self.evidence() == disabled_before and not sends, "disabled delivery mutated state")
@@ -919,7 +1103,7 @@ class RecallWorkflow:
         username = (await self.db.get(User, self.user_id)).telegram_username
         require(bool(username), "temporary Telegram username is missing")
         offset_store = MemoryOffsetStore(100)
-        telegram = RecordingTelegramCommandService(self.recall_service, offset_store)
+        telegram = RecordingTelegramCommandProcessor(self.command_provider, offset_store)
 
         await telegram._process_single_update(telegram_update(101, username, "/start"))
         started = await self.evidence()
@@ -1045,7 +1229,7 @@ class RecallWorkflow:
         self.case_before = await self.evidence()
         username = (await self.db.get(User, self.user_id)).telegram_username
         require(bool(username), "temporary username missing")
-        telegram = RecordingTelegramCommandService(self.recall_service, MemoryOffsetStore())
+        telegram = RecordingTelegramCommandProcessor(self.command_provider, MemoryOffsetStore())
 
         await telegram._process_single_update(telegram_update(201, f"@{username.upper()}", "/start"))
         normalized = await self.evidence()
@@ -1139,6 +1323,7 @@ class RecallWorkflow:
             )
             await self.db.commit()
             result = await self.recall_service.postpone_word(state, target.word_phrase)
+            await self.db.commit()
             after_ids = [word.id for word in result.daily_selection]
             require(target.id not in after_ids, f"postponed position {position} was re-added")
             expected_cursor = RecallRepository._cursor_after_removal(cursor, position, settings.words_per_day - 1)
@@ -1159,6 +1344,7 @@ class RecallWorkflow:
         single_state = await self.recall_repository.get_recall_state(self.user_id)
         require(single_state is not None, "single-item state missing")
         single_result = await self.recall_service.postpone_word(single_state, only.word_phrase)
+        await self.db.commit()
         if only.id in [word.id for word in single_result.daily_selection]:
             failures.append("D03 postponed single eligible word was immediately re-added")
         require(single_result.next_word_index == 0, "single-item postpone cursor is not zero")
@@ -1170,6 +1356,7 @@ class RecallWorkflow:
         )
         await self.db.commit()
         refilled = await self.recall_service.postpone_word(state, target.word_phrase)
+        await self.db.commit()
         require(target.id not in [word.id for word in refilled.daily_selection], "alternative refill re-added target")
         require(len(refilled.daily_selection) == settings.words_per_day, "alternative refill did not reach target")
 
@@ -1177,6 +1364,7 @@ class RecallWorkflow:
         absent = self.fixtures[settings.words_per_day + 2]
         queue_before = [word.id for word in state.daily_selection]
         removed = await self.recall_service.remove_word_completely(state, absent.word_phrase)
+        await self.db.commit()
         require([word.id for word in removed.daily_selection] == queue_before, "absent soft remove changed queue")
         absent_row = await self.db.get(Vocabulary, absent.id, populate_existing=True)
         require(absent_row is not None and not absent_row.in_learn, "absent soft remove did not deactivate")
@@ -1184,6 +1372,7 @@ class RecallWorkflow:
         state = await self.reset()
         old_ids = {word.id for word in state.daily_selection}
         bumped = await self.recall_service.bump_words(state)
+        await self.db.commit()
         require(old_ids.isdisjoint({word.id for word in bumped.daily_selection}), "full bump reused old IDs")
         require(len(bumped.daily_selection) == settings.words_per_day, "full bump did not fill queue")
         require(bumped.next_word_index == 0, "full bump cursor is not zero")
@@ -1193,6 +1382,7 @@ class RecallWorkflow:
         alternatives = {self.fixtures[settings.words_per_day].id, self.fixtures[settings.words_per_day + 1].id}
         await self.configure_fixture_pool(alternatives, cooldown_ids=current_ids)
         insufficient = await self.recall_service.bump_words(state)
+        await self.db.commit()
         require(
             {word.id for word in insufficient.daily_selection} == alternatives,
             "insufficient bump did not retain exactly available alternatives",
@@ -1202,6 +1392,7 @@ class RecallWorkflow:
         state = await self.reset()
         await self.configure_fixture_pool(set(), cooldown_ids={fixture.id for fixture in self.fixtures})
         empty = await self.recall_service.bump_words(state)
+        await self.db.commit()
         require(not empty.daily_selection and empty.next_word_index == 0, "no-alternative bump did not clear queue")
         await self.reset()
         require(not failures, "; ".join(failures))
@@ -1216,6 +1407,7 @@ class RecallWorkflow:
         )
 
         await self.recall_service.disable_for_user(self.user_id, chat_id=DEFAULT_CHAT_ID)
+        await self.db.commit()
         disabled_states = await self.recall_service.get_active_recall_states()
         require(
             self.user_id not in [state.user_id for state in disabled_states], "disabled recall state remains eligible"
@@ -1255,35 +1447,50 @@ class RecallWorkflow:
             offset_path.write_text("41", encoding="utf-8")
             require(store.get_update_offset() == 41, "valid offset was not read")
 
-        proxy = FailFirstRecallProxy(self.db, self.recall_service)
+        failing_provider = FixtureRecallTransactionProvider(self.fixture_ids, fail_first=True)
         batch_store = MemoryOffsetStore(300)
-        batch = RecordingTelegramCommandService(proxy, batch_store)
+        batch = RecordingTelegramCommandProcessor(failing_provider, batch_store)
         batch.pending_updates = [
             telegram_update(301, username, "/state"),
             telegram_update(302, username, "/state"),
         ]
         await batch.process_updates()
-        transaction_usable = True
-        try:
-            await self.db.execute(text("SELECT 1"))
-        except Exception:
-            transaction_usable = False
-        await self.db.rollback()
-        later_processed = any("Current State" in message["text"] for message in batch.outbox)
+        require(batch_store.offset == 300, "failed update advanced the polling offset")
+        require(not batch.outbox, "failed update or a later update emitted a message")
+        require(len(failing_provider.sessions) == 1, "later update ran after the retryable database failure")
+        require(failing_provider.active_sessions == 0, "failed provider session did not close")
+
+        await batch.process_updates()
+        require(batch_store.offset == 303, "retried contiguous batch did not advance through the later update")
+        require(len(batch.outbox) == 2, "retry did not process the failed update and its later update")
+        require(
+            all("Current State" in message["text"] for message in batch.outbox),
+            "retried state commands emitted unexpected responses",
+        )
+        require(
+            all(message["provider_closed"] for message in batch.outbox),
+            "outbound command response started before its provider closed",
+        )
+        require(len(failing_provider.sessions) == 3, "retry did not open one fresh session per relevant update")
+        require(
+            len({id(session) for session in failing_provider.sessions}) == 3,
+            "retry reused a PostgreSQL session",
+        )
+        require(failing_provider.active_sessions == 0, "successful provider sessions did not close")
 
         await self.reset(enabled=True)
         failing_store = FailingOffsetStore(400)
-        failing = RecordingTelegramCommandService(self.recall_service, failing_store)
+        failing = RecordingTelegramCommandProcessor(self.command_provider, failing_store)
         failing.pending_updates = [telegram_update(401, username, "/stop")]
         await failing.process_updates()
         stopped = await self.evidence()
         require(not stopped["recall_state"]["is_enabled"], "command did not commit before offset write failure")
         require(failing_store.offset == 400, "failing offset store changed its cursor")
 
-        require(transaction_usable, "real PostgreSQL failure left the shared command session aborted")
-        require(later_processed, "later update in failed PostgreSQL batch was silently discarded")
-        require(batch_store.offset == 303, "successful recovered batch did not advance offset")
-        return "file offset defaults, aborted-batch recovery, and offset-write failure verified"
+        return (
+            "file offset defaults; retryable PostgreSQL failure retained its offset and stopped the batch; "
+            "fresh-session retry processed the contiguous suffix after provider close; offset-write failure verified"
+        )
 
     async def concurrency(self) -> str:
         await self.reset(cursor=0)
@@ -1338,6 +1545,7 @@ class RecallWorkflow:
         async def enable_once(db: AsyncSession) -> None:
             service, _, _ = build_recall_service(db, fixture_ids)
             await service.enable_for_username(username, DEFAULT_CHAT_ID)
+            await db.commit()
 
         await self.db.rollback()
         async with SessionLocal() as first_db, SessionLocal() as second_db:
@@ -1439,7 +1647,7 @@ class RecallWorkflow:
         user = await self.db.get(User, self.user_id, populate_existing=True)
         require(user is not None and user.telegram_username, "temporary username missing")
         username = user.telegram_username
-        telegram = RecordingTelegramCommandService(self.recall_service, MemoryOffsetStore())
+        telegram = RecordingTelegramCommandProcessor(self.command_provider, MemoryOffsetStore())
 
         initial = await self.evidence()
         queue_ids = [row["vocabulary_id"] for row in initial["queue"]]
@@ -1542,6 +1750,7 @@ class RecallWorkflow:
         require(after_delivery is not None, "state disappeared after delivery")
         postpone_target = after_delivery.daily_selection[after_delivery.next_word_index]
         postponed = await self.recall_service.postpone_word(after_delivery, postpone_target.word_phrase)
+        await self.db.commit()
         teacher_after_postpone = await self.recall_service.load_current_recall_words(self.user_id)
         require(
             teacher_after_postpone == [word.word_phrase for word in postponed.daily_selection],
@@ -1550,6 +1759,7 @@ class RecallWorkflow:
 
         remove_target = postponed.daily_selection[postponed.next_word_index]
         removed = await self.recall_service.remove_word_completely(postponed, remove_target.word_phrase)
+        await self.db.commit()
         teacher_after_remove = await self.recall_service.load_current_recall_words(self.user_id)
         require(
             teacher_after_remove == [word.word_phrase for word in removed.daily_selection],
@@ -1600,6 +1810,7 @@ class RecallWorkflow:
         require(current is not None, "state disappeared before created-word bump")
         await self.configure_fixture_pool(set(), cooldown_ids={fixture.id for fixture in self.fixtures})
         created_selection = await self.recall_service.bump_words(current)
+        await self.db.commit()
         require(
             [word.id for word in created_selection.daily_selection] == [created_id],
             "created eligible word was unavailable to the next bump",
@@ -1617,7 +1828,7 @@ class RecallWorkflow:
         )
 
     async def worker_lifecycle(self) -> str:
-        """Exercise explicit best-effort batch and persisted-offset restart policy."""
+        """Exercise contiguous-prefix batch and persisted-offset restart policy."""
         await self.reset(enabled=True)
         self.case_before = await self.evidence()
         user = await self.db.get(User, self.user_id, populate_existing=True)
@@ -1625,10 +1836,10 @@ class RecallWorkflow:
         username = user.telegram_username
 
         # Telegram update IDs define processing order even if an API response is
-        # unexpectedly unordered. The offset acknowledges the whole batch after
-        # per-update recovery; poison updates are not retried indefinitely.
+        # unexpectedly unordered. Because every update in this batch is handled,
+        # the contiguous offset advances through the highest update ID.
         store = MemoryOffsetStore(600)
-        telegram = RecordingTelegramCommandService(self.recall_service, store)
+        telegram = RecordingTelegramCommandProcessor(self.command_provider, store)
         telegram.pending_updates = [
             telegram_update(602, username, "/stop"),
             telegram_update(601, username, "/start"),
@@ -1641,20 +1852,23 @@ class RecallWorkflow:
         with tempfile.TemporaryDirectory(prefix="runestone-recall-worker-") as directory:
             path = Path(directory) / "offset.txt"
             persistent_store = TelegramUpdateOffsetStore(str(path))
-            first_worker = RecordingTelegramCommandService(self.recall_service, persistent_store)
+            first_worker = RecordingTelegramCommandProcessor(self.command_provider, persistent_store)
             first_worker.pending_updates = [telegram_update(610, username, "/start")]
             await first_worker.process_updates()
             before_restart = await self.evidence()
-            second_worker = RecordingTelegramCommandService(self.recall_service, TelegramUpdateOffsetStore(str(path)))
+            second_worker = RecordingTelegramCommandProcessor(
+                self.command_provider,
+                TelegramUpdateOffsetStore(str(path)),
+            )
             require(second_worker.offset_store.get_update_offset() == 611, "worker restart lost persisted offset")
             require(await self.evidence() == before_restart, "worker restart changed persisted recall state")
 
         failing_store = FailingOffsetStore(700)
-        first_attempt = RecordingTelegramCommandService(self.recall_service, failing_store)
+        first_attempt = RecordingTelegramCommandProcessor(self.command_provider, failing_store)
         first_attempt.pending_updates = [telegram_update(701, username, "/stop")]
         await first_attempt.process_updates()
         once = await self.evidence()
-        second_attempt = RecordingTelegramCommandService(self.recall_service, MemoryOffsetStore(700))
+        second_attempt = RecordingTelegramCommandProcessor(self.command_provider, MemoryOffsetStore(700))
         second_attempt.pending_updates = [telegram_update(701, username, "/stop")]
         await second_attempt.process_updates()
         twice = await self.evidence()
@@ -1701,7 +1915,12 @@ class RecallWorkflow:
 
                 delivery_task = asyncio.create_task(delivery_service.deliver_next_word(self.user_id, record))
                 await asyncio.wait_for(entered_send.wait(), timeout=5)
-                mutation_task = asyncio.create_task(mutation(mutation_service, mutation_vocabulary))
+
+                async def run_mutation() -> None:
+                    await mutation(mutation_service, mutation_vocabulary)
+                    await mutation_db.commit()
+
+                mutation_task = asyncio.create_task(run_mutation())
                 await asyncio.sleep(0.05)
                 require(not mutation_task.done(), f"{name} did not wait for the delivery aggregate lock")
                 release_send.set()
@@ -1740,7 +1959,6 @@ class RecallWorkflow:
             require(await vocabulary.hard_delete_item(target_id, self.user_id), "delete race target vanished")
             if changed:
                 await service.refill_queue(self.user_id)
-            await service.recall_repository.commit()
 
         async def web_soft_delete(service: RecallService, vocabulary: VocabularyService) -> None:
             state = await service.recall_repository.get_recall_state(self.user_id)
@@ -1754,7 +1972,6 @@ class RecallWorkflow:
             )
             if changed:
                 await service.refill_queue(self.user_id)
-            await service.recall_repository.commit()
 
         for name, mutation in (
             ("stop", stop),
@@ -1787,7 +2004,7 @@ class RecallWorkflow:
         try:
             await self.recall_service.postpone_word(state, f"{self.fixture_prefix}not-in-queue")
         except WordNotInSelectionError:
-            pass
+            await self.db.rollback()
         else:
             raise AssertionError("postponing a missing word did not raise WordNotInSelectionError")
         after_missing = await self.evidence()
@@ -1923,12 +2140,12 @@ def load_coverage_manifest() -> dict[str, Any]:
             "C": 11,
             "D": 9,
             "E": 6,
-            "F": 4,
+            "F": 8,
             "G": 5,
             "H": 3,
             "I": 2,
             "J": 6,
-            "K": 5,
+            "K": 7,
             "L": 6,
             "M": 5,
             "N": 5,
@@ -1936,7 +2153,7 @@ def load_coverage_manifest() -> dict[str, Any]:
         for index in range(1, end + 1)
     }
     scenarios = manifest.get("scenarios", {})
-    require(set(scenarios) == expected_ids, "coverage manifest does not contain exactly A01-I02")
+    require(set(scenarios) == expected_ids, "coverage manifest scenario IDs do not match the integration plan")
     allowed_statuses = {"automated", "grouped", "manual-only", "unsupported"}
     for scenario_id, coverage in scenarios.items():
         require(coverage.get("status") in allowed_statuses, f"invalid coverage status for {scenario_id}")
@@ -2041,10 +2258,8 @@ async def run(args: argparse.Namespace) -> int:
                         }
                         for fixture in fixtures
                     ]
-                    recall_service, recall_repository, vocabulary_service = build_recall_service(
-                        db,
-                        {fixture.id for fixture in fixtures},
-                    )
+                    fixture_ids = {fixture.id for fixture in fixtures}
+                    recall_service, recall_repository, vocabulary_service = build_recall_service(db, fixture_ids)
                     workflow = RecallWorkflow(
                         db,
                         args.user_id,
@@ -2053,6 +2268,7 @@ async def run(args: argparse.Namespace) -> int:
                         recall_service,
                         recall_repository,
                         vocabulary_service,
+                        fixture_ids,
                     )
 
                     for case_name in selected_cases:
@@ -2212,7 +2428,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fail-fast", action="store_true", help="Stop after the first failed scenario")
     parser.add_argument("--report-file", help="Retained machine-readable JSON report path (default: /tmp)")
     parser.add_argument(
-        "--show-coverage", action="store_true", help="Print A01-I02 coverage manifest without DB access"
+        "--show-coverage", action="store_true", help="Print A01-N05 coverage manifest without DB access"
     )
     args = parser.parse_args()
     if not args.cases:

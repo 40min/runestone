@@ -17,7 +17,7 @@ from runestone.api.endpoints import delete_vocabulary, update_vocabulary
 from runestone.api.schemas import VocabularyUpdate
 from runestone.core.exceptions import RunestoneError
 from runestone.db.models import RecallQueueItemDB, RecallUserStateDB, Vocabulary
-from runestone.services.recall_service import RecallService
+from runestone.recall.service import RecallService
 from runestone.services.vocabulary_service import VocabularyService
 
 

@@ -1,38 +1,31 @@
-"""
-Service for sending daily vocabulary words to users via Telegram.
-
-This module contains the TelegramRecallDeliveryService class that handles the daily word
-portion logic for multiple concurrent users.
-"""
+"""Scheduled Telegram transport for recall-word delivery."""
 
 import logging
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 from datetime import datetime
 
 import httpx
 
-from runestone.services.recall_service import RecallService
-from runestone.services.recall_types import RecallQueueWord, RecallState
+from runestone.recall.service import RecallService
+from runestone.recall.types import RecallQueueWord, RecallState
 from runestone.utils.markdown import escape_markdown
 
 logger = logging.getLogger(__name__)
 
+RecallSessionProvider = Callable[[], AbstractAsyncContextManager[RecallService]]
 
-class TelegramRecallDeliveryService:
-    """Service for sending daily vocabulary words to Telegram users."""
+
+class TelegramRecallDelivery:
+    """Coordinate isolated recall sessions with Telegram message delivery."""
 
     def __init__(
         self,
-        recall_service: RecallService,
+        recall_session_provider: RecallSessionProvider,
         settings,
     ):
-        """
-        Initialize the TelegramRecallDeliveryService.
-
-        Args:
-            recall_service: RecallService instance for user recall state management
-            settings: Application settings object
-        """
-        self.recall_service = recall_service
+        """Initialize delivery with a session-only recall provider."""
+        self.recall_session_provider = recall_session_provider
         self.bot_token = settings.telegram_bot_token
         if not self.bot_token:
             raise ValueError("Telegram bot token is required")
@@ -42,15 +35,8 @@ class TelegramRecallDeliveryService:
         self.recall_end_hour = settings.recall_end_hour
 
     async def send_next_recall_word(self) -> None:
-        """
-        Send the next vocabulary word in the daily portion to all active users.
-
-        This method iterates through all active users and sends one word from their
-        daily portion if available and within the recall period.
-        """
+        """Send one recall word to each eligible user in isolated sessions."""
         current_hour = datetime.now().hour
-
-        # Check if we're within recall hours
         if not (self.recall_start_hour <= current_hour < self.recall_end_hour):
             logger.info(
                 "Outside recall hours (%s-%s), skipping recall",
@@ -59,30 +45,35 @@ class TelegramRecallDeliveryService:
             )
             return
 
-        active_users = await self.recall_service.get_active_recall_states()
-        logger.info("Starting recall word sending for %s active users", len(active_users))
+        # Enumeration has its own short-lived read session. The resulting DTOs
+        # remain safe to use after that session closes.
+        async with self.recall_session_provider() as recall_service:
+            active_users = await recall_service.get_active_recall_states()
 
+        logger.info("Starting recall word sending for %s active users", len(active_users))
         for user_state in active_users:
             try:
-                await self._process_user_recall_word(user_state)
+                # deliver_next_word owns commit/rollback for this session and
+                # deliberately keeps its row lock across the send callback.
+                async with self.recall_session_provider() as recall_service:
+                    await self._process_user_recall_word(recall_service, user_state)
             except Exception as exc:
                 logger.error(
                     "Failed to process recall word for user %s: %s",
                     user_state.user_id,
                     exc,
                 )
-                # Continue with other users even if one fails
 
         logger.info("Completed recall word sending process")
 
-    async def _process_user_recall_word(self, user_state: RecallState, max_attempts: int = 3) -> None:
-        """Delegate one user's locked delivery workflow to the recall service.
-
-        Args:
-            user_state: Recall state for the user
-            max_attempts: Maximum number of attempts to retry with new selection (default: 3)
-        """
-        updated_state = await self.recall_service.deliver_next_word(
+    async def _process_user_recall_word(
+        self,
+        recall_service: RecallService,
+        user_state: RecallState,
+        max_attempts: int = 3,
+    ) -> None:
+        """Delegate one user's locked delivery workflow to its recall service."""
+        updated_state = await recall_service.deliver_next_word(
             user_state.user_id,
             self._send_queue_word,
             max_attempts=max_attempts,
@@ -107,26 +98,13 @@ class TelegramRecallDeliveryService:
         )
 
     async def _send_word_message(self, chat_id: int, word: dict) -> bool:
-        """
-        Send a vocabulary word message to a Telegram chat.
-
-        Args:
-            chat_id: Telegram chat ID
-            word: Word dictionary with word_phrase, translation, etc.
-
-        Returns:
-            True if message was sent successfully, False otherwise
-        """
-        word_phrase = word.get("word_phrase", "Unknown")
-        translation = word.get("translation", "Unknown")
+        """Send a formatted vocabulary word to one Telegram chat."""
+        word_phrase = escape_markdown(word.get("word_phrase", "Unknown"))
+        translation = escape_markdown(word.get("translation", "Unknown"))
         example_phrase = word.get("example_phrase", "")
-
-        word_phrase = escape_markdown(word_phrase)
-        translation = escape_markdown(translation)
         if example_phrase:
             example_phrase = escape_markdown(example_phrase)
 
-        # Format the message
         message = f"🇸🇪 *{word_phrase}*\n🇬🇧 {translation}"
         if example_phrase:
             message += f"\n\n💡 _Example:_ {example_phrase}"

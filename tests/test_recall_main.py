@@ -1,4 +1,4 @@
-from unittest.mock import ANY, AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -132,7 +132,7 @@ class TestRecallMain:
     def test_create_scheduler(self, mock_settings, mock_async_scheduler):
         """Test scheduler creation and job configuration."""
         from recall_main import create_scheduler
-        from runestone.state.telegram_update_offset_store import TelegramUpdateOffsetStore
+        from runestone.telegram.offset_store import TelegramUpdateOffsetStore
 
         mock_offset_store = TelegramUpdateOffsetStore("state/offset.txt")
         mock_scheduler = Mock()
@@ -196,54 +196,44 @@ class TestRecallMain:
         mock_engine.connect.assert_called_once()
         mock_conn.run_sync.assert_called_once()
 
-    @patch("recall_main.SessionLocal")
-    @patch("recall_main._create_recall_service")
-    @patch("recall_main.TelegramCommandService")
+    @patch("recall_main.provide_recall_transaction")
+    @patch("recall_main.TelegramCommandProcessor")
     @pytest.mark.asyncio
     async def test_process_updates_job(
         self,
-        mock_telegram_service,
-        mock_create_recall_service,
-        mock_session_local,
+        mock_telegram_processor,
+        mock_recall_transaction_provider,
     ):
         """Test process_updates_job wrapper function."""
         from recall_main import process_updates_job
 
-        mock_db = AsyncMock()
-        mock_session_local.return_value.__aenter__.return_value = mock_db
         mock_offset_store = Mock()
 
-        mock_telegram_instance = AsyncMock()
-        mock_telegram_service.return_value = mock_telegram_instance
+        mock_processor_instance = AsyncMock()
+        mock_telegram_processor.return_value = mock_processor_instance
 
         await process_updates_job(mock_offset_store)
 
-        mock_session_local.assert_called_once()
-        mock_create_recall_service.assert_called_once_with(mock_db)
-        mock_telegram_service.assert_called_once_with(mock_offset_store, mock_create_recall_service.return_value)
-        mock_telegram_instance.process_updates.assert_awaited_once()
+        mock_telegram_processor.assert_called_once_with(mock_offset_store, mock_recall_transaction_provider)
+        mock_processor_instance.process_updates.assert_awaited_once()
 
-    @patch("recall_main.SessionLocal")
-    @patch("recall_main._create_recall_service")
-    @patch("recall_main.TelegramRecallDeliveryService")
+    @patch("recall_main.settings")
+    @patch("recall_main.provide_recall_session")
+    @patch("recall_main.TelegramRecallDelivery")
     @pytest.mark.asyncio
     async def test_send_recall_word_job(
         self,
-        mock_telegram_recall_delivery_service,
-        mock_create_recall_service,
-        mock_session_local,
+        mock_telegram_recall_delivery,
+        mock_recall_session_provider,
+        mock_settings,
     ):
         """Test send_recall_word_job wrapper function."""
         from recall_main import send_recall_word_job
 
-        mock_db = AsyncMock()
-        mock_session_local.return_value.__aenter__.return_value = mock_db
         mock_recall_instance = AsyncMock()
-        mock_telegram_recall_delivery_service.return_value = mock_recall_instance
+        mock_telegram_recall_delivery.return_value = mock_recall_instance
 
         await send_recall_word_job()
 
-        mock_session_local.assert_called_once()
-        mock_create_recall_service.assert_called_once_with(mock_db)
-        mock_telegram_recall_delivery_service.assert_called_once_with(mock_create_recall_service.return_value, ANY)
+        mock_telegram_recall_delivery.assert_called_once_with(mock_recall_session_provider, mock_settings)
         mock_recall_instance.send_next_recall_word.assert_awaited_once()

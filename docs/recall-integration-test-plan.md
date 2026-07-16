@@ -288,9 +288,13 @@ Build Telegram update dictionaries with realistic command entities and record ou
 | ID | Action | Assertions |
 | --- | --- | --- |
 | F01 | No offset file, empty result, malformed content. | Missing defaults to `0`; malformed input is handled as documented without touching the database. |
-| F02 | Process ordered update IDs successfully. | Offset becomes `max(update_id) + 1` only after the batch handling policy permits it. |
-| F03 | First update causes a real PostgreSQL statement failure; a later valid command follows in the same fetched batch. | Failure is rolled back or isolated per update; later command commits successfully and offset advancement does not silently discard unprocessed work. |
-| F04 | Offset-file write fails after command handling. | Database outcome and retry behavior are reported explicitly; original fixture offset file is restored at cleanup. |
+| F02 | Process ordered update IDs successfully. | Offset advances through the highest contiguous handled update only. |
+| F03 | First update causes a real PostgreSQL statement failure; a later valid command follows in the same fetched batch. | The failing update rolls back, no command response is sent, later fetched updates are not processed, and the offset remains at the failing update. |
+| F04 | Poll again after removing the injected database failure. | The failed update is retried with a fresh session, later updates then process in order, and the contiguous offset advances through them. |
+| F05 | Inspect the command transaction while its outgoing Telegram message is recorded. | Commit and provider closure complete before outbound HTTP begins. |
+| F06 | Fail Telegram send after a successful command commit. | The failure is logged and the offset advances because application work has already committed. |
+| F07 | Offset-file write fails after command handling. | Database outcome and replay behavior are reported explicitly; original fixture offset file is restored at cleanup. |
+| F08 | Application and commit succeed, but closing the command session raises. | Cleanup failure is logged without suppressing the prepared response or retaining the offset for replay. |
 
 ### G. Concurrency and eligibility races
 
@@ -330,8 +334,9 @@ Use two independent `AsyncSession` instances and bounded timeouts so a failed lo
 
 | IDs | Consumer behavior | Executable boundary |
 | --- | --- | --- |
-| K01-K03 | Exact safe MarkdownV2 payload, all rejected transport outcomes, and later-user continuation. | Focused production-adapter pytest tests with deterministic HTTP recorders. |
+| K01-K03 | Exact safe MarkdownV2 payload, all rejected transport outcomes, and later-user continuation with a fresh session per user. | Focused production-adapter pytest tests with deterministic HTTP and provider recorders. |
 | K04-K05 | Accepted delivery transaction, eligibility partitions, and invalid queue repair. | Existing PostgreSQL delivery cases. |
+| K06-K07 | No provider outside delivery hours; one short enumeration session followed by a fresh session for every active user. | Focused Telegram delivery provider-lifecycle tests. |
 
 ### L. Vocabulary and Teacher consumers
 
@@ -344,15 +349,15 @@ Use two independent `AsyncSession` instances and bounded timeouts so a failed lo
 
 | IDs | Consumer behavior | Executable boundary |
 | --- | --- | --- |
-| M01-M04 | Update-ID ordering, failed-update and `/start` response recovery, duplicate idempotent command, persisted offset, and database state after restart. | `worker-lifecycle`, `offset-recovery`, and focused Telegram command tests. |
-| M05 | Network, API, JSON, and empty polling outcomes preserve offset. | Focused TelegramCommandService tests. |
+| M01-M04 | Update-ID ordering, retryable failure stop/retry, contiguous persisted offset, duplicate idempotent replay after offset-write failure, and database state after restart. | `worker-lifecycle`, `offset-recovery`, and focused Telegram command tests. |
+| M05 | Network, API, JSON, and empty polling outcomes preserve offset. | Focused `TelegramCommandProcessor` tests. |
 
-The current worker uses an explicit best-effort batch policy: each update is recovered independently,
-then the batch offset advances to `max(update_id) + 1`. This prevents one poison update from blocking
-the worker but does not retry that failed update. If writing the offset fails, Telegram may replay the
-batch. Idempotent commands are exact no-ops on replay; non-idempotent commands are required to settle
-on another valid aggregate, not to reproduce an identical queue. Exactly-once command effects would
-require durable per-update idempotency records and remain a product-design decision.
+The worker processes updates by ascending ID and persists only the highest contiguous prefix considered
+handled. A database or SQLAlchemy failure stops the batch and retains the failing update for a later poll;
+the retry and every later update receive fresh sessions. Expected domain failures and unknown non-database
+application failures follow their handled response policy and advance. Telegram send failure after commit
+also advances, so exactly-once outbound delivery remains outside this design. If writing the offset itself
+fails, Telegram may replay already committed commands; idempotent commands must remain safe under replay.
 
 ### N. Supported concurrency boundaries
 
