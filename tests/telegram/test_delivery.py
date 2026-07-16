@@ -115,21 +115,22 @@ async def test_enumeration_closes_before_fresh_session_for_each_user(mock_settin
     )
     delivery = TelegramRecallDelivery(provider, mock_settings)
 
-    with patch("runestone.telegram.delivery.datetime") as mock_datetime:
+    with (
+        patch("runestone.telegram.delivery.datetime") as mock_datetime,
+        patch("runestone.telegram.delivery.httpx.AsyncClient") as client_class,
+    ):
         mock_datetime.now.return_value.hour = 10
         await delivery.send_next_recall_word()
 
     enumeration_service.get_active_recall_states.assert_awaited_once_with()
-    first_user_service.deliver_next_word.assert_awaited_once_with(
-        1,
-        delivery._send_queue_word,
-        max_attempts=3,
-    )
-    second_user_service.deliver_next_word.assert_awaited_once_with(
-        2,
-        delivery._send_queue_word,
-        max_attempts=3,
-    )
+    first_callback = first_user_service.deliver_next_word.await_args.args[1]
+    second_callback = second_user_service.deliver_next_word.await_args.args[1]
+    assert first_callback is second_callback
+    assert first_callback.func == delivery._send_queue_word
+    assert first_callback.args == (client_class.return_value.__aenter__.return_value,)
+    first_user_service.deliver_next_word.assert_awaited_once_with(1, first_callback, max_attempts=3)
+    second_user_service.deliver_next_word.assert_awaited_once_with(2, first_callback, max_attempts=3)
+    client_class.assert_called_once_with(timeout=10.0)
     assert provider.events == [
         ("open", 0),
         ("close", 0),
@@ -150,7 +151,10 @@ async def test_failed_user_session_closes_and_later_user_still_runs(mock_setting
     provider = RecordingRecallProvider(enumeration_service, failed_service, later_service)
     delivery = TelegramRecallDelivery(provider, mock_settings)
 
-    with patch("runestone.telegram.delivery.datetime") as mock_datetime:
+    with (
+        patch("runestone.telegram.delivery.datetime") as mock_datetime,
+        patch("runestone.telegram.delivery.httpx.AsyncClient"),
+    ):
         mock_datetime.now.return_value.hour = 10
         await delivery.send_next_recall_word()
 
@@ -169,12 +173,13 @@ async def test_process_user_delegates_locked_workflow(mock_settings):
     recall_service = make_service()
     recall_service.deliver_next_word.return_value = state
     delivery = TelegramRecallDelivery(Mock(), mock_settings)
+    send_word = AsyncMock()
 
-    await delivery._process_user_recall_word(recall_service, state, max_attempts=2)
+    await delivery._process_user_recall_word(recall_service, state, send_word, max_attempts=2)
 
     recall_service.deliver_next_word.assert_awaited_once_with(
         1,
-        delivery._send_queue_word,
+        send_word,
         max_attempts=2,
     )
 
@@ -183,10 +188,12 @@ async def test_process_user_delegates_locked_workflow(mock_settings):
 async def test_send_queue_word_converts_dto_to_payload(mock_settings):
     delivery = TelegramRecallDelivery(Mock(), mock_settings)
     delivery._send_word_message = AsyncMock(return_value=True)
+    client = Mock()
     word = RecallQueueWord(id=7, word_phrase="hej", translation="hi", example_phrase="Hej!")
 
-    assert await delivery._send_queue_word(123, word) is True
+    assert await delivery._send_queue_word(client, 123, word) is True
     delivery._send_word_message.assert_awaited_once_with(
+        client,
         123,
         {"id": 7, "word_phrase": "hej", "translation": "hi", "example_phrase": "Hej!"},
     )
@@ -201,16 +208,15 @@ async def test_send_word_message_escapes_markdown_v2(mock_settings):
     client = MagicMock()
     client.post = AsyncMock(return_value=response)
 
-    with patch("runestone.telegram.delivery.httpx.AsyncClient") as client_class:
-        client_class.return_value.__aenter__.return_value = client
-        accepted = await delivery._send_word_message(
-            123,
-            {
-                "word_phrase": "hej_[x]!",
-                "translation": "hi (there)",
-                "example_phrase": "Hej - du!",
-            },
-        )
+    accepted = await delivery._send_word_message(
+        client,
+        123,
+        {
+            "word_phrase": "hej_[x]!",
+            "translation": "hi (there)",
+            "example_phrase": "Hej - du!",
+        },
+    )
 
     assert accepted is True
     client.post.assert_awaited_once_with(
@@ -253,6 +259,4 @@ async def test_send_word_message_rejects_unsuccessful_transport_outcome(
     elif outcome == "transport-error":
         client.post.side_effect = httpx.ConnectError("offline", request=request)
 
-    with patch("runestone.telegram.delivery.httpx.AsyncClient") as client_class:
-        client_class.return_value.__aenter__.return_value = client
-        assert await delivery._send_word_message(123, {"word_phrase": "hej", "translation": "hi"}) is False
+    assert await delivery._send_word_message(client, 123, {"word_phrase": "hej", "translation": "hi"}) is False
