@@ -776,6 +776,56 @@ class TestVocabularyRepository:
 
         assert updated.priority_learn == VOCABULARY_PRIORITY_LOW
 
+    async def test_deprioritize_items_updates_active_owned_words_without_committing(self, repo, db_session):
+        """Bulk deprioritization increments, caps, and preserves ownership and activity boundaries."""
+        incremented = VocabularyModel(
+            user_id=1,
+            word_phrase="incremented",
+            translation="incremented",
+            in_learn=True,
+            priority_learn=3,
+        )
+        capped = VocabularyModel(
+            user_id=1,
+            word_phrase="capped",
+            translation="capped",
+            in_learn=True,
+            priority_learn=VOCABULARY_PRIORITY_LOW,
+        )
+        inactive = VocabularyModel(
+            user_id=1,
+            word_phrase="inactive",
+            translation="inactive",
+            in_learn=False,
+            priority_learn=2,
+        )
+        other_user = VocabularyModel(
+            user_id=2,
+            word_phrase="other-user",
+            translation="other user",
+            in_learn=True,
+            priority_learn=1,
+        )
+        db_session.add_all([incremented, capped, inactive, other_user])
+        await db_session.commit()
+        incremented_id = incremented.id
+        capped_id = capped.id
+        inactive_id = inactive.id
+        other_user_id = other_user.id
+        item_ids = [incremented_id, capped_id, inactive_id, other_user_id]
+
+        await repo.deprioritize_items(item_ids, user_id=1)
+        db_session.expire_all()
+
+        assert (await db_session.get(VocabularyModel, incremented_id)).priority_learn == 4
+        assert (await db_session.get(VocabularyModel, capped_id)).priority_learn == VOCABULARY_PRIORITY_LOW
+        assert (await db_session.get(VocabularyModel, inactive_id)).priority_learn == 2
+        assert (await db_session.get(VocabularyModel, other_user_id)).priority_learn == 1
+
+        await db_session.rollback()
+        persisted = await db_session.get(VocabularyModel, incremented_id)
+        assert persisted.priority_learn == 3
+
     async def test_get_vocabulary_item_not_found_existing(self, repo, db_session):
         """Test getting a non-existent vocabulary item."""
         with pytest.raises(ValueError, match="Vocabulary item with id 999 not found for user 1"):

@@ -526,6 +526,9 @@ class TestVocabularyService:
         await service.deprioritize_item(11, 7)
         vocabulary_repository.deprioritize_item.assert_awaited_once_with(11, 7)
 
+        await service.deprioritize_items([11, 12], 7)
+        vocabulary_repository.deprioritize_items.assert_awaited_once_with([11, 12], 7)
+
         await service.record_learning_event(11, 7)
 
         vocabulary_repository.update_last_learned.assert_awaited_once_with(word, commit=False)
