@@ -1371,7 +1371,7 @@ class RecallWorkflow:
 
         state = await self.reset()
         old_ids = {word.id for word in state.daily_selection}
-        bumped = await self.recall_service.bump_words(state)
+        bumped = await self.recall_service.bump_words(state.user_id)
         await self.db.commit()
         require(old_ids.isdisjoint({word.id for word in bumped.daily_selection}), "full bump reused old IDs")
         require(len(bumped.daily_selection) == settings.words_per_day, "full bump did not fill queue")
@@ -1381,7 +1381,7 @@ class RecallWorkflow:
         current_ids = {word.id for word in state.daily_selection}
         alternatives = {self.fixtures[settings.words_per_day].id, self.fixtures[settings.words_per_day + 1].id}
         await self.configure_fixture_pool(alternatives, cooldown_ids=current_ids)
-        insufficient = await self.recall_service.bump_words(state)
+        insufficient = await self.recall_service.bump_words(state.user_id)
         await self.db.commit()
         require(
             {word.id for word in insufficient.daily_selection} == alternatives,
@@ -1391,7 +1391,7 @@ class RecallWorkflow:
 
         state = await self.reset()
         await self.configure_fixture_pool(set(), cooldown_ids={fixture.id for fixture in self.fixtures})
-        empty = await self.recall_service.bump_words(state)
+        empty = await self.recall_service.bump_words(state.user_id)
         await self.db.commit()
         require(not empty.daily_selection and empty.next_word_index == 0, "no-alternative bump did not clear queue")
         await self.reset()
@@ -1809,7 +1809,7 @@ class RecallWorkflow:
         current = await self.recall_repository.get_recall_state(self.user_id)
         require(current is not None, "state disappeared before created-word bump")
         await self.configure_fixture_pool(set(), cooldown_ids={fixture.id for fixture in self.fixtures})
-        created_selection = await self.recall_service.bump_words(current)
+        created_selection = await self.recall_service.bump_words(current.user_id)
         await self.db.commit()
         require(
             [word.id for word in created_selection.daily_selection] == [created_id],
@@ -1939,7 +1939,7 @@ class RecallWorkflow:
         async def bump(service: RecallService, _vocabulary: VocabularyService) -> None:
             state = await service.recall_repository.get_recall_state(self.user_id)
             require(state is not None, "bump race state missing")
-            await service.bump_words(state)
+            await service.bump_words(state.user_id)
 
         async def postpone(service: RecallService, _vocabulary: VocabularyService) -> None:
             state = await service.recall_repository.get_recall_state(self.user_id)

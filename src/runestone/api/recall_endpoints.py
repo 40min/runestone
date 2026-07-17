@@ -112,10 +112,7 @@ async def bump_recall(
     """Apply the shared bump workflow and return the authoritative queue."""
 
     async def operation() -> RecallState:
-        state = await service.get_state_for_user(current_user.id)
-        if state is None:
-            raise RecallStateNotFoundError(current_user.id)
-        return await service.bump_words(state)
+        return await service.bump_words(current_user.id)
 
     return await _run_mutation(operation, db=db, user_id=current_user.id)
 

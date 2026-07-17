@@ -100,17 +100,15 @@ async def test_get_recall_serializes_only_display_safe_queue_fields(recall_api_c
 
 async def test_bump_recall_commits_once_and_returns_authoritative_queue(recall_api_client):
     client, service, db = recall_api_client
-    previous = make_state(user_id=client.user.id, words=[RecallQueueWord(id=7, word_phrase="hej")])
     updated = make_state(user_id=client.user.id, words=[RecallQueueWord(id=8, word_phrase="tack")])
-    service.get_state_for_user.return_value = previous
     service.bump_words.return_value = updated
 
     response = await client.post("/api/recall/bump")
 
     assert response.status_code == 200
     assert [word["id"] for word in response.json()["words"]] == [8]
-    service.get_state_for_user.assert_awaited_once_with(client.user.id)
-    service.bump_words.assert_awaited_once_with(previous)
+    service.get_state_for_user.assert_not_awaited()
+    service.bump_words.assert_awaited_once_with(client.user.id)
     db.commit.assert_awaited_once_with()
     db.rollback.assert_not_awaited()
 
@@ -155,7 +153,7 @@ async def test_mutations_map_unconfigured_recall_to_conflict(
 ):
     client, service, db = recall_api_client
     if configure_failure == "bump":
-        service.get_state_for_user.return_value = None
+        service.bump_words.side_effect = RecallStateNotFoundError(client.user.id)
     elif configure_failure == "postpone":
         service.postpone_queue_word.side_effect = RecallStateNotFoundError(client.user.id)
     else:

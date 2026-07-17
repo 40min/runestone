@@ -309,7 +309,7 @@ async def test_bump_words_raises_specific_error_when_state_is_missing(recall_ser
     recall_service.recall_repository.get_recall_state_for_update.return_value = None
 
     with pytest.raises(RecallStateNotFoundError, match="Recall state not found"):
-        await recall_service.bump_words(make_state(user_id=7))
+        await recall_service.bump_words(7)
 
     recall_service.recall_repository.commit.assert_not_awaited()
     recall_service.recall_repository.rollback.assert_not_awaited()
@@ -318,7 +318,6 @@ async def test_bump_words_raises_specific_error_when_state_is_missing(recall_ser
 @pytest.mark.anyio
 async def test_bump_words_keeps_original_queue_excluded_across_fallback_selection(recall_service):
     queued_state = make_state(user_id=1, daily_selection=[make_word(7, "hej"), make_word(8, "tack")])
-    stale_state = make_state(user_id=1, daily_selection=[make_word(99, "stale")])
     replacement = make_word(9, "ny")
     refreshed_state = make_state(user_id=1, daily_selection=[replacement, make_word(10, "sen")])
     recall_service.recall_repository.get_recall_state_for_update.return_value = queued_state
@@ -328,7 +327,7 @@ async def test_bump_words_keeps_original_queue_excluded_across_fallback_selectio
         [make_word(10, "sen")],
     ]
 
-    result = await recall_service.bump_words(stale_state)
+    result = await recall_service.bump_words(1)
 
     assert result == refreshed_state
     recall_service.vocabulary_service.deprioritize_items.assert_awaited_once_with([7, 8], 1)
@@ -369,7 +368,7 @@ async def test_bump_words_deprioritizes_locked_queue_before_selecting_replacemen
 
     recall_service.vocabulary_service.select_alternative_candidates.side_effect = select_after_deprioritization
 
-    result = await recall_service.bump_words(queued_state)
+    result = await recall_service.bump_words(1)
 
     assert result == refreshed_state
     recall_service.recall_repository.replace_queue.assert_awaited_once_with(
