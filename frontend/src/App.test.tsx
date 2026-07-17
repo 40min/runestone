@@ -55,8 +55,14 @@ vi.mock('./hooks/useImageProcessing', () => ({
   }),
 }));
 
+vi.mock('./components/RecallView', () => ({
+  default: () => <div>Recall test view</div>,
+}));
+
 describe('App', () => {
   beforeEach(() => {
+    window.history.replaceState({}, '', '/');
+    document.title = '';
     mockProcessImage.mockClear();
     mockRecognizeImage.mockClear();
     mockAnalyzeText.mockClear();
@@ -87,6 +93,36 @@ describe('App', () => {
 
     // Check for header element
     expect(document.querySelector('header')).toBeInTheDocument();
+  });
+
+  it('restores the Recall deep link and updates the document title', async () => {
+    window.history.replaceState({}, '', '/?view=recall');
+
+    render(<App />, { wrapper });
+
+    expect(screen.getByText('Recall test view')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(document.title).toBe('Runestone | Recall');
+    });
+    expect(window.location.search).toBe('?view=recall');
+  });
+
+  it('shows Recall in desktop and mobile navigation and navigates to it', async () => {
+    const user = userEvent.setup();
+    render(<App />, { wrapper });
+
+    expect(screen.getAllByText('Recall')).toHaveLength(2);
+    await user.click(screen.getAllByRole('button', { name: 'Recall' })[0]);
+
+    expect(screen.getByText('Recall test view')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.location.search).toBe('?view=recall');
+      expect(document.title).toBe('Runestone | Recall');
+    });
+    expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
+      'runestone_current_view',
+      'recall'
+    );
   });
 
   it('should call only recognizeImage when analysis mode is set to OCR only', async () => {

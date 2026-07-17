@@ -2,6 +2,7 @@ import Header from "./components/Header";
 import FileUpload from "./components/FileUpload";
 import ResultsDisplay from "./components/ResultsDisplay";
 import VocabularyView from "./components/VocabularyView";
+import RecallView from "./components/RecallView";
 import GrammarView from "./components/GrammarView";
 import ChatView from "./components/ChatView";
 import Login from "./components/auth/Login";
@@ -13,20 +14,28 @@ import { BrainCircuit } from "lucide-react";
 import { Box } from "@mui/material";
 import { useAuth } from "./context/AuthContext";
 import { analyzerShellGradients, buildAnalyzerShellSx } from "./components/ui";
+import type { ViewType } from "./types/navigation";
 
 type AuthView = "login" | "register";
-type ViewType = "analyzer" | "vocabulary" | "grammar" | "chat" | "profile";
 
 const VIEW_NAMES: Record<ViewType, string> = {
   analyzer: "Analyzer",
   vocabulary: "Vocabulary",
+  recall: "Recall",
   grammar: "Grammar",
   chat: "Chat",
   profile: "Profile",
 };
 
 const STORAGE_KEY = "runestone_current_view";
-const VALID_VIEWS: ViewType[] = ["analyzer", "vocabulary", "grammar", "chat", "profile"];
+const VALID_VIEWS: ViewType[] = [
+  "analyzer",
+  "vocabulary",
+  "recall",
+  "grammar",
+  "chat",
+  "profile",
+];
 
 function getInitialView(): ViewType {
   if (typeof window === "undefined") return "analyzer";
@@ -212,6 +221,8 @@ function App() {
               </>
             ) : currentView === "vocabulary" ? (
               <VocabularyView />
+            ) : currentView === "recall" ? (
+              <RecallView />
             ) : currentView === "grammar" ? (
               <GrammarView />
             ) : currentView === "chat" ? (

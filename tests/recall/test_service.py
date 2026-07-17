@@ -5,7 +5,12 @@ from unittest.mock import AsyncMock, Mock, call
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
 
-from runestone.core.exceptions import RecallOperationError, RecallStateNotFoundError, TelegramUsernameConflictError
+from runestone.core.exceptions import (
+    RecallOperationError,
+    RecallQueueWordNotFoundError,
+    RecallStateNotFoundError,
+    TelegramUsernameConflictError,
+)
 from runestone.db.models import User, Vocabulary
 from runestone.db.recall_repository import RecallRepository
 from runestone.db.user_repository import UserRepository
@@ -124,6 +129,31 @@ async def test_get_state_for_telegram_username_does_not_hide_programming_errors(
     with pytest.raises(TypeError, match="broken collaborator contract"):
         await recall_service.get_state_for_telegram_username("linked")
 
+    recall_service.recall_repository.rollback.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_get_state_for_user_loads_transport_neutral_state(recall_service):
+    state = make_state(user_id=7, telegram_username="linked")
+    recall_service.recall_repository.get_recall_state.return_value = state
+
+    result = await recall_service.get_state_for_user(7)
+
+    assert result == state
+    recall_service.recall_repository.get_recall_state.assert_awaited_once_with(7)
+    recall_service.recall_repository.commit.assert_not_awaited()
+    recall_service.recall_repository.rollback.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_get_state_for_user_wraps_database_failure(recall_service):
+    database_error = SQLAlchemyError("database unavailable")
+    recall_service.recall_repository.get_recall_state.side_effect = database_error
+
+    with pytest.raises(RecallOperationError, match="Failed to load recall state") as exc_info:
+        await recall_service.get_state_for_user(7)
+
+    assert exc_info.value.__cause__ is database_error
     recall_service.recall_repository.rollback.assert_not_awaited()
 
 
@@ -391,6 +421,55 @@ async def test_postpone_word_excludes_removed_item_from_immediate_refill(recall_
 
 
 @pytest.mark.anyio
+async def test_postpone_queue_word_uses_locked_membership_and_refills(recall_service):
+    queued_state = make_state(user_id=1, daily_selection=[make_word(7, "hej")])
+    shortened_state = make_state(user_id=1)
+    replacement = make_word(8, "tack")
+    refreshed_state = make_state(user_id=1, daily_selection=[replacement])
+    recall_service.recall_repository.get_recall_state_for_update.return_value = queued_state
+    recall_service.recall_repository.remove_queue_word.return_value = SimpleNamespace(removed_position=0)
+    recall_service.recall_repository.get_recall_state.side_effect = [shortened_state, refreshed_state]
+    recall_service.vocabulary_service.select_daily_candidates.return_value = [replacement]
+
+    result = await recall_service.postpone_queue_word(1, 7)
+
+    assert result == refreshed_state
+    recall_service.recall_repository.remove_queue_word.assert_awaited_once_with(1, 7)
+    recall_service.vocabulary_service.deprioritize_item.assert_awaited_once_with(7, 1)
+    recall_service.vocabulary_service.select_daily_candidates.assert_awaited_once_with(
+        user_id=1,
+        cooldown_days=7,
+        limit=3,
+        excluded_word_ids=[7],
+    )
+    recall_service.recall_repository.append_queue_words.assert_awaited_once_with(1, [replacement])
+    recall_service.recall_repository.commit.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_postpone_queue_word_rejects_id_outside_locked_selection(recall_service):
+    queued_state = make_state(user_id=1, daily_selection=[make_word(7, "hej")])
+    recall_service.recall_repository.get_recall_state_for_update.return_value = queued_state
+
+    with pytest.raises(RecallQueueWordNotFoundError, match="not found in current selection"):
+        await recall_service.postpone_queue_word(1, 99)
+
+    recall_service.recall_repository.remove_queue_word.assert_not_awaited()
+    recall_service.vocabulary_service.deprioritize_item.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_postpone_queue_word_rejects_missing_recall_state(recall_service):
+    recall_service.recall_repository.get_recall_state_for_update.return_value = None
+
+    with pytest.raises(RecallStateNotFoundError):
+        await recall_service.postpone_queue_word(1, 7)
+
+    recall_service.recall_repository.remove_queue_word.assert_not_awaited()
+    recall_service.vocabulary_service.deprioritize_item.assert_not_awaited()
+
+
+@pytest.mark.anyio
 async def test_remove_word_completely_returns_transaction_snapshot_without_owning_transaction(recall_service):
     queued_state = make_state(user_id=1, daily_selection=[make_word(7, "hej")])
     shortened_state = make_state(user_id=1)
@@ -412,6 +491,51 @@ async def test_remove_word_completely_returns_transaction_snapshot_without_ownin
     recall_service.recall_repository.commit.assert_not_awaited()
     recall_service.recall_repository.rollback.assert_not_awaited()
     assert persistence_events == ["load"]
+
+
+@pytest.mark.anyio
+async def test_remove_queue_word_from_learning_deactivates_locked_membership_and_refills(recall_service):
+    queued_state = make_state(user_id=1, daily_selection=[make_word(7, "hej")])
+    shortened_state = make_state(user_id=1)
+    recall_service.recall_repository.get_recall_state_for_update.return_value = queued_state
+    recall_service.recall_repository.remove_queue_word.return_value = SimpleNamespace(removed_position=0)
+    recall_service.recall_repository.get_recall_state.return_value = shortened_state
+
+    result = await recall_service.remove_queue_word_from_learning(1, 7)
+
+    assert result == shortened_state
+    recall_service.vocabulary_service.deactivate_item.assert_awaited_once_with(7, 1)
+    recall_service.recall_repository.remove_queue_word.assert_awaited_once_with(1, 7)
+    recall_service.vocabulary_service.select_daily_candidates.assert_awaited_once_with(
+        user_id=1,
+        cooldown_days=7,
+        limit=3,
+        excluded_word_ids=None,
+    )
+    recall_service.recall_repository.commit.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_remove_queue_word_from_learning_rejects_id_outside_locked_selection(recall_service):
+    queued_state = make_state(user_id=1, daily_selection=[make_word(7, "hej")])
+    recall_service.recall_repository.get_recall_state_for_update.return_value = queued_state
+
+    with pytest.raises(RecallQueueWordNotFoundError, match="not found in current selection"):
+        await recall_service.remove_queue_word_from_learning(1, 99)
+
+    recall_service.vocabulary_service.deactivate_item.assert_not_awaited()
+    recall_service.recall_repository.remove_queue_word.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_remove_queue_word_from_learning_rejects_missing_recall_state(recall_service):
+    recall_service.recall_repository.get_recall_state_for_update.return_value = None
+
+    with pytest.raises(RecallStateNotFoundError):
+        await recall_service.remove_queue_word_from_learning(1, 7)
+
+    recall_service.vocabulary_service.deactivate_item.assert_not_awaited()
+    recall_service.recall_repository.remove_queue_word.assert_not_awaited()
 
 
 @pytest.mark.anyio

@@ -18,6 +18,7 @@ from runestone.api.chat_endpoints import router as chat_router
 from runestone.api.endpoints import grammar_router
 from runestone.api.endpoints import router as api_router
 from runestone.api.memory_endpoints import router as memory_router
+from runestone.api.recall_endpoints import router as recall_router
 from runestone.api.user_endpoints import router as user_router
 from runestone.config import settings
 from runestone.core.clients.voice.voice_factory import (
@@ -139,6 +140,13 @@ def create_application() -> FastAPI:
         memory_router,
         prefix="/api",
         tags=["memory"],
+    )
+
+    # Include recall router
+    app.include_router(
+        recall_router,
+        prefix="/api/recall",
+        tags=["recall"],
     )
 
     return app
