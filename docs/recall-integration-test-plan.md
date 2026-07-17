@@ -67,9 +67,10 @@ The finite consumer interaction inventory is:
 
 - `/state` reports enabled and disabled states, empty/short/full queues, persisted queue order, and
   words containing Markdown-significant or Unicode characters without mutating state.
-- `/bump_words` replaces the current queue and resets the cursor when enough, few, or no alternative
-  candidates exist; it also handles an initially empty queue and reports the resulting count/empty
-  state accurately.
+- `/bump_words` lowers the urgency of every active word in the current queue, replaces the queue,
+  and resets the cursor when enough, few, or no alternative candidates exist. Priority increments
+  cap at the lowest supported urgency, and the command handles an initially empty queue while
+  reporting the resulting count/empty state accurately.
 - `/remove`, used as a reply to a delivered word, soft-deactivates a queued or non-queued owned word,
   removes any queue membership, repairs the cursor, and refills when possible.
 - `/postpone`, used as a reply to a delivered word, keeps the vocabulary active, lowers its urgency,
@@ -268,9 +269,9 @@ Build Telegram update dictionaries with realistic command entities and record ou
 | D04 | Postpone when alternatives exist. | Queue refills toward `WORDS_PER_DAY` with unique eligible alternatives and never immediately re-adds the postponed ID. |
 | D05 | `/remove` a queued word. | Vocabulary remains present but becomes `in_learn = false` with low priority; queue removes it, compacts, repairs cursor, and refills with an eligible alternative. |
 | D06 | `/remove` a vocabulary word absent from the queue. | Vocabulary is deactivated; unrelated queue and cursor remain unchanged. |
-| D07 | `/bump_words` with enough alternatives. | Complete queue is replaced, prior queue IDs are excluded when alternatives suffice, positions restart at `0`, and cursor resets to `0`. |
-| D08 | `/bump_words` with insufficient alternatives. | Fallback selection fills as far as possible without duplicate queue IDs; resulting cursor is `0`. |
-| D09 | `/bump_words` with no eligible words. | Queue becomes empty and cursor is `0`; command reports that no words are available. |
+| D07 | `/bump_words` with enough alternatives. | Active prior queue words are deprioritized once, the complete queue is replaced, prior queue IDs are excluded, positions restart at `0`, and cursor resets to `0`. |
+| D08 | `/bump_words` with insufficient alternatives. | Active prior queue words are deprioritized once, fallback selection fills as far as possible without duplicate queue IDs, and the resulting cursor is `0`. |
+| D09 | `/bump_words` with no eligible words. | Active prior queue words are deprioritized once, the queue becomes empty, the cursor is `0`, and the command reports that no words are available. |
 
 ### E. Hard deletion through the API application boundary
 

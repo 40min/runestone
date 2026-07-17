@@ -41,7 +41,9 @@ Application DTOs still expose the queue as `daily_selection`, but this is a tran
 The queue and `next_word_index` are related but stored separately: queue rows define the stable order, and the cursor points into that order.
 
 - Creating the first selection replaces the queue and resets the cursor to `0`.
-- `/bump_words` replaces the complete queue and resets the cursor to `0`.
+- `/bump_words` raises every active queued word's numeric learning-priority value, replaces the
+  complete queue, and resets the cursor to `0`. The priority changes and queue replacement share
+  the command transaction, and bumped vocabulary IDs remain excluded from that replacement.
 - Topping up a short queue appends new words after the existing positions and leaves the cursor unchanged.
 - A successful Telegram send updates the vocabulary learning timestamp and advances `next_word_index` in one database commit. Cursor advancement wraps against the authoritative queue length, so a completed cycle resumes at position `0`. A failed send rolls back and does not advance it.
 - Removing, postponing, or discarding an invalid word compacts the remaining positions to `0..n-1` and adjusts the cursor to keep the same logical next word where possible.

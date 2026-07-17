@@ -121,11 +121,13 @@ class RecallService:
             raise RecallOperationError("Failed to load active recall states", details=str(exc)) from exc
 
     async def bump_words(self, state: RecallState) -> RecallState:
-        """Replace the current queue with a fresh selection."""
+        """Deprioritize and replace the current queue with a fresh selection."""
         try:
             current_state = await self.recall_repository.get_recall_state_for_update(state.user_id)
             if current_state is None:
                 raise RecallStateNotFoundError(state.user_id)
+            bumped_word_ids = [word.id for word in current_state.daily_selection]
+            await self.vocabulary_service.deprioritize_items(bumped_word_ids, state.user_id)
             refreshed = await self._bump_words_locked(current_state)
             return refreshed
         except RecallOperationError:

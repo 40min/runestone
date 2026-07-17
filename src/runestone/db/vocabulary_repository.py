@@ -383,6 +383,28 @@ class VocabularyRepository:
         await self.db.flush()
         return word
 
+    async def deprioritize_items(self, vocabulary_ids: List[int], user_id: int) -> None:
+        """Lower active owned items' learning urgency in one uncommitted update."""
+        if not vocabulary_ids:
+            return
+
+        stmt = (
+            update(Vocabulary)
+            .where(
+                Vocabulary.user_id == user_id,
+                Vocabulary.id.in_(vocabulary_ids),
+                Vocabulary.in_learn.is_(True),
+            )
+            .values(
+                priority_learn=func.least(
+                    Vocabulary.priority_learn + 1,
+                    VOCABULARY_PRIORITY_LOW,
+                )
+            )
+        )
+        await self.db.execute(stmt)
+        await self.db.flush()
+
     async def select_new_daily_words(
         self, user_id: int, cooldown_days: int = 7, limit: int = 100, excluded_word_ids: Optional[List[int]] = None
     ) -> List[Vocabulary]:

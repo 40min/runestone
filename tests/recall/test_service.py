@@ -58,6 +58,7 @@ def recall_service():
     vocabulary_service.get_learnable_item = AsyncMock()
     vocabulary_service.deactivate_item = AsyncMock()
     vocabulary_service.deprioritize_item = AsyncMock()
+    vocabulary_service.deprioritize_items = AsyncMock()
     vocabulary_service.record_learning_event = AsyncMock()
     vocabulary_service.select_daily_candidates = AsyncMock(return_value=[])
     vocabulary_service.select_alternative_candidates = AsyncMock(return_value=[])
@@ -287,6 +288,7 @@ async def test_bump_words_raises_specific_error_when_state_is_missing(recall_ser
 @pytest.mark.anyio
 async def test_bump_words_keeps_original_queue_excluded_across_fallback_selection(recall_service):
     queued_state = make_state(user_id=1, daily_selection=[make_word(7, "hej"), make_word(8, "tack")])
+    stale_state = make_state(user_id=1, daily_selection=[make_word(99, "stale")])
     replacement = make_word(9, "ny")
     refreshed_state = make_state(user_id=1, daily_selection=[replacement, make_word(10, "sen")])
     recall_service.recall_repository.get_recall_state_for_update.return_value = queued_state
@@ -296,9 +298,10 @@ async def test_bump_words_keeps_original_queue_excluded_across_fallback_selectio
         [make_word(10, "sen")],
     ]
 
-    result = await recall_service.bump_words(queued_state)
+    result = await recall_service.bump_words(stale_state)
 
     assert result == refreshed_state
+    recall_service.vocabulary_service.deprioritize_items.assert_awaited_once_with([7, 8], 1)
     assert recall_service.vocabulary_service.select_alternative_candidates.await_args_list == [
         call(
             1,
@@ -320,6 +323,30 @@ async def test_bump_words_keeps_original_queue_excluded_across_fallback_selectio
     )
     recall_service.recall_repository.commit.assert_not_awaited()
     recall_service.recall_repository.rollback.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_bump_words_deprioritizes_locked_queue_before_selecting_replacements(recall_service):
+    queued_state = make_state(user_id=1, daily_selection=[make_word(7, "hej")])
+    replacements = [make_word(8, "tack"), make_word(9, "ny"), make_word(10, "sen")]
+    refreshed_state = make_state(user_id=1, daily_selection=replacements)
+    recall_service.recall_repository.get_recall_state_for_update.return_value = queued_state
+    recall_service.recall_repository.get_recall_state.return_value = refreshed_state
+
+    async def select_after_deprioritization(*args, **kwargs):
+        recall_service.vocabulary_service.deprioritize_items.assert_awaited_once_with([7], 1)
+        return replacements
+
+    recall_service.vocabulary_service.select_alternative_candidates.side_effect = select_after_deprioritization
+
+    result = await recall_service.bump_words(queued_state)
+
+    assert result == refreshed_state
+    recall_service.recall_repository.replace_queue.assert_awaited_once_with(
+        1,
+        replacements,
+        next_word_index=0,
+    )
 
 
 @pytest.mark.anyio

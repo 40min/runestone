@@ -443,6 +443,10 @@ class VocabularyService:
         """Lower an owned item's learning urgency without committing the caller's transaction."""
         await self.repo.deprioritize_item(vocabulary_id, user_id)
 
+    async def deprioritize_items(self, vocabulary_ids: list[int], user_id: int) -> None:
+        """Lower active owned items' learning urgency without committing the caller's transaction."""
+        await self.repo.deprioritize_items(vocabulary_ids, user_id)
+
     async def select_daily_candidates(
         self,
         user_id: int,
