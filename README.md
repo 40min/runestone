@@ -139,6 +139,10 @@ The API will be available at `http://localhost:8010` with the following endpoint
 - `GET /api/health`: Health check endpoint
 - `GET /api/grammar/search`: Search grammar cheatsheets (RAG)
 - `GET /api/grammar/page/{path}`: Read a specific grammar cheatsheet
+- `GET /api/recall`: Read the authenticated user's recall delivery status and ordered queue
+- `POST /api/recall/bump`: Replace the authenticated user's recall queue
+- `POST /api/recall/words/{vocabulary_id}/postpone`: Postpone a queued word
+- `POST /api/recall/words/{vocabulary_id}/remove`: Soft-remove a queued word from learning
 
 API documentation is available at `http://localhost:8010/docs`.
 
@@ -162,6 +166,7 @@ The web interface will be available at `http://localhost:5173` with the followin
 - **📊 Real-time Results**: View formatted analysis results with grammar explanations and vocabulary
 - **🔄 Processing Status**: Visual feedback during image processing
 - **🧠 Agent Memory Modal**: View, add, edit, and delete memory items by category
+- **🤖 Recall Queue Controls**: Inspect, refresh, postpone, and soft-remove selected recall words
 - **📱 Responsive Design**: Works on desktop and mobile devices
 
 **Quick Start:**
@@ -172,7 +177,8 @@ The web interface will be available at `http://localhost:5173` with the followin
 
 ### Rune Recall Feature
 
-Runestone includes a Telegram bot for automated vocabulary recall and command processing:
+Runestone includes a Telegram bot for automated vocabulary recall and command processing, plus an
+authenticated Recall page for managing the existing queue:
 
 ```bash
 # Start the Rune Recall Telegram Bot Worker
@@ -186,6 +192,16 @@ The bot will:
 - Poll for incoming commands every 5 seconds
 - Send vocabulary recall words at configured intervals (default: every 60 minutes)
 - Process user interactions via Telegram
+
+The web Recall page is available from the authenticated desktop and mobile navigation, or through
+the `?view=recall` deep link. It shows the ordered queue and read-only Telegram delivery status.
+Users can refresh the complete selection, postpone a queued word, or soft-remove a queued word from
+learning. Every mutation returns and displays the complete authoritative queue, including any
+replacement words selected during refill.
+
+Telegram remains responsible for activation. A user without recall state must link their Telegram
+username in Profile and send `/start` to the bot. The web page does not provide Start, Stop, or
+delivery-toggle controls, but queue management remains available when delivery is disabled.
 
 ### Vocabulary Priority Model
 

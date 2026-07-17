@@ -41,23 +41,120 @@ Application DTOs still expose the queue as `daily_selection`, but this is a tran
 The queue and `next_word_index` are related but stored separately: queue rows define the stable order, and the cursor points into that order.
 
 - Creating the first selection replaces the queue and resets the cursor to `0`.
-- `/bump_words` raises every active queued word's numeric learning-priority value, replaces the
-  complete queue, and resets the cursor to `0`. The priority changes and queue replacement share
-  the command transaction, and bumped vocabulary IDs remain excluded from that replacement.
+- `/bump_words` and the web `Refresh selection` action invoke the same service workflow. While the
+  recall-state row is locked, the workflow raises every active queued word's numeric
+  learning-priority value, excludes the bumped vocabulary IDs from replacement selection, replaces
+  the complete queue, and resets the cursor to `0`. The priority changes and queue replacement
+  share the outer command or request transaction.
 - Topping up a short queue appends new words after the existing positions and leaves the cursor unchanged.
 - A successful Telegram send updates the vocabulary learning timestamp and advances `next_word_index` in one database commit. Cursor advancement wraps against the authoritative queue length, so a completed cycle resumes at position `0`. A failed send rolls back and does not advance it.
 - Removing, postponing, or discarding an invalid word compacts the remaining positions to `0..n-1` and adjusts the cursor to keep the same logical next word where possible.
 - If a removed word was before the cursor, the cursor decreases by one. If the queue becomes empty, or the adjusted cursor is outside the shortened queue, it resets to `0`.
-- `/remove` also marks the vocabulary item as not being learned and lowers its learning priority.
-- `/postpone` raises the numeric learning-priority value, removes the item from the current queue, and then attempts to backfill the queue to `WORDS_PER_DAY`. The postponed vocabulary ID is excluded from that refill, so a small candidate pool cannot immediately select the same word again.
+- Telegram `/remove` and the web `Remove from learning` action also mark the vocabulary item as not being learned and lower its learning priority. The web action requires the vocabulary item to belong to the current queue.
+- Telegram `/postpone` and the web `Postpone` action raise the numeric learning-priority value, remove the item from the current queue, and then attempt to backfill the queue to `WORDS_PER_DAY`. The postponed vocabulary ID is excluded from that refill, so a small candidate pool cannot immediately select the same word again. The web action requires the vocabulary item to belong to the current queue.
 
 The backend vocabulary endpoints temporarily own cross-service orchestration for both hard deletion and explicit soft deletion (`PUT` with `in_learn=false`). They ask `RecallService` to remove and compact any queued reference, ask `VocabularyService` to mutate the owned vocabulary item, then ask `RecallService` to refill a shortened queue when removal changed it. All phases use the same request-scoped session and are committed once; a not-found item, vocabulary-update failure, or refill failure rolls back the complete operation. Deleting vocabulary for a user without recall state remains a normal vocabulary mutation without queue maintenance.
 
 For example, given queue `[A, B, C]` with `next_word_index = 2`, removing `A` produces `[B, C]` with `next_word_index = 1`, so `C` remains the next word. Removing `C` instead produces `[A, B]` with `next_word_index = 0` because the previous cursor is now past the end.
 
+## Authenticated Web Controls
+
+The authenticated web application exposes Recall as a top-level desktop and mobile view. The
+`?view=recall` deep link restores the page and sets the document title to `Runestone | Recall`. It
+shows the ordered queue, available word text, translation and example fields, selected-word count,
+and whether Telegram delivery is enabled. Delivery status is read-only: the page does not start,
+stop, enable, or disable delivery.
+
+A user without `recall_user_states` receives an unconfigured empty response and is directed to link
+their Telegram username in Profile and send `/start` to the bot. This Telegram interaction
+establishes the destination chat id; the web transport does not attempt to create that linkage.
+Existing queues remain manageable when delivery is disabled or outside the worker's delivery
+window.
+
+The recall API is mounted at `/api/recall` and always derives ownership from the authenticated
+Runestone user:
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| `GET` | `/api/recall` | Return configuration state, read-only delivery status, and the ordered queue. |
+| `POST` | `/api/recall/bump` | Deprioritize the locked active queue, replace it through the shared bump workflow, reset the cursor, and return the complete queue. |
+| `POST` | `/api/recall/words/{vocabulary_id}/postpone` | Require current queue membership, remove and deprioritize the item, exclude it from immediate best-effort refill, and return the complete queue. |
+| `POST` | `/api/recall/words/{vocabulary_id}/remove` | Require current queue membership, set the owned item to `in_learn=false` and lowest urgency, best-effort refill the shortened queue, and return the complete queue. |
+
+Every route derives the user id from the authenticated account; the client cannot supply a user id
+or Telegram username. Word mutations accept the vocabulary id returned by the queue response,
+rather than resolving display text. A configured response has this shape:
+
+```json
+{
+  "configured": true,
+  "delivery_enabled": true,
+  "words": [
+    {
+      "id": 42,
+      "word_phrase": "kontanter",
+      "translation": "cash",
+      "example_phrase": "Jag betalar med kontanter."
+    }
+  ]
+}
+```
+
+`translation` and `example_phrase` are nullable. The response does not expose the user id, Telegram
+username, chat id, or next-word cursor. An unconfigured read returns `200` with:
+
+```json
+{
+  "configured": false,
+  "delivery_enabled": false,
+  "words": []
+}
+```
+
+Unauthenticated and inactive-account requests retain the shared `401`/`403` authentication
+behavior. Mutations return `409` with Telegram onboarding guidance until recall is configured; a
+vocabulary id outside the authenticated user's current queue returns `404` without revealing
+another user's ownership. Unexpected read failures return `500` with the generic detail
+`Failed to retrieve recall selection`. Mutation, commit, and other unexpected failures roll back
+and return `500` with the generic detail `Failed to update recall selection` while the server logs
+diagnostic context.
+
+The frontend does not update the queue optimistically. It replaces local state with the complete
+successful mutation response because postpone and remove may refill with different words and bump
+replaces the entire queue. Failed mutations preserve the previously loaded queue and show an error;
+successful mutations show action feedback. The hook prevents duplicate mutation submissions, and
+the page disables conflicting actions while showing progress for the active full-queue or row
+operation. Loading, initial-load error with retry, unconfigured, configured-empty, and populated
+states are distinct.
+
+Refresh, postpone, and remove are compact icon-only actions with accessible names. Per-word names
+include the displayed word, such as `Postpone kontanter` and `Remove kontanter from learning`.
+Their hover and keyboard-focus tooltips explain the complete outcomes:
+
+- `Refresh selection: lowers the priority of all current words and replaces the selection.`
+- `Postpone: moves this word out of the current selection and lowers its recall priority.`
+- `Remove from learning: stops learning this word and removes it from the current selection.`
+
+The actions do not use confirmation dialogs or separate information buttons. The
+`Remove from learning` action is a soft deactivation, not the hard delete exposed by the Vocabulary
+API.
+
+The first web version does not edit vocabulary fields, reorder the queue, expose or set the
+next-delivery cursor, or synchronize an already-open page through real-time push updates. Telegram
+commands and scheduled delivery can therefore change the authoritative queue after a page has
+loaded; the next web load or successful mutation response refreshes the displayed snapshot.
+
 ## Transactions And Concurrency
 
 Repository mutations lock the relevant `recall_user_states` row with `SELECT ... FOR UPDATE` before replacing or appending queue rows, removing a word, or changing the cursor. Full queue replacement, queue compaction, cursor adjustment, and related vocabulary changes are performed through the same request- or job-scoped database session.
+
+Each authenticated web mutation owns one request transaction. The endpoint calls the shared
+`RecallService` workflow with services and repositories assembled over the same request-scoped
+`AsyncSession`, commits exactly once after queue invariants and the response snapshot are prepared,
+and rolls back every domain or persistence failure. The recall-state row lock serializes web
+mutations with Telegram commands and scheduled delivery for that user. A web mutation may briefly
+wait while scheduled delivery holds the same user's lock across a Telegram send. The read endpoint
+is transaction-neutral and does not commit.
 
 Scheduled delivery checks its configured delivery window before opening a database session. It then enumerates active recall states in one short-lived session and opens a fresh session for each user delivery. Within that per-user session, delivery acquires the user's recall-state row lock before validating enabled state and chat linkage, loading or creating the selection, resolving invalid items, and choosing the next word. After taking that lock it performs a fresh scalar read of `users.active`, bypassing any identity-mapped `User` object, so deactivation between enumeration and delivery prevents the send. The lock remains held across the injected Telegram send callback. This serializes delivery with other workers and queue mutations for that user, preventing two replicas from sending from the same cursor concurrently, while a failed transaction for one user cannot contaminate later users. Invalid-item cleanup and an exhausted selection's replacement also occur while holding that lock.
 
@@ -77,6 +174,7 @@ The main consumers are:
 
 - `TelegramCommandProcessor` for `/start`, `/stop`, `/state`, `/postpone`, `/remove`, and `/bump_words`;
 - `TelegramRecallDelivery` for scheduled queue selection and delivery;
+- the authenticated recall API for read-only delivery status and queue management by Runestone user id;
 - request-scoped `ChatService`, which loads ordered recall words through its injected `RecallService` and supplies the resulting plain list to `AgentsManager` for Teacher context. This separate best-effort read path rolls back only after a database failure because `ChatService` intentionally continues on the same request session; successful reads remain transaction-neutral.
 
 Telegram polling fetches and sorts updates before opening a database session. Structurally irrelevant updates are acknowledged without a session. Each relevant update opens at most one fresh transaction provider, applies the command, and prepares immutable outgoing message data. Only after the provider commits and closes does the processor call Telegram. Successful reads and mutations do not commit or roll back independently.

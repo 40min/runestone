@@ -244,7 +244,7 @@ class TelegramCommandProcessor:
         state: RecallState,
         chat_id: int,
     ) -> CommandOutcome:
-        refreshed = await recall_service.bump_words(state)
+        refreshed = await recall_service.bump_words(state.user_id)
         count = len(refreshed.daily_selection)
         if count:
             return self._message_outcome(

@@ -639,7 +639,7 @@ async def test_bump_words_preserves_nonempty_and_empty_responses(
 
     await processor.process_updates()
 
-    recall_service.bump_words.assert_awaited_once_with(original)
+    recall_service.bump_words.assert_awaited_once_with(original.user_id)
     processor._send_message.assert_awaited_once_with(123, expected, None)
 
 

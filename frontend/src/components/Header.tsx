@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Typography, Box, IconButton, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
-import { Diamond, User, LogOut, MessageCircle, BookOpen, ScrollText, Menu, X } from 'lucide-react';
+import { Diamond, User, LogOut, MessageCircle, BookOpen, ScrollText, Menu, X, Repeat2 } from 'lucide-react';
 import { CustomButton } from './ui';
 import { useAuth } from '../context/AuthContext';
+import type { ViewType } from '../types/navigation';
 
 interface HeaderProps {
-  currentView: 'analyzer' | 'vocabulary' | 'grammar' | 'chat' | 'profile';
-  onViewChange: (view: 'analyzer' | 'vocabulary' | 'grammar' | 'chat' | 'profile') => void;
+  currentView: ViewType;
+  onViewChange: (view: ViewType) => void;
 }
 
 const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
@@ -17,11 +18,10 @@ const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
     setMobileOpen(!mobileOpen);
   };
 
-  type ViewType = 'analyzer' | 'vocabulary' | 'grammar' | 'chat' | 'profile';
-
   const navItems: { id: ViewType; label: string; icon: React.ReactNode }[] = [
     { id: 'analyzer', label: 'Analyzer', icon: <Diamond size={20} /> },
     { id: 'vocabulary', label: 'Vocabulary', icon: <BookOpen size={20} /> },
+    { id: 'recall', label: 'Recall', icon: <Repeat2 size={20} /> },
     { id: 'grammar', label: 'Grammar', icon: <ScrollText size={20} /> },
     { id: 'chat', label: 'Chat', icon: <MessageCircle size={20} /> },
     { id: 'profile', label: 'Profile', icon: <User size={20} /> },

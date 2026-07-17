@@ -7,6 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from runestone.core.exceptions import (
     RecallOperationError,
+    RecallQueueWordNotFoundError,
     RecallStateNotFoundError,
     TelegramUsernameConflictError,
     WordNotFoundError,
@@ -62,6 +63,13 @@ class RecallService:
             self._disabled_state_for_user(user) if state is None else self._with_username(state, user.telegram_username)
         )
         return normalized_username, result
+
+    async def get_state_for_user(self, user_id: int) -> RecallState | None:
+        """Load one user's persisted recall state without transport-specific identity."""
+        try:
+            return await self.recall_repository.get_recall_state(user_id)
+        except SQLAlchemyError as exc:
+            raise RecallOperationError("Failed to load recall state", details=str(exc)) from exc
 
     async def enable_for_username(self, username: str, chat_id: int) -> RecallEnableResult:
         """Enable recall and report whether it was already enabled before this request."""
@@ -120,14 +128,14 @@ class RecallService:
         except SQLAlchemyError as exc:
             raise RecallOperationError("Failed to load active recall states", details=str(exc)) from exc
 
-    async def bump_words(self, state: RecallState) -> RecallState:
-        """Deprioritize and replace the current queue with a fresh selection."""
+    async def bump_words(self, user_id: int) -> RecallState:
+        """Deprioritize and replace a user's current queue with a fresh selection."""
         try:
-            current_state = await self.recall_repository.get_recall_state_for_update(state.user_id)
+            current_state = await self.recall_repository.get_recall_state_for_update(user_id)
             if current_state is None:
-                raise RecallStateNotFoundError(state.user_id)
+                raise RecallStateNotFoundError(user_id)
             bumped_word_ids = [word.id for word in current_state.daily_selection]
-            await self.vocabulary_service.deprioritize_items(bumped_word_ids, state.user_id)
+            await self.vocabulary_service.deprioritize_items(bumped_word_ids, user_id)
             refreshed = await self._bump_words_locked(current_state)
             return refreshed
         except RecallOperationError:
@@ -168,19 +176,53 @@ class RecallService:
             if not matching_word:
                 raise WordNotFoundError(word_phrase, state.telegram_username or str(state.user_id))
 
-            # 2. Mutate vocabulary and queue in the shared transaction, then refill.
-            await self.vocabulary_service.deactivate_item(matching_word.id, state.user_id)
-            removal = await self.recall_repository.remove_queue_word(state.user_id, matching_word.id)
-            refreshed = await self.recall_repository.get_recall_state(state.user_id) or current_state
-            if removal is not None:
-                refreshed = await self._maintain_daily_selection_locked(refreshed)
-
-            # The outer transaction provider commits after every invariant is restored.
-            return refreshed
+            # 2. Reuse the id-based mutation while the same aggregate lock is held.
+            return await self._remove_word_from_learning_locked(
+                current_state,
+                matching_word.id,
+                require_queue_membership=False,
+            )
         except (RecallOperationError, WordNotFoundError):
             raise
         except Exception as exc:
             raise RecallOperationError("Failed to remove word from recall state", details=str(exc)) from exc
+
+    async def remove_queue_word_from_learning(self, user_id: int, vocabulary_id: int) -> RecallState:
+        """Soft-deactivate one current queue item and restore queue invariants."""
+        try:
+            current_state = await self.recall_repository.get_recall_state_for_update(user_id)
+            if current_state is None:
+                raise RecallStateNotFoundError(user_id)
+            return await self._remove_word_from_learning_locked(
+                current_state,
+                vocabulary_id,
+                require_queue_membership=True,
+            )
+        except RecallOperationError:
+            raise
+        except Exception as exc:
+            raise RecallOperationError("Failed to remove word from recall state", details=str(exc)) from exc
+
+    async def _remove_word_from_learning_locked(
+        self,
+        state: RecallState,
+        vocabulary_id: int,
+        *,
+        require_queue_membership: bool,
+    ) -> RecallState:
+        """Deactivate one owned item while the caller holds its recall-state lock."""
+        if require_queue_membership and not self._queue_contains(state, vocabulary_id):
+            raise RecallQueueWordNotFoundError(vocabulary_id)
+
+        # Mutate vocabulary and queue in the shared transaction, then refill.
+        await self.vocabulary_service.deactivate_item(vocabulary_id, state.user_id)
+        removal = await self.recall_repository.remove_queue_word(state.user_id, vocabulary_id)
+        refreshed = await self.recall_repository.get_recall_state(state.user_id) or state
+        if removal is not None:
+            refreshed = await self._maintain_daily_selection_locked(refreshed)
+
+        # The outer transaction boundary commits after every invariant is restored.
+        return refreshed
 
     async def postpone_word(self, state: RecallState, word_phrase: str) -> RecallState:
         """Remove one queue item, lower its urgency, and backfill the queue."""
@@ -193,24 +235,46 @@ class RecallService:
             if not matching_word:
                 raise WordNotInSelectionError(word_phrase)
 
-            # 2. Require queue membership before lowering urgency, then refill.
-            removal = await self.recall_repository.remove_queue_word(state.user_id, matching_word.id)
-            if removal is None:
+            if not self._queue_contains(current_state, matching_word.id):
                 raise WordNotInSelectionError(word_phrase)
 
-            await self.vocabulary_service.deprioritize_item(matching_word.id, state.user_id)
-            refreshed = await self.recall_repository.get_recall_state(state.user_id) or current_state
-            refreshed = await self._maintain_daily_selection_locked(
-                refreshed,
-                additionally_excluded_word_ids=[matching_word.id],
-            )
-
-            # The outer transaction provider persists vocabulary, queue, cursor, and refill together.
-            return refreshed
+            # 2. Reuse the id-based mutation while the same aggregate lock is held.
+            return await self._postpone_queue_word_locked(current_state, matching_word.id)
         except RecallOperationError:
             raise
         except Exception as exc:
             raise RecallOperationError("Failed to postpone word", details=str(exc)) from exc
+
+    async def postpone_queue_word(self, user_id: int, vocabulary_id: int) -> RecallState:
+        """Postpone one current queue item selected by owned vocabulary id."""
+        try:
+            current_state = await self.recall_repository.get_recall_state_for_update(user_id)
+            if current_state is None:
+                raise RecallStateNotFoundError(user_id)
+            if not self._queue_contains(current_state, vocabulary_id):
+                raise RecallQueueWordNotFoundError(vocabulary_id)
+            return await self._postpone_queue_word_locked(current_state, vocabulary_id)
+        except RecallOperationError:
+            raise
+        except Exception as exc:
+            raise RecallOperationError("Failed to postpone word", details=str(exc)) from exc
+
+    async def _postpone_queue_word_locked(self, state: RecallState, vocabulary_id: int) -> RecallState:
+        """Postpone one queue item while the caller holds its recall-state lock."""
+        # Remove first so a missing membership cannot lower vocabulary priority.
+        removal = await self.recall_repository.remove_queue_word(state.user_id, vocabulary_id)
+        if removal is None:
+            raise RecallQueueWordNotFoundError(vocabulary_id)
+
+        await self.vocabulary_service.deprioritize_item(vocabulary_id, state.user_id)
+        refreshed = await self.recall_repository.get_recall_state(state.user_id) or state
+        refreshed = await self._maintain_daily_selection_locked(
+            refreshed,
+            additionally_excluded_word_ids=[vocabulary_id],
+        )
+
+        # The outer transaction boundary persists priority, queue, cursor, and refill together.
+        return refreshed
 
     async def load_current_recall_words(self, user_id: int) -> list[str]:
         """Best-effort load of the current ordered recall queue for Teacher context."""
@@ -381,6 +445,11 @@ class RecallService:
         if not state.daily_selection:
             return None
         return state.daily_selection[state.next_word_index % len(state.daily_selection)]
+
+    @staticmethod
+    def _queue_contains(state: RecallState, vocabulary_id: int) -> bool:
+        """Return whether an owned vocabulary id belongs to the loaded queue."""
+        return any(word.id == vocabulary_id for word in state.daily_selection)
 
     @staticmethod
     def _merge_queue_metadata(queued_word: RecallQueueWord, validated_word: RecallQueueWord) -> RecallQueueWord:

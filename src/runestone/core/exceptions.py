@@ -110,6 +110,17 @@ class WordNotInSelectionError(RecallOperationError):
         super().__init__(message=f"Word '{word_phrase}' not in today's selection")
 
 
+class RecallQueueWordNotFoundError(RecallOperationError):
+    """Raised when a vocabulary id is not in the current recall queue."""
+
+    def __init__(self, vocabulary_id: int):
+        self.vocabulary_id = vocabulary_id
+        super().__init__(
+            message="Recall word not found in current selection",
+            details=f"Vocabulary item {vocabulary_id} is not in the current recall queue",
+        )
+
+
 class UserNotFoundError(ValueError):
     """Raised when a user is not found."""
 
