@@ -396,6 +396,26 @@ describe("AddEditVocabularyModal", () => {
     });
   });
 
+  it("submits the form when Enter is pressed in the translation field", async () => {
+    const user = userEvent.setup();
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
+
+    await user.type(screen.getByLabelText("Swedish Word/Phrase"), "hej");
+    await user.type(screen.getByLabelText("English Translation"), "hello");
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(mockOnSave).toHaveBeenCalledWith({
+        word_phrase: "hej",
+        translation: "hello",
+        example_phrase: null,
+        extra_info: null,
+        in_learn: true,
+        priority_learn: 5,
+      });
+    });
+  });
+
   it("replaces save with progress while pending and restores it after completion", async () => {
     const user = userEvent.setup();
     let resolveSave: () => void = () => {};

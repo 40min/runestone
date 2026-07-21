@@ -280,6 +280,14 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
           </IconButton>
         </Box>
 
+        <Box
+          component="form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleSave();
+          }}
+          sx={{ display: "contents" }}
+        >
         <Box sx={{ px: { xs: 2.25, sm: 3.5 }, py: 3, overflowY: "auto" }}>
           <Box sx={{ ...panelStyles, mb: 2.25 }}>
             <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mb: 2 }}>
@@ -329,6 +337,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
                 hasWord &&
                 onLookup && (
                   <CustomButton
+                    type="button"
                     variant="secondary"
                     title="Look up existing word"
                     aria-label="Look up existing word"
@@ -384,6 +393,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
                   </Box>
                 ) : (
                   <CustomButton
+                    type="button"
                     variant="secondary"
                     size="small"
                     title="Fill All"
@@ -424,6 +434,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
                   <Typography sx={{ color: "#a8b6d8", fontSize: "0.72rem" }}>Example phrase</Typography>
                   {hasWord && !isImproving && (
                     <CustomButton
+                      type="button"
                       variant="secondary"
                       size="small"
                       title="Fill Example"
@@ -453,6 +464,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
                   <Typography sx={{ color: "#a8b6d8", fontSize: "0.72rem" }}>Grammar &amp; notes</Typography>
                   {hasWord && !isImproving && (
                     <CustomButton
+                      type="button"
                       variant="secondary"
                       size="small"
                       title="Fill Extra Info"
@@ -561,6 +573,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
           <Box>
             {item && onDelete && (
               <CustomButton
+                type="button"
                 variant="secondary"
                 startIcon={<DeleteOutlineIcon fontSize="small" />}
                 onClick={() => void onDelete()}
@@ -577,7 +590,7 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
                 Add a word and translation to continue.
               </Typography>
             )}
-            <CustomButton variant="secondary" onClick={handleClose}>
+            <CustomButton type="button" variant="secondary" onClick={handleClose}>
               Cancel
             </CustomButton>
             {isSaving ? (
@@ -587,12 +600,13 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
               </Box>
             ) : (
               canSave && (
-                <CustomButton variant="primary" onClick={() => void handleSave()}>
+                <CustomButton type="submit" variant="primary">
                   {item ? "Save changes" : "Add to vocabulary"}
                 </CustomButton>
               )
             )}
           </Box>
+        </Box>
         </Box>
       </Dialog>
 
