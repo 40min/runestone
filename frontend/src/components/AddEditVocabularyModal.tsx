@@ -78,10 +78,13 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   const [priorityLearn, setPriorityLearn] = useState(DEFAULT_PRIORITY_LEARN);
   const [isImproving, setIsImproving] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [lookupMessage, setLookupMessage] = useState<string | null>(null);
   const [lookupSeverity, setLookupSeverity] = useState<"success" | "info">("info");
   const [error, setError] = useState<string | null>(null);
   const lookupRequestIdRef = useRef(0);
+  const improveRequestIdRef = useRef(0);
+  const saveInFlightRef = useRef(false);
   const api = useApi();
 
   useEffect(() => {
@@ -106,14 +109,25 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
 
   const handleClose = () => {
     lookupRequestIdRef.current += 1;
+    improveRequestIdRef.current += 1;
     setIsLookingUp(false);
+    setIsImproving(false);
     setLookupMessage(null);
     onClose();
   };
 
   const handleSave = async () => {
-    if (!wordPhrase.trim() || !translation.trim()) return;
+    if (
+      !wordPhrase.trim() ||
+      !translation.trim() ||
+      saveInFlightRef.current
+    ) {
+      return;
+    }
 
+    saveInFlightRef.current = true;
+    setError(null);
+    setIsSaving(true);
     try {
       await onSave({
         word_phrase: wordPhrase.trim(),
@@ -129,27 +143,36 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
           ? saveError.message
           : "Failed to save vocabulary item"
       );
+    } finally {
+      saveInFlightRef.current = false;
+      setIsSaving(false);
     }
   };
 
   const handleImproveVocabulary = async (mode: VocabularyImprovementMode) => {
     if (!wordPhrase.trim()) return;
 
+    const requestId = improveRequestIdRef.current + 1;
+    improveRequestIdRef.current = requestId;
     setError(null);
     setIsImproving(true);
     try {
       const result = await improveVocabularyItem(api, wordPhrase.trim(), mode);
+      if (requestId !== improveRequestIdRef.current) return;
+
       if (result.translation) setTranslation(result.translation);
       if (result.example_phrase) setExamplePhrase(result.example_phrase);
       if (result.extra_info) setExtraInfo(result.extra_info);
     } catch (improveError) {
-      setError(
-        improveError instanceof Error
-          ? improveError.message
-          : "Failed to improve vocabulary item"
-      );
+      if (requestId === improveRequestIdRef.current) {
+        setError(
+          improveError instanceof Error
+            ? improveError.message
+            : "Failed to improve vocabulary item"
+        );
+      }
     } finally {
-      setIsImproving(false);
+      if (requestId === improveRequestIdRef.current) setIsImproving(false);
     }
   };
 
@@ -540,9 +563,13 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
             <CustomButton
               variant="primary"
               onClick={() => void handleSave()}
-              disabled={!wordPhrase.trim() || !translation.trim()}
+              disabled={!wordPhrase.trim() || !translation.trim() || isSaving}
             >
-              {item ? "Save changes" : "Add to vocabulary"}
+              {isSaving
+                ? "Saving..."
+                : item
+                  ? "Save changes"
+                  : "Add to vocabulary"}
             </CustomButton>
           </Box>
         </Box>

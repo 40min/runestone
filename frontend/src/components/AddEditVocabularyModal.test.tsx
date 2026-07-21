@@ -316,6 +316,62 @@ describe("AddEditVocabularyModal", () => {
     });
   });
 
+  it("ignores an AI result after the modal is closed", async () => {
+    const user = userEvent.setup();
+    let resolveImprove: (result: {
+      translation: string;
+      example_phrase: string;
+      extra_info: string;
+    }) => void = () => {};
+    mockImproveVocabularyItem.mockReturnValue(
+      new Promise((resolve) => {
+        resolveImprove = resolve;
+      })
+    );
+
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
+
+    await user.type(screen.getByLabelText("Swedish Word/Phrase"), "hej");
+    await user.click(screen.getByTitle("Fill All"));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await act(async () => {
+      resolveImprove({
+        translation: "hello",
+        example_phrase: "Hej, hur mår du?",
+        extra_info: "interjection",
+      });
+    });
+
+    expect(mockOnClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByDisplayValue("hello")).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Hej, hur mår du?")).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue("interjection")).not.toBeInTheDocument();
+  });
+
+  it("ignores an AI error after the modal is closed", async () => {
+    const user = userEvent.setup();
+    let rejectImprove: (reason?: unknown) => void = () => {};
+    mockImproveVocabularyItem.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        rejectImprove = reject;
+      })
+    );
+
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
+
+    await user.type(screen.getByLabelText("Swedish Word/Phrase"), "hej");
+    await user.click(screen.getByTitle("Fill All"));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await act(async () => {
+      rejectImprove(new Error("Improve failed after close"));
+    });
+
+    expect(mockOnClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Improve failed after close")).not.toBeInTheDocument();
+  });
+
   it("calls onSave when Add to vocabulary is clicked with valid data", async () => {
     const user = userEvent.setup();
     renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
@@ -340,6 +396,37 @@ describe("AddEditVocabularyModal", () => {
       priority_learn: 5,
     });
   });
+
+  it("disables save while pending and re-enables it after completion", async () => {
+    const user = userEvent.setup();
+    let resolveSave: () => void = () => {};
+    mockOnSave.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveSave = resolve;
+      })
+    );
+
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
+
+    await user.type(screen.getByLabelText("Swedish Word/Phrase"), "hej");
+    await user.type(screen.getByLabelText("English Translation"), "hello");
+    await user.click(screen.getByRole("button", { name: "Add to vocabulary" }));
+
+    const savingButton = screen.getByRole("button", { name: "Saving..." });
+    expect(savingButton).toBeDisabled();
+    expect(mockOnSave).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveSave();
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Add to vocabulary" })
+      ).toBeEnabled();
+    });
+  });
+
   it("calls onSave with in_learn: false when checkbox is unchecked", async () => {
     const user = userEvent.setup();
     renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
@@ -416,6 +503,9 @@ describe("AddEditVocabularyModal", () => {
     await waitFor(() => {
       expect(screen.getByText("Save failed")).toBeInTheDocument();
     });
+    expect(
+      screen.getByRole("button", { name: "Add to vocabulary" })
+    ).toBeEnabled();
   });
 
   it("shows error message when improve vocabulary fails", async () => {
