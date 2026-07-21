@@ -61,6 +61,13 @@ const sectionLabelStyles = {
   textTransform: "uppercase",
 };
 
+const panelStyles = {
+  p: { xs: 2, sm: 2.5 },
+  border: dialogBorder,
+  borderRadius: 2,
+  backgroundColor: "rgba(255,255,255,.025)",
+};
+
 const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
   open,
   item,
@@ -212,19 +219,20 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
     }
   };
 
-  const fillDisabled = !wordPhrase.trim() || isImproving;
+  const hasWord = Boolean(wordPhrase.trim());
+  const canSave = hasWord && Boolean(translation.trim());
 
   return (
     <>
       <Dialog
         open={open}
         onClose={handleClose}
-        maxWidth="lg"
+        maxWidth="md"
         fullWidth
         aria-labelledby="edit-vocabulary-modal"
         PaperProps={{
           sx: {
-            width: "min(1000px, calc(100vw - 24px))",
+            width: "min(920px, calc(100vw - 24px))",
             maxHeight: "calc(100vh - 32px)",
             m: 1.5,
             overflow: "hidden",
@@ -273,22 +281,35 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
         </Box>
 
         <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "minmax(0, .9fr) minmax(0, 1.1fr)" },
-            gap: { xs: 3.5, md: 3 },
-            px: { xs: 2.25, sm: 3.5 },
-            py: 3,
-            overflowY: "auto",
+          component="form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleSave();
           }}
+          sx={{ display: "contents" }}
         >
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2.25 }}>
-            <Box sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
-              <Typography sx={sectionLabelStyles}>Core meaning</Typography>
-              <Typography sx={{ color: "#7280a5", fontSize: "0.66rem" }}>Required</Typography>
+        <Box sx={{ px: { xs: 2.25, sm: 3.5 }, py: 3, overflowY: "auto" }}>
+          <Box sx={{ ...panelStyles, mb: 2.25 }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, mb: 2 }}>
+              <Box>
+                <Typography sx={sectionLabelStyles}>Word &amp; meaning</Typography>
+                <Typography sx={{ color: "#7f8db1", fontSize: "0.72rem", mt: 0.55 }}>
+                  The two details needed to save this entry.
+                </Typography>
+              </Box>
+              <Typography sx={{ color: "#65eaa0", fontSize: "0.68rem", fontWeight: 700 }}>
+                Required
+              </Typography>
             </Box>
 
-            <Box sx={{ display: "flex", alignItems: "stretch", gap: 1 }}>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "minmax(0, 1fr) auto" },
+                gap: 1,
+                alignItems: "stretch",
+              }}
+            >
               <TextField
                 label="Swedish Word/Phrase"
                 value={wordPhrase}
@@ -296,28 +317,42 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
                 fullWidth
                 sx={textFieldStyles}
               />
-              <CustomButton
-                variant="secondary"
-                title="Look up existing word"
-                aria-label="Look up existing word"
-                onClick={() => void handleLookupVocabulary()}
-                disabled={!wordPhrase.trim() || isLookingUp || !onLookup}
-                startIcon={
-                  isLookingUp ? (
-                    <CircularProgress size={16} color="inherit" />
-                  ) : (
-                    <SearchIcon fontSize="small" />
-                  )
-                }
-                sx={{
-                  flexShrink: 0,
-                  color: "#dce4fa",
-                  border: dialogBorder,
-                  backgroundColor: "rgba(255,255,255,.02)",
-                }}
-              >
-                Look up
-              </CustomButton>
+              {isLookingUp ? (
+                <Box
+                  role="status"
+                  sx={{
+                    minWidth: 132,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 1,
+                    color: "#b8c4df",
+                    fontSize: "0.75rem",
+                  }}
+                >
+                  <CircularProgress size={16} color="inherit" />
+                  Checking library…
+                </Box>
+              ) : (
+                hasWord &&
+                onLookup && (
+                  <CustomButton
+                    type="button"
+                    variant="secondary"
+                    title="Look up existing word"
+                    aria-label="Look up existing word"
+                    onClick={() => void handleLookupVocabulary()}
+                    startIcon={<SearchIcon fontSize="small" />}
+                    sx={{
+                      color: "#dce4fa",
+                      border: dialogBorder,
+                      backgroundColor: "rgba(255,255,255,.02)",
+                    }}
+                  >
+                    Look up
+                  </CustomButton>
+                )
+              )}
             </Box>
 
             <TextField
@@ -325,75 +360,164 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
               value={translation}
               onChange={(event) => setTranslation(event.target.value)}
               fullWidth
-              sx={textFieldStyles}
+              sx={{ ...textFieldStyles, mt: 1.5 }}
             />
 
-            <Box
-              sx={{
-                p: 2,
-                border: dialogBorder,
-                borderRadius: 2,
-                backgroundColor: "rgba(255,255,255,.02)",
-              }}
-            >
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Checkbox
-                    checked={inLearn}
-                    onChange={(event) => setInLearn(event.target.checked)}
-                    inputProps={{ "aria-label": "In Learning" }}
-                    sx={{
-                      p: 0.5,
-                      color: "#6f7fa7",
-                      "&.Mui-checked": { color: "#38e07b" },
-                    }}
-                  />
-                  <Box>
-                    <Typography sx={{ fontSize: "0.8rem", fontWeight: 700 }}>
-                      Add to learning
-                    </Typography>
-                    <Typography sx={{ color: "#7f8db1", fontSize: "0.66rem", mt: 0.25 }}>
-                      Include this word in your active study set.
-                    </Typography>
-                  </Box>
+            {hasWord && (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: { xs: "flex-start", sm: "center" },
+                  justifyContent: "space-between",
+                  flexDirection: { xs: "column", sm: "row" },
+                  gap: 1.5,
+                  mt: 2,
+                  p: 1.5,
+                  border: "1px solid rgba(56,224,123,.22)",
+                  borderRadius: 1.5,
+                  backgroundColor: "rgba(56,224,123,.055)",
+                }}
+              >
+                <Box>
+                  <Typography sx={{ color: "#dfe8ff", fontSize: "0.78rem", fontWeight: 700 }}>
+                    Runestone assist
+                  </Typography>
+                  <Typography sx={{ color: "#8291b4", fontSize: "0.68rem", mt: 0.25 }}>
+                    Suggest the translation, example, and grammar details in one pass.
+                  </Typography>
                 </Box>
-                <Box
-                  sx={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 0.65,
-                    color: inLearn ? "#65eaa0" : "#98a5c4",
-                    border: inLearn
-                      ? "1px solid rgba(56,224,123,.28)"
-                      : "1px solid rgba(148,163,184,.22)",
-                    backgroundColor: inLearn
-                      ? "rgba(56,224,123,.08)"
-                      : "rgba(148,163,184,.06)",
-                    px: 1,
-                    py: 0.45,
-                    borderRadius: 99,
-                  }}
-                >
-                  <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: "currentColor" }} />
-                  <Typography sx={{ fontSize: "0.67rem", fontWeight: 700 }}>
-                    {inLearn ? "Active" : "Skipped"}
+                {isImproving ? (
+                  <Box role="status" sx={{ display: "flex", alignItems: "center", gap: 1, color: "#65eaa0", fontSize: "0.75rem" }}>
+                    <CircularProgress size={16} color="inherit" />
+                    Building suggestions…
+                  </Box>
+                ) : (
+                  <CustomButton
+                    type="button"
+                    variant="secondary"
+                    size="small"
+                    title="Fill All"
+                    aria-label="Fill with AI"
+                    onClick={() => void handleImproveVocabulary(VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS)}
+                    startIcon={<AutoFixHighIcon fontSize="small" />}
+                    sx={{
+                      flexShrink: 0,
+                      color: "#65eaa0",
+                      border: "1px solid rgba(56,224,123,.34)",
+                      backgroundColor: "rgba(56,224,123,.08)",
+                    }}
+                  >
+                    Fill with AI
+                  </CustomButton>
+                )}
+              </Box>
+            )}
+          </Box>
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1.45fr) minmax(250px, .75fr)" },
+              gap: 2.25,
+            }}
+          >
+            <Box sx={panelStyles}>
+              <Box sx={{ mb: 2 }}>
+                <Typography sx={sectionLabelStyles}>Learning context</Typography>
+                <Typography sx={{ color: "#7f8db1", fontSize: "0.72rem", mt: 0.55 }}>
+                  Optional details that make the word easier to remember.
+                </Typography>
+              </Box>
+
+              <Box sx={{ mb: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 0.8 }}>
+                  <Typography sx={{ color: "#a8b6d8", fontSize: "0.72rem" }}>Example phrase</Typography>
+                  {hasWord && !isImproving && (
+                    <CustomButton
+                      type="button"
+                      variant="secondary"
+                      size="small"
+                      title="Fill Example"
+                      aria-label="Suggest example"
+                      onClick={() => void handleImproveVocabulary(VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY)}
+                      startIcon={<AutoFixNormalIcon sx={{ fontSize: 14 }} />}
+                      sx={{ py: 0.5, px: 1.25, color: "#65eaa0" }}
+                    >
+                      Suggest
+                    </CustomButton>
+                  )}
+                </Box>
+                <TextField
+                  label="Example Phrase (Optional)"
+                  placeholder="A natural sentence using this word"
+                  value={examplePhrase}
+                  onChange={(event) => setExamplePhrase(event.target.value)}
+                  fullWidth
+                  multiline
+                  minRows={3}
+                  sx={textFieldStyles}
+                />
+              </Box>
+
+              <Box>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 0.8 }}>
+                  <Typography sx={{ color: "#a8b6d8", fontSize: "0.72rem" }}>Grammar &amp; notes</Typography>
+                  {hasWord && !isImproving && (
+                    <CustomButton
+                      type="button"
+                      variant="secondary"
+                      size="small"
+                      title="Fill Extra Info"
+                      aria-label="Suggest grammar"
+                      onClick={() => void handleImproveVocabulary(VOCABULARY_IMPROVEMENT_MODES.EXTRA_INFO_ONLY)}
+                      startIcon={<AutoFixNormalIcon sx={{ fontSize: 14 }} />}
+                      sx={{ py: 0.5, px: 1.25, color: "#65eaa0" }}
+                    >
+                      Suggest
+                    </CustomButton>
+                  )}
+                </Box>
+                <TextField
+                  label="Extra Info (Optional)"
+                  placeholder="Word form, usage notes, or a memory cue"
+                  value={extraInfo}
+                  onChange={(event) => setExtraInfo(event.target.value)}
+                  fullWidth
+                  multiline
+                  minRows={3}
+                  sx={textFieldStyles}
+                />
+              </Box>
+            </Box>
+
+            <Box sx={panelStyles}>
+              <Typography sx={sectionLabelStyles}>Study settings</Typography>
+              <Typography sx={{ color: "#7f8db1", fontSize: "0.72rem", mt: 0.55, mb: 2 }}>
+                Choose when this word enters your review flow.
+              </Typography>
+
+              <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                <Checkbox
+                  checked={inLearn}
+                  onChange={(event) => setInLearn(event.target.checked)}
+                  inputProps={{ "aria-label": "In Learning" }}
+                  sx={{ p: 0.5, color: "#6f7fa7", "&.Mui-checked": { color: "#38e07b" } }}
+                />
+                <Box>
+                  <Typography sx={{ fontSize: "0.8rem", fontWeight: 700 }}>Add to learning</Typography>
+                  <Typography sx={{ color: "#7f8db1", fontSize: "0.66rem", mt: 0.25 }}>
+                    {inLearn ? "Active in your study set." : "Saved, but outside the study set."}
                   </Typography>
                 </Box>
               </Box>
 
-              <Box sx={{ mt: 2 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1, mb: 0.8 }}>
-                  <Typography sx={{ color: "#8f9dc0", fontSize: "0.66rem" }}>
-                    Study priority
-                  </Typography>
-                  <Typography sx={{ color: "#8f9dc0", fontSize: "0.66rem" }}>
-                    0 = sooner · 9 = later
-                  </Typography>
-                </Box>
+              <Box sx={{ mt: 2.5 }}>
+                <Typography sx={{ color: "#a8b6d8", fontSize: "0.72rem", mb: 0.35 }}>Study priority</Typography>
+                <Typography sx={{ color: "#7180a7", fontSize: "0.64rem", mb: 1 }}>0 = sooner · 9 = later</Typography>
                 <Box
                   role="group"
                   aria-label="Priority (0-9)"
-                  sx={{ display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: 0.45 }}
+                  sx={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 0.55 }}
                 >
                   {Array.from({ length: 10 }, (_, priority) => (
                     <Box
@@ -405,14 +529,12 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
                       onClick={() => setPriorityLearn(priority)}
                       sx={{
                         minWidth: 0,
-                        height: 32,
+                        height: 34,
                         p: 0,
                         borderRadius: 1,
-                        border:
-                          priorityLearn === priority ? "1px solid #38e07b" : dialogBorder,
+                        border: priorityLearn === priority ? "1px solid #38e07b" : dialogBorder,
                         color: priorityLearn === priority ? "#071b11" : "#8593b7",
-                        backgroundColor:
-                          priorityLearn === priority ? "#38e07b" : "rgba(255,255,255,.02)",
+                        backgroundColor: priorityLearn === priority ? "#38e07b" : "rgba(255,255,255,.02)",
                         font: "inherit",
                         fontSize: "0.68rem",
                         fontWeight: priorityLearn === priority ? 700 : 400,
@@ -427,82 +549,11 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
             </Box>
           </Box>
 
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2.25 }}>
-            <Box sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
-              <Typography sx={sectionLabelStyles}>Learning context</Typography>
-              <Typography sx={{ color: "#7280a5", fontSize: "0.66rem" }}>
-                Optional, but useful
-              </Typography>
-            </Box>
-
-            <Box sx={{ position: "relative" }}>
-              <TextField
-                label="Example Phrase (Optional)"
-                value={examplePhrase}
-                onChange={(event) => setExamplePhrase(event.target.value)}
-                fullWidth
-                multiline
-                minRows={4}
-                sx={{ ...textFieldStyles, "& textarea": { pr: 15 } }}
-              />
-              <CustomButton
-                variant="secondary"
-                size="small"
-                title="Fill Example"
-                aria-label="Suggest example"
-                onClick={() => void handleImproveVocabulary(VOCABULARY_IMPROVEMENT_MODES.EXAMPLE_ONLY)}
-                disabled={fillDisabled}
-                startIcon={<AutoFixNormalIcon sx={{ fontSize: 14 }} />}
-                sx={{
-                  position: "absolute",
-                  top: 8,
-                  right: 8,
-                  color: "#65eaa0",
-                  border: "1px solid rgba(56,224,123,.28)",
-                  backgroundColor: "rgba(56,224,123,.06)",
-                }}
-              >
-                Suggest example
-              </CustomButton>
-            </Box>
-
-            <Box sx={{ position: "relative" }}>
-              <TextField
-                label="Extra Info (Optional)"
-                value={extraInfo}
-                onChange={(event) => setExtraInfo(event.target.value)}
-                fullWidth
-                multiline
-                minRows={4}
-                sx={{ ...textFieldStyles, "& textarea": { pr: 15 } }}
-              />
-              <CustomButton
-                variant="secondary"
-                size="small"
-                title="Fill Extra Info"
-                aria-label="Suggest grammar"
-                onClick={() => void handleImproveVocabulary(VOCABULARY_IMPROVEMENT_MODES.EXTRA_INFO_ONLY)}
-                disabled={fillDisabled}
-                startIcon={<AutoFixNormalIcon sx={{ fontSize: 14 }} />}
-                sx={{
-                  position: "absolute",
-                  top: 8,
-                  right: 8,
-                  color: "#65eaa0",
-                  border: "1px solid rgba(56,224,123,.28)",
-                  backgroundColor: "rgba(56,224,123,.06)",
-                }}
-              >
-                Suggest grammar
-              </CustomButton>
-            </Box>
-
-            {error && (
-              <Typography role="alert" sx={{ color: "#fda4af", fontSize: "0.8rem" }}>
-                {error}
-              </Typography>
-            )}
-          </Box>
+          {error && (
+            <Typography role="alert" sx={{ color: "#fda4af", fontSize: "0.8rem", mt: 2 }}>
+              {error}
+            </Typography>
+          )}
         </Box>
 
         <Box
@@ -519,59 +570,43 @@ const AddEditVocabularyModal: React.FC<AddEditVocabularyModalProps> = ({
             backgroundColor: "rgba(5, 10, 38, 0.52)",
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap" }}>
-            <CustomButton
-              variant="secondary"
-              title="Fill All"
-              aria-label="Fill with AI"
-              onClick={() => void handleImproveVocabulary(VOCABULARY_IMPROVEMENT_MODES.ALL_FIELDS)}
-              disabled={fillDisabled}
-              startIcon={
-                isImproving ? (
-                  <CircularProgress size={16} color="inherit" />
-                ) : (
-                  <AutoFixHighIcon fontSize="small" />
-                )
-              }
-              sx={{
-                color: "#65eaa0",
-                border: "1px solid rgba(56,224,123,.34)",
-                backgroundColor: "rgba(56,224,123,.08)",
-              }}
-            >
-              Fill with AI
-            </CustomButton>
-            <Typography sx={{ color: "#7180a7", fontSize: "0.67rem", maxWidth: 210 }}>
-              Suggest translation, example, and grammar details.
-            </Typography>
-          </Box>
-
-          <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 1 }}>
+          <Box>
             {item && onDelete && (
               <CustomButton
+                type="button"
                 variant="secondary"
                 startIcon={<DeleteOutlineIcon fontSize="small" />}
                 onClick={() => void onDelete()}
-                sx={{ color: "#fda4af", mr: { xs: "auto", sm: 1 } }}
+                sx={{ color: "#fda4af" }}
               >
                 Delete
               </CustomButton>
             )}
-            <CustomButton variant="secondary" onClick={handleClose}>
+          </Box>
+
+          <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 1 }}>
+            {!canSave && !isSaving && (
+              <Typography sx={{ color: "#7180a7", fontSize: "0.68rem", mr: 0.5 }}>
+                Add a word and translation to continue.
+              </Typography>
+            )}
+            <CustomButton type="button" variant="secondary" onClick={handleClose}>
               Cancel
             </CustomButton>
-            <CustomButton
-              variant="primary"
-              onClick={() => void handleSave()}
-              disabled={!wordPhrase.trim() || !translation.trim() || isSaving}
-            >
-              {isSaving
-                ? "Saving..."
-                : item
-                  ? "Save changes"
-                  : "Add to vocabulary"}
-            </CustomButton>
+            {isSaving ? (
+              <Box role="status" sx={{ display: "flex", alignItems: "center", gap: 1, color: "#65eaa0", fontSize: "0.75rem", px: 1.5 }}>
+                <CircularProgress size={16} color="inherit" />
+                Saving…
+              </Box>
+            ) : (
+              canSave && (
+                <CustomButton type="submit" variant="primary">
+                  {item ? "Save changes" : "Add to vocabulary"}
+                </CustomButton>
+              )
+            )}
           </Box>
+        </Box>
         </Box>
       </Dialog>
 

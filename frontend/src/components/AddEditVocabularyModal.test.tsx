@@ -116,10 +116,10 @@ describe("AddEditVocabularyModal", () => {
   });
 
 
-  it("disables lookup button when word phrase is empty", () => {
+  it("hides lookup until a word phrase is available", () => {
     renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
-    expect(screen.getByTitle("Look up existing word")).toBeDisabled();
+    expect(screen.queryByTitle("Look up existing word")).not.toBeInTheDocument();
   });
 
   it("looks up the trimmed word and shows a found notification", async () => {
@@ -285,17 +285,15 @@ describe("AddEditVocabularyModal", () => {
     });
   });
 
-  it("disables fill buttons when word phrase is empty", () => {
+  it("hides suggestion actions until a word phrase is available", () => {
     renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
-    const fillAllButton = screen.getByTitle("Fill All");
-    const fillExampleButton = screen.getByTitle("Fill Example");
-
-    expect(fillAllButton).toBeDisabled();
-    expect(fillExampleButton).toBeDisabled();
+    expect(screen.queryByTitle("Fill All")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Fill Example")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Fill Extra Info")).not.toBeInTheDocument();
   });
 
-  it("disables fill buttons when improving", async () => {
+  it("replaces suggestion actions with progress while improving", async () => {
     const user = userEvent.setup();
     mockImproveVocabularyItem.mockImplementation(() => new Promise(() => {})); // Never resolves
 
@@ -309,10 +307,11 @@ describe("AddEditVocabularyModal", () => {
     const fillAllButton = screen.getByTitle("Fill All");
     await user.click(fillAllButton);
 
-    // Buttons should be disabled while improving
+    // Actions should not remain as ugly disabled controls while improving.
     await waitFor(() => {
-      expect(fillAllButton).toBeDisabled();
-      expect(screen.getByTitle("Fill Example")).toBeDisabled();
+      expect(screen.queryByTitle("Fill All")).not.toBeInTheDocument();
+      expect(screen.queryByTitle("Fill Example")).not.toBeInTheDocument();
+      expect(screen.getByText("Building suggestions…")).toBeInTheDocument();
     });
   });
 
@@ -397,7 +396,27 @@ describe("AddEditVocabularyModal", () => {
     });
   });
 
-  it("disables save while pending and re-enables it after completion", async () => {
+  it("submits the form when Enter is pressed in the translation field", async () => {
+    const user = userEvent.setup();
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
+
+    await user.type(screen.getByLabelText("Swedish Word/Phrase"), "hej");
+    await user.type(screen.getByLabelText("English Translation"), "hello");
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(mockOnSave).toHaveBeenCalledWith({
+        word_phrase: "hej",
+        translation: "hello",
+        example_phrase: null,
+        extra_info: null,
+        in_learn: true,
+        priority_learn: 5,
+      });
+    });
+  });
+
+  it("replaces save with progress while pending and restores it after completion", async () => {
     const user = userEvent.setup();
     let resolveSave: () => void = () => {};
     mockOnSave.mockReturnValue(
@@ -412,8 +431,8 @@ describe("AddEditVocabularyModal", () => {
     await user.type(screen.getByLabelText("English Translation"), "hello");
     await user.click(screen.getByRole("button", { name: "Add to vocabulary" }));
 
-    const savingButton = screen.getByRole("button", { name: "Saving..." });
-    expect(savingButton).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Add to vocabulary" })).not.toBeInTheDocument();
+    expect(screen.getByText("Saving…")).toBeInTheDocument();
     expect(mockOnSave).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -475,13 +494,11 @@ describe("AddEditVocabularyModal", () => {
     });
   });
 
-  it("does not call onSave when required fields are empty", () => {
+  it("hides save and explains what is missing when required fields are empty", () => {
     renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
-    const saveButton = screen.getByRole("button", { name: "Add to vocabulary" });
-
-    // Button should be disabled when required fields are empty
-    expect(saveButton).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Add to vocabulary" })).not.toBeInTheDocument();
+    expect(screen.getByText("Add a word and translation to continue.")).toBeInTheDocument();
     expect(mockOnSave).not.toHaveBeenCalled();
   });
 

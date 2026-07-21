@@ -131,9 +131,10 @@ const VocabularyOverview: React.FC<VocabularyOverviewProps> = ({
                 {stats ? metric.note(stats) : "Loading vocabulary summary"}
               </Typography>
 
-              {index > 0 && (
+              {index > 0 && metric.key !== "overall_words_count" && (
                 <Box
                   aria-hidden="true"
+                  data-testid={`${metric.key}-segments`}
                   sx={{
                     display: "grid",
                     gridTemplateColumns: "repeat(6, 1fr)",
