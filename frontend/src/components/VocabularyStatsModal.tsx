@@ -1,342 +1,333 @@
 import React from "react";
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  Box,
-  IconButton,
-  Typography,
-} from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { Box, Drawer, Typography } from "@mui/material";
 import { useVocabularyDistribution } from "../hooks/useVocabulary";
-import type {
-  PriorityDistributionItem,
-  LearnedTimesDistributionItem,
-} from "../hooks/useVocabulary";
-import { LoadingSpinner, ErrorAlert } from "./ui";
-
-// ─── Colour palettes ────────────────────────────────────────────────────────
-
-/** 10-step gradient: red alert (highest priority 0) → green (lowest priority 9) */
-const PRIORITY_COLORS = [
-  "#991b1b", // 0 Highest
-  "#dc2626", // 1 Very High
-  "#ef4444", // 2 High
-  "#f97316", // 3 Above Average
-  "#fb923c", // 4 Average
-  "#fbbf24", // 5 Below Average
-  "#fde047", // 6 Low
-  "#bef264", // 7 Very Low
-  "#86efac", // 8 Minimal
-  "#4ade80", // 9 Default
-];
-
-const LEARNED_COLORS = ["#6366f1", "#22d3ee", "#a78bfa", "#34d399"];
-
-// ─── Shared sub-components ──────────────────────────────────────────────────
-
-interface ChartEntry {
-  label: string;
-  count: number;
-}
-
-interface LegendItemProps {
-  color: string;
-  label: string;
-  count: number;
-}
-
-const LegendItem: React.FC<LegendItemProps> = ({ color, label, count }) => (
-  <Box sx={{ display: "flex", alignItems: "center", gap: 1, py: 0.25 }}>
-    <Box
-      sx={{
-        width: 10,
-        height: 10,
-        borderRadius: "50%",
-        backgroundColor: color,
-        flexShrink: 0,
-        opacity: count === 0 ? 0.35 : 1,
-      }}
-    />
-    <Typography
-      sx={{
-        color:
-          count === 0 ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.85)",
-        fontSize: "0.75rem",
-        lineHeight: 1.4,
-      }}
-    >
-      {label}
-    </Typography>
-    <Typography
-      sx={{
-        color:
-          count === 0 ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.7)",
-        fontSize: "0.75rem",
-        ml: "auto",
-        pl: 1,
-      }}
-    >
-      {count}
-    </Typography>
-  </Box>
-);
-
-interface DonutChartProps {
-  title: string;
-  items: ChartEntry[];
-  colors: string[];
-  ariaLabel: string;
-}
-
-const DonutChart: React.FC<DonutChartProps> = ({
-  title,
-  items,
-  colors,
-  ariaLabel,
-}) => {
-  const total = items.reduce((s, i) => s + i.count, 0);
-  const pieData = items.filter((i) => i.count > 0);
-  const allZero = total === 0;
-
-  return (
-    <Box
-      sx={{
-        flex: 1,
-        minWidth: { xs: "100%", sm: 280 },
-        p: 2,
-        borderRadius: 2,
-        background:
-          "linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)",
-        border: "1px solid rgba(255,255,255,0.08)",
-      }}
-    >
-      <Typography
-        sx={{
-          color: "rgba(255,255,255,0.9)",
-          fontWeight: 600,
-          fontSize: "0.875rem",
-          mb: 1.5,
-          textAlign: "center",
-        }}
-      >
-        {title}
-      </Typography>
-
-      {allZero ? (
-        <Box sx={{ textAlign: "center", py: 3 }}>
-          <Typography
-            sx={{ color: "rgba(255,255,255,0.4)", fontSize: "0.8rem" }}
-          >
-            No data yet
-          </Typography>
-        </Box>
-      ) : (
-        <Box sx={{ position: "relative", width: "100%", height: 180 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart aria-label={ariaLabel}>
-              <Pie
-                data={pieData}
-                dataKey="count"
-                nameKey="label"
-                cx="50%"
-                cy="50%"
-                innerRadius={52}
-                outerRadius={78}
-                paddingAngle={2}
-                isAnimationActive
-              >
-                {pieData.map((entry) => {
-                  const idx = items.findIndex((i) => i.label === entry.label);
-                  return (
-                    <Cell
-                      key={entry.label}
-                      fill={colors[idx % colors.length]}
-                    />
-                  );
-                })}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "rgba(17,24,39,0.92)",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  borderRadius: 8,
-                  color: "#fff",
-                  fontSize: 13,
-                }}
-                formatter={(value, name) => {
-                  const count = Number(value ?? 0);
-                  return [
-                    `${count} word${count !== 1 ? "s" : ""}`,
-                    String(name),
-                  ];
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-          {/* Centred total */}
-          <Box
-            sx={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              textAlign: "center",
-              pointerEvents: "none",
-            }}
-          >
-            <Typography
-              sx={{
-                color: "white",
-                fontWeight: 700,
-                fontSize: "1.3rem",
-                lineHeight: 1,
-              }}
-            >
-              {total}
-            </Typography>
-            <Typography
-              sx={{ color: "rgba(255,255,255,0.5)", fontSize: "0.65rem" }}
-            >
-              words
-            </Typography>
-          </Box>
-        </Box>
-      )}
-
-      {/* Custom legend — always shows all buckets including zero-count */}
-      <Box sx={{ mt: 1.5 }}>
-        {items.map((item, idx) => (
-          <LegendItem
-            key={item.label}
-            color={colors[idx % colors.length]}
-            label={item.label}
-            count={item.count}
-          />
-        ))}
-      </Box>
-    </Box>
-  );
-};
-
-// ─── Modal ───────────────────────────────────────────────────────────────────
+import { ErrorAlert, LoadingSpinner } from "./ui";
+import {
+  buildLearnedDistributionGradient,
+  LEARNED_COLORS,
+} from "./vocabulary/visualization";
 
 interface VocabularyStatsModalProps {
   open: boolean;
   onClose: () => void;
 }
 
+const PRIORITY_COLORS = [
+  "#b91c1c",
+  "#ef4444",
+  "#ff5a5f",
+  "#f97316",
+  "#fb923c",
+  "#fbbf24",
+  "#fde047",
+  "#bef264",
+  "#86efac",
+  "#4ade80",
+];
+
+const PRIORITY_NAMES = [
+  "Highest",
+  "Very high",
+  "High",
+  "Above average",
+  "Average",
+  "Below average",
+  "Low",
+  "Very low",
+  "Minimal",
+  "Default",
+];
+
+const learnedLabel = (label: string) => {
+  const normalized = label.toLowerCase();
+  if (normalized.includes("never")) return "Never learned";
+  if (normalized.includes("1") && normalized.includes("10")) return "1–10 times";
+  if (normalized.includes("11") && normalized.includes("30")) return "11–30 times";
+  if (normalized.includes(">30") || normalized.includes("over")) return "Over 30";
+  return label;
+};
+
 const VocabularyStatsModal: React.FC<VocabularyStatsModalProps> = ({
   open,
   onClose,
 }) => {
   const { data, loading, error } = useVocabularyDistribution(open);
-
-  const priorityItems: ChartEntry[] = (
-    data?.priority_distribution ?? []
-  ).map((item: PriorityDistributionItem) => ({
-    label: item.label,
-    count: item.count,
-  }));
-
-  const learnedItems: ChartEntry[] = (
-    data?.learned_times_distribution ?? []
-  ).map((item: LearnedTimesDistributionItem) => ({
-    label: item.label,
-    count: item.count,
-  }));
-
-  const allEmpty =
-    data !== null &&
-    priorityItems.every((i) => i.count === 0) &&
-    learnedItems.every((i) => i.count === 0);
+  const priorities = data?.priority_distribution ?? [];
+  const learned = data?.learned_times_distribution ?? [];
+  const priorityTotal = priorities.reduce((sum, item) => sum + item.count, 0);
+  const learnedTotal = learned.reduce((sum, item) => sum + item.count, 0);
+  const total = Math.max(priorityTotal, learnedTotal);
+  const neverLearned = learned.find((item) =>
+    item.label.toLowerCase().includes("never")
+  )?.count ?? 0;
+  const unseenPercentage = learnedTotal
+    ? Math.round((neverLearned / learnedTotal) * 100)
+    : 0;
+  const maximumPriorityCount = Math.max(
+    ...priorities.map((item) => item.count),
+    0
+  );
+  const allEmpty = data !== null && total === 0;
   const showLoading = loading || (!data && !error);
+  const learnedGradient = buildLearnedDistributionGradient(
+    learned.map((item) => item.count)
+  );
 
   return (
-    <Dialog
+    <Drawer
+      anchor="right"
       open={open}
-      onClose={onClose}
-      maxWidth="md"
-      fullWidth
+      onClose={(_, reason) => {
+        if (reason === "backdropClick" || reason === "escapeKeyDown") {
+          onClose();
+        }
+      }}
       aria-labelledby="vocab-stats-title"
+      ModalProps={{
+        slotProps: {
+          backdrop: {
+            sx: {
+              backgroundColor: "rgba(2, 6, 24, 0.78)",
+              backdropFilter: "blur(3px)",
+            },
+          },
+        },
+      }}
       PaperProps={{
+        "aria-labelledby": "vocab-stats-title",
+        onClick: onClose,
         sx: {
+          width: "min(650px, 94vw)",
+          color: "#f4f7ff",
+          cursor: "pointer",
+          borderLeft: "1px solid rgba(103, 121, 181, 0.52)",
           background:
-            "linear-gradient(135deg, rgba(17,24,39,0.97) 0%, rgba(31,41,55,0.97) 100%)",
-          backdropFilter: "blur(20px)",
-          border: "1px solid rgba(255,255,255,0.1)",
-          borderRadius: 3,
-          color: "white",
+            "linear-gradient(155deg, rgba(18, 26, 65, 0.99), rgba(7, 12, 43, 0.99) 68%)",
+          boxShadow: "-28px 0 90px rgba(0, 0, 0, 0.48)",
         },
       }}
     >
-      <DialogTitle
-        id="vocab-stats-title"
+      <Box
+        component="header"
         sx={{
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          pb: 1,
+          alignItems: "flex-start",
+          gap: 2,
+          px: { xs: 2.5, sm: 4 },
+          py: { xs: 2.5, sm: 3.5 },
+          borderBottom: "1px solid rgba(99, 114, 173, 0.35)",
         }}
       >
-        <Typography sx={{ fontWeight: 700, fontSize: "1.05rem" }}>
-          Vocabulary Statistics
-        </Typography>
-        <IconButton
-          onClick={onClose}
-          aria-label="Close vocabulary statistics"
-          size="small"
-          sx={{ color: "rgba(255,255,255,0.6)" }}
-        >
-          <CloseIcon fontSize="small" />
-        </IconButton>
-      </DialogTitle>
+        <Box>
+          <Typography
+            id="vocab-stats-title"
+            component="h2"
+            sx={{ fontSize: "1.35rem", fontWeight: 700, letterSpacing: "-0.025em" }}
+          >
+            Vocabulary statistics
+          </Typography>
+          <Typography sx={{ color: "#99a8ca", fontSize: "0.78rem", mt: 0.6 }}>
+            A clearer view of what is active, learned, and waiting.
+          </Typography>
+        </Box>
+      </Box>
 
-      <DialogContent>
+      <Box sx={{ px: { xs: 2.5, sm: 4 }, py: 3.5 }}>
         {showLoading && <LoadingSpinner />}
-
         {!showLoading && error && <ErrorAlert message={error} />}
 
         {!showLoading && !error && allEmpty && (
-          <Box sx={{ textAlign: "center", py: 6 }}>
-            <Typography sx={{ color: "rgba(255,255,255,0.5)", mb: 1 }}>
+          <Box sx={{ textAlign: "center", py: 8 }}>
+            <Typography sx={{ color: "#c4cee8", mb: 1 }}>
               No vocabulary data yet
             </Typography>
-            <Typography
-              sx={{ color: "rgba(255,255,255,0.3)", fontSize: "0.8rem" }}
-            >
+            <Typography sx={{ color: "#7180a7", fontSize: "0.78rem" }}>
               Add words to your active vocabulary to see statistics here.
             </Typography>
           </Box>
         )}
 
         {!showLoading && !error && !allEmpty && data && (
-          <Box
-            sx={{
-              display: "flex",
-              gap: 2,
-              flexDirection: { xs: "column", sm: "row" },
-              pt: 1,
-              pb: 2,
-            }}
-          >
-            <DonutChart
-              title="Words by Priority"
-              items={priorityItems}
-              colors={PRIORITY_COLORS}
-              ariaLabel="Priority distribution donut chart"
-            />
-            <DonutChart
-              title="Words by Times Learned"
-              items={learnedItems}
-              colors={LEARNED_COLORS}
-              ariaLabel="Learned-times distribution donut chart"
-            />
-          </Box>
+          <>
+            <Box
+              component="section"
+              aria-label="Vocabulary distribution overview"
+              sx={{
+                display: "grid",
+                gridTemplateColumns: "1fr auto",
+                alignItems: "center",
+                gap: 2,
+                p: 2.75,
+                mb: 2.25,
+                borderRadius: 2,
+                border: "1px solid rgba(103, 121, 181, 0.44)",
+                background:
+                  "radial-gradient(circle at 10% 8%, rgba(35, 50, 116, 0.52), rgba(7, 11, 39, 0.92))",
+              }}
+            >
+              <Box>
+                <Typography
+                  sx={{
+                    color: "#f4f7ff",
+                    fontSize: { xs: "2.15rem", sm: "2.55rem" },
+                    fontWeight: 700,
+                    lineHeight: 1,
+                    letterSpacing: "-0.045em",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {total.toLocaleString()}
+                </Typography>
+                <Typography sx={{ color: "#8d9bc0", fontSize: "0.72rem", mt: 1 }}>
+                  words included in these distributions
+                </Typography>
+              </Box>
+              <Box
+                aria-label={`${unseenPercentage}% unseen`}
+                sx={{
+                  width: { xs: 92, sm: 112 },
+                  height: { xs: 92, sm: 112 },
+                  borderRadius: "50%",
+                  display: "grid",
+                  placeItems: "center",
+                  position: "relative",
+                  background: learnedGradient,
+                  "&::after": {
+                    content: '""',
+                    position: "absolute",
+                    inset: 16,
+                    borderRadius: "50%",
+                    backgroundColor: "#101737",
+                  },
+                }}
+              >
+                <Box sx={{ position: "relative", zIndex: 1, textAlign: "center" }}>
+                  <Typography sx={{ fontSize: "0.83rem", fontWeight: 700, lineHeight: 1 }}>
+                    {unseenPercentage}%
+                  </Typography>
+                  <Typography sx={{ color: "#8795b9", fontSize: "0.56rem", mt: 0.35 }}>
+                    unseen
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+
+            <Box
+              component="section"
+              aria-labelledby="learning-history-title"
+              sx={{
+                p: 2.5,
+                mb: 2.25,
+                borderRadius: 2,
+                border: "1px solid rgba(99, 114, 173, 0.34)",
+                backgroundColor: "rgba(255,255,255,.02)",
+              }}
+            >
+              <Typography id="learning-history-title" sx={{ fontSize: "0.9rem", fontWeight: 700 }}>
+                Learning history
+              </Typography>
+              <Typography sx={{ color: "#7583aa", fontSize: "0.68rem", mt: 0.4, mb: 2 }}>
+                Most of the library has not yet entered a completed review.
+              </Typography>
+
+              {learnedTotal === 0 ? (
+                <Typography sx={{ color: "#7180a7", fontSize: "0.75rem" }}>
+                  No data yet
+                </Typography>
+              ) : (
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)" }, gap: 1.2 }}>
+                  {learned.map((item, index) => (
+                    <Box key={item.label} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Box
+                        aria-hidden="true"
+                        sx={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: "50%",
+                          backgroundColor: LEARNED_COLORS[index % LEARNED_COLORS.length],
+                          opacity: item.count === 0 ? 0.35 : 1,
+                        }}
+                      />
+                      <Typography sx={{ color: "#aab7d4", fontSize: "0.72rem" }}>
+                        {learnedLabel(item.label)}
+                      </Typography>
+                      <Typography
+                        sx={{ ml: "auto", color: "#e1e7f8", fontSize: "0.72rem", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}
+                      >
+                        {item.count.toLocaleString()}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Box>
+
+            <Box
+              component="section"
+              aria-labelledby="priority-distribution-title"
+              sx={{
+                p: 2.5,
+                borderRadius: 2,
+                border: "1px solid rgba(99, 114, 173, 0.34)",
+                backgroundColor: "rgba(255,255,255,.02)",
+              }}
+            >
+              <Typography id="priority-distribution-title" sx={{ fontSize: "0.9rem", fontWeight: 700 }}>
+                Priority distribution
+              </Typography>
+              <Typography sx={{ color: "#7583aa", fontSize: "0.68rem", mt: 0.4, mb: 2 }}>
+                Horizontal bars make the ten priority levels easy to compare.
+              </Typography>
+
+              {priorities.map((item) => {
+                const priority = Math.min(Math.max(item.priority, 0), 9);
+                const width = maximumPriorityCount
+                  ? (item.count / maximumPriorityCount) * 100
+                  : 0;
+
+                return (
+                  <Box
+                    key={item.priority}
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: { xs: "105px 1fr 42px", sm: "126px 1fr 48px" },
+                      alignItems: "center",
+                      gap: 1.25,
+                      my: 1.05,
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.9, minWidth: 0 }}>
+                      <Box
+                        aria-hidden="true"
+                        sx={{ width: 7, height: 7, flexShrink: 0, borderRadius: "50%", backgroundColor: PRIORITY_COLORS[priority] }}
+                      />
+                      <Typography sx={{ color: "#aab7d4", fontSize: "0.68rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {PRIORITY_NAMES[priority]} · {priority}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ height: 7, overflow: "hidden", borderRadius: 99, backgroundColor: "rgba(127,148,205,.12)" }}>
+                      <Box
+                        data-testid={`priority-bar-${priority}`}
+                        data-color={PRIORITY_COLORS[priority]}
+                        sx={{
+                          width: item.count > 0 ? `${Math.max(width, 1)}%` : 0,
+                          height: "100%",
+                          borderRadius: "inherit",
+                          backgroundColor: PRIORITY_COLORS[priority],
+                        }}
+                      />
+                    </Box>
+                    <Typography sx={{ color: "#8290b5", fontSize: "0.68rem", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                      {item.count.toLocaleString()}
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </Box>
+          </>
         )}
-      </DialogContent>
-    </Dialog>
+      </Box>
+    </Drawer>
   );
 };
 

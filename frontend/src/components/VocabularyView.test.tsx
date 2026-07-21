@@ -1,6 +1,7 @@
 /// <reference types="vitest/globals" />
 /// <reference types="@testing-library/jest-dom" />
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { vi } from 'vitest';
 
 // Mock the useVocabulary hook
@@ -428,7 +429,7 @@ describe("VocabularyView", () => {
     expect(screen.getByText("5")).toBeInTheDocument();
     expect(screen.getByText("Prioritised Words")).toBeInTheDocument();
     expect(screen.getByText("1")).toBeInTheDocument();
-    expect(screen.getByText("Recent Vocabulary")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Vocabulary" })).toBeInTheDocument();
     expect(screen.getByText("No vocabulary saved yet.")).toBeInTheDocument();
     expect(screen.getByText("Analyze some text and save vocabulary items to see them here.")).toBeInTheDocument();
   });
@@ -458,7 +459,7 @@ describe("VocabularyView", () => {
     renderWithAuthProvider(<VocabularyView />);
 
     expect(screen.getByText("Failed to fetch vocabulary stats")).toBeInTheDocument();
-    expect(screen.getByText("Recent Vocabulary")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Vocabulary" })).toBeInTheDocument();
   });
 
   it("renders search input", () => {
@@ -703,16 +704,13 @@ describe("VocabularyView", () => {
 
     renderWithAuthProvider(<VocabularyView />);
 
-    expect(screen.getByText("Recent Vocabulary")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Vocabulary" })).toBeInTheDocument();
 
-    // Check table headers
-    expect(screen.getByText("Swedish")).toBeInTheDocument();
-    expect(screen.getByText("English")).toBeInTheDocument();
-    expect(screen.getByText("Example Phrase")).toBeInTheDocument();
-    expect(screen.getByText("Grammar Info")).toBeInTheDocument();
-    expect(screen.getByText("In Learning")).toBeInTheDocument();
-    expect(screen.getByText("Priority")).toBeInTheDocument();
-    expect(screen.getByText("Last Learned")).toBeInTheDocument();
+    // Check grouped ledger headers
+    expect(screen.getByText("Word")).toBeInTheDocument();
+    expect(screen.getByText("Usage & grammar")).toBeInTheDocument();
+    expect(screen.getByText("Study status")).toBeInTheDocument();
+    expect(screen.getByText("Learning progress")).toBeInTheDocument();
     expect(screen.getByText("Updated")).toBeInTheDocument();
 
     // Check vocabulary data
@@ -726,6 +724,8 @@ describe("VocabularyView", () => {
     expect(screen.getByText("good")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Boost priority for bra" })).toBeDisabled();
     expect(screen.getAllByText("—")).toHaveLength(2); // null example_phrase and null extra_info should show dash
+    expect(screen.queryByText("01")).not.toBeInTheDocument();
+    expect(screen.queryByText("02")).not.toBeInTheDocument();
 
     // Check dates are formatted
     expect(screen.getByText("10/27/2023")).toBeInTheDocument();
@@ -826,6 +826,65 @@ describe("VocabularyView", () => {
       expect(refetchStats).toHaveBeenCalledTimes(1);
     });
     expect(openEditModal).not.toHaveBeenCalled();
+  });
+
+  it("keeps keyboard boost and edit actions isolated", async () => {
+    const user = userEvent.setup();
+    const openEditModal = vi.fn();
+    const updateVocabularyItem = vi.fn().mockResolvedValue(undefined);
+
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [
+        {
+          id: 7,
+          user_id: 1,
+          word_phrase: "snabb",
+          translation: "fast",
+          example_phrase: null,
+          extra_info: null,
+          in_learn: false,
+          priority_learn: 9,
+          last_learned: null,
+          learned_times: 0,
+          created_at: "2023-10-27T10:00:00Z",
+          updated_at: "2023-10-27T10:00:00Z",
+        },
+      ],
+      loading: false,
+      loadingMore: false,
+      error: null,
+      refetch: vi.fn(),
+      loadMore: vi.fn(),
+      hasMore: false,
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal,
+      closeEditModal: vi.fn(),
+      updateVocabularyItem,
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
+    });
+
+    renderWithAuthProvider(<VocabularyView />);
+
+    const boostButton = screen.getByRole("button", {
+      name: "Boost priority for snabb",
+    });
+    act(() => boostButton.focus());
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(updateVocabularyItem).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(boostButton).toBeEnabled());
+    act(() => boostButton.focus());
+    await user.keyboard(" ");
+    await waitFor(() => expect(updateVocabularyItem).toHaveBeenCalledTimes(2));
+    expect(openEditModal).not.toHaveBeenCalled();
+
+    const editButton = screen.getByRole("button", { name: "Edit snabb" });
+    act(() => editButton.focus());
+    await user.keyboard("{Enter}");
+    await user.keyboard(" ");
+    expect(openEditModal).toHaveBeenCalledTimes(2);
   });
 
   it("does not boost words that are already highest priority", () => {

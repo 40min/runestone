@@ -10,6 +10,7 @@ interface SearchInputProps {
   placeholder?: string;
   fullWidth?: boolean;
   sx?: SxProps<Theme>;
+  inputSx?: SxProps<Theme>;
   onSearch?: () => void;
   onClear?: () => void;
   clearLabel?: string;
@@ -21,6 +22,7 @@ const SearchInput: React.FC<SearchInputProps> = ({
   placeholder = "Search...",
   fullWidth = true,
   sx = {},
+  inputSx = {},
   onSearch,
   onClear,
   clearLabel = "Clear search",
@@ -76,6 +78,7 @@ const SearchInput: React.FC<SearchInputProps> = ({
           "& .MuiInputBase-input::placeholder": {
             color: "#9ca3af",
           },
+          ...inputSx,
         }}
       />
       {onSearch && (

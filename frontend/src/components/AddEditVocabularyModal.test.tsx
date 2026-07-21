@@ -62,15 +62,15 @@ describe("AddEditVocabularyModal", () => {
   it("renders the modal for adding a new item", () => {
     renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
-    expect(screen.getByText("Add Vocabulary Item")).toBeInTheDocument();
+    expect(screen.getByText("Add a vocabulary item")).toBeInTheDocument();
     expect(screen.getByLabelText("Swedish Word/Phrase")).toBeInTheDocument();
     expect(screen.getByLabelText("English Translation")).toBeInTheDocument();
     expect(
       screen.getByLabelText("Example Phrase (Optional)")
     ).toBeInTheDocument();
-    expect(screen.getByText("In Learning")).toBeInTheDocument();
-    expect(screen.getByLabelText("Priority (0-9)")).toBeInTheDocument();
-    expect(screen.getByText("0 = highest, 9 = lowest (new words default to 5)")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "In Learning" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Priority (0-9)" })).toBeInTheDocument();
+    expect(screen.getByText("0 = sooner · 9 = later")).toBeInTheDocument();
   });
 
   it("renders the modal for editing an existing item", () => {
@@ -89,7 +89,7 @@ describe("AddEditVocabularyModal", () => {
 
     renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} item={existingItem} />);
 
-    expect(screen.getByText("Edit Vocabulary Item")).toBeInTheDocument();
+    expect(screen.getByText("Edit vocabulary item")).toBeInTheDocument();
     expect(screen.getByDisplayValue("hej")).toBeInTheDocument();
     expect(screen.getByDisplayValue("hello")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Hej, hur mår du?")).toBeInTheDocument();
@@ -99,7 +99,7 @@ describe("AddEditVocabularyModal", () => {
     const user = userEvent.setup();
     renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
-    const closeButton = screen.getByRole("button", { name: /×/ });
+    const closeButton = screen.getByRole("button", { name: "Close vocabulary dialog" });
     await user.click(closeButton);
 
     expect(mockOnClose).toHaveBeenCalledTimes(1);
@@ -204,7 +204,7 @@ describe("AddEditVocabularyModal", () => {
     await waitFor(() => {
       expect(screen.getByText("No existing word found.")).toBeInTheDocument();
     });
-    expect(screen.getByText("Add Vocabulary Item")).toBeInTheDocument();
+    expect(screen.getByText("Add a vocabulary item")).toBeInTheDocument();
   });
 
   it("shows an inline error when lookup fails", async () => {
@@ -316,7 +316,63 @@ describe("AddEditVocabularyModal", () => {
     });
   });
 
-  it("calls onSave when Add Item button is clicked with valid data", async () => {
+  it("ignores an AI result after the modal is closed", async () => {
+    const user = userEvent.setup();
+    let resolveImprove: (result: {
+      translation: string;
+      example_phrase: string;
+      extra_info: string;
+    }) => void = () => {};
+    mockImproveVocabularyItem.mockReturnValue(
+      new Promise((resolve) => {
+        resolveImprove = resolve;
+      })
+    );
+
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
+
+    await user.type(screen.getByLabelText("Swedish Word/Phrase"), "hej");
+    await user.click(screen.getByTitle("Fill All"));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await act(async () => {
+      resolveImprove({
+        translation: "hello",
+        example_phrase: "Hej, hur mår du?",
+        extra_info: "interjection",
+      });
+    });
+
+    expect(mockOnClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByDisplayValue("hello")).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Hej, hur mår du?")).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue("interjection")).not.toBeInTheDocument();
+  });
+
+  it("ignores an AI error after the modal is closed", async () => {
+    const user = userEvent.setup();
+    let rejectImprove: (reason?: unknown) => void = () => {};
+    mockImproveVocabularyItem.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        rejectImprove = reject;
+      })
+    );
+
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
+
+    await user.type(screen.getByLabelText("Swedish Word/Phrase"), "hej");
+    await user.click(screen.getByTitle("Fill All"));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await act(async () => {
+      rejectImprove(new Error("Improve failed after close"));
+    });
+
+    expect(mockOnClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Improve failed after close")).not.toBeInTheDocument();
+  });
+
+  it("calls onSave when Add to vocabulary is clicked with valid data", async () => {
     const user = userEvent.setup();
     renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
@@ -328,7 +384,7 @@ describe("AddEditVocabularyModal", () => {
     await user.type(translationInput, "hello");
     await user.type(exampleInput, "Hej, hur mår du?");
 
-    const saveButton = screen.getByRole("button", { name: "Add Item" });
+    const saveButton = screen.getByRole("button", { name: "Add to vocabulary" });
     await user.click(saveButton);
 
     expect(mockOnSave).toHaveBeenCalledWith({
@@ -340,6 +396,37 @@ describe("AddEditVocabularyModal", () => {
       priority_learn: 5,
     });
   });
+
+  it("disables save while pending and re-enables it after completion", async () => {
+    const user = userEvent.setup();
+    let resolveSave: () => void = () => {};
+    mockOnSave.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveSave = resolve;
+      })
+    );
+
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
+
+    await user.type(screen.getByLabelText("Swedish Word/Phrase"), "hej");
+    await user.type(screen.getByLabelText("English Translation"), "hello");
+    await user.click(screen.getByRole("button", { name: "Add to vocabulary" }));
+
+    const savingButton = screen.getByRole("button", { name: "Saving..." });
+    expect(savingButton).toBeDisabled();
+    expect(mockOnSave).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveSave();
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Add to vocabulary" })
+      ).toBeEnabled();
+    });
+  });
+
   it("calls onSave with in_learn: false when checkbox is unchecked", async () => {
     const user = userEvent.setup();
     renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
@@ -352,7 +439,7 @@ describe("AddEditVocabularyModal", () => {
     await user.type(translationInput, "hello");
     await user.click(checkbox); // Uncheck the checkbox
 
-    const saveButton = screen.getByRole("button", { name: "Add Item" });
+    const saveButton = screen.getByRole("button", { name: "Add to vocabulary" });
     await user.click(saveButton);
 
     expect(mockOnSave).toHaveBeenCalledWith({
@@ -371,14 +458,11 @@ describe("AddEditVocabularyModal", () => {
 
     const wordInput = screen.getByLabelText("Swedish Word/Phrase");
     const translationInput = screen.getByLabelText("English Translation");
-    const prioritySelect = screen.getByLabelText("Priority (0-9)");
-
     await user.type(wordInput, "hej");
     await user.type(translationInput, "hello");
-    await user.click(prioritySelect);
-    await user.click(screen.getByRole("option", { name: "2" }));
+    await user.click(screen.getByRole("button", { name: "Priority 2" }));
 
-    const saveButton = screen.getByRole("button", { name: "Add Item" });
+    const saveButton = screen.getByRole("button", { name: "Add to vocabulary" });
     await user.click(saveButton);
 
     expect(mockOnSave).toHaveBeenCalledWith({
@@ -394,7 +478,7 @@ describe("AddEditVocabularyModal", () => {
   it("does not call onSave when required fields are empty", () => {
     renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
-    const saveButton = screen.getByRole("button", { name: "Add Item" });
+    const saveButton = screen.getByRole("button", { name: "Add to vocabulary" });
 
     // Button should be disabled when required fields are empty
     expect(saveButton).toBeDisabled();
@@ -413,12 +497,15 @@ describe("AddEditVocabularyModal", () => {
     await user.type(wordInput, "hej");
     await user.type(translationInput, "hello");
 
-    const saveButton = screen.getByRole("button", { name: "Add Item" });
+    const saveButton = screen.getByRole("button", { name: "Add to vocabulary" });
     await user.click(saveButton);
 
     await waitFor(() => {
       expect(screen.getByText("Save failed")).toBeInTheDocument();
     });
+    expect(
+      screen.getByRole("button", { name: "Add to vocabulary" })
+    ).toBeEnabled();
   });
 
   it("shows error message when improve vocabulary fails", async () => {

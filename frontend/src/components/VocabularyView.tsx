@@ -1,30 +1,15 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Box, IconButton, Tooltip, Typography } from "@mui/material";
-import { alpha, useTheme } from "@mui/material/styles";
+import React, { useEffect, useRef, useState } from "react";
+import { Box, Typography } from "@mui/material";
 import BarChartIcon from "@mui/icons-material/BarChart";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import AddIcon from "@mui/icons-material/Add";
 import { useRecentVocabulary, useVocabularyStats } from "../hooks/useVocabulary";
-import {
-  LoadingSpinner,
-  ErrorAlert,
-  SectionTitle,
-  DataTable,
-  StyledCheckbox,
-  SearchInput,
-  CustomButton,
-} from "./ui";
+import { CustomButton, ErrorAlert, LoadingSpinner } from "./ui";
 import AddEditVocabularyModal from "./AddEditVocabularyModal";
 import VocabularyStatsModal from "./VocabularyStatsModal";
-
-const statCards = [
-  { key: "words_in_learn_count", label: "Words Studied" },
-  { key: "words_skipped_count", label: "Words Skipped" },
-  { key: "overall_words_count", label: "Overall Words" },
-  { key: "words_prioritized_count", label: "Prioritised Words" },
-] as const;
+import VocabularyOverview from "./vocabulary/VocabularyOverview";
+import VocabularyLedger from "./vocabulary/VocabularyLedger";
 
 const VocabularyView: React.FC = () => {
-  const theme = useTheme();
   const [searchTerm, setSearchTerm] = useState("");
   const [activeSearchTerm, setActiveSearchTerm] = useState("");
   const [preciseSearch, setPreciseSearch] = useState(false);
@@ -33,6 +18,8 @@ const VocabularyView: React.FC = () => {
   const [boostError, setBoostError] = useState<string | null>(null);
   const [statsModalOpen, setStatsModalOpen] = useState(false);
   const boostingItemIdsRef = useRef<Set<number>>(new Set());
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+
   const {
     stats,
     loading: statsLoading,
@@ -55,7 +42,6 @@ const VocabularyView: React.FC = () => {
     deleteVocabularyItem,
     lookupVocabularyItem,
   } = useRecentVocabulary(activeSearchTerm, preciseSearch);
-  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!loading && isInitialLoad) {
@@ -73,12 +59,8 @@ const VocabularyView: React.FC = () => {
 
   useEffect(() => {
     const sentinel = loadMoreSentinelRef.current;
-    if (!sentinel || !hasMore || loading || loadingMore) {
-      return;
-    }
-    if (typeof IntersectionObserver === "undefined") {
-      return;
-    }
+    if (!sentinel || !hasMore || loading || loadingMore) return;
+    if (typeof IntersectionObserver === "undefined") return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -92,20 +74,6 @@ const VocabularyView: React.FC = () => {
     return () => observer.disconnect();
   }, [hasMore, loading, loadingMore, loadMore]);
 
-  const handleSearch = () => {
-    setActiveSearchTerm(searchTerm);
-  };
-
-  const handleClearSearch = () => {
-    setSearchTerm("");
-    setActiveSearchTerm("");
-  };
-
-  const handleRowClick = (row: unknown) => {
-    const item = row as (typeof recentVocabulary)[0];
-    openEditModal(item);
-  };
-
   const handleSaveEdit = async (
     updatedItem: Partial<(typeof recentVocabulary)[0]>
   ) => {
@@ -118,10 +86,9 @@ const VocabularyView: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (editingItem) {
-      await deleteVocabularyItem(editingItem.id);
-      await refetchStats();
-    }
+    if (!editingItem) return;
+    await deleteVocabularyItem(editingItem.id);
+    await refetchStats();
   };
 
   const handleBoostPriority = async (
@@ -132,328 +99,132 @@ const VocabularyView: React.FC = () => {
     setBoostError(null);
 
     const nextPriority = Math.max(item.priority_learn - 1, 0);
-    if (nextPriority === item.priority_learn) {
-      return;
-    }
+    if (nextPriority === item.priority_learn) return;
+    if (boostingItemIdsRef.current.has(item.id)) return;
 
-    if (boostingItemIdsRef.current.has(item.id)) {
-      return;
-    }
     boostingItemIdsRef.current.add(item.id);
     setBoostingItemIds(new Set(boostingItemIdsRef.current));
 
     try {
       await updateVocabularyItem(item.id, { priority_learn: nextPriority });
       await refetchStats();
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      setBoostError(`Failed to boost priority: ${errorMessage}`);
+    } catch (updateError) {
+      const message =
+        updateError instanceof Error ? updateError.message : "Unknown error";
+      setBoostError(`Failed to boost priority: ${message}`);
     } finally {
       boostingItemIdsRef.current.delete(item.id);
       setBoostingItemIds(new Set(boostingItemIdsRef.current));
     }
   };
 
-  // Only show full-page loading spinner on initial load
-  if (loading && isInitialLoad) {
-    return <LoadingSpinner />;
-  }
-
-  if (error && recentVocabulary.length === 0) {
-    return <ErrorAlert message={error} />;
-  }
+  if (loading && isInitialLoad) return <LoadingSpinner />;
+  if (error && recentVocabulary.length === 0) return <ErrorAlert message={error} />;
 
   return (
-    <Box sx={{ py: 8 }}>
+    <Box sx={{ py: { xs: 2, sm: 4 }, display: "flex", flexDirection: "column", gap: 2.25 }}>
       <Box
+        component="header"
         sx={{
           display: "flex",
-          alignItems: "center",
+          alignItems: { xs: "flex-start", md: "flex-end" },
           justifyContent: "space-between",
-          gap: 2,
-          mb: 4,
+          flexDirection: { xs: "column", md: "row" },
+          gap: 2.5,
+          pb: 1,
         }}
       >
-        <SectionTitle marginBottom={0}>Recent Vocabulary</SectionTitle>
-        <Tooltip title="Vocabulary statistics">
-          <IconButton
+        <Box>
+          <Typography
+            sx={{
+              color: "#38e07b",
+              fontSize: "0.72rem",
+              fontWeight: 700,
+              letterSpacing: "0.13em",
+              textTransform: "uppercase",
+              mb: 1,
+            }}
+          >
+            Your Swedish study library
+          </Typography>
+          <Typography
+            component="h1"
+            sx={{
+              color: "#f3f6ff",
+              fontSize: { xs: "2.5rem", sm: "3.25rem" },
+              fontWeight: 700,
+              letterSpacing: "-0.055em",
+              lineHeight: 1,
+            }}
+          >
+            Vocabulary
+          </Typography>
+          <Typography
+            sx={{ color: "#bdc9e5", fontSize: { xs: "0.95rem", sm: "1.05rem" }, mt: 1.45 }}
+          >
+            Find, refine, and prioritise the words you want to remember.
+          </Typography>
+        </Box>
+
+        <Box sx={{ display: "flex", gap: 1.25, width: { xs: "100%", md: "auto" } }}>
+          <CustomButton
+            variant="secondary"
+            startIcon={<BarChartIcon fontSize="small" />}
             aria-label="Open vocabulary statistics"
             onClick={() => setStatsModalOpen(true)}
             sx={{
-              color: "rgba(255,255,255,0.6)",
-              border: "1px solid rgba(255,255,255,0.15)",
-              borderRadius: 1.5,
-              "&:hover": {
-                color: "white",
-                borderColor: "rgba(255,255,255,0.35)",
-              },
+              flex: { xs: 1, md: "none" },
+              color: "#e3e9fb",
+              border: "1px solid rgba(99, 114, 173, 0.45)",
+              backgroundColor: "rgba(9, 15, 51, 0.55)",
             }}
           >
-            <BarChartIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
+            Statistics
+          </CustomButton>
+          <CustomButton
+            variant="primary"
+            startIcon={<AddIcon fontSize="small" />}
+            onClick={() => openEditModal(null)}
+            sx={{ flex: { xs: 1, md: "none" } }}
+          >
+            Add word
+          </CustomButton>
+        </Box>
       </Box>
 
       {statsError ? (
         <ErrorAlert message={statsError} />
       ) : (
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: {
-              xs: "1fr",
-              sm: "repeat(2, minmax(0, 1fr))",
-              lg: "repeat(4, minmax(0, 1fr))",
-            },
-            gap: 1,
-            mb: 2.5,
-          }}
-        >
-          {statCards.map((card) => (
-            <Box
-              key={card.key}
-              sx={{
-                p: 1.25,
-                borderRadius: 1.5,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 1,
-                background:
-                  "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                backdropFilter: "blur(10px)",
-              }}
-            >
-              <Typography
-                sx={{
-                  color: "rgba(255, 255, 255, 0.7)",
-                  fontSize: "0.75rem",
-                  mb: 0,
-                }}
-              >
-                {card.label}
-              </Typography>
-              <Typography
-                sx={{
-                  color: "white",
-                  fontSize: { xs: "1.05rem", sm: "1.2rem" },
-                  fontWeight: 700,
-                  lineHeight: 1.1,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {statsLoading || !stats ? "..." : stats[card.key]}
-              </Typography>
-            </Box>
-          ))}
-        </Box>
+        <VocabularyOverview stats={stats} loading={statsLoading} />
       )}
 
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          mb: 3,
-          gap: 2,
-        }}
-      >
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 1,
-            flex: 1,
-          }}
-        >
-          <SearchInput
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search vocabulary..."
-            onSearch={handleSearch}
-            onClear={handleClearSearch}
-            sx={{ mb: 0 }}
-          />
-          <StyledCheckbox
-            id="precise-search-checkbox"
-            checked={preciseSearch}
-            onChange={setPreciseSearch}
-            label="Precise search"
-          />
-        </Box>
-        <CustomButton variant="primary" onClick={() => openEditModal(null)}>
-          Add New Word
-        </CustomButton>
-      </Box>
       {boostError && (
-        <Typography sx={{ color: "#f87171", mb: 2 }}>{boostError}</Typography>
+        <Typography role="alert" sx={{ color: "#fda4af", fontSize: "0.82rem" }}>
+          {boostError}
+        </Typography>
       )}
 
-      {loading && !isInitialLoad && (
-        <Box sx={{ display: "flex", justifyContent: "center", my: 2 }}>
-          <Typography sx={{ color: "#9ca3af" }}>Loading...</Typography>
-        </Box>
-      )}
-
-      {recentVocabulary.length === 0 && !loading ? (
-        <Box sx={{ textAlign: "center", py: 8 }}>
-          <Typography sx={{ color: "#9ca3af", mb: 2 }}>
-            {activeSearchTerm
-              ? "No vocabulary matches your search."
-              : "No vocabulary saved yet."}
-          </Typography>
-          <Typography sx={{ color: "#6b7280" }}>
-            {activeSearchTerm
-              ? "Try a different search term."
-              : "Analyze some text and save vocabulary items to see them here."}
-          </Typography>
-        </Box>
-      ) : (
-        recentVocabulary.length > 0 && (
-          <>
-            <DataTable
-              columns={[
-              { key: "word_phrase", label: "Swedish" },
-              { key: "translation", label: "English" },
-              { key: "example_phrase", label: "Example Phrase" },
-              {
-                key: "extra_info",
-                label: "Grammar Info",
-                render: (value) => (value as string | null) || "—",
-              },
-              {
-                key: "in_learn",
-                label: "In Learning",
-                render: (value) => (
-                  <StyledCheckbox
-                    checked={value as boolean}
-                    onChange={() => {}} // TODO: Implement update functionality
-                    sx={{ pointerEvents: "none" }} // Make it read-only for now
-                  />
-                ),
-              },
-              {
-                key: "priority_learn",
-                label: "Priority",
-                render: (value, row) => {
-                  const priority = value as number;
-                  const item = row as unknown as (typeof recentVocabulary)[0];
-                  const isHighestPriority = priority <= 0;
-                  const isBoosting = boostingItemIds.has(item.id);
-
-                  return (
-                    <Box
-                      onClick={(event) => event.stopPropagation()}
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 0.75,
-                      }}
-                    >
-                      <Typography sx={{ color: "white", minWidth: 18, textAlign: "center" }}>
-                        {priority}
-                      </Typography>
-                      <Tooltip
-                        title={
-                          isBoosting
-                            ? "Updating priority..."
-                            : isHighestPriority
-                              ? "Already highest priority"
-                              : "Boost priority"
-                        }
-                      >
-                        <span>
-                          <IconButton
-                            aria-label={`Boost priority for ${item.word_phrase}`}
-                            size="small"
-                            disabled={isHighestPriority || isBoosting}
-                            onClick={(event) => handleBoostPriority(event, item)}
-                            sx={{
-                              color: theme.palette.primary.main,
-                              border: `1px solid ${alpha(theme.palette.primary.main, 0.35)}`,
-                              width: 30,
-                              height: 30,
-                              "&:hover": {
-                                backgroundColor: alpha(theme.palette.primary.main, 0.12),
-                              },
-                              "&.Mui-disabled": {
-                                color: theme.palette.action.disabled,
-                                borderColor: alpha(theme.palette.action.disabled, 0.35),
-                              },
-                            }}
-                          >
-                            <TrendingUpIcon fontSize="inherit" />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    </Box>
-                  );
-                },
-              },
-              {
-                key: "last_learned",
-                label: "Last Learned",
-                render: (value) => (
-                  <Typography sx={{ color: "white", textAlign: "center" }}>
-                    {value
-                      ? new Date(value as string).toLocaleDateString()
-                      : "Never"}
-                  </Typography>
-                ),
-              },
-              {
-                key: "learned_times",
-                label: "Learned Times",
-                render: (value) => (
-                  <Typography sx={{ color: "white", textAlign: "center" }}>
-                    {value as number}
-                  </Typography>
-                ),
-              },
-              {
-                key: "updated",
-                label: "Updated",
-                render: (value, row) => {
-                  const item = row as unknown as (typeof recentVocabulary)[0];
-                  const updated = value || item.updated_at;
-                  return updated ? new Date(updated as string).toLocaleDateString() : "—";
-                },
-              },
-              ]}
-              data={
-                recentVocabulary.map((item) => ({
-                  ...item,
-                  id: item.id,
-                })) as unknown as ({ id: string } & Record<string, unknown>)[]
-              }
-              onRowClick={handleRowClick}
-            />
-            <Box
-              ref={loadMoreSentinelRef}
-              data-testid="vocabulary-load-more-sentinel"
-              sx={{ height: 1 }}
-            />
-            {loadingMore && (
-              <Box sx={{ display: "flex", justifyContent: "center", my: 2 }}>
-                <Typography sx={{ color: "text.secondary" }}>Loading more...</Typography>
-              </Box>
-            )}
-            {error && !loadingMore && (
-              <Box sx={{ display: "flex", justifyContent: "center", my: 2 }}>
-                <Typography sx={{ color: "error.main" }}>{error}</Typography>
-              </Box>
-            )}
-            {!hasMore && !loadingMore && (
-              <Box sx={{ display: "flex", justifyContent: "center", my: 2 }}>
-                <Typography sx={{ color: "text.secondary" }}>All vocabulary loaded.</Typography>
-              </Box>
-            )}
-          </>
-        )
-      )}
+      <VocabularyLedger
+        items={recentVocabulary}
+        searchTerm={searchTerm}
+        hasActiveSearch={Boolean(activeSearchTerm)}
+        preciseSearch={preciseSearch}
+        loading={loading && !isInitialLoad}
+        loadingMore={loadingMore}
+        hasMore={hasMore}
+        error={error}
+        boostingItemIds={boostingItemIds}
+        loadMoreSentinelRef={loadMoreSentinelRef}
+        onSearchTermChange={setSearchTerm}
+        onSearch={() => setActiveSearchTerm(searchTerm)}
+        onClearSearch={() => {
+          setSearchTerm("");
+          setActiveSearchTerm("");
+        }}
+        onPreciseSearchChange={setPreciseSearch}
+        onItemClick={openEditModal}
+        onBoostPriority={(event, item) => void handleBoostPriority(event, item)}
+      />
 
       <AddEditVocabularyModal
         open={isEditModalOpen}
