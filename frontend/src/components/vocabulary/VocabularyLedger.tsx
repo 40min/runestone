@@ -132,11 +132,21 @@ const VocabularyLedger: React.FC<VocabularyLedgerProps> = ({
           inputSx={{
             "& .MuiOutlinedInput-root": {
               minHeight: 48,
+              color: "#f4f7ff",
               backgroundColor: "rgba(7, 12, 43, 0.78)",
               borderRadius: 1.5,
               "& fieldset": { borderColor: "rgba(111, 133, 192, 0.52)" },
               "&:hover fieldset": { borderColor: "rgba(138, 158, 216, 0.72)" },
               "&.Mui-focused fieldset": { borderColor: "#38e07b" },
+            },
+            "& .MuiInputBase-input": {
+              color: "#f4f7ff",
+              WebkitTextFillColor: "#f4f7ff",
+              caretColor: "#38e07b",
+            },
+            "& .MuiInputBase-input::placeholder": {
+              color: "#9aa8c8",
+              opacity: 0.72,
             },
           }}
         />
