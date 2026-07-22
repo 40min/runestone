@@ -561,5 +561,18 @@
     ],
     "annotation": "Guide to Swedish time prepositions: för…sedan (past), om (future), i (duration), på (negation & completion time), and om/i/per (frequency).",
     "path": "prepositions/prepositioner_med_tid.md"
+  },
+  {
+    "url": "{HOST}/?view=grammar&cheatsheet=tenses%2Fkonditionalis",
+    "tags": [
+      "tenses",
+      "grammar",
+      "konditionalis",
+      "conditionals",
+      "skulle",
+      "supinum"
+    ],
+    "annotation": "A playful guide to Swedish present/future and past conditional constructions, including word order and common alternatives.",
+    "path": "tenses/konditionalis.md"
   }
 ]
