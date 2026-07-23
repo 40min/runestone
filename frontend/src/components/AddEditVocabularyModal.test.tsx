@@ -285,6 +285,32 @@ describe("AddEditVocabularyModal", () => {
     });
   });
 
+  it("fills extra info when Fill Extra Info is clicked", async () => {
+    const user = userEvent.setup();
+    mockImproveVocabularyItem.mockResolvedValue({
+      extra_info: "en-word, noun, base form: hej",
+    });
+
+    renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
+
+    await user.type(screen.getByLabelText("Swedish Word/Phrase"), "hej");
+    await user.click(screen.getByTitle("Fill Extra Info"));
+
+    await waitFor(() => {
+      expect(mockImproveVocabularyItem).toHaveBeenCalledWith(
+        expect.any(Object),
+        "hej",
+        VOCABULARY_IMPROVEMENT_MODES.EXTRA_INFO_ONLY
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByDisplayValue("en-word, noun, base form: hej")
+      ).toBeInTheDocument();
+    });
+  });
+
   it("hides suggestion actions until a word phrase is available", () => {
     renderWithAuthProvider(<AddEditVocabularyModal {...defaultProps} />);
 
