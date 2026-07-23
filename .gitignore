@@ -49,3 +49,10 @@ vocab_db.md
 *.offset
 
 .agents
+.playwright-cli/console-2026-07-23T09-41-34-745Z.log
+.playwright-cli/page-2026-07-23T09-41-37-022Z.yml
+.playwright-cli/page-2026-07-23T09-41-49-925Z.yml
+.playwright-cli/page-2026-07-23T09-42-05-870Z.yml
+.playwright-cli/page-2026-07-23T09-42-05-929Z.yml
+.playwright-cli/page-2026-07-23T09-42-23-528Z.yml
+.playwright-cli/page-2026-07-23T09-42-23-573Z.yml

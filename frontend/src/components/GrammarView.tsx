@@ -50,12 +50,19 @@ const GrammarView: React.FC = () => {
   const {
     cheatsheets,
     selectedCheatsheet,
+    searchResults = [],
     loading,
     error,
+    searchLoading = false,
+    searchError = null,
     fetchCheatsheetContent,
+    searchGrammar = async () => undefined,
+    clearSearch = () => undefined,
   } = useGrammar();
   const [selectedFilename, setSelectedFilename] = useState<string | null>(null);
-  const [libraryQuery, setLibraryQuery] = useState("");
+  const [libraryFilter, setLibraryFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set()
   );
@@ -111,6 +118,24 @@ const GrammarView: React.FC = () => {
       setCheatsheetInUrl(filename, "push");
     }
     await fetchCheatsheetContent(filename);
+  };
+
+  const handleSearch = async () => {
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery) {
+      setHasSearched(false);
+      clearSearch();
+      return;
+    }
+
+    setHasSearched(true);
+    await searchGrammar(trimmedQuery);
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery("");
+    setHasSearched(false);
+    clearSearch();
   };
 
   useEffect(() => {
@@ -271,8 +296,8 @@ const GrammarView: React.FC = () => {
               handleCheatsheetClick(filename).catch(handleSelectionError);
             }}
             onToggleCategory={toggleCategory}
-            searchQuery={libraryQuery}
-            onSearchQueryChange={setLibraryQuery}
+            filterQuery={libraryFilter}
+            onFilterQueryChange={setLibraryFilter}
           />
         </Box>
 
@@ -306,7 +331,21 @@ const GrammarView: React.FC = () => {
                 ...buildAnalyzerShellSx(analyzerShellGradients.emptyState),
               }}
             >
-              <GrammarStartPanel />
+              <GrammarStartPanel
+                searchQuery={searchQuery}
+                searchResults={searchResults}
+                searchLoading={searchLoading}
+                searchError={searchError}
+                hasSearched={hasSearched}
+                onSearchQueryChange={setSearchQuery}
+                onSearch={() => {
+                  void handleSearch();
+                }}
+                onClearSearch={handleClearSearch}
+                onSelectSearchResult={(filename) => {
+                  handleCheatsheetClick(filename).catch(handleSelectionError);
+                }}
+              />
             </Box>
           )}
         </Box>

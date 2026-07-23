@@ -109,8 +109,8 @@ type GrammarSidebarProps = {
   onBackToStart: () => void;
   onSelectCheatsheet: (filename: string) => void;
   onToggleCategory: (category: string) => void;
-  searchQuery: string;
-  onSearchQueryChange: (value: string) => void;
+  filterQuery: string;
+  onFilterQueryChange: (value: string) => void;
 };
 
 function GrammarSidebar({
@@ -121,8 +121,8 @@ function GrammarSidebar({
   onBackToStart,
   onSelectCheatsheet,
   onToggleCategory,
-  searchQuery,
-  onSearchQueryChange,
+  filterQuery,
+  onFilterQueryChange,
 }: GrammarSidebarProps) {
   const {
     generalCheatsheets,
@@ -131,7 +131,7 @@ function GrammarSidebar({
     visibleCheatsheetCount,
   } =
     React.useMemo(() => {
-      const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
+      const normalizedQuery = filterQuery.trim().toLocaleLowerCase();
       const visibleCheatsheets = normalizedQuery
         ? cheatsheets.filter(
             (cheatsheet) =>
@@ -145,7 +145,7 @@ function GrammarSidebar({
         sortedCategoryKeys: Object.keys(grouped.categorizedCheatsheets).sort(),
         visibleCheatsheetCount: visibleCheatsheets.length,
       };
-    }, [cheatsheets, searchQuery]);
+    }, [cheatsheets, filterQuery]);
 
   return (
     <Box
@@ -201,12 +201,12 @@ function GrammarSidebar({
       </Box>
 
       <SearchInput
-        value={searchQuery}
-        onChange={(event) => onSearchQueryChange(event.target.value)}
-        onClear={() => onSearchQueryChange("")}
-        placeholder="Search cheatsheets"
-        ariaLabel="Search cheatsheet library"
-        clearLabel="Clear cheatsheet library search"
+        value={filterQuery}
+        onChange={(event) => onFilterQueryChange(event.target.value)}
+        onClear={() => onFilterQueryChange("")}
+        placeholder="Filter cheatsheets"
+        ariaLabel="Filter cheatsheet library"
+        clearLabel="Clear cheatsheet filter"
         sx={{ mb: 2.5, maxWidth: "none" }}
         inputSx={{
           "& .MuiOutlinedInput-root": {
@@ -242,7 +242,7 @@ function GrammarSidebar({
         generalCheatsheets.length === 0 &&
         sortedCategoryKeys.length === 0 ? (
         <Typography sx={{ px: 1, py: 2, color: "#8fa0c5", fontSize: "0.88rem" }}>
-          No cheatsheets match “{searchQuery}”.
+          No cheatsheets match “{filterQuery}”.
         </Typography>
       ) : (
         <List disablePadding sx={{ display: "grid", gap: 0.5 }}>
@@ -259,9 +259,13 @@ function GrammarSidebar({
             <React.Fragment key={category}>
               <ListItem disablePadding>
                 <ListItemButton
-                  onClick={() => onToggleCategory(category)}
+                  onClick={() => {
+                    if (!filterQuery.trim()) {
+                      onToggleCategory(category);
+                    }
+                  }}
                   aria-expanded={
-                    expandedCategories.has(category) || Boolean(searchQuery.trim())
+                    expandedCategories.has(category) || Boolean(filterQuery.trim())
                   }
                   sx={{
                     minHeight: 44,
@@ -282,7 +286,7 @@ function GrammarSidebar({
                     }}
                     sx={cheatsheetTextSx}
                   />
-                  {expandedCategories.has(category) || searchQuery.trim() ? (
+                  {expandedCategories.has(category) || filterQuery.trim() ? (
                     <ExpandLess sx={{ color: "#9aabd0", fontSize: 20 }} />
                   ) : (
                     <ExpandMore sx={{ color: "#9aabd0", fontSize: 20 }} />
@@ -290,7 +294,7 @@ function GrammarSidebar({
                 </ListItemButton>
               </ListItem>
               <Collapse
-                in={expandedCategories.has(category) || Boolean(searchQuery.trim())}
+                in={expandedCategories.has(category) || Boolean(filterQuery.trim())}
               >
                 <List component="div" disablePadding>
                   {categorizedCheatsheets[category].map((cheatsheet) => (
@@ -321,7 +325,7 @@ function GrammarSidebar({
       >
         <Layers3 size={16} aria-hidden="true" />
         <Typography sx={{ fontSize: "0.82rem" }}>
-          {searchQuery.trim()
+          {filterQuery.trim()
             ? `${visibleCheatsheetCount} matching ${
                 visibleCheatsheetCount === 1 ? "cheatsheet" : "cheatsheets"
               }`

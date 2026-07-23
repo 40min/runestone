@@ -151,7 +151,7 @@ describe("GrammarView", () => {
     expect(verbParent).toHaveStyle({ height: "0px" });
   });
 
-  it("filters the library and reveals matching categorized cheatsheets", () => {
+  it("filters the library without changing persisted category expansion", async () => {
     mockUseGrammar.mockReturnValue({
       cheatsheets: [
         {
@@ -173,16 +173,27 @@ describe("GrammarView", () => {
     });
 
     render(<GrammarView />);
-    fireEvent.change(screen.getByPlaceholderText("Search cheatsheets"), {
+    fireEvent.change(screen.getByPlaceholderText("Filter cheatsheets"), {
       target: { value: "comparison" },
     });
 
     expect(screen.getByRole("button", { name: "Adjective comparison" })).toBeVisible();
     expect(screen.queryByText("Imperative")).not.toBeInTheDocument();
     expect(screen.getByText("1 matching cheatsheet")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "adjectives" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear cheatsheet filter" }));
+
+    await waitFor(() => {
+      expect(
+        screen
+          .getByRole("button", { name: "Adjective comparison" })
+          .closest(".MuiCollapse-root")
+      ).toHaveStyle({ height: "0px" });
+    });
   });
 
-  it("renders only the accessible library search on the start page", () => {
+  it("distinguishes the library filter from semantic grammar search", () => {
     mockUseGrammar.mockReturnValue({
       cheatsheets: [],
       selectedCheatsheet: null,
@@ -194,18 +205,84 @@ describe("GrammarView", () => {
 
     render(<GrammarView />);
 
-    const librarySearch = screen.getByRole("textbox", {
-      name: "Search cheatsheet library",
+    const libraryFilter = screen.getByRole("textbox", {
+      name: "Filter cheatsheet library",
+    });
+    const topicSearch = screen.getByRole("textbox", {
+      name: "Search grammar topics",
     });
 
-    fireEvent.change(librarySearch, { target: { value: "verbs" } });
+    fireEvent.change(libraryFilter, { target: { value: "verbs" } });
+    fireEvent.change(topicSearch, { target: { value: "word order" } });
 
     expect(
-      screen.getByRole("button", { name: "Clear cheatsheet library search" })
+      screen.getByRole("button", { name: "Clear cheatsheet filter" })
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("textbox", { name: "Search grammar topics" })
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Clear grammar topic search" })
+    ).toBeInTheDocument();
+  });
+
+  it("submits semantic grammar search from the start panel", async () => {
+    const mockSearchGrammar = vi.fn().mockResolvedValue(undefined);
+    mockUseGrammar.mockReturnValue({
+      cheatsheets: [],
+      selectedCheatsheet: null,
+      searchResults: [],
+      loading: false,
+      error: null,
+      searchLoading: false,
+      searchError: null,
+      fetchCheatsheets: vi.fn(),
+      fetchCheatsheetContent: vi.fn(),
+      searchGrammar: mockSearchGrammar,
+      clearSearch: vi.fn(),
+    });
+
+    render(<GrammarView />);
+
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Search grammar topics" }),
+      { target: { value: "word order" } }
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    await waitFor(() => {
+      expect(mockSearchGrammar).toHaveBeenCalledWith("word order");
+    });
+  });
+
+  it("opens a semantic grammar search result", async () => {
+    const mockFetchCheatsheetContent = vi.fn().mockResolvedValue(undefined);
+    mockUseGrammar.mockReturnValue({
+      cheatsheets: [],
+      selectedCheatsheet: null,
+      searchResults: [
+        {
+          title: "Verb forms",
+          url: "http://localhost:5173/?view=grammar&cheatsheet=verbs/verb-forms",
+          path: "verbs/verb-forms.md",
+        },
+      ],
+      loading: false,
+      error: null,
+      searchLoading: false,
+      searchError: null,
+      fetchCheatsheets: vi.fn(),
+      fetchCheatsheetContent: mockFetchCheatsheetContent,
+      searchGrammar: vi.fn(),
+      clearSearch: vi.fn(),
+    });
+
+    render(<GrammarView />);
+    fireEvent.click(screen.getByRole("button", { name: /Verb forms/ }));
+
+    await waitFor(() => {
+      expect(mockFetchCheatsheetContent).toHaveBeenCalledWith(
+        "verbs/verb-forms.md"
+      );
+    });
+    expect(window.location.search).toContain("cheatsheet=verbs%2Fverb-forms");
   });
 
   it("should expand and collapse categories when clicked", async () => {
@@ -415,6 +492,9 @@ describe("GrammarView", () => {
     await waitFor(() => {
       const markdownDiv = container.querySelector(".markdown-content");
       expect(markdownDiv).not.toBeNull();
+      expect(
+        screen.getByRole("article", { name: "Pronunciation" })
+      ).toBeInTheDocument();
     });
   });
 

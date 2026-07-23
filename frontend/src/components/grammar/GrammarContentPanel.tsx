@@ -36,6 +36,7 @@ function GrammarContentPanel({
   return (
     <Box
       component="article"
+      aria-label={title ?? "Grammar cheatsheet"}
       sx={{
         minHeight: { xs: 360, lg: 620 },
         p: { xs: 2, sm: 3, lg: 4 },
