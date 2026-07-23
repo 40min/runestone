@@ -144,6 +144,17 @@ describe("RecallView", () => {
   it("renders an ordered queue with optional word details", () => {
     render(<RecallView />);
 
+    expect(
+      screen.getByRole("heading", {
+        name: "Recall Your Swedish Vocabulary",
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", {
+        name: "Recall session summary",
+      })
+    ).toBeInTheDocument();
+    expect(screen.getByText("Changes sync with Telegram.")).toBeInTheDocument();
     expect(screen.getByRole("list")).toBeInTheDocument();
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
     expect(screen.getByText("kontanter")).toBeInTheDocument();
@@ -154,7 +165,7 @@ describe("RecallView", () => {
     expect(screen.getByText("lagom")).toBeInTheDocument();
   });
 
-  it("uses compact accessible action buttons with the agreed tooltips", async () => {
+  it("uses a prominent refresh action and compact row actions with the agreed tooltips", async () => {
     const user = userEvent.setup();
     render(<RecallView />);
 
@@ -168,7 +179,7 @@ describe("RecallView", () => {
       name: "Remove kontanter from learning",
     });
 
-    expect(refresh).toHaveTextContent("");
+    expect(refresh).toHaveTextContent("Refresh selection");
     expect(postpone).toHaveTextContent("");
     expect(remove).toHaveTextContent("");
 
