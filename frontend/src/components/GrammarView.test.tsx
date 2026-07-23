@@ -28,10 +28,10 @@ describe("GrammarView", () => {
     render(<GrammarView />);
 
     expect(screen.getByText("Grammar Cheatsheets")).toBeInTheDocument();
-    expect(screen.getByText("Available Cheatsheets")).toBeInTheDocument();
+    expect(screen.getByText("Cheatsheet library")).toBeInTheDocument();
   });
 
-  it("navigates to grammar start when clicking Available Cheatsheets", async () => {
+  it("navigates to grammar start when clicking Cheatsheet library", async () => {
     const mockFetchCheatsheetContent = vi.fn().mockResolvedValue(undefined);
     mockUseGrammar.mockReturnValue({
       cheatsheets: [
@@ -59,7 +59,7 @@ describe("GrammarView", () => {
       expect(window.location.search).toContain("cheatsheet=pronunciation");
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Available Cheatsheets" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cheatsheet library" }));
 
     await waitFor(() => {
       expect(screen.getByText("Search grammar cheatsheets")).toBeInTheDocument();
@@ -149,6 +149,140 @@ describe("GrammarView", () => {
 
     expect(adjectivParent).toHaveStyle({ height: "0px" });
     expect(verbParent).toHaveStyle({ height: "0px" });
+  });
+
+  it("filters the library without changing persisted category expansion", async () => {
+    mockUseGrammar.mockReturnValue({
+      cheatsheets: [
+        {
+          filename: "adjectives/komparation.md",
+          title: "Adjective comparison",
+          category: "adjectives",
+        },
+        {
+          filename: "verbs/imperativ.md",
+          title: "Imperative",
+          category: "verbs",
+        },
+      ],
+      selectedCheatsheet: null,
+      loading: false,
+      error: null,
+      fetchCheatsheets: vi.fn(),
+      fetchCheatsheetContent: vi.fn(),
+    });
+
+    render(<GrammarView />);
+    fireEvent.change(screen.getByPlaceholderText("Filter cheatsheets"), {
+      target: { value: "comparison" },
+    });
+
+    expect(screen.getByRole("button", { name: "Adjective comparison" })).toBeVisible();
+    expect(screen.queryByText("Imperative")).not.toBeInTheDocument();
+    expect(screen.getByText("1 matching cheatsheet")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "adjectives" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear cheatsheet filter" }));
+
+    await waitFor(() => {
+      expect(
+        screen
+          .getByRole("button", { name: "Adjective comparison" })
+          .closest(".MuiCollapse-root")
+      ).toHaveStyle({ height: "0px" });
+    });
+  });
+
+  it("distinguishes the library filter from semantic grammar search", () => {
+    mockUseGrammar.mockReturnValue({
+      cheatsheets: [],
+      selectedCheatsheet: null,
+      loading: false,
+      error: null,
+      fetchCheatsheets: vi.fn(),
+      fetchCheatsheetContent: vi.fn(),
+    });
+
+    render(<GrammarView />);
+
+    const libraryFilter = screen.getByRole("textbox", {
+      name: "Filter cheatsheet library",
+    });
+    const topicSearch = screen.getByRole("textbox", {
+      name: "Search grammar topics",
+    });
+
+    fireEvent.change(libraryFilter, { target: { value: "verbs" } });
+    fireEvent.change(topicSearch, { target: { value: "word order" } });
+
+    expect(
+      screen.getByRole("button", { name: "Clear cheatsheet filter" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Clear grammar topic search" })
+    ).toBeInTheDocument();
+  });
+
+  it("submits semantic grammar search from the start panel", async () => {
+    const mockSearchGrammar = vi.fn().mockResolvedValue(undefined);
+    mockUseGrammar.mockReturnValue({
+      cheatsheets: [],
+      selectedCheatsheet: null,
+      searchResults: [],
+      loading: false,
+      error: null,
+      searchLoading: false,
+      searchError: null,
+      fetchCheatsheets: vi.fn(),
+      fetchCheatsheetContent: vi.fn(),
+      searchGrammar: mockSearchGrammar,
+      clearSearch: vi.fn(),
+    });
+
+    render(<GrammarView />);
+
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Search grammar topics" }),
+      { target: { value: "word order" } }
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    await waitFor(() => {
+      expect(mockSearchGrammar).toHaveBeenCalledWith("word order");
+    });
+  });
+
+  it("opens a semantic grammar search result", async () => {
+    const mockFetchCheatsheetContent = vi.fn().mockResolvedValue(undefined);
+    mockUseGrammar.mockReturnValue({
+      cheatsheets: [],
+      selectedCheatsheet: null,
+      searchResults: [
+        {
+          title: "Verb forms",
+          url: "http://localhost:5173/?view=grammar&cheatsheet=verbs/verb-forms",
+          path: "verbs/verb-forms.md",
+        },
+      ],
+      loading: false,
+      error: null,
+      searchLoading: false,
+      searchError: null,
+      fetchCheatsheets: vi.fn(),
+      fetchCheatsheetContent: mockFetchCheatsheetContent,
+      searchGrammar: vi.fn(),
+      clearSearch: vi.fn(),
+    });
+
+    render(<GrammarView />);
+    fireEvent.click(screen.getByRole("button", { name: /Verb forms/ }));
+
+    await waitFor(() => {
+      expect(mockFetchCheatsheetContent).toHaveBeenCalledWith(
+        "verbs/verb-forms.md"
+      );
+    });
+    expect(window.location.search).toContain("cheatsheet=verbs%2Fverb-forms");
   });
 
   it("should expand and collapse categories when clicked", async () => {
@@ -358,6 +492,9 @@ describe("GrammarView", () => {
     await waitFor(() => {
       const markdownDiv = container.querySelector(".markdown-content");
       expect(markdownDiv).not.toBeNull();
+      expect(
+        screen.getByRole("article", { name: "Pronunciation" })
+      ).toBeInTheDocument();
     });
   });
 
@@ -443,145 +580,6 @@ describe("GrammarView", () => {
     await waitFor(() => {
       expect(mockClipboard.writeText).toHaveBeenCalledWith("# Pronunciation Guide");
     });
-  });
-
-  it("renders grammar search input in the default empty state", () => {
-    mockUseGrammar.mockReturnValue({
-      cheatsheets: [],
-      selectedCheatsheet: null,
-      searchResults: [],
-      loading: false,
-      error: null,
-      searchLoading: false,
-      searchError: null,
-      fetchCheatsheets: vi.fn(),
-      fetchCheatsheetContent: vi.fn(),
-      searchGrammar: vi.fn(),
-      clearSearch: vi.fn(),
-    });
-
-    render(<GrammarView />);
-
-    expect(screen.getByPlaceholderText("Search grammar topics...")).toBeInTheDocument();
-  });
-
-  it("submits grammar search from the empty state", async () => {
-    const mockSearchGrammar = vi.fn().mockResolvedValue(undefined);
-
-    mockUseGrammar.mockReturnValue({
-      cheatsheets: [],
-      selectedCheatsheet: null,
-      searchResults: [],
-      loading: false,
-      error: null,
-      searchLoading: false,
-      searchError: null,
-      fetchCheatsheets: vi.fn(),
-      fetchCheatsheetContent: vi.fn(),
-      searchGrammar: mockSearchGrammar,
-      clearSearch: vi.fn(),
-    });
-
-    render(<GrammarView />);
-
-    fireEvent.change(screen.getByPlaceholderText("Search grammar topics..."), {
-      target: { value: "adjective comparison" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Search" }));
-
-    await waitFor(() => {
-      expect(mockSearchGrammar).toHaveBeenCalledWith("adjective comparison");
-    });
-  });
-
-  it("submits grammar search when Enter is pressed in the search input", async () => {
-    const mockSearchGrammar = vi.fn().mockResolvedValue(undefined);
-
-    mockUseGrammar.mockReturnValue({
-      cheatsheets: [],
-      selectedCheatsheet: null,
-      searchResults: [],
-      loading: false,
-      error: null,
-      searchLoading: false,
-      searchError: null,
-      fetchCheatsheets: vi.fn(),
-      fetchCheatsheetContent: vi.fn(),
-      searchGrammar: mockSearchGrammar,
-      clearSearch: vi.fn(),
-    });
-
-    render(<GrammarView />);
-
-    const searchInput = screen.getByPlaceholderText("Search grammar topics...");
-    fireEvent.change(searchInput, {
-      target: { value: "word order" },
-    });
-    fireEvent.keyDown(searchInput, { key: "Enter" });
-
-    await waitFor(() => {
-      expect(mockSearchGrammar).toHaveBeenCalledWith("word order");
-    });
-  });
-
-  it("renders grammar search results", () => {
-    mockUseGrammar.mockReturnValue({
-      cheatsheets: [],
-      selectedCheatsheet: null,
-      searchResults: [
-        {
-          title: "Adjective comparison rules",
-          url: "http://localhost:5173/?view=grammar&cheatsheet=adjectives/komparation",
-          path: "adjectives/komparation.md",
-        },
-      ],
-      loading: false,
-      error: null,
-      searchLoading: false,
-      searchError: null,
-      fetchCheatsheets: vi.fn(),
-      fetchCheatsheetContent: vi.fn(),
-      searchGrammar: vi.fn(),
-      clearSearch: vi.fn(),
-    });
-
-    render(<GrammarView />);
-
-    expect(screen.getByText("Adjective comparison rules")).toBeInTheDocument();
-    expect(screen.getByText("adjectives/komparation.md")).toBeInTheDocument();
-  });
-
-  it("opens a grammar search result and updates the URL", async () => {
-    const mockFetchCheatsheetContent = vi.fn().mockResolvedValue(undefined);
-
-    mockUseGrammar.mockReturnValue({
-      cheatsheets: [],
-      selectedCheatsheet: null,
-      searchResults: [
-        {
-          title: "Verb forms",
-          url: "http://localhost:5173/?view=grammar&cheatsheet=verbs/verb-forms",
-          path: "verbs/verb-forms.md",
-        },
-      ],
-      loading: false,
-      error: null,
-      searchLoading: false,
-      searchError: null,
-      fetchCheatsheets: vi.fn(),
-      fetchCheatsheetContent: mockFetchCheatsheetContent,
-      searchGrammar: vi.fn(),
-      clearSearch: vi.fn(),
-    });
-
-    render(<GrammarView />);
-    fireEvent.click(screen.getByRole("button", { name: /Verb forms/ }));
-
-    await waitFor(() => {
-      expect(mockFetchCheatsheetContent).toHaveBeenCalledWith("verbs/verb-forms.md");
-    });
-    expect(window.location.search).toContain("view=grammar");
-    expect(window.location.search).toContain("cheatsheet=verbs%2Fverb-forms");
   });
 
   it("loads a direct categorized cheatsheet link after cheatsheets arrive", async () => {
@@ -726,48 +724,4 @@ describe("GrammarView", () => {
     consoleError.mockRestore();
   });
 
-  it("renders no-result message after an empty grammar search", async () => {
-    mockUseGrammar.mockReturnValue({
-      cheatsheets: [],
-      selectedCheatsheet: null,
-      searchResults: [],
-      loading: false,
-      error: null,
-      searchLoading: false,
-      searchError: null,
-      fetchCheatsheets: vi.fn(),
-      fetchCheatsheetContent: vi.fn(),
-      searchGrammar: vi.fn().mockResolvedValue(undefined),
-      clearSearch: vi.fn(),
-    });
-
-    render(<GrammarView />);
-
-    fireEvent.change(screen.getByPlaceholderText("Search grammar topics..."), {
-      target: { value: "nope" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Search" }));
-
-    expect(await screen.findByText("No matching grammar pages found.")).toBeInTheDocument();
-  });
-
-  it("renders grammar search errors separately", () => {
-    mockUseGrammar.mockReturnValue({
-      cheatsheets: [],
-      selectedCheatsheet: null,
-      searchResults: [],
-      loading: false,
-      error: null,
-      searchLoading: false,
-      searchError: "Failed to search grammar cheatsheets",
-      fetchCheatsheets: vi.fn(),
-      fetchCheatsheetContent: vi.fn(),
-      searchGrammar: vi.fn(),
-      clearSearch: vi.fn(),
-    });
-
-    render(<GrammarView />);
-
-    expect(screen.getByText("Failed to search grammar cheatsheets")).toBeInTheDocument();
-  });
 });

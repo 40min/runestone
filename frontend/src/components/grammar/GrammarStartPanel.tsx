@@ -7,8 +7,7 @@ import {
   Typography,
 } from "@mui/material";
 import type { GrammarSearchResult } from "../../hooks/useGrammar";
-import { ErrorAlert, LoadingSpinner } from "../ui";
-import SearchInput from "../ui/SearchInput";
+import { ErrorAlert, LoadingSpinner, SearchInput } from "../ui";
 
 type GrammarStartPanelProps = {
   searchQuery: string;
@@ -34,20 +33,56 @@ function GrammarStartPanel({
   onSelectSearchResult,
 }: GrammarStartPanelProps) {
   return (
-    <Box>
-      <Typography variant="h6" sx={{ color: "white", mb: 1 }}>
+    <Box sx={{ maxWidth: 720 }}>
+      <Typography
+        variant="h4"
+        sx={{
+          color: "#f7f9ff",
+          mb: 1.25,
+          fontSize: { xs: "1.65rem", sm: "2rem" },
+          fontWeight: 700,
+          letterSpacing: "-0.025em",
+        }}
+      >
         Search grammar cheatsheets
       </Typography>
-      <Typography sx={{ color: "#9ca3af", mb: 3 }}>
+      <Typography sx={{ maxWidth: 560, color: "#aab8d7", lineHeight: 1.7 }}>
         Search for a grammar topic, or select a cheatsheet from the list.
       </Typography>
+
       <SearchInput
         value={searchQuery}
         onChange={(event) => onSearchQueryChange(event.target.value)}
         onSearch={onSearch}
         onClear={onClearSearch}
         placeholder="Search grammar topics..."
-        sx={{ mb: 3, maxWidth: 560 }}
+        ariaLabel="Search grammar topics"
+        clearLabel="Clear grammar topic search"
+        sx={{ mt: 4, mb: 4, maxWidth: 600 }}
+        inputSx={{
+          "& .MuiOutlinedInput-root": {
+            minHeight: 50,
+            backgroundColor: "rgba(7, 13, 43, 0.5)",
+            borderRadius: "0.8rem",
+            color: "#edf2ff",
+            "& fieldset": {
+              borderColor: "rgba(103, 124, 184, 0.46)",
+            },
+            "&:hover fieldset": {
+              borderColor: "rgba(132, 153, 214, 0.66)",
+            },
+            "&.Mui-focused fieldset": {
+              borderColor: "var(--primary-color)",
+            },
+          },
+          "& .MuiInputBase-input": {
+            color: "#edf2ff",
+            "&::placeholder": {
+              color: "#91a2c9",
+              opacity: 1,
+            },
+          },
+        }}
       />
 
       {searchError && (
@@ -63,17 +98,24 @@ function GrammarStartPanel({
           No matching grammar pages found.
         </Typography>
       ) : searchResults.length > 0 ? (
-        <List disablePadding aria-label="Grammar search results">
+        <List
+          disablePadding
+          aria-label="Grammar search results"
+          sx={{ display: "grid", gap: 1.25 }}
+        >
           {searchResults.map((result) => (
-            <ListItem key={result.path || result.url} disablePadding sx={{ mb: 1 }}>
+            <ListItem key={result.path || result.url} disablePadding>
               <ListItemButton
                 onClick={() => onSelectSearchResult(result.path)}
                 sx={{
-                  border: "1px solid #374151",
-                  borderRadius: "0.5rem",
-                  backgroundColor: "#1f2937",
+                  border: "1px solid rgba(103, 124, 184, 0.38)",
+                  borderRadius: "0.75rem",
+                  backgroundColor: "rgba(15, 25, 61, 0.58)",
+                  transition: "all 160ms ease",
                   "&:hover": {
-                    backgroundColor: "#243244",
+                    borderColor: "rgba(56, 224, 123, 0.44)",
+                    backgroundColor: "rgba(22, 38, 77, 0.72)",
+                    transform: "translateY(-1px)",
                   },
                 }}
               >
@@ -82,10 +124,11 @@ function GrammarStartPanel({
                   secondary={result.path}
                   sx={{
                     "& .MuiListItemText-primary": {
-                      color: "white",
+                      color: "#f7f9ff",
+                      fontWeight: 600,
                     },
                     "& .MuiListItemText-secondary": {
-                      color: "#9ca3af",
+                      color: "#8fa0c5",
                     },
                   }}
                 />

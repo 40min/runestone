@@ -14,6 +14,7 @@ interface SearchInputProps {
   onSearch?: () => void;
   onClear?: () => void;
   clearLabel?: string;
+  ariaLabel?: string;
 }
 
 const SearchInput: React.FC<SearchInputProps> = ({
@@ -26,6 +27,7 @@ const SearchInput: React.FC<SearchInputProps> = ({
   onSearch,
   onClear,
   clearLabel = "Clear search",
+  ariaLabel,
 }) => {
   const showClearButton = Boolean(onClear && value);
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -45,6 +47,9 @@ const SearchInput: React.FC<SearchInputProps> = ({
         onChange={onChange}
         onKeyDown={handleKeyDown}
         slotProps={{
+          htmlInput: {
+            "aria-label": ariaLabel,
+          },
           input: {
             endAdornment: showClearButton ? (
               <InputAdornment position="end">

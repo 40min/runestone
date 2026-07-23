@@ -9,21 +9,49 @@ import {
   Typography,
 } from "@mui/material";
 import { ExpandLess, ExpandMore } from "@mui/icons-material";
-import { ContentCard, LoadingSpinner } from "../ui";
+import { BookOpen, Layers3 } from "lucide-react";
+import { LoadingSpinner } from "../ui";
+import SearchInput from "../ui/SearchInput";
 import type { CheatsheetInfo } from "./types";
 
 const selectedCheatsheetSx = {
+  minHeight: 42,
+  borderRadius: "0.7rem",
+  color: "#dbe5fb",
+  transition: "background-color 160ms ease, color 160ms ease, transform 160ms ease",
+  "&:hover": {
+    backgroundColor: "rgba(148, 163, 184, 0.08)",
+    color: "#ffffff",
+    transform: "translateX(2px)",
+  },
   "&.Mui-selected": {
-    backgroundColor: "rgba(147, 51, 234, 0.1)",
+    position: "relative",
+    color: "#ffffff",
+    background:
+      "linear-gradient(90deg, rgba(56, 224, 123, 0.14), rgba(56, 224, 123, 0.08))",
+    boxShadow: "0 10px 30px rgba(2, 8, 28, 0.2)",
+    "&::before": {
+      content: '""',
+      position: "absolute",
+      left: 0,
+      top: 8,
+      bottom: 8,
+      width: 3,
+      borderRadius: 999,
+      backgroundColor: "var(--primary-color)",
+    },
     "&:hover": {
-      backgroundColor: "rgba(147, 51, 234, 0.2)",
+      background:
+        "linear-gradient(90deg, rgba(56, 224, 123, 0.18), rgba(56, 224, 123, 0.1))",
     },
   },
 };
 
 const cheatsheetTextSx = {
   "& .MuiListItemText-primary": {
-    color: "white",
+    color: "inherit",
+    fontSize: "0.92rem",
+    fontWeight: 500,
   },
 };
 
@@ -81,6 +109,8 @@ type GrammarSidebarProps = {
   onBackToStart: () => void;
   onSelectCheatsheet: (filename: string) => void;
   onToggleCategory: (category: string) => void;
+  filterQuery: string;
+  onFilterQueryChange: (value: string) => void;
 };
 
 function GrammarSidebar({
@@ -91,44 +121,131 @@ function GrammarSidebar({
   onBackToStart,
   onSelectCheatsheet,
   onToggleCategory,
+  filterQuery,
+  onFilterQueryChange,
 }: GrammarSidebarProps) {
-  const { generalCheatsheets, categorizedCheatsheets, sortedCategoryKeys } =
+  const {
+    generalCheatsheets,
+    categorizedCheatsheets,
+    sortedCategoryKeys,
+    visibleCheatsheetCount,
+  } =
     React.useMemo(() => {
-      const grouped = groupCheatsheets(cheatsheets);
+      const normalizedQuery = filterQuery.trim().toLocaleLowerCase();
+      const visibleCheatsheets = normalizedQuery
+        ? cheatsheets.filter(
+            (cheatsheet) =>
+              cheatsheet.title.toLocaleLowerCase().includes(normalizedQuery) ||
+              cheatsheet.category.toLocaleLowerCase().includes(normalizedQuery)
+          )
+        : cheatsheets;
+      const grouped = groupCheatsheets(visibleCheatsheets);
       return {
         ...grouped,
         sortedCategoryKeys: Object.keys(grouped.categorizedCheatsheets).sort(),
+        visibleCheatsheetCount: visibleCheatsheets.length,
       };
-    }, [cheatsheets]);
+    }, [cheatsheets, filterQuery]);
 
   return (
-    <ContentCard>
-      <Typography
-        variant="h6"
-        sx={{ color: "var(--primary-color)", mb: 2 }}
+    <Box
+      component="nav"
+      aria-label="Grammar cheatsheet library"
+      sx={{
+        display: "flex",
+        minWidth: 0,
+        flexDirection: "column",
+        color: "white",
+      }}
+    >
+      <Box
+        component="button"
+        type="button"
+        aria-label="Cheatsheet library"
+        onClick={onBackToStart}
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1.5,
+          width: "fit-content",
+          mb: 2.5,
+          color: "white",
+          background: "none",
+          border: 0,
+          p: 0,
+          font: "inherit",
+          cursor: "pointer",
+          textAlign: "left",
+          "&:hover .library-title": {
+            color: "var(--primary-color)",
+          },
+        }}
       >
-        <Box
-          component="button"
-          type="button"
-          onClick={onBackToStart}
+        <BookOpen
+          size={26}
+          strokeWidth={1.8}
+          aria-hidden="true"
+          style={{ color: "var(--primary-color)" }}
+        />
+        <Typography
+          className="library-title"
+          variant="h6"
           sx={{
-            color: "inherit",
-            background: "none",
-            border: "none",
-            p: 0,
-            m: 0,
-            font: "inherit",
-            cursor: "pointer",
-            textAlign: "left",
+            fontSize: "1.05rem",
+            fontWeight: 700,
+            transition: "color 160ms ease",
           }}
         >
-          Available Cheatsheets
-        </Box>
-      </Typography>
+          Cheatsheet library
+        </Typography>
+      </Box>
+
+      <SearchInput
+        value={filterQuery}
+        onChange={(event) => onFilterQueryChange(event.target.value)}
+        onClear={() => onFilterQueryChange("")}
+        placeholder="Filter cheatsheets"
+        ariaLabel="Filter cheatsheet library"
+        clearLabel="Clear cheatsheet filter"
+        sx={{ mb: 2.5, maxWidth: "none" }}
+        inputSx={{
+          "& .MuiOutlinedInput-root": {
+            minHeight: 44,
+            backgroundColor: "rgba(7, 13, 43, 0.45)",
+            borderRadius: "0.75rem",
+            color: "#edf2ff",
+            "& fieldset": {
+              borderColor: "rgba(103, 124, 184, 0.42)",
+            },
+            "&:hover fieldset": {
+              borderColor: "rgba(132, 153, 214, 0.62)",
+            },
+            "&.Mui-focused fieldset": {
+              borderColor: "var(--primary-color)",
+            },
+          },
+          "& .MuiInputBase-input": {
+            py: 1.15,
+            fontSize: "0.9rem",
+            color: "#edf2ff",
+            "&::placeholder": {
+              color: "#91a2c9",
+              opacity: 1,
+            },
+          },
+        }}
+      />
+
       {loading && cheatsheets.length === 0 ? (
         <LoadingSpinner />
+      ) : cheatsheets.length > 0 &&
+        generalCheatsheets.length === 0 &&
+        sortedCategoryKeys.length === 0 ? (
+        <Typography sx={{ px: 1, py: 2, color: "#8fa0c5", fontSize: "0.88rem" }}>
+          No cheatsheets match “{filterQuery}”.
+        </Typography>
       ) : (
-        <List>
+        <List disablePadding sx={{ display: "grid", gap: 0.5 }}>
           {generalCheatsheets.map((cheatsheet) => (
             <CheatsheetListItem
               key={cheatsheet.filename}
@@ -141,20 +258,44 @@ function GrammarSidebar({
           {sortedCategoryKeys.map((category) => (
             <React.Fragment key={category}>
               <ListItem disablePadding>
-                <ListItemButton onClick={() => onToggleCategory(category)}>
+                <ListItemButton
+                  onClick={() => {
+                    if (!filterQuery.trim()) {
+                      onToggleCategory(category);
+                    }
+                  }}
+                  aria-expanded={
+                    expandedCategories.has(category) || Boolean(filterQuery.trim())
+                  }
+                  sx={{
+                    minHeight: 44,
+                    borderRadius: "0.7rem",
+                    px: 1,
+                    color: "#f3f6ff",
+                    "&:hover": {
+                      backgroundColor: "rgba(148, 163, 184, 0.06)",
+                    },
+                  }}
+                >
                   <ListItemText
                     primary={category}
-                    primaryTypographyProps={{ fontWeight: "bold" }}
+                    primaryTypographyProps={{
+                      fontWeight: 700,
+                      textTransform: "capitalize",
+                      fontSize: "0.94rem",
+                    }}
                     sx={cheatsheetTextSx}
                   />
-                  {expandedCategories.has(category) ? (
-                    <ExpandLess />
+                  {expandedCategories.has(category) || filterQuery.trim() ? (
+                    <ExpandLess sx={{ color: "#9aabd0", fontSize: 20 }} />
                   ) : (
-                    <ExpandMore />
+                    <ExpandMore sx={{ color: "#9aabd0", fontSize: 20 }} />
                   )}
                 </ListItemButton>
               </ListItem>
-              <Collapse in={expandedCategories.has(category)}>
+              <Collapse
+                in={expandedCategories.has(category) || Boolean(filterQuery.trim())}
+              >
                 <List component="div" disablePadding>
                   {categorizedCheatsheets[category].map((cheatsheet) => (
                     <CheatsheetListItem
@@ -171,7 +312,29 @@ function GrammarSidebar({
           ))}
         </List>
       )}
-    </ContentCard>
+
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1,
+          mt: 3,
+          px: 1,
+          color: "#8fa0c5",
+        }}
+      >
+        <Layers3 size={16} aria-hidden="true" />
+        <Typography sx={{ fontSize: "0.82rem" }}>
+          {filterQuery.trim()
+            ? `${visibleCheatsheetCount} matching ${
+                visibleCheatsheetCount === 1 ? "cheatsheet" : "cheatsheets"
+              }`
+            : `${cheatsheets.length} ${
+                cheatsheets.length === 1 ? "cheatsheet" : "cheatsheets"
+              } available`}
+        </Typography>
+      </Box>
+    </Box>
   );
 }
 

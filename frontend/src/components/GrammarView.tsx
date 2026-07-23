@@ -1,8 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Typography } from "@mui/material";
-import { ContentCard, LoadingSpinner, ErrorAlert, SectionTitle, CustomButton, Snackbar } from "./ui";
-import MarkdownDisplay from "./ui/MarkdownDisplay";
+import {
+  ErrorAlert,
+  SectionTitle,
+  Snackbar,
+  analyzerShellGradients,
+  buildAnalyzerShellSx,
+} from "./ui";
 import useGrammar from "../hooks/useGrammar";
+import GrammarContentPanel from "./grammar/GrammarContentPanel";
 import GrammarSidebar from "./grammar/GrammarSidebar";
 import GrammarStartPanel from "./grammar/GrammarStartPanel";
 
@@ -54,6 +60,7 @@ const GrammarView: React.FC = () => {
     clearSearch = () => undefined,
   } = useGrammar();
   const [selectedFilename, setSelectedFilename] = useState<string | null>(null);
+  const [libraryFilter, setLibraryFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
@@ -227,9 +234,35 @@ const GrammarView: React.FC = () => {
     setCheatsheetInUrl(null, "push");
   };
 
+  const selectedCheatsheetInfo = selectedFilename
+    ? cheatsheets.find((cheatsheet) => cheatsheet.filename === selectedFilename)
+    : null;
+
   return (
-    <Box sx={{ py: 8 }}>
-      <SectionTitle>Grammar Cheatsheets</SectionTitle>
+    <Box sx={{ py: { xs: 2, md: 4 } }}>
+      <Box sx={{ mb: { xs: 4, md: 5 } }}>
+        <SectionTitle
+          variant="h2"
+          marginBottom={1}
+          sx={{
+            color: "#f7f9ff",
+            fontSize: { xs: "2.25rem", md: "3.25rem" },
+            lineHeight: 1.05,
+            letterSpacing: "-0.045em",
+          }}
+        >
+          Grammar Cheatsheets
+        </SectionTitle>
+        <Typography
+          sx={{
+            maxWidth: 680,
+            color: "#b8c5e3",
+            fontSize: { xs: "1rem", md: "1.08rem" },
+          }}
+        >
+          Quick Swedish grammar references for everyday study.
+        </Typography>
+      </Box>
 
       {error && (
         <Box sx={{ mb: 4 }}>
@@ -237,9 +270,22 @@ const GrammarView: React.FC = () => {
         </Box>
       )}
 
-      <Box sx={{ display: "flex", gap: 2, mt: 6 }}>
-        {/* Left Pane: Cheatsheet List */}
-        <Box sx={{ flexShrink: 0, width: "220px" }}>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "minmax(0, 1fr)", lg: "280px minmax(0, 1fr)" },
+          alignItems: "start",
+          gap: { xs: 4, lg: 5, xl: 7 },
+        }}
+      >
+        <Box
+          sx={{
+            minWidth: 0,
+            position: { lg: "sticky" },
+            top: { lg: 116 },
+            order: { xs: selectedFilename ? 2 : 1, lg: 1 },
+          }}
+        >
           <GrammarSidebar
             cheatsheets={cheatsheets}
             loading={loading}
@@ -250,54 +296,41 @@ const GrammarView: React.FC = () => {
               handleCheatsheetClick(filename).catch(handleSelectionError);
             }}
             onToggleCategory={toggleCategory}
+            filterQuery={libraryFilter}
+            onFilterQueryChange={setLibraryFilter}
           />
         </Box>
 
-        {/* Right Pane: Content Display */}
-        <Box sx={{ flex: 1 }}>
-          <ContentCard>
-            {selectedFilename ? (
-              <>
-                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, mb: 2 }}>
-                  <Typography sx={{ color: "#9ca3af", fontSize: "0.875rem" }}>
-                    {paramFromFilepath(selectedFilename)}
-                  </Typography>
-                  <Box sx={{ display: "flex", gap: 1 }}>
-                    <CustomButton
-                      variant="secondary"
-                      size="small"
-                      onClick={() => {
-                        void handleCopyMarkdown();
-                      }}
-                    >
-                      Copy markdown
-                    </CustomButton>
-                    <CustomButton
-                      variant="secondary"
-                      size="small"
-                      onClick={() => {
-                        void handleCopyLink();
-                      }}
-                    >
-                      Copy link
-                    </CustomButton>
-                  </Box>
-                </Box>
-                {loading ? (
-                  <LoadingSpinner />
-                ) : selectedCheatsheet ? (
-                  <MarkdownDisplay
-                    markdownContent={selectedCheatsheet.content}
-                  />
-                ) : (
-                  !error && (
-                    <Typography sx={{ color: "#9ca3af" }}>
-                      Failed to load cheatsheet content.
-                    </Typography>
-                  )
-                )}
-              </>
-            ) : (
+        <Box
+          sx={{
+            minWidth: 0,
+            order: { xs: selectedFilename ? 1 : 2, lg: 2 },
+          }}
+        >
+          {selectedFilename ? (
+            <GrammarContentPanel
+              category={selectedCheatsheetInfo?.category ?? null}
+              title={
+                selectedCheatsheetInfo?.title ?? paramFromFilepath(selectedFilename)
+              }
+              markdownContent={selectedCheatsheet?.content ?? null}
+              loading={loading}
+              hasError={Boolean(error)}
+              onCopyMarkdown={() => {
+                void handleCopyMarkdown();
+              }}
+              onCopyLink={() => {
+                void handleCopyLink();
+              }}
+            />
+          ) : (
+            <Box
+              sx={{
+                minHeight: { xs: 360, lg: 620 },
+                p: { xs: 2.5, sm: 4, lg: 5 },
+                ...buildAnalyzerShellSx(analyzerShellGradients.emptyState),
+              }}
+            >
               <GrammarStartPanel
                 searchQuery={searchQuery}
                 searchResults={searchResults}
@@ -306,17 +339,15 @@ const GrammarView: React.FC = () => {
                 hasSearched={hasSearched}
                 onSearchQueryChange={setSearchQuery}
                 onSearch={() => {
-                  handleSearch().catch((err) => {
-                    console.error("Failed to search grammar: ", err);
-                  });
+                  void handleSearch();
                 }}
                 onClearSearch={handleClearSearch}
                 onSelectSearchResult={(filename) => {
                   handleCheatsheetClick(filename).catch(handleSelectionError);
                 }}
               />
-            )}
-          </ContentCard>
+            </Box>
+          )}
         </Box>
       </Box>
 
