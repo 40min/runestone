@@ -574,5 +574,16 @@
     ],
     "annotation": "A playful guide to Swedish present/future and past conditional constructions, including word order and common alternatives.",
     "path": "tenses/konditionalis.md"
+  },
+  {
+    "url": "{HOST}/?view=grammar&cheatsheet=pronouns%2Fman-pronoun",
+    "tags": [
+      "pronouns",
+      "grammar",
+      "man",
+      "impersonal"
+    ],
+    "annotation": "Declension and usage of the Swedish impersonal pronoun 'man' (one/you/people in general), including object form 'en', possessive 'ens', and the generic 'du' overlap.",
+    "path": "pronouns/man-pronoun.md"
   }
 ]
