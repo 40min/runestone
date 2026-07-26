@@ -267,7 +267,7 @@ export const TeacherAvatar: React.FC<TeacherAvatarProps> = ({
             height: Math.max(9, Math.floor(size * 0.22)),
             borderRadius: "50%",
             backgroundColor: isBackendAvailable ? "var(--primary-color)" : "#ef4444",
-            border: "2px solid #1a102b",
+            border: "2px solid #060b26",
             boxShadow: isBackendAvailable
               ? "0 0 0 1px rgba(56, 224, 123, 0.28)"
               : "0 0 0 1px rgba(239, 68, 68, 0.25)",

@@ -13,17 +13,17 @@ export const ChatInput: React.FC<ChatInputProps> = (props) => {
       sx={{
         '& .MuiOutlinedInput-root': {
           color: 'white',
-          backgroundColor: 'rgba(35, 24, 55, 0.72)',
+          backgroundColor: 'rgba(8, 18, 50, 0.78)',
           borderRadius: '8px',
           minHeight: '46px',
           '& fieldset': {
-            borderColor: 'rgba(147, 51, 234, 0.28)',
+            borderColor: 'rgba(99, 114, 173, 0.42)',
           },
           '&:hover fieldset': {
-            borderColor: 'rgba(147, 51, 234, 0.5)',
+            borderColor: 'rgba(112, 139, 210, 0.68)',
           },
           '&.Mui-focused fieldset': {
-            borderColor: '#9333ea',
+            borderColor: '#638bd8',
           },
         },
         '& .MuiInputBase-input::placeholder': {
