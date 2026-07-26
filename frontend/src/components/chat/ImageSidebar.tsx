@@ -50,7 +50,7 @@ export const ImageSidebar: React.FC<ImageSidebarProps> = ({ images }) => {
               borderRadius: '4px',
               overflow: 'hidden',
               cursor: 'pointer',
-              border: '1px solid #4d3c63',
+              border: '1px solid rgba(99, 114, 173, 0.5)',
               transition: 'border-color 0.2s',
               '&:hover': {
                 borderColor: 'var(--primary-color)',

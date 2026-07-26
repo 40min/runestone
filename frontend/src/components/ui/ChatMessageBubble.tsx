@@ -175,15 +175,15 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
             role === "user" ? "8px 8px 2px 8px" : "8px 8px 8px 2px",
           backgroundColor:
             role === "user"
-              ? "rgba(58, 30, 104, 0.92)"
-              : "rgba(43, 31, 65, 0.88)",
+              ? "rgba(31, 58, 153, 0.9)"
+              : "rgba(8, 18, 49, 0.88)",
           border:
             role === "user"
-              ? "1px solid rgba(147, 51, 234, 0.32)"
-              : "1px solid rgba(255, 255, 255, 0.04)",
+              ? "1px solid rgba(81, 124, 238, 0.72)"
+              : "1px solid rgba(99, 114, 173, 0.38)",
           boxShadow:
             role === "assistant"
-              ? "0 18px 44px rgba(0, 0, 0, 0.12)"
+              ? "0 18px 44px rgba(2, 6, 23, 0.16)"
               : "none",
         }}
       >

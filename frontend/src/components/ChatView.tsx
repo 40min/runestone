@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ExpandLess, ExpandMore } from "@mui/icons-material";
-import { Box, ButtonBase, Collapse, Typography } from "@mui/material";
+import { Box, Collapse, Typography } from "@mui/material";
 import {
   ErrorAlert,
   ChatMessageBubble,
@@ -14,6 +13,11 @@ import { ChatComposerInputRow } from "./chat/ChatComposerInputRow";
 import { ImageSidebar } from "./chat/ImageSidebar";
 import { ChatHeader } from "./chat/ChatHeader";
 import { ChatPlaybackSettings } from "./chat/ChatPlaybackSettings";
+import { ChatControlsToggle } from "./chat/ChatControlsToggle";
+import {
+  chatControlsPanelSx,
+  chatPageBackground,
+} from "./chat/chatStyles";
 import AgentMemoryModal from "./chat/AgentMemoryModal";
 import { useChat } from "../hooks/useChat";
 import { useChatImageUpload } from "../hooks/useChatImageUpload";
@@ -358,12 +362,14 @@ const ChatView: React.FC = () => {
       sx={{
         display: "flex",
         flexDirection: "row",
-        height: { xs: "calc(100dvh - 58px)", md: "calc(100vh - 74px)" },
+        height: "100%",
         width: "100%",
         maxWidth: { xs: "100%", md: "100%" },
         margin: "0 auto",
-        backgroundColor: "#1a102b",
-        gap: 2,
+        boxSizing: "border-box",
+        backgroundColor: chatPageBackground,
+        gap: { xs: 0.5, md: 1 },
+        p: { xs: 0.75, md: 1.5 },
       }}
     >
       {/* Main chat area */}
@@ -372,6 +378,8 @@ const ChatView: React.FC = () => {
           display: "flex",
           flexDirection: "column",
           flex: 1,
+          minWidth: 0,
+          gap: { xs: 0.75, md: 1 },
         }}
       >
         {/* Header */}
@@ -463,11 +471,8 @@ const ChatView: React.FC = () => {
             display: "flex",
             flexDirection: "column",
             gap: 1,
-            px: { xs: 2, md: 4 },
-            pt: { xs: 1.5, md: 2 },
-            pb: { xs: "calc(12px + env(safe-area-inset-bottom))", md: 2 },
-            borderTop: "1px solid rgba(255, 255, 255, 0.08)",
-            backgroundColor: "rgba(26, 16, 43, 0.96)",
+            px: { xs: 0.25, md: 0.75 },
+            pb: { xs: "calc(4px + env(safe-area-inset-bottom))", md: 0 },
           }}
         >
           <ChatComposerInputRow
@@ -482,65 +487,18 @@ const ChatView: React.FC = () => {
           <Box
             sx={{
               position: "relative",
-              mt: 2.5,
-              pt: areComposerControlsExpanded ? 1.75 : 0,
+              mt: 2,
+              pt: areComposerControlsExpanded ? 2.25 : 0.75,
+              borderTop: "1px solid rgba(99, 114, 173, 0.35)",
             }}
           >
-            <ButtonBase
-              onClick={() =>
+            <ChatControlsToggle
+              expanded={areComposerControlsExpanded}
+              disabled={isRecording}
+              onToggle={() =>
                 setAreComposerControlsExpanded((expanded) => !expanded)
               }
-              disabled={isRecording}
-              aria-expanded={areComposerControlsExpanded}
-              aria-controls="teacher-chat-controls-panel"
-              aria-label={areComposerControlsExpanded ? "Hide chat controls" : "Show chat controls"}
-              sx={{
-                position: "absolute",
-                top: 0,
-                left: "50%",
-                transform: "translate(-50%, -50%)",
-                zIndex: 1,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                minWidth: 72,
-                gap: 0.5,
-                px: 1.65,
-                py: 0.4,
-                borderRadius: 999,
-                border: "1px solid rgba(164, 92, 255, 0.55)",
-                background:
-                  areComposerControlsExpanded
-                    ? "linear-gradient(180deg, rgba(101, 34, 188, 0.92) 0%, rgba(54, 22, 103, 0.96) 100%)"
-                    : "linear-gradient(180deg, rgba(41, 18, 79, 0.98) 0%, rgba(26, 14, 51, 0.98) 100%)",
-                boxShadow: areComposerControlsExpanded
-                  ? "0 0 0 1px rgba(192, 132, 252, 0.15), 0 10px 30px rgba(126, 34, 206, 0.4)"
-                  : "0 8px 24px rgba(10, 6, 24, 0.42)",
-                color: "#f5f3ff",
-                transition:
-                  "transform 180ms ease, box-shadow 180ms ease, background 180ms ease, border-color 180ms ease",
-                "&:hover": {
-                  transform: "translate(-50%, -50%) scale(1.03)",
-                  boxShadow: "0 0 0 1px rgba(216, 180, 254, 0.22), 0 12px 34px rgba(126, 34, 206, 0.46)",
-                },
-                "&:focus-visible": {
-                  outline: "none",
-                  transform: "translate(-50%, -50%) scale(1.03)",
-                  boxShadow: "0 0 0 2px rgba(243, 232, 255, 0.72), 0 0 0 5px rgba(126, 34, 206, 0.22), 0 12px 34px rgba(126, 34, 206, 0.46)",
-                },
-                "&.Mui-disabled": {
-                  opacity: 0.58,
-                  color: "#c4b5fd",
-                  cursor: "not-allowed",
-                },
-              }}
-            >
-              {areComposerControlsExpanded ? (
-                <ExpandLess fontSize="small" />
-              ) : (
-                <ExpandMore fontSize="small" />
-              )}
-            </ButtonBase>
+            />
 
             <Collapse
               in={areComposerControlsExpanded}
@@ -551,12 +509,8 @@ const ChatView: React.FC = () => {
                 sx={{
                   px: { xs: 1.25, md: 1.5 },
                   pb: 1.25,
-                  pt: 1.1,
-                  borderRadius: 2.5,
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
-                  background:
-                    "radial-gradient(circle at top center, rgba(111, 34, 178, 0.18) 0%, rgba(255, 255, 255, 0.03) 42%, rgba(255, 255, 255, 0.02) 100%)",
-                  boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 40px rgba(8, 5, 20, 0.22)",
+                  pt: 1.6,
+                  ...chatControlsPanelSx,
                 }}
               >
                 <Typography

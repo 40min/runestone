@@ -18,7 +18,7 @@ export const ChatLoadingIndicator: React.FC<ChatLoadingIndicatorProps> = ({
         mb: 2,
       }}
     >
-      <CircularProgress size={20} sx={{ color: '#9333ea' }} />
+      <CircularProgress size={20} sx={{ color: 'var(--primary-color)' }} />
       <Typography sx={{ color: '#9ca3af', fontStyle: 'italic' }}>
         {message}
       </Typography>

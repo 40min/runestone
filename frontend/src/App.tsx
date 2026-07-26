@@ -125,10 +125,12 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#060b26]">
+    <div
+      className={`${currentView === "chat" ? "h-dvh overflow-hidden" : "min-h-screen"} bg-[#060b26]`}
+    >
       <div className="layout-container flex h-full grow flex-col">
         <Header currentView={currentView} onViewChange={setCurrentView} />
-        <main className={`flex flex-1 justify-center ${currentView === "chat" ? "" : "py-4 px-2 sm:py-12 sm:px-6 lg:px-8"}`}>
+        <main className={`flex flex-1 justify-center ${currentView === "chat" ? "min-h-0" : "py-4 px-2 sm:py-12 sm:px-6 lg:px-8"}`}>
           <div
             className={`w-full ${currentView === "chat" ? "max-w-screen-2xl h-full" : "max-w-7xl space-y-10"}`}
           >

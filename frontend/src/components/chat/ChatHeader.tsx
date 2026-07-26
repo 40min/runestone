@@ -29,16 +29,15 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        px: { xs: 2, md: 5 },
-        py: { xs: 1.5, md: 2 },
-        borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+        px: { xs: 0.5, md: 1 },
+        py: { xs: 0.5, md: 0.75 },
         gap: 2,
-        minHeight: { xs: 92, md: 102 },
+        minHeight: { xs: 64, md: 68 },
       }}
     >
       <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
         <TeacherAvatar
-          size={73}
+          size={65}
           showStatus
           isBackendAvailable={isBackendAvailable}
           emotion={isLoading ? "thinking" : teacherEmotion}
@@ -81,10 +80,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             sx={{
               width: 38,
               height: 38,
-              color: "var(--primary-color)",
-              bgcolor: "rgba(56, 224, 123, 0.08)",
-              border: "1px solid rgba(56, 224, 123, 0.12)",
-              "&:hover": { bgcolor: "rgba(56, 224, 123, 0.16)" },
+              color: "#c7d2ea",
+              bgcolor: "rgba(13, 25, 63, 0.72)",
+              border: "1px solid rgba(99, 114, 173, 0.35)",
+              "&:hover": { bgcolor: "rgba(23, 42, 91, 0.86)" },
             }}
           >
             <PsychologyIcon fontSize="small" />
@@ -102,7 +101,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         </Tooltip>
 
         <Tooltip title="Starts a new chat session. Previous chats are archived.">
-          <Box component="span" sx={{ display: { xs: "inline-flex", md: "none" } }}>
+          <Box
+            component="span"
+            sx={{ display: { xs: "inline-flex", md: "none" } }}
+          >
             <IconButton
               aria-label="New chat"
               onClick={onNewChat}
