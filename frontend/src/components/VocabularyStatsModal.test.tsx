@@ -57,7 +57,7 @@ const makeLearnedDistribution = (
 ];
 
 const renderModal = (open = true) =>
-  render(<VocabularyStatsModal open={open} onClose={vi.fn()} />);
+  render(<VocabularyStatsModal open={open} onClose={vi.fn()} stats={null} statsLoading={false} statsError={null} />);
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
@@ -236,7 +236,7 @@ describe("VocabularyStatsModal", () => {
   it("calls onClose when the statistics panel is clicked", () => {
     const onClose = vi.fn();
     mockUseDistribution.mockReturnValue({ data: null, loading: false, error: null });
-    render(<VocabularyStatsModal open onClose={onClose} />);
+    render(<VocabularyStatsModal open onClose={onClose} stats={null} statsLoading={false} statsError={null} />);
     expect(
       screen.queryByRole("button", { name: "Close vocabulary statistics" })
     ).not.toBeInTheDocument();
@@ -249,7 +249,7 @@ describe("VocabularyStatsModal", () => {
   it("calls onClose when the backdrop is clicked", () => {
     const onClose = vi.fn();
     mockUseDistribution.mockReturnValue({ data: null, loading: false, error: null });
-    render(<VocabularyStatsModal open onClose={onClose} />);
+    render(<VocabularyStatsModal open onClose={onClose} stats={null} statsLoading={false} statsError={null} />);
 
     const backdrop = document.querySelector(".MuiBackdrop-root");
     expect(backdrop).not.toBeNull();
@@ -276,13 +276,29 @@ describe("VocabularyStatsModal", () => {
   it("triggers a fresh fetch on each open (hook called with current open value)", async () => {
     mockUseDistribution.mockReturnValue({ data: null, loading: false, error: null });
     const { rerender } = render(
-      <VocabularyStatsModal open={false} onClose={vi.fn()} />
+      <VocabularyStatsModal open={false} onClose={vi.fn()} stats={null} statsLoading={false} statsError={null} />
     );
     expect(mockUseDistribution).toHaveBeenLastCalledWith(false);
 
-    rerender(<VocabularyStatsModal open onClose={vi.fn()} />);
+    rerender(<VocabularyStatsModal open onClose={vi.fn()} stats={null} statsLoading={false} statsError={null} />);
     await waitFor(() =>
       expect(mockUseDistribution).toHaveBeenLastCalledWith(true)
     );
+  });
+
+  it("renders statsError in place of the overview panel when stats fetch fails", () => {
+    mockUseDistribution.mockReturnValue({ data: null, loading: true, error: null });
+    render(
+      <VocabularyStatsModal
+        open
+        onClose={vi.fn()}
+        stats={null}
+        statsLoading={false}
+        statsError="Failed to load vocabulary stats"
+      />
+    );
+    expect(screen.getByText(/failed to load vocabulary stats/i)).toBeInTheDocument();
+    // Overview metric labels must not render when the error is shown
+    expect(screen.queryByText("Words Studied")).not.toBeInTheDocument();
   });
 });

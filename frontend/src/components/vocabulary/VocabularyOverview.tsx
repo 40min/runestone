@@ -6,6 +6,8 @@ import { getActiveSegmentCount } from "./visualization";
 interface VocabularyOverviewProps {
   stats: VocabularyStats | null;
   loading: boolean;
+  /** Compact mode for use inside a narrow drawer panel */
+  compact?: boolean;
 }
 
 interface MetricDefinition {
@@ -54,6 +56,7 @@ const metricBorder = "1px solid rgba(103, 121, 181, 0.32)";
 const VocabularyOverview: React.FC<VocabularyOverviewProps> = ({
   stats,
   loading,
+  compact = false,
 }) => {
   const studiedPercentage = stats
     ? getPercentage(stats.words_in_learn_count, stats.overall_words_count)
@@ -65,11 +68,13 @@ const VocabularyOverview: React.FC<VocabularyOverviewProps> = ({
       aria-label="Vocabulary overview"
       sx={{
         display: "grid",
-        gridTemplateColumns: {
-          xs: "1fr",
-          sm: "repeat(2, minmax(0, 1fr))",
-          lg: "1.35fr repeat(3, minmax(0, 1fr))",
-        },
+        gridTemplateColumns: compact
+          ? "repeat(2, minmax(0, 1fr))"
+          : {
+              xs: "1fr",
+              sm: "repeat(2, minmax(0, 1fr))",
+              lg: "1.35fr repeat(3, minmax(0, 1fr))",
+            },
         overflow: "hidden",
         border: metricBorder,
         borderRadius: 2.25,
@@ -89,34 +94,34 @@ const VocabularyOverview: React.FC<VocabularyOverviewProps> = ({
             component="article"
             key={metric.key}
             sx={{
-              minHeight: 138,
-              p: { xs: 2.25, md: 2.75 },
+              minHeight: compact ? 0 : 138,
+              p: compact ? 1.5 : { xs: 2.25, md: 2.75 },
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: 2,
+              gap: compact ? 1 : 2,
               borderLeft: {
                 xs: 0,
                 sm: index % 2 === 1 ? metricBorder : 0,
-                lg: index > 0 ? metricBorder : 0,
+                ...(compact ? {} : { lg: index > 0 ? metricBorder : 0 }),
               },
               borderTop: {
                 xs: index > 0 ? metricBorder : 0,
                 sm: index > 1 ? metricBorder : 0,
-                lg: 0,
+                ...(compact ? {} : { lg: 0 }),
               },
             }}
           >
             <Box sx={{ minWidth: 0 }}>
               <Typography
-                sx={{ color: "#a8b6d8", fontSize: "0.78rem", mb: 0.8 }}
+                sx={{ color: "#a8b6d8", fontSize: compact ? "0.68rem" : "0.78rem", mb: compact ? 0.4 : 0.8 }}
               >
                 {metric.label}
               </Typography>
               <Typography
                 sx={{
                   color: "#f4f7ff",
-                  fontSize: { xs: "1.75rem", md: "2rem" },
+                  fontSize: compact ? "1.25rem" : { xs: "1.75rem", md: "2rem" },
                   fontWeight: 700,
                   letterSpacing: "-0.04em",
                   lineHeight: 1,
@@ -126,12 +131,12 @@ const VocabularyOverview: React.FC<VocabularyOverviewProps> = ({
                 {loading || !stats ? "…" : formatNumber(value)}
               </Typography>
               <Typography
-                sx={{ color: "#7f8db2", fontSize: "0.72rem", mt: 1.1 }}
+                sx={{ color: "#7f8db2", fontSize: compact ? "0.65rem" : "0.72rem", mt: compact ? 0.5 : 1.1 }}
               >
                 {stats ? metric.note(stats) : "Loading vocabulary summary"}
               </Typography>
 
-              {index > 0 && metric.key !== "overall_words_count" && (
+              {!compact && index > 0 && metric.key !== "overall_words_count" && (
                 <Box
                   aria-hidden="true"
                   data-testid={`${metric.key}-segments`}
@@ -163,8 +168,8 @@ const VocabularyOverview: React.FC<VocabularyOverviewProps> = ({
               <Box
                 aria-label={`${studiedPercentage}% of vocabulary studied`}
                 sx={{
-                  width: 76,
-                  height: 76,
+                  width: compact ? 48 : 76,
+                  height: compact ? 48 : 76,
                   flexShrink: 0,
                   borderRadius: "50%",
                   display: "grid",
@@ -174,7 +179,7 @@ const VocabularyOverview: React.FC<VocabularyOverviewProps> = ({
                   "&::after": {
                     content: '""',
                     position: "absolute",
-                    inset: 10,
+                    inset: compact ? 6 : 10,
                     borderRadius: "50%",
                     backgroundColor: "#10183d",
                   },
@@ -186,7 +191,7 @@ const VocabularyOverview: React.FC<VocabularyOverviewProps> = ({
                     zIndex: 1,
                     color: "#f4f7ff",
                     fontWeight: 700,
-                    fontSize: "0.78rem",
+                    fontSize: compact ? "0.62rem" : "0.78rem",
                   }}
                 >
                   {studiedPercentage}%

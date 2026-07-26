@@ -91,12 +91,19 @@ vi.mock("./AddEditVocabularyModal", () => ({
     ) : null,
 }));
 
-// Track open prop of VocabularyStatsModal for assertion
+// Track open prop and statsError of VocabularyStatsModal for assertion
 let lastStatsModalOpen = false;
+let lastStatsModalError: string | null = null;
 vi.mock("./VocabularyStatsModal", () => ({
-  default: ({ open, onClose }: { open: boolean; onClose: () => void }) => {
+  default: ({ open, onClose, statsError }: { open: boolean; onClose: () => void; statsError: string | null }) => {
     lastStatsModalOpen = open;
-    return open ? <div data-testid="stats-modal"><button onClick={onClose}>Close Stats</button></div> : null;
+    lastStatsModalError = statsError ?? null;
+    return open ? (
+      <div data-testid="stats-modal">
+        {statsError && <p data-testid="stats-modal-error">{statsError}</p>}
+        <button onClick={onClose}>Close Stats</button>
+      </div>
+    ) : null;
   },
 }));
 
@@ -421,25 +428,18 @@ describe("VocabularyView", () => {
 
     renderWithAuthProvider(<VocabularyView />);
 
-    expect(screen.getByText("Words Studied")).toBeInTheDocument();
-    expect(screen.getByText("3")).toBeInTheDocument();
-    expect(screen.getByText("Words Skipped")).toBeInTheDocument();
-    expect(screen.getByText("2")).toBeInTheDocument();
-    expect(screen.getByText("Overall Words")).toBeInTheDocument();
-    expect(screen.getByText("5")).toBeInTheDocument();
-    expect(screen.getByText("Prioritised Words")).toBeInTheDocument();
-    expect(screen.getByText("1")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Vocabulary" })).toBeInTheDocument();
     expect(screen.getByText("No vocabulary saved yet.")).toBeInTheDocument();
     expect(screen.getByText("Analyze some text and save vocabulary items to see them here.")).toBeInTheDocument();
   });
 
-  it("renders vocabulary stats error without blocking the table view", () => {
+  it("renders vocabulary stats error without blocking the table view", async () => {
+    const refetch = vi.fn().mockResolvedValue(undefined);
     mockUseVocabularyStats.mockReturnValue({
       stats: null,
       loading: false,
       error: "Failed to fetch vocabulary stats",
-      refetch: vi.fn(),
+      refetch,
     });
     mockUseRecentVocabulary.mockReturnValue({
       recentVocabulary: [],
@@ -458,8 +458,15 @@ describe("VocabularyView", () => {
 
     renderWithAuthProvider(<VocabularyView />);
 
-    expect(screen.getByText("Failed to fetch vocabulary stats")).toBeInTheDocument();
+    // Vocabulary page itself is unblocked
     expect(screen.getByRole("heading", { name: "Vocabulary" })).toBeInTheDocument();
+
+    // Open the modal — the error must appear inside it
+    fireEvent.click(screen.getByRole("button", { name: "Open vocabulary statistics" }));
+    await waitFor(() => expect(screen.getByTestId("stats-modal")).toBeInTheDocument());
+    expect(screen.getByTestId("stats-modal-error")).toHaveTextContent(
+      "Failed to fetch vocabulary stats"
+    );
   });
 
   it("renders search input", () => {
@@ -1230,6 +1237,51 @@ describe("VocabularyView — stats button", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close Stats" }));
     await waitFor(() =>
       expect(screen.queryByTestId("stats-modal")).not.toBeInTheDocument()
+    );
+  });
+
+  it("calls refetchStats on every open and reopen of the modal", async () => {
+    const refetch = vi.fn().mockResolvedValue(undefined);
+    mockUseVocabularyStats.mockReturnValue({
+      stats: { words_in_learn_count: 0, words_skipped_count: 0, overall_words_count: 0, words_prioritized_count: 0 },
+      loading: false,
+      error: null,
+      refetch,
+    });
+
+    renderWithAuthProvider(<VocabularyView />);
+
+    // First open
+    fireEvent.click(screen.getByRole("button", { name: "Open vocabulary statistics" }));
+    await waitFor(() => expect(screen.getByTestId("stats-modal")).toBeInTheDocument());
+    expect(refetch).toHaveBeenCalledTimes(1);
+
+    // Close, then reopen — refetch must fire again
+    fireEvent.click(screen.getByRole("button", { name: "Close Stats" }));
+    await waitFor(() => expect(screen.queryByTestId("stats-modal")).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Open vocabulary statistics" }));
+    await waitFor(() => expect(screen.getByTestId("stats-modal")).toBeInTheDocument());
+    expect(refetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("passes statsError into the modal so the error is visible when stats fetch fails", async () => {
+    const refetch = vi.fn().mockResolvedValue(undefined);
+    mockUseVocabularyStats.mockReturnValue({
+      stats: null,
+      loading: false,
+      error: "Stats service unavailable",
+      refetch,
+    });
+
+    renderWithAuthProvider(<VocabularyView />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open vocabulary statistics" }));
+    await waitFor(() => expect(screen.getByTestId("stats-modal")).toBeInTheDocument());
+
+    expect(lastStatsModalError).toBe("Stats service unavailable");
+    expect(screen.getByTestId("stats-modal-error")).toHaveTextContent(
+      "Stats service unavailable"
     );
   });
 });

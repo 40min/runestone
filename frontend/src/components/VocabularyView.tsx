@@ -6,7 +6,6 @@ import { useRecentVocabulary, useVocabularyStats } from "../hooks/useVocabulary"
 import { CustomButton, ErrorAlert, LoadingSpinner } from "./ui";
 import AddEditVocabularyModal from "./AddEditVocabularyModal";
 import VocabularyStatsModal from "./VocabularyStatsModal";
-import VocabularyOverview from "./vocabulary/VocabularyOverview";
 import VocabularyLedger from "./vocabulary/VocabularyLedger";
 
 const VocabularyView: React.FC = () => {
@@ -171,7 +170,7 @@ const VocabularyView: React.FC = () => {
             variant="secondary"
             startIcon={<BarChartIcon fontSize="small" />}
             aria-label="Open vocabulary statistics"
-            onClick={() => setStatsModalOpen(true)}
+            onClick={() => { setStatsModalOpen(true); void refetchStats(); }}
             sx={{
               flex: { xs: 1, md: "none" },
               color: "#e3e9fb",
@@ -191,12 +190,6 @@ const VocabularyView: React.FC = () => {
           </CustomButton>
         </Box>
       </Box>
-
-      {statsError ? (
-        <ErrorAlert message={statsError} />
-      ) : (
-        <VocabularyOverview stats={stats} loading={statsLoading} />
-      )}
 
       {boostError && (
         <Typography role="alert" sx={{ color: "#fda4af", fontSize: "0.82rem" }}>
@@ -238,6 +231,9 @@ const VocabularyView: React.FC = () => {
       <VocabularyStatsModal
         open={statsModalOpen}
         onClose={() => setStatsModalOpen(false)}
+        stats={stats}
+        statsLoading={statsLoading}
+        statsError={statsError}
       />
     </Box>
   );

@@ -1,15 +1,20 @@
 import React from "react";
 import { Box, Drawer, Typography } from "@mui/material";
 import { useVocabularyDistribution } from "../hooks/useVocabulary";
+import type { VocabularyStats } from "../hooks/useVocabulary";
 import { ErrorAlert, LoadingSpinner } from "./ui";
 import {
   buildLearnedDistributionGradient,
   LEARNED_COLORS,
 } from "./vocabulary/visualization";
+import VocabularyOverview from "./vocabulary/VocabularyOverview";
 
 interface VocabularyStatsModalProps {
   open: boolean;
   onClose: () => void;
+  stats: VocabularyStats | null;
+  statsLoading: boolean;
+  statsError: string | null;
 }
 
 const PRIORITY_COLORS = [
@@ -50,6 +55,9 @@ const learnedLabel = (label: string) => {
 const VocabularyStatsModal: React.FC<VocabularyStatsModalProps> = ({
   open,
   onClose,
+  stats,
+  statsLoading,
+  statsError,
 }) => {
   const { data, loading, error } = useVocabularyDistribution(open);
   const priorities = data?.priority_distribution ?? [];
@@ -133,6 +141,11 @@ const VocabularyStatsModal: React.FC<VocabularyStatsModalProps> = ({
       </Box>
 
       <Box sx={{ px: { xs: 2.5, sm: 4 }, py: 3.5 }}>
+        <Box sx={{ mb: 2.5 }}>
+          {statsError
+            ? <ErrorAlert message={statsError} />
+            : <VocabularyOverview stats={stats} loading={statsLoading} compact />}
+        </Box>
         {showLoading && <LoadingSpinner />}
         {!showLoading && error && <ErrorAlert message={error} />}
 
@@ -149,27 +162,35 @@ const VocabularyStatsModal: React.FC<VocabularyStatsModalProps> = ({
 
         {!showLoading && !error && !allEmpty && data && (
           <>
+            {/* ── Card 1: total words + learning history ─────────────── */}
             <Box
               component="section"
-              aria-label="Vocabulary distribution overview"
+              aria-labelledby="learning-history-title"
               sx={{
-                display: "grid",
-                gridTemplateColumns: "1fr auto",
-                alignItems: "center",
-                gap: 2,
-                p: 2.75,
                 mb: 2.25,
                 borderRadius: 2,
                 border: "1px solid rgba(103, 121, 181, 0.44)",
                 background:
                   "radial-gradient(circle at 10% 8%, rgba(35, 50, 116, 0.52), rgba(7, 11, 39, 0.92))",
+                overflow: "hidden",
+              }}
+            >
+            {/* ── Header: total words + unseen donut ─────────────────── */}
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: "1fr auto",
+                alignItems: "center",
+                gap: 2,
+                px: 2.5,
+                py: 2,
               }}
             >
               <Box>
                 <Typography
                   sx={{
                     color: "#f4f7ff",
-                    fontSize: { xs: "2.15rem", sm: "2.55rem" },
+                    fontSize: "1.75rem",
                     fontWeight: 700,
                     lineHeight: 1,
                     letterSpacing: "-0.045em",
@@ -178,15 +199,15 @@ const VocabularyStatsModal: React.FC<VocabularyStatsModalProps> = ({
                 >
                   {total.toLocaleString()}
                 </Typography>
-                <Typography sx={{ color: "#8d9bc0", fontSize: "0.72rem", mt: 1 }}>
+                <Typography sx={{ color: "#8d9bc0", fontSize: "0.68rem", mt: 0.65 }}>
                   words included in these distributions
                 </Typography>
               </Box>
               <Box
                 aria-label={`${unseenPercentage}% unseen`}
                 sx={{
-                  width: { xs: 92, sm: 112 },
-                  height: { xs: 92, sm: 112 },
+                  width: 80,
+                  height: 80,
                   borderRadius: "50%",
                   display: "grid",
                   placeItems: "center",
@@ -195,39 +216,38 @@ const VocabularyStatsModal: React.FC<VocabularyStatsModalProps> = ({
                   "&::after": {
                     content: '""',
                     position: "absolute",
-                    inset: 16,
+                    inset: 12,
                     borderRadius: "50%",
-                    backgroundColor: "#101737",
+                    backgroundColor: "#0d1534",
                   },
                 }}
               >
                 <Box sx={{ position: "relative", zIndex: 1, textAlign: "center" }}>
-                  <Typography sx={{ fontSize: "0.83rem", fontWeight: 700, lineHeight: 1 }}>
+                  <Typography sx={{ fontSize: "0.8rem", fontWeight: 700, lineHeight: 1 }}>
                     {unseenPercentage}%
                   </Typography>
-                  <Typography sx={{ color: "#8795b9", fontSize: "0.56rem", mt: 0.35 }}>
+                  <Typography sx={{ color: "#8795b9", fontSize: "0.54rem", mt: 0.3 }}>
                     unseen
                   </Typography>
                 </Box>
               </Box>
             </Box>
 
+            {/* ── Learning history ──────────────────────────────────── */}
             <Box
               component="section"
               aria-labelledby="learning-history-title"
               sx={{
-                p: 2.5,
-                mb: 2.25,
-                borderRadius: 2,
-                border: "1px solid rgba(99, 114, 173, 0.34)",
-                backgroundColor: "rgba(255,255,255,.02)",
+                px: 2.5,
+                py: 2,
+                borderTop: "1px solid rgba(99, 114, 173, 0.28)",
               }}
             >
-              <Typography id="learning-history-title" sx={{ fontSize: "0.9rem", fontWeight: 700 }}>
+              <Typography id="learning-history-title" sx={{ fontSize: "0.82rem", fontWeight: 700, mb: 0.4 }}>
                 Learning history
               </Typography>
-              <Typography sx={{ color: "#7583aa", fontSize: "0.68rem", mt: 0.4, mb: 2 }}>
-                Most of the library has not yet entered a completed review.
+              <Typography sx={{ color: "#7583aa", fontSize: "0.65rem", mb: 1.5 }}>
+                How many times each word has been reviewed.
               </Typography>
 
               {learnedTotal === 0 ? (
@@ -235,7 +255,7 @@ const VocabularyStatsModal: React.FC<VocabularyStatsModalProps> = ({
                   No data yet
                 </Typography>
               ) : (
-                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)" }, gap: 1.2 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 1.1 }}>
                   {learned.map((item, index) => (
                     <Box key={item.label} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                       <Box
@@ -248,11 +268,11 @@ const VocabularyStatsModal: React.FC<VocabularyStatsModalProps> = ({
                           opacity: item.count === 0 ? 0.35 : 1,
                         }}
                       />
-                      <Typography sx={{ color: "#aab7d4", fontSize: "0.72rem" }}>
+                      <Typography sx={{ color: "#aab7d4", fontSize: "0.7rem" }}>
                         {learnedLabel(item.label)}
                       </Typography>
                       <Typography
-                        sx={{ ml: "auto", color: "#e1e7f8", fontSize: "0.72rem", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}
+                        sx={{ ml: "auto", color: "#e1e7f8", fontSize: "0.7rem", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}
                       >
                         {item.count.toLocaleString()}
                       </Typography>
@@ -262,6 +282,9 @@ const VocabularyStatsModal: React.FC<VocabularyStatsModalProps> = ({
               )}
             </Box>
 
+            </Box>
+
+            {/* ── Card 2: priority distribution ──────────────────────── */}
             <Box
               component="section"
               aria-labelledby="priority-distribution-title"
@@ -272,11 +295,11 @@ const VocabularyStatsModal: React.FC<VocabularyStatsModalProps> = ({
                 backgroundColor: "rgba(255,255,255,.02)",
               }}
             >
-              <Typography id="priority-distribution-title" sx={{ fontSize: "0.9rem", fontWeight: 700 }}>
+              <Typography id="priority-distribution-title" sx={{ fontSize: "0.82rem", fontWeight: 700, mb: 0.4 }}>
                 Priority distribution
               </Typography>
-              <Typography sx={{ color: "#7583aa", fontSize: "0.68rem", mt: 0.4, mb: 2 }}>
-                Horizontal bars make the ten priority levels easy to compare.
+              <Typography sx={{ color: "#7583aa", fontSize: "0.65rem", mb: 1.5 }}>
+                Relative count across the ten priority levels.
               </Typography>
 
               {priorities.map((item) => {
@@ -290,10 +313,10 @@ const VocabularyStatsModal: React.FC<VocabularyStatsModalProps> = ({
                     key={item.priority}
                     sx={{
                       display: "grid",
-                      gridTemplateColumns: { xs: "105px 1fr 42px", sm: "126px 1fr 48px" },
+                      gridTemplateColumns: "120px 1fr 44px",
                       alignItems: "center",
                       gap: 1.25,
-                      my: 1.05,
+                      my: 1,
                     }}
                   >
                     <Box sx={{ display: "flex", alignItems: "center", gap: 0.9, minWidth: 0 }}>
@@ -301,11 +324,11 @@ const VocabularyStatsModal: React.FC<VocabularyStatsModalProps> = ({
                         aria-hidden="true"
                         sx={{ width: 7, height: 7, flexShrink: 0, borderRadius: "50%", backgroundColor: PRIORITY_COLORS[priority] }}
                       />
-                      <Typography sx={{ color: "#aab7d4", fontSize: "0.68rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <Typography sx={{ color: "#aab7d4", fontSize: "0.67rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {PRIORITY_NAMES[priority]} · {priority}
                       </Typography>
                     </Box>
-                    <Box sx={{ height: 7, overflow: "hidden", borderRadius: 99, backgroundColor: "rgba(127,148,205,.12)" }}>
+                    <Box sx={{ height: 6, overflow: "hidden", borderRadius: 99, backgroundColor: "rgba(127,148,205,.12)" }}>
                       <Box
                         data-testid={`priority-bar-${priority}`}
                         data-color={PRIORITY_COLORS[priority]}
@@ -317,7 +340,7 @@ const VocabularyStatsModal: React.FC<VocabularyStatsModalProps> = ({
                         }}
                       />
                     </Box>
-                    <Typography sx={{ color: "#8290b5", fontSize: "0.68rem", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                    <Typography sx={{ color: "#8290b5", fontSize: "0.67rem", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
                       {item.count.toLocaleString()}
                     </Typography>
                   </Box>
