@@ -585,5 +585,18 @@
     ],
     "annotation": "Declension and usage of the Swedish impersonal pronoun 'man' (one/you/people in general), including object form 'en', possessive 'ens', and the generic 'du' overlap.",
     "path": "pronouns/man-pronoun.md"
+  },
+  {
+    "url": "{HOST}/?view=grammar&cheatsheet=verbs%2Fperfekt_particip",
+    "tags": [
+      "verbs",
+      "adjectives",
+      "perfekt particip",
+      "supinum",
+      "agreement",
+      "particle verbs"
+    ],
+    "annotation": "A guide to Swedish past participle (perfekt particip), covering verb groups, adjective agreement, predictive use, and particle verbs.",
+    "path": "verbs/perfekt_particip.md"
   }
 ]
