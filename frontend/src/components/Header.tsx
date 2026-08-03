@@ -5,6 +5,15 @@ import { CustomButton } from './ui';
 import { useAuth } from '../context/AuthContext';
 import type { ViewType } from '../types/navigation';
 
+const headerFontFamily = '"Space Grotesk", "Noto Sans", sans-serif';
+const headerBackground = 'linear-gradient(180deg, rgba(15, 24, 58, 0.98) 0%, rgba(6, 11, 38, 0.96) 100%)';
+const headerBorder = '1px solid rgba(99, 114, 173, 0.35)';
+const headerTextColor = '#f3f6ff';
+const headerMutedTextColor = '#a8b6d8';
+const activeNavBackground = 'rgba(56, 224, 123, 0.12)';
+const activeNavHoverBackground = 'rgba(56, 224, 123, 0.18)';
+const navHoverBackground = 'rgba(148, 163, 184, 0.08)';
+
 interface HeaderProps {
   currentView: ViewType;
   onViewChange: (view: ViewType) => void;
@@ -33,15 +42,16 @@ const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
       sx={{
         textAlign: 'center',
         height: '100%',
-        backgroundColor: '#1a102b',
-        color: 'white',
+        background: headerBackground,
+        color: headerTextColor,
+        fontFamily: headerFontFamily,
         display: 'flex',
         flexDirection: 'column',
       }}
     >
-      <Box sx={{ py: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, borderBottom: '1px solid #3a2d4a' }}>
+      <Box sx={{ py: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, borderBottom: headerBorder }}>
         <Diamond size={24} style={{ color: 'var(--primary-color)' }} />
-        <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold' }}>
+        <Typography variant="h6" sx={{ color: headerTextColor, fontFamily: headerFontFamily, fontWeight: 700, letterSpacing: '-0.02em' }}>
           Runestone
         </Typography>
       </Box>
@@ -53,11 +63,12 @@ const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
               sx={{
                 textAlign: 'left',
                 borderRadius: '0.5rem',
-                backgroundColor: currentView === item.id ? 'rgba(147, 51, 234, 0.1)' : 'transparent',
-                color: currentView === item.id ? 'var(--primary-color)' : '#9ca3af',
+                backgroundColor: currentView === item.id ? activeNavBackground : 'transparent',
+                color: currentView === item.id ? 'var(--primary-color)' : headerMutedTextColor,
+                fontFamily: headerFontFamily,
                 '&:hover': {
-                  backgroundColor: currentView === item.id ? 'rgba(147, 51, 234, 0.2)' : 'rgba(156, 163, 175, 0.1)',
-                  color: 'white',
+                  backgroundColor: currentView === item.id ? activeNavHoverBackground : navHoverBackground,
+                  color: headerTextColor,
                 },
               }}
             >
@@ -68,14 +79,15 @@ const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
                 primary={item.label}
                 primaryTypographyProps={{
                   fontWeight: currentView === item.id ? 'bold' : 'medium',
-                  fontSize: '1rem'
+                  fontSize: '1rem',
+                  fontFamily: headerFontFamily,
                 }}
               />
             </ListItemButton>
           </ListItem>
         ))}
       </List>
-      <Box sx={{ p: 2, borderTop: '1px solid #3a2d4a' }}>
+      <Box sx={{ p: 2, borderTop: headerBorder }}>
         <CustomButton
           variant="secondary"
           onClick={logout}
@@ -100,10 +112,12 @@ const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          fontFamily: headerFontFamily,
           px: { xs: 2, md: 10 },
           py: { xs: 2, md: 3 },
-          borderBottom: '1px solid #3a2d4a',
-          backgroundColor: '#1a102b',
+          borderBottom: headerBorder,
+          background: headerBackground,
+          boxShadow: '0 10px 30px rgba(2, 6, 23, 0.18)',
           position: 'sticky',
           top: 0,
           zIndex: 50,
@@ -115,11 +129,12 @@ const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
             variant="h6"
             component="h1"
             sx={{
-              color: 'white',
+              color: headerTextColor,
+              fontFamily: headerFontFamily,
               fontSize: '1.25rem',
-              fontWeight: 'bold',
+              fontWeight: 700,
               lineHeight: '1.625rem',
-              tracking: '-0.015em',
+              letterSpacing: '-0.02em',
             }}
           >
             Runestone
@@ -134,11 +149,12 @@ const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
               variant="secondary"
               onClick={() => onViewChange(item.id)}
               sx={{
-                color: currentView === item.id ? 'var(--primary-color)' : '#9ca3af',
-                backgroundColor: currentView === item.id ? 'rgba(147, 51, 234, 0.1)' : 'transparent',
+                color: currentView === item.id ? 'var(--primary-color)' : headerMutedTextColor,
+                backgroundColor: currentView === item.id ? activeNavBackground : 'transparent',
+                fontFamily: headerFontFamily,
                 '&:hover': {
-                  color: 'white',
-                  backgroundColor: currentView === item.id ? 'rgba(147, 51, 234, 0.2)' : 'rgba(156, 163, 175, 0.1)',
+                  color: headerTextColor,
+                  backgroundColor: currentView === item.id ? activeNavHoverBackground : navHoverBackground,
                 },
               }}
             >
@@ -158,8 +174,9 @@ const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
             sx={{
               color: '#ef4444',
               backgroundColor: 'transparent',
+              fontFamily: headerFontFamily,
               '&:hover': {
-                color: 'white',
+                color: headerTextColor,
                 backgroundColor: 'rgba(239, 68, 68, 0.1)',
               },
             }}
@@ -175,7 +192,11 @@ const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
           aria-label="open drawer"
           edge="start"
           onClick={handleDrawerToggle}
-          sx={{ display: { md: 'none' }, color: 'white' }}
+          sx={{
+            display: { md: 'none' },
+            color: headerTextColor,
+            '&:hover': { backgroundColor: navHoverBackground },
+          }}
         >
           {mobileOpen ? <X size={24} /> : <Menu size={24} />}
         </IconButton>
@@ -195,8 +216,8 @@ const Header: React.FC<HeaderProps> = ({ currentView, onViewChange }) => {
           '& .MuiDrawer-paper': {
             boxSizing: 'border-box',
             width: 280,
-            backgroundColor: '#1a102b',
-            borderLeft: '1px solid #3a2d4a'
+            background: headerBackground,
+            borderLeft: headerBorder,
           },
         }}
       >
