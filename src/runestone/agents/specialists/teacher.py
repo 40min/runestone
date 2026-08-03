@@ -519,9 +519,12 @@ already names a clear topic.
         if explanation_language:
             language_msg = (
                 f"[IMPORTANT] STUDENT'S MOTHER TONGUE: {explanation_language}\n\n"
-                f"Use {explanation_language} as the default language for all student-facing interaction. "
-                "Switch to Swedish if the student asks for it, and keep using Swedish naturally in examples, "
-                "exercises, and quoted language material."
+                f"Use {explanation_language} for the surrounding student-facing conversation, including "
+                "explanations, feedback, praise, corrections, instructions, transitions, and follow-up questions. "
+                "Keep Swedish for the language being learned: words, quotations, examples, and the actual content "
+                "of exercises. A student's answer written in Swedish does not by itself request a change of "
+                "conversation language. Only change the surrounding conversation language when the student "
+                "explicitly asks."
             )
             messages.append(SystemMessage(content=language_msg))
 

@@ -423,9 +423,9 @@ async def test_run_with_mother_tongue(teacher_agent, mock_user):
     messages = invoke_args["messages"]
     assert any(
         isinstance(m, SystemMessage)
-        and "Use Spanish as the default language for all student-facing interaction." in m.content
-        and "Switch to Swedish if the student asks for it" in m.content
-        and "examples, exercises, and quoted language material." in m.content
+        and "Use Spanish for the surrounding student-facing conversation" in m.content
+        and "feedback, praise, corrections, instructions, transitions, and follow-up questions" in m.content
+        and "Keep Swedish for the language being learned" in m.content
         for m in messages
     )
 
@@ -443,10 +443,42 @@ async def test_run_with_english_mother_tongue_uses_english_as_default(teacher_ag
     messages = invoke_args["messages"]
     assert any(
         isinstance(m, SystemMessage)
-        and "Use English as the default language for all student-facing interaction." in m.content
-        and "Switch to Swedish if the student asks for it" in m.content
-        and "quoted language material." in m.content
+        and "Use English for the surrounding student-facing conversation" in m.content
+        and "A student's answer written in Swedish does not by itself request" in m.content
+        and "Only change the surrounding conversation language when the student explicitly asks" in m.content
         for m in messages
+    )
+
+
+@pytest.mark.anyio
+async def test_run_keeps_profile_language_contract_after_swedish_exercise_answer(teacher_agent, mock_user):
+    """A Swedish exercise answer must not implicitly switch the interaction language."""
+    mock_user.mother_tongue = "Estonian"
+    history = [
+        ChatMessage(role="user", content="Let's practise Swedish."),
+        ChatMessage(role="assistant", content="Skriv en mening med ordet 'eftersom'."),
+    ]
+    teacher_agent.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
+
+    await teacher_agent.generate_response(
+        message="Jag stannade hemma eftersom det regnade.",
+        history=history,
+        user=mock_user,
+    )
+
+    invoke_args = teacher_agent.agent.ainvoke.call_args[0][0]
+    language_message = next(
+        message
+        for message in invoke_args["messages"]
+        if isinstance(message, SystemMessage) and "STUDENT'S MOTHER TONGUE" in message.content
+    )
+    assert "Use Estonian for the surrounding student-facing conversation" in language_message.content
+    assert "feedback, praise, corrections, instructions, transitions, and follow-up questions" in (
+        language_message.content
+    )
+    assert "A student's answer written in Swedish does not by itself request" in language_message.content
+    assert "Only change the surrounding conversation language when the student explicitly asks" in (
+        language_message.content
     )
 
 
@@ -487,7 +519,7 @@ async def test_run_trims_mother_tongue_before_prompt_injection(teacher_agent, mo
     assert mother_tongue_msg is not None, "Mother tongue system message was not injected"
     assert "[IMPORTANT] STUDENT'S MOTHER TONGUE: Spanish" in mother_tongue_msg.content
     assert "  Spanish  " not in mother_tongue_msg.content
-    assert "Use Spanish as the default language for all student-facing interaction." in mother_tongue_msg.content
+    assert "Use Spanish for the surrounding student-facing conversation" in mother_tongue_msg.content
 
 
 @pytest.mark.anyio

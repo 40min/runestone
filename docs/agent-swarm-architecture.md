@@ -622,8 +622,17 @@ Input:
 
 - latest user message
 - recent conversation history
+- the user's current profile `mother_tongue`, when configured
 - `[PRE_RESULTS]`
 - `[RECENT_SIDE_EFFECTS]`
+
+Language behavior:
+
+- use the configured mother tongue for the surrounding conversation, including explanations,
+  feedback, corrections, instructions, and follow-up questions
+- keep Swedish words, quotations, examples, and exercise content in Swedish
+- do not treat a student's Swedish exercise answer as an implicit request to switch the
+  surrounding conversation language; switching requires an explicit student request
 
 Output:
 
