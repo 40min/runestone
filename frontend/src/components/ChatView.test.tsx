@@ -161,6 +161,26 @@ describe('ChatView', () => {
     expect(screen.getByText('Speed:')).toBeInTheDocument();
   });
 
+  it('collapses teacher chat controls and restores the show-toggle label', async () => {
+    render(
+      <AuthProvider>
+        <ChatView />
+      </AuthProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /show chat controls/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /hide chat controls/i })).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /hide chat controls/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /show chat controls/i })).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    expect(document.getElementById('teacher-chat-controls-panel')).not.toBeInTheDocument();
+  });
+
   it('keeps chat controls expanded and disables the toggle while recording', () => {
     const startRecording = vi.fn();
     const stopRecording = vi.fn();
