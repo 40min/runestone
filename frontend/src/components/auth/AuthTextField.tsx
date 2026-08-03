@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { TextField, InputAdornment, IconButton } from "@mui/material";
+import type { SxProps, Theme } from "@mui/material";
 import { Eye, EyeOff } from "lucide-react";
 
 interface AuthTextFieldProps {
@@ -17,6 +18,8 @@ interface AuthTextFieldProps {
   startIcon?: React.ReactNode;
   /** Placeholder text shown inside the input when empty. */
   placeholder?: string;
+  /** Optional presentation overrides for pages with a different visual system. */
+  sx?: SxProps<Theme>;
 }
 
 const AuthTextField: React.FC<AuthTextFieldProps> = ({
@@ -32,11 +35,25 @@ const AuthTextField: React.FC<AuthTextFieldProps> = ({
   helperText,
   startIcon,
   placeholder,
+  sx = {},
 }) => {
   const isPassword = type === "password";
   const [showPassword, setShowPassword] = useState(false);
 
   const resolvedType = isPassword ? (showPassword ? "text" : "password") : type;
+
+  const defaultSx = {
+    "& .MuiOutlinedInput-root": {
+      color: "white",
+      backgroundColor: "rgba(255,255,255,0.05)",
+      borderRadius: "10px",
+      "& fieldset": { borderColor: "rgba(255,255,255,0.15)" },
+      "&:hover fieldset": { borderColor: "rgba(255,255,255,0.35)" },
+      "&.Mui-focused fieldset": { borderColor: "rgba(56,224,123,0.6)", borderWidth: "1.5px" },
+    },
+    "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.55)" },
+    "& .MuiInputLabel-root.Mui-focused": { color: "rgba(56,224,123,0.9)" },
+  };
 
   return (
     <TextField
@@ -74,18 +91,7 @@ const AuthTextField: React.FC<AuthTextFieldProps> = ({
           ) : undefined,
         },
       }}
-      sx={{
-        "& .MuiOutlinedInput-root": {
-          color: "white",
-          backgroundColor: "rgba(255,255,255,0.05)",
-          borderRadius: "10px",
-          "& fieldset": { borderColor: "rgba(255,255,255,0.15)" },
-          "&:hover fieldset": { borderColor: "rgba(255,255,255,0.35)" },
-          "&.Mui-focused fieldset": { borderColor: "rgba(56,224,123,0.6)", borderWidth: "1.5px" },
-        },
-        "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.55)" },
-        "& .MuiInputLabel-root.Mui-focused": { color: "rgba(56,224,123,0.9)" },
-      }}
+      sx={[defaultSx, ...(Array.isArray(sx) ? sx : [sx])]}
     />
   );
 };

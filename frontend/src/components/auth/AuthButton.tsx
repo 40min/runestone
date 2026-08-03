@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button, CircularProgress } from '@mui/material';
+import type { SxProps, Theme } from '@mui/material';
 
 interface AuthButtonProps {
   loading?: boolean;
@@ -9,6 +10,7 @@ interface AuthButtonProps {
   variant?: 'primary' | 'secondary';
   loadingText?: string;
   fullWidth?: boolean;
+  sx?: SxProps<Theme>;
 }
 
 const AuthButton: React.FC<AuthButtonProps> = ({
@@ -19,6 +21,7 @@ const AuthButton: React.FC<AuthButtonProps> = ({
   variant = 'primary',
   loadingText,
   fullWidth = true,
+  sx: customSx = {},
 }) => {
   const primarySx = {
     backgroundColor: '#38e07b',
@@ -52,7 +55,7 @@ const AuthButton: React.FC<AuthButtonProps> = ({
     '&:hover': { color: 'white', backgroundColor: 'rgba(156,163,175,0.08)' },
   };
 
-  const sx = variant === 'primary' ? primarySx : secondarySx;
+  const buttonSx = variant === 'primary' ? primarySx : secondarySx;
 
   return (
     <Button
@@ -60,7 +63,7 @@ const AuthButton: React.FC<AuthButtonProps> = ({
       onClick={onClick}
       disabled={loading}
       fullWidth={fullWidth}
-      sx={sx}
+      sx={[buttonSx, ...(Array.isArray(customSx) ? customSx : [customSx])]}
     >
       {loading ? (
         <>

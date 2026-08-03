@@ -1,12 +1,43 @@
 import React, { useState, useEffect } from "react";
 import type { FormEvent } from "react";
 import { Box, Typography } from "@mui/material";
+import type { SxProps, Theme } from "@mui/material";
 import { useAuth } from "../../context/AuthContext";
 import { useAuthActions } from "../../hooks/useAuth";
 import { ErrorAlert } from "../ui";
 import AuthButton from "./AuthButton";
 import AuthTextField from "./AuthTextField";
 import LanguageAutocomplete from "./LanguageAutocomplete";
+
+const profileFontFamily = '"Space Grotesk", "Noto Sans", sans-serif';
+
+const profileFieldSx: SxProps<Theme> = {
+  fontFamily: profileFontFamily,
+  "& .MuiOutlinedInput-root": {
+    color: "#f3f6ff",
+    backgroundColor: "rgba(9, 15, 51, 0.55)",
+    borderRadius: "0.75rem",
+    fontFamily: profileFontFamily,
+    "& fieldset": { borderColor: "rgba(99, 114, 173, 0.45)" },
+    "&:hover fieldset": { borderColor: "rgba(99, 114, 173, 0.8)" },
+    "&.Mui-focused fieldset": {
+      borderColor: "#38e07b",
+      borderWidth: "1.5px",
+    },
+  },
+  "& .MuiInputBase-input": { fontFamily: profileFontFamily },
+  "& .MuiInputLabel-root": {
+    color: "#a8b6d8",
+    fontFamily: profileFontFamily,
+  },
+  "& .MuiInputLabel-root.Mui-focused": {
+    color: "#38e07b",
+  },
+  "& .MuiFormHelperText-root": {
+    color: "#8ea0d0",
+    fontFamily: profileFontFamily,
+  },
+};
 
 const Profile: React.FC = () => {
   const { userData } = useAuth();
@@ -119,24 +150,50 @@ const Profile: React.FC = () => {
       sx={{
         display: "flex",
         flexDirection: "column",
-        gap: 2,
-        maxWidth: 600,
+        gap: 2.25,
+        maxWidth: 720,
         mx: "auto",
-        p: 4,
-        backgroundColor: "rgba(255, 255, 255, 0.05)",
-        borderRadius: 2,
-        backdropFilter: "blur(10px)",
+        py: { xs: 2, sm: 4 },
+        px: { xs: 2, sm: 3 },
+        background:
+          "radial-gradient(circle at 12% 8%, rgba(35, 50, 116, 0.42), rgba(7, 12, 44, 0.97))",
+        border: "1px solid rgba(99, 114, 173, 0.35)",
+        borderRadius: "1rem",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+        fontFamily: profileFontFamily,
       }}
     >
-      <h2 className="text-3xl font-bold text-white text-center mb-2">
+      <Typography
+        component="h1"
+        sx={{
+          color: "#f3f6ff",
+          fontFamily: profileFontFamily,
+          fontSize: { xs: "2.5rem", sm: "3.25rem" },
+          fontWeight: 700,
+          letterSpacing: "-0.055em",
+          lineHeight: 1,
+          textAlign: "center",
+          mb: 0.5,
+        }}
+      >
         Profile
-      </h2>
+      </Typography>
 
       <Box
-        sx={{ color: "rgba(255, 255, 255, 0.7)", textAlign: "center", mb: 2 }}
+        sx={{
+          color: "#bdc9e5",
+          textAlign: "center",
+          mb: 1,
+          fontFamily: profileFontFamily,
+        }}
       >
-        <Typography variant="body1" sx={{ mb: 1 }}>
-          <strong>Pages Recognised:</strong>{" "}
+        <Typography
+          variant="body1"
+          sx={{ color: "inherit", fontFamily: "inherit" }}
+        >
+          <Box component="strong" sx={{ color: "#38e07b" }}>
+            Pages Recognised:
+          </Box>{" "}
           {userData.pages_recognised_count || 0}
         </Typography>
       </Box>
@@ -147,6 +204,7 @@ const Profile: React.FC = () => {
         type="email"
         value={formData.email}
         onChange={(e) => handleChange("email", e.target.value)}
+        sx={profileFieldSx}
       />
 
       {error && <ErrorAlert message={error} />}
@@ -155,10 +213,11 @@ const Profile: React.FC = () => {
         <Box
           sx={{
             p: 2,
-            backgroundColor: "rgba(56, 142, 60, 0.1)",
-            border: "1px solid rgba(56, 142, 60, 0.5)",
+            backgroundColor: "rgba(56, 224, 123, 0.08)",
+            border: "1px solid rgba(56, 224, 123, 0.35)",
             borderRadius: 1,
-            color: "#4caf50",
+            color: "#38e07b",
+            fontFamily: profileFontFamily,
           }}
         >
           {successMessage}
@@ -170,6 +229,7 @@ const Profile: React.FC = () => {
         name="name"
         value={formData.name}
         onChange={(e) => handleChange("name", e.target.value)}
+        sx={profileFieldSx}
       />
 
       <AuthTextField
@@ -177,6 +237,7 @@ const Profile: React.FC = () => {
         name="surname"
         value={formData.surname}
         onChange={(e) => handleChange("surname", e.target.value)}
+        sx={profileFieldSx}
       />
 
       <AuthTextField
@@ -185,12 +246,14 @@ const Profile: React.FC = () => {
         value={formData.telegram_username}
         onChange={(e) => handleChange("telegram_username", e.target.value)}
         helperText="Use your Telegram @username so RuneRecall can link /start to your account."
+        sx={profileFieldSx}
       />
 
       <LanguageAutocomplete
         label="Preferred Language (Mother Tongue)"
         value={formData.mother_tongue || ""}
         onChange={(value) => handleChange("mother_tongue", value)}
+        sx={profileFieldSx}
       />
 
       <AuthTextField
@@ -198,6 +261,7 @@ const Profile: React.FC = () => {
         name="timezone"
         value={formData.timezone}
         onChange={(e) => handleChange("timezone", e.target.value)}
+        sx={profileFieldSx}
       />
 
       <AuthTextField
@@ -207,6 +271,7 @@ const Profile: React.FC = () => {
         value={formData.password}
         onChange={(e) => handleChange("password", e.target.value)}
         autoComplete="new-password"
+        sx={profileFieldSx}
       />
 
       <AuthTextField
@@ -216,6 +281,7 @@ const Profile: React.FC = () => {
         value={formData.confirmPassword}
         onChange={(e) => handleChange("confirmPassword", e.target.value)}
         autoComplete="new-password"
+        sx={profileFieldSx}
       />
 
       <AuthButton
@@ -225,6 +291,11 @@ const Profile: React.FC = () => {
         onClick={(e) => {
           e.preventDefault();
           handleSubmit(e);
+        }}
+        sx={{
+          fontFamily: profileFontFamily,
+          borderRadius: "0.75rem",
+          boxShadow: "0 6px 24px rgba(56, 224, 123, 0.24)",
         }}
       >
         Update Profile
