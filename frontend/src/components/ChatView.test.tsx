@@ -178,7 +178,9 @@ describe('ChatView', () => {
       expect(screen.getByRole('button', { name: /show chat controls/i })).toHaveAttribute('aria-expanded', 'false');
     });
 
-    expect(document.getElementById('teacher-chat-controls-panel')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(document.getElementById('teacher-chat-controls-panel')).not.toBeInTheDocument();
+    });
   });
 
   it('keeps chat controls expanded and disables the toggle while recording', () => {

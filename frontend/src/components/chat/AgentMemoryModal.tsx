@@ -33,7 +33,12 @@ import PsychologyIcon from "@mui/icons-material/Psychology";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CalendarTodayOutlinedIcon from "@mui/icons-material/CalendarTodayOutlined";
 import LightbulbOutlinedIcon from "@mui/icons-material/LightbulbOutlined";
-import { CustomButton, TabNavigation } from "../ui";
+import {
+  analyzerShellGradients,
+  buildAnalyzerShellSx,
+  CustomButton,
+  TabNavigation,
+} from "../ui";
 import useMemoryItems, {
   type MemoryItem,
   type MemoryCategory,
@@ -95,6 +100,19 @@ const PRIORITY_OPTIONS = [
   { value: "9", label: "P9 (lowest)" },
 ];
 
+const MEMORY_FONT_FAMILY = '"Space Grotesk", "Noto Sans", sans-serif';
+const MEMORY_PRIMARY_TEXT = "#f4f7ff";
+const MEMORY_SECONDARY_TEXT = "#9ca3af";
+const MEMORY_MUTED_TEXT = "#c7d2ea";
+const MEMORY_BORDER = "1px solid rgba(99, 114, 173, 0.35)";
+
+const memoryPanelSx = {
+  border: MEMORY_BORDER,
+  borderRadius: "1rem",
+  backgroundColor: "rgba(13, 25, 63, 0.72)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+};
+
 const getPriorityChipStyles = (priority: number | null | undefined) => {
   if (priority == null) {
     return { bgcolor: "rgba(55,65,81,0.4)", color: "#6b7280" };
@@ -131,9 +149,9 @@ const getStatusChipStyles = (status: string) => {
       };
     default:
       return {
-        bgcolor: "rgba(148, 163, 184, 0.12)",
-        color: "#cbd5e1",
-        border: "1px solid rgba(148, 163, 184, 0.16)",
+        bgcolor: "rgba(99, 114, 173, 0.16)",
+        color: MEMORY_MUTED_TEXT,
+        border: MEMORY_BORDER,
       };
   }
 };
@@ -146,22 +164,23 @@ const CATEGORY_HELP_TEXT: Record<MemoryCategory, string> = {
 };
 
 const MEMORY_DATE_LOCALE = "en-GB";
-
 const textFieldStyles = {
   "& .MuiOutlinedInput-root": {
-    color: "white",
-    "& fieldset": { borderColor: "rgba(148, 163, 184, 0.2)" },
-    "&:hover fieldset": { borderColor: "rgba(148, 163, 184, 0.4)" },
+    color: MEMORY_PRIMARY_TEXT,
+    fontFamily: MEMORY_FONT_FAMILY,
+    backgroundColor: "rgba(6, 12, 43, 0.62)",
+    borderRadius: 1.5,
+    "& fieldset": { borderColor: "rgba(103, 121, 181, 0.5)" },
+    "&:hover fieldset": { borderColor: "rgba(137, 155, 211, 0.72)" },
     "&.Mui-focused fieldset": { borderColor: "var(--primary-color)" },
-    bgcolor: "rgba(15, 23, 42, 0.55)",
-    backdropFilter: "blur(10px)",
   },
   "& .MuiInputLabel-root": {
-    color: "#9ca3af",
+    color: "#9eaccd",
+    fontFamily: MEMORY_FONT_FAMILY,
     "&.Mui-focused": { color: "var(--primary-color)" },
   },
   "& .MuiSelect-icon": {
-    color: "#94a3b8",
+    color: MEMORY_MUTED_TEXT,
   },
 };
 
@@ -547,17 +566,16 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
         PaperProps={{
           ref: dialogPaperRef,
           sx: {
+            ...buildAnalyzerShellSx(analyzerShellGradients.results),
             width: { xs: "calc(100vw - 16px)", sm: "calc(100vw - 48px)", lg: "1220px" },
             maxWidth: "1220px",
             maxHeight: { xs: "calc(100vh - 16px)", sm: "calc(100vh - 40px)" },
-            bgcolor: "rgba(15, 23, 42, 0.96)",
-            backgroundImage:
-              "radial-gradient(circle at top left, rgba(56, 224, 123, 0.08), transparent 32%), linear-gradient(180deg, rgba(15,23,42,0.98) 0%, rgba(15,23,42,0.94) 100%)",
-            color: "white",
-            border: "1px solid rgba(148, 163, 184, 0.18)",
-            borderRadius: { xs: "1rem", md: "1.25rem" },
-            boxShadow: "0 28px 80px rgba(2, 6, 23, 0.6)",
+            color: MEMORY_PRIMARY_TEXT,
+            fontFamily: MEMORY_FONT_FAMILY,
             overflow: "hidden",
+            "& .MuiTypography-root, & .MuiButton-root, & .MuiInputBase-root, & .MuiInputLabel-root, & .MuiChip-root": {
+              fontFamily: MEMORY_FONT_FAMILY,
+            },
           },
         }}
       >
@@ -573,19 +591,25 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1.5, md: 2 } }}>
             <PsychologyIcon
-              sx={{ color: "var(--primary-color)", fontSize: { xs: "2.2rem", md: "3.2rem" } }}
+              sx={{ color: "#8fb7ff", fontSize: { xs: "2rem", md: "2.5rem" } }}
             />
             <Box>
               <Typography
                 variant="h6"
                 fontWeight="bold"
-                sx={{ fontSize: { xs: "1.35rem", md: "2.1rem" }, lineHeight: 1.1, mb: 0.35 }}
+                sx={{
+                  color: MEMORY_PRIMARY_TEXT,
+                  fontSize: { xs: "1.25rem", md: "1.45rem" },
+                  lineHeight: 1.1,
+                  letterSpacing: "-0.02em",
+                  mb: 0.35,
+                }}
               >
                 Teacher&apos;s Memory
               </Typography>
               <Typography
                 variant="body2"
-                sx={{ color: "#a5b4c7", fontSize: { xs: "0.86rem", md: "1rem" } }}
+                sx={{ color: MEMORY_SECONDARY_TEXT, fontSize: { xs: "0.8rem", md: "0.9rem" } }}
               >
                 What your teacher remembers about your learning journey
               </Typography>
@@ -594,10 +618,10 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
           <IconButton
             onClick={onClose}
             sx={{
-              color: "#94a3b8",
+              color: MEMORY_MUTED_TEXT,
               mt: { xs: -0.5, md: -1 },
               mr: { xs: -0.5, md: -1 },
-              "&:hover": { bgcolor: "rgba(148, 163, 184, 0.08)", color: "white" },
+              "&:hover": { bgcolor: "rgba(99, 114, 173, 0.16)", color: MEMORY_PRIMARY_TEXT },
             }}
           >
             <CloseIcon />
@@ -610,7 +634,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
           onTabChange={handleTabChange}
           containerSx={{
             px: { xs: 2.25, md: 4.5 },
-            borderColor: "rgba(148, 163, 184, 0.18)",
+            borderColor: "rgba(99, 114, 173, 0.35)",
           }}
           tabsSx={{
             display: "grid",
@@ -620,16 +644,16 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
           }}
           buttonSx={{
             px: { xs: 0.5, md: 0 },
-            py: { xs: 1.2, md: 1.6 },
-            color: "#d5dbe6",
-            fontSize: { xs: "0.88rem", md: "1.02rem" },
+            py: { xs: 1, md: 1.15 },
+            color: MEMORY_MUTED_TEXT,
+            fontSize: { xs: "0.82rem", md: "0.9rem" },
             fontWeight: 500,
             whiteSpace: "normal",
             textAlign: "center",
             lineHeight: { xs: 1.25, md: 1.35 },
             minWidth: 0,
             "&:hover": {
-              color: "white",
+              color: MEMORY_PRIMARY_TEXT,
             },
           }}
           activeButtonSx={{
@@ -644,7 +668,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
         <DialogContent
           sx={{
             px: { xs: 2.25, md: 4.5 },
-            pt: { xs: 2.25, md: 2.5 },
+            pt: { xs: 2, md: 2.25 },
             pb: { xs: 2.25, md: 3 },
             height: { xs: "auto", md: "68vh" },
             minHeight: 0,
@@ -654,11 +678,8 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
         >
           <Box
             sx={{
+              ...memoryPanelSx,
               p: { xs: 1.25, sm: 2, md: 2.25 },
-              border: "1px solid rgba(148, 163, 184, 0.18)",
-              borderRadius: "1rem",
-              bgcolor: "rgba(30, 41, 59, 0.56)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
               mb: 2,
             }}
           >
@@ -673,7 +694,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
             >
               <Typography
                 variant="body2"
-                sx={{ color: "#a5b4c7", whiteSpace: "nowrap", fontSize: { xs: "0.88rem", md: "0.95rem" } }}
+                sx={{ color: MEMORY_SECONDARY_TEXT, whiteSpace: "nowrap", fontSize: { xs: "0.8rem", md: "0.84rem" } }}
               >
                 {displayedCountLabel}
               </Typography>
@@ -691,15 +712,15 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                   onClick={() => handleOpenForm()}
                   startIcon={<AddIcon />}
                   sx={{
-                    border: "1px solid rgba(148, 163, 184, 0.2)",
-                    bgcolor: "rgba(15, 23, 42, 0.34)",
-                    color: "#e2e8f0",
+                    border: MEMORY_BORDER,
+                    bgcolor: "rgba(6, 12, 43, 0.42)",
+                    color: MEMORY_MUTED_TEXT,
                     px: 2.5,
                     minHeight: 42,
                     flex: { xs: "1 1 0", sm: "0 0 auto" },
                     "&:hover": {
-                      bgcolor: "rgba(15, 23, 42, 0.56)",
-                      color: "white",
+                      bgcolor: "rgba(31, 58, 153, 0.32)",
+                      color: MEMORY_PRIMARY_TEXT,
                     },
                   }}
                 >
@@ -715,8 +736,8 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                     aria-expanded={isFiltersOpen}
                     aria-controls="memory-mobile-filters"
                     sx={{
-                      border: "1px solid rgba(148, 163, 184, 0.2)",
-                      color: "#cbd5e1",
+                      border: MEMORY_BORDER,
+                      color: MEMORY_MUTED_TEXT,
                       minHeight: 42,
                       flex: "1 1 0",
                     }}
@@ -747,7 +768,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                           variant="secondary"
                           onClick={() => setConfirmClear(false)}
                           sx={{
-                            border: "1px solid rgba(148, 163, 184, 0.2)",
+                            border: MEMORY_BORDER,
                           }}
                         >
                           Cancel
@@ -759,7 +780,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                         onClick={handleClearCategory}
                         disabled={items.length === 0}
                         sx={{
-                          color: "#f87171",
+                          color: "#ff8a80",
                           "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" },
                         }}
                       >
@@ -778,9 +799,9 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                     label={statusSummaryLabel}
                     size="small"
                     sx={{
-                      bgcolor: "rgba(15, 23, 42, 0.5)",
-                      color: "#cbd5e1",
-                      border: "1px solid rgba(148, 163, 184, 0.16)",
+                      bgcolor: "rgba(6, 12, 43, 0.62)",
+                      color: MEMORY_MUTED_TEXT,
+                      border: MEMORY_BORDER,
                     }}
                   />
                 )}
@@ -788,9 +809,9 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                   label={sortSummaryLabel}
                   size="small"
                   sx={{
-                    bgcolor: "rgba(15, 23, 42, 0.5)",
-                    color: "#cbd5e1",
-                    border: "1px solid rgba(148, 163, 184, 0.16)",
+                    bgcolor: "rgba(6, 12, 43, 0.62)",
+                    color: MEMORY_MUTED_TEXT,
+                    border: MEMORY_BORDER,
                   }}
                 />
               </Box>
@@ -820,7 +841,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                       <Typography
                         id="status-filter-label"
                         component="label"
-                        sx={{ mb: 0.5, color: "#cbd5e1", fontSize: "0.9rem", fontWeight: 500 }}
+                        sx={{ mb: 0.5, color: MEMORY_MUTED_TEXT, fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}
                       >
                         Status
                       </Typography>
@@ -839,7 +860,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                     <Typography
                       id="sort-by-label"
                       component="label"
-                      sx={{ mb: 0.5, color: "#cbd5e1", fontSize: "0.9rem", fontWeight: 500 }}
+                      sx={{ mb: 0.5, color: MEMORY_MUTED_TEXT, fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}
                     >
                       Sort by
                     </Typography>
@@ -859,7 +880,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                     <Typography
                       id="sort-direction-label"
                       component="label"
-                      sx={{ mb: 0.5, color: "#cbd5e1", fontSize: "0.9rem", fontWeight: 500 }}
+                      sx={{ mb: 0.5, color: MEMORY_MUTED_TEXT, fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}
                     >
                       Direction
                     </Typography>
@@ -906,7 +927,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                           variant="secondary"
                           onClick={() => setConfirmClear(false)}
                           sx={{
-                            border: "1px solid rgba(148, 163, 184, 0.2)",
+                            border: MEMORY_BORDER,
                             flex: "1 1 0",
                           }}
                         >
@@ -963,20 +984,20 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                 sx={{
                   p: 2,
                   bgcolor: "rgba(56, 224, 123, 0.08)",
-                  border: "1px solid rgba(56, 224, 123, 0.18)",
+                  border: "1px solid rgba(56, 224, 123, 0.24)",
                   borderRadius: 1,
                 }}
               >
-                <Typography sx={{ color: "#d1fae5" }}>{syncNotice}</Typography>
+                <Typography sx={{ color: "#d1fae5", fontSize: "0.9rem" }}>{syncNotice}</Typography>
               </Box>
             )}
 
             {items.length === 0 && !loading && (
-              <Box sx={{ py: 8, textAlign: "center", color: "#6b7280" }}>
-                <Typography variant="body1">
+              <Box sx={{ py: 8, textAlign: "center", color: MEMORY_SECONDARY_TEXT }}>
+                <Typography variant="body1" sx={{ color: MEMORY_PRIMARY_TEXT }}>
                   No memory items found in this category.
                 </Typography>
-                <Typography variant="body2">
+                <Typography variant="body2" sx={{ color: MEMORY_SECONDARY_TEXT, fontSize: "0.85rem" }}>
                   The agent will add information here as you chat.
                 </Typography>
               </Box>
@@ -993,13 +1014,14 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                 <Card
                   key={item.id}
                   sx={{
-                    bgcolor: "rgba(30, 41, 59, 0.7)",
-                    color: "white",
-                    border: "1px solid rgba(148, 163, 184, 0.18)",
-                    borderRadius: "1rem",
-                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
-                    backdropFilter: "blur(10px)",
-                    "&:hover": { borderColor: "rgba(148, 163, 184, 0.3)" },
+                    ...memoryPanelSx,
+                    bgcolor: "rgba(8, 18, 49, 0.88)",
+                    color: MEMORY_PRIMARY_TEXT,
+                    transition: "border-color 160ms ease, background-color 160ms ease",
+                    "&:hover": {
+                      borderColor: "rgba(127, 174, 255, 0.62)",
+                      bgcolor: "rgba(13, 25, 63, 0.86)",
+                    },
                   }}
                 >
                   <CardContent
@@ -1024,7 +1046,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                           variant="subtitle1"
                           fontWeight="bold"
                           sx={{
-                            color: "var(--primary-color)",
+                            color: "#8fb7ff",
                             fontSize: { xs: "1.1rem", md: "1.18rem" },
                             lineHeight: 1.35,
                             mb: 1.25,
@@ -1045,7 +1067,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                             <Typography
                               variant="body2"
                               sx={{
-                                color: "#94a3b8",
+                                color: MEMORY_SECONDARY_TEXT,
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
@@ -1061,9 +1083,9 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                               size="small"
                               onClick={() => copyKeyToClipboard(item.key)}
                               sx={{
-                                color: "#94a3b8",
+                                color: MEMORY_SECONDARY_TEXT,
                                 p: 0.25,
-                                "&:hover": { color: "white", bgcolor: "transparent" },
+                                "&:hover": { color: MEMORY_PRIMARY_TEXT, bgcolor: "transparent" },
                               }}
                               aria-label="Copy memory item key"
                             >
@@ -1094,15 +1116,15 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                               onClose={() => setEditingPriorityId(null)}
                               aria-label="Priority selector"
                               sx={{
-                                color: "white",
+                                color: MEMORY_PRIMARY_TEXT,
                                 fontSize: "0.74rem",
                                 height: 30,
                                 minWidth: 78,
-                                bgcolor: "rgba(15, 23, 42, 0.85)",
+                                bgcolor: "rgba(6, 12, 43, 0.9)",
                                 ".MuiOutlinedInput-notchedOutline": {
-                                  borderColor: "rgba(148, 163, 184, 0.24)",
+                                  borderColor: "rgba(103, 121, 181, 0.5)",
                                 },
-                                ".MuiSvgIcon-root": { color: "white" },
+                                ".MuiSvgIcon-root": { color: MEMORY_PRIMARY_TEXT },
                               }}
                             >
                               {PRIORITY_OPTIONS.map((opt) => (
@@ -1150,14 +1172,14 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                       variant="body1"
                       sx={{
                         whiteSpace: "pre-wrap",
-                        color: "#e2e8f0",
+                        color: MEMORY_PRIMARY_TEXT,
                         lineHeight: 1.65,
                         minHeight: { md: 110 },
                       }}
                     >
                       {item.content}
                     </Typography>
-                    <Divider sx={{ borderColor: "rgba(148, 163, 184, 0.14)" }} />
+                    <Divider sx={{ borderColor: "rgba(99, 114, 173, 0.28)" }} />
                     <Box
                       sx={{
                         display: "flex",
@@ -1167,9 +1189,9 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
                         flexWrap: "wrap",
                       }}
                     >
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.85, color: "#94a3b8" }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.85, color: MEMORY_SECONDARY_TEXT }}>
                         <CalendarTodayOutlinedIcon sx={{ fontSize: "0.95rem" }} />
-                        <Typography variant="body2" sx={{ fontSize: "0.95rem", color: "#94a3b8" }}>
+                        <Typography variant="body2" sx={{ fontSize: "0.8rem", color: MEMORY_SECONDARY_TEXT }}>
                           Updated {new Date(item.updated_at).toLocaleDateString(MEMORY_DATE_LOCALE)}
                         </Typography>
                       </Box>
@@ -1233,22 +1255,20 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
 
             <Box
               sx={{
+                ...memoryPanelSx,
                 display: "flex",
                 alignItems: "center",
                 gap: 1.25,
                 px: { xs: 1.5, md: 2 },
                 py: 1.5,
-                borderRadius: "0.95rem",
-                border: "1px solid rgba(148, 163, 184, 0.16)",
-                bgcolor: "rgba(30, 41, 59, 0.45)",
               }}
             >
               <LightbulbOutlinedIcon
-                sx={{ color: "var(--primary-color)", fontSize: "1.05rem", flexShrink: 0 }}
+                sx={{ color: "#38e07b", fontSize: "1.05rem", flexShrink: 0 }}
               />
               <Typography
                 variant="body2"
-                sx={{ color: "#cbd5e1", fontSize: { xs: "0.92rem", md: "0.98rem" } }}
+                sx={{ color: MEMORY_MUTED_TEXT, fontSize: { xs: "0.84rem", md: "0.9rem" } }}
               >
                 {CATEGORY_HELP_TEXT[activeTab]}
               </Typography>
@@ -1269,14 +1289,17 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
         onClose={() => setIsFormOpen(false)}
         PaperProps={{
           sx: {
-            bgcolor: "#1f2937",
-            color: "white",
-            border: "1px solid #374151",
-            borderRadius: "0.5rem",
+            ...buildAnalyzerShellSx(analyzerShellGradients.processing),
+            width: { xs: "calc(100vw - 32px)", sm: 480 },
+            color: MEMORY_PRIMARY_TEXT,
+            fontFamily: MEMORY_FONT_FAMILY,
+            "& .MuiTypography-root, & .MuiButton-root, & .MuiInputBase-root, & .MuiInputLabel-root": {
+              fontFamily: MEMORY_FONT_FAMILY,
+            },
           },
         }}
       >
-        <DialogTitle>
+        <DialogTitle sx={{ fontSize: "1.2rem", fontWeight: 700 }}>
           {editingItem ? "Edit Memory Item" : "Add Memory Item"}
         </DialogTitle>
         <DialogContent
@@ -1285,7 +1308,7 @@ const AgentMemoryModal: React.FC<AgentMemoryModalProps> = ({
             flexDirection: "column",
             gap: 3,
             pt: 2,
-            minWidth: 400,
+            minWidth: { xs: 0, sm: 400 },
           }}
         >
           <TextField
