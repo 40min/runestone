@@ -303,6 +303,25 @@ class TestSettings:
         assert test_settings.resolve_service_llm_provider() == "gemini"
         assert test_settings.resolve_service_llm_model() == DEFAULT_GEMINI_SERVICE_LLM_MODEL
 
+    def test_gemini_only_settings_do_not_require_openai_api_key(self):
+        """Gemini-first configs should validate without unrelated OpenAI credentials."""
+        test_settings = Settings(
+            llm_provider="gemini",
+            openai_api_key=None,
+            gemini_api_key="test-gemini-key",
+            allowed_origins="http://localhost:3000",
+            database_url="sqlite:///./test.db",
+            telegram_bot_token="test-token",
+            frontend_url="http://localhost:5173",
+            jwt_secret_key="secret",
+            teacher_provider="gemini",
+            teacher_model="teacher-model",
+            coordinator_model="coordinator-model",
+        )
+
+        assert test_settings.openai_api_key is None
+        assert test_settings.resolve_service_llm_provider() == "gemini"
+
     def test_ocr_service_llm_resolvers_prefer_explicit_overrides(self):
         """OCR resolver helpers should prefer OCR-specific provider/model overrides."""
         test_settings = Settings.model_construct(
