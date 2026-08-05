@@ -4,6 +4,8 @@
 
 Keep package `__init__.py` files empty unless there is an explicit, reviewed reason to add code.
 
+Prefer module-level imports; avoid local imports where possible.
+
 ## Dependency And Service Boundaries
 
 - Treat constructor collaborators as required unless their absence is a deliberate, supported runtime mode. Do not make repositories, services, clients, or other injected collaborators optional merely to simplify tests, and do not construct fallback collaborators inside a service. Assemble the complete dependency graph at composition roots such as FastAPI dependencies, CLI entry points, workers, and test fixtures.
