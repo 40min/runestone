@@ -6,12 +6,11 @@ import pytest
 from runestone.agents.specialists.base import SpecialistResult
 from runestone.agents.specialists.memory_maintainer.shared import build_combined_result
 from runestone.agents.specialists.memory_maintainer.specialist import CombinedMemoryMaintainerSpecialist
+from runestone.config import AgentLLMSettings, ReasoningLevel
 
 
 @pytest.fixture
 def mock_settings():
-    from runestone.config import AgentLLMSettings, ReasoningLevel
-
     settings = MagicMock()
     settings.memory_maintainer_provider = "openrouter"
     settings.memory_maintainer_model = "test-model"

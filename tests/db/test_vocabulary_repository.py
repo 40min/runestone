@@ -327,8 +327,6 @@ class TestVocabularyRepository:
 
     async def test_get_vocabulary_recent(self, repo, db_session):
         """Test retrieving the most recent vocabulary items."""
-        from datetime import datetime, timezone
-
         # Add test data with different update times
         vocab1 = VocabularyModel(
             user_id=1,
@@ -905,8 +903,6 @@ class TestVocabularyRepository:
 
     async def test_select_new_daily_words_custom_cooldown(self, repo, db_session):
         """Test selecting new daily words with custom cooldown period."""
-        from datetime import datetime, timedelta
-
         # Add test vocabulary items
         vocab1 = VocabularyModel(
             user_id=1,
@@ -1090,8 +1086,6 @@ class TestVocabularyRepository:
 
     async def test_update_last_learned(self, repo, db_session):
         """Test updating the last_learned timestamp."""
-        from datetime import datetime
-
         # Add a test item
         vocab = VocabularyModel(
             user_id=1,

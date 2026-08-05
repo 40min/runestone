@@ -1,4 +1,5 @@
 import pytest
+from ddgs.exceptions import RatelimitException
 
 from runestone.agents.tools import news as agent_news
 
@@ -119,8 +120,6 @@ async def test_search_news_with_dates_clamps_k(monkeypatch):
 
 @pytest.mark.anyio
 async def test_search_news_with_dates_rate_limited(monkeypatch):
-    from ddgs.exceptions import RatelimitException
-
     call_count = {"count": 0}
 
     def _raise_rate_limit(*_args, **_kwargs):

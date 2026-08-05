@@ -5,6 +5,13 @@ This module tests the chat endpoints including authentication,
 request validation, and response handling.
 """
 
+import io
+from unittest.mock import AsyncMock, Mock
+
+from runestone.auth.dependencies import get_current_user
+from runestone.config import settings
+from runestone.dependencies import get_runestone_processor
+
 
 async def test_send_message_success(client_with_mock_agent_service, db_session):
     """Test successful message sending."""
@@ -181,8 +188,6 @@ async def test_send_message_requires_authentication(client):
     """Test that chat endpoint requires authentication."""
     # The 'client' fixture in conftest.py overrides get_current_user by default.
     # To test authentication, we need to remove that override.
-    from runestone.auth.dependencies import get_current_user
-
     if get_current_user in client.app.dependency_overrides:
         del client.app.dependency_overrides[get_current_user]
 
@@ -210,8 +215,6 @@ async def test_send_message_invalid_payload(client):
 
 async def test_send_image_success(client_with_mock_agent_service, db_session, monkeypatch):
     """Test successful image upload with OCR and translation."""
-    import io
-
     client, mock_agent_service = client_with_mock_agent_service
     mock_agent_service.process_turn_result = (
         "Here's the translated text: Hej (Hello). Hur mår du? (How are you?)",
@@ -220,16 +223,12 @@ async def test_send_image_success(client_with_mock_agent_service, db_session, mo
     )
 
     # Mock the processor dependency
-    from unittest.mock import AsyncMock, Mock
-
     mock_processor = AsyncMock()
     # Create a proper OCRResult-like object
     mock_ocr_result = Mock()
     mock_ocr_result.transcribed_text = "Hej. Hur mår du?"
     mock_ocr_result.character_count = 16
     mock_processor.run_ocr.return_value = mock_ocr_result
-
-    from runestone.dependencies import get_runestone_processor
 
     def override_processor():
         return mock_processor
@@ -255,9 +254,6 @@ async def test_send_image_success(client_with_mock_agent_service, db_session, mo
 
 async def test_send_image_ocr_failure(client, monkeypatch):
     """Test image upload when OCR returns empty text."""
-    import io
-    from unittest.mock import AsyncMock, Mock
-
     # Mock the processor dependency
     mock_processor = AsyncMock()
     # Create a proper OCRResult-like object with empty text
@@ -265,8 +261,6 @@ async def test_send_image_ocr_failure(client, monkeypatch):
     mock_ocr_result.transcribed_text = ""
     mock_ocr_result.character_count = 0
     mock_processor.run_ocr.return_value = mock_ocr_result
-
-    from runestone.dependencies import get_runestone_processor
 
     def override_processor():
         return mock_processor
@@ -285,8 +279,6 @@ async def test_send_image_ocr_failure(client, monkeypatch):
 
 async def test_send_image_invalid_file_type(client):
     """Test image upload with invalid file type."""
-    import io
-
     # Create a fake non-image file
     file_data = io.BytesIO(b"not an image")
     files = {"file": ("test.txt", file_data, "text/plain")}
@@ -299,10 +291,6 @@ async def test_send_image_invalid_file_type(client):
 
 async def test_send_image_requires_authentication(client):
     """Test that image endpoint requires authentication."""
-    import io
-
-    from runestone.auth.dependencies import get_current_user
-
     if get_current_user in client.app.dependency_overrides:
         del client.app.dependency_overrides[get_current_user]
 
@@ -315,10 +303,6 @@ async def test_send_image_requires_authentication(client):
 
 async def test_send_image_file_too_large(client_with_mock_agent_service):
     """Test that files larger than configured limit are rejected."""
-    import io
-
-    from runestone.config import settings
-
     client, _ = client_with_mock_agent_service
 
     # Create a file larger than max size
@@ -344,9 +328,6 @@ async def test_send_image_missing_file(client_with_mock_agent_service):
 
 async def test_send_image_whitespace_only_ocr(client_with_mock_agent_service, monkeypatch):
     """Test image upload when OCR returns only whitespace."""
-    import io
-    from unittest.mock import AsyncMock, Mock
-
     client, _ = client_with_mock_agent_service
 
     # Mock the processor dependency
@@ -356,8 +337,6 @@ async def test_send_image_whitespace_only_ocr(client_with_mock_agent_service, mo
     mock_ocr_result.transcribed_text = "   \n\t  \n  "
     mock_ocr_result.character_count = 10
     mock_processor.run_ocr.return_value = mock_ocr_result
-
-    from runestone.dependencies import get_runestone_processor
 
     def override_processor():
         return mock_processor
@@ -376,9 +355,6 @@ async def test_send_image_whitespace_only_ocr(client_with_mock_agent_service, mo
 
 async def test_transcribe_voice_uses_explicit_language(client_with_overrides):
     """Test voice transcription prefers explicit form language over profile language."""
-    import io
-    from unittest.mock import AsyncMock, Mock
-
     mock_voice_service = Mock()
     mock_voice_service.process_voice_input = AsyncMock(return_value="Hei maailma")
 
@@ -403,9 +379,6 @@ async def test_transcribe_voice_uses_explicit_language(client_with_overrides):
 
 async def test_transcribe_voice_falls_back_to_profile_language(client_with_overrides):
     """Test omitted voice language keeps the existing profile-language behavior."""
-    import io
-    from unittest.mock import AsyncMock, Mock
-
     mock_voice_service = Mock()
     mock_voice_service.process_voice_input = AsyncMock(return_value="Hola mundo")
 
@@ -430,9 +403,6 @@ async def test_transcribe_voice_falls_back_to_profile_language(client_with_overr
 
 async def test_transcribe_voice_rejects_unsupported_explicit_language(client_with_overrides):
     """Test unsupported explicit voice languages are rejected before transcription."""
-    import io
-    from unittest.mock import AsyncMock, Mock
-
     mock_voice_service = Mock()
     mock_voice_service.process_voice_input = AsyncMock(return_value="ignored")
 
@@ -452,9 +422,6 @@ async def test_transcribe_voice_rejects_unsupported_explicit_language(client_wit
 
 async def test_transcribe_voice_defaults_to_swedish_for_unsupported_profile_language(client_with_overrides):
     """Test unsupported profile language falls back to Swedish."""
-    import io
-    from unittest.mock import AsyncMock, Mock
-
     mock_voice_service = Mock()
     mock_voice_service.process_voice_input = AsyncMock(return_value="Hej varlden")
 
@@ -479,9 +446,6 @@ async def test_transcribe_voice_defaults_to_swedish_for_unsupported_profile_lang
 
 async def test_transcribe_voice_defaults_to_swedish_for_missing_profile_language(client_with_overrides):
     """Test missing profile language falls back to Swedish."""
-    import io
-    from unittest.mock import AsyncMock, Mock
-
     mock_voice_service = Mock()
     mock_voice_service.process_voice_input = AsyncMock(return_value="Hej igen")
 

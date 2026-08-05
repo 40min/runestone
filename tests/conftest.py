@@ -6,6 +6,10 @@ including database setup for unit tests.
 """
 
 import os
+import tempfile
+import uuid
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, Mock
 
 # Set test environment file BEFORE any imports that could trigger config loading
 os.environ["ENV_FILE"] = ".env.test"
@@ -14,11 +18,14 @@ import pytest  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine  # noqa: E402
 from sqlalchemy.pool import NullPool  # noqa: E402
 
+from runestone.api.schemas import VocabularyItemCreate  # noqa: E402
 from runestone.config import settings  # noqa: E402
 from runestone.db.database import Base  # noqa: E402
-from runestone.db.models import User  # noqa: E402
+from runestone.db.models import User, Vocabulary  # noqa: E402
 from runestone.db.user_repository import UserRepository  # noqa: E402
 from runestone.db.vocabulary_repository import VocabularyRepository  # noqa: E402
+from runestone.schemas.analysis import ContentAnalysis, GrammarFocus  # noqa: E402
+from runestone.schemas.ocr import OCRResult, RecognitionStatistics  # noqa: E402
 
 
 @pytest.fixture
@@ -62,8 +69,6 @@ async def db_with_test_user(db_session_factory):
 
     Each test gets a fresh database with a unique test user.
     """
-    import uuid
-
     db = db_session_factory()
     try:
         unique_email = f"test-{uuid.uuid4()}@example.com"
@@ -119,11 +124,6 @@ def vocabulary_repository(db_session):
 @pytest.fixture
 def mock_processor():
     """Create a standardized mock RunestoneProcessor."""
-    from unittest.mock import AsyncMock, Mock
-
-    from runestone.schemas.analysis import ContentAnalysis, GrammarFocus
-    from runestone.schemas.ocr import OCRResult, RecognitionStatistics
-
     mock = Mock()
     # Create the OCR result
     ocr_result = OCRResult(
@@ -151,7 +151,6 @@ def mock_processor():
 @pytest.fixture
 def vocabulary_item_factory():
     """Factory for creating VocabularyItemCreate instances."""
-    from runestone.api.schemas import VocabularyItemCreate
 
     def _create(
         word_phrase="test word", translation="test translation", example_phrase="Test example.", extra_info=None
@@ -166,9 +165,6 @@ def vocabulary_item_factory():
 @pytest.fixture
 def vocabulary_model_factory():
     """Factory for creating VocabularyModel instances."""
-    from datetime import datetime, timezone
-
-    from runestone.db.models import Vocabulary
 
     def _create(
         user_id=1,
@@ -203,9 +199,6 @@ def vocabulary_model_factory():
 @pytest.fixture
 def temp_cheatsheets_dir():
     """Create a temporary directory with test cheatsheet files."""
-    import os
-    import tempfile
-
     with tempfile.TemporaryDirectory() as temp_dir:
         # Create test markdown files
         files = {
@@ -234,9 +227,6 @@ def temp_cheatsheets_dir():
 @pytest.fixture
 def temp_cheatsheets_with_categories():
     """Create a temporary directory with categorized cheatsheet files."""
-    import os
-    import tempfile
-
     with tempfile.TemporaryDirectory() as temp_dir:
         # Create root level files (General category)
         root_files = {

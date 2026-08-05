@@ -9,6 +9,7 @@ from runestone.config import Settings
 from runestone.core.analyzer import ContentAnalyzer
 from runestone.core.console import setup_console
 from runestone.core.exceptions import ContentAnalysisError
+from runestone.core.prompt_builder.parsers import ResponseParser
 from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, VocabularyItem
 
 
@@ -187,8 +188,6 @@ class TestContentAnalyzer:
 
     def test_fallback_analysis_structure(self):
         """Test structure of fallback analysis via parser."""
-        from runestone.core.prompt_builder.parsers import ResponseParser
-
         parser = ResponseParser()
 
         # Test that fallback returns valid structure
@@ -202,8 +201,6 @@ class TestContentAnalyzer:
 
     def test_fallback_analysis_includes_rules_field(self):
         """Test that fallback analysis includes rules field."""
-        from runestone.core.prompt_builder.parsers import ResponseParser
-
         parser = ResponseParser()
         fallback_data = parser._fallback_analysis_parse("invalid response")
 

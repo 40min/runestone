@@ -14,14 +14,12 @@ from runestone.agents.specialists.word_keeper import (
     WordKeeperExtraction,
     WordKeeperSpecialist,
 )
-from runestone.config import Settings
+from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
 from runestone.schemas.vocabulary_save import VocabularyPrioritizationAction, WordSaveCandidate
 
 
 @pytest.fixture
 def mock_settings():
-    from runestone.config import AgentLLMSettings, ReasoningLevel
-
     settings = MagicMock(spec=Settings)
     settings.word_keeper_provider = "openrouter"
     settings.word_keeper_model = "test-model"

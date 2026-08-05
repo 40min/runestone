@@ -5,9 +5,13 @@ Covers authentication, bucket correctness, in_learn filtering,
 user isolation, and response shape invariants.
 """
 
+import uuid
+
 import pytest
 
+from runestone.auth.dependencies import get_current_user
 from runestone.constants import VOCABULARY_PRIORITY_LABELS
+from runestone.db.models import User
 from runestone.db.models import Vocabulary as VocabularyModel
 
 
@@ -162,11 +166,6 @@ class TestVocabularyDistributionEndpoint:
 
     async def test_user_isolation(self, client_with_overrides, db_with_test_user):
         """Each user only sees their own vocabulary in the distribution."""
-        import uuid
-
-        from runestone.auth.dependencies import get_current_user
-        from runestone.db.models import User
-
         async for client_a, _ in client_with_overrides():
             # Add 2 words for user A
             await client_a.post(

@@ -15,7 +15,12 @@ from sqlalchemy import select
 
 from runestone.api.schemas import ImprovementMode
 from runestone.api.schemas import Vocabulary as VocabularySchema
-from runestone.api.schemas import VocabularyImproveRequest, VocabularyImproveResponse, VocabularyItemCreate
+from runestone.api.schemas import (
+    VocabularyImproveRequest,
+    VocabularyImproveResponse,
+    VocabularyItemCreate,
+    VocabularyUpdate,
+)
 from runestone.config import Settings
 from runestone.core.exceptions import VocabularyItemExists
 from runestone.db.models import User as UserModel
@@ -263,8 +268,6 @@ class TestVocabularyService:
 
     async def test_update_vocabulary_item(self, service, db_session):
         """Test updating a vocabulary item."""
-        from runestone.api.schemas import VocabularyUpdate
-
         # Add a test item
         vocab = VocabularyModel(
             user_id=1,
@@ -296,8 +299,6 @@ class TestVocabularyService:
 
     async def test_update_vocabulary_item_partial(self, service, db_session):
         """Test updating a vocabulary item with partial fields."""
-        from runestone.api.schemas import VocabularyUpdate
-
         # Add a test item
         vocab = VocabularyModel(
             user_id=1,
@@ -321,8 +322,6 @@ class TestVocabularyService:
 
     async def test_update_vocabulary_item_duplicate_word_phrase(self, service, db_session):
         """Test that updating to a duplicate word_phrase raises an error."""
-        from runestone.api.schemas import VocabularyUpdate
-
         # Add two test items
         vocab1 = VocabularyModel(
             user_id=1,
@@ -1444,8 +1443,6 @@ class TestGetVocabularyDistribution:
     @pytest.fixture
     def service(self, vocabulary_repository):
         """Create a VocabularyService instance."""
-        from runestone.config import Settings
-
         mock_settings = Mock(spec=Settings)
         mock_settings.llm_provider = "openai"
         mock_llm_model = AsyncMock()
