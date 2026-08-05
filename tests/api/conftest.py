@@ -6,15 +6,30 @@ including database setup and test client configuration.
 """
 
 import uuid
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
+from fastapi import HTTPException, status
+from httpx import ASGITransport, AsyncClient
 from langchain_core.messages import AIMessage
 
 from runestone.api.main import app
 from runestone.auth.dependencies import get_current_user
+from runestone.db.database import get_db
 from runestone.db.models import User
-from runestone.dependencies import get_llm_model
+from runestone.dependencies import (
+    get_agents_manager,
+    get_chat_service,
+    get_grammar_index,
+    get_grammar_service,
+    get_llm_model,
+    get_recall_service,
+    get_runestone_processor,
+    get_tts_service,
+    get_user_service,
+    get_vocabulary_service,
+    get_voice_service,
+)
 
 
 @pytest.fixture
@@ -34,8 +49,6 @@ async def client(client_with_overrides):
 @pytest.fixture(scope="function")
 def mock_llm_model():
     """Create a mock LangChain model that doesn't make external API calls."""
-    from unittest.mock import AsyncMock, Mock
-
     mock_model = Mock()
     mock_model.ainvoke = AsyncMock(return_value=AIMessage(content='{"word": "mock info"}'))
     return mock_model
@@ -44,11 +57,6 @@ def mock_llm_model():
 @pytest.fixture(scope="function")
 async def client_no_db():
     """Create a test client without database setup for mocked tests."""
-    from fastapi import HTTPException, status
-    from httpx import ASGITransport, AsyncClient
-
-    from runestone.dependencies import get_chat_service, get_user_service, get_vocabulary_service, get_voice_service
-
     # Mock services to avoid database calls for unauthorized tests
     mock_chat_service = Mock()
     mock_user_service = Mock()
@@ -91,15 +99,6 @@ def client_with_overrides(mock_llm_model, db_with_test_user):
     """
     Factory fixture for creating test clients with customizable dependency overrides.
     """
-    from httpx import ASGITransport, AsyncClient
-
-    from runestone.db.database import get_db
-    from runestone.dependencies import (
-        get_grammar_index,
-        get_grammar_service,
-        get_recall_service,
-        get_vocabulary_service,
-    )
 
     async def _create_client(
         vocabulary_service=None,
@@ -126,8 +125,6 @@ def client_with_overrides(mock_llm_model, db_with_test_user):
         def override_get_current_user():
             user = current_user or test_user
             if not user.active:
-                from fastapi import HTTPException, status
-
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="User is not active",
@@ -151,10 +148,6 @@ def client_with_overrides(mock_llm_model, db_with_test_user):
             overrides[get_grammar_index] = lambda: grammar_index
 
         # Always mock RunestoneProcessor
-        from unittest.mock import Mock
-
-        from runestone.dependencies import get_runestone_processor
-
         processor_instance = processor or Mock()
         overrides[get_runestone_processor] = lambda: processor_instance
 
@@ -164,8 +157,6 @@ def client_with_overrides(mock_llm_model, db_with_test_user):
             agents_manager_instance = Mock()
 
         # Always mock TTSService
-        from runestone.dependencies import get_tts_service, get_voice_service
-
         tts_service_instance = tts_service or Mock()
         overrides[get_tts_service] = lambda: tts_service_instance
         voice_service_instance = voice_service or Mock()
@@ -173,8 +164,6 @@ def client_with_overrides(mock_llm_model, db_with_test_user):
 
         # Always provide AgentsManager via dependency + app.state so callers that
         # access request.app.state.* directly don't explode.
-        from runestone.dependencies import get_agents_manager
-
         overrides[get_agents_manager] = lambda: agents_manager_instance
 
         # Also inject into app.state to avoid attribute errors
@@ -273,8 +262,6 @@ async def client_with_mock_agent_service(client_with_overrides, mock_agent_servi
 @pytest.fixture
 def mock_vocabulary_service():
     """Create a standardized mock VocabularyService."""
-    from unittest.mock import AsyncMock, Mock
-
     from runestone.api.schemas import VocabularyImproveResponse
 
     mock = Mock()
@@ -291,8 +278,6 @@ def mock_vocabulary_service():
 @pytest.fixture
 def mock_grammar_service():
     """Create a standardized mock GrammarService."""
-    from unittest.mock import Mock
-
     mock = Mock()
     mock.list_cheatsheets.return_value = []
     mock.get_cheatsheet_content.return_value = "# Mock Content"
@@ -302,8 +287,6 @@ def mock_grammar_service():
 @pytest.fixture
 def mock_agent_service():
     """Create a standardized mock AgentsManager."""
-    from unittest.mock import AsyncMock
-
     mock = AsyncMock()
     mock.process_turn_result = ("Mock response", None, "neutral")
     mock.process_turn.side_effect = lambda **_kwargs: mock.process_turn_result

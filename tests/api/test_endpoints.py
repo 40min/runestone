@@ -15,9 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from runestone.api.endpoints import delete_vocabulary, update_vocabulary
 from runestone.api.schemas import VocabularyUpdate
-from runestone.core.exceptions import RunestoneError
+from runestone.core.exceptions import RunestoneError, VocabularyItemExists
 from runestone.db.models import RecallQueueItemDB, RecallUserStateDB, Vocabulary
+from runestone.dependencies import get_settings
 from runestone.recall.service import RecallService
+from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, VocabularyItem
+from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 from runestone.services.vocabulary_service import VocabularyService
 
 
@@ -27,7 +30,6 @@ class TestOCREndpoints:
     async def test_ocr_success(self, client_with_mock_processor):
         """Test successful OCR processing."""
         client, mock_processor_instance = client_with_mock_processor
-        from runestone.schemas.ocr import OCRResult, RecognitionStatistics
 
         mock_ocr_result = OCRResult(
             transcribed_text="Hej, vad heter du?",
@@ -123,8 +125,6 @@ class TestAnalysisEndpoints:
         """Test successful content analysis."""
         client, mock_processor_instance = client_with_mock_processor
 
-        from runestone.schemas.analysis import ContentAnalysis, GrammarFocus, VocabularyItem
-
         mock_analysis_result = ContentAnalysis(
             grammar_focus=GrammarFocus(
                 topic="Swedish questions", explanation="Basic question formation", has_explicit_rules=False, rules=""
@@ -135,8 +135,6 @@ class TestAnalysisEndpoints:
             ],
             core_topics=["questions", "greetings"],
         )
-        from unittest.mock import AsyncMock
-
         mock_processor_instance.run_analysis = AsyncMock(return_value=mock_analysis_result)
 
         # Test request payload
@@ -463,8 +461,6 @@ class TestSettingsDependency:
 
         # This test verifies that the settings dependency injection works
         # by checking that our mock settings are used
-        from runestone.dependencies import get_settings
-
         result = get_settings()
         assert result == mock_settings
 
@@ -743,8 +739,6 @@ class TestSettingsDependency:
 
     async def test_duplicate_update_rolls_back_speculative_queue_change(self):
         """A domain conflict rolls back queue maintenance before returning 409."""
-        from runestone.core.exceptions import VocabularyItemExists
-
         recall_service = AsyncMock(spec=RecallService)
         recall_service.remove_queue_item.return_value = True
         vocabulary_service = AsyncMock(spec=VocabularyService)
@@ -956,7 +950,6 @@ class TestSettingsDependency:
     async def test_save_vocabulary_with_enrichment_enabled(self, client_with_mock_vocabulary_service):
         """Test saving vocabulary with enrichment enabled."""
         client, mock_vocabulary_service = client_with_mock_vocabulary_service
-        from unittest.mock import AsyncMock
 
         mock_vocabulary_service.save_vocabulary = AsyncMock(return_value={"message": "Vocabulary saved successfully"})
 
@@ -993,7 +986,6 @@ class TestSettingsDependency:
     async def test_save_vocabulary_with_enrichment_disabled(self, client_with_mock_vocabulary_service):
         """Test saving vocabulary with enrichment disabled."""
         client, mock_vocabulary_service = client_with_mock_vocabulary_service
-        from unittest.mock import AsyncMock
 
         mock_vocabulary_service.save_vocabulary = AsyncMock(return_value={"message": "Vocabulary saved successfully"})
 
@@ -1030,7 +1022,6 @@ class TestSettingsDependency:
     async def test_save_vocabulary_enrichment_default_true(self, client_with_mock_vocabulary_service):
         """Test that enrichment defaults to True when not specified."""
         client, mock_vocabulary_service = client_with_mock_vocabulary_service
-        from unittest.mock import AsyncMock
 
         mock_vocabulary_service.save_vocabulary = AsyncMock(return_value={"message": "Vocabulary saved successfully"})
 

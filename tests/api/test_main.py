@@ -5,6 +5,8 @@ This module tests the FastAPI app setup, configuration, and basic endpoints
 like health checks.
 """
 
+from httpx import ASGITransport, AsyncClient
+
 from runestone.api.main import app
 
 
@@ -19,8 +21,6 @@ class TestFastAPIApp:
 
     async def test_health_check_endpoint(self):
         """Test the health check endpoint."""
-        from httpx import ASGITransport, AsyncClient
-
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/health")
 
@@ -32,8 +32,6 @@ class TestFastAPIApp:
     async def test_cors_middleware(self):
         """Test that CORS middleware is properly configured."""
         # Check that CORS headers are present in responses
-        from httpx import ASGITransport, AsyncClient
-
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/health", headers={"Origin": "http://localhost:5173"})
 
@@ -45,8 +43,6 @@ class TestFastAPIApp:
     async def test_api_router_included(self):
         """Test that the API router is properly included."""
         # The /api/health endpoint should exist, indicating router is included
-        from httpx import ASGITransport, AsyncClient
-
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/health")
             assert response.status_code == 200

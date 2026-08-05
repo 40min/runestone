@@ -2,6 +2,10 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+from recall_main import create_scheduler, main, process_updates_job, send_recall_word_job
+from runestone.db.database import setup_database
+from runestone.telegram.offset_store import TelegramUpdateOffsetStore
+
 
 class TestRecallMain:
     """Test cases for recall_main functionality."""
@@ -38,8 +42,6 @@ class TestRecallMain:
         mock_create_scheduler.return_value = mock_scheduler
 
         with patch("asyncio.Event.wait", new_callable=AsyncMock):
-            from recall_main import main
-
             await main(self.test_offset_file)
 
         mock_setup_logging.assert_called_once_with(level="INFO")
@@ -78,8 +80,6 @@ class TestRecallMain:
         mock_create_scheduler.return_value = mock_scheduler
 
         with patch("asyncio.Event.wait", new_callable=AsyncMock):
-            from recall_main import main
-
             await main()
 
         mock_offset_store.assert_called_once_with("custom/offset.txt")
@@ -92,8 +92,6 @@ class TestRecallMain:
     async def test_main_missing_token(self, mock_settings):
         """Test main with missing telegram bot token."""
         mock_settings.telegram_bot_token = None
-
-        from recall_main import main
 
         with pytest.raises(SystemExit, match="1"):
             await main()
@@ -119,8 +117,6 @@ class TestRecallMain:
         mock_settings.verbose = False
         mock_setup_database.side_effect = RuntimeError("Database error")
 
-        from recall_main import main
-
         with pytest.raises(SystemExit, match="1"):
             await main()
 
@@ -131,9 +127,6 @@ class TestRecallMain:
     @patch("recall_main.settings")
     def test_create_scheduler(self, mock_settings, mock_async_scheduler):
         """Test scheduler creation and job configuration."""
-        from recall_main import create_scheduler
-        from runestone.telegram.offset_store import TelegramUpdateOffsetStore
-
         mock_offset_store = TelegramUpdateOffsetStore("state/offset.txt")
         mock_scheduler = Mock()
         mock_async_scheduler.return_value = mock_scheduler
@@ -169,8 +162,6 @@ class TestRecallMain:
     @pytest.mark.asyncio
     async def test_setup_database_missing_tables(self, mock_engine, mock_run_migrations):
         """Test database setup when tables are missing - should run migrations."""
-        from runestone.db.database import setup_database
-
         mock_conn = AsyncMock()
         mock_engine.connect.return_value.__aenter__.return_value = mock_conn
         mock_conn.run_sync.side_effect = [["users", "vocabulary"], []]
@@ -185,8 +176,6 @@ class TestRecallMain:
     @pytest.mark.asyncio
     async def test_setup_database(self, mock_engine):
         """Test database setup when all tables exist."""
-        from runestone.db.database import setup_database
-
         mock_conn = AsyncMock()
         mock_engine.connect.return_value.__aenter__.return_value = mock_conn
         mock_conn.run_sync.return_value = []
@@ -205,8 +194,6 @@ class TestRecallMain:
         mock_recall_transaction_provider,
     ):
         """Test process_updates_job wrapper function."""
-        from recall_main import process_updates_job
-
         mock_offset_store = Mock()
 
         mock_processor_instance = AsyncMock()
@@ -228,8 +215,6 @@ class TestRecallMain:
         mock_settings,
     ):
         """Test send_recall_word_job wrapper function."""
-        from recall_main import send_recall_word_job
-
         mock_recall_instance = AsyncMock()
         mock_telegram_recall_delivery.return_value = mock_recall_instance
 

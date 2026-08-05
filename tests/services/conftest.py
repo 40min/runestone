@@ -2,10 +2,16 @@
 Shared fixtures for services tests.
 """
 
+import json
 import os
 import tempfile
+from datetime import datetime
+from unittest.mock import AsyncMock, Mock
 
 import pytest
+
+from runestone.db.models import User
+from runestone.services.user_service import UserService
 
 # ==============================================================================
 # User Service Fixtures
@@ -15,8 +21,6 @@ import pytest
 @pytest.fixture
 def mock_user_repo():
     """Create a mocked UserRepository."""
-    from unittest.mock import AsyncMock, Mock
-
     mock = Mock()
     mock.get_by_id = AsyncMock()
     mock.is_active = AsyncMock(return_value=True)
@@ -32,18 +36,12 @@ def mock_user_repo():
 @pytest.fixture
 def user_service(mock_user_repo):
     """Create a UserService instance with its mocked repository."""
-    from runestone.services.user_service import UserService
-
     return UserService(mock_user_repo)
 
 
 @pytest.fixture
 def user():
     """Create a real User instance for testing."""
-    from datetime import datetime
-
-    from runestone.db.models import User
-
     return User(
         id=1,
         email="test@example.com",
@@ -66,8 +64,6 @@ def user():
 @pytest.fixture
 def temp_state_file():
     """Create a temporary state file with default configuration."""
-    import json
-
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         offset_file = os.path.join(os.path.dirname(f.name), "offset.txt")
         if os.path.exists(offset_file):

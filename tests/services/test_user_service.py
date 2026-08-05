@@ -4,7 +4,13 @@ Tests for user service.
 This module contains unit tests for the UserService class.
 """
 
+from datetime import datetime
+
 import pytest
+from sqlalchemy.exc import IntegrityError
+
+from runestone.api.schemas import UserProfileUpdate
+from runestone.db.models import User
 
 
 class TestUserService:
@@ -32,10 +38,6 @@ class TestUserService:
     async def test_update_user_profile_email_validation_duplicate(self, user_service, mock_user_repo, user):
         """Test email update validation fails when email is already taken."""
         # Mock get_by_email to return another user
-        from datetime import datetime
-
-        from runestone.db.models import User
-
         existing_user = User(
             id=2,
             email="existing@example.com",
@@ -47,8 +49,6 @@ class TestUserService:
             updated_at=datetime.utcnow(),
         )
         mock_user_repo.get_by_email.return_value = existing_user
-
-        from runestone.api.schemas import UserProfileUpdate
 
         # Try to update to existing email
         update_data = UserProfileUpdate(email="existing@example.com")
@@ -66,8 +66,6 @@ class TestUserService:
         # Mock get_by_email to return None (email available)
         mock_user_repo.get_by_email.return_value = None
         mock_user_repo.update.return_value = user
-
-        from runestone.api.schemas import UserProfileUpdate
 
         # Update to new email
         update_data = UserProfileUpdate(email="newemail@example.com")
@@ -88,8 +86,6 @@ class TestUserService:
         # Mock get_by_email - not called since email hasn't changed
         mock_user_repo.update.return_value = user
 
-        from runestone.api.schemas import UserProfileUpdate
-
         # Update with same email
         update_data = UserProfileUpdate(email="current@example.com")
         result = await user_service.update_user_profile(user, update_data)
@@ -102,10 +98,6 @@ class TestUserService:
     async def test_update_user_profile_email_other_user_owns_it(self, user_service, mock_user_repo, user):
         """Test email update validation fails when another user owns the email."""
         # Mock get_by_email to return a different user
-        from datetime import datetime
-
-        from runestone.db.models import User
-
         existing_user = User(
             id=999,  # Different user ID
             email="taken@example.com",
@@ -117,8 +109,6 @@ class TestUserService:
             updated_at=datetime.utcnow(),
         )
         mock_user_repo.get_by_email.return_value = existing_user
-
-        from runestone.api.schemas import UserProfileUpdate
 
         # Try to update to taken email
         update_data = UserProfileUpdate(email="taken@example.com")
@@ -137,8 +127,6 @@ class TestUserService:
         mock_user_repo.get_by_email.return_value = user
         mock_user_repo.update.return_value = user
 
-        from runestone.api.schemas import UserProfileUpdate
-
         # Update with different case of same email
         update_data = UserProfileUpdate(email="current@example.com")
         result = await user_service.update_user_profile(user, update_data)
@@ -150,10 +138,6 @@ class TestUserService:
     @pytest.mark.anyio
     async def test_update_user_profile_email_toctou_race_condition(self, user_service, mock_user_repo, user):
         """Test TOCTOU race condition: IntegrityError is caught and converted to ValueError."""
-        from sqlalchemy.exc import IntegrityError
-
-        from runestone.api.schemas import UserProfileUpdate
-
         # Set user email to a new one and mock get_by_email to return None
         # (simulating the case where email is available at check time)
         user.email = "old@example.com"
@@ -182,10 +166,6 @@ class TestUserService:
     @pytest.mark.anyio
     async def test_update_user_profile_email_toctou_sqlite_constraint(self, user_service, mock_user_repo, user):
         """Test TOCTOU race condition with SQLite-style UNIQUE constraint failed message."""
-        from sqlalchemy.exc import IntegrityError
-
-        from runestone.api.schemas import UserProfileUpdate
-
         # Set user email
         user.email = "old@example.com"
         mock_user_repo.get_by_email.return_value = None
@@ -208,10 +188,6 @@ class TestUserService:
     @pytest.mark.anyio
     async def test_update_user_profile_other_integrity_error_raised(self, user_service, mock_user_repo, user):
         """Test that non-email IntegrityError is re-raised."""
-        from sqlalchemy.exc import IntegrityError
-
-        from runestone.api.schemas import UserProfileUpdate
-
         # Set user email
         user.email = "old@example.com"
         mock_user_repo.get_by_email.return_value = None
@@ -232,8 +208,6 @@ class TestUserService:
     @pytest.mark.anyio
     async def test_update_user_profile_mother_tongue(self, user_service, mock_user_repo, user):
         """Test updating mother tongue."""
-        from runestone.api.schemas import UserProfileUpdate
-
         # Mock update to return updated user
         mock_user_repo.update.return_value = user
 
@@ -248,8 +222,6 @@ class TestUserService:
     @pytest.mark.anyio
     async def test_update_user_profile_normalizes_telegram_username(self, user_service, mock_user_repo, user):
         """Test updating Telegram username stores the canonical format."""
-        from runestone.api.schemas import UserProfileUpdate
-
         mock_user_repo.find_by_telegram_username.return_value = []
         mock_user_repo.update.return_value = user
 
@@ -263,8 +235,6 @@ class TestUserService:
     @pytest.mark.anyio
     async def test_update_user_profile_clears_telegram_username(self, user_service, mock_user_repo, user):
         """Test clearing Telegram username."""
-        from runestone.api.schemas import UserProfileUpdate
-
         user.telegram_username = "someuser"
         mock_user_repo.update.return_value = user
 
@@ -278,11 +248,6 @@ class TestUserService:
     @pytest.mark.anyio
     async def test_update_user_profile_duplicate_telegram_username(self, user_service, mock_user_repo, user):
         """Test duplicate Telegram username validation."""
-        from datetime import datetime
-
-        from runestone.api.schemas import UserProfileUpdate
-        from runestone.db.models import User
-
         existing_user = User(
             id=2,
             email="existing@example.com",

@@ -19,12 +19,11 @@ from runestone.agents.specialists.memory_maintainer.personal_info import (
     PersonalInfoMemoryMaintainer,
     PersonalInfoSummaryPlan,
 )
+from runestone.config import AgentLLMSettings, ReasoningLevel
 
 
 @pytest.fixture
 def mock_settings():
-    from runestone.config import AgentLLMSettings, ReasoningLevel
-
     settings = MagicMock()
     settings.memory_maintainer_provider = "openrouter"
     settings.memory_maintainer_model = "test-model"

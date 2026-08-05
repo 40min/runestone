@@ -8,12 +8,14 @@ from pydantic import ValidationError
 from pydantic_settings import BaseSettings
 
 from runestone.config import (
+    DEFAULT_AGENT_MAX_RETRIES,
     DEFAULT_GEMINI_SERVICE_LLM_MODEL,
     DEFAULT_SERVICE_LLM_MODEL,
     GEMINI_MINIMUM_TIMEOUT_SECONDS,
     MEMORY_MAINTENANCE_TIMEOUT_SECONDS_DEFAULT,
     ReasoningLevel,
     Settings,
+    settings,
 )
 
 
@@ -101,8 +103,6 @@ class TestSettings:
 
     def test_test_env_file_is_used(self):
         """Test that tests use the .env.test file instead of .env."""
-        from runestone.config import settings
-
         # These should be the test values from .env.test, not from .env
         assert settings.llm_provider == "openai"
         assert settings.openai_api_key == "test_openai_api_key_for_testing_only"
@@ -522,8 +522,6 @@ class TestSettings:
 
     def test_get_agent_llm_settings_coordinator_uses_default_timeout(self):
         """coordinator uses its built-in default when no env override is given."""
-        from runestone.config import DEFAULT_AGENT_MAX_RETRIES
-
         s = self._base_settings(coordinator_provider="openrouter")
         result = s.get_agent_llm_settings("coordinator")
         assert result.timeout_seconds == 3.0

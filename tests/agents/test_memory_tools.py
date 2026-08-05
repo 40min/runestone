@@ -7,7 +7,11 @@ import pytest
 
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.memory import read_active_learning_focus, read_memory
-from runestone.agents.tools.utils import ACTIVE_LEARNING_FOCUS_CONTENT_MAX_CHARS, serialize_memory_items
+from runestone.agents.tools.utils import (
+    ACTIVE_LEARNING_FOCUS_CONTENT_MAX_CHARS,
+    serialize_active_learning_focus,
+    serialize_memory_items,
+)
 from runestone.api.memory_item_schemas import (
     AreaToImproveStatus,
     MemoryCategory,
@@ -105,8 +109,6 @@ def test_read_active_learning_focus_serializer_quotes_untrusted_values():
         status_changed_at=datetime(2026, 2, 2, tzinfo=timezone.utc),
     )
 
-    from runestone.agents.tools.utils import serialize_active_learning_focus
-
     result = serialize_active_learning_focus([item])
 
     assert result.startswith("UNTRUSTED_ACTIVE_LEARNING_FOCUS")
@@ -130,8 +132,6 @@ def test_read_active_learning_focus_serializer_truncates_at_relaxed_cap_and_logs
         updated_at=datetime(2026, 2, 2, tzinfo=timezone.utc),
         status_changed_at=datetime(2026, 2, 2, tzinfo=timezone.utc),
     )
-
-    from runestone.agents.tools.utils import serialize_active_learning_focus
 
     with caplog.at_level("WARNING"):
         result = serialize_active_learning_focus([item])
@@ -179,8 +179,6 @@ def test_serializers_preserve_swedish_characters_without_unicode_escaping():
         updated_at=datetime(2026, 2, 2, tzinfo=timezone.utc),
         status_changed_at=datetime(2026, 2, 2, tzinfo=timezone.utc),
     )
-
-    from runestone.agents.tools.utils import serialize_active_learning_focus
 
     memory_result = serialize_memory_items([item])
     focus_result = serialize_active_learning_focus([item])

@@ -6,13 +6,12 @@ from langchain_core.messages import AIMessage
 
 from runestone.agents.specialists.base import SpecialistContext
 from runestone.agents.specialists.news_agent import NEWS_AGENT_SYSTEM_PROMPT, NewsAgentSpecialist
+from runestone.config import AgentLLMSettings, ReasoningLevel
 from runestone.constants import RECURSION_LIMIT_NEWS_AGENT
 
 
 @pytest.fixture
 def mock_settings():
-    from runestone.config import AgentLLMSettings, ReasoningLevel
-
     settings = MagicMock()
     settings.news_agent_provider = "openrouter"
     settings.news_agent_model = "test-model"

@@ -24,6 +24,7 @@ from runestone.agents.specialists.memory_maintainer.area_to_improve import (
     PriorityReviewPlan,
     PrioritySuggestion,
 )
+from runestone.config import AgentLLMSettings, ReasoningLevel
 from runestone.db.memory_item_repository import MemoryItemRepository
 from runestone.db.models import MemoryItem
 from runestone.services.memory_item_service import MemoryItemService
@@ -31,8 +32,6 @@ from runestone.services.memory_item_service import MemoryItemService
 
 @pytest.fixture
 def mock_settings():
-    from runestone.config import AgentLLMSettings, ReasoningLevel
-
     settings = MagicMock()
     settings.memory_maintainer_provider = "openrouter"
     settings.memory_maintainer_model = "test-model"

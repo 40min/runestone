@@ -10,6 +10,7 @@ from click.testing import CliRunner
 
 from runestone.cli import cli
 from runestone.core.exceptions import RunestoneError
+from runestone.core.processor import RunestoneProcessor
 
 
 class TestCLI:
@@ -24,8 +25,6 @@ class TestCLI:
     @staticmethod
     def _make_processor_mock():
         """Build a processor double with async processing and sync display helpers."""
-        from runestone.core.processor import RunestoneProcessor
-
         return AsyncMock(spec=RunestoneProcessor)
 
     def test_cli_group_help(self):
