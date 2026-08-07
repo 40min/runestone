@@ -26,6 +26,7 @@ from runestone.core.clients.voice.voice_factory import (
     create_voice_synthesis_client,
     create_voice_transcription_client,
 )
+from runestone.core.error_tracking import setup_error_tracking
 from runestone.core.logging_config import setup_logging
 from runestone.core.service_llm import build_service_llm_model
 from runestone.db.database import setup_database
@@ -33,6 +34,9 @@ from runestone.rag.index import GrammarIndex
 from runestone.services.grammar_service import GrammarService
 from runestone.services.tts_service import TTSService
 from runestone.services.voice_service import VoiceService
+
+# Initialize before application startup so lifespan and request failures are captured.
+setup_error_tracking(settings)
 
 
 @asynccontextmanager

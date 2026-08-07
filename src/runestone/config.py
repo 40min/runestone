@@ -115,6 +115,9 @@ class Settings(BaseSettings):
     allowed_origins: str
     cheatsheets_dir: str = "cheatsheets"
     frontend_url: str
+    sentry_dsn: Optional[str] = None
+    sentry_environment: Optional[str] = None
+    sentry_release: Optional[str] = None
 
     # HuggingFace / sentence-transformers cache (must be writable in containers)
     hf_cache_dir: str = "state/hf-cache"
