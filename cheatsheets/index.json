@@ -598,5 +598,17 @@
     ],
     "annotation": "A guide to Swedish past participle (perfekt particip), covering verb groups, adjective agreement, predictive use, and particle verbs.",
     "path": "verbs/perfekt_particip.md"
+  },
+  {
+    "url": "{HOST}/?view=grammar&cheatsheet=verbs%2Fpresens_particip",
+    "tags": [
+      "verbs",
+      "present participle",
+      "presens particip",
+      "participle",
+      "grammar"
+    ],
+    "annotation": "Funny guide to the Swedish present participle: how to form -ande/-ende, and how it works as adjective, adverb, noun, and preposition",
+    "path": "verbs/presens_particip.md"
   }
 ]
