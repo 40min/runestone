@@ -610,5 +610,16 @@
     ],
     "annotation": "Funny guide to the Swedish present participle: how to form -ande/-ende, and how it works as adjective, adverb, noun, and preposition",
     "path": "verbs/presens_particip.md"
+  },
+  {
+    "url": "{HOST}/?view=grammar&cheatsheet=verbs%2Fpassiv",
+    "tags": [
+      "verbs",
+      "passive",
+      "grammar",
+      "particip"
+    ],
+    "annotation": "Swedish passive voice: -s passiv vs bli + perfekt particip, with tense tables, agreement rules, and side-by-side comparison",
+    "path": "verbs/passiv.md"
   }
 ]
