@@ -127,6 +127,26 @@ class UserNotFoundError(ValueError):
     pass
 
 
+class RegistrationError(ValueError):
+    """Raised when submitted registration data cannot create an account."""
+
+
+class UserEmailAlreadyExistsError(RegistrationError):
+    """Raised when a user email conflicts with the persisted unique constraint."""
+
+
+class InvalidCredentialsError(ValueError):
+    """Raised when login credentials do not identify a valid user."""
+
+
+class InvalidAccessTokenError(ValueError):
+    """Raised when an access token cannot resolve an authenticated user."""
+
+
+class InactiveUserError(ValueError):
+    """Raised when an otherwise authenticated user is inactive."""
+
+
 class PermissionDeniedError(ValueError):
     """Raised when a user lacks permission to perform an action."""
 

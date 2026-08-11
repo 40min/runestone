@@ -5,19 +5,23 @@ This module provides dependency functions for user authentication,
 including the get_current_user dependency for securing endpoints.
 """
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Annotated
 
-from runestone.auth.security import verify_token
-from runestone.db.database import get_db
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from runestone.core.exceptions import InactiveUserError, InvalidAccessTokenError
 from runestone.db.models import User
+from runestone.dependencies import get_auth_service
+from runestone.services.auth_service import AuthService
 
 security = HTTPBearer()
 
 
-async def get_current_user(token: str = Depends(security), db: AsyncSession = Depends(get_db)) -> User:
+async def get_current_user(
+    token: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+    service: Annotated[AuthService, Depends(get_auth_service)],
+) -> User:
     """
     FastAPI dependency to get the current authenticated user.
 
@@ -26,7 +30,7 @@ async def get_current_user(token: str = Depends(security), db: AsyncSession = De
 
     Args:
         token: JWT token from Authorization header
-        db: Database session
+        service: Authentication use-case service
 
     Returns:
         User model instance for the authenticated user
@@ -34,46 +38,16 @@ async def get_current_user(token: str = Depends(security), db: AsyncSession = De
     Raises:
         HTTPException: If token is invalid or user not found
     """
-    payload = verify_token(token.credentials)
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token payload",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
     try:
-        user_id_int = int(user_id)
-    except ValueError:
+        return await service.resolve_access_token(token.credentials)
+    except InvalidAccessTokenError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid user ID in token",
+            detail=str(exc),
             headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    stmt = select(User).filter(User.id == user_id_int)
-    result = await db.execute(stmt)
-    user = result.scalars().first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if not user.active:
+        ) from exc
+    except InactiveUserError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User is not active",
-        )
-
-    return user
+            detail=str(exc),
+        ) from exc

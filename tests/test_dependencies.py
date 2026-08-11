@@ -14,6 +14,7 @@ from runestone.core.analyzer import ContentAnalyzer
 from runestone.core.ocr import OCRProcessor
 from runestone.core.processor import RunestoneProcessor
 from runestone.dependencies import (
+    get_auth_service,
     get_content_analyzer,
     get_llm_model,
     get_ocr_llm_model,
@@ -145,6 +146,17 @@ class TestDependencyProviders:
 
         assert result == mock_user_service_class.return_value
         mock_user_service_class.assert_called_once_with(user_repository)
+
+    @patch("runestone.dependencies.AuthService")
+    def test_get_auth_service(self, mock_auth_service_class):
+        """Auth service receives its required repository and settings."""
+        user_repository = Mock()
+        mock_settings = Mock(spec=Settings)
+
+        result = get_auth_service(user_repository, mock_settings)
+
+        assert result == mock_auth_service_class.return_value
+        mock_auth_service_class.assert_called_once_with(user_repository, mock_settings)
 
     @patch("runestone.dependencies.RecallService")
     def test_get_recall_service(self, mock_recall_service_class):
