@@ -478,11 +478,18 @@
     "tags": [
       "word order",
       "indirect speech",
+      "indirect questions",
+      "frågeordsbisatser",
+      "indirekta frågor",
       "att",
       "om",
-      "subordinate clauses"
+      "som",
+      "bisatsordföljd",
+      "satsadverbial",
+      "subordinate clauses",
+      "politeness"
     ],
-    "annotation": "Guide to forming indirect speech in Swedish, covering statements, questions, and word order rules.",
+    "annotation": "Guide to forming indirect speech and indirect questions in Swedish: statements use 'att', question-word questions keep the question word (add 'som' when it's the subject), yes/no questions use 'om', satsadverbial goes before the verb, and indirect questions make you sound more polite.",
     "path": "word_order/direkt_indirekt_tal.md"
   },
   {

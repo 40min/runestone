@@ -36,6 +36,24 @@
 - Direct: *"Varför dansar hunden?"* (Why is the dog dancing?)
   - Indirect: *De vill veta* **varför** *hunden dansar* 🕺🐕
 
+#### ⚠️ No subject in the direct question? Add "som"!
+When the **question word itself is the subject** (nothing else acts as subject), add **som** right after the question word in the indirect version:
+
+- Direct: *"Vem ringer?"* → question word = subject, no extra subject!
+  - Indirect: *Jag undrar* **vem som** *ringer* ✅
+
+- Direct: *"Vems jacka ligger där?"*
+  - Indirect: *Jag vill veta* **vems jacka som** *ligger där* 🧥
+
+> **Why?** A subordinate clause must always have an explicit subject. If the question word is doing that job, add *som* as a marker so the clause structure is clear.
+
+#### 🚦 Satsadverbial (e.g., "inte") goes BEFORE the verb
+- Direct: *"Varför kom du inte till skolan igår?"*
+  - Indirect: *Jag undrar varför du* **inte** *kom till skolan igår* ✅
+
+- Direct: *"När jobbar du inte?"*
+  - Indirect: *Jag vill veta när du* **inte** *jobbar* ✅
+
 ### 3️⃣ **Yes/No question** → use "om" or "ifall" (if/whether)
 - Direct: *"Är du hungrig?"* (Are you hungry?)
   - Indirect: *Han frågar* **om** *jag är hungrig* ✅
@@ -53,6 +71,18 @@ When you gossip = subordinate clause = verb moves!
 *"Är du hungrig?"* → *"Han frågar om du **är** hungrig"* (not *"du hungrig är"*) ✅
 
 **Remember:** Word order matters, otherwise it's chaos! 🎪
+
+---
+
+## 🤝 Bonus: Sound more polite!
+Indirect questions soften a direct question — great when talking to strangers.
+
+| Direct (blunt 😬) | Indirect (polite 😊) |
+|---|---|
+| *Vad är klockan?* | *Ursäkta, jag undrar vad klockan är.* |
+| *Var ligger toaletten?* | *Ursäkta, jag skulle behöva veta var toaletten ligger.* |
+| *När kommer nästa buss?* | *Ursäkta, vet du när nästa buss kommer?* |
+| *Vad kostar det?* | *Ursäkta, skulle du kunna säga vad det kostar?* |
 
 ---
 
