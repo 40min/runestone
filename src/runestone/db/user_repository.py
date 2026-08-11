@@ -1,9 +1,10 @@
 from typing import Optional
 
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.exceptions import UserNotFoundError
+from ..core.exceptions import UserEmailAlreadyExistsError, UserNotFoundError
 from ..db.models import User
 
 
@@ -41,12 +42,56 @@ class UserRepository:
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
-    async def create(self, user: User) -> User:
-        """Create a new user."""
+    async def add_user(self, user: User) -> User:
+        """Add and flush a user without deciding the outer transaction."""
         self.db.add(user)
-        await self.db.commit()
-        await self.db.refresh(user)
+        try:
+            await self.db.flush()
+        except IntegrityError as exc:
+            if self._is_user_email_unique_violation(exc):
+                raise UserEmailAlreadyExistsError("Email already registered") from exc
+            raise
         return user
+
+    @staticmethod
+    def _is_user_email_unique_violation(exc: IntegrityError) -> bool:
+        """Identify only the supported database constraints for unique user email."""
+        supported_constraints = {"users_email_key", "ix_users_email"}
+        pending = [exc.orig]
+        seen: set[int] = set()
+        has_unique_violation_state = False
+        constraint_names: set[str] = set()
+
+        while pending:
+            current = pending.pop()
+            if current is None or id(current) in seen:
+                continue
+            seen.add(id(current))
+
+            if str(current) == "UNIQUE constraint failed: users.email":
+                return True
+
+            sqlstate = getattr(current, "sqlstate", None) or getattr(current, "pgcode", None)
+            has_unique_violation_state = has_unique_violation_state or sqlstate == "23505"
+
+            constraint_name = getattr(current, "constraint_name", None)
+            diagnostic = getattr(current, "diag", None)
+            if diagnostic is not None:
+                constraint_name = constraint_name or getattr(diagnostic, "constraint_name", None)
+            if constraint_name:
+                constraint_names.add(constraint_name)
+
+            pending.extend((getattr(current, "__cause__", None), getattr(current, "__context__", None)))
+
+        return has_unique_violation_state and bool(constraint_names & supported_constraints)
+
+    async def commit(self) -> None:
+        """Commit the current user use-case transaction."""
+        await self.db.commit()
+
+    async def rollback(self) -> None:
+        """Roll back the current user use-case transaction."""
+        await self.db.rollback()
 
     async def update(self, user: User) -> User:
         """Update an existing user."""

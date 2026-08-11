@@ -28,6 +28,7 @@ from runestone.db.vocabulary_repository import VocabularyRepository
 from runestone.rag.index import GrammarIndex
 from runestone.recall.service import RecallService
 from runestone.services.agent_side_effect_service import AgentSideEffectService
+from runestone.services.auth_service import AuthService
 from runestone.services.chat_service import ChatService
 from runestone.services.chat_session_learning_focus_service import ChatSessionLearningFocusService
 from runestone.services.grammar_service import GrammarService
@@ -162,6 +163,14 @@ def get_user_service(
         UserService: Service instance with its repository dependency
     """
     return UserService(user_repo)
+
+
+def get_auth_service(
+    user_repo: Annotated[UserRepository, Depends(get_user_repository)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> AuthService:
+    """Build request-scoped authentication over the user repository."""
+    return AuthService(user_repo, settings)
 
 
 def get_memory_item_service(

@@ -45,6 +45,8 @@ __all__ = [
     "LearnedTimesDistributionItem",
     "UserProfileResponse",
     "UserProfileUpdate",
+    "RegisterRequest",
+    "LoginRequest",
     "MemoryMaintenanceStatusResponse",
 ]
 
@@ -248,8 +250,17 @@ class UserProfileUpdate(BaseModel):
 
 
 class LoginRequest(BaseModel):
+    """Credentials submitted for login."""
+
     email: str
     password: str
+
+
+class RegisterRequest(BaseModel):
+    """Registration fields with service-owned required-value validation."""
+
+    email: Optional[str] = None
+    password: Optional[str] = None
 
 
 class MemoryMaintenanceStatusResponse(BaseModel):
