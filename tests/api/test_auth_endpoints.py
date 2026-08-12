@@ -77,3 +77,21 @@ async def test_login_preserves_incorrect_credentials_error(client):
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json()["detail"] == "Incorrect email or password"
     assert response.headers["www-authenticate"] == "Bearer"
+
+
+async def test_login_rejects_inactive_user_with_authentication_challenge(client, user_factory):
+    password = "password123"
+    await user_factory(
+        email="inactive-login@example.com",
+        hashed_password=hash_password(password),
+        active=False,
+    )
+
+    response = await client.post(
+        "/api/auth/",
+        json={"email": "inactive-login@example.com", "password": password},
+    )
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json()["detail"] == "User is not active"
+    assert response.headers["www-authenticate"] == "Bearer"
