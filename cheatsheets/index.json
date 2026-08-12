@@ -628,5 +628,20 @@
     ],
     "annotation": "Swedish passive voice: -s passiv vs bli + perfekt particip, with tense tables, agreement rules, and side-by-side comparison",
     "path": "verbs/passiv.md"
+  },
+  {
+    "url": "{HOST}/?view=grammar&cheatsheet=pronouns%2Fvar_varsin_each_person",
+    "tags": [
+      "pronouns",
+      "grammar",
+      "var",
+      "varsin",
+      "varsitt",
+      "var och en",
+      "distributive",
+      "each"
+    ],
+    "annotation": "Funny guide to Swedish distributive expressions for 'each person': var (number per person, placed after), varsin/varsitt (one each, before en/ett-noun), and var och en/vart ett (each individual, standalone or before av).",
+    "path": "pronouns/var_varsin_each_person.md"
   }
 ]
