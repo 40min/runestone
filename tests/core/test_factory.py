@@ -1,11 +1,17 @@
 """Tests for the non-agent LangChain model builder."""
 
+from inspect import signature
 from unittest.mock import Mock, patch
 
 import pytest
 from pydantic import SecretStr
 
 from runestone.config import DEFAULT_GEMINI_SERVICE_LLM_MODEL, DEFAULT_SERVICE_LLM_MODEL, Settings
+from runestone.core.clients.voice.voice_factory import (
+    VoiceEnhancementClient,
+    VoiceSynthesisClient,
+    VoiceTranscriptionClient,
+)
 from runestone.core.exceptions import APIKeyError
 from runestone.core.service_llm import (
     OPENAI_SERVICE_LLM_MAX_RETRIES,
@@ -13,6 +19,24 @@ from runestone.core.service_llm import (
     build_service_llm_model,
     get_available_service_llm_providers,
 )
+from runestone.model_costs.langchain_callback import LangChainCostCallback
+
+
+@pytest.mark.parametrize(
+    ("protocol", "method_name"),
+    [
+        (VoiceTranscriptionClient, "transcribe_audio"),
+        (VoiceEnhancementClient, "enhance_text"),
+        (VoiceSynthesisClient, "synthesize_speech_stream"),
+    ],
+)
+def test_voice_protocols_do_not_expose_cost_tracking(protocol, method_name):
+    """Voice contracts should contain only their business inputs."""
+    parameters = signature(getattr(protocol, method_name)).parameters
+
+    assert "operation" not in parameters
+    assert "phase" not in parameters
+    assert not any(parameter.kind.name.startswith("VAR_") for parameter in parameters.values())
 
 
 class TestServiceLLMBuilder:
@@ -41,6 +65,14 @@ class TestServiceLLMBuilder:
         assert call_kwargs["temperature"] == 0.1
         assert call_kwargs["timeout"] == SERVICE_LLM_TIMEOUT_SECONDS
         assert call_kwargs["max_retries"] == OPENAI_SERVICE_LLM_MAX_RETRIES
+        assert len(call_kwargs["callbacks"]) == 1
+        callback = call_kwargs["callbacks"][0]
+        assert isinstance(callback, LangChainCostCallback)
+        assert (callback.provider, callback.model, callback.component) == (
+            "openai",
+            "gpt-4o-mini",
+            "service_llm",
+        )
         assert "base_url" not in call_kwargs
 
     @patch("runestone.core.service_llm.ChatOpenAI")

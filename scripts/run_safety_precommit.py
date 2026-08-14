@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Run Safety in pre-commit without blocking on interactive authentication."""
 
-from __future__ import annotations
-
 import os
 import shutil
 import subprocess

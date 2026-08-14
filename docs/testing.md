@@ -205,31 +205,29 @@ def test_vocabulary_improvement_with_custom_services(client_with_overrides):
 
 ## Database Isolation Strategy
 
-The test suite uses **complete database isolation** to ensure tests don't interfere with each other:
+Database-backed tests normally use a **per-test outer PostgreSQL transaction**. The engine and schema are created once per test session, and each test's sessions join its dedicated connection through savepoints. The shared schema remains a serial-test design; concurrent pytest workers must not target it.
 
 ### Isolation Guarantees
 
-- **Per-test database**: Each test gets a fresh in-memory SQLite database
+- **Fast default isolation**: Each eligible test runs inside one outer transaction that is rolled back afterward
+- **Real commit/rollback behavior**: Test and application sessions use `join_transaction_mode="create_savepoint"`
+- **Explicit exception path**: `@pytest.mark.db_schema_reset` gives tests real independent connections and a clean schema
 - **Unique test user**: Each test gets a unique user with a UUID-based email
-- **Automatic cleanup**: Databases are dropped and disposed after each test
+- **Automatic cleanup**: The outer transaction removes ordinary test data; marked tests reset the schema
 - **No shared state**: No data persists between tests
 
 ### Database Configuration
 
 ```python
-# All tests use this pattern
-engine = create_engine(
-    "sqlite:///:memory:",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool
+# Database-backed tests use the PostgreSQL URL from .env.test
+engine = create_async_engine(
+    settings.database_url,
+    pool_pre_ping=True,
+    poolclass=NullPool,
 )
 ```
 
-**Why in-memory SQLite?**
-- Fast: No disk I/O overhead (~1-5ms per test)
-- Safe: Complete isolation between tests
-- Simple: No external dependencies (no PostgreSQL/MySQL needed)
-- Parallel-safe: Each test has its own memory space
+This deliberately exercises the same PostgreSQL dialect and async driver as the application. A local test database must be available at the `DATABASE_URL` configured in `.env.test`.
 
 ## Key Fixtures
 
@@ -238,31 +236,37 @@ engine = create_engine(
 Located in `tests/conftest.py`:
 
 #### `db_engine`
-Creates a fresh database engine for each test. This is the foundation of our isolation strategy.
+Creates the engine and application schema once for the test session.
 
 ```python
-@pytest.fixture(scope="function")
-def db_engine():
-    engine = create_engine("sqlite:///:memory:", ...)
-    Base.metadata.create_all(bind=engine)
+@pytest.fixture(scope="session")
+async def db_engine():
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield engine
-    Base.metadata.drop_all(bind=engine)
-    engine.dispose()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
 ```
+
+#### `db_isolation`
+By default, opens one connection and outer transaction per test, then transactionally truncates mapped tables with `RESTART IDENTITY` so legacy tests receive deterministic PostgreSQL identities. `db_session_factory` binds every session to that connection with `join_transaction_mode="create_savepoint"`, so commits and rollbacks remain testable while final outer rollback removes all changes. A session or connection must never be used concurrently by multiple async tasks.
+
+Tests that require genuinely independent connections must use `@pytest.mark.db_schema_reset`. This includes concurrent insert races, committed cross-session visibility, true lock contention, and sequence-dependent cases that cannot safely be rewritten. Marked tests receive engine-bound sessions and a schema reset before and after the test.
 
 #### `db_session`
 Provides a database session with automatic rollback after the test.
 
 ```python
 @pytest.fixture(scope="function")
-def db_session(db_engine):
-    SessionLocal = sessionmaker(..., bind=db_engine)
-    db = SessionLocal()
+async def db_session(db_session_factory):
+    db = db_session_factory()
     try:
         yield db
     finally:
-        db.rollback()
-        db.close()
+        await db.rollback()
+        await db.close()
 ```
 
 #### `db_with_test_user`
@@ -270,15 +274,16 @@ Provides both a database session and a pre-created test user.
 
 ```python
 @pytest.fixture(scope="function")
-def db_with_test_user(db_session_factory):
-    db = db_session_factory()
+async def db_with_test_user(db_session):
+    db = db_session
     test_user = User(..., email=f"test-{uuid.uuid4()}@example.com")
     db.add(test_user)
-    db.commit()
-    db.refresh(test_user)
+    await db.commit()
+    await db.refresh(test_user)
     yield db, test_user
-    db.close()
 ```
+
+`db_with_test_user` reuses the canonical `db_session` fixture. Tests must not keep multiple sessions with overlapping transactions on the same test connection: rolling back an older PostgreSQL savepoint invalidates savepoints opened later by another session. Create additional sessions only for sequential work, or use `@pytest.mark.db_schema_reset` when the behavior genuinely requires independent concurrent connections.
 
 **Use when**: You need both a database and a user object (most common case)
 
@@ -609,10 +614,12 @@ pytest tests/api/test_endpoints.py::TestVocabularyEndpoints::test_save_vocabular
 pytest --cov=runestone tests/ -v
 ```
 
-### Run in Parallel
-```bash
-pytest -n auto tests/
-```
+### Parallel Execution
+
+Do not run database-backed tests with `pytest -n auto` against the shared
+`.env.test` database. Outer transactions and marked schema resets are designed
+for serial pytest execution. Parallel execution requires a separate PostgreSQL
+database or schema per worker and is not part of the current fixture contract.
 
 ### Run API Tests Only
 ```bash
@@ -646,40 +653,40 @@ pytest --tb=short tests/
 - **Don't create databases manually** - use `db_engine` or `db_session`
 - **Don't share data between tests** - each test should be self-contained
 - **Don't hardcode user IDs** - the test user is created automatically
-- **Don't use real database URLs** - tests use in-memory SQLite
+- **Don't point tests at development or production databases** - use the dedicated PostgreSQL database in `.env.test`
 - **Don't mock database models directly** - use the repository layer
 - **Don't create fixtures in test files** - use the shared fixtures in `conftest.py`
 
 ## Troubleshooting
 
-### "database is locked" errors
-This shouldn't happen with our in-memory SQLite setup, but if it does:
-- Ensure tests are using `scope="function"` for fixtures
-- Check that `db.rollback()` and `db.close()` are called in fixtures
-- Run tests with `-x` to stop on first failure
+### PostgreSQL connection errors
+- Ensure PostgreSQL is running and the `.env.test` database exists
+- Verify the test user can create and drop tables in that database
+- Confirm no other test process is using or resetting the same schema concurrently
 
 ### Tests failing on CI but passing locally
 - Check that all tests use the `.env.test` file (set by conftest)
 - Ensure `ENV_FILE` environment variable is set before imports
 - Verify all database operations are wrapped in transactions
 
-### "no such table" errors
-- Ensure `Base.metadata.create_all()` is called before tests
+### Missing-relation errors
+- Ensure `Base.metadata.create_all()` runs through `conn.run_sync()` before tests
 - Check that your model imports are correct
 - Verify the model is registered with `Base`
 
 ## Architecture Decisions
 
-### Why In-Memory SQLite?
-- **Speed**: 10-100x faster than file-based databases
-- **Isolation**: Complete separation between tests
-- **Reliability**: No risk of test pollution
-- **Simplicity**: No external dependencies
+### Why PostgreSQL?
+- **Parity**: Repository SQL and constraint behavior match production
+- **Async coverage**: Tests exercise SQLAlchemy's asyncpg path
+- **Reliability**: PostgreSQL-specific queries and metadata cannot silently diverge
 
-### Why Per-Test Database?
-- **Safety**: Tests can't affect each other
-- **Debugging**: Each test starts fresh
-- **Reliability**: No flakiness from shared state
+### Why Transaction/Savepoint Isolation?
+- **Speed**: Schema creation and teardown happen once for ordinary tests
+- **Compatibility**: Transactional identity restart preserves deterministic ids without rebuilding the schema
+- **Behavior coverage**: Nested savepoints let application code commit and roll back normally
+- **Safety**: The outer transaction is owned by the fixture and always rolled back
+- **Honest concurrency tests**: The schema-reset marker preserves real independent connections where one shared connection would be invalid
 
 ### Why Factory Fixtures?
 - **Consistency**: Same defaults across all tests

@@ -1,9 +1,11 @@
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from runestone.config import Settings
 from runestone.core.exceptions import RunestoneError
+from runestone.model_costs.tracking import record_model_interaction
 from runestone.services.voice_service import VoiceService
 
 
@@ -41,7 +43,10 @@ async def test_transcribe_audio_success(voice_service, mock_transcription_client
     result = await voice_service.transcribe_audio(audio_content)
 
     assert result == "Hello world"
-    mock_transcription_client.transcribe_audio.assert_awaited_once_with(audio_content=audio_content, language=None)
+    mock_transcription_client.transcribe_audio.assert_awaited_once_with(
+        audio_content=audio_content,
+        language=None,
+    )
 
 
 @pytest.mark.anyio
@@ -51,7 +56,10 @@ async def test_transcribe_audio_with_language(voice_service, mock_transcription_
     result = await voice_service.transcribe_audio(audio_content, language="sv")
 
     assert result == "Hello world"
-    mock_transcription_client.transcribe_audio.assert_awaited_once_with(audio_content=audio_content, language="sv")
+    mock_transcription_client.transcribe_audio.assert_awaited_once_with(
+        audio_content=audio_content,
+        language="sv",
+    )
 
 
 @pytest.mark.anyio
@@ -83,6 +91,7 @@ async def test_enhance_text_success(voice_service, mock_enhancement_client):
     call_kwargs = mock_enhancement_client.enhance_text.call_args.kwargs
     assert call_kwargs["text"] == original_text
     assert "Fix grammar, punctuation, and clarity" in call_kwargs["system_prompt"]
+    assert set(call_kwargs) == {"text", "system_prompt"}
 
 
 @pytest.mark.anyio
@@ -113,8 +122,8 @@ async def test_process_voice_input_auto_detection(voice_service):
     result = await voice_service.process_voice_input(audio_content, improve=True, language=None)
 
     assert result == "enhanced text"
-    voice_service.transcribe_audio.assert_called_once_with(audio_content, language=None)
-    voice_service.enhance_text.assert_called_once_with("raw text")
+    voice_service.transcribe_audio.assert_awaited_once_with(audio_content, language=None)
+    voice_service.enhance_text.assert_awaited_once_with("raw text")
 
 
 @pytest.mark.anyio
@@ -127,8 +136,8 @@ async def test_process_voice_input_with_provided_language(voice_service):
     result = await voice_service.process_voice_input(audio_content, improve=True, language="sv")
 
     assert result == "enhanced text"
-    voice_service.transcribe_audio.assert_called_once_with(audio_content, language="sv")
-    voice_service.enhance_text.assert_called_once_with("raw text")
+    voice_service.transcribe_audio.assert_awaited_once_with(audio_content, language="sv")
+    voice_service.enhance_text.assert_awaited_once_with("raw text")
 
 
 @pytest.mark.anyio
@@ -156,4 +165,80 @@ async def test_process_voice_input_with_language_mapping(voice_service):
 
     assert result == "enhanced text"
     # Verify it was called with "sv" not "Swedish"
-    voice_service.transcribe_audio.assert_called_once_with(audio_content, language="sv")
+    transcription_call = voice_service.transcribe_audio.call_args
+    assert transcription_call.args == (audio_content,)
+    assert transcription_call.kwargs["language"] == "sv"
+
+
+@pytest.mark.anyio
+async def test_voice_operation_marks_handled_enhancement_failure(voice_service, mock_enhancement_client, caplog):
+    """A failed optional enhancement preserves STT and degrades the final status."""
+
+    async def failed_enhancement(**_kwargs):
+        record_model_interaction(
+            component="voice_enhancement",
+            provider="openai",
+            model="gpt-4o-mini",
+            status="failed",
+        )
+        raise RuntimeError("provider unavailable")
+
+    mock_enhancement_client.enhance_text.side_effect = failed_enhancement
+    with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+        result = await voice_service.process_voice_input(b"private audio")
+
+    assert result == "Hello world"
+    summaries = [record.message for record in caplog.records if record.message.startswith("model_cost ")]
+    assert len(summaries) == 1
+    assert "operation=voice_transcription" in summaries[0]
+    assert "status=completed_with_errors" in summaries[0]
+
+
+@pytest.mark.anyio
+async def test_concurrent_voice_operations_keep_ambient_tracking_isolated(
+    voice_service,
+    mock_transcription_client,
+    mock_enhancement_client,
+    caplog,
+):
+    provider_calls = []
+
+    async def transcribe(audio_content, language):
+        provider_calls.append(("stt", audio_content))
+        await asyncio.sleep(0)
+        record_model_interaction(
+            component="voice_stt",
+            provider="openai",
+            model="whisper-1",
+            status="completed",
+            provider_cost_usd="0.01",
+        )
+        return audio_content.decode()
+
+    async def enhance(text, system_prompt):
+        del system_prompt
+        provider_calls.append(("enhancement", text))
+        await asyncio.sleep(0)
+        record_model_interaction(
+            component="voice_enhancement",
+            provider="openai",
+            model="gpt-4o-mini",
+            status="completed",
+            provider_cost_usd="0.02",
+        )
+        return f"{text}!"
+
+    mock_transcription_client.transcribe_audio.side_effect = transcribe
+    mock_enhancement_client.enhance_text.side_effect = enhance
+
+    with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+        results = await asyncio.gather(
+            voice_service.process_voice_input(b"one"),
+            voice_service.process_voice_input(b"two"),
+        )
+
+    assert results == ["one!", "two!"]
+    assert provider_calls == [("stt", b"one"), ("stt", b"two"), ("enhancement", "one"), ("enhancement", "two")]
+    summaries = [record.message for record in caplog.records if record.message.startswith("model_cost ")]
+    assert len(summaries) == 2
+    assert all("stage=final" in summary and "known_total_usd=0.03" in summary for summary in summaries)

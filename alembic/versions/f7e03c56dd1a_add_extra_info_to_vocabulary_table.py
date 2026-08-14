@@ -30,7 +30,7 @@ def upgrade() -> None:
     indexes = {idx["name"] for idx in inspector.get_indexes("vocabulary")}
     constraints = {const["name"] for const in inspector.get_unique_constraints("vocabulary")}
 
-    # Use batch mode for SQLite compatibility
+    # Keep the related column alterations grouped in one migration block.
     with op.batch_alter_table("vocabulary", schema=None) as batch_op:
         # Add extra_info column if it doesn't exist
         if "extra_info" not in columns:
@@ -56,7 +56,7 @@ def downgrade() -> None:
     indexes = {idx["name"] for idx in inspector.get_indexes("vocabulary")}
     constraints = {const["name"] for const in inspector.get_unique_constraints("vocabulary")}
 
-    # Use batch mode for SQLite compatibility
+    # Keep the related column alterations grouped in one migration block.
     with op.batch_alter_table("vocabulary", schema=None) as batch_op:
         # Drop constraint if it exists
         if "uq_user_word_phrase" in constraints:

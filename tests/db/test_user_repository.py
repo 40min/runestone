@@ -43,12 +43,6 @@ def test_email_unique_matcher_supports_postgresql_constraint_names(constraint_na
     assert UserRepository._is_user_email_unique_violation(error) is True
 
 
-def test_email_unique_matcher_supports_exact_sqlite_error():
-    error = IntegrityError("INSERT INTO users", {}, Exception("UNIQUE constraint failed: users.email"))
-
-    assert UserRepository._is_user_email_unique_violation(error) is True
-
-
 def test_email_unique_matcher_ignores_constraint_names_outside_driver_metadata():
     error = IntegrityError(
         "INSERT INTO users /* ix_users_email users_email_key */",

@@ -70,7 +70,6 @@ dev = [
     "flake8==7.0.0",
     "pre-commit>=3.6.0",
     "pytest-asyncio>=0.23.0",
-    "aiosqlite>=0.19.0",
 ]
 
 [build-system]
@@ -98,3 +97,6 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "--cov=runestone --cov-report=term-missing"
 asyncio_mode = "auto"
+markers = [
+    "db_schema_reset: reset the PostgreSQL schema for tests requiring independent connections, committed cross-session visibility, lock contention, or non-transactional sequence isolation",
+]

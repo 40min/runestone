@@ -223,6 +223,7 @@ class TestVocabularyRepository:
         assert apple_vocab.in_learn is True
         assert apple_vocab.last_learned is None
 
+    @pytest.mark.db_schema_reset
     async def test_upsert_vocabulary_items(self, repo, db_session):
         """Test upserting vocabulary items (bulk insert/update)."""
         # Add an initial item

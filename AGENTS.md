@@ -6,6 +6,11 @@ Keep package `__init__.py` files empty unless there is an explicit, reviewed rea
 
 Prefer module-level imports; avoid local imports where possible.
 
+## Python API Conventions
+
+- Do not use `from __future__ import annotations`. Quote genuine forward references as needed for Python 3.13.
+- Prefer explicit named parameters. Do not introduce a bare keyword-only `*` or variadic `*args`/`**kwargs` in application-owned APIs unless required by a framework, protocol, inherited method, or decorator boundary. Keep unavoidable forwarding at that boundary.
+
 ## Dependency And Service Boundaries
 
 - Treat constructor collaborators as required unless their absence is a deliberate, supported runtime mode. Do not make repositories, services, clients, or other injected collaborators optional merely to simplify tests, and do not construct fallback collaborators inside a service. Assemble the complete dependency graph at composition roots such as FastAPI dependencies, CLI entry points, workers, and test fixtures.
@@ -32,7 +37,7 @@ Prefer the Makefile targets over spelling out raw tool commands; the Makefile al
     - make test-coverage when you need the backend coverage report plus the frontend test run.
 - Use `make install` for production-only dependencies, `make install-dev` for the full Python development set, and `make install-all` when bootstrapping a fresh worktree. Use `make install-backend` and `make install-frontend` for partial dependency refreshes; `make install-backend` currently runs the same backend development dependency sync as `make install-dev`. In a fresh worktree, run `make install-dev` before readiness checks if tools such as `black` are missing, and run `make install-frontend` before focused frontend tests if Vitest is missing. Run `make setup` to install pre-commit hooks (which also runs `install-dev` under the hood).
 - Start services with `make run-backend` (applies Alembic migrations, serves FastAPI on port 8010), `make run-frontend` (Vite on port 5173), or `make run-dev` for both.
-- For CLI and prompt-debugging workflows, use `make run IMAGE_PATH=...`, `make load-vocab CSV_PATH=... [DB_NAME=...] [SKIP_EXISTENCE_CHECK=true]`, and the prompt targets `make test-prompts-ocr`, `make test-prompts-analysis TEXT=...`, `make test-prompts-vocabulary WORD=... [MODE=example_only|extra_info_only|all_fields]`, and `make test-grammar-search QUERY=...`.
+- For CLI and prompt-debugging workflows, use `make run IMAGE_PATH=...`, `make load-vocab CSV_PATH=... [USER_ID=1] [SKIP_EXISTENCE_CHECK=true]`, and the prompt targets `make test-prompts-ocr`, `make test-prompts-analysis TEXT=...`, `make test-prompts-vocabulary WORD=... [MODE=example_only|extra_info_only|all_fields]`, and `make test-grammar-search QUERY=...`.
 - When touching the Telegram recall worker or containerized dev stack, use `make run-recall`, `make init-state`, `make docker-up`, `make docker-down`, and `make docker-build`.
 - For refreshing running containers, prefer `make restart-recall`, `make rebuild-restart-recall`, or `make rebuild-restart-all` over ad hoc Docker commands.
 - Use `make rebuild-container NAMES="..."` only for explicit full container rebuilds; **note** that this target also runs `git pull` and `sudo docker` cleanup steps, which may affect local changes.

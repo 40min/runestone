@@ -27,7 +27,7 @@ from runestone.services.vocabulary_service import VocabularyService
 class TestOCREndpoints:
     """Test cases for OCR-related endpoints."""
 
-    async def test_ocr_success(self, client_with_mock_processor):
+    async def test_ocr_success(self, client_with_mock_processor, caplog):
         """Test successful OCR processing."""
         client, mock_processor_instance = client_with_mock_processor
 
@@ -46,7 +46,8 @@ class TestOCREndpoints:
         image_content = b"fake image data"
         files = {"file": ("test.jpg", io.BytesIO(image_content), "image/jpeg")}
 
-        response = await client.post("/api/ocr", files=files)
+        with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+            response = await client.post("/api/ocr", files=files)
 
         assert response.status_code == 200
         data = response.json()
@@ -57,6 +58,9 @@ class TestOCREndpoints:
 
         # Verify processor was called with image bytes
         mock_processor_instance.run_ocr.assert_called_once_with(image_content)
+        summaries = [message for message in caplog.messages if message.startswith("model_cost ")]
+        assert len(summaries) == 1
+        assert "stage=final operation=ocr" in summaries[0]
 
     async def test_ocr_invalid_file_type(self, client):
         """Test OCR with invalid file type."""
@@ -121,7 +125,7 @@ class TestOCREndpoints:
 class TestAnalysisEndpoints:
     """Test cases for content analysis endpoints."""
 
-    async def test_analyze_success(self, client_with_mock_processor):
+    async def test_analyze_success(self, client_with_mock_processor, caplog):
         """Test successful content analysis."""
         client, mock_processor_instance = client_with_mock_processor
 
@@ -140,7 +144,8 @@ class TestAnalysisEndpoints:
         # Test request payload
         payload = {"text": "Hej, vad heter du?"}
 
-        response = await client.post("/api/analyze", json=payload)
+        with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+            response = await client.post("/api/analyze", json=payload)
 
         assert response.status_code == 200
         data = response.json()
@@ -160,6 +165,9 @@ class TestAnalysisEndpoints:
         args, kwargs = mock_processor_instance.run_analysis.call_args
         called_text, called_user = args
         assert called_text == "Hej, vad heter du?"
+        summaries = [message for message in caplog.messages if message.startswith("model_cost ")]
+        assert len(summaries) == 1
+        assert "stage=final operation=content_analysis" in summaries[0]
 
     async def test_analyze_empty_text(self, client_with_mock_processor):
         """Test analysis with empty text."""

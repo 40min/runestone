@@ -26,6 +26,7 @@ from runestone.core.exceptions import VocabularyItemExists
 from runestone.db.models import User as UserModel
 from runestone.db.models import Vocabulary as VocabularyModel
 from runestone.db.vocabulary_repository import VocabularyRepository
+from runestone.model_costs.tracking import record_model_interaction
 from runestone.schemas.vocabulary import VocabularyResponse
 from runestone.schemas.vocabulary_save import PriorityWordSaveItem, WordSaveCandidate
 from runestone.services.vocabulary_service import VocabularyService
@@ -546,7 +547,7 @@ class TestVocabularyService:
 
         vocabulary_repository.hard_delete_vocabulary_item.assert_awaited_once_with(11, 7, commit=False)
 
-    async def test_improve_item_success(self, service):
+    async def test_improve_item_success(self, service, caplog):
         """Test successful vocabulary item improvement with ALL_FIELDS mode."""
         structured_model = AsyncMock()
         structured_model.ainvoke.return_value = VocabularyResponse(
@@ -559,7 +560,8 @@ class TestVocabularyService:
         # Test request with ALL_FIELDS mode
         request = VocabularyImproveRequest(word_phrase="ett äpple", mode=ImprovementMode.ALL_FIELDS)
 
-        result = await service.improve_item(request)
+        with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+            result = await service.improve_item(request)
 
         # Verify result
         assert isinstance(result, VocabularyImproveResponse)
@@ -571,6 +573,9 @@ class TestVocabularyService:
         structured_model.ainvoke.assert_awaited_once()
         prompt_arg = structured_model.ainvoke.call_args[0][0]
         assert "ett äpple" in prompt_arg
+        summaries = [record.message for record in caplog.records if record.message.startswith("model_cost ")]
+        assert len(summaries) == 1
+        assert "operation=vocabulary_improve" in summaries[0]
 
     async def test_improve_item_uses_structured_output_when_available(self, service):
         """Prefer LangChain schema output over legacy text parsing when supported."""
@@ -724,7 +729,7 @@ class TestVocabularyService:
 
         structured_model.ainvoke.assert_awaited_once()
 
-    async def test_enrich_vocabulary_items_success(self, service):
+    async def test_enrich_vocabulary_items_success(self, service, caplog):
         """Test successful vocabulary items batch enrichment."""
         # Mock LLM client to return batch response
         service.llm_model.ainvoke.return_value = AIMessage(
@@ -745,18 +750,22 @@ class TestVocabularyService:
         ]
 
         # Enrich the items
-        enriched_items = await service._enrich_vocabulary_items(items)
+        with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+            enriched_items = await service._enrich_vocabulary_items(items)
 
         # Verify all enriched
         assert len(enriched_items) == 3
         assert enriched_items[0].extra_info == "en-word, noun, base form: äpple"
         assert enriched_items[1].extra_info == "en-word, noun"
         assert enriched_items[2].extra_info == "verb, forms: vara, är, var, varit"
+        summaries = [record.message for record in caplog.records if record.message.startswith("model_cost ")]
+        assert len(summaries) == 1
+        assert "operation=vocabulary_enrichment" in summaries[0]
 
     async def test_enrich_vocabulary_items_logs_and_returns_original_items_on_llm_failure(self, service, caplog):
-        """Log batch invocation failures while keeping enrichment as a no-op."""
+        """Business fallback does not manually degrade the accounting result."""
         service.llm_model.ainvoke.side_effect = TypeError("ainvoke misconfigured")
-        caplog.set_level("ERROR")
+        caplog.set_level("INFO")
 
         items = [
             VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple.")
@@ -767,6 +776,34 @@ class TestVocabularyService:
         assert len(enriched_items) == 1
         assert enriched_items[0] == items[0]
         assert "Failed to enrich batch 1: ainvoke misconfigured" in caplog.text
+        assert "operation=vocabulary_enrichment" in caplog.text
+        assert "status=completed " in caplog.text
+
+    async def test_enrich_vocabulary_items_uses_failed_provider_status_for_summary(self, service, caplog):
+        """A recorded provider failure automatically degrades the ordinary summary."""
+
+        async def fail_provider(_prompt):
+            record_model_interaction(
+                component="vocabulary_enrichment",
+                provider="openai",
+                model="test-model",
+                status="failed",
+            )
+            raise TypeError("ainvoke misconfigured")
+
+        service.llm_model.ainvoke.side_effect = fail_provider
+        items = [
+            VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple.")
+        ]
+
+        with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+            enriched_items = await service._enrich_vocabulary_items(items)
+
+        assert enriched_items == items
+        summaries = [record.message for record in caplog.records if record.message.startswith("model_cost ")]
+        assert len(summaries) == 1
+        assert "operation=vocabulary_enrichment" in summaries[0]
+        assert "status=completed_with_errors" in summaries[0]
 
     async def test_enrich_vocabulary_items_llm_exception(self, service):
         """Test vocabulary items enrichment when LLM raises exception."""
@@ -1348,6 +1385,7 @@ class TestVocabularyService:
         assert result[0]["action"] == "already_prioritized"
         assert result[0]["changed"] is False
 
+    @pytest.mark.db_schema_reset
     async def test_insert_or_prioritize_words_handle_concurrent_insert_race(self, db_session_factory):
         """Concurrent upserts for same word should not surface integrity errors or duplicate rows."""
         mock_settings = Mock(spec=Settings)

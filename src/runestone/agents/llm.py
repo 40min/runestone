@@ -8,6 +8,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
 from runestone.config import AgentName, ReasoningLevel, Settings
+from runestone.model_costs.langchain_callback import LangChainCostCallback
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,11 @@ def build_chat_model(settings: Settings, agent_name: AgentName) -> BaseChatModel
         raise ValueError(f"API key for {agent_settings.provider} is not configured")
 
     extra_kwargs = {}
+    cost_callback = LangChainCostCallback(
+        provider=agent_settings.provider,
+        model=agent_settings.model,
+        component=agent_name,
+    )
     if agent_settings.provider == "openrouter":
         extra_body: dict[str, object] = {}
         if agent_settings.reasoning_level != ReasoningLevel.NONE:
@@ -75,6 +81,7 @@ def build_chat_model(settings: Settings, agent_name: AgentName) -> BaseChatModel
             timeout=agent_settings.timeout_seconds,
             max_retries=agent_settings.max_retries,
             disable_streaming="tool_calling",
+            callbacks=[cost_callback],
             **gemini_kwargs,
         )
 
@@ -85,5 +92,6 @@ def build_chat_model(settings: Settings, agent_name: AgentName) -> BaseChatModel
         temperature=agent_settings.temperature,
         timeout=agent_settings.timeout_seconds,
         max_retries=agent_settings.max_retries,
+        callbacks=[cost_callback],
         **extra_kwargs,
     )

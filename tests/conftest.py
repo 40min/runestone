@@ -15,7 +15,14 @@ from unittest.mock import AsyncMock, Mock
 os.environ["ENV_FILE"] = ".env.test"
 
 import pytest  # noqa: E402
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine  # noqa: E402
+from sqlalchemy import text  # noqa: E402
+from sqlalchemy.ext.asyncio import (  # noqa: E402
+    AsyncConnection,
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.pool import NullPool  # noqa: E402
 
 from runestone.api.schemas import VocabularyItemCreate  # noqa: E402
@@ -33,11 +40,9 @@ def anyio_backend():
     return "asyncio"
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="session")
 async def db_engine():
-    """
-    Create a fresh test database engine for each test.
-    """
+    """Create the shared test engine and schema once per test session."""
     engine = create_async_engine(
         settings.database_url,
         pool_pre_ping=True,
@@ -55,42 +60,67 @@ async def db_engine():
 
 
 @pytest.fixture(scope="function")
-def db_session_factory(db_engine):
-    """Create a session factory for the test database."""
-    return async_sessionmaker(
-        autocommit=False, autoflush=False, bind=db_engine, class_=AsyncSession, expire_on_commit=False
-    )
+async def db_isolation(request, db_engine: AsyncEngine):
+    """Provide transactional isolation, or a clean schema for real connection tests."""
+    if request.node.get_closest_marker("db_schema_reset") is not None:
+        async with db_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
+        yield db_engine
+        async with db_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
+        return
+
+    connection = await db_engine.connect()
+    transaction = await connection.begin()
+    try:
+        quote = connection.dialect.identifier_preparer.quote
+        table_names = ", ".join(quote(table.name) for table in Base.metadata.sorted_tables)
+        await connection.execute(text(f"TRUNCATE TABLE {table_names} RESTART IDENTITY CASCADE"))
+        yield connection
+    finally:
+        if transaction.is_active:
+            await transaction.rollback()
+        await connection.close()
 
 
 @pytest.fixture(scope="function")
-async def db_with_test_user(db_session_factory):
+def db_session_factory(db_isolation):
+    """Create sessions participating in the test's selected isolation mode."""
+    options = {
+        "autocommit": False,
+        "autoflush": False,
+        "bind": db_isolation,
+        "class_": AsyncSession,
+        "expire_on_commit": False,
+    }
+    if isinstance(db_isolation, AsyncConnection):
+        options["join_transaction_mode"] = "create_savepoint"
+    return async_sessionmaker(**options)
+
+
+@pytest.fixture(scope="function")
+async def db_with_test_user(db_session):
     """
     Create a database session with a pre-created test user.
 
     Each test gets a fresh database with a unique test user.
     """
-    db = db_session_factory()
-    try:
-        unique_email = f"test-{uuid.uuid4()}@example.com"
-        test_user = User(
-            name="Test User",
-            surname="Testsson",
-            email=unique_email,
-            hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYQmP7XzL6",
-            timezone="UTC",
-            pages_recognised_count=0,
-            active=True,
-        )
-        db.add(test_user)
-        await db.commit()
+    unique_email = f"test-{uuid.uuid4()}@example.com"
+    test_user = User(
+        name="Test User",
+        surname="Testsson",
+        email=unique_email,
+        hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYQmP7XzL6",
+        timezone="UTC",
+        pages_recognised_count=0,
+        active=True,
+    )
+    db_session.add(test_user)
+    await db_session.commit()
 
-        yield db, test_user
-    finally:
-        try:
-            await db.rollback()
-        except Exception:
-            pass
-        await db.close()
+    yield db_session, test_user
 
 
 @pytest.fixture(scope="function")

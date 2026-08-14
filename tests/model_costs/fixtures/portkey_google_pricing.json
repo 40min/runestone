@@ -1,0 +1,21 @@
+{
+  "_fixture": {
+    "source_url": "https://configs.portkey.ai/pricing/google.json",
+    "captured_at": "2026-08-11T12:00:00Z"
+  },
+  "models": {
+    "gemini-2.5-flash": {
+      "id": "gemini-2.5-flash",
+      "pricing_config": {
+        "pay_as_you_go": {
+          "request_token": {"price": "0.000030"},
+          "response_token": {"price": "0.000250"},
+          "additional_units": {
+            "thinking_token": {"price": "0.000040"}
+          }
+        },
+        "currency": "USD"
+      }
+    }
+  }
+}

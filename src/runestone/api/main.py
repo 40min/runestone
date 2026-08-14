@@ -5,7 +5,8 @@ This module initializes the FastAPI application, configures middleware,
 and includes API routers for the web interface.
 """
 
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
@@ -30,6 +31,7 @@ from runestone.core.error_tracking import setup_error_tracking
 from runestone.core.logging_config import setup_logging
 from runestone.core.service_llm import build_service_llm_model
 from runestone.db.database import setup_database
+from runestone.model_costs.startup import refresh_startup_model_prices
 from runestone.rag.index import GrammarIndex
 from runestone.services.grammar_service import GrammarService
 from runestone.services.tts_service import TTSService
@@ -74,8 +76,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         transcription_client=create_voice_transcription_client(settings),
         enhancement_client=create_voice_enhancement_client(settings),
     )
-    yield
-    # Shutdown
+    app.state.model_price_refresh_task = asyncio.create_task(
+        refresh_startup_model_prices(settings),
+        name="model-price-refresh",
+    )
+    try:
+        yield
+    finally:
+        refresh_task = app.state.model_price_refresh_task
+        if not refresh_task.done():
+            refresh_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await refresh_task
 
 
 def create_application() -> FastAPI:

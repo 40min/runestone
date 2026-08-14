@@ -37,6 +37,7 @@ from runestone.constants import MAX_TEACHER_GRAMMAR_SOURCE_LINKS
 from runestone.core.exceptions import RunestoneError
 from runestone.core.observability import elapsed_ms_since
 from runestone.db.models import User
+from runestone.model_costs.tracking import CostTrackingHandle, suspend_model_cost_tracking, track_model_costs
 from runestone.rag.index import GrammarIndex
 from runestone.schemas.vocabulary_save import WordSaveCandidate
 from runestone.services.agent_side_effect_service import AgentSideEffectService
@@ -90,6 +91,8 @@ class AgentsManager:
         self.memory_maintainer = CombinedMemoryMaintainerSpecialist(settings)
 
         self._post_task_registry = BackgroundTaskRegistry(logger=logger, key_name="chat_id")
+        self._post_task_cost_tracking: dict[str, CostTrackingHandle] = {}
+        self._post_task_terminal_overrides: dict[asyncio.Task, str] = {}
         self._memory_maintenance_registry = BackgroundTaskRegistry(
             logger=logger,
             log_prefix="memory-maintenance",
@@ -320,6 +323,7 @@ class AgentsManager:
         memory_item_service: MemoryItemService,
         side_effect_service: AgentSideEffectService,
         chat_session_learning_focus_service: ChatSessionLearningFocusService,
+        cost_tracking: CostTrackingHandle,
         current_recall_words: list[str] | None = None,
     ) -> tuple[str, Optional[list[dict[str, str]]], TeacherEmotion]:
         """
@@ -333,6 +337,9 @@ class AgentsManager:
         The caller also remains responsible for chat delivery concerns after this call:
         - persisting the assistant message
         - optional TTS push to the client
+
+        ``cost_tracking`` must be registered before the turn starts so the
+        background phase cannot outlive cost-operation accounting.
         """
         if history:
             await self.handle_stale_post_task(
@@ -388,6 +395,7 @@ class AgentsManager:
             learning_memory_signals=learning_memory_signals,
             pre_results=pre_results,
             coordinator_row_id=coordinator_row_id,
+            cost_tracking=cost_tracking,
         )
 
         return assistant_text, sources, teacher_emotion
@@ -404,7 +412,7 @@ class AgentsManager:
         pre_results: list[dict],
         side_effect_service: AgentSideEffectService,
         coordinator_row_id: int,
-    ) -> None:
+    ) -> str:
         """
         Run post-stage: post specialists and persist side effects.
 
@@ -435,7 +443,7 @@ class AgentsManager:
                     chat_id,
                     coordinator_row_id,
                 )
-                return
+                return "stale_replaced"
             if coordinator_failed:
                 await side_effect_service.mark_coordinator_failed_if_current(
                     row_id=coordinator_row_id,
@@ -447,13 +455,14 @@ class AgentsManager:
                     user.id,
                     chat_id,
                 )
-                return
+                return "failed"
             await side_effect_service.mark_coordinator_done_if_current(
                 row_id=coordinator_row_id,
                 user_id=user.id,
                 chat_id=chat_id,
             )
             logger.info("post-turn completed user_id=%s chat_id=%s", user.id, chat_id)
+            return "completed"
         except Exception:
             logger.error("post-turn failed user_id=%s chat_id=%s", user.id, chat_id, exc_info=True)
             await side_effect_service.mark_coordinator_failed_if_current(
@@ -576,15 +585,78 @@ class AgentsManager:
     # Background task registry
     # ------------------------------------------------------------------
 
-    def _register_post_task(self, chat_id: str, task: asyncio.Task) -> None:
+    def _register_post_task(
+        self,
+        chat_id: str,
+        task: asyncio.Task,
+        cost_tracking: CostTrackingHandle | None = None,
+    ) -> None:
         self._post_task_registry.register(chat_id, task)
+        if cost_tracking is not None:
+            self._post_task_cost_tracking[chat_id] = cost_tracking
 
-    def _unregister_post_task(self, chat_id: str) -> None:
+    def _unregister_post_task(self, chat_id: str, task: asyncio.Task | None = None) -> None:
+        active_task = self._post_task_registry.tasks.get(chat_id)
+        if task is not None and active_task is not None and active_task is not task:
+            return
         self._post_task_registry.unregister(chat_id)
+        self._post_task_cost_tracking.pop(chat_id, None)
 
     def cancel_post_task(self, chat_id: str) -> bool:
         """Cancel any live background post task for chat_id. Returns True if a task was cancelled."""
         return self._post_task_registry.cancel(chat_id)
+
+    async def _cancel_post_task_with_grace(
+        self,
+        chat_id: str,
+        *,
+        terminal_status: str,
+        grace_seconds: float = 1.0,
+        expected_cost_tracking: CostTrackingHandle | None = None,
+    ) -> bool:
+        """Cancel first, then let callbacks record before closing or sealing the child."""
+        task = self._post_task_registry.tasks.pop(chat_id, None)
+        cost_tracking = self._post_task_cost_tracking.pop(chat_id, None)
+        if expected_cost_tracking is not None and cost_tracking is not expected_cost_tracking:
+            cost_tracking = expected_cost_tracking
+        if task is None or task.done():
+            return False
+
+        self._post_task_terminal_overrides[task] = terminal_status
+        task.cancel()
+        try:
+            done, _pending = await asyncio.wait({task}, timeout=grace_seconds)
+        except asyncio.CancelledError:
+            if cost_tracking is not None and cost_tracking.status is None:
+                cost_tracking.finish("cancelled_with_unknown_usage")
+            self._post_task_terminal_overrides.pop(task, None)
+            raise
+        if done:
+            try:
+                await task
+            except BaseException:
+                pass
+            if cost_tracking is not None and cost_tracking.status is None:
+                cost_tracking.finish(terminal_status)
+            return True
+
+        if cost_tracking is not None and cost_tracking.status is None:
+            cost_tracking.finish("cancelled_with_unknown_usage")
+        return True
+
+    async def cancel_post_task_for_foreground_failure(
+        self,
+        chat_id: str,
+        cost_tracking: CostTrackingHandle,
+        grace_seconds: float = 1.0,
+    ) -> None:
+        """Cancel a started post-turn task and bound foreground-failure latency."""
+        await self._cancel_post_task_with_grace(
+            chat_id,
+            terminal_status="cancelled",
+            grace_seconds=grace_seconds,
+            expected_cost_tracking=cost_tracking,
+        )
 
     async def start_background_memory_maintenance(self, user: User) -> bool:
         """
@@ -604,10 +676,26 @@ class AgentsManager:
 
         async def _run() -> None:
             try:
-                result = await asyncio.wait_for(
-                    self.run_memory_maintenance(user),
-                    timeout=self.settings.memory_maintenance_timeout_seconds,
+                async with track_model_costs("memory_maintenance"):
+                    result = await asyncio.wait_for(
+                        self.run_memory_maintenance(user),
+                        timeout=self.settings.memory_maintenance_timeout_seconds,
+                    )
+            except asyncio.TimeoutError:
+                logger.error(
+                    "memory maintenance timed out timeout_s=%s user_id=%s",
+                    self.settings.memory_maintenance_timeout_seconds,
+                    user.id,
                 )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.error(
+                    "memory maintenance failed user_id=%s",
+                    user.id,
+                    exc_info=True,
+                )
+            else:
                 artifacts = result.artifacts if isinstance(result.artifacts, dict) else {}
                 logger.info(
                     "memory maintenance completed user_id=%s status=%s actions=%s reviewed=%s merged=%s "
@@ -616,29 +704,22 @@ class AgentsManager:
                     result.status,
                     len(result.actions),
                     artifacts.get("reviewed_item_count"),
-                    len(artifacts.get("merged_groups", [])) if isinstance(artifacts.get("merged_groups"), list) else 0,
+                    (
+                        len(artifacts.get("merged_groups", []))
+                        if isinstance(artifacts.get("merged_groups"), list)
+                        else 0
+                    ),
                     (
                         len(artifacts.get("priority_updates", []))
                         if isinstance(artifacts.get("priority_updates"), list)
                         else 0
                     ),
                 )
-            except asyncio.TimeoutError:
-                logger.error(
-                    "memory maintenance timed out timeout_s=%s user_id=%s",
-                    self.settings.memory_maintenance_timeout_seconds,
-                    user.id,
-                )
-            except Exception:
-                logger.error(
-                    "memory maintenance failed user_id=%s",
-                    user.id,
-                    exc_info=True,
-                )
             finally:
                 self._memory_maintenance_registry.unregister(user_key)
 
-        task = asyncio.create_task(_run())
+        with suspend_model_cost_tracking():
+            task = asyncio.create_task(_run())
         self._memory_maintenance_registry.register(user_key, task)
         logger.info("memory maintenance background task started user_id=%s", user.id)
         return True
@@ -663,53 +744,77 @@ class AgentsManager:
         learning_memory_signals: list[LearningMemorySignal] | None,
         pre_results: list[dict],
         coordinator_row_id: int,
+        cost_tracking: CostTrackingHandle,
     ) -> None:
         """
-        Fire-and-forget: wrap run_post_turn in a timeout and register the task handle.
+        Run post-turn work in the pre-registered cost child and track its task.
         """
 
+        await self._cancel_post_task_with_grace(chat_id, terminal_status="stale_replaced")
+
         async def _run():
+            terminal_status = "completed"
             try:
-                async with provide_agent_side_effect_service() as background_side_effect_service:
-                    try:
-                        await asyncio.wait_for(
-                            self.run_post_turn(
-                                message=message,
+                with cost_tracking.activate():
+                    async with provide_agent_side_effect_service() as background_side_effect_service:
+                        try:
+                            result_status = await asyncio.wait_for(
+                                self.run_post_turn(
+                                    message=message,
+                                    chat_id=chat_id,
+                                    history=history,
+                                    user=user,
+                                    teacher_response=teacher_response,
+                                    vocabulary_candidates=vocabulary_candidates or [],
+                                    learning_memory_signals=learning_memory_signals or [],
+                                    pre_results=pre_results,
+                                    side_effect_service=background_side_effect_service,
+                                    coordinator_row_id=coordinator_row_id,
+                                ),
+                                timeout=self.POST_TASK_TIMEOUT_SECONDS,
+                            )
+                            if isinstance(result_status, str):
+                                terminal_status = result_status
+                        except asyncio.TimeoutError:
+                            terminal_status = "timed_out"
+                            logger.error(
+                                "post task timed out timeout_s=%s chat_id=%s",
+                                self.POST_TASK_TIMEOUT_SECONDS,
+                                chat_id,
+                            )
+                            await background_side_effect_service.mark_coordinator_failed_if_current(
+                                row_id=coordinator_row_id,
+                                user_id=user.id,
                                 chat_id=chat_id,
-                                history=history,
-                                user=user,
-                                teacher_response=teacher_response,
-                                vocabulary_candidates=vocabulary_candidates or [],
-                                learning_memory_signals=learning_memory_signals or [],
-                                pre_results=pre_results,
-                                side_effect_service=background_side_effect_service,
-                                coordinator_row_id=coordinator_row_id,
-                            ),
-                            timeout=self.POST_TASK_TIMEOUT_SECONDS,
-                        )
-                    except asyncio.TimeoutError:
-                        logger.error(
-                            "post task timed out timeout_s=%s chat_id=%s",
-                            self.POST_TASK_TIMEOUT_SECONDS,
-                            chat_id,
-                        )
-                        await background_side_effect_service.mark_coordinator_failed_if_current(
-                            row_id=coordinator_row_id,
-                            user_id=user.id,
-                            chat_id=chat_id,
-                        )
-                    except asyncio.CancelledError:
-                        logger.info("post task cancelled chat_id=%s", chat_id)
-                        await background_side_effect_service.mark_coordinator_failed_if_current(
-                            row_id=coordinator_row_id,
-                            user_id=user.id,
-                            chat_id=chat_id,
-                        )
+                            )
+                        except asyncio.CancelledError:
+                            current_task = asyncio.current_task()
+                            terminal_status = self._post_task_terminal_overrides.get(current_task, "cancelled")
+                            logger.info("post task cancelled chat_id=%s", chat_id)
+                            await background_side_effect_service.mark_coordinator_failed_if_current(
+                                row_id=coordinator_row_id,
+                                user_id=user.id,
+                                chat_id=chat_id,
+                            )
+                        except Exception:
+                            terminal_status = "failed"
+                            logger.error("post task failed chat_id=%s", chat_id, exc_info=True)
+            except asyncio.CancelledError:
+                current_task = asyncio.current_task()
+                terminal_status = self._post_task_terminal_overrides.get(current_task, "cancelled")
+                raise
+            except Exception:
+                terminal_status = "failed"
+                logger.error("post task orchestration failed chat_id=%s", chat_id, exc_info=True)
             finally:
-                self._unregister_post_task(chat_id)
+                cost_tracking.finish(terminal_status)
+                current_task = asyncio.current_task()
+                if current_task is not None:
+                    self._post_task_terminal_overrides.pop(current_task, None)
+                self._unregister_post_task(chat_id, current_task)
 
         task = asyncio.create_task(_run())
-        self._register_post_task(chat_id, task)
+        self._register_post_task(chat_id, task, cost_tracking)
         logger.info(
             "post task background task started chat_id=%s timeout_s=%s",
             chat_id,
@@ -737,7 +842,7 @@ class AgentsManager:
             coordinator_row.status,
         )
 
-        self.cancel_post_task(chat_id)
+        await self._cancel_post_task_with_grace(chat_id, terminal_status="stale_replaced")
 
         try:
             await side_effect_service.mark_coordinator_failed_if_current(

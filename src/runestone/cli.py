@@ -7,16 +7,12 @@ This module provides the main CLI commands and handles user interaction.
 import asyncio
 import csv
 import json
-import shutil
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 import click
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from runestone.agents.specialists.base import SpecialistResult
 from runestone.agents.specialists.memory_maintainer.area_to_improve import AreaToImproveMemoryMaintainer
@@ -37,6 +33,7 @@ from runestone.db.database import provide_db_session
 from runestone.db.models import User
 from runestone.db.user_repository import UserRepository
 from runestone.db.vocabulary_repository import VocabularyRepository
+from runestone.model_costs.tracking import track_model_costs
 from runestone.rag.index import GrammarIndex
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
@@ -52,6 +49,12 @@ setup_logging()
 
 # Load centralized settings
 settings = Settings()
+
+
+async def _process_image_cli(processor: RunestoneProcessor, image_path: Path, user: User) -> dict:
+    """Run the complete paid image workflow under one CLI-owned cost scope."""
+    async with track_model_costs("image_analysis"):
+        return await processor.process_image(image_path, user)
 
 
 @click.group()
@@ -228,7 +231,7 @@ def process(
 
         # Process the image
         # for tool we'll use default user_id=1
-        result = asyncio.run(processor.process_image(image_path, user=mock_user))
+        result = asyncio.run(_process_image_cli(processor, image_path, mock_user))
 
         # Output results
         if output_format == "console":
@@ -280,18 +283,20 @@ async def _run_area_memory_maintainer_cli(user_id: int, dry_run: bool, with_prio
     """Load a real user and run the area_to_improve maintainer in CLI mode."""
     user = await _load_cli_user(user_id)
     specialist = AreaToImproveMemoryMaintainer(settings)
-    return await specialist.run_cli_for_user(
-        user,
-        dry_run=dry_run,
-        with_priority_review=with_priority_review,
-    )
+    async with track_model_costs("memory_maintenance"):
+        return await specialist.run_cli_for_user(
+            user,
+            dry_run=dry_run,
+            with_priority_review=with_priority_review,
+        )
 
 
 async def _run_personal_info_memory_maintainer_cli(user_id: int, dry_run: bool) -> SpecialistResult:
     """Load a real user and run the personal_info maintainer in CLI mode."""
     user = await _load_cli_user(user_id)
     specialist = PersonalInfoMemoryMaintainer(settings)
-    return await specialist.run_cli_for_user(user, dry_run=dry_run)
+    async with track_model_costs("memory_maintenance"):
+        return await specialist.run_cli_for_user(user, dry_run=dry_run)
 
 
 def _print_memory_maintainer_summary(result: SpecialistResult) -> None:
@@ -430,26 +435,41 @@ def maintain_personal_info_memory(user_id: int, dry_run: bool):
         sys.exit(1)
 
 
+async def _load_vocabulary_items(
+    items: list[VocabularyItemCreate],
+    skip_existence_check: bool,
+    user_id: int,
+) -> dict:
+    """Load parsed CSV items through the configured async application database."""
+    async with provide_db_session() as session:
+        repository = VocabularyRepository(session)
+        llm_model = build_service_llm_model(settings=settings)
+        service = VocabularyService(repository, settings, llm_model)
+        return await service.load_vocab_from_csv(items, skip_existence_check, user_id=user_id)
+
+
 @cli.command()
 @click.argument("csv_path", type=click.Path(exists=True, path_type=Path))
 @click.option(
-    "--db-name",
-    default="state/runestone.db",
-    help="Database file name (default: state/runestone.db)",
+    "--user-id",
+    type=int,
+    default=1,
+    show_default=True,
+    help="Owner of the imported vocabulary items",
 )
 @click.option(
     "--skip-existence-check",
     is_flag=True,
     default=False,
-    help="Skip checking for existing words before adding (allow duplicates)",
+    help="Skip filtering existing words and upsert every CSV item",
 )
-def load_vocab(csv_path: Path, db_name: str, skip_existence_check: bool):
+def load_vocab(csv_path: Path, user_id: int, skip_existence_check: bool):
     """
     Load vocabulary data from a CSV file into the database.
 
     CSV_PATH: Path to the CSV file to load (columns: word;translation;example)
 
-    The command creates a backup of the existing database before adding new data.
+    Items are stored in the configured PostgreSQL database for USER_ID.
     """
     try:
         # Parse CSV file
@@ -470,50 +490,21 @@ def load_vocab(csv_path: Path, db_name: str, skip_existence_check: bool):
             console.print("[yellow]Warning:[/yellow] No valid items found in CSV file.")
             return
 
-        # Create database backup
-        db_path = Path(db_name)
-        if db_path.exists():
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_path = db_path.with_name(f"{db_path.stem}_backup_{timestamp}.db")
-            shutil.copy2(db_path, backup_path)
-            console.print(f"Database backup created: {backup_path}")
+        stats = asyncio.run(_load_vocabulary_items(items, skip_existence_check, user_id))
+        original_count = stats["original_count"]
+        added_count = stats["added_count"]
+        skipped_count = stats["skipped_count"]
+
+        if skip_existence_check:
+            if skipped_count > 0:
+                console.print(f"[yellow]Warning:[/yellow] Skipped {skipped_count} duplicate items within the batch.")
+            console.print(f"[green]Success:[/green] Processed {added_count} vocabulary items (inserted or updated).")
         else:
-            console.print("[yellow]Warning:[/yellow] Database file does not exist, skipping backup.")
+            if skipped_count > 0:
+                console.print(f"[yellow]Warning:[/yellow] Skipped {skipped_count} duplicate vocabulary items.")
+            console.print(f"[green]Success:[/green] Added {added_count} new vocabulary items.")
 
-        # Insert data into database using service
-        engine = create_engine(f"sqlite:///{db_name}", connect_args={"check_same_thread": False})
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-        db = SessionLocal()
-        try:
-            # Create service with database session
-            repo = VocabularyRepository(db)
-            # Create LLM client for vocabulary service
-            llm_model = build_service_llm_model(settings=settings)
-            service = VocabularyService(repo, settings, llm_model)
-
-            # Load vocabulary using service
-            stats = service.load_vocab_from_csv(items, skip_existence_check, user_id=1)
-
-            original_count = stats["original_count"]
-            added_count = stats["added_count"]
-            skipped_count = stats["skipped_count"]
-
-            if skip_existence_check:
-                if skipped_count > 0:
-                    console.print(
-                        f"[yellow]Warning:[/yellow] Skipped {skipped_count} duplicate items within the batch."
-                    )
-                console.print(
-                    f"[green]Success:[/green] Processed {added_count} vocabulary items (inserted or updated)."
-                )
-            else:
-                if skipped_count > 0:
-                    console.print(f"[yellow]Warning:[/yellow] Skipped {skipped_count} duplicate vocabulary items.")
-                console.print(f"[green]Success:[/green] Added {added_count} new vocabulary items.")
-
-            console.print(f"Total processed: {original_count} items (added: {added_count}, skipped: {skipped_count})")
-        finally:
-            db.close()
+        console.print(f"Total processed: {original_count} items (added: {added_count}, skipped: {skipped_count})")
 
     except FileNotFoundError:
         console.print(f"[red]Error:[/red] CSV file not found: {csv_path}")

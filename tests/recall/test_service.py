@@ -745,6 +745,7 @@ async def test_postpone_single_eligible_word_does_not_reselect_it(db_session):
 
 
 @pytest.mark.anyio
+@pytest.mark.db_schema_reset
 async def test_delivery_rechecks_active_user_after_concurrent_deactivation(db_session_factory):
     delivery_session = db_session_factory()
     deactivation_session = db_session_factory()

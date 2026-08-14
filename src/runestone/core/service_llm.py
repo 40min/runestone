@@ -10,6 +10,7 @@ from pydantic import SecretStr
 
 from runestone.config import Settings
 from runestone.core.exceptions import APIKeyError
+from runestone.model_costs.langchain_callback import LangChainCostCallback
 
 ServiceLLMProvider = Literal["openai", "openrouter", "gemini"]
 SERVICE_LLM_TIMEOUT_SECONDS = 120.0
@@ -45,6 +46,13 @@ def build_service_llm_model(
     """
     effective_provider = cast(ServiceLLMProvider, (provider or settings.resolve_service_llm_provider()).lower())
     effective_model_name = model_name or settings.resolve_service_llm_model(provider=effective_provider)
+    callbacks = [
+        LangChainCostCallback(
+            provider=effective_provider,
+            model=effective_model_name,
+            component="service_llm",
+        )
+    ]
 
     if effective_provider not in get_available_service_llm_providers():
         raise ValueError(
@@ -71,6 +79,7 @@ def build_service_llm_model(
             },
             timeout=SERVICE_LLM_TIMEOUT_SECONDS,
             extra_body=extra_body,
+            callbacks=callbacks,
         )
 
     if effective_provider == "gemini":
@@ -82,6 +91,7 @@ def build_service_llm_model(
             api_key=SecretStr(api_key),
             temperature=temperature,
             request_timeout=SERVICE_LLM_TIMEOUT_SECONDS,
+            callbacks=callbacks,
         )
 
     api_key = settings.openai_api_key
@@ -94,6 +104,7 @@ def build_service_llm_model(
         temperature=temperature,
         timeout=SERVICE_LLM_TIMEOUT_SECONDS,
         max_retries=OPENAI_SERVICE_LLM_MAX_RETRIES,
+        callbacks=callbacks,
     )
 
 

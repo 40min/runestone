@@ -25,7 +25,7 @@ target_metadata = Base.metadata
 
 def _sync_database_url(url: str) -> str:
     """Convert application async database URLs to Alembic-compatible sync URLs."""
-    return url.replace("+asyncpg", "+psycopg2").replace("+aiosqlite", "")
+    return url.replace("postgresql+asyncpg", "postgresql+psycopg2", 1)
 
 
 # other values from the config, defined by the needs of env.py,

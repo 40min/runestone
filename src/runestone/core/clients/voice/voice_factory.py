@@ -17,21 +17,33 @@ from runestone.core.exceptions import APIKeyError, RunestoneError
 class VoiceTranscriptionClient(Protocol):
     """Contract for speech-to-text providers."""
 
-    async def transcribe_audio(self, audio_content: bytes, language: str | None = None) -> str:
+    async def transcribe_audio(
+        self,
+        audio_content: bytes,
+        language: str | None = None,
+    ) -> str:
         """Transcribe raw audio bytes to text."""
 
 
 class VoiceEnhancementClient(Protocol):
     """Contract for transcript cleanup providers."""
 
-    async def enhance_text(self, text: str, system_prompt: str) -> str:
+    async def enhance_text(
+        self,
+        text: str,
+        system_prompt: str,
+    ) -> str:
         """Enhance transcript text with provider-specific language model support."""
 
 
 class VoiceSynthesisClient(Protocol):
     """Contract for text-to-speech providers."""
 
-    async def synthesize_speech_stream(self, text: str, speed: float = 1.0) -> AsyncIterator[bytes]:
+    async def synthesize_speech_stream(
+        self,
+        text: str,
+        speed: float = 1.0,
+    ) -> AsyncIterator[bytes]:
         """Yield synthesized audio bytes for the input text."""
 
 
