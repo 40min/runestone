@@ -64,6 +64,7 @@ async def test_upsert_for_user_creates_and_updates_without_resetting_cursor(db_s
 
 
 @pytest.mark.anyio
+@pytest.mark.db_schema_reset
 async def test_upsert_for_user_is_safe_for_concurrent_first_link(
     db_session_factory: async_sessionmaker[AsyncSession],
 ):

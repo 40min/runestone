@@ -16,6 +16,7 @@ from runestone.config import (
     ReasoningLevel,
     Settings,
 )
+from runestone.model_costs.langchain_callback import LangChainCostCallback
 
 
 def _make_settings(
@@ -61,6 +62,13 @@ def test_build_chat_model_openrouter(mock_settings):
         assert call_kwargs["temperature"] == 0.3
         assert call_kwargs["timeout"] == DEFAULT_AGENT_LLM_TIMEOUT_SECONDS
         assert call_kwargs["max_retries"] == DEFAULT_AGENT_MAX_RETRIES
+        callback = call_kwargs["callbacks"][0]
+        assert isinstance(callback, LangChainCostCallback)
+        assert (callback.component, callback.provider, callback.model) == (
+            "teacher",
+            "openrouter",
+            "test-chat-model",
+        )
         assert "extra_body" not in call_kwargs
         mock_settings.get_agent_llm_settings.assert_called_once_with("teacher")
 
@@ -105,6 +113,13 @@ def test_build_chat_model_gemini(mock_settings):
         assert call_kwargs["timeout"] == DEFAULT_AGENT_LLM_TIMEOUT_SECONDS
         assert call_kwargs["max_retries"] == DEFAULT_AGENT_MAX_RETRIES
         assert call_kwargs["disable_streaming"] == "tool_calling"
+        callback = call_kwargs["callbacks"][0]
+        assert isinstance(callback, LangChainCostCallback)
+        assert (callback.component, callback.provider, callback.model) == (
+            "coordinator",
+            "gemini",
+            "gemini-2.5-flash",
+        )
         assert "thinking_level" not in call_kwargs
 
 
@@ -194,10 +209,13 @@ def test_build_chat_model_supports_memory_maintainer(mock_settings):
 
 def test_build_chat_model_supports_teacher_backup(mock_settings):
     """Test teacher_backup uses the standard per-agent config path."""
-    with patch("runestone.agents.llm.ChatOpenAI"):
+    with patch("runestone.agents.llm.ChatOpenAI") as mock_chat_openai:
         build_chat_model(mock_settings, "teacher_backup")
 
     mock_settings.get_agent_llm_settings.assert_called_once_with("teacher_backup")
+    callback = mock_chat_openai.call_args.kwargs["callbacks"][0]
+    assert isinstance(callback, LangChainCostCallback)
+    assert callback.component == "teacher_backup"
 
 
 def test_build_chat_model_teacher_backup_requires_provider_api_key(mock_settings):

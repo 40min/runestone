@@ -1,0 +1,44 @@
+{
+  "_fixture": {
+    "source_url": "https://models.dev/api.json",
+    "captured_at": "2026-08-11T12:00:00Z"
+  },
+  "openai": {
+    "id": "openai",
+    "models": {
+      "gpt-4o-mini": {
+        "id": "gpt-4o-mini",
+        "cost": {
+          "input": "0.15",
+          "output": "0.60",
+          "cache_read": "0.075"
+        }
+      }
+    }
+  },
+  "google": {
+    "id": "google",
+    "models": {
+      "gemini-2.5-flash": {
+        "id": "gemini-2.5-flash",
+        "cost": {
+          "input": "0.30",
+          "output": "2.50",
+          "cache_read": "0.075"
+        }
+      }
+    }
+  },
+  "openrouter": {
+    "id": "openrouter",
+    "models": {
+      "openai/gpt-4o-mini": {
+        "id": "openai/gpt-4o-mini",
+        "cost": {
+          "input": "0.20",
+          "output": "0.80"
+        }
+      }
+    }
+  }
+}

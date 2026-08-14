@@ -32,6 +32,7 @@ from ..core.prompt_builder.parsers import ResponseParser
 from ..core.service_llm import extract_message_text
 from ..db.models import Vocabulary
 from ..db.vocabulary_repository import VocabularyRepository
+from ..model_costs.tracking import track_model_costs
 from ..schemas.vocabulary import VocabularyResponse
 from ..schemas.vocabulary_save import PriorityWordSaveItem, VocabularyPrioritizationAction, WordSaveCandidate
 
@@ -243,10 +244,10 @@ class VocabularyService:
 
     async def improve_item(self, request: VocabularyImproveRequest) -> VocabularyImproveResponse:
         """Improve a vocabulary item using LLM to generate translation, example phrase, and extra info."""
-        # Build improvement prompt using PromptBuilder
-        prompt = self.builder.build_vocabulary_prompt(word_phrase=request.word_phrase, mode=request.mode)
-        structured_response = await self._invoke_vocabulary_item_structured(prompt)
-        return self._to_improve_response(structured_response, request.mode)
+        async with track_model_costs("vocabulary_improve"):
+            prompt = self.builder.build_vocabulary_prompt(word_phrase=request.word_phrase, mode=request.mode)
+            structured_response = await self._invoke_vocabulary_item_structured(prompt)
+            return self._to_improve_response(structured_response, request.mode)
 
     async def _invoke_vocabulary_item_structured(self, prompt: str) -> VocabularyResponse:
         """Return schema-backed vocabulary improvement via LangChain structured output."""
@@ -297,6 +298,14 @@ class VocabularyService:
         """
         if not items:
             return items
+
+        async with track_model_costs("vocabulary_enrichment"):
+            return await self._enrich_vocabulary_items_in_operation(items)
+
+    async def _enrich_vocabulary_items_in_operation(
+        self, items: List[VocabularyItemCreate]
+    ) -> List[VocabularyItemCreate]:
+        """Run all enrichment batches within the caller-owned cost operation."""
 
         enriched_items = []
         total_enriched = 0

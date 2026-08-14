@@ -41,6 +41,7 @@ from runestone.dependencies import (
     get_runestone_processor,
     get_vocabulary_service,
 )
+from runestone.model_costs.tracking import track_model_costs
 from runestone.rag.index import GrammarIndex
 from runestone.recall.service import RecallService
 from runestone.services.grammar_service import GrammarService
@@ -100,7 +101,8 @@ async def process_ocr(
 
     try:
         # Run OCR on image bytes (async call)
-        ocr_result = await processor.run_ocr(content)
+        async with track_model_costs("ocr"):
+            ocr_result = await processor.run_ocr(content)
 
         # OCRResult object - return directly (unified schema)
         stats = ocr_result.recognition_statistics
@@ -157,7 +159,8 @@ async def analyze_content(
 
     try:
         # Run content analysis
-        analysis_result = await processor.run_analysis(request.text, current_user)
+        async with track_model_costs("content_analysis"):
+            analysis_result = await processor.run_analysis(request.text, current_user)
 
         # ContentAnalysis object - return directly (unified schema)
         vocab_count = len(analysis_result.vocabulary)

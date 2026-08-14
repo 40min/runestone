@@ -71,8 +71,7 @@ class RunestoneProcessor:
             raise RunestoneError(f"Failed to initialize processor: {str(e)}")
 
     async def run_ocr(self, image_bytes: bytes) -> OCRResult:
-        """
-        Run OCR on image bytes.
+        """Run OCR on image bytes.
 
         Args:
             image_bytes: Raw image bytes
@@ -110,8 +109,7 @@ class RunestoneProcessor:
                 raise RunestoneError(f"OCR processing failed: {type(e).__name__}: {str(e)}")
 
     async def run_analysis(self, text: str, user: User) -> ContentAnalysis:
-        """
-        Analyze extracted text content and mark known vocabulary.
+        """Analyze extracted text content and mark known vocabulary.
 
         Args:
             text: Extracted text from OCR
@@ -218,8 +216,7 @@ class RunestoneProcessor:
             raise RunestoneError(f"Failed to generate markdown output: {str(e)}")
 
     async def process_image(self, image_path: Path, user: User) -> Dict[str, Any]:
-        """
-        Process an image file through the complete Runestone workflow.
+        """Process an image file through the complete Runestone workflow.
 
         Args:
             image_path: Path to the image file to process

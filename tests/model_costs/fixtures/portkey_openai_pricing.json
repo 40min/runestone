@@ -1,0 +1,19 @@
+{
+  "_fixture": {
+    "source_url": "https://configs.portkey.ai/pricing/openai.json",
+    "captured_at": "2026-08-11T12:00:00Z"
+  },
+  "models": {
+    "gpt-4o-mini": {
+      "id": "gpt-4o-mini",
+      "pricing_config": {
+        "pay_as_you_go": {
+          "request_token": {"price": "0.000015"},
+          "response_token": {"price": "0.000060"},
+          "cache_read_input_token": {"price": "0.0000075"}
+        },
+        "currency": "USD"
+      }
+    }
+  }
+}

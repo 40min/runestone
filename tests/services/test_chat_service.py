@@ -2,6 +2,7 @@
 Tests for ChatService.
 """
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, Mock
 from uuid import uuid4
@@ -12,6 +13,7 @@ from sqlalchemy import text
 from runestone.db.chat_repository import ChatRepository
 from runestone.db.recall_repository import RecallRepository
 from runestone.db.user_repository import UserRepository
+from runestone.model_costs.tracking import record_model_interaction
 from runestone.recall.service import RecallService
 from runestone.services.agent_side_effect_service import AgentSideEffectService
 from runestone.services.chat_service import ChatService
@@ -86,6 +88,44 @@ def mock_processor():
     mock_ocr_result.transcribed_text = "Hej världen"
     mock.run_ocr.return_value = mock_ocr_result
     return mock
+
+
+def _make_unit_chat_service() -> tuple[ChatService, SimpleNamespace]:
+    """Build a database-free ChatService for cost state-machine tests."""
+    settings = SimpleNamespace(chat_history_retention_days=7)
+    repository = AsyncMock()
+    repository.get_context_for_agent.return_value = []
+    side_effect_service = MagicMock(spec=AgentSideEffectService)
+    user = SimpleNamespace(id=1, mother_tongue="English")
+    user_service = AsyncMock()
+    user_service.get_or_create_current_chat_id.return_value = "chat-cost"
+    user_service.get_user_by_id.return_value = user
+    recall_service = AsyncMock()
+    recall_service.load_current_recall_words.return_value = []
+    agents_manager = AsyncMock()
+    processor = AsyncMock()
+    tts_service = AsyncMock()
+    memory_item_service = AsyncMock()
+    learning_focus_service = AsyncMock()
+    service = ChatService(
+        settings,
+        repository,
+        side_effect_service,
+        user_service,
+        recall_service,
+        agents_manager,
+        processor,
+        tts_service,
+        memory_item_service,
+        learning_focus_service,
+    )
+    return service, SimpleNamespace(
+        repository=repository,
+        user_service=user_service,
+        agents_manager=agents_manager,
+        processor=processor,
+        tts_service=tts_service,
+    )
 
 
 @pytest.fixture
@@ -291,6 +331,129 @@ async def test_process_message_logs_total_turn_timing(
 
 
 @pytest.mark.anyio
+async def test_text_chat_cost_state_machine_freezes_preliminary_before_tts(caplog):
+    service, dependencies = _make_unit_chat_service()
+
+    async def _process_turn(**kwargs):
+        record_model_interaction(
+            component="teacher",
+            provider="openrouter",
+            model="teacher-model",
+            status="completed",
+            provider_cost_usd="0.10",
+        )
+        child = kwargs["cost_tracking"]
+        with child.activate():
+            record_model_interaction(
+                component="coordinator",
+                provider="openrouter",
+                model="coordinator-model",
+                status="completed",
+                provider_cost_usd="0.02",
+            )
+        child.finish("completed")
+        return "Svar", None, "neutral"
+
+    dependencies.agents_manager.process_turn.side_effect = _process_turn
+
+    async def _push_audio(_user_id, _text, *, speed, cost_tracking):
+        assert speed == 1.25
+        with cost_tracking.activate():
+            record_model_interaction(
+                component="voice_tts",
+                provider="openai",
+                model="tts-model",
+                status="completed",
+                provider_cost_usd="0.03",
+            )
+        cost_tracking.finish("completed")
+
+    dependencies.tts_service.push_audio_to_client.side_effect = _push_audio
+
+    with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+        result = await service.process_message(1, "Hej", tts_expected=True, speed=1.25)
+
+    assert result == ("Svar", None, "neutral")
+    summaries = [record.message for record in caplog.records if record.message.startswith("model_cost ")]
+    assert len(summaries) == 2
+    assert "stage=preliminary" in summaries[0]
+    assert "known_foreground_usd=0.10" in summaries[0]
+    assert "stage=corrected" in summaries[1]
+    assert "post_turn_status=completed" in summaries[1]
+    assert "tts_status=completed" in summaries[1]
+    assert "known_total_usd=0.15" in summaries[1]
+    assert "known_delta_usd=0.05" in summaries[1]
+
+
+@pytest.mark.anyio
+async def test_chat_foreground_persistence_failure_emits_only_final_and_seals_children(caplog):
+    service, dependencies = _make_unit_chat_service()
+
+    async def _process_turn(**_kwargs):
+        record_model_interaction(
+            component="teacher",
+            provider="openrouter",
+            model="teacher-model",
+            status="completed",
+            provider_cost_usd="0.10",
+        )
+        return "Svar", None, "neutral"
+
+    dependencies.agents_manager.process_turn.side_effect = _process_turn
+
+    async def _add_message(_user_id, _chat_id, role, _content, **_kwargs):
+        if role == "assistant":
+            raise RuntimeError("persistence failed")
+
+    dependencies.repository.add_message.side_effect = _add_message
+
+    with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+        with pytest.raises(RuntimeError, match="persistence failed"):
+            await service.process_message(1, "Hej", tts_expected=True)
+
+    dependencies.agents_manager.cancel_post_task_for_foreground_failure.assert_awaited_once()
+    summaries = [record.message for record in caplog.records if record.message.startswith("model_cost ")]
+    assert len(summaries) == 1
+    assert "stage=final" in summaries[0]
+    assert "status=failed" in summaries[0]
+    assert "known_total_usd=0.10" in summaries[0]
+
+
+@pytest.mark.anyio
+async def test_tts_scheduling_cancellation_cleans_up_post_turn_before_failed_summary(caplog):
+    service, dependencies = _make_unit_chat_service()
+    handles = {}
+
+    async def _process_turn(**kwargs):
+        handles["post_turn"] = kwargs["cost_tracking"]
+        return "Svar", None, "neutral"
+
+    async def _cancel_tts(_user_id, _text, speed, cost_tracking):
+        del speed
+        handles["tts"] = cost_tracking
+        raise asyncio.CancelledError
+
+    dependencies.agents_manager.process_turn.side_effect = _process_turn
+    dependencies.tts_service.push_audio_to_client.side_effect = _cancel_tts
+
+    with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+        with pytest.raises(asyncio.CancelledError):
+            await service.process_message(1, "Hej", tts_expected=True)
+
+    dependencies.agents_manager.cancel_post_task_for_foreground_failure.assert_awaited_once_with(
+        "chat-cost",
+        handles["post_turn"],
+        grace_seconds=1.0,
+    )
+    assert handles["tts"].status == "cancelled"
+    assert handles["post_turn"].status == "cancelled_with_unknown_usage"
+    summaries = [record.message for record in caplog.records if record.message.startswith("model_cost ")]
+    assert len(summaries) == 1
+    assert "stage=final" in summaries[0]
+    assert "status=failed" in summaries[0]
+
+
+@pytest.mark.anyio
 async def test_process_image_message_success(
     chat_service,
     db_with_test_user,
@@ -326,6 +489,45 @@ async def test_process_image_message_success(
     history = await chat_service.get_history(user.id, user.current_chat_id)
     assert history[-1].role == "assistant"
     assert history[-1].content == "Björn's reply"
+
+
+@pytest.mark.anyio
+async def test_image_chat_ocr_and_teacher_share_foreground_operation(caplog):
+    service, dependencies = _make_unit_chat_service()
+
+    async def _run_ocr(_image):
+        record_model_interaction(
+            component="ocr",
+            provider="openai",
+            model="ocr-model",
+            status="completed",
+            provider_cost_usd="0.04",
+        )
+        return SimpleNamespace(transcribed_text="Hej världen")
+
+    dependencies.processor.run_ocr.side_effect = _run_ocr
+
+    async def _process_turn(**kwargs):
+        record_model_interaction(
+            component="teacher",
+            provider="openrouter",
+            model="teacher-model",
+            status="completed",
+            provider_cost_usd="0.06",
+        )
+        kwargs["cost_tracking"].finish("completed")
+        return "Translation", None, "neutral"
+
+    dependencies.agents_manager.process_turn.side_effect = _process_turn
+
+    with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+        result = await service.process_image_message(1, b"image")
+
+    assert result == ("Translation", "neutral")
+    summaries = [record.message for record in caplog.records if record.message.startswith("model_cost ")]
+    assert len(summaries) == 2
+    assert "known_foreground_usd=0.10" in summaries[0]
+    assert "known_total_usd=0.10" in summaries[1]
 
 
 @pytest.mark.anyio
@@ -461,7 +663,12 @@ async def test_process_message_pushes_tts_from_chat_service(
     )
 
     assert response == "Ljudsvar"
-    mock_tts_service.push_audio_to_client.assert_awaited_once_with(user.id, "Ljudsvar", speed=1.25)
+    mock_tts_service.push_audio_to_client.assert_awaited_once()
+    args = mock_tts_service.push_audio_to_client.await_args.args
+    kwargs = mock_tts_service.push_audio_to_client.await_args.kwargs
+    assert args == (user.id, "Ljudsvar")
+    assert kwargs["speed"] == 1.25
+    assert kwargs["cost_tracking"].name == "tts"
 
 
 @pytest.mark.anyio

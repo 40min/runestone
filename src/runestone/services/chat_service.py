@@ -2,6 +2,7 @@
 Service for managing chat interactions and history.
 """
 
+import asyncio
 import logging
 from typing import List
 
@@ -14,6 +15,7 @@ from runestone.core.exceptions import RunestoneError
 from runestone.core.observability import timed_operation
 from runestone.core.processor import RunestoneProcessor
 from runestone.db.chat_repository import ChatRepository
+from runestone.model_costs.tracking import CostTrackingHandle, track_model_costs_with_background
 from runestone.recall.service import RecallService
 from runestone.services.agent_side_effect_service import AgentSideEffectService
 from runestone.services.chat_session_learning_focus_service import ChatSessionLearningFocusService
@@ -75,6 +77,26 @@ class ChatService:
         self.memory_item_service = memory_item_service
         self.chat_session_learning_focus_service = chat_session_learning_focus_service
 
+    async def _fail_foreground_operation(
+        self,
+        cost_tracking: CostTrackingHandle,
+        chat_id: str | None,
+    ) -> None:
+        """Bound foreground failure cleanup without replacing the application error."""
+        if chat_id is not None:
+            try:
+                await self.agents_manager.cancel_post_task_for_foreground_failure(
+                    chat_id,
+                    cost_tracking,
+                    grace_seconds=1.0,
+                )
+            except BaseException:
+                logger.warning(
+                    "post-turn cancellation during chat failure failed chat_id=%s",
+                    chat_id,
+                    exc_info=True,
+                )
+
     @timed_operation(logger, "[chat:service] Message turn completed", fields_factory=_process_message_timing_fields)
     async def process_message(
         self,
@@ -99,66 +121,89 @@ class ChatService:
                 means normal playback speed.
         """
 
-        # 1. Resolve current chat session and save user message
-        chat_id = await self.get_or_create_current_chat_id(user_id)
-        await self.repository.add_message(user_id, chat_id, "user", message_text)
+        chat_id: str | None = None
+        async with track_model_costs_with_background("chat") as cost_tracking:
+            post_turn_cost_tracking = cost_tracking.transfer("post_turn")
+            tts_cost_tracking = cost_tracking.transfer("tts") if tts_expected else None
+            try:
+                # 1. Resolve current chat session and save user message
+                chat_id = await self.get_or_create_current_chat_id(user_id)
+                await self.repository.add_message(user_id, chat_id, "user", message_text)
 
-        # 2. Truncate old messages
-        await self.repository.truncate_history(
-            user_id, self.settings.chat_history_retention_days, preserve_chat_id=chat_id
-        )
+                # 2. Truncate old messages
+                await self.repository.truncate_history(
+                    user_id, self.settings.chat_history_retention_days, preserve_chat_id=chat_id
+                )
 
-        # 3. Fetch context for agent
-        context_models = await self.repository.get_context_for_agent(user_id, chat_id)
+                # 3. Fetch context for agent
+                context_models = await self.repository.get_context_for_agent(user_id, chat_id)
 
-        # Convert models to schemas for the agent service
-        history = [
-            ChatMessageSchema(
-                id=m.id,
-                role=m.role,
-                content=m.content,
-                sources=m.sources,
-                teacher_emotion=m.teacher_emotion,
-                created_at=m.created_at,
-            )
-            for m in context_models
-        ]
+                # Convert models to schemas for the agent service
+                history = [
+                    ChatMessageSchema(
+                        id=m.id,
+                        role=m.role,
+                        content=m.content,
+                        sources=m.sources,
+                        teacher_emotion=m.teacher_emotion,
+                        created_at=m.created_at,
+                    )
+                    for m in context_models
+                ]
 
-        # 4. Build recall context before loading the ORM user. A handled recall
-        # database failure rolls back the shared session and expires loaded ORM
-        # instances, so the user must be fetched after that recovery boundary.
-        current_recall_words = await self._load_current_recall_words(user_id)
-        user = await self.user_service.get_user_by_id(user_id)
-        if not user:
-            raise ValueError(f"User {user_id} not found")
+                # 4. Build recall context before loading the ORM user. A handled recall
+                # database failure rolls back the shared session and expires loaded ORM
+                # instances, so the user must be fetched after that recovery boundary.
+                current_recall_words = await self._load_current_recall_words(user_id)
+                user = await self.user_service.get_user_by_id(user_id)
+                if not user:
+                    raise ValueError(f"User {user_id} not found")
 
-        # 5. Generate response using agents
-        assistant_text, sources, teacher_emotion = await self.agents_manager.process_turn(
-            message=message_text,
-            chat_id=chat_id,
-            history=history[:-1],
-            user=user,
-            memory_item_service=self.memory_item_service,
-            chat_session_learning_focus_service=self.chat_session_learning_focus_service,
-            side_effect_service=self.side_effect_service,
-            current_recall_words=current_recall_words,
-        )
+                # 5. Generate response using agents
+                assistant_text, sources, teacher_emotion = await self.agents_manager.process_turn(
+                    message=message_text,
+                    chat_id=chat_id,
+                    history=history[:-1],
+                    user=user,
+                    memory_item_service=self.memory_item_service,
+                    chat_session_learning_focus_service=self.chat_session_learning_focus_service,
+                    side_effect_service=self.side_effect_service,
+                    current_recall_words=current_recall_words,
+                    cost_tracking=post_turn_cost_tracking,
+                )
 
-        # 6. Save assistant message
-        await self.repository.add_message(
-            user_id,
-            chat_id,
-            "assistant",
-            assistant_text,
-            sources=sources,
-            teacher_emotion=teacher_emotion,
-        )
+                # 6. Save assistant message
+                await self.repository.add_message(
+                    user_id,
+                    chat_id,
+                    "assistant",
+                    assistant_text,
+                    sources=sources,
+                    teacher_emotion=teacher_emotion,
+                )
+            except BaseException:
+                await self._fail_foreground_operation(post_turn_cost_tracking, chat_id)
+                raise
 
-        # 7. Push TTS audio if client expects it (non-blocking)
-        if tts_expected:
-            await self.tts_service.push_audio_to_client(user_id, assistant_text, speed=speed)
+            # 7. Push TTS audio if client expects it (non-blocking)
+            if tts_cost_tracking is not None:
+                try:
+                    await self.tts_service.push_audio_to_client(
+                        user_id,
+                        assistant_text,
+                        speed=speed,
+                        cost_tracking=tts_cost_tracking,
+                    )
+                except Exception:
+                    tts_cost_tracking.finish("failed")
+                    logger.error("failed to schedule TTS user_id=%s", user_id, exc_info=True)
+                except BaseException as exc:
+                    status = "cancelled" if isinstance(exc, asyncio.CancelledError) else "failed"
+                    tts_cost_tracking.finish(status)
+                    await self._fail_foreground_operation(post_turn_cost_tracking, chat_id)
+                    raise
 
-        return assistant_text, sources, teacher_emotion
+            return assistant_text, sources, teacher_emotion
 
     async def process_image_message(self, user_id: int, image_content: bytes) -> tuple[str, TeacherEmotion]:
         """
@@ -172,47 +217,51 @@ class ChatService:
             user_id: Authenticated user whose active chat session should receive the reply.
             image_content: Uploaded image bytes that will be sent through OCR.
         """
-        # 1. Run OCR on image content (async)
-        ocr_result = await self.processor.run_ocr(image_content)
+        chat_id: str | None = None
+        async with track_model_costs_with_background("chat") as cost_tracking:
+            post_turn_cost_tracking = cost_tracking.transfer("post_turn")
+            try:
+                # 1. Run OCR on image content (async). Part 3 joins this operation.
+                ocr_result = await self.processor.run_ocr(image_content)
 
-        if not ocr_result.transcribed_text or not ocr_result.transcribed_text.strip():
-            logger.warning("OCR returned empty text")
-            raise RunestoneError("Could not recognize text from image")
+                if not ocr_result.transcribed_text or not ocr_result.transcribed_text.strip():
+                    logger.warning("OCR returned empty text")
+                    raise RunestoneError("Could not recognize text from image")
 
-        logger.info(f"OCR extracted {len(ocr_result.transcribed_text)} characters")
-        ocr_text = ocr_result.transcribed_text
+                logger.info(f"OCR extracted {len(ocr_result.transcribed_text)} characters")
+                ocr_text = ocr_result.transcribed_text
 
-        # 2. Resolve current chat session and truncate old messages
-        chat_id = await self.get_or_create_current_chat_id(user_id)
-        await self.repository.truncate_history(
-            user_id, self.settings.chat_history_retention_days, preserve_chat_id=chat_id
-        )
+                # 2. Resolve current chat session and truncate old messages
+                chat_id = await self.get_or_create_current_chat_id(user_id)
+                await self.repository.truncate_history(
+                    user_id, self.settings.chat_history_retention_days, preserve_chat_id=chat_id
+                )
 
-        # 3. Fetch context for agent
-        context_models = await self.repository.get_context_for_agent(user_id, chat_id)
+                # 3. Fetch context for agent
+                context_models = await self.repository.get_context_for_agent(user_id, chat_id)
 
-        # Convert models to schemas for the agent service
-        history = [
-            ChatMessageSchema(
-                id=m.id,
-                role=m.role,
-                content=m.content,
-                teacher_emotion=m.teacher_emotion,
-                created_at=m.created_at,
-            )
-            for m in context_models
-        ]
+                # Convert models to schemas for the agent service
+                history = [
+                    ChatMessageSchema(
+                        id=m.id,
+                        role=m.role,
+                        content=m.content,
+                        teacher_emotion=m.teacher_emotion,
+                        created_at=m.created_at,
+                    )
+                    for m in context_models
+                ]
 
-        # 4. Build recall context before loading the ORM user. See the text-turn
-        # path above for why this ordering matters after a handled rollback.
-        current_recall_words = await self._load_current_recall_words(user_id)
-        user = await self.user_service.get_user_by_id(user_id)
-        if not user:
-            raise ValueError(f"User {user_id} not found")
+                # 4. Build recall context before loading the ORM user. See the text-turn
+                # path above for why this ordering matters after a handled rollback.
+                current_recall_words = await self._load_current_recall_words(user_id)
+                user = await self.user_service.get_user_by_id(user_id)
+                if not user:
+                    raise ValueError(f"User {user_id} not found")
 
-        # 5. Build translation prompt with OCR text
-        mother_tongue = user.mother_tongue or "English"
-        translation_prompt = f"""User uploaded an image with Swedish text. Please translate it phrase-by-phrase.
+                # 5. Build translation prompt with OCR text
+                mother_tongue = user.mother_tongue or "English"
+                translation_prompt = f"""User uploaded an image with Swedish text. Please translate it phrase-by-phrase.
 
 OCR Text:
 {ocr_text}
@@ -222,26 +271,29 @@ Instructions:
 2. Then provide phrase-by-phrase translation in format: "Swedish phrase (translation). Next phrase (translation)."
 3. Use {mother_tongue} for all translations."""
 
-        assistant_text, _sources, teacher_emotion = await self.agents_manager.process_turn(
-            message=translation_prompt,
-            chat_id=chat_id,
-            history=history,
-            user=user,
-            memory_item_service=self.memory_item_service,
-            chat_session_learning_focus_service=self.chat_session_learning_focus_service,
-            side_effect_service=self.side_effect_service,
-            current_recall_words=current_recall_words,
-        )
+                assistant_text, _sources, teacher_emotion = await self.agents_manager.process_turn(
+                    message=translation_prompt,
+                    chat_id=chat_id,
+                    history=history,
+                    user=user,
+                    memory_item_service=self.memory_item_service,
+                    chat_session_learning_focus_service=self.chat_session_learning_focus_service,
+                    side_effect_service=self.side_effect_service,
+                    current_recall_words=current_recall_words,
+                    cost_tracking=post_turn_cost_tracking,
+                )
 
-        await self.repository.add_message(
-            user_id,
-            chat_id,
-            "assistant",
-            assistant_text,
-            teacher_emotion=teacher_emotion,
-        )
-
-        return assistant_text, teacher_emotion
+                await self.repository.add_message(
+                    user_id,
+                    chat_id,
+                    "assistant",
+                    assistant_text,
+                    teacher_emotion=teacher_emotion,
+                )
+            except BaseException:
+                await self._fail_foreground_operation(post_turn_cost_tracking, chat_id)
+                raise
+            return assistant_text, teacher_emotion
 
     async def _load_current_recall_words(self, user_id: int) -> list[str]:
         """Load Teacher recall context without leaving the request-scoped session."""

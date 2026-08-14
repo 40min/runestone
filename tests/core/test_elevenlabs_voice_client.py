@@ -1,5 +1,6 @@
 """Tests for ElevenLabs STT/TTS clients."""
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -79,6 +80,33 @@ class TestElevenLabsSTTClient:
 
         assert result == ""
 
+    @patch("runestone.core.clients.voice.elevenlabs_voice_client.AsyncElevenLabs")
+    @pytest.mark.anyio
+    async def test_transcription_without_billing_metadata_is_unknown(self, mock_client_class):
+        """File bytes must not be treated as a billed STT quantity."""
+        mock_client_class.return_value.speech_to_text.convert = AsyncMock(
+            return_value=SimpleNamespace(text="private transcript")
+        )
+        client = ElevenLabsSTTClient(api_key="test-key", transcription_model="scribe_v2")
+
+        with patch("runestone.core.clients.voice.elevenlabs_voice_client.record_model_interaction") as record:
+            await client.transcribe_audio(b"private audio bytes")
+
+        assert record.call_args.kwargs["usage"] == {}
+        assert "provider_cost_usd" not in record.call_args.kwargs
+
+    @patch("runestone.core.clients.voice.elevenlabs_voice_client.AsyncElevenLabs")
+    @pytest.mark.anyio
+    async def test_transcription_records_supported_audio_duration(self, mock_client_class):
+        response = SimpleNamespace(text="hello", audio_duration_secs=2.5)
+        mock_client_class.return_value.speech_to_text.convert = AsyncMock(return_value=response)
+        client = ElevenLabsSTTClient(api_key="test-key", transcription_model="scribe_v2")
+
+        with patch("runestone.core.clients.voice.elevenlabs_voice_client.record_model_interaction") as record:
+            await client.transcribe_audio(b"private audio bytes")
+
+        assert record.call_args.kwargs["usage"] == {"second": 2.5}
+
 
 class TestElevenLabsTTSClient:
     """Test cases for ElevenLabs TTS client."""
@@ -109,8 +137,9 @@ class TestElevenLabsTTSClient:
         )
 
         chunks = []
-        async for chunk in client.synthesize_speech_stream("Hello", speed=1.25):
-            chunks.append(chunk)
+        with patch("runestone.core.clients.voice.elevenlabs_voice_client.record_model_interaction") as record:
+            async for chunk in client.synthesize_speech_stream("Hello", speed=1.25):
+                chunks.append(chunk)
 
         assert chunks == [b"chunk1", b"chunk2"]
         mock_voice_settings.assert_called_once_with(
@@ -127,3 +156,94 @@ class TestElevenLabsTTSClient:
             output_format="mp3_44100_128",
             voice_settings="voice-settings",
         )
+        record.assert_called_once()
+        assert record.call_args.kwargs["status"] == "completed"
+        assert record.call_args.kwargs["usage"] == {"character": 5}
+
+    @patch("runestone.core.clients.voice.elevenlabs_voice_client.AsyncElevenLabs")
+    @pytest.mark.anyio
+    async def test_failed_tts_records_unknown_cost(self, mock_client_class):
+        """A failed potentially billed stream should remain attributed with unknown cost."""
+
+        async def failed_stream(**kwargs):
+            raise RuntimeError("provider failed")
+            yield  # pragma: no cover
+
+        mock_client_class.return_value.text_to_speech.stream = MagicMock(side_effect=failed_stream)
+        client = ElevenLabsTTSClient(
+            api_key="test-key",
+            tts_model_id="eleven_multilingual_v2",
+            voice_id="voice-id",
+            output_format="mp3_44100_128",
+            stability=0.5,
+            similarity_boost=0.75,
+            style=0.0,
+            use_speaker_boost=True,
+        )
+
+        with patch("runestone.core.clients.voice.elevenlabs_voice_client.record_model_interaction") as record:
+            with pytest.raises(RuntimeError, match="provider failed"):
+                async for _ in client.synthesize_speech_stream("private text"):
+                    pass
+
+        record.assert_called_once()
+        assert record.call_args.kwargs["status"] == "failed"
+        assert record.call_args.kwargs["usage"] == {"character": 12}
+
+    @patch("runestone.core.clients.voice.elevenlabs_voice_client.AsyncElevenLabs")
+    @pytest.mark.anyio
+    async def test_early_close_records_cancelled_attempt_once(self, mock_client_class):
+        """Consumer abandonment should record the submitted request once."""
+
+        async def stream_audio(**kwargs):
+            yield b"first"
+            yield b"second"
+
+        mock_client_class.return_value.text_to_speech.stream = MagicMock(side_effect=stream_audio)
+        client = ElevenLabsTTSClient(
+            api_key="test-key",
+            tts_model_id="eleven_multilingual_v2",
+            voice_id="voice-id",
+            output_format="mp3_44100_128",
+            stability=0.5,
+            similarity_boost=0.75,
+            style=0.0,
+            use_speaker_boost=True,
+        )
+        stream = client.synthesize_speech_stream("private text")
+
+        with patch("runestone.core.clients.voice.elevenlabs_voice_client.record_model_interaction") as record:
+            assert await anext(stream) == b"first"
+            await stream.aclose()
+
+        record.assert_called_once()
+        assert record.call_args.kwargs["status"] == "cancelled"
+
+    @patch("runestone.core.clients.voice.elevenlabs_voice_client.AsyncElevenLabs")
+    @pytest.mark.anyio
+    async def test_cancellation_records_attempt_once(self, mock_client_class):
+        """Cancellation should record once and remain cancellation."""
+
+        async def stream_audio(**kwargs):
+            raise asyncio.CancelledError
+            yield  # pragma: no cover
+
+        mock_client_class.return_value.text_to_speech.stream = MagicMock(side_effect=stream_audio)
+        client = ElevenLabsTTSClient(
+            api_key="test-key",
+            tts_model_id="eleven_multilingual_v2",
+            voice_id="voice-id",
+            output_format="mp3_44100_128",
+            stability=0.5,
+            similarity_boost=0.75,
+            style=0.0,
+            use_speaker_boost=True,
+        )
+
+        with patch("runestone.core.clients.voice.elevenlabs_voice_client.record_model_interaction") as record:
+            with pytest.raises(asyncio.CancelledError):
+                async for _ in client.synthesize_speech_stream("Hello"):
+                    pass
+
+        record.assert_called_once()
+        assert record.call_args.kwargs["status"] == "cancelled"

@@ -5,7 +5,7 @@
 .PHONY: install install-dev install-backend install-frontend install-all
 .PHONY: lint lint-check backend-lint frontend-lint frontend-lockfile-check frontend-lockfile-sync security-check
 .PHONY: test test-coverage backend-test frontend-test
-.PHONY: run run-backend run-frontend run-dev run-recall load-vocab
+.PHONY: run run-backend run-frontend run-dev run-recall load-vocab update-model-prices
 .PHONY: test-prompts-ocr test-prompts-analysis test-prompts-vocabulary test-grammar-search
 .PHONY: dev-test dev-full ci-lint ci-test
 .PHONY: db-init db-migrate db-upgrade db-downgrade db-current db-history
@@ -50,7 +50,8 @@ help:
 	@echo ""
 	@echo "Running Applications:"
 	@echo "  run              - Run CLI application (requires IMAGE_PATH and the selected provider API key)"
-	@echo "  load-vocab       - Load vocabulary from CSV file (requires CSV_PATH, optional: DB_NAME, SKIP_EXISTENCE_CHECK)"
+	@echo "  load-vocab       - Load vocabulary from CSV file (requires CSV_PATH, optional: USER_ID, SKIP_EXISTENCE_CHECK)"
+	@echo "  update-model-prices - Refresh the local model-price snapshot"
 	@echo "  run-backend      - Start FastAPI backend server"
 	@echo "  run-frontend     - Start frontend development server"
 	@echo "  run-dev          - Start both backend and frontend concurrently"
@@ -79,7 +80,7 @@ help:
 	@echo "  db-history       - Show migration history"
 	@echo ""
 	@echo "Docker:"
-	@echo "  init-state       - Initialize state directory and database with proper permissions"
+	@echo "  init-state       - Initialize state files and caches with proper permissions"
 	@echo "  docker-up        - Initialize state and start Docker services"
 	@echo "  docker-down      - Stop and remove Docker services"
 	@echo "  docker-build     - Build Docker images without cache"
@@ -239,13 +240,18 @@ run:
 # Load vocabulary from CSV file
 load-vocab:
 	@if [ -z "$(CSV_PATH)" ]; then \
-		echo "❌ Error: CSV_PATH is required. Usage: make load-vocab CSV_PATH=path/to/vocab.csv [DB_NAME=name.db] [SKIP_EXISTENCE_CHECK=true]"; \
+		echo "❌ Error: CSV_PATH is required. Usage: make load-vocab CSV_PATH=path/to/vocab.csv [USER_ID=1] [SKIP_EXISTENCE_CHECK=true]"; \
 		exit 1; \
 	fi
 	@echo "📚 Loading vocabulary from CSV: $(CSV_PATH)"
 	@uv run runestone load-vocab "$(CSV_PATH)" \
-		$(if $(DB_NAME),--db-name "$(DB_NAME)") \
+		--user-id "$(or $(USER_ID),1)" \
 		$(if $(filter true,$(SKIP_EXISTENCE_CHECK)),--skip-existence-check)
+
+# Refresh the local model-price registry for runtime cost estimates
+update-model-prices:
+	@echo "💵 Refreshing model prices..."
+	@uv run python scripts/update-model-prices.py
 
 # Start FastAPI backend server
 run-backend: db-upgrade
@@ -406,11 +412,11 @@ clean:
 # DOCKER COMMANDS
 # =============================================================================
 
-# Initialize state directory and database with proper permissions for Docker containers
+# Initialize state files and caches with proper permissions for Docker containers
 init-state:
-	@echo "🔧 Initializing state directory and database for Docker containers..."
+	@echo "🔧 Initializing state files and caches for Docker containers..."
 	@./scripts/init-state.sh
-	@echo "✅ State directory and database initialized!"
+	@echo "✅ State files and caches initialized!"
 
 # Initialize state and start all Docker services
 docker-up: init-state

@@ -13,10 +13,24 @@ from runestone.config import (
     DEFAULT_SERVICE_LLM_MODEL,
     GEMINI_MINIMUM_TIMEOUT_SECONDS,
     MEMORY_MAINTENANCE_TIMEOUT_SECONDS_DEFAULT,
+    PAID_AGENT_NAMES,
     ReasoningLevel,
     Settings,
     settings,
 )
+
+
+def test_paid_agent_names_are_canonical_and_include_optional_backup() -> None:
+    assert PAID_AGENT_NAMES == (
+        "teacher",
+        "teacher_backup",
+        "coordinator",
+        "word_keeper",
+        "news_agent",
+        "learning_memory_keeper",
+        "personal_memory_keeper",
+        "memory_maintainer",
+    )
 
 
 class TestSettings:
@@ -31,7 +45,7 @@ class TestSettings:
             llm_model_name: str
             verbose: bool = False
             allowed_origins: str
-            database_url: str = "sqlite:///./state/runestone.db"
+            database_url: str = "postgresql+asyncpg://user:pass@localhost/runestone"
             telegram_offset_file_path: str = "state/offset.txt"
             telegram_bot_token: str
             recall_start_hour: int = 9
@@ -49,7 +63,7 @@ class TestSettings:
             "LLM_MODEL_NAME": "gpt-4o-mini",
             "VERBOSE": "true",
             "ALLOWED_ORIGINS": "http://localhost:3000",
-            "DATABASE_URL": "sqlite:///./test.db",
+            "DATABASE_URL": "postgresql+asyncpg://user:pass@localhost/runestone",
             "TELEGRAM_OFFSET_FILE_PATH": "custom/offset.txt",
             "TELEGRAM_BOT_TOKEN": "test-token",
             "RECALL_START_HOUR": "8",
@@ -65,7 +79,7 @@ class TestSettings:
             assert test_settings.llm_model_name == "gpt-4o-mini"
             assert test_settings.verbose is True
             assert test_settings.allowed_origins == "http://localhost:3000"
-            assert test_settings.database_url == "sqlite:///./test.db"
+            assert test_settings.database_url == "postgresql+asyncpg://user:pass@localhost/runestone"
             assert test_settings.telegram_offset_file_path == "custom/offset.txt"
             assert test_settings.telegram_bot_token == "test-token"
             assert test_settings.recall_start_hour == 8
@@ -81,7 +95,7 @@ class TestSettings:
             llm_model_name: str
             verbose: bool = False
             allowed_origins: str
-            database_url: str = "sqlite:///./state/runestone.db"
+            database_url: str = "postgresql+asyncpg://user:pass@localhost/runestone"
             telegram_offset_file_path: str = "state/offset.txt"
             telegram_bot_token: str
             recall_start_hour: int = 9
@@ -109,6 +123,42 @@ class TestSettings:
         assert settings.allowed_origins == "http://localhost:5173,http://127.0.0.1:5173,http://frontend:3010"
         assert settings.telegram_bot_token == "test_telegram_bot_token_for_testing_only"
 
+    @staticmethod
+    def _minimal_settings_env(database_url: str) -> dict[str, str]:
+        """Build the required environment for database URL validation tests."""
+        return {
+            "LLM_PROVIDER": "openai",
+            "OPENAI_API_KEY": "test-key",
+            "ALLOWED_ORIGINS": "http://localhost:3000",
+            "DATABASE_URL": database_url,
+            "TELEGRAM_BOT_TOKEN": "test-token",
+            "FRONTEND_URL": "http://localhost:5173",
+            "JWT_SECRET_KEY": "secret",
+            "TEACHER_MODEL": "teacher-model",
+            "COORDINATOR_MODEL": "coordinator-model",
+        }
+
+    def test_database_url_accepts_postgresql_asyncpg(self):
+        database_url = "postgresql+asyncpg://user:pass@localhost/runestone"
+
+        with patch.dict(os.environ, self._minimal_settings_env(database_url), clear=True):
+            test_settings = Settings()
+
+        assert test_settings.database_url == database_url
+
+    @pytest.mark.parametrize(
+        "database_url",
+        [
+            "postgresql://user:pass@localhost/runestone",
+            "postgresql+psycopg2://user:pass@localhost/runestone",
+            "mysql+asyncmy://user:pass@localhost/runestone",
+        ],
+    )
+    def test_database_url_rejects_unsupported_dialects_and_drivers(self, database_url):
+        with patch.dict(os.environ, self._minimal_settings_env(database_url), clear=True):
+            with pytest.raises(ValidationError, match=r"postgresql\+asyncpg"):
+                Settings()
+
     def test_agent_reasoning_level_accepts_known_enum_values(self):
         """Test per-agent reasoning settings are validated via enum."""
         env_vars = {
@@ -116,7 +166,7 @@ class TestSettings:
             "OPENAI_API_KEY": "test-key",
             "OPENROUTER_API_KEY": "test-openrouter-key",
             "ALLOWED_ORIGINS": "http://localhost:3000",
-            "DATABASE_URL": "sqlite:///./test.db",
+            "DATABASE_URL": "postgresql+asyncpg://user:pass@localhost/runestone",
             "TELEGRAM_BOT_TOKEN": "test-token",
             "FRONTEND_URL": "http://localhost:5173",
             "JWT_SECRET_KEY": "secret",
@@ -137,7 +187,7 @@ class TestSettings:
             "OPENAI_API_KEY": "test-key",
             "OPENROUTER_API_KEY": "test-openrouter-key",
             "ALLOWED_ORIGINS": "http://localhost:3000",
-            "DATABASE_URL": "sqlite:///./test.db",
+            "DATABASE_URL": "postgresql+asyncpg://user:pass@localhost/runestone",
             "TELEGRAM_BOT_TOKEN": "test-token",
             "FRONTEND_URL": "http://localhost:5173",
             "JWT_SECRET_KEY": "secret",
@@ -169,7 +219,7 @@ class TestSettings:
             "LLM_PROVIDER": "openai",
             "OPENAI_API_KEY": "test-key",
             "ALLOWED_ORIGINS": "http://localhost:3000",
-            "DATABASE_URL": "sqlite:///./test.db",
+            "DATABASE_URL": "postgresql+asyncpg://user:pass@localhost/runestone",
             "TELEGRAM_BOT_TOKEN": "test-token",
             "FRONTEND_URL": "http://localhost:5173",
             "JWT_SECRET_KEY": "secret",
@@ -200,7 +250,7 @@ class TestSettings:
             "LLM_PROVIDER": "openai",
             "OPENAI_API_KEY": "test-key",
             "ALLOWED_ORIGINS": "http://localhost:3000",
-            "DATABASE_URL": "sqlite:///./test.db",
+            "DATABASE_URL": "postgresql+asyncpg://user:pass@localhost/runestone",
             "TELEGRAM_BOT_TOKEN": "test-token",
             "FRONTEND_URL": "http://localhost:5173",
             "JWT_SECRET_KEY": "secret",
@@ -219,7 +269,7 @@ class TestSettings:
             "LLM_PROVIDER": "openai",
             "OPENAI_API_KEY": "test-key",
             "ALLOWED_ORIGINS": "http://localhost:3000",
-            "DATABASE_URL": "sqlite:///./test.db",
+            "DATABASE_URL": "postgresql+asyncpg://user:pass@localhost/runestone",
             "TELEGRAM_BOT_TOKEN": "test-token",
             "FRONTEND_URL": "http://localhost:5173",
             "JWT_SECRET_KEY": "secret",
@@ -240,7 +290,7 @@ class TestSettings:
             "OPENAI_API_KEY": "test-key",
             "OPENROUTER_API_KEY": "test-openrouter-key",
             "ALLOWED_ORIGINS": "http://localhost:3000",
-            "DATABASE_URL": "sqlite:///./test.db",
+            "DATABASE_URL": "postgresql+asyncpg://user:pass@localhost/runestone",
             "TELEGRAM_BOT_TOKEN": "test-token",
             "FRONTEND_URL": "http://localhost:5173",
             "JWT_SECRET_KEY": "secret",
@@ -266,7 +316,7 @@ class TestSettings:
             ocr_llm_provider=None,
             ocr_llm_model_name=None,
             allowed_origins="http://localhost:3000",
-            database_url="sqlite:///./test.db",
+            database_url="postgresql+asyncpg://user:pass@localhost/runestone",
             telegram_bot_token="test-token",
             frontend_url="http://localhost:5173",
             jwt_secret_key="secret",
@@ -291,7 +341,7 @@ class TestSettings:
             ocr_llm_provider=None,
             ocr_llm_model_name=None,
             allowed_origins="http://localhost:3000",
-            database_url="sqlite:///./test.db",
+            database_url="postgresql+asyncpg://user:pass@localhost/runestone",
             telegram_bot_token="test-token",
             frontend_url="http://localhost:5173",
             jwt_secret_key="secret",
@@ -314,7 +364,7 @@ class TestSettings:
             ocr_llm_provider="openrouter",
             ocr_llm_model_name="anthropic/claude-3.5-sonnet",
             allowed_origins="http://localhost:3000",
-            database_url="sqlite:///./test.db",
+            database_url="postgresql+asyncpg://user:pass@localhost/runestone",
             telegram_bot_token="test-token",
             frontend_url="http://localhost:5173",
             jwt_secret_key="secret",
@@ -338,7 +388,7 @@ class TestSettings:
             ocr_llm_provider=None,
             ocr_llm_model_name=None,
             allowed_origins="http://localhost:3000",
-            database_url="sqlite:///./test.db",
+            database_url="postgresql+asyncpg://user:pass@localhost/runestone",
             telegram_bot_token="test-token",
             frontend_url="http://localhost:5173",
             jwt_secret_key="secret",
@@ -360,7 +410,7 @@ class TestSettings:
             ocr_llm_provider="openrouter",
             ocr_llm_model_name="amazon/nova-lite-v1",
             allowed_origins="http://localhost:3000",
-            database_url="sqlite:///./test.db",
+            database_url="postgresql+asyncpg://user:pass@localhost/runestone",
             telegram_bot_token="test-token",
             frontend_url="http://localhost:5173",
             jwt_secret_key="secret",
@@ -382,7 +432,7 @@ class TestSettings:
             gemini_api_key="test-gemini-key",
             openrouter_api_key="test-openrouter-key",
             allowed_origins="http://localhost:3000",
-            database_url="sqlite:///./test.db",
+            database_url="postgresql+asyncpg://user:pass@localhost/runestone",
             telegram_bot_token="test-token",
             frontend_url="http://localhost:5173",
             jwt_secret_key="secret",
@@ -405,7 +455,7 @@ class TestSettings:
             gemini_api_key="test-gemini-key",
             openrouter_api_key="test-openrouter-key",
             allowed_origins="http://localhost:3000",
-            database_url="sqlite:///./test.db",
+            database_url="postgresql+asyncpg://user:pass@localhost/runestone",
             telegram_bot_token="test-token",
             frontend_url="http://localhost:5173",
             jwt_secret_key="secret",
@@ -435,7 +485,7 @@ class TestSettings:
             gemini_api_key="test-gemini-key",
             openrouter_api_key="test-openrouter-key",
             allowed_origins="http://localhost:3000",
-            database_url="sqlite:///./test.db",
+            database_url="postgresql+asyncpg://user:pass@localhost/runestone",
             telegram_bot_token="test-token",
             frontend_url="http://localhost:5173",
             jwt_secret_key="secret",
@@ -453,7 +503,7 @@ class TestSettings:
             "OPENAI_API_KEY": "test-key",
             "OPENROUTER_API_KEY": "test-openrouter-key",
             "ALLOWED_ORIGINS": "http://localhost:3000",
-            "DATABASE_URL": "sqlite:///./test.db",
+            "DATABASE_URL": "postgresql+asyncpg://user:pass@localhost/runestone",
             "TELEGRAM_BOT_TOKEN": "test-token",
             "FRONTEND_URL": "http://localhost:5173",
             "JWT_SECRET_KEY": "secret",
@@ -477,7 +527,7 @@ class TestSettings:
             gemini_api_key="gkey",
             openrouter_api_key="orkey",
             allowed_origins="http://localhost",
-            database_url="sqlite:///./test.db",
+            database_url="postgresql+asyncpg://user:pass@localhost/runestone",
             telegram_bot_token="tok",
             frontend_url="http://localhost:5173",
             jwt_secret_key="secret",
@@ -565,7 +615,7 @@ class TestSettings:
             "LLM_PROVIDER": "openai",
             "OPENAI_API_KEY": "test-key",
             "ALLOWED_ORIGINS": "http://localhost:3000",
-            "DATABASE_URL": "sqlite:///./test.db",
+            "DATABASE_URL": "postgresql+asyncpg://user:pass@localhost/runestone",
             "TELEGRAM_BOT_TOKEN": "test-token",
             "FRONTEND_URL": "http://localhost:5173",
             "JWT_SECRET_KEY": "secret",
@@ -590,7 +640,7 @@ class TestSettings:
             "LLM_PROVIDER": "openai",
             "OPENAI_API_KEY": "test-key",
             "ALLOWED_ORIGINS": "http://localhost:3000",
-            "DATABASE_URL": "sqlite:///./test.db",
+            "DATABASE_URL": "postgresql+asyncpg://user:pass@localhost/runestone",
             "TELEGRAM_BOT_TOKEN": "test-token",
             "FRONTEND_URL": "http://localhost:5173",
             "JWT_SECRET_KEY": "secret",
@@ -615,7 +665,7 @@ class TestSettings:
             gemini_api_key="gkey",
             openrouter_api_key="orkey",
             allowed_origins="http://localhost",
-            database_url="sqlite:///./test.db",
+            database_url="postgresql+asyncpg://user:pass@localhost/runestone",
             telegram_bot_token="tok",
             frontend_url="http://localhost:5173",
             jwt_secret_key="secret",
@@ -635,7 +685,7 @@ class TestSettings:
             "LLM_PROVIDER": "openai",
             "OPENAI_API_KEY": "test-key",
             "ALLOWED_ORIGINS": "http://localhost:3000",
-            "DATABASE_URL": "sqlite:///./test.db",
+            "DATABASE_URL": "postgresql+asyncpg://user:pass@localhost/runestone",
             "TELEGRAM_BOT_TOKEN": "test-token",
             "FRONTEND_URL": "http://localhost:5173",
             "JWT_SECRET_KEY": "secret",

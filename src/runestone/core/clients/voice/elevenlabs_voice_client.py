@@ -2,11 +2,19 @@
 ElevenLabs-backed voice clients for STT and TTS.
 """
 
+import asyncio
 import io
 from typing import AsyncIterator
 
 from elevenlabs import VoiceSettings
 from elevenlabs.client import AsyncElevenLabs
+
+from runestone.model_costs.tracking import record_model_interaction
+
+
+def _transcription_usage(response: object) -> dict[str, object]:
+    duration = getattr(response, "audio_duration_secs", None)
+    return {"second": duration} if duration is not None else {}
 
 
 class ElevenLabsSTTClient:
@@ -27,7 +35,11 @@ class ElevenLabsSTTClient:
         self._client = AsyncElevenLabs(api_key=api_key)
         self._transcription_model = transcription_model
 
-    async def transcribe_audio(self, audio_content: bytes, language: str | None = None) -> str:
+    async def transcribe_audio(
+        self,
+        audio_content: bytes,
+        language: str | None = None,
+    ) -> str:
         """
         Transcribe raw audio bytes with ElevenLabs Scribe.
 
@@ -48,7 +60,31 @@ class ElevenLabsSTTClient:
         if language:
             params["language_code"] = language
 
-        response = await self._client.speech_to_text.convert(**params)
+        try:
+            response = await self._client.speech_to_text.convert(**params)
+        except asyncio.CancelledError:
+            record_model_interaction(
+                component="voice_stt",
+                provider="elevenlabs",
+                model=self._transcription_model,
+                status="cancelled",
+            )
+            raise
+        except Exception:
+            record_model_interaction(
+                component="voice_stt",
+                provider="elevenlabs",
+                model=self._transcription_model,
+                status="failed",
+            )
+            raise
+        record_model_interaction(
+            component="voice_stt",
+            provider="elevenlabs",
+            model=self._transcription_model,
+            status="completed",
+            usage=_transcription_usage(response),
+        )
         return (getattr(response, "text", None) or "").strip()
 
 
@@ -103,7 +139,11 @@ class ElevenLabsTTSClient:
             speed=speed,
         )
 
-    async def synthesize_speech_stream(self, text: str, speed: float = 1.0) -> AsyncIterator[bytes]:
+    async def synthesize_speech_stream(
+        self,
+        text: str,
+        speed: float = 1.0,
+    ) -> AsyncIterator[bytes]:
         """
         Synthesize text and stream MP3 audio chunks.
 
@@ -115,11 +155,30 @@ class ElevenLabsTTSClient:
             MP3 byte chunks
         """
         voice_settings = self._build_voice_settings(speed=speed)
-        async for chunk in self._client.text_to_speech.stream(
-            voice_id=self._voice_id,
-            text=text,
-            model_id=self._tts_model_id,
-            output_format=self._output_format,
-            voice_settings=voice_settings,
-        ):
-            yield chunk
+        status = "failed"
+        try:
+            async for chunk in self._client.text_to_speech.stream(
+                voice_id=self._voice_id,
+                text=text,
+                model_id=self._tts_model_id,
+                output_format=self._output_format,
+                voice_settings=voice_settings,
+            ):
+                yield chunk
+            status = "completed"
+        except asyncio.CancelledError:
+            status = "cancelled"
+            raise
+        except GeneratorExit:
+            status = "cancelled"
+            raise
+        except Exception:
+            raise
+        finally:
+            record_model_interaction(
+                component="voice_tts",
+                provider="elevenlabs",
+                model=self._tts_model_id,
+                status=status,
+                usage={"character": len(text)},
+            )

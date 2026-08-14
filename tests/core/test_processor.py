@@ -207,8 +207,8 @@ class TestRunestoneProcessor:
 
     @patch("PIL.Image.open")
     @pytest.mark.anyio
-    async def test_run_ocr_success(self, mock_image_open):
-        """Test successful OCR processing."""
+    async def test_run_ocr_success(self, mock_image_open, caplog):
+        """Processor OCR remains unaware of cost-tracking lifecycle."""
         # Mock PIL Image
         mock_image = Mock()
         mock_image.size = (800, 600)
@@ -238,14 +238,16 @@ class TestRunestoneProcessor:
             user_service=Mock(spec=UserService),
             verbose=False,
         )
-        result = await processor.run_ocr(b"fake image data")
+        with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+            result = await processor.run_ocr(b"fake image data")
 
         assert result == mock_ocr_result
         mock_ocr_instance.extract_text.assert_called_once()
+        assert not [record for record in caplog.records if record.message.startswith("model_cost ")]
 
     @pytest.mark.anyio
-    async def test_run_analysis_success(self):
-        """Test successful content analysis."""
+    async def test_run_analysis_success(self, caplog):
+        """Processor analysis remains unaware of cost-tracking lifecycle."""
         # Mock analysis result as ContentAnalysis object
         mock_analysis = ContentAnalysis(
             vocabulary=[VocabularyItem(swedish="hej", english="hello", example_phrase=None)],
@@ -276,11 +278,13 @@ class TestRunestoneProcessor:
             user_service=mock_user_service,
             verbose=False,
         )
-        result = await processor.run_analysis("Sample text", user=mock_user)
+        with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+            result = await processor.run_analysis("Sample text", user=mock_user)
 
         assert result == mock_analysis
         mock_analyzer_instance.analyze_content.assert_called_once_with("Sample text")
         mock_user_service.increment_pages_recognised_count.assert_awaited_once_with(mock_user)
+        assert not [record for record in caplog.records if record.message.startswith("model_cost ")]
 
     @patch("PIL.Image.open")
     @patch("runestone.core.processor.get_logger")
@@ -353,6 +357,51 @@ class TestRunestoneProcessor:
         # Verify logging
         mock_logger.debug.assert_any_call(f"[RunestoneProcessor] Starting processing of image: {self.image_path}")
         mock_logger.debug.assert_any_call("[RunestoneProcessor] Image processing completed successfully")
+
+    @patch("PIL.Image.open")
+    @patch("builtins.open")
+    @pytest.mark.anyio
+    async def test_process_image_is_tracking_agnostic(self, mock_open, mock_image_open, caplog):
+        """Combined processor workflow does not create a cost scope."""
+        mock_open.return_value.__enter__.return_value.read.return_value = b"image"
+        mock_image_open.return_value = Mock(size=(800, 600))
+        ocr_result = OCRResult(
+            transcribed_text="Sample Swedish text",
+            recognition_statistics=RecognitionStatistics(
+                total_elements=20,
+                successfully_transcribed=20,
+                unclear_uncertain=0,
+                unable_to_recognize=0,
+            ),
+        )
+        analysis = ContentAnalysis(
+            vocabulary=[],
+            grammar_focus=GrammarFocus(has_explicit_rules=False, topic="greetings", explanation="", rules=None),
+            core_topics=[],
+        )
+        ocr = AsyncMock()
+        analyzer = AsyncMock()
+
+        async def extract_text(_image):
+            return ocr_result
+
+        async def analyze_content(_text):
+            return analysis
+
+        ocr.extract_text.side_effect = extract_text
+        analyzer.analyze_content.side_effect = analyze_content
+        processor = RunestoneProcessor(
+            settings=self.settings,
+            ocr_processor=ocr,
+            content_analyzer=analyzer,
+            vocabulary_service=Mock(get_existing_word_phrases=AsyncMock(return_value=[])),
+            user_service=Mock(increment_pages_recognised_count=AsyncMock()),
+        )
+
+        with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+            await processor.process_image(self.image_path, user=Mock(id=1))
+
+        assert not [record for record in caplog.records if record.message.startswith("model_cost ")]
 
     @patch("PIL.Image.open")
     @patch("runestone.core.processor.get_logger")

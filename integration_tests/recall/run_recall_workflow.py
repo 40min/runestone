@@ -7,8 +7,6 @@ assertion. Telegram delivery and polling are recorded in memory; no network or
 LLM operation is permitted.
 """
 
-from __future__ import annotations
-
 import argparse
 import asyncio
 import hashlib

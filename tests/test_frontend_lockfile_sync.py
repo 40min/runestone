@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import subprocess
 
 from scripts import check_frontend_lockfile_sync

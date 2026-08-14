@@ -5,6 +5,7 @@ This module contains unit tests for the UserService class.
 """
 
 from datetime import datetime
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -147,9 +148,8 @@ class TestUserService:
         # where another user took the email between check and update
         integrity_error = IntegrityError(
             'Duplicate key value violates unique constraint "users_email_key"',
-            'Duplicate key value violates unique constraint "users_email_key"',
-            "ORIGINAL ERROR: psycopg2.errors.UniqueViolation: "
-            'duplicate key value violates unique constraint "users_email_key"',
+            {},
+            SimpleNamespace(sqlstate="23505", constraint_name="users_email_key"),
         )
         mock_user_repo.update.side_effect = integrity_error
 
@@ -162,28 +162,6 @@ class TestUserService:
 
         # Verify update was called
         mock_user_repo.update.assert_called_once()
-
-    @pytest.mark.anyio
-    async def test_update_user_profile_email_toctou_sqlite_constraint(self, user_service, mock_user_repo, user):
-        """Test TOCTOU race condition with SQLite-style UNIQUE constraint failed message."""
-        # Set user email
-        user.email = "old@example.com"
-        mock_user_repo.get_by_email.return_value = None
-
-        # Mock update to raise IntegrityError with SQLite-style message
-        integrity_error = IntegrityError(
-            "(sqlite3.IntegrityError) UNIQUE constraint failed: users.email",
-            "(sqlite3.IntegrityError) UNIQUE constraint failed: users.email",
-            "UNIQUE constraint failed: users.email",
-        )
-        mock_user_repo.update.side_effect = integrity_error
-
-        # Try to update email
-        update_data = UserProfileUpdate(email="newemail@example.com")
-
-        # Should raise ValueError with user-friendly message
-        with pytest.raises(ValueError, match="Email address is already registered by another user"):
-            await user_service.update_user_profile(user, update_data)
 
     @pytest.mark.anyio
     async def test_update_user_profile_other_integrity_error_raised(self, user_service, mock_user_repo, user):
@@ -265,6 +243,19 @@ class TestUserService:
 
         with pytest.raises(ValueError, match="Telegram username is already linked to another account"):
             await user_service.update_user_profile(user, update_data)
+
+    @pytest.mark.anyio
+    async def test_update_user_profile_telegram_toctou_race_condition(self, user_service, mock_user_repo, user):
+        """Translate a PostgreSQL username uniqueness race into the domain-facing error."""
+        mock_user_repo.find_by_telegram_username.return_value = []
+        mock_user_repo.update.side_effect = IntegrityError(
+            'Duplicate key value violates unique constraint "ix_users_telegram_username"',
+            {},
+            SimpleNamespace(sqlstate="23505", constraint_name="ix_users_telegram_username"),
+        )
+
+        with pytest.raises(ValueError, match="Telegram username is already linked to another account"):
+            await user_service.update_user_profile(user, UserProfileUpdate(telegram_username="@SomeUser"))
 
     @pytest.mark.anyio
     async def test_get_user_profile_includes_telegram_username(self, user_service, mock_user_repo, user):

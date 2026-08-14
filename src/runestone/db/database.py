@@ -10,7 +10,7 @@ import os
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from sqlalchemy import create_engine, make_url
+from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
@@ -21,20 +21,16 @@ from runestone.config import settings
 logger = logging.getLogger(__name__)
 
 
-db_url_params = {}
-settings_url = make_url(settings.database_url)
-# QueuePool kwargs are valid for PostgreSQL (asyncpg, psycopg) drivers
-if settings_url.get_dialect().name == "postgresql":
-    # Keep the pool configurable because each backend process owns its own pool.
-    # Small NAS deployments need lower defaults than a workstation, while bursts
-    # from parallel agent tool calls can still use max_overflow headroom.
-    db_url_params = {
-        "pool_size": settings.database_pool_size,
-        "max_overflow": settings.database_max_overflow,
-        "pool_timeout": settings.database_pool_timeout,
-        "pool_pre_ping": settings.database_pool_pre_ping,
-        "pool_recycle": settings.database_pool_recycle_seconds,
-    }
+# Each backend process owns a PostgreSQL pool. Small NAS deployments need lower
+# defaults than a workstation, while bursts from parallel agent calls can still
+# use max_overflow headroom.
+db_url_params = {
+    "pool_size": settings.database_pool_size,
+    "max_overflow": settings.database_max_overflow,
+    "pool_timeout": settings.database_pool_timeout,
+    "pool_pre_ping": settings.database_pool_pre_ping,
+    "pool_recycle": settings.database_pool_recycle_seconds,
+}
 
 logger.info("DB connection params: %s", db_url_params)
 

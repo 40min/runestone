@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Keep the frontend lockfile synchronized with its package manifest."""
 
-from __future__ import annotations
-
 import argparse
 import json
 import shutil

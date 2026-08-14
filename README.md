@@ -10,7 +10,7 @@ A command-line tool and web application for analyzing Swedish textbook pages usi
 - **📸 OCR Processing**: Extract text from Swedish textbook page images using vision-enabled LLMs
 - **🎓 Grammar Analysis**: Identify and explain grammatical patterns and rules
 - **🔑 Vocabulary Extraction**: Generate word banks with English translations and contextual examples
-- **💾 Vocabulary Persistence**: Save vocabulary to SQLite database for long-term learning tracking
+- **💾 Vocabulary Persistence**: Save vocabulary to PostgreSQL for long-term learning tracking
 - **🔗 Resource Discovery**: Find relevant learning resources from trusted Swedish language sites
 - **✨ Rich Output**: Beautiful console output with emojis and formatting
 - **📝 Export Options**: Output results to console or markdown format
@@ -27,6 +27,7 @@ A command-line tool and web application for analyzing Swedish textbook pages usi
 
 - Python 3.13+
 - Node.js 18+ and npm (for web interface development)
+- PostgreSQL 16+
 - API key for your chosen LLM provider:
   - **OpenAI**: API key with GPT-4o access (recommended, default)
   - **Gemini**: Google Gemini API key with vision capabilities
@@ -107,10 +108,10 @@ runestone process --provider openai --api-key YOUR_API_KEY /path/to/textbook_pag
 # Load vocabulary from CSV file
 runestone load-vocab /path/to/vocabulary.csv
 
-# Load vocabulary with custom database name
-runestone load-vocab /path/to/vocabulary.csv --db-name my_vocab.db
+# Load vocabulary for a specific user (defaults to user 1)
+runestone load-vocab /path/to/vocabulary.csv --user-id 42
 
-# Load vocabulary skipping existence check (allow duplicates)
+# Load vocabulary skipping existence checks (upsert every CSV item)
 runestone load-vocab /path/to/vocabulary.csv --skip-existence-check
 ```
 
@@ -406,21 +407,6 @@ docker exec -i runestone-postgres pg_restore --clean --if-exists -U "$POSTGRES_U
 
 On Coolify, redeploy the application after adding the backup environment variables so the backup sidecar starts alongside the rest of the stack.
 
-### Database Permissions (SQLite)
-
-The Docker setup automatically handles SQLite database permissions to prevent "attempt to write a readonly database" errors:
-
-- **Database in State Directory**: The SQLite database is stored in the `state/` directory (`sqlite:///./state/runestone.db`)
-- **Automatic Permissions**: The `init-state.sh` script ensures the state directory has proper permissions (`777`) for container access
-- **No Manual Configuration**: Works across all development machines without user ID mapping
-
-**Technical Details:**
-- Database file: `./state/runestone.db` (inherits directory permissions)
-- State directory permissions: `drwxrwxrwx` (777) - allows container write access
-- The `init-state.sh` script automatically sets permissions during `make docker-up`
-
-This clean solution eliminates the need for complex user ID mapping while maintaining security and portability.
-
 ### Docker Volume Permissions
 
 When deploying the application inside Docker containers (using `docker compose` or orchestrators like Coolify), the backend and recall services run as a non-root user `runestone` with UID/GID `10001:10001`. This ensures security and avoids namespace conflicts with standard system accounts on the host.
@@ -517,12 +503,13 @@ Design docs:
 - Contracts + orchestration flow: [`agent-swarm-architecture.md`](docs/agent-swarm-architecture.md:1)
 - Chat-reset memory maintenance: [`memory-maintainer.md`](docs/memory-maintainer.md:1)
 - Implementation milestones: [`agent-swarm-plan.md`](docs/agent-swarm-plan.md:1)
+- Model-cost operations and price refresh: [`model-cost-tracking.md`](docs/model-cost-tracking.md:1)
 - Documentation naming convention: [`docs/README.md`](docs/README.md:1)
 
 ## 📋 Requirements
 
 - **Python**: 3.13+
-- **Database**: SQLite (built-in) or PostgreSQL/MySQL (optional)
+- **Database**: PostgreSQL 16+
 - **API Key**: Choose one:
   - OpenAI API key with GPT-4o access (recommended)
   - Google Gemini API key with vision capabilities
@@ -592,7 +579,7 @@ after any load-time minimum enforcement.
 - `ELEVENLABS_TTS_USE_SPEAKER_BOOST`: Enable speaker boost (`true` or `false`, default: `true`)
 
 **Database Configuration:**
-- `DATABASE_URL`: Database connection URL (default: `sqlite:///./state/runestone.db`)
+- `DATABASE_URL`: Required PostgreSQL async URL using `postgresql+asyncpg://`.
 - `DATABASE_POOL_SIZE`, `DATABASE_MAX_OVERFLOW`: Application connection pool sizing for Postgres deployments.
 - `STARTUP_DB_CHECK`: Enable or disable the application startup table check. Compose disables this because migrations run before backend startup.
 - `POSTGRES_MAX_CONNECTIONS`, `POSTGRES_SHARED_BUFFERS`, `POSTGRES_EFFECTIVE_CACHE_SIZE`: Postgres container resource settings. See [Postgres Container Tuning](docs/postgres-container-tuning.md).
@@ -642,7 +629,7 @@ ELEVENLABS_TTS_MODEL=eleven_multilingual_v2
 ELEVENLABS_TTS_VOICE_ID=your_elevenlabs_voice_id_here
 
 # Database settings
-DATABASE_URL=sqlite:///./state/runestone.db
+DATABASE_URL=postgresql+asyncpg://runestone:runestone@localhost:5432/runestone
 
 # Telegram settings (for Rune Recall)
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here

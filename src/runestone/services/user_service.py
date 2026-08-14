@@ -16,6 +16,7 @@ from ..core.exceptions import UserNotFoundError
 from ..core.logging_config import get_logger
 from ..db.models import User
 from ..db.user_repository import UserRepository
+from ..db.utils import is_postgresql_unique_violation
 
 
 class UserService:
@@ -94,16 +95,14 @@ class UserService:
         # Save changes using user repository
         try:
             updated_user = await self.user_repo.update(user)
-        except IntegrityError as e:
-            error_str = str(e)
-            if "users_email_key" in error_str or "UNIQUE constraint failed: users.email" in error_str:
-                raise ValueError("Email address is already registered by another user") from e
-            if (
-                "users_telegram_username_key" in error_str
-                or "ix_users_telegram_username" in error_str
-                or "UNIQUE constraint failed: users.telegram_username" in error_str
+        except IntegrityError as exc:
+            if is_postgresql_unique_violation(exc, {"users_email_key", "ix_users_email"}):
+                raise ValueError("Email address is already registered by another user") from exc
+            if is_postgresql_unique_violation(
+                exc,
+                {"users_telegram_username_key", "ix_users_telegram_username"},
             ):
-                raise ValueError("Telegram username is already linked to another account") from e
+                raise ValueError("Telegram username is already linked to another account") from exc
             raise
 
         return await self.get_user_profile(updated_user)

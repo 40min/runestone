@@ -12,6 +12,7 @@ from runestone.config import Settings
 from runestone.core.clients.voice.voice_factory import VoiceEnhancementClient, VoiceTranscriptionClient
 from runestone.core.constants import LANGUAGE_CODE_MAP
 from runestone.core.exceptions import RunestoneError
+from runestone.model_costs.tracking import track_model_costs
 
 logger = logging.getLogger(__name__)
 
@@ -37,14 +38,17 @@ class VoiceService:
         self._transcription_client = transcription_client
         self._enhancement_client = enhancement_client
 
-    async def transcribe_audio(self, audio_content: bytes, language: str | None = None) -> str:
+    async def transcribe_audio(
+        self,
+        audio_content: bytes,
+        language: str | None = None,
+    ) -> str:
         """
         Transcribe audio to text using the configured transcription provider.
 
         Args:
             audio_content: Raw audio bytes from the browser recorder (currently WebM Opus)
             language: Optional ISO-639-1 language code
-
         Returns:
             Transcribed text
 
@@ -68,13 +72,15 @@ class VoiceService:
             logger.error(f"Transcription failed: {e}", exc_info=True)
             raise RunestoneError(f"Failed to transcribe audio: {str(e)}")
 
-    async def enhance_text(self, text: str) -> str:
+    async def enhance_text(
+        self,
+        text: str,
+    ) -> str:
         """
         Enhance transcribed text for grammar and clarity.
 
         Args:
             text: The transcribed text to enhance
-
         Returns:
             Enhanced text with improved grammar and clarity
 
@@ -118,18 +124,21 @@ class VoiceService:
         Returns:
             Final processed text
         """
-        # Map full language name to ISO-639-1 if possible
-        whisper_lang = language
-        if language and language in LANGUAGE_CODE_MAP:
-            whisper_lang = LANGUAGE_CODE_MAP[language]
-            logger.info(f"Mapped language '{language}' to code '{whisper_lang}'")
+        async with track_model_costs("voice_transcription"):
+            whisper_lang = language
+            if language and language in LANGUAGE_CODE_MAP:
+                whisper_lang = LANGUAGE_CODE_MAP[language]
+                logger.info("Mapped voice language to ISO-639-1 code")
 
-        # 1. Transcribe (with provided language or Whisper auto-detection)
-        transcribed_text = await self.transcribe_audio(audio_content, language=whisper_lang)
-        logger.info(f"Transcription completed (lang={whisper_lang}): {transcribed_text}")
+            transcribed_text = await self.transcribe_audio(
+                audio_content,
+                language=whisper_lang,
+            )
+            logger.info("Voice transcription completed language=%s", whisper_lang)
 
-        # 2. Text enhancement
-        if improve:
-            return await self.enhance_text(transcribed_text)
+            if not improve:
+                return transcribed_text
 
-        return transcribed_text
+            return await self.enhance_text(
+                transcribed_text,
+            )

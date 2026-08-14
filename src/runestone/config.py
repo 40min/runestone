@@ -12,8 +12,9 @@ from enum import Enum
 from typing import Literal, Optional
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
+from sqlalchemy import make_url
 
 DEFAULT_SERVICE_LLM_MODEL = "gpt-5.4-nano"
 DEFAULT_GEMINI_SERVICE_LLM_MODEL = "gemini-2.5-flash"
@@ -58,6 +59,19 @@ AgentName = Literal[
     "learning_memory_keeper",
     "personal_memory_keeper",
 ]
+
+# Canonical paid agent profiles used when resolving model-price coverage. The
+# backup remains listed here even though it is enabled only when a model is set.
+PAID_AGENT_NAMES: tuple[AgentName, ...] = (
+    "teacher",
+    "teacher_backup",
+    "coordinator",
+    "word_keeper",
+    "news_agent",
+    "learning_memory_keeper",
+    "personal_memory_keeper",
+    "memory_maintainer",
+)
 
 # Each entry corresponds to one independently configured agent timeout. Keep this
 # at module scope so settings loading does not recreate the registry.
@@ -241,6 +255,19 @@ class Settings(BaseSettings):
     elevenlabs_tts_similarity_boost: float = 0.75
     elevenlabs_tts_style: float = 0.0
     elevenlabs_tts_use_speaker_boost: bool = True
+
+    @field_validator("database_url")
+    @classmethod
+    def _require_async_postgresql_database(cls, value: str) -> str:
+        """Require the single database dialect supported by application runtime."""
+        try:
+            drivername = make_url(value).drivername
+        except Exception as exc:
+            raise ValueError("DATABASE_URL must be a valid postgresql+asyncpg URL") from exc
+
+        if drivername != "postgresql+asyncpg":
+            raise ValueError("DATABASE_URL must use the postgresql+asyncpg dialect")
+        return value
 
     @model_validator(mode="after")
     def _apply_agent_defaults(self) -> "Settings":

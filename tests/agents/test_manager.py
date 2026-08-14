@@ -4,6 +4,8 @@ Tests for AgentsManager orchestration.
 
 import asyncio
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -20,8 +22,13 @@ from runestone.agents.schemas import (
 )
 from runestone.agents.specialists.base import BaseSpecialist, SpecialistContext, SpecialistResult
 from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
+from runestone.model_costs.tracking import _bind_collector, _CostCollector, record_model_interaction
 from runestone.schemas.vocabulary_save import WordSaveCandidate
 from runestone.services.agent_side_effect_service import AgentSideEffectService
+
+
+def _tracking_session(activity: str) -> _CostCollector:
+    return _CostCollector(activity)
 
 
 @pytest.fixture
@@ -160,6 +167,10 @@ def _make_manager(mock_settings):
     return AgentsManager(mock_settings)
 
 
+def _make_cost_tracking():
+    return _tracking_session("chat_turn").transfer("post_turn")
+
+
 # ---------------------------------------------------------------------------
 # process_turn tests
 # ---------------------------------------------------------------------------
@@ -192,6 +203,8 @@ async def test_process_turn_returns_teacher_reply_and_starts_background_post(
         )
     )
     manager.start_background_post_turn = AsyncMock()
+    operation = _tracking_session("chat_turn")
+    cost_tracking = operation.transfer("post_turn")
 
     response, sources, teacher_emotion = await manager.process_turn(
         message="Hello",
@@ -201,6 +214,7 @@ async def test_process_turn_returns_teacher_reply_and_starts_background_post(
         memory_item_service=mock_memory_item_service,
         chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
         side_effect_service=mock_side_effect_service,
+        cost_tracking=cost_tracking,
     )
 
     assert response == "Teacher says hi"
@@ -231,6 +245,7 @@ async def test_process_turn_returns_teacher_reply_and_starts_background_post(
         ],
         pre_results=[{"name": "pre"}],
         coordinator_row_id=42,
+        cost_tracking=cost_tracking,
     )
 
 
@@ -256,6 +271,7 @@ async def test_process_turn_skips_stale_check_on_first_turn(
         memory_item_service=mock_memory_item_service,
         chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
         side_effect_service=mock_side_effect_service,
+        cost_tracking=_make_cost_tracking(),
     )
 
     manager.handle_stale_post_task.assert_not_awaited()
@@ -284,6 +300,139 @@ async def test_start_background_memory_maintenance_runs_specialist_and_clears_re
     manager.memory_maintainer.run_for_user.assert_awaited_once_with(mock_user)
     assert manager.is_memory_maintenance_running(mock_user.id) is False
     assert str(mock_user.id) not in manager._memory_maintenance_registry.tasks
+
+
+@pytest.mark.anyio
+async def test_memory_maintenance_owns_one_final_cost_operation(mock_settings, mock_user, caplog):
+    manager = _make_manager(mock_settings)
+
+    async def _run(_user):
+        record_model_interaction(
+            component="memory_maintainer",
+            provider="openrouter",
+            model="test-memory-maintainer-model",
+            status="completed",
+            usage={"input_token": 1},
+            provider_cost_usd="0.01",
+        )
+        return SpecialistResult(status="no_action", actions=[], info_for_teacher="", artifacts={})
+
+    manager.memory_maintainer.run_for_user = AsyncMock(side_effect=_run)
+
+    with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+        await manager.start_background_memory_maintenance(mock_user)
+        await manager._memory_maintenance_registry.tasks[str(mock_user.id)]
+
+    summaries = [record.message for record in caplog.records if record.message.startswith("model_cost ")]
+    assert len(summaries) == 1
+    assert "operation=memory_maintenance" in summaries[0]
+    assert "stage=final" in summaries[0]
+    assert "status=completed" in summaries[0]
+    assert "known_total_usd=0.01" in summaries[0]
+
+
+@pytest.mark.anyio
+async def test_suspended_model_cost_tracking_gives_memory_maintenance_an_independent_operation(
+    mock_settings, mock_user, caplog
+):
+    manager = _make_manager(mock_settings)
+    parent = _tracking_session("parent")
+
+    async def _run(_user):
+        record_model_interaction(
+            component="memory_maintainer",
+            provider="openrouter",
+            model="test-memory-maintainer-model",
+            status="completed",
+            provider_cost_usd="0.02",
+        )
+        return SpecialistResult(status="no_action", actions=[], info_for_teacher="", artifacts={})
+
+    manager.memory_maintainer.run_for_user = AsyncMock(side_effect=_run)
+
+    with _bind_collector(parent, phase="background"):
+        with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+            await manager.start_background_memory_maintenance(mock_user)
+            await manager._memory_maintenance_registry.tasks[str(mock_user.id)]
+
+    assert parent.interactions == ()
+    assert any("operation=memory_maintenance" in record.message for record in caplog.records)
+
+
+@pytest.mark.anyio
+async def test_suspending_model_cost_tracking_preserves_other_task_context(mock_settings, mock_user):
+    manager = _make_manager(mock_settings)
+    request_context = ContextVar("test_request_context", default=None)
+    request_context.set("request-123")
+    inherited_values = []
+
+    async def _run(_user):
+        inherited_values.append(request_context.get())
+        return SpecialistResult(status="no_action", actions=[], info_for_teacher="", artifacts={})
+
+    manager.memory_maintainer.run_for_user = AsyncMock(side_effect=_run)
+
+    await manager.start_background_memory_maintenance(mock_user)
+    await manager._memory_maintenance_registry.tasks[str(mock_user.id)]
+
+    assert inherited_values == ["request-123"]
+
+
+@pytest.mark.anyio
+async def test_memory_maintenance_error_keeps_parent_independent(mock_settings, mock_user, caplog):
+    manager = _make_manager(mock_settings)
+    parent = _tracking_session("parent")
+    manager.memory_maintainer.run_for_user = AsyncMock(
+        return_value=SpecialistResult(
+            status="error",
+            actions=[],
+            info_for_teacher="",
+            artifacts={"step_errors": {"area_to_improve": True, "personal_info": False}},
+        )
+    )
+
+    with _bind_collector(parent, phase="background"):
+        with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+            await manager.start_background_memory_maintenance(mock_user)
+            await manager._memory_maintenance_registry.tasks[str(mock_user.id)]
+
+    assert parent.state == "foreground_open"
+    assert any("operation=memory_maintenance" in record.message for record in caplog.records)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "step_errors",
+    [
+        {"area_to_improve": True, "personal_info": True},
+        {"area_to_improve": True, "personal_info": False},
+    ],
+    ids=["full-error", "partial-error"],
+)
+async def test_memory_maintenance_business_error_does_not_override_tracking_status(
+    mock_settings,
+    mock_user,
+    caplog,
+    step_errors,
+):
+    manager = _make_manager(mock_settings)
+    manager.memory_maintainer.run_for_user = AsyncMock(
+        return_value=SpecialistResult(
+            status="error",
+            actions=[],
+            info_for_teacher="",
+            artifacts={"step_errors": step_errors},
+        )
+    )
+
+    with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+        await manager.start_background_memory_maintenance(mock_user)
+        await manager._memory_maintenance_registry.tasks[str(mock_user.id)]
+
+    summaries = [record.message for record in caplog.records if record.message.startswith("model_cost ")]
+    assert len(summaries) == 1
+    assert "stage=final" in summaries[0]
+    assert "status=completed" in summaries[0]
 
 
 @pytest.mark.anyio
@@ -318,11 +467,15 @@ async def test_start_background_memory_maintenance_clears_registry_on_failure(mo
     await manager.start_background_memory_maintenance(mock_user)
 
     task = manager._memory_maintenance_registry.tasks[str(mock_user.id)]
-    with caplog.at_level("ERROR"):
+    with caplog.at_level("INFO"):
         await task
 
     assert str(mock_user.id) not in manager._memory_maintenance_registry.tasks
     assert "memory maintenance failed user_id=1" in caplog.text
+    summaries = [record.message for record in caplog.records if record.message.startswith("model_cost ")]
+    assert len(summaries) == 1
+    assert "stage=final" in summaries[0]
+    assert "status=failed" in summaries[0]
 
 
 @pytest.mark.anyio
@@ -338,11 +491,41 @@ async def test_start_background_memory_maintenance_clears_registry_on_timeout(mo
 
     await manager.start_background_memory_maintenance(mock_user)
     task = manager._memory_maintenance_registry.tasks[str(mock_user.id)]
-    with caplog.at_level("ERROR"):
+    with caplog.at_level("INFO"):
         await task
 
     assert str(mock_user.id) not in manager._memory_maintenance_registry.tasks
     assert "memory maintenance timed out" in caplog.text
+    summaries = [record.message for record in caplog.records if record.message.startswith("model_cost ")]
+    assert len(summaries) == 1
+    assert "stage=final" in summaries[0]
+    assert "status=timed_out" in summaries[0]
+
+
+@pytest.mark.anyio
+async def test_start_background_memory_maintenance_reraises_cancellation(mock_settings, mock_user, caplog):
+    manager = _make_manager(mock_settings)
+    started = asyncio.Event()
+
+    async def _wait_forever(_user):
+        started.set()
+        await asyncio.Event().wait()
+
+    manager.memory_maintainer.run_for_user = AsyncMock(side_effect=_wait_forever)
+
+    with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+        await manager.start_background_memory_maintenance(mock_user)
+        task = manager._memory_maintenance_registry.tasks[str(mock_user.id)]
+        await started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    assert str(mock_user.id) not in manager._memory_maintenance_registry.tasks
+    summaries = [record.message for record in caplog.records if record.message.startswith("model_cost ")]
+    assert len(summaries) == 1
+    assert "stage=final" in summaries[0]
+    assert "status=cancelled" in summaries[0]
 
 
 # ---------------------------------------------------------------------------
@@ -1818,7 +2001,7 @@ async def test_handle_stale_post_task_cancels_live_task_and_marks_failed(mock_se
     stale_row.status = "pending"
     stale_row.id = 456
     mock_side_effect_service.load_latest_coordinator_row.return_value = stale_row
-    manager.cancel_post_task = MagicMock(return_value=True)
+    manager._cancel_post_task_with_grace = AsyncMock(return_value=True)
 
     await manager.handle_stale_post_task(
         user_id=1,
@@ -1826,7 +2009,10 @@ async def test_handle_stale_post_task_cancels_live_task_and_marks_failed(mock_se
         side_effect_service=mock_side_effect_service,
     )
 
-    manager.cancel_post_task.assert_called_once_with("chat-123")
+    manager._cancel_post_task_with_grace.assert_awaited_once_with(
+        "chat-123",
+        terminal_status="stale_replaced",
+    )
     mock_side_effect_service.mark_coordinator_failed_if_current.assert_awaited_once_with(
         row_id=456,
         user_id=1,
@@ -1840,7 +2026,7 @@ async def test_handle_stale_post_task_ignores_done_row(mock_settings, mock_side_
     done_row = MagicMock()
     done_row.status = "done"
     mock_side_effect_service.load_latest_coordinator_row.return_value = done_row
-    manager.cancel_post_task = MagicMock(return_value=False)
+    manager._cancel_post_task_with_grace = AsyncMock(return_value=False)
 
     await manager.handle_stale_post_task(
         user_id=1,
@@ -1848,7 +2034,7 @@ async def test_handle_stale_post_task_ignores_done_row(mock_settings, mock_side_
         side_effect_service=mock_side_effect_service,
     )
 
-    manager.cancel_post_task.assert_not_called()
+    manager._cancel_post_task_with_grace.assert_not_awaited()
     mock_side_effect_service.mark_coordinator_failed_if_current.assert_not_awaited()
 
 
@@ -1922,6 +2108,7 @@ async def test_start_background_post_turn_creates_task(mock_settings, mock_user,
             learning_memory_signals=[],
             pre_results=[],
             coordinator_row_id=42,
+            cost_tracking=_make_cost_tracking(),
         )
         # Allow the task to run
         await asyncio.sleep(0)
@@ -1930,6 +2117,86 @@ async def test_start_background_post_turn_creates_task(mock_settings, mock_user,
         # Task should be cleaned up after completion
         await asyncio.sleep(0.05)
         assert "chat-1" not in manager._post_task_registry.tasks
+
+
+@pytest.mark.anyio
+async def test_background_post_turn_activates_and_closes_typed_child(
+    mock_settings,
+    mock_user,
+    mock_side_effect_service,
+):
+    manager = _make_manager(mock_settings)
+    operation = _tracking_session("chat_turn")
+    child = operation.transfer("post_turn")
+
+    async def _run_post_turn(**_kwargs):
+        record_model_interaction(
+            component="coordinator",
+            provider="openrouter",
+            model="test-coordinator-model",
+            status="completed",
+            provider_cost_usd="0.03",
+        )
+        return "completed"
+
+    manager.run_post_turn = AsyncMock(side_effect=_run_post_turn)
+
+    @asynccontextmanager
+    async def _provider():
+        yield mock_side_effect_service
+
+    with patch("runestone.agents.manager.provide_agent_side_effect_service", _provider):
+        await manager.start_background_post_turn(
+            message="Hello",
+            chat_id="chat-cost",
+            history=[],
+            user=mock_user,
+            teacher_response="Hi!",
+            vocabulary_candidates=[],
+            learning_memory_signals=[],
+            pre_results=[],
+            coordinator_row_id=42,
+            cost_tracking=child,
+        )
+        task = manager._post_task_registry.tasks["chat-cost"]
+        await task
+
+    assert child.status == "completed"
+    assert [(record.phase, record.known_cost_usd) for record in operation.interactions] == [
+        ("background", Decimal("0.03"))
+    ]
+    assert operation.state == "foreground_open"
+    operation.emit_preliminary()
+    assert operation.state == "corrected_emitted"
+
+
+@pytest.mark.anyio
+async def test_background_post_turn_closes_child_on_failure(mock_settings, mock_user, mock_side_effect_service):
+    manager = _make_manager(mock_settings)
+    operation = _tracking_session("chat_turn")
+    child = operation.transfer("post_turn")
+    manager.run_post_turn = AsyncMock(side_effect=RuntimeError("post failed"))
+
+    @asynccontextmanager
+    async def _provider():
+        yield mock_side_effect_service
+
+    with patch("runestone.agents.manager.provide_agent_side_effect_service", _provider):
+        await manager.start_background_post_turn(
+            message="Hello",
+            chat_id="chat-cost",
+            history=[],
+            user=mock_user,
+            teacher_response="Hi!",
+            vocabulary_candidates=[],
+            learning_memory_signals=[],
+            pre_results=[],
+            coordinator_row_id=42,
+            cost_tracking=child,
+        )
+        await manager._post_task_registry.tasks["chat-cost"]
+
+    assert child.status == "failed"
 
 
 @pytest.mark.anyio
@@ -1959,6 +2226,7 @@ async def test_start_background_post_turn_returns_before_slow_post_finishes(
             learning_memory_signals=[],
             pre_results=[],
             coordinator_row_id=42,
+            cost_tracking=_make_cost_tracking(),
         )
         assert "chat-1" in manager._post_task_registry.tasks
         assert not manager._post_task_registry.tasks["chat-1"].done()
@@ -1982,6 +2250,9 @@ async def test_start_background_post_turn_marks_failed_on_timeout(mock_settings,
     async def _provider():
         yield mock_side_effect_service
 
+    operation = _tracking_session("chat_turn")
+    child = operation.transfer("post_turn")
+
     with patch("runestone.agents.manager.provide_agent_side_effect_service", _provider):
         await manager.start_background_post_turn(
             message="Hello",
@@ -1993,6 +2264,7 @@ async def test_start_background_post_turn_marks_failed_on_timeout(mock_settings,
             learning_memory_signals=[],
             pre_results=[],
             coordinator_row_id=42,
+            cost_tracking=child,
         )
         await asyncio.sleep(0.1)  # wait for timeout to fire
 
@@ -2000,6 +2272,156 @@ async def test_start_background_post_turn_marks_failed_on_timeout(mock_settings,
             row_id=42, user_id=mock_user.id, chat_id="chat-1"
         )
         assert "chat-1" not in manager._post_task_registry.tasks
+        assert child.status == "timed_out"
+
+
+@pytest.mark.anyio
+async def test_foreground_failure_seals_post_child_when_task_ignores_cancellation(mock_settings, caplog):
+    manager = _make_manager(mock_settings)
+    operation = _tracking_session("chat_turn")
+    child = operation.transfer("post_turn")
+    release = asyncio.Event()
+
+    async def _ignore_first_cancellation():
+        try:
+            await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            await release.wait()
+
+    task = asyncio.create_task(_ignore_first_cancellation())
+    manager._post_task_registry.tasks["chat-stuck"] = task
+    manager._post_task_cost_tracking["chat-stuck"] = child
+    await asyncio.sleep(0)
+
+    with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+        await manager.cancel_post_task_for_foreground_failure(
+            "chat-stuck",
+            child,
+            grace_seconds=0.01,
+        )
+        operation.emit_preliminary()
+
+    assert child.status == "cancelled_with_unknown_usage"
+    assert operation.interactions == ()
+    assert operation.state == "corrected_emitted"
+    corrected = [record.message for record in caplog.records if "stage=corrected" in record.message]
+    assert len(corrected) == 1
+    assert "cost_quality=unknown" in corrected[0]
+    assert "unknown_calls=1" in corrected[0]
+    assert not task.done()
+    release.set()
+    await task
+
+
+@pytest.mark.anyio
+async def test_cancelling_grace_wait_seals_and_detaches_cancellation_resistant_task(caplog, mock_settings):
+    manager = _make_manager(mock_settings)
+    operation = _tracking_session("chat_turn")
+    child = operation.transfer("post_turn")
+    operation.emit_preliminary()
+    cancellation_received = asyncio.Event()
+    release = asyncio.Event()
+
+    async def _ignore_first_cancellation():
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancellation_received.set()
+            await release.wait()
+
+    old_task = asyncio.create_task(_ignore_first_cancellation())
+    manager._post_task_registry.tasks["chat-stuck"] = old_task
+    manager._post_task_cost_tracking["chat-stuck"] = child
+    await asyncio.sleep(0)
+
+    with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+        caller = asyncio.create_task(
+            manager._cancel_post_task_with_grace(
+                "chat-stuck",
+                terminal_status="stale_replaced",
+                grace_seconds=60,
+            )
+        )
+        await cancellation_received.wait()
+        caller.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await caller
+
+    assert child.status == "cancelled_with_unknown_usage"
+    assert operation.state == "corrected_emitted"
+    assert old_task not in manager._post_task_terminal_overrides
+    assert "chat-stuck" not in manager._post_task_registry.tasks
+    assert "chat-stuck" not in manager._post_task_cost_tracking
+    corrected = [record.message for record in caplog.records if "stage=corrected" in record.message]
+    assert len(corrected) == 1
+    assert "cost_quality=unknown" in corrected[0]
+
+    release.set()
+    await old_task
+
+
+@pytest.mark.anyio
+async def test_stale_post_replacement_records_cancellation_before_closing_child(
+    mock_settings,
+    mock_user,
+    mock_side_effect_service,
+):
+    manager = _make_manager(mock_settings)
+    previous_operation = _tracking_session("chat_turn")
+    previous_child = previous_operation.transfer("post_turn")
+    previous_operation.emit_preliminary()
+    next_operation = _tracking_session("chat_turn")
+    next_child = next_operation.transfer("post_turn")
+    first_started = asyncio.Event()
+    calls = 0
+
+    async def _run_post_turn(**_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            first_started.set()
+            try:
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                record_model_interaction(
+                    component="coordinator",
+                    provider="openrouter",
+                    model="test-model",
+                    status="cancelled",
+                )
+                raise
+        return "completed"
+
+    manager.run_post_turn = AsyncMock(side_effect=_run_post_turn)
+
+    @asynccontextmanager
+    async def _provider():
+        yield mock_side_effect_service
+
+    kwargs = {
+        "message": "Hello",
+        "chat_id": "chat-1",
+        "history": [],
+        "user": mock_user,
+        "teacher_response": "Hi!",
+        "vocabulary_candidates": [],
+        "learning_memory_signals": [],
+        "pre_results": [],
+        "coordinator_row_id": 42,
+    }
+
+    with patch("runestone.agents.manager.provide_agent_side_effect_service", _provider):
+        await manager.start_background_post_turn(**kwargs, cost_tracking=previous_child)
+        await first_started.wait()
+        await manager.start_background_post_turn(**kwargs, cost_tracking=next_child)
+        await manager._post_task_registry.tasks["chat-1"]
+
+    assert previous_child.status == "stale_replaced"
+    assert previous_operation.state == "corrected_emitted"
+    assert len(previous_operation.interactions) == 1
+    assert previous_operation.interactions[0].status == "cancelled"
+    assert previous_operation.interactions[0].cost_quality == "unknown"
+    assert next_child.status == "completed"
 
 
 # ---------------------------------------------------------------------------

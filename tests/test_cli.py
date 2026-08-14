@@ -2,15 +2,23 @@
 Tests for the CLI module.
 """
 
+import logging
 import os
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
+import pytest
 from click.testing import CliRunner
 
-from runestone.cli import cli
+from runestone.cli import (
+    _process_image_cli,
+    _run_area_memory_maintainer_cli,
+    _run_personal_info_memory_maintainer_cli,
+    cli,
+)
 from runestone.core.exceptions import RunestoneError
 from runestone.core.processor import RunestoneProcessor
+from runestone.model_costs.tracking import record_model_interaction
 
 
 class TestCLI:
@@ -43,6 +51,26 @@ class TestCLI:
         assert "Process a Swedish textbook page" in result.output
         assert "IMAGE_PATH" in result.output
         assert "gemini" in result.output
+
+    @pytest.mark.anyio
+    async def test_process_image_boundary_emits_one_summary(self, caplog):
+        """The CLI owns one scope for the complete image workflow."""
+        processor = self._make_processor_mock()
+
+        async def process_image(image_path, user):
+            record_model_interaction("ocr", "openai", "vision", "completed")
+            record_model_interaction("analysis", "openai", "text", "completed")
+            return {"ocr_result": {}, "analysis": {}}
+
+        processor.process_image.side_effect = process_image
+        with caplog.at_level("INFO", logger="runestone.model_costs.tracking"):
+            result = await _process_image_cli(processor, Path("page.jpg"), Mock(id=1))
+
+        assert result == {"ocr_result": {}, "analysis": {}}
+        summaries = [message for message in caplog.messages if message.startswith("model_cost ")]
+        assert len(summaries) == 1
+        assert "stage=final operation=image_analysis" in summaries[0]
+        assert "unknown_calls=2" in summaries[0]
 
     def test_maintain_area_memory_command_help(self):
         """Test maintain-area-memory command help message."""
@@ -258,6 +286,114 @@ class TestCLI:
 
         assert result.exit_code == 0
         assert "0.1.0" in result.output
+
+    @patch("runestone.cli.AreaToImproveMemoryMaintainer")
+    @patch("runestone.cli._load_cli_user", new_callable=AsyncMock)
+    async def test_area_memory_maintainer_helper_tracks_one_operation(
+        self, mock_load_user, mock_specialist_class, caplog
+    ):
+        """The direct area-maintainer CLI helper owns one model-cost operation."""
+        caplog.set_level(logging.INFO)
+        user = Mock()
+        result = Mock()
+        records = []
+        mock_load_user.return_value = user
+
+        async def run_cli_for_user(*args, **kwargs):
+            records.append(
+                record_model_interaction(
+                    component="area_memory_maintainer",
+                    provider="openai",
+                    model="test-model",
+                    status="completed",
+                    provider_cost_usd="0.01",
+                )
+            )
+            return result
+
+        mock_specialist_class.return_value.run_cli_for_user = AsyncMock(side_effect=run_cli_for_user)
+
+        actual = await _run_area_memory_maintainer_cli(7, True, True)
+
+        assert actual is result
+        assert records[0] is not None
+        assert records[0].operation_type == "memory_maintenance"
+        assert caplog.text.count("model_cost stage=final operation=memory_maintenance") == 1
+        mock_specialist_class.return_value.run_cli_for_user.assert_awaited_once_with(
+            user,
+            dry_run=True,
+            with_priority_review=True,
+        )
+
+    @patch("runestone.cli.PersonalInfoMemoryMaintainer")
+    @patch("runestone.cli._load_cli_user", new_callable=AsyncMock)
+    async def test_personal_info_memory_maintainer_helper_tracks_one_operation(
+        self, mock_load_user, mock_specialist_class, caplog
+    ):
+        """The direct personal-info CLI helper owns one model-cost operation."""
+        caplog.set_level(logging.INFO)
+        user = Mock()
+        result = Mock()
+        records = []
+        mock_load_user.return_value = user
+
+        async def run_cli_for_user(*args, **kwargs):
+            records.append(
+                record_model_interaction(
+                    component="personal_info_memory_maintainer",
+                    provider="openai",
+                    model="test-model",
+                    status="completed",
+                    provider_cost_usd="0.02",
+                )
+            )
+            return result
+
+        mock_specialist_class.return_value.run_cli_for_user = AsyncMock(side_effect=run_cli_for_user)
+
+        actual = await _run_personal_info_memory_maintainer_cli(9, False)
+
+        assert actual is result
+        assert records[0] is not None
+        assert records[0].operation_type == "memory_maintenance"
+        assert caplog.text.count("model_cost stage=final operation=memory_maintenance") == 1
+        mock_specialist_class.return_value.run_cli_for_user.assert_awaited_once_with(user, dry_run=False)
+
+    @patch("runestone.cli.AreaToImproveMemoryMaintainer")
+    @patch("runestone.cli._load_cli_user", new_callable=AsyncMock)
+    async def test_area_memory_maintainer_error_result_does_not_override_summary(
+        self, mock_load_user, mock_specialist_class, caplog
+    ):
+        caplog.set_level(logging.INFO)
+        mock_load_user.return_value = Mock()
+        error_result = Mock(status="error")
+        mock_specialist_class.return_value.run_cli_for_user = AsyncMock(return_value=error_result)
+
+        actual = await _run_area_memory_maintainer_cli(7, False, False)
+
+        assert actual is error_result
+        summaries = [message for message in caplog.messages if "model_cost stage=final" in message]
+        assert len(summaries) == 1
+        assert "operation=memory_maintenance" in summaries[0]
+        assert "status=completed " in summaries[0]
+
+    @patch("runestone.cli.PersonalInfoMemoryMaintainer")
+    @patch("runestone.cli._load_cli_user", new_callable=AsyncMock)
+    async def test_personal_info_memory_maintainer_error_result_does_not_override_summary(
+        self, mock_load_user, mock_specialist_class, caplog
+    ):
+        caplog.set_level(logging.INFO)
+        mock_load_user.return_value = Mock()
+        error_result = Mock(status="error")
+        mock_specialist_class.return_value.run_cli_for_user = AsyncMock(return_value=error_result)
+
+        actual = await _run_personal_info_memory_maintainer_cli(9, False)
+
+        assert actual is error_result
+        summaries = [message for message in caplog.messages if "model_cost stage=final" in message]
+        assert len(summaries) == 1
+        assert "operation=memory_maintenance" in summaries[0]
+        assert "status=completed " in summaries[0]
 
     @patch("runestone.cli._run_area_memory_maintainer_cli", new_callable=AsyncMock)
     def test_maintain_area_memory_dry_run_prints_summary_and_json(self, mock_run):
@@ -518,9 +654,11 @@ class TestCLI:
         assert result.exit_code == 0
         assert "Load vocabulary data" in result.output
         assert "--skip-existence-check" in result.output
+        assert "--user-id INTEGER" in result.output
+        assert "--db-name" not in result.output
 
-    @patch("runestone.cli.VocabularyService")
-    def test_load_vocab_command_skip_check(self, mock_service_class):
+    @patch("runestone.cli._load_vocabulary_items", new_callable=AsyncMock)
+    def test_load_vocab_command_skip_check(self, mock_load):
         """Test load_vocab command with skip existence check."""
         with self.runner.isolated_filesystem():
             # Create a test CSV file
@@ -529,18 +667,23 @@ class TestCLI:
             with open(csv_path, "w") as f:
                 f.write(csv_content)
 
-            mock_service = Mock()
-            mock_service_class.return_value = mock_service
-            mock_service.load_vocab_from_csv.return_value = {"original_count": 2, "added_count": 2, "skipped_count": 0}
+            mock_load.return_value = {"original_count": 2, "added_count": 2, "skipped_count": 0}
 
-            result = self.runner.invoke(cli, ["load-vocab", csv_path, "--skip-existence-check"])
+            result = self.runner.invoke(
+                cli,
+                ["load-vocab", csv_path, "--skip-existence-check", "--user-id", "42"],
+            )
 
             assert result.exit_code == 0
-            mock_service.load_vocab_from_csv.assert_called_once()
+            mock_load.assert_awaited_once()
+            items, skip_existence_check, user_id = mock_load.await_args.args
+            assert [item.word_phrase for item in items] == ["word1", "word2"]
+            assert skip_existence_check is True
+            assert user_id == 42
             assert "Processed 2 vocabulary items" in result.output
 
-    @patch("runestone.cli.VocabularyService")
-    def test_load_vocab_command_default_check(self, mock_service_class):
+    @patch("runestone.cli._load_vocabulary_items", new_callable=AsyncMock)
+    def test_load_vocab_command_default_check(self, mock_load):
         """Test load_vocab command with default existence check."""
         with self.runner.isolated_filesystem():
             # Create a test CSV file
@@ -549,14 +692,15 @@ class TestCLI:
             with open(csv_path, "w") as f:
                 f.write(csv_content)
 
-            mock_service = Mock()
-            mock_service_class.return_value = mock_service
-            mock_service.load_vocab_from_csv.return_value = {"original_count": 2, "added_count": 2, "skipped_count": 0}
+            mock_load.return_value = {"original_count": 2, "added_count": 2, "skipped_count": 0}
 
             result = self.runner.invoke(cli, ["load-vocab", csv_path])
 
             assert result.exit_code == 0
-            mock_service.load_vocab_from_csv.assert_called_once()
+            mock_load.assert_awaited_once()
+            _, skip_existence_check, user_id = mock_load.await_args.args
+            assert skip_existence_check is False
+            assert user_id == 1
             assert "Added 2 new vocabulary items" in result.output
 
     @patch("runestone.cli.GrammarIndex")
