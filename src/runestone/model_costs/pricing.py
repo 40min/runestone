@@ -471,10 +471,11 @@ async def fetch_json(client: httpx.AsyncClient, url: str, *, max_bytes: int) -> 
         content_length = response.headers.get("content-length")
         if content_length is not None:
             try:
-                if int(content_length) > max_bytes:
-                    raise PriceSnapshotError(f"Response exceeds {max_bytes} bytes")
+                content_length_value = int(content_length)
             except ValueError as exc:
                 raise PriceSnapshotError("Invalid Content-Length header") from exc
+            if content_length_value > max_bytes:
+                raise PriceSnapshotError(f"Response exceeds {max_bytes} bytes")
         chunks: list[bytes] = []
         received = 0
         async for chunk in response.aiter_bytes():
