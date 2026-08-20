@@ -5,9 +5,11 @@ This module contains tests for the vocabulary repository.
 """
 
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import dialect
 
 from runestone.api.schemas import VocabularyItemCreate
 from runestone.constants import VOCABULARY_PRIORITY_LOW
@@ -1427,7 +1429,7 @@ class TestVocabularyRepository:
         assert result[2].word_phrase == "prio-1"
 
     async def test_select_unstudied_words_unstudied_recall_eligibility(self, repo, db_session):
-        """Repository query selects unstudied candidates in id order regardless of priority."""
+        """Repository query selects eligible unstudied words regardless of priority."""
         # Unstudied word 1: lower id, but lower urgency priority_learn = 9
         unstudied_low_prio = VocabularyModel(
             user_id=1,
@@ -1500,17 +1502,19 @@ class TestVocabularyRepository:
         )
         await db_session.commit()
 
-        # 1. Assert selection selects only eligible unstudied words, in id order (low_prio before high_prio)
+        eligible_ids = {unstudied_low_prio.id, unstudied_high_prio.id}
+        eligible_phrases = {"unstudied-low-prio", "unstudied-high-prio"}
+
+        # 1. Assert selection returns only eligible unstudied words in random order.
         results = await repo.select_unstudied_words(user_id=1, cooldown_days=7, limit=10)
         assert len(results) == 2
-        assert results[0].id == unstudied_low_prio.id
-        assert results[1].id == unstudied_high_prio.id
-        assert [r.word_phrase for r in results] == ["unstudied-low-prio", "unstudied-high-prio"]
+        assert {r.id for r in results} == eligible_ids
+        assert {r.word_phrase for r in results} == eligible_phrases
 
         # 2. Assert limit works
         limited_results = await repo.select_unstudied_words(user_id=1, cooldown_days=7, limit=1)
         assert len(limited_results) == 1
-        assert limited_results[0].id == unstudied_low_prio.id
+        assert limited_results[0].id in eligible_ids
 
         # 3. Assert exclusions work
         excluded_results = await repo.select_unstudied_words(
@@ -1518,6 +1522,26 @@ class TestVocabularyRepository:
         )
         assert len(excluded_results) == 1
         assert excluded_results[0].id == unstudied_high_prio.id
+
+    async def test_select_unstudied_words_uses_random_ordering(self):
+        """The unstudied query applies random ordering before the configured limit."""
+        mock_db = AsyncMock()
+        mock_result = Mock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_db.execute.return_value = mock_result
+        repo = VocabularyRepository(mock_db)
+
+        await repo.select_unstudied_words(user_id=7, cooldown_days=3, limit=5, excluded_word_ids=[10, 20])
+
+        stmt = mock_db.execute.await_args[0][0]
+        sql = str(stmt.compile(dialect=dialect()))
+
+        assert "ORDER BY random()" in sql
+        assert "vocabulary.user_id" in sql
+        assert "in_learn" in sql
+        assert "learned_times" in sql
+        assert "last_learned" in sql
+        assert "LIMIT" in sql
 
     async def test_update_last_learned_increments_learned_times_none(self, repo, db_session):
         """Test that update_last_learned handles None learned_times gracefully."""
