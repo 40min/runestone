@@ -122,6 +122,31 @@ class TestSettings:
         assert settings.openai_api_key == "test_openai_api_key_for_testing_only"
         assert settings.allowed_origins == "http://localhost:5173,http://127.0.0.1:5173,http://frontend:3010"
         assert settings.telegram_bot_token == "test_telegram_bot_token_for_testing_only"
+        assert settings.words_unstudied_extra_count == 5
+
+    def test_words_unstudied_extra_count_default_and_overrides(self):
+        """Test words_unstudied_extra_count default, custom override, zero, and negative rejection."""
+        base_env = self._minimal_settings_env("postgresql+asyncpg://user:pass@localhost/runestone")
+
+        # 1. Default value is 5
+        with patch.dict(os.environ, base_env, clear=True):
+            test_settings = Settings()
+            assert test_settings.words_unstudied_extra_count == 5
+
+        # 2. Non-default positive override
+        with patch.dict(os.environ, {**base_env, "WORDS_UNSTUDIED_EXTRA_COUNT": "3"}, clear=True):
+            test_settings = Settings()
+            assert test_settings.words_unstudied_extra_count == 3
+
+        # 3. Zero override is valid (disables unstudied additions)
+        with patch.dict(os.environ, {**base_env, "WORDS_UNSTUDIED_EXTRA_COUNT": "0"}, clear=True):
+            test_settings = Settings()
+            assert test_settings.words_unstudied_extra_count == 0
+
+        # 4. Negative value raises ValidationError
+        with patch.dict(os.environ, {**base_env, "WORDS_UNSTUDIED_EXTRA_COUNT": "-1"}, clear=True):
+            with pytest.raises(ValidationError):
+                Settings()
 
     @staticmethod
     def _minimal_settings_env(database_url: str) -> dict[str, str]:

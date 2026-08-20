@@ -1426,6 +1426,99 @@ class TestVocabularyRepository:
         assert {result[0].word_phrase, result[1].word_phrase} == {"prio-0-a", "prio-0-b"}
         assert result[2].word_phrase == "prio-1"
 
+    async def test_select_unstudied_words_unstudied_recall_eligibility(self, repo, db_session):
+        """Repository query selects unstudied candidates in id order regardless of priority."""
+        # Unstudied word 1: lower id, but lower urgency priority_learn = 9
+        unstudied_low_prio = VocabularyModel(
+            user_id=1,
+            word_phrase="unstudied-low-prio",
+            translation="unstudied low prio",
+            in_learn=True,
+            priority_learn=9,
+            learned_times=0,
+            last_learned=None,
+        )
+        # Unstudied word 2: higher id, but highest urgency priority_learn = 0
+        unstudied_high_prio = VocabularyModel(
+            user_id=1,
+            word_phrase="unstudied-high-prio",
+            translation="unstudied high prio",
+            in_learn=True,
+            priority_learn=0,
+            learned_times=0,
+            last_learned=None,
+        )
+        # Studied word: learned_times = 1, should be excluded
+        studied_word = VocabularyModel(
+            user_id=1,
+            word_phrase="studied-word",
+            translation="studied",
+            in_learn=True,
+            priority_learn=0,
+            learned_times=1,
+            last_learned=datetime.now(timezone.utc) - timedelta(days=10),
+        )
+        # Inactive word: in_learn = False, should be excluded
+        inactive_word = VocabularyModel(
+            user_id=1,
+            word_phrase="inactive-word",
+            translation="inactive",
+            in_learn=False,
+            priority_learn=0,
+            learned_times=0,
+            last_learned=None,
+        )
+        # Cooldown blocked word: learned_times=0 but recent last_learned, should be excluded
+        cooldown_word = VocabularyModel(
+            user_id=1,
+            word_phrase="cooldown-word",
+            translation="cooldown",
+            in_learn=True,
+            priority_learn=0,
+            learned_times=0,
+            last_learned=datetime.now(timezone.utc) - timedelta(days=2),
+        )
+        # Other user's word: user_id = 2, should be excluded
+        other_user_word = VocabularyModel(
+            user_id=2,
+            word_phrase="other-user-word",
+            translation="other user",
+            in_learn=True,
+            priority_learn=0,
+            learned_times=0,
+            last_learned=None,
+        )
+        db_session.add_all(
+            [
+                unstudied_low_prio,
+                unstudied_high_prio,
+                studied_word,
+                inactive_word,
+                cooldown_word,
+                other_user_word,
+            ]
+        )
+        await db_session.commit()
+
+        # 1. Assert selection selects only eligible unstudied words, in id order (low_prio before high_prio)
+        results = await repo.select_unstudied_words(user_id=1, cooldown_days=7, limit=10)
+        assert len(results) == 2
+        assert results[0].id == unstudied_low_prio.id
+        assert results[1].id == unstudied_high_prio.id
+        assert [r.word_phrase for r in results] == ["unstudied-low-prio", "unstudied-high-prio"]
+
+        # 2. Assert limit works
+        limited_results = await repo.select_unstudied_words(user_id=1, cooldown_days=7, limit=1)
+        assert len(limited_results) == 1
+        assert limited_results[0].id == unstudied_low_prio.id
+
+        # 3. Assert exclusions work
+        excluded_results = await repo.select_unstudied_words(
+            user_id=1, cooldown_days=7, limit=10, excluded_word_ids=[unstudied_low_prio.id]
+        )
+        assert len(excluded_results) == 1
+        assert excluded_results[0].id == unstudied_high_prio.id
+
     async def test_update_last_learned_increments_learned_times_none(self, repo, db_session):
         """Test that update_last_learned handles None learned_times gracefully."""
         vocab_with_none = VocabularyModel(

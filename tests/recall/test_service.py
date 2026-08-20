@@ -67,11 +67,12 @@ def recall_service():
     vocabulary_service.record_learning_event = AsyncMock()
     vocabulary_service.select_daily_candidates = AsyncMock(return_value=[])
     vocabulary_service.select_alternative_candidates = AsyncMock(return_value=[])
+    vocabulary_service.select_unstudied_candidates = AsyncMock(return_value=[])
 
     user_service = Mock()
     user_service.get_users_by_telegram_username = AsyncMock(return_value=[])
     user_service.is_user_active = AsyncMock(return_value=True)
-    settings = SimpleNamespace(words_per_day=3, cooldown_days=7)
+    settings = SimpleNamespace(words_per_day=3, cooldown_days=7, words_unstudied_extra_count=0)
     service = RecallService(recall_repository, vocabulary_service, user_service, settings)
     return service
 
@@ -720,7 +721,7 @@ async def test_postpone_single_eligible_word_does_not_reselect_it(db_session):
     db_session.add(word)
     await db_session.flush()
 
-    settings = SimpleNamespace(words_per_day=1, cooldown_days=7)
+    settings = SimpleNamespace(words_per_day=1, cooldown_days=7, words_unstudied_extra_count=0)
     repository = RecallRepository(db_session)
     service = RecallService(
         repository,
@@ -766,7 +767,7 @@ async def test_delivery_rechecks_active_user_after_concurrent_deactivation(db_se
         user_id = user.id
         vocabulary_id = word.id
 
-        settings = SimpleNamespace(words_per_day=1, cooldown_days=7)
+        settings = SimpleNamespace(words_per_day=1, cooldown_days=7, words_unstudied_extra_count=0)
         repository = RecallRepository(delivery_session)
         service = RecallService(
             repository,
@@ -821,7 +822,7 @@ async def test_delivery_rolls_back_learning_metadata_when_cursor_update_fails(db
     vocabulary_id = word.id
     await db_session.commit()
 
-    settings = SimpleNamespace(words_per_day=1, cooldown_days=7)
+    settings = SimpleNamespace(words_per_day=1, cooldown_days=7, words_unstudied_extra_count=0)
     recall_repository = RecallRepository(db_session)
     vocabulary_service = VocabularyService(VocabularyRepository(db_session), settings, AsyncMock())
     service = RecallService(
@@ -844,3 +845,247 @@ async def test_delivery_rolls_back_learning_metadata_when_cursor_update_fails(db
     assert word.last_learned is None
     assert state is not None
     assert state.next_word_index == 0
+
+
+@pytest.mark.anyio
+async def test_ensure_daily_selection_composes_priority_and_unstudied_candidates(recall_service):
+    """Initial selection requests priority portion, then appends distinct unstudied additions."""
+    recall_service.words_per_day = 3
+    recall_service.words_unstudied_extra_count = 2
+
+    priority_words = [make_word(1, "prio1"), make_word(2, "prio2"), make_word(3, "prio3")]
+    unstudied_words = [make_word(4, "unstudied1"), make_word(5, "unstudied2")]
+
+    recall_service.vocabulary_service.select_daily_candidates.return_value = priority_words
+    recall_service.vocabulary_service.select_unstudied_candidates.return_value = unstudied_words
+
+    empty_state = make_state(user_id=1, daily_selection=[])
+    full_state = make_state(user_id=1, daily_selection=priority_words + unstudied_words)
+    recall_service.recall_repository.get_recall_state.return_value = full_state
+
+    result = await recall_service._ensure_daily_selection_locked(empty_state)
+
+    recall_service.vocabulary_service.select_daily_candidates.assert_awaited_once_with(1, 7, limit=3)
+    recall_service.vocabulary_service.select_unstudied_candidates.assert_awaited_once_with(
+        user_id=1, cooldown_days=7, limit=2, excluded_word_ids=[1, 2, 3]
+    )
+    recall_service.recall_repository.replace_queue.assert_awaited_once_with(
+        1, priority_words + unstudied_words, next_word_index=0
+    )
+    assert result == full_state
+
+
+@pytest.mark.anyio
+async def test_ensure_daily_selection_partial_unstudied_pool_does_not_backfill(recall_service):
+    """When fewer unstudied words than configured are available, no studied backfill occurs."""
+    recall_service.words_per_day = 5
+    recall_service.words_unstudied_extra_count = 5
+
+    priority_words = [make_word(i, f"prio{i}") for i in range(1, 6)]
+    unstudied_words = [make_word(6, "unstudied1"), make_word(7, "unstudied2")]
+
+    recall_service.vocabulary_service.select_daily_candidates.return_value = priority_words
+    recall_service.vocabulary_service.select_unstudied_candidates.return_value = unstudied_words
+
+    empty_state = make_state(user_id=1, daily_selection=[])
+    partial_state = make_state(user_id=1, daily_selection=priority_words + unstudied_words)
+    recall_service.recall_repository.get_recall_state.return_value = partial_state
+
+    result = await recall_service._ensure_daily_selection_locked(empty_state)
+
+    recall_service.vocabulary_service.select_daily_candidates.assert_awaited_once_with(1, 7, limit=5)
+    recall_service.vocabulary_service.select_unstudied_candidates.assert_awaited_once_with(
+        user_id=1, cooldown_days=7, limit=5, excluded_word_ids=[1, 2, 3, 4, 5]
+    )
+    recall_service.recall_repository.replace_queue.assert_awaited_once_with(
+        1, priority_words + unstudied_words, next_word_index=0
+    )
+    assert len(result.daily_selection) == 7
+
+
+@pytest.mark.anyio
+async def test_ensure_daily_selection_zero_unstudied_count_omits_unstudied_selection(recall_service):
+    """When WORDS_UNSTUDIED_EXTRA_COUNT is 0, unstudied query is omitted."""
+    recall_service.words_per_day = 3
+    recall_service.words_unstudied_extra_count = 0
+
+    priority_words = [make_word(1, "prio1"), make_word(2, "prio2"), make_word(3, "prio3")]
+    recall_service.vocabulary_service.select_daily_candidates.return_value = priority_words
+
+    empty_state = make_state(user_id=1, daily_selection=[])
+    refreshed_state = make_state(user_id=1, daily_selection=priority_words)
+    recall_service.recall_repository.get_recall_state.return_value = refreshed_state
+
+    result = await recall_service._ensure_daily_selection_locked(empty_state)
+
+    recall_service.vocabulary_service.select_daily_candidates.assert_awaited_once_with(1, 7, limit=3)
+    recall_service.vocabulary_service.select_unstudied_candidates.assert_not_awaited()
+    recall_service.recall_repository.replace_queue.assert_awaited_once_with(1, priority_words, next_word_index=0)
+    assert result == refreshed_state
+
+
+@pytest.mark.anyio
+async def test_bump_words_composes_priority_and_unstudied_with_all_exclusions(recall_service):
+    """Bump excludes old queue from both replacement portion and appended unstudied additions."""
+    recall_service.words_per_day = 2
+    recall_service.words_unstudied_extra_count = 2
+
+    old_queue = [make_word(10, "old1"), make_word(11, "old2")]
+    current_state = make_state(user_id=1, daily_selection=old_queue)
+
+    replacement_priority = [make_word(20, "new_prio1"), make_word(21, "new_prio2")]
+    unstudied_words = [make_word(30, "unstudied1"), make_word(31, "unstudied2")]
+
+    recall_service.recall_repository.get_recall_state_for_update.return_value = current_state
+    recall_service.vocabulary_service.select_alternative_candidates.return_value = replacement_priority
+    recall_service.vocabulary_service.select_unstudied_candidates.return_value = unstudied_words
+
+    new_queue = replacement_priority + unstudied_words
+    refreshed_state = make_state(user_id=1, daily_selection=new_queue)
+    recall_service.recall_repository.get_recall_state.return_value = refreshed_state
+
+    result = await recall_service.bump_words(1)
+
+    recall_service.vocabulary_service.deprioritize_items.assert_awaited_once_with([10, 11], 1)
+    recall_service.vocabulary_service.select_alternative_candidates.assert_awaited_once_with(
+        1, 7, limit=2, excluded_word_ids=[10, 11]
+    )
+    recall_service.vocabulary_service.select_unstudied_candidates.assert_awaited_once_with(
+        user_id=1, cooldown_days=7, limit=2, excluded_word_ids=[10, 11, 20, 21]
+    )
+    recall_service.recall_repository.replace_queue.assert_awaited_once_with(1, new_queue, next_word_index=0)
+    assert result == refreshed_state
+
+
+@pytest.mark.anyio
+async def test_refill_queue_follows_two_capacity_formula_when_queue_length_exceeds_base_capacity(recall_service):
+    """For n=8 in a 5+5 configuration, refill requests 2 unstudied words and 0 priority words."""
+    recall_service.words_per_day = 5
+    recall_service.words_unstudied_extra_count = 5
+
+    existing_words = [make_word(i, f"w{i}") for i in range(1, 9)]
+    current_state = make_state(user_id=1, daily_selection=existing_words)
+    recall_service.recall_repository.get_recall_state_for_update.return_value = current_state
+
+    unstudied_additions = [make_word(9, "unstudied9"), make_word(10, "unstudied10")]
+    recall_service.vocabulary_service.select_unstudied_candidates.return_value = unstudied_additions
+
+    refilled_state = make_state(user_id=1, daily_selection=existing_words + unstudied_additions)
+    recall_service.recall_repository.get_recall_state.return_value = refilled_state
+
+    result = await recall_service.refill_queue(1)
+
+    recall_service.vocabulary_service.select_unstudied_candidates.assert_awaited_once_with(
+        user_id=1,
+        cooldown_days=7,
+        limit=2,  # max(0, min(5, 10 - 8)) = 2
+        excluded_word_ids=list(range(1, 9)),
+    )
+    recall_service.vocabulary_service.select_daily_candidates.assert_not_awaited()  # max(0, 5 - 8) = 0
+    recall_service.recall_repository.append_queue_words.assert_awaited_once_with(1, unstudied_additions)
+    assert result == refilled_state
+
+
+@pytest.mark.anyio
+async def test_refill_queue_follows_two_capacity_formula_when_queue_is_short(recall_service):
+    """For n=3 in a 5+5 configuration, refill requests 5 unstudied words and 2 priority words."""
+    recall_service.words_per_day = 5
+    recall_service.words_unstudied_extra_count = 5
+
+    existing_words = [make_word(1, "w1"), make_word(2, "w2"), make_word(3, "w3")]
+    current_state = make_state(user_id=1, daily_selection=existing_words)
+    recall_service.recall_repository.get_recall_state_for_update.return_value = current_state
+
+    unstudied_additions = [make_word(i, f"unstudied{i}") for i in range(10, 15)]
+    priority_additions = [make_word(20, "prio20"), make_word(21, "prio21")]
+
+    recall_service.vocabulary_service.select_unstudied_candidates.return_value = unstudied_additions
+    recall_service.vocabulary_service.select_daily_candidates.return_value = priority_additions
+
+    all_words = existing_words + unstudied_additions + priority_additions
+    refilled_state = make_state(user_id=1, daily_selection=all_words)
+    recall_service.recall_repository.get_recall_state.return_value = refilled_state
+
+    result = await recall_service.refill_queue(1)
+
+    recall_service.vocabulary_service.select_unstudied_candidates.assert_awaited_once_with(
+        user_id=1,
+        cooldown_days=7,
+        limit=5,  # max(0, min(5, 10 - 3)) = 5
+        excluded_word_ids=[1, 2, 3],
+    )
+    recall_service.vocabulary_service.select_daily_candidates.assert_awaited_once_with(
+        user_id=1,
+        cooldown_days=7,
+        limit=2,  # max(0, 5 - 3) = 2
+        excluded_word_ids=[1, 2, 3, 10, 11, 12, 13, 14],
+    )
+    recall_service.recall_repository.append_queue_words.assert_awaited_once_with(
+        1, unstudied_additions + priority_additions
+    )
+    assert result == refilled_state
+
+
+@pytest.mark.anyio
+async def test_refill_queue_does_not_backfill_missing_unstudied_slots_with_studied_words(recall_service):
+    """When unstudied pool is empty, priority selection is still strictly capped at base capacity."""
+    recall_service.words_per_day = 5
+    recall_service.words_unstudied_extra_count = 5
+
+    # n = 4: unstudied_needed = 5, priority_needed = 1
+    existing_words = [make_word(i, f"w{i}") for i in range(1, 5)]
+    current_state = make_state(user_id=1, daily_selection=existing_words)
+    recall_service.recall_repository.get_recall_state_for_update.return_value = current_state
+
+    # 0 unstudied candidates available
+    recall_service.vocabulary_service.select_unstudied_candidates.return_value = []
+    # 1 priority candidate available
+    priority_addition = [make_word(10, "prio10")]
+    recall_service.vocabulary_service.select_daily_candidates.return_value = priority_addition
+
+    refilled_state = make_state(user_id=1, daily_selection=existing_words + priority_addition)
+    recall_service.recall_repository.get_recall_state.return_value = refilled_state
+
+    result = await recall_service.refill_queue(1)
+
+    recall_service.vocabulary_service.select_unstudied_candidates.assert_awaited_once_with(
+        user_id=1,
+        cooldown_days=7,
+        limit=5,
+        excluded_word_ids=[1, 2, 3, 4],
+    )
+    # Priority query must only ask for 1 (5 - 4), NOT 6 (10 - 4)
+    recall_service.vocabulary_service.select_daily_candidates.assert_awaited_once_with(
+        user_id=1,
+        cooldown_days=7,
+        limit=1,
+        excluded_word_ids=[1, 2, 3, 4],
+    )
+    recall_service.recall_repository.append_queue_words.assert_awaited_once_with(1, priority_addition)
+    assert result == refilled_state
+
+
+@pytest.mark.anyio
+async def test_deliver_next_word_scans_stale_expanded_queue_bounded_by_expanded_maximum(recall_service):
+    """Delivery scans and cleans an expanded queue containing stale entries without looping indefinitely (AC9)."""
+    recall_service.words_per_day = 3
+    recall_service.words_unstudied_extra_count = 2  # max total = 5
+
+    # 5 stale items in queue
+    stale_words = [make_word(i, f"stale{i}") for i in range(1, 6)]
+    stale_state = make_state(user_id=1, daily_selection=stale_words)
+
+    recall_service.recall_repository.get_recall_state_for_update.return_value = stale_state
+    recall_service.recall_repository.get_recall_state.side_effect = [
+        make_state(user_id=1, daily_selection=stale_words[i:]) for i in range(1, 6)
+    ]
+    recall_service.vocabulary_service.get_learnable_item.return_value = None
+
+    send_word = AsyncMock(return_value=True)
+    result = await recall_service.deliver_next_word(1, send_word, max_attempts=0)
+
+    assert result is None
+    send_word.assert_not_awaited()
+    # All 5 stale words removed
+    assert recall_service.recall_repository.remove_queue_word.await_count == 5
+    recall_service.recall_repository.commit.assert_awaited_once()

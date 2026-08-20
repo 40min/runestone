@@ -547,6 +547,46 @@ class TestVocabularyService:
 
         vocabulary_repository.hard_delete_vocabulary_item.assert_awaited_once_with(11, 7, commit=False)
 
+    async def test_select_unstudied_candidates_unstudied_recall_forwards_and_projects(self):
+        """VocabularyService forwards arguments and projects repository rows to RecallQueueWord."""
+        vocabulary_repository = AsyncMock(spec=VocabularyRepository)
+        vocab_model = VocabularyModel(
+            id=42,
+            user_id=7,
+            word_phrase="kontanter",
+            translation="cash",
+            example_phrase="Jag betalar med kontanter.",
+            in_learn=True,
+            priority_learn=9,
+            learned_times=0,
+            last_learned=None,
+        )
+        vocabulary_repository.select_unstudied_words.return_value = [vocab_model]
+        service = VocabularyService(
+            vocabulary_repository,
+            Mock(spec=Settings),
+            AsyncMock(),
+        )
+
+        result = await service.select_unstudied_candidates(
+            user_id=7,
+            cooldown_days=5,
+            limit=10,
+            excluded_word_ids=[1, 2],
+        )
+
+        vocabulary_repository.select_unstudied_words.assert_awaited_once_with(
+            7,
+            5,
+            limit=10,
+            excluded_word_ids=[1, 2],
+        )
+        assert len(result) == 1
+        assert result[0].id == 42
+        assert result[0].word_phrase == "kontanter"
+        assert result[0].translation == "cash"
+        assert result[0].example_phrase == "Jag betalar med kontanter."
+
     async def test_improve_item_success(self, service, caplog):
         """Test successful vocabulary item improvement with ALL_FIELDS mode."""
         structured_model = AsyncMock()

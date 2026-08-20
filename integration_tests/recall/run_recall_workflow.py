@@ -129,6 +129,20 @@ class FixtureCandidateVocabularyService(VocabularyService):
             await self._selection_exclusions(user_id, excluded_word_ids),
         )
 
+    async def select_unstudied_candidates(
+        self,
+        user_id: int,
+        cooldown_days: int,
+        limit: int,
+        excluded_word_ids: list[int] | None = None,
+    ) -> list[RecallQueueWord]:
+        return await super().select_unstudied_candidates(
+            user_id,
+            cooldown_days,
+            limit,
+            await self._selection_exclusions(user_id, excluded_word_ids),
+        )
+
 
 class MemoryOffsetStore:
     """Record Telegram offset behavior without touching the configured file."""
@@ -611,13 +625,13 @@ async def read_evidence(db: AsyncSession, user_id: int, fixture_prefix: str) -> 
     }
 
 
-def assert_queue_invariants(evidence: dict[str, Any], words_per_day: int) -> None:
+def assert_queue_invariants(evidence: dict[str, Any], max_queue_words: int) -> None:
     queue = evidence["queue"]
     positions = [item["position"] for item in queue]
     vocabulary_ids = [item["vocabulary_id"] for item in queue]
     require(positions == list(range(len(queue))), f"queue positions are not contiguous: {positions}")
     require(len(vocabulary_ids) == len(set(vocabulary_ids)), "queue contains duplicate vocabulary IDs")
-    require(len(queue) <= words_per_day, f"queue exceeds WORDS_PER_DAY={words_per_day}")
+    require(len(queue) <= max_queue_words, f"queue exceeds maximum capacity={max_queue_words}")
     require(
         all(item["vocabulary_user_id"] == evidence["user"]["id"] for item in queue),
         "queue references another user's vocabulary",
@@ -707,10 +721,11 @@ async def prepare_fixture_state(
     enabled: bool = True,
     cursor: int = 0,
 ) -> RecallState:
+    total_capacity = settings.words_per_day + settings.words_unstudied_extra_count
     await recall_repository.upsert_for_user(user_id, chat_id=DEFAULT_CHAT_ID, is_enabled=enabled)
     await recall_repository.replace_queue(
         user_id,
-        queue_words(fixtures, settings.words_per_day),
+        queue_words(fixtures, total_capacity),
         next_word_index=cursor,
     )
     await db.commit()
@@ -765,19 +780,20 @@ class RecallWorkflow:
     async def evidence(self) -> dict[str, Any]:
         self.db.expire_all()
         evidence = await read_evidence(self.db, self.user_id, self.fixture_prefix)
-        assert_queue_invariants(evidence, settings.words_per_day)
+        assert_queue_invariants(evidence, settings.words_per_day + settings.words_unstudied_extra_count)
         return evidence
 
     async def reset(self, *, enabled: bool = True, cursor: int = 0) -> RecallState:
-        for fixture in self.fixtures:
+        for index, fixture in enumerate(self.fixtures):
+            is_studied = index % 2 == 1
             await self.db.execute(
                 update(Vocabulary)
                 .where(Vocabulary.id == fixture.id)
                 .values(
                     in_learn=True,
                     priority_learn=VOCABULARY_PRIORITY_HIGH,
-                    last_learned=None,
-                    learned_times=0,
+                    last_learned=FIXTURE_TIMESTAMP if is_studied else None,
+                    learned_times=1 if is_studied else 0,
                     updated_at=FIXTURE_TIMESTAMP,
                 )
             )
@@ -797,18 +813,24 @@ class RecallWorkflow:
         *,
         cooldown_ids: set[int] | None = None,
         priorities: dict[int, int] | None = None,
+        studied_ids: set[int] | None = None,
     ) -> None:
         cooldown_ids = cooldown_ids or set()
         priorities = priorities or {}
-        for fixture in self.fixtures:
+        has_explicit_studied = studied_ids is not None
+        explicit_studied = studied_ids or set()
+        for index, fixture in enumerate(self.fixtures):
+            is_cooldown = fixture.id in cooldown_ids
+            is_studied = (fixture.id in explicit_studied) if has_explicit_studied else (index % 2 == 1)
+            last_learned = datetime.now(timezone.utc) if is_cooldown else (FIXTURE_TIMESTAMP if is_studied else None)
             await self.db.execute(
                 update(Vocabulary)
                 .where(Vocabulary.id == fixture.id)
                 .values(
-                    in_learn=fixture.id in eligible_ids or fixture.id in cooldown_ids,
+                    in_learn=fixture.id in eligible_ids or is_cooldown,
                     priority_learn=priorities.get(fixture.id, VOCABULARY_PRIORITY_HIGH),
-                    last_learned=datetime.now(timezone.utc) if fixture.id in cooldown_ids else None,
-                    learned_times=0,
+                    last_learned=last_learned,
+                    learned_times=1 if (is_cooldown or is_studied) else 0,
                     updated_at=FIXTURE_TIMESTAMP,
                 )
             )
@@ -862,13 +884,8 @@ class RecallWorkflow:
             eligible,
             cooldown_ids=cooldown,
             priorities={self.fixtures[2].id: 0, self.fixtures[3].id: 4, self.fixtures[5].id: 9},
+            studied_ids={self.fixtures[3].id},
         )
-        await self.db.execute(
-            update(Vocabulary)
-            .where(Vocabulary.id == self.fixtures[3].id)
-            .values(last_learned=FIXTURE_TIMESTAMP, learned_times=1, updated_at=FIXTURE_TIMESTAMP)
-        )
-        await self.db.commit()
         candidates = await self.vocabulary_service.select_daily_candidates(
             self.user_id,
             settings.cooldown_days,
@@ -878,10 +895,21 @@ class RecallWorkflow:
             [word.id for word in candidates] == [self.fixtures[2].id, self.fixtures[3].id, self.fixtures[5].id],
             "filters/order differ",
         )
+        unstudied_candidates = await self.vocabulary_service.select_unstudied_candidates(
+            self.user_id,
+            settings.cooldown_days,
+            settings.words_unstudied_extra_count,
+        )
+        expected_unstudied_ids = [self.fixtures[2].id, self.fixtures[5].id][: settings.words_unstudied_extra_count]
+        require(
+            [word.id for word in unstudied_candidates] == expected_unstudied_ids,
+            "unstudied candidates select studied fixture",
+        )
         await self.reset()
         return "missing-state read, short/empty pools, cooldown, inactive, and priority filters verified"
 
     async def normal_delivery(self) -> str:
+        total_target_size = settings.words_per_day + settings.words_unstudied_extra_count
         await self.reset(cursor=0)
         await self.recall_repository.replace_queue(self.user_id, [], next_word_index=0)
         await self.db.commit()
@@ -894,20 +922,35 @@ class RecallWorkflow:
             sent.append({"chat_id": chat_id, "word_id": word.id, "word_phrase": word.word_phrase})
             return True
 
-        for _ in range(settings.words_per_day):
+        for _ in range(total_target_size):
             await self.recall_service.deliver_next_word(self.user_id, accept)
         after = await self.evidence()
         queue_ids = [row["vocabulary_id"] for row in after["queue"]]
         sent_ids = [row["word_id"] for row in sent]
-        require(len(queue_ids) == settings.words_per_day, "empty queue was not populated to target size")
+        require(len(queue_ids) == total_target_size, "empty queue was not populated to target size")
         require(sent_ids == queue_ids, f"delivery order {sent_ids} does not match queue order {queue_ids}")
+        before_fixture_rows = {row["id"]: row for row in before["fixtures"]}
         fixture_rows = {row["id"]: row for row in after["fixtures"]}
         require(all(vocabulary_id in fixture_rows for vocabulary_id in queue_ids), "normal queue selected non-fixtures")
         for vocabulary_id in queue_ids:
+            before_learned = before_fixture_rows[vocabulary_id]
             learned = fixture_rows[vocabulary_id]
-            require(learned["learned_times"] == 1, f"fixture {vocabulary_id} learning count is not 1")
-            require(learned["last_learned"] is not None, f"fixture {vocabulary_id} lacks last_learned")
-        require(after["recall_state"]["next_word_index"] == 0, "full delivery cycle did not wrap cursor to zero")
+            require(
+                learned["learned_times"] == before_learned["learned_times"] + 1,
+                f"fixture {vocabulary_id} learned count did not increment once",
+            )
+            require(
+                learned["last_learned"] is not None and learned["last_learned"] != before_learned["last_learned"],
+                f"fixture {vocabulary_id} last-learned timestamp was not updated",
+            )
+        require(after["recall_state"]["next_word_index"] == 0, "normal delivery cursor did not wrap to zero")
+        unstudied_fixture_ids = {row["id"] for row in before["fixtures"] if row["learned_times"] == 0}
+        unstudied_cohort = queue_ids[settings.words_per_day :]
+        require(len(unstudied_cohort) == settings.words_unstudied_extra_count, "unstudied cohort length differs")
+        require(
+            all(w_id in unstudied_fixture_ids for w_id in unstudied_cohort),
+            "unstudied cohort contains studied or non-unstudied words",
+        )
 
         await self.reset(cursor=0)
         # Duplicate the target DTO only inside the harness: the first user
@@ -973,10 +1016,11 @@ class RecallWorkflow:
         await self.reset()
         all_ids = {fixture.id for fixture in self.fixtures}
         await self.configure_fixture_pool(set())
+        total_capacity = settings.words_per_day + settings.words_unstudied_extra_count
         # Direct setup keeps now-inactive rows queued so delivery must clean them.
         await self.recall_repository.replace_queue(
             self.user_id,
-            queue_words(self.fixtures, settings.words_per_day),
+            queue_words(self.fixtures, total_capacity),
             next_word_index=0,
         )
         await self.db.commit()
@@ -990,13 +1034,14 @@ class RecallWorkflow:
         return "disabled/null-chat no-op and one/all-invalid queue repair verified"
 
     async def hard_delete(self) -> str:
-        initial_cursor = min(2, settings.words_per_day - 1)
+        total_capacity = settings.words_per_day + settings.words_unstudied_extra_count
+        initial_cursor = min(2, total_capacity - 1)
         await self.reset(cursor=initial_cursor)
         target_fixture = self.fixtures[-1]
-        hard_delete_queue = [target_fixture, *self.fixtures[: settings.words_per_day - 1]]
+        hard_delete_queue = [target_fixture, *self.fixtures[: total_capacity - 1]]
         await self.recall_repository.replace_queue(
             self.user_id,
-            queue_words(hard_delete_queue, settings.words_per_day),
+            queue_words(hard_delete_queue, total_capacity),
             next_word_index=initial_cursor,
         )
         await self.db.commit()
@@ -1019,8 +1064,18 @@ class RecallWorkflow:
             "deleted word remains queued",
         )
         require(target["vocabulary_id"] not in [row["id"] for row in after["fixtures"]], "vocabulary row still exists")
-        require(len(after["queue"]) == settings.words_per_day, "queue was not refilled to target size")
-        expected_cursor = RecallRepository._cursor_after_removal(initial_cursor, 0, settings.words_per_day - 1)
+        require(len(after["queue"]) == total_capacity, "queue was not refilled to target size")
+        before_queue_ids = {row["vocabulary_id"] for row in before["queue"]}
+        after_queue_ids = {row["vocabulary_id"] for row in after["queue"]}
+        newly_added_ids = after_queue_ids - before_queue_ids
+        unstudied_fixture_ids = {row["id"] for row in before["fixtures"] if row["learned_times"] == 0}
+        require(newly_added_ids, "hard-delete did not add a replacement")
+        if settings.words_unstudied_extra_count > 0:
+            require(
+                newly_added_ids.issubset(unstudied_fixture_ids),
+                "hard-delete refilled replacement is not from unstudied fixtures",
+            )
+        expected_cursor = RecallRepository._cursor_after_removal(initial_cursor, 0, total_capacity - 1)
         require(
             after["recall_state"]["next_word_index"] == expected_cursor,
             "cursor did not preserve the logical next word",
@@ -1028,7 +1083,9 @@ class RecallWorkflow:
         return f"hard-deleted fixture {target['vocabulary_id']} and restored queue size"
 
     async def hard_delete_edge(self) -> str:
-        await self.reset(cursor=min(2, settings.words_per_day - 1))
+        total_capacity = settings.words_per_day + settings.words_unstudied_extra_count
+        cursor = min(2, total_capacity - 1)
+        await self.reset(cursor=cursor)
         self.case_before = await self.evidence()
 
         not_queued = self.fixtures[-2]
@@ -1049,7 +1106,7 @@ class RecallWorkflow:
         await self.db.commit()
         require(await self.db.get(RecallUserStateDB, self.user_id) is None, "deletion created recall state")
 
-        await self.reset(cursor=min(2, settings.words_per_day - 1))
+        await self.reset(cursor=cursor)
         missing_before = await self.evidence()
         require(
             not await self.vocabulary_service.hard_delete_item(-9_999_999, self.user_id), "missing delete succeeded"
@@ -1076,8 +1133,7 @@ class RecallWorkflow:
         await self.db.rollback()
         require(await self.evidence() == rollback_before, "delete/refill failure did not roll back")
 
-        cursor = min(2, settings.words_per_day - 1)
-        for position in sorted({0, cursor, settings.words_per_day - 1}):
+        for position in sorted({0, cursor, total_capacity - 1}):
             await self.reset(cursor=cursor)
             state_before = await self.evidence()
             target_id = state_before["queue"][position]["vocabulary_id"]
@@ -1086,7 +1142,7 @@ class RecallWorkflow:
             )
             require(await self.vocabulary_service.hard_delete_item(target_id, self.user_id), "position delete failed")
             pending = await self.evidence()
-            expected = RecallRepository._cursor_after_removal(cursor, position, settings.words_per_day - 1)
+            expected = RecallRepository._cursor_after_removal(cursor, position, total_capacity - 1)
             require(pending["recall_state"]["next_word_index"] == expected, f"cursor wrong for position {position}")
             await self.db.rollback()
             require(await self.evidence() == state_before, f"position {position} rollback drifted")
@@ -1183,8 +1239,12 @@ class RecallWorkflow:
         require([row["vocabulary_id"] for row in bumped["queue"]] != old_queue, "/bump_words did not replace queue")
         require(bumped["recall_state"]["next_word_index"] == 0, "/bump_words did not reset cursor")
 
+        total_capacity = settings.words_per_day + settings.words_unstudied_extra_count
         state = await self.recall_repository.get_recall_state(self.user_id)
         require(state is not None and state.daily_selection, "queue missing before /remove")
+        before_remove_ids = {word.id for word in state.daily_selection}
+        before_remove_fixtures = await self.evidence()
+        unstudied_fixture_ids = {row["id"] for row in before_remove_fixtures["fixtures"] if row["learned_times"] == 0}
         fixture_ids = {fixture.id for fixture in self.fixtures}
         remove_word = next((word for word in state.daily_selection if word.id in fixture_ids), None)
         require(remove_word is not None, "bumped queue contains no fixture word safe to remove")
@@ -1195,6 +1255,15 @@ class RecallWorkflow:
         removed_vocab = next(row for row in removed["fixtures"] if row["id"] == remove_word.id)
         require(not removed_vocab["in_learn"], "/remove did not deactivate vocabulary")
         require(remove_word.id not in [row["vocabulary_id"] for row in removed["queue"]], "/remove left word queued")
+        require(len(removed["queue"]) == total_capacity, "/remove did not restore queue capacity")
+        after_remove_ids = {row["vocabulary_id"] for row in removed["queue"]}
+        newly_added_remove_ids = after_remove_ids - before_remove_ids
+        require(newly_added_remove_ids, "/remove did not add a replacement")
+        if settings.words_unstudied_extra_count > 0:
+            require(
+                newly_added_remove_ids.issubset(unstudied_fixture_ids),
+                "/remove refilled replacement is not from unstudied fixtures",
+            )
 
         await telegram._process_single_update(telegram_update(106, username, "/stop"))
         stopped = await self.evidence()
@@ -1297,7 +1366,8 @@ class RecallWorkflow:
         require("not found" in telegram.outbox[-1]["text"], "unknown remove response is wrong")
 
         await self.reset(enabled=True)
-        absent_fixture = self.fixtures[settings.words_per_day + 1]
+        total_capacity = settings.words_per_day + settings.words_unstudied_extra_count
+        absent_fixture = self.fixtures[total_capacity + 1]
         absent_before = await self.evidence()
         await telegram._process_single_update(
             telegram_update(210, username, "/postpone", reply_word=absent_fixture.word_phrase)
@@ -1307,12 +1377,13 @@ class RecallWorkflow:
         return "normalization, authorization, malformed updates/replies, unknown and absent words verified"
 
     async def postpone_bump(self) -> str:
+        total_capacity = settings.words_per_day + settings.words_unstudied_extra_count
         failures: list[str] = []
-        cursor = min(2, settings.words_per_day - 1)
+        cursor = min(2, total_capacity - 1)
         await self.reset(cursor=cursor)
         self.case_before = await self.evidence()
 
-        for position in sorted({0, cursor, settings.words_per_day - 1}):
+        for position in sorted({0, cursor, total_capacity - 1}):
             state = await self.reset(cursor=cursor)
             before_ids = [word.id for word in state.daily_selection]
             target = state.daily_selection[position]
@@ -1324,7 +1395,7 @@ class RecallWorkflow:
             await self.db.commit()
             after_ids = [word.id for word in result.daily_selection]
             require(target.id not in after_ids, f"postponed position {position} was re-added")
-            expected_cursor = RecallRepository._cursor_after_removal(cursor, position, settings.words_per_day - 1)
+            expected_cursor = RecallRepository._cursor_after_removal(cursor, position, total_capacity - 1)
             require(result.next_word_index == expected_cursor, f"postpone cursor wrong at position {position}")
             if position < cursor:
                 require(after_ids[result.next_word_index] == before_ids[cursor], "before-cursor logical next changed")
@@ -1349,6 +1420,9 @@ class RecallWorkflow:
 
         state = await self.reset(cursor=0)
         target = state.daily_selection[0]
+        before_postpone_ids = {word.id for word in state.daily_selection}
+        before_postpone_fixtures = await self.evidence()
+        unstudied_fixture_ids = {row["id"] for row in before_postpone_fixtures["fixtures"] if row["learned_times"] == 0}
         await self.db.execute(
             update(Vocabulary).where(Vocabulary.id == target.id).values(last_learned=datetime.now(timezone.utc))
         )
@@ -1356,10 +1430,18 @@ class RecallWorkflow:
         refilled = await self.recall_service.postpone_word(state, target.word_phrase)
         await self.db.commit()
         require(target.id not in [word.id for word in refilled.daily_selection], "alternative refill re-added target")
-        require(len(refilled.daily_selection) == settings.words_per_day, "alternative refill did not reach target")
+        require(len(refilled.daily_selection) == total_capacity, "alternative refill did not reach target")
+        after_postpone_ids = {word.id for word in refilled.daily_selection}
+        newly_added_postpone_ids = after_postpone_ids - before_postpone_ids
+        require(newly_added_postpone_ids, "postpone did not add a replacement")
+        if settings.words_unstudied_extra_count > 0:
+            require(
+                newly_added_postpone_ids.issubset(unstudied_fixture_ids),
+                "postpone refilled replacement is not from unstudied fixtures",
+            )
 
         state = await self.reset(cursor=cursor)
-        absent = self.fixtures[settings.words_per_day + 2]
+        absent = self.fixtures[total_capacity + 2]
         queue_before = [word.id for word in state.daily_selection]
         removed = await self.recall_service.remove_word_completely(state, absent.word_phrase)
         await self.db.commit()
@@ -1369,15 +1451,24 @@ class RecallWorkflow:
 
         state = await self.reset()
         old_ids = {word.id for word in state.daily_selection}
+        before_bump_fixtures = await self.evidence()
+        unstudied_bump_fixtures = {row["id"] for row in before_bump_fixtures["fixtures"] if row["learned_times"] == 0}
         bumped = await self.recall_service.bump_words(state.user_id)
         await self.db.commit()
         require(old_ids.isdisjoint({word.id for word in bumped.daily_selection}), "full bump reused old IDs")
-        require(len(bumped.daily_selection) == settings.words_per_day, "full bump did not fill queue")
+        require(len(bumped.daily_selection) == total_capacity, "full bump did not fill queue")
         require(bumped.next_word_index == 0, "full bump cursor is not zero")
+        bumped_ids = [word.id for word in bumped.daily_selection]
+        unstudied_cohort = bumped_ids[settings.words_per_day :]
+        require(len(unstudied_cohort) == settings.words_unstudied_extra_count, "bump unstudied cohort length differs")
+        require(
+            all(w_id in unstudied_bump_fixtures for w_id in unstudied_cohort),
+            "bump unstudied cohort contains studied or non-unstudied words",
+        )
 
         state = await self.reset()
         current_ids = {word.id for word in state.daily_selection}
-        alternatives = {self.fixtures[settings.words_per_day].id, self.fixtures[settings.words_per_day + 1].id}
+        alternatives = {self.fixtures[total_capacity].id, self.fixtures[total_capacity + 1].id}
         await self.configure_fixture_pool(alternatives, cooldown_ids=current_ids)
         insufficient = await self.recall_service.bump_words(state.user_id)
         await self.db.commit()
@@ -1556,11 +1647,12 @@ class RecallWorkflow:
         )
         require(len(state_count_result.scalars().all()) == 1, "concurrent start created duplicate states")
 
+        total_capacity = settings.words_per_day + settings.words_unstudied_extra_count
         await self.reset(cursor=0)
         delete_target = self.fixtures[-4]
         await self.recall_repository.replace_queue(
             self.user_id,
-            queue_words([delete_target, *self.fixtures[: settings.words_per_day - 1]], settings.words_per_day),
+            queue_words([delete_target, *self.fixtures[: total_capacity - 1]], total_capacity),
             next_word_index=0,
         )
         await self.db.commit()
@@ -1639,7 +1731,8 @@ class RecallWorkflow:
 
     async def lifecycle(self) -> str:
         """Exercise lifecycle transitions that retain one deployed recall aggregate."""
-        cursor = min(2, settings.words_per_day - 1)
+        total_capacity = settings.words_per_day + settings.words_unstudied_extra_count
+        cursor = min(2, total_capacity - 1)
         await self.reset(enabled=False, cursor=cursor)
         self.case_before = await self.evidence()
         user = await self.db.get(User, self.user_id, populate_existing=True)
@@ -1692,7 +1785,8 @@ class RecallWorkflow:
 
     async def vocabulary_context(self) -> str:
         """Verify deployed vocabulary edits are reflected by queue consumers."""
-        cursor = min(1, settings.words_per_day - 1)
+        total_capacity = settings.words_per_day + settings.words_unstudied_extra_count
+        cursor = min(1, total_capacity - 1)
         state = await self.reset(enabled=True, cursor=cursor)
         self.case_before = await self.evidence()
         target = state.daily_selection[cursor]
@@ -2244,7 +2338,8 @@ async def run(args: argparse.Namespace) -> int:
                     )
                     await db.commit()
 
-                    fixture_count = max(16, settings.words_per_day * 4)
+                    total_capacity = settings.words_per_day + settings.words_unstudied_extra_count
+                    fixture_count = max(24, total_capacity * 4)
                     fixtures = await create_fixtures(db, args.user_id, fixture_prefix, fixture_count)
                     fixture_catalog = [
                         {
@@ -2365,6 +2460,7 @@ async def run(args: argparse.Namespace) -> int:
         "selected_cases": selected_cases,
         "settings": {
             "words_per_day": settings.words_per_day,
+            "words_unstudied_extra_count": settings.words_unstudied_extra_count,
             "cooldown_days": settings.cooldown_days,
             "recall_start_hour": settings.recall_start_hour,
             "recall_end_hour": settings.recall_end_hour,

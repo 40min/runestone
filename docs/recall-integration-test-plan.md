@@ -184,7 +184,7 @@ Before running the scenarios, record:
 - ordered `recall_queue_items` joined to `vocabulary`;
 - all fixture vocabulary fields;
 - Telegram offset-file presence and content;
-- configured `WORDS_PER_DAY`, cooldown, and recall delivery window.
+- configured `WORDS_PER_DAY`, `WORDS_UNSTUDIED_EXTRA_COUNT`, cooldown, and recall delivery window.
 
 ## Invariants Checked After Every Mutating Scenario
 
@@ -202,7 +202,7 @@ Use these common assertions unless a scenario explicitly expects otherwise:
 
 ## Fixture Set
 
-Create at least `2 * WORDS_PER_DAY + 3` learnable fixture words so replacement and exclusion behavior can be proved. Include:
+Create at least `2 * (WORDS_PER_DAY + WORDS_UNSTUDIED_EXTRA_COUNT) + 3` learnable fixture words so replacement and exclusion behavior can be proved. Include:
 
 - high-, default-, and low-priority words;
 - words never learned;
@@ -222,10 +222,10 @@ Keep the fixture IDs and expected selection eligibility in the run report.
 | A01 | Verify migration/schema prerequisites. | Both recall tables and all named PK/FK/check/unique constraints exist; Alembic is at the expected head. |
 | A02 | Load state for a user without a recall row. | Read returns no persisted row; no row is created by a read. |
 | A03 | Enable recall for active user `5`. | One state row exists, `is_enabled = true`, supplied chat ID is stored, cursor is `0`; repeated enable updates rather than duplicates the row. |
-| A04 | Deliver with an empty queue and enough eligible vocabulary. | Queue is created with up to `WORDS_PER_DAY` eligible unique items at contiguous positions; cursor advances only after the accepted send. |
+| A04 | Deliver with an empty queue and enough eligible vocabulary. | Queue is created with up to `WORDS_PER_DAY` priority words plus up to `WORDS_UNSTUDIED_EXTRA_COUNT` unstudied words at contiguous positions; cursor advances only after the accepted send. |
 | A05 | Select with fewer eligible words than the target. | Queue contains every eligible item once and remains shorter than the configured target without failure. |
 | A06 | Select with no eligible words. | Queue stays empty, cursor remains `0`, no learning metadata changes, and no message is recorded. |
-| A07 | Validate selection filters. | Inactive and cooldown-blocked words are absent; priority/candidate rules match repository semantics. |
+| A07 | Validate selection filters. | Inactive and cooldown-blocked words are absent; priority and unstudied candidate rules match repository semantics. |
 
 ### B. Normal scheduled delivery
 
@@ -266,10 +266,10 @@ Build Telegram update dictionaries with realistic command entities and record ou
 | D01 | Postpone the item before the cursor. | Item is absent from the resulting queue, priority moves one step toward low urgency within bounds, positions compact, and cursor decreases so the same logical next item remains selected. |
 | D02 | Postpone the item at the cursor or after it. | Item is absent, positions compact, and cursor still identifies the correct logical next item. |
 | D03 | Postpone the last/only queue item. | Postponed ID is excluded from immediate refill, including the single-eligible-word case; empty queue implies cursor `0`. |
-| D04 | Postpone when alternatives exist. | Queue refills toward `WORDS_PER_DAY` with unique eligible alternatives and never immediately re-adds the postponed ID. |
-| D05 | `/remove` a queued word. | Vocabulary remains present but becomes `in_learn = false` with low priority; queue removes it, compacts, repairs cursor, and refills with an eligible alternative. |
+| D04 | Postpone when alternatives exist. | Queue refills toward configured target with unique eligible alternatives according to the two-capacity refill rule and never immediately re-adds the postponed ID. |
+| D05 | `/remove` a queued word. | Vocabulary remains present but becomes `in_learn = false` with low priority; queue removes it, compacts, repairs cursor, and refills with eligible alternatives. |
 | D06 | `/remove` a vocabulary word absent from the queue. | Vocabulary is deactivated; unrelated queue and cursor remain unchanged. |
-| D07 | `/bump_words` with enough alternatives. | Active prior queue words are deprioritized once, the complete queue is replaced, prior queue IDs are excluded, positions restart at `0`, and cursor resets to `0`. |
+| D07 | `/bump_words` with enough alternatives. | Active prior queue words are deprioritized once, the complete queue is replaced with priority and unstudied candidates, prior queue IDs are excluded, positions restart at `0`, and cursor resets to `0`. |
 | D08 | `/bump_words` with insufficient alternatives. | Active prior queue words are deprioritized once, fallback selection fills as far as possible without duplicate queue IDs, and the resulting cursor is `0`. |
 | D09 | `/bump_words` with no eligible words. | Active prior queue words are deprioritized once, the queue becomes empty, the cursor is `0`, and the command reports that no words are available. |
 

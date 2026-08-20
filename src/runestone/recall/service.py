@@ -35,6 +35,7 @@ class RecallService:
         self.vocabulary_service = vocabulary_service
         self.user_service = user_service
         self.words_per_day = settings.words_per_day
+        self.words_unstudied_extra_count = settings.words_unstudied_extra_count
         self.cooldown_days = settings.cooldown_days
 
     async def get_state_for_telegram_username(self, username: str) -> tuple[str | None, RecallState | None]:
@@ -160,6 +161,16 @@ class RecallService:
                     limit=needed,
                 )
             )
+
+        if self.words_unstudied_extra_count > 0:
+            excluded_unstudied_ids = list(dict.fromkeys(bumped_word_ids + [word.id for word in portion_words]))
+            unstudied_words = await self.vocabulary_service.select_unstudied_candidates(
+                user_id=state.user_id,
+                cooldown_days=self.cooldown_days,
+                limit=self.words_unstudied_extra_count,
+                excluded_word_ids=excluded_unstudied_ids or None,
+            )
+            portion_words.extend(unstudied_words)
 
         await self.recall_repository.replace_queue(state.user_id, portion_words, next_word_index=0)
         refreshed = await self.recall_repository.get_recall_state(state.user_id)
@@ -319,7 +330,9 @@ class RecallService:
                     await self.recall_repository.commit()
                     return None
 
-                for _ in range(max(len(current_state.daily_selection), self.words_per_day)):
+                for _ in range(
+                    max(len(current_state.daily_selection), self.words_per_day + self.words_unstudied_extra_count)
+                ):
                     queued_word = self._next_queue_word(current_state)
                     if queued_word is None:
                         break
@@ -399,19 +412,38 @@ class RecallService:
         *,
         additionally_excluded_word_ids: list[int] | None = None,
     ) -> RecallState:
-        needed = self.words_per_day - len(state.daily_selection)
-        if needed <= 0:
+        n = len(state.daily_selection)
+        max_capacity = self.words_per_day + self.words_unstudied_extra_count
+        unstudied_needed = max(0, min(self.words_unstudied_extra_count, max_capacity - n))
+        priority_needed = max(0, self.words_per_day - n)
+
+        if unstudied_needed <= 0 and priority_needed <= 0:
             return state
 
-        excluded_ids = list(
+        base_excluded_ids = list(
             dict.fromkeys([word.id for word in state.daily_selection] + (additionally_excluded_word_ids or []))
         )
-        additions = await self.vocabulary_service.select_daily_candidates(
-            user_id=state.user_id,
-            cooldown_days=self.cooldown_days,
-            limit=needed,
-            excluded_word_ids=excluded_ids or None,
-        )
+
+        unstudied_additions: list[RecallQueueWord] = []
+        if unstudied_needed > 0:
+            unstudied_additions = await self.vocabulary_service.select_unstudied_candidates(
+                user_id=state.user_id,
+                cooldown_days=self.cooldown_days,
+                limit=unstudied_needed,
+                excluded_word_ids=base_excluded_ids or None,
+            )
+
+        priority_additions: list[RecallQueueWord] = []
+        if priority_needed > 0:
+            priority_excluded_ids = list(dict.fromkeys(base_excluded_ids + [word.id for word in unstudied_additions]))
+            priority_additions = await self.vocabulary_service.select_daily_candidates(
+                user_id=state.user_id,
+                cooldown_days=self.cooldown_days,
+                limit=priority_needed,
+                excluded_word_ids=priority_excluded_ids or None,
+            )
+
+        additions = unstudied_additions + priority_additions
         if not additions:
             return state
 
@@ -419,11 +451,20 @@ class RecallService:
         return await self.recall_repository.get_recall_state(state.user_id) or state
 
     async def _select_daily_portion(self, user_id: int) -> list[RecallQueueWord]:
-        return await self.vocabulary_service.select_daily_candidates(
+        portion_words = await self.vocabulary_service.select_daily_candidates(
             user_id,
             self.cooldown_days,
             limit=self.words_per_day,
         )
+        if self.words_unstudied_extra_count > 0:
+            unstudied_words = await self.vocabulary_service.select_unstudied_candidates(
+                user_id=user_id,
+                cooldown_days=self.cooldown_days,
+                limit=self.words_unstudied_extra_count,
+                excluded_word_ids=[w.id for w in portion_words] or None,
+            )
+            portion_words = portion_words + unstudied_words
+        return portion_words
 
     async def _select_bumped_daily_portion(
         self,
