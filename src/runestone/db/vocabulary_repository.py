@@ -457,7 +457,7 @@ class VocabularyRepository:
     async def select_unstudied_words(
         self, user_id: int, cooldown_days: int = 7, limit: int = 100, excluded_word_ids: Optional[List[int]] = None
     ) -> List[Vocabulary]:
-        """Select eligible unstudied recall candidates in deterministic id order."""
+        """Select eligible unstudied recall candidates in random order."""
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=cooldown_days)
 
         base_filter = [
@@ -470,7 +470,7 @@ class VocabularyRepository:
         if excluded_word_ids:
             base_filter.append(~Vocabulary.id.in_(excluded_word_ids))
 
-        stmt = select(Vocabulary).filter(*base_filter).order_by(Vocabulary.id.asc()).limit(limit)
+        stmt = select(Vocabulary).filter(*base_filter).order_by(func.random()).limit(limit)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
