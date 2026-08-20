@@ -261,7 +261,7 @@ async def test_process_message_recovers_user_after_real_recall_query_rollback(
         recall_repository,
         AsyncMock(),
         user_service,
-        SimpleNamespace(words_per_day=3, cooldown_days=7),
+        SimpleNamespace(words_per_day=3, cooldown_days=7, words_unstudied_extra_count=5),
     )
 
     async def fail_with_real_database_error(_user_id: int) -> list[str]:

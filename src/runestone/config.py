@@ -165,6 +165,7 @@ class Settings(BaseSettings):
 
     # Vocabulary Learning Configuration
     words_per_day: int = 5
+    words_unstudied_extra_count: int = Field(default=5, ge=0)
     cooldown_days: int = 7
 
     # Chat Agent Configuration

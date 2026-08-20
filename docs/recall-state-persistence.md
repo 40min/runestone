@@ -40,18 +40,19 @@ Application DTOs still expose the queue as `daily_selection`, but this is a tran
 
 The queue and `next_word_index` are related but stored separately: queue rows define the stable order, and the cursor points into that order.
 
-- Creating the first selection replaces the queue and resets the cursor to `0`.
+- Creating the initial selection requests up to `WORDS_PER_DAY` priority-selected words, appends up to `WORDS_UNSTUDIED_EXTRA_COUNT` additional unstudied words (`coalesce(learned_times, 0) == 0` ordered by `id ASC`), replaces the queue, and resets the cursor to `0`. Maximum queue capacity is `WORDS_PER_DAY + WORDS_UNSTUDIED_EXTRA_COUNT`.
 - `/bump_words` and the web `Refresh selection` action invoke the same service workflow. While the
   recall-state row is locked, the workflow raises every active queued word's numeric
   learning-priority value, excludes the bumped vocabulary IDs from replacement selection, replaces
-  the complete queue, and resets the cursor to `0`. The priority changes and queue replacement
-  share the outer command or request transaction.
-- Topping up a short queue appends new words after the existing positions and leaves the cursor unchanged.
+  the priority portion, appends unstudied additions excluding bumped and priority words, and resets
+  the cursor to `0`. The priority changes and queue replacement share the outer command or request
+  transaction.
+- Topping up a short queue (refill) appends new words after the existing positions and leaves the cursor unchanged. Refill first adds eligible unstudied words up to `max(0, min(WORDS_UNSTUDIED_EXTRA_COUNT, WORDS_PER_DAY + WORDS_UNSTUDIED_EXTRA_COUNT - n))`, then adds ordinary priority candidates up to `max(WORDS_PER_DAY - n, 0)`, without backfilling missing unstudied slots with studied words.
 - A successful Telegram send updates the vocabulary learning timestamp and advances `next_word_index` in one database commit. Cursor advancement wraps against the authoritative queue length, so a completed cycle resumes at position `0`. A failed send rolls back and does not advance it.
 - Removing, postponing, or discarding an invalid word compacts the remaining positions to `0..n-1` and adjusts the cursor to keep the same logical next word where possible.
 - If a removed word was before the cursor, the cursor decreases by one. If the queue becomes empty, or the adjusted cursor is outside the shortened queue, it resets to `0`.
 - Telegram `/remove` and the web `Remove from learning` action also mark the vocabulary item as not being learned and lower its learning priority. The web action requires the vocabulary item to belong to the current queue.
-- Telegram `/postpone` and the web `Postpone` action raise the numeric learning-priority value, remove the item from the current queue, and then attempt to backfill the queue to `WORDS_PER_DAY`. The postponed vocabulary ID is excluded from that refill, so a small candidate pool cannot immediately select the same word again. The web action requires the vocabulary item to belong to the current queue.
+- Telegram `/postpone` and the web `Postpone` action raise the numeric learning-priority value, remove the item from the current queue, and then attempt to refill the queue following the two-capacity refill rules. The postponed vocabulary ID is excluded from that refill, so a small candidate pool cannot immediately select the same word again. The web action requires the vocabulary item to belong to the current queue.
 
 The backend vocabulary endpoints temporarily own cross-service orchestration for both hard deletion and explicit soft deletion (`PUT` with `in_learn=false`). They ask `RecallService` to remove and compact any queued reference, ask `VocabularyService` to mutate the owned vocabulary item, then ask `RecallService` to refill a shortened queue when removal changed it. All phases use the same request-scoped session and are committed once; a not-found item, vocabulary-update failure, or refill failure rolls back the complete operation. Deleting vocabulary for a user without recall state remains a normal vocabulary mutation without queue maintenance.
 

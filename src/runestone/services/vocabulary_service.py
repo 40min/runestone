@@ -488,6 +488,22 @@ class VocabularyService:
         )
         return [self._to_queue_word(word) for word in words]
 
+    async def select_unstudied_candidates(
+        self,
+        user_id: int,
+        cooldown_days: int,
+        limit: int,
+        excluded_word_ids: list[int] | None = None,
+    ) -> list[RecallQueueWord]:
+        """Return deterministic unstudied learnable candidates for recall selection."""
+        words = await self.repo.select_unstudied_words(
+            user_id,
+            cooldown_days,
+            limit=limit,
+            excluded_word_ids=excluded_word_ids,
+        )
+        return [self._to_queue_word(word) for word in words]
+
     async def record_learning_event(self, vocabulary_id: int, user_id: int) -> None:
         """Update learning metadata without committing the caller's transaction."""
         word = await self.repo.get_vocabulary_item_for_recall(vocabulary_id, user_id)
