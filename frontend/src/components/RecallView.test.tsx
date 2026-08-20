@@ -1,12 +1,24 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import RecallView from "./RecallView";
 
 const mockUseRecall = vi.hoisted(() => vi.fn());
+const mockGet = vi.hoisted(() => vi.fn());
+const mockPut = vi.hoisted(() => vi.fn());
+const mockDelete = vi.hoisted(() => vi.fn());
 
 vi.mock("../hooks/useRecall", () => ({
   useRecall: mockUseRecall,
+}));
+
+vi.mock("../utils/api", () => ({
+  useApi: () => ({
+    get: mockGet,
+    put: mockPut,
+    delete: mockDelete,
+    post: vi.fn(),
+  }),
 }));
 
 const refreshSelection = vi.fn().mockResolvedValue(undefined);
@@ -32,6 +44,21 @@ const populatedRecall = {
   ],
 };
 
+const fullKontanter = {
+  id: 42,
+  user_id: 1,
+  word_phrase: "kontanter",
+  translation: "cash",
+  example_phrase: "Jag betalar med kontanter.",
+  extra_info: null,
+  in_learn: true,
+  priority_learn: 3,
+  last_learned: null,
+  learned_times: 0,
+  created_at: "2023-10-27T10:00:00Z",
+  updated_at: "2023-10-27T10:00:00Z",
+};
+
 const setHookState = (overrides: Record<string, unknown> = {}) => {
   mockUseRecall.mockReturnValue({
     recall: populatedRecall,
@@ -51,6 +78,9 @@ const setHookState = (overrides: Record<string, unknown> = {}) => {
 describe("RecallView", () => {
   beforeEach(() => {
     setHookState();
+    mockGet.mockReset();
+    mockPut.mockReset();
+    mockDelete.mockReset();
   });
 
   it("renders loading and initial error states with a retry action", async () => {
@@ -172,6 +202,9 @@ describe("RecallView", () => {
     const refresh = screen.getByRole("button", {
       name: "Refresh selection",
     });
+    const edit = screen.getByRole("button", {
+      name: "Edit kontanter",
+    });
     const postpone = screen.getByRole("button", {
       name: "Postpone kontanter",
     });
@@ -180,6 +213,7 @@ describe("RecallView", () => {
     });
 
     expect(refresh).toHaveTextContent("Refresh selection");
+    expect(edit).toHaveTextContent("");
     expect(postpone).toHaveTextContent("");
     expect(remove).toHaveTextContent("");
 
@@ -188,6 +222,12 @@ describe("RecallView", () => {
       "Refresh selection: lowers the priority of all current words and replaces the selection."
     );
     await user.unhover(refresh);
+
+    await user.hover(edit);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Edit vocabulary item: open the full editor for this word."
+    );
+    await user.unhover(edit);
 
     await user.hover(postpone);
     expect(await screen.findByRole("tooltip")).toHaveTextContent(
@@ -212,6 +252,12 @@ describe("RecallView", () => {
         }),
         tooltip:
           "Refresh selection: lowers the priority of all current words and replaces the selection.",
+      },
+      {
+        button: screen.getByRole("button", {
+          name: "Edit kontanter",
+        }),
+        tooltip: "Edit vocabulary item: open the full editor for this word.",
       },
       {
         button: screen.getByRole("button", {
@@ -286,5 +332,88 @@ describe("RecallView", () => {
 
     expect(screen.getByText("Recall selection refreshed.")).toBeInTheDocument();
     expect(screen.getByText("Could not postpone word")).toBeInTheDocument();
+  });
+
+  it("opens the edit vocabulary modal for a queued word", async () => {
+    const user = userEvent.setup();
+    mockGet.mockResolvedValue(fullKontanter);
+
+    render(<RecallView />);
+
+    await user.click(screen.getByRole("button", { name: "Edit kontanter" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Edit vocabulary item")).toBeInTheDocument();
+    });
+    expect(screen.getByDisplayValue("kontanter")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("cash")).toBeInTheDocument();
+    expect(mockGet).toHaveBeenCalledWith("/api/vocabulary/42");
+  });
+
+  it("shows an error and keeps the modal closed when the item lookup fails", async () => {
+    const user = userEvent.setup();
+    mockGet.mockRejectedValue(new Error("Item not found"));
+
+    render(<RecallView />);
+
+    await user.click(screen.getByRole("button", { name: "Edit kontanter" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Item not found")).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText("Edit vocabulary item")
+    ).not.toBeInTheDocument();
+  });
+
+  it("saves edits and refreshes the recall queue", async () => {
+    const user = userEvent.setup();
+    mockGet.mockResolvedValue(fullKontanter);
+    mockPut.mockResolvedValue(fullKontanter);
+
+    render(<RecallView />);
+
+    await user.click(screen.getByRole("button", { name: "Edit kontanter" }));
+    await waitFor(() => {
+      expect(screen.getByText("Edit vocabulary item")).toBeInTheDocument();
+    });
+
+    const translationInput = screen.getByLabelText("English Translation");
+    await user.clear(translationInput);
+    await user.type(translationInput, "money");
+
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(mockPut).toHaveBeenCalledWith("/api/vocabulary/42", {
+        word_phrase: "kontanter",
+        translation: "money",
+        example_phrase: "Jag betalar med kontanter.",
+        extra_info: null,
+        in_learn: true,
+        priority_learn: 3,
+      });
+    });
+    expect(refetch).toHaveBeenCalled();
+  });
+
+  it("deletes a word and refreshes the recall queue", async () => {
+    const user = userEvent.setup();
+    mockGet.mockResolvedValue(fullKontanter);
+    mockDelete.mockResolvedValue(undefined);
+
+    render(<RecallView />);
+
+    await user.click(screen.getByRole("button", { name: "Edit kontanter" }));
+    await waitFor(() => {
+      expect(screen.getByText("Edit vocabulary item")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(mockDelete).toHaveBeenCalledWith("/api/vocabulary/42");
+    });
+    expect(refetch).toHaveBeenCalled();
   });
 });

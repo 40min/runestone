@@ -1,11 +1,15 @@
+import { useState } from "react";
 import { Box, CircularProgress, Stack, Typography } from "@mui/material";
 import { useRecall } from "../hooks/useRecall";
+import type { SavedVocabularyItem } from "../hooks/useVocabulary";
+import { useApi } from "../utils/api";
 import {
   CustomButton,
   ErrorAlert,
   SectionTitle,
   Snackbar,
 } from "./ui";
+import AddEditVocabularyModal from "./AddEditVocabularyModal";
 import RecallQueuePanel from "./recall/RecallQueuePanel";
 import RecallSummaryPanel from "./recall/RecallSummaryPanel";
 
@@ -22,7 +26,82 @@ const RecallView = () => {
     removeWord,
     clearFeedback,
   } = useRecall();
+  const { get, put, delete: apiDelete } = useApi();
   const isMutating = pendingAction !== null;
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<SavedVocabularyItem | null>(
+    null
+  );
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const getVocabularyItem = async (
+    itemId: number
+  ): Promise<SavedVocabularyItem | null> => {
+    return get<SavedVocabularyItem>(`/api/vocabulary/${itemId}`);
+  };
+
+  const lookupVocabularyItem = async (
+    wordPhrase: string
+  ): Promise<SavedVocabularyItem | null> => {
+    const trimmedWordPhrase = wordPhrase.trim();
+    if (!trimmedWordPhrase) {
+      return null;
+    }
+
+    const params = new URLSearchParams({
+      search_query: trimmedWordPhrase,
+      limit: "20",
+      precise: "true",
+    });
+    const data = await get<SavedVocabularyItem[]>(
+      `/api/vocabulary?${params.toString()}`
+    );
+    const exactCaseMatch = data.find(
+      (item) => item.word_phrase === trimmedWordPhrase
+    );
+    return exactCaseMatch ?? data[0] ?? null;
+  };
+
+  const handleEditWord = async (word: {
+    id: number;
+    word_phrase: string;
+  }) => {
+    setEditError(null);
+    try {
+      const item = await getVocabularyItem(word.id);
+      setEditingItem(item);
+      setIsEditModalOpen(true);
+    } catch (editError_) {
+      setEditError(
+        editError_ instanceof Error
+          ? editError_.message
+          : "Failed to load vocabulary item"
+      );
+    }
+  };
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setEditingItem(null);
+  };
+
+  const handleSaveEdit = async (updatedItem: Partial<SavedVocabularyItem>) => {
+    if (!editingItem) return;
+    await put<SavedVocabularyItem>(
+      `/api/vocabulary/${editingItem.id}`,
+      updatedItem
+    );
+    handleCloseEditModal();
+    await refetch();
+  };
+
+  const handleDeleteEdit = async () => {
+    if (!editingItem) return;
+    await apiDelete(`/api/vocabulary/${editingItem.id}`);
+    handleCloseEditModal();
+    await refetch();
+  };
 
   if (loading && recall === null) {
     return (
@@ -110,6 +189,7 @@ const RecallView = () => {
           words={recall.words}
           pendingAction={pendingAction}
           isMutating={isMutating}
+          onEdit={handleEditWord}
           onPostpone={(id, phrase) => void postponeWord(id, phrase)}
           onRemove={(id, phrase) => void removeWord(id, phrase)}
         />
@@ -126,6 +206,22 @@ const RecallView = () => {
         message={error ?? ""}
         severity="error"
         onClose={clearFeedback}
+      />
+      <Snackbar
+        open={Boolean(editError)}
+        message={editError ?? ""}
+        severity="error"
+        onClose={() => setEditError(null)}
+      />
+
+      <AddEditVocabularyModal
+        open={isEditModalOpen}
+        item={editingItem}
+        onClose={handleCloseEditModal}
+        onSave={handleSaveEdit}
+        onDelete={handleDeleteEdit}
+        onLookup={lookupVocabularyItem}
+        onLookupFound={setEditingItem}
       />
     </Box>
   );

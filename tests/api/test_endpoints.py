@@ -275,6 +275,38 @@ class TestVocabularyEndpoints:
         assert "updated_at" in vocab
         assert vocab["updated"] == vocab["updated_at"]
 
+    async def test_get_vocabulary_item_success(self, client):
+        """Test retrieving a single vocabulary item by ID."""
+        payload = {
+            "items": [
+                {
+                    "word_phrase": "ett äpple",
+                    "translation": "an apple",
+                    "example_phrase": "Jag äter ett äpple varje dag.",
+                }
+            ]
+        }
+        await client.post("/api/vocabulary", json=payload)
+
+        response = await client.get("/api/vocabulary")
+        item_id = response.json()[0]["id"]
+
+        response = await client.get(f"/api/vocabulary/{item_id}")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == item_id
+        assert data["word_phrase"] == "ett äpple"
+        assert data["translation"] == "an apple"
+        assert data["user_id"] == 1
+
+    async def test_get_vocabulary_item_not_found(self, client):
+        """Test retrieving a missing vocabulary item returns 404."""
+        response = await client.get("/api/vocabulary/999999")
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Vocabulary item not found"
+
     async def test_save_vocabulary_item_success(self, client):
         """Test successful saving of a single vocabulary item."""
         payload = {

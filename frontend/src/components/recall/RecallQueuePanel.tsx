@@ -7,6 +7,7 @@ import {
   Typography,
 } from "@mui/material";
 import {
+  EditOutlined,
   InfoOutlined,
   RemoveCircleOutline,
   Snooze,
@@ -17,6 +18,8 @@ import type {
 } from "../../types/recall";
 import { buildAnalyzerShellSx } from "../ui";
 
+const EDIT_TOOLTIP =
+  "Edit vocabulary item: open the full editor for this word.";
 const POSTPONE_TOOLTIP =
   "Postpone: moves this word out of the current selection and lowers its recall priority.";
 const REMOVE_TOOLTIP =
@@ -27,6 +30,7 @@ interface RecallQueuePanelProps {
   words: RecallWord[];
   pendingAction: RecallPendingAction | null;
   isMutating: boolean;
+  onEdit: (word: RecallWord) => void;
   onPostpone: (vocabularyId: number, wordPhrase: string) => void;
   onRemove: (vocabularyId: number, wordPhrase: string) => void;
 }
@@ -69,6 +73,7 @@ const RecallQueuePanel = ({
   words,
   pendingAction,
   isMutating,
+  onEdit,
   onPostpone,
   onRemove,
 }: RecallQueuePanelProps) => (
@@ -198,6 +203,26 @@ const RecallQueuePanel = ({
               </Box>
 
               <Stack direction="row" spacing={{ xs: 0, sm: 0.5 }}>
+                <Tooltip title={EDIT_TOOLTIP}>
+                  <span>
+                    <IconButton
+                      aria-label={`Edit ${word.word_phrase}`}
+                      disabled={isMutating}
+                      onClick={() => onEdit(word)}
+                      sx={{
+                        color: "#9dadd4",
+                        border: "1px solid transparent",
+                        "&:hover": {
+                          color: "#dbe5ff",
+                          borderColor: "rgba(156,173,216,0.34)",
+                          backgroundColor: "rgba(101,124,190,0.12)",
+                        },
+                      }}
+                    >
+                      <EditOutlined fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
                 <Tooltip title={POSTPONE_TOOLTIP}>
                   <span>
                     <IconButton

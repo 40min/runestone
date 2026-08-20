@@ -167,6 +167,25 @@ class VocabularyService:
             ],
         )
 
+    async def get_vocabulary_item(self, item_id: int, user_id: int) -> VocabularySchema:
+        """Retrieve a single vocabulary item by ID."""
+        vocab = await self.repo.get_vocabulary_item(item_id, user_id)
+        return VocabularySchema(
+            id=vocab.id,
+            user_id=vocab.user_id,
+            word_phrase=vocab.word_phrase,
+            translation=vocab.translation,
+            example_phrase=vocab.example_phrase,
+            extra_info=vocab.extra_info,
+            in_learn=vocab.in_learn,
+            priority_learn=vocab.priority_learn,
+            last_learned=vocab.last_learned.isoformat() if vocab.last_learned else None,
+            learned_times=vocab.learned_times or 0,
+            created_at=vocab.created_at.isoformat() if vocab.created_at else None,
+            updated_at=vocab.updated_at.isoformat() if vocab.updated_at else None,
+            updated=vocab.updated_at.isoformat() if vocab.updated_at else None,
+        )
+
     async def update_vocabulary_item(self, item_id: int, update: VocabularyUpdate, user_id: int) -> VocabularySchema:
         """Update a vocabulary item and return the updated record."""
         vocab = await self.repo.get_vocabulary_item(item_id, user_id)

@@ -319,6 +319,49 @@ async def get_vocabulary_distribution(
 
 
 @router.get(
+    "/vocabulary/{item_id}",
+    response_model=Vocabulary,
+    responses={
+        200: {"description": "Vocabulary item retrieved successfully"},
+        404: {"model": ErrorResponse, "description": "Vocabulary item not found"},
+        500: {"model": ErrorResponse, "description": "Database error"},
+    },
+)
+async def get_vocabulary_item(
+    item_id: int,
+    service: Annotated[VocabularyService, Depends(get_vocabulary_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> Vocabulary:
+    """
+    Retrieve a single vocabulary item by ID.
+
+    Args:
+        item_id: The ID of the vocabulary item to retrieve
+        service: Vocabulary service responsible for item retrieval
+        current_user: The authenticated user
+
+    Returns:
+        Vocabulary: The requested vocabulary item
+
+    Raises:
+        HTTPException: For missing items or database errors
+    """
+    try:
+        return await service.get_vocabulary_item(item_id, current_user.id)
+    except ValueError:
+        raise HTTPException(
+            status_code=404,
+            detail="Vocabulary item not found",
+        )
+    except Exception:
+        logger.exception("retrieve vocabulary item failed")
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred while retrieving the vocabulary item. Please try again later.",
+        )
+
+
+@router.get(
     "/vocabulary",
     response_model=List[Vocabulary],
     responses={
