@@ -3,6 +3,35 @@ import "@testing-library/jest-dom";
 import { vi, afterEach } from "vitest";
 import { cleanup } from "@testing-library/react";
 
+// jsdom 26 + Node 22+ leaves `window.localStorage` undefined, which breaks
+// components that read it eagerly during render. Provide an in-memory shim so
+// tests behave like a browser.
+const createMemoryLocalStorage = (): Storage => {
+  const store = new Map<string, string>();
+  return {
+    get length() {
+      return store.size;
+    },
+    clear: () => store.clear(),
+    getItem: (key: string) => store.get(key) ?? null,
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    setItem: (key: string, value: string) => {
+      store.set(key, String(value));
+    },
+  };
+};
+
+if (typeof window !== "undefined" && window.localStorage === undefined) {
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    writable: true,
+    value: createMemoryLocalStorage(),
+  });
+}
+
 // Mock URL.createObjectURL and URL.revokeObjectURL
 Object.defineProperty(window.URL, "createObjectURL", {
   writable: true,
