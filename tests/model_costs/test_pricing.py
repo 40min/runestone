@@ -15,6 +15,7 @@ from runestone.model_costs.pricing import (
     PriceSnapshotError,
     RefreshCounts,
     build_refreshed_snapshot,
+    fetch_json,
     load_price_snapshot,
     normalize_models_dev,
     normalize_portkey,
@@ -236,10 +237,12 @@ def test_configured_model_resolver_covers_agents_services_and_voice() -> None:
 
 
 class AsyncResponse:
-    headers: dict[str, str] = {}
-
-    def __init__(self, payload: object) -> None:
+    def __init__(
+        self, payload: object, *, headers: dict[str, str] | None = None, chunks: list[bytes] | None = None
+    ) -> None:
         self.payload = payload
+        self.headers = headers or {}
+        self.chunks = chunks
 
     async def __aenter__(self):
         return self
@@ -251,7 +254,21 @@ class AsyncResponse:
         return None
 
     async def aiter_bytes(self):
+        if self.chunks is not None:
+            for chunk in self.chunks:
+                yield chunk
+            return
         yield json.dumps(self.payload).encode()
+
+
+class SingleResponseClient:
+    def __init__(self, response: AsyncResponse) -> None:
+        self.response = response
+
+    def stream(self, method: str, url: str) -> AsyncResponse:
+        assert method == "GET"
+        assert url == "https://example.test/prices"
+        return self.response
 
 
 class FixtureClient:
@@ -265,6 +282,25 @@ class FixtureClient:
             return AsyncResponse(read_fixture("models_dev_api.json"))
         provider = url.removesuffix(".json").rsplit("/", 1)[-1]
         return AsyncResponse(read_fixture(f"portkey_{provider}_pricing.json"))
+
+
+@pytest.mark.parametrize(
+    ("response", "expected_error"),
+    [
+        (AsyncResponse(None, headers={"content-length": "11"}), "Response exceeds 10 bytes"),
+        (AsyncResponse(None, headers={"content-length": "invalid"}), "Invalid Content-Length header"),
+        (AsyncResponse(None, chunks=[b"12345678901"]), "Response exceeds 10 bytes"),
+        (AsyncResponse(None, chunks=[b"not-json"]), "Pricing response is not valid JSON"),
+    ],
+)
+async def test_fetch_json_rejects_oversized_or_malformed_responses(
+    response: AsyncResponse,
+    expected_error: str,
+) -> None:
+    with pytest.raises(PriceSnapshotError, match=expected_error):
+        await fetch_json(
+            SingleResponseClient(response), "https://example.test/prices", max_bytes=10
+        )  # type: ignore[arg-type]
 
 
 async def test_updater_fetches_fixtures_without_live_network() -> None:
