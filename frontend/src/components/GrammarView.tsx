@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Box, Typography } from "@mui/material";
+import { Box, Drawer, Typography } from "@mui/material";
 import {
   ErrorAlert,
+  CustomButton,
   SectionTitle,
   Snackbar,
   analyzerShellGradients,
@@ -11,6 +12,7 @@ import useGrammar from "../hooks/useGrammar";
 import GrammarContentPanel from "./grammar/GrammarContentPanel";
 import GrammarSidebar from "./grammar/GrammarSidebar";
 import GrammarStartPanel from "./grammar/GrammarStartPanel";
+import { Menu } from "lucide-react";
 
 type SnackbarState = {
   open: boolean;
@@ -66,6 +68,7 @@ const GrammarView: React.FC = () => {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set()
   );
+  const [mobileTopicsOpen, setMobileTopicsOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<SnackbarState>({ open: false, message: "", severity: "info" });
   const didInitFromUrlRef = useRef(false);
   const initialCheatsheetParamRef = useRef<string | null>(getCheatsheetFromUrl());
@@ -113,6 +116,7 @@ const GrammarView: React.FC = () => {
   );
 
   const handleCheatsheetClick = async (filename: string, options?: { pushUrl?: boolean }) => {
+    setMobileTopicsOpen(false);
     setSelectedFilename(filename);
     if (options?.pushUrl !== false) {
       setCheatsheetInUrl(filename, "push");
@@ -230,6 +234,7 @@ const GrammarView: React.FC = () => {
   };
 
   const handleBackToStart = () => {
+    setMobileTopicsOpen(false);
     setSelectedFilename(null);
     setCheatsheetInUrl(null, "push");
   };
@@ -273,20 +278,21 @@ const GrammarView: React.FC = () => {
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: { xs: "minmax(0, 1fr)", lg: "280px minmax(0, 1fr)" },
+          gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "280px minmax(0, 1fr)" },
           alignItems: "start",
-          gap: { xs: 4, lg: 5, xl: 7 },
+          gap: { xs: 4, md: 5, xl: 7 },
         }}
       >
         <Box
           sx={{
             minWidth: 0,
-            position: { lg: "sticky" },
-            top: { lg: 116 },
-            maxHeight: { lg: "calc(100dvh - 140px)" },
+            display: { xs: "none", md: "block" },
+            position: { md: "sticky" },
+            top: { md: 116 },
+            maxHeight: { md: "calc(100dvh - 140px)" },
             overflowY: "auto",
             overscrollBehavior: "contain",
-            order: { xs: selectedFilename ? 2 : 1, lg: 1 },
+            order: { xs: selectedFilename ? 2 : 1, md: 1 },
           }}
         >
           <GrammarSidebar
@@ -307,7 +313,7 @@ const GrammarView: React.FC = () => {
         <Box
           sx={{
             minWidth: 0,
-            order: { xs: selectedFilename ? 1 : 2, lg: 2 },
+            order: { xs: selectedFilename ? 1 : 2, md: 2 },
           }}
         >
           {selectedFilename ? (
@@ -353,6 +359,60 @@ const GrammarView: React.FC = () => {
           )}
         </Box>
       </Box>
+
+      <CustomButton
+        variant="primary"
+        size="small"
+        aria-label="Topics"
+        aria-expanded={mobileTopicsOpen}
+        aria-controls="grammar-topics-drawer"
+        startIcon={<Menu size={17} aria-hidden="true" />}
+        onClick={() => setMobileTopicsOpen(true)}
+        sx={{
+          display: { xs: "inline-flex", md: "none" },
+          position: "fixed",
+          right: 2,
+          bottom: 2,
+          zIndex: 1200,
+          boxShadow: "0 8px 24px rgba(2, 8, 28, 0.35)",
+        }}
+      >
+        Topics
+      </CustomButton>
+
+      <Drawer
+        id="grammar-topics-drawer"
+        anchor="left"
+        open={mobileTopicsOpen}
+        onClose={() => setMobileTopicsOpen(false)}
+        sx={{
+          display: { xs: "block", md: "none" },
+          "& .MuiDrawer-paper": {
+            boxSizing: "border-box",
+            width: "min(320px, 88vw)",
+            p: 2,
+            background:
+              "linear-gradient(180deg, rgba(15, 24, 58, 0.99) 0%, rgba(6, 11, 38, 0.99) 100%)",
+            borderRight: "1px solid rgba(99, 114, 173, 0.35)",
+          },
+        }}
+      >
+        <Box sx={{ height: "100%", overflowY: "auto" }}>
+          <GrammarSidebar
+            cheatsheets={cheatsheets}
+            loading={loading}
+            selectedFilename={selectedFilename}
+            expandedCategories={expandedCategories}
+            onBackToStart={handleBackToStart}
+            onSelectCheatsheet={(filename) => {
+              handleCheatsheetClick(filename).catch(handleSelectionError);
+            }}
+            onToggleCategory={toggleCategory}
+            filterQuery={libraryFilter}
+            onFilterQueryChange={setLibraryFilter}
+          />
+        </Box>
+      </Drawer>
 
       <Snackbar
         open={snackbar.open}

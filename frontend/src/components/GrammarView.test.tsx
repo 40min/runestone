@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import GrammarView from "./GrammarView";
 
@@ -49,6 +49,54 @@ describe("GrammarView", () => {
     expect(sidebar).toHaveStyle({
       overflowY: "auto",
       overscrollBehavior: "contain",
+    });
+  });
+
+  it("opens mobile topics in a drawer and closes it after selecting a cheatsheet", async () => {
+    const mockFetchCheatsheetContent = vi.fn().mockResolvedValue(undefined);
+    mockUseGrammar.mockReturnValue({
+      cheatsheets: [
+        {
+          filename: "pronunciation.md",
+          title: "Pronunciation",
+          category: "General",
+        },
+        {
+          filename: "adjectives/komparation.md",
+          title: "Adjective comparison",
+          category: "adjectives",
+        },
+      ],
+      selectedCheatsheet: null,
+      loading: false,
+      error: null,
+      fetchCheatsheets: vi.fn(),
+      fetchCheatsheetContent: mockFetchCheatsheetContent,
+    });
+
+    render(<GrammarView />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Topics" }));
+    const drawer = await screen.findByRole("presentation");
+    expect(
+      within(drawer).getByRole("navigation", {
+        name: "Grammar cheatsheet library",
+      })
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(drawer).getByRole("button", { name: "adjectives" }));
+    expect(screen.getByRole("presentation")).toBeInTheDocument();
+    fireEvent.change(
+      within(drawer).getByRole("textbox", { name: "Filter cheatsheet library" }),
+      { target: { value: "Pronunciation" } }
+    );
+    expect(screen.getByRole("presentation")).toBeInTheDocument();
+
+    fireEvent.click(within(drawer).getByRole("button", { name: "Pronunciation" }));
+
+    await waitFor(() => {
+      expect(mockFetchCheatsheetContent).toHaveBeenCalledWith("pronunciation.md");
+      expect(screen.queryByRole("presentation")).not.toBeInTheDocument();
     });
   });
 
