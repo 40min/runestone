@@ -76,6 +76,11 @@ dev = [
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[dependency-groups]
+dev = [
+    "pyright>=1.1.411",
+]
+
 
 [tool.black]
 line-length = 120
