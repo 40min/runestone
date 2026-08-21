@@ -283,6 +283,9 @@ const GrammarView: React.FC = () => {
             minWidth: 0,
             position: { lg: "sticky" },
             top: { lg: 116 },
+            maxHeight: { lg: "calc(100dvh - 140px)" },
+            overflowY: "auto",
+            overscrollBehavior: "contain",
             order: { xs: selectedFilename ? 2 : 1, lg: 1 },
           }}
         >

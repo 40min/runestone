@@ -31,6 +31,27 @@ describe("GrammarView", () => {
     expect(screen.getByText("Cheatsheet library")).toBeInTheDocument();
   });
 
+  it("keeps the cheatsheet library independently scrollable", () => {
+    mockUseGrammar.mockReturnValue({
+      cheatsheets: [],
+      selectedCheatsheet: null,
+      loading: false,
+      error: null,
+      fetchCheatsheets: vi.fn(),
+      fetchCheatsheetContent: vi.fn(),
+    });
+
+    render(<GrammarView />);
+
+    const sidebar = screen.getByRole("navigation", {
+      name: "Grammar cheatsheet library",
+    }).parentElement;
+    expect(sidebar).toHaveStyle({
+      overflowY: "auto",
+      overscrollBehavior: "contain",
+    });
+  });
+
   it("navigates to grammar start when clicking Cheatsheet library", async () => {
     const mockFetchCheatsheetContent = vi.fn().mockResolvedValue(undefined);
     mockUseGrammar.mockReturnValue({
