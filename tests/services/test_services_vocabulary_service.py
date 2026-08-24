@@ -298,6 +298,26 @@ class TestVocabularyService:
         assert updated_vocab.last_learned is None  # Unchanged
         assert updated_vocab.learned_times == 0  # Unchanged
 
+    async def test_update_vocabulary_item_clears_explicit_nullable_fields(self, service, db_session):
+        """Explicit nulls clear nullable fields instead of being treated as omitted."""
+        vocab = VocabularyModel(
+            user_id=1,
+            word_phrase="ett äpple",
+            translation="an apple",
+            example_phrase="Jag äter ett äpple varje dag.",
+            extra_info="fruit; common gender",
+            in_learn=True,
+            last_learned=None,
+        )
+        db_session.add(vocab)
+        await db_session.commit()
+
+        update_data = VocabularyUpdate(example_phrase=None, extra_info=None)
+        updated_vocab = await service.update_vocabulary_item(vocab.id, update_data, user_id=1)
+
+        assert updated_vocab.example_phrase is None
+        assert updated_vocab.extra_info is None
+
     async def test_update_vocabulary_item_partial(self, service, db_session):
         """Test updating a vocabulary item with partial fields."""
         # Add a test item
