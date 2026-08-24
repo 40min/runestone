@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from runestone.agents.schemas import CoordinatorRow, TeacherSideEffect
+from runestone.agents.schemas.coordinator import CoordinatorRow, TeacherSideEffect
 from runestone.db.agent_side_effect_repository import AgentSideEffectRepository
 from runestone.services.agent_side_effect_service import AgentSideEffectService
 

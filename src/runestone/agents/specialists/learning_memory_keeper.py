@@ -10,7 +10,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 
 from runestone.agents.llm import build_chat_model
-from runestone.agents.schemas import LearningMemorySignal
+from runestone.agents.schemas.memory import LearningMemorySignal
 from runestone.agents.service_providers import provide_memory_item_service
 from runestone.agents.specialists.base import BaseSpecialist, SpecialistAction, SpecialistContext, SpecialistResult
 from runestone.api.memory_item_schemas import MemoryCategory, MemorySortBy, SortDirection

@@ -11,7 +11,7 @@ from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from runestone.agents.schemas import AgentPersonalInfoStatus
+from runestone.agents.schemas.memory import AgentPersonalInfoStatus
 from runestone.agents.service_providers import provide_memory_item_service
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.utils import serialize_active_learning_focus, serialize_memory_items

@@ -12,7 +12,10 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.errors import GraphRecursionError
 from pydantic import ValidationError
 
-from runestone.agents.schemas import ChatMessage, LearningMemorySignal, TeacherOutput, TeacherSideEffect
+from runestone.agents.schemas.chat import ChatMessage
+from runestone.agents.schemas.coordinator import TeacherSideEffect
+from runestone.agents.schemas.memory import LearningMemorySignal
+from runestone.agents.schemas.teacher import TeacherOutput
 from runestone.agents.specialists.base import INFO_FOR_TEACHER_MAX_CHARS
 from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.config import AgentLLMSettings, ReasoningLevel, Settings

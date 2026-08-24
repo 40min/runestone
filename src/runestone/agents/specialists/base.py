@@ -5,7 +5,8 @@ from typing import Annotated, Any, Literal
 from langchain_core.messages import AIMessage
 from pydantic import BaseModel, Field, StringConstraints, ValidationError
 
-from runestone.agents.schemas import ChatMessage, LearningMemorySignal
+from runestone.agents.schemas.chat import ChatMessage
+from runestone.agents.schemas.memory import LearningMemorySignal
 from runestone.core.service_llm import extract_message_text
 from runestone.schemas.vocabulary_save import WordSaveCandidate
 

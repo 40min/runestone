@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from runestone.agents.schemas import ChatMessage
+from runestone.agents.schemas.chat import ChatMessage
 from runestone.agents.specialists.base import SpecialistContext
 from runestone.agents.specialists.word_keeper import (
     WORDKEEPER_ENRICHMENT_PROMPT,

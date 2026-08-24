@@ -6,7 +6,7 @@ import pytest
 from langchain_core.exceptions import OutputParserException
 from pydantic import ValidationError
 
-from runestone.agents.schemas import ChatMessage
+from runestone.agents.schemas.chat import ChatMessage
 from runestone.agents.specialists.base import SpecialistContext
 from runestone.agents.specialists.personal_memory_keeper import (
     PERSONAL_MEMORY_KEEPER_SYSTEM_PROMPT,

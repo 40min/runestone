@@ -2,7 +2,7 @@ import logging
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from runestone.agents.schemas import CoordinatorRow, TeacherSideEffect
+from runestone.agents.schemas.coordinator import CoordinatorRow, TeacherSideEffect
 from runestone.db.agent_side_effect_repository import AgentSideEffectRepository
 
 logger = logging.getLogger(__name__)

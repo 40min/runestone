@@ -12,7 +12,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from runestone.agents.llm import build_chat_model
-from runestone.agents.schemas import AgentPersonalInfoStatus
+from runestone.agents.schemas.memory import AgentPersonalInfoStatus
 from runestone.agents.service_providers import provide_memory_item_service, provide_user_service
 from runestone.agents.specialists.base import BaseSpecialist, SpecialistAction, SpecialistContext, SpecialistResult
 from runestone.api.memory_item_schemas import MemoryCategory

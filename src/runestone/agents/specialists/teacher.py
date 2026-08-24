@@ -18,14 +18,9 @@ from pydantic import ValidationError
 
 from runestone.agents.llm import build_chat_model
 from runestone.agents.prompts import load_persona
-from runestone.agents.schemas import (
-    DEFAULT_TEACHER_EMOTION,
-    ChatMessage,
-    TeacherGenerationResult,
-    TeacherOutput,
-    TeacherSideEffect,
-    normalize_teacher_emotion,
-)
+from runestone.agents.schemas.chat import ChatMessage, normalize_teacher_emotion
+from runestone.agents.schemas.coordinator import TeacherSideEffect
+from runestone.agents.schemas.teacher import TeacherGenerationResult, TeacherOutput
 from runestone.agents.specialists.base import INFO_FOR_TEACHER_MAX_CHARS
 from runestone.agents.tools.context import AgentContext
 from runestone.agents.tools.grammar import read_grammar_page, search_grammar
@@ -33,6 +28,7 @@ from runestone.agents.tools.memory import read_active_learning_focus
 from runestone.agents.tools.read_url import read_url
 from runestone.config import Settings
 from runestone.constants import (
+    DEFAULT_TEACHER_EMOTION,
     MAX_GRAMMAR_READ_CALLS,
     MAX_GRAMMAR_SEARCH_CALLS,
     MAX_TEACHER_GRAMMAR_SOURCE_LINKS,
