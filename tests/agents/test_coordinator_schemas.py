@@ -1,4 +1,4 @@
-from runestone.agents.schemas import CoordinatorPlan
+from runestone.agents.schemas.coordinator import CoordinatorPlan
 
 
 def test_coordinator_plan_validation():

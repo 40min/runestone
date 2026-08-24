@@ -5,7 +5,7 @@ from typing import Optional
 
 from sqlalchemy.exc import IntegrityError
 
-from runestone.agents.schemas import AgentPersonalInfoStatus
+from runestone.agents.schemas.memory import AgentPersonalInfoStatus
 from runestone.api.memory_item_schemas import (
     DEFAULT_STATUS_BY_CATEGORY,
     VALID_STATUSES_BY_CATEGORY,

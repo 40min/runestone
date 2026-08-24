@@ -10,7 +10,8 @@ from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from runestone.agents.llm import build_chat_model
-from runestone.agents.schemas import ChatMessage, CoordinatorPlan
+from runestone.agents.schemas.chat import ChatMessage
+from runestone.agents.schemas.coordinator import CoordinatorPlan
 from runestone.config import Settings
 from runestone.core.observability import timed_operation
 

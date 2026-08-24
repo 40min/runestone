@@ -12,14 +12,10 @@ import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
 from runestone.agents.manager import AgentsManager
-from runestone.agents.schemas import (
-    ChatMessage,
-    CoordinatorPlan,
-    LearningMemorySignal,
-    RoutingItem,
-    TeacherGenerationResult,
-    TeacherSideEffect,
-)
+from runestone.agents.schemas.chat import ChatMessage
+from runestone.agents.schemas.coordinator import CoordinatorPlan, RoutingItem, TeacherSideEffect
+from runestone.agents.schemas.memory import LearningMemorySignal
+from runestone.agents.schemas.teacher import TeacherGenerationResult
 from runestone.agents.specialists.base import BaseSpecialist, SpecialistContext, SpecialistResult
 from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
 from runestone.model_costs.tracking import _bind_collector, _CostCollector, record_model_interaction

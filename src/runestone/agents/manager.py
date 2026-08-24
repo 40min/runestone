@@ -14,14 +14,9 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from runestone.agents.background_task_registry import BackgroundTaskRegistry
 from runestone.agents.coordinator import CoordinatorAgent
-from runestone.agents.schemas import (
-    ChatMessage,
-    CoordinatorPlan,
-    LearningMemorySignal,
-    RoutingItem,
-    TeacherEmotion,
-    TeacherSideEffect,
-)
+from runestone.agents.schemas.chat import ChatMessage
+from runestone.agents.schemas.coordinator import CoordinatorPlan, RoutingItem, TeacherSideEffect
+from runestone.agents.schemas.memory import LearningMemorySignal
 from runestone.agents.service_providers import provide_agent_side_effect_service
 from runestone.agents.specialists.base import SpecialistContext, SpecialistResult
 from runestone.agents.specialists.learning_memory_keeper import LearningMemoryKeeperSpecialist
@@ -33,7 +28,7 @@ from runestone.agents.specialists.teacher import TeacherAgent
 from runestone.agents.specialists.word_keeper import WordKeeperSpecialist
 from runestone.agents.tools.utils import serialize_active_learning_focus
 from runestone.config import Settings
-from runestone.constants import MAX_TEACHER_GRAMMAR_SOURCE_LINKS
+from runestone.constants import MAX_TEACHER_GRAMMAR_SOURCE_LINKS, TeacherEmotion
 from runestone.core.exceptions import RunestoneError
 from runestone.core.observability import elapsed_ms_since
 from runestone.db.models import User

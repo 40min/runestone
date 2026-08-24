@@ -6,7 +6,7 @@ import pytest
 from langchain_core.exceptions import OutputParserException
 from pydantic import ValidationError
 
-from runestone.agents.schemas import LearningMemorySignal
+from runestone.agents.schemas.memory import LearningMemorySignal
 from runestone.agents.specialists.base import SpecialistContext
 from runestone.agents.specialists.learning_memory_keeper import (
     LEARNING_MEMORY_KEEPER_SYSTEM_PROMPT,

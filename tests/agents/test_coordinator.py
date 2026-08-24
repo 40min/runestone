@@ -13,7 +13,8 @@ from runestone.agents.coordinator import (
     COORDINATOR_PRE_RESPONSE_PROMPT,
     CoordinatorAgent,
 )
-from runestone.agents.schemas import ChatMessage, CoordinatorPlan, RoutingItem
+from runestone.agents.schemas.chat import ChatMessage
+from runestone.agents.schemas.coordinator import CoordinatorPlan, RoutingItem
 from runestone.config import Settings
 
 

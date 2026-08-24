@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select
 
-from runestone.agents.schemas import AgentPersonalInfoStatus
+from runestone.agents.schemas.memory import AgentPersonalInfoStatus
 from runestone.api.memory_item_schemas import AreaToImproveStatus, MemoryCategory, PersonalInfoStatus
 from runestone.core.exceptions import PermissionDeniedError
 from runestone.db.memory_item_repository import MemoryItemRepository
