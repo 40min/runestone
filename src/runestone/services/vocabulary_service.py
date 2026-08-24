@@ -201,7 +201,7 @@ class VocabularyService:
 
         allowed_fields = Vocabulary.UPDATABLE_FIELDS
         for key, value in updates.items():
-            if key in allowed_fields and value is not None:
+            if key in allowed_fields and (value is not None or key in {"example_phrase", "extra_info"}):
                 setattr(vocab, key, value)
         updated_vocab = await self.repo.update_vocabulary_item(vocab)
         return VocabularySchema(
