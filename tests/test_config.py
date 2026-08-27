@@ -128,10 +128,10 @@ class TestSettings:
         """Test words_unstudied_extra_count default, custom override, zero, and negative rejection."""
         base_env = self._minimal_settings_env("postgresql+asyncpg://user:pass@localhost/runestone")
 
-        # 1. Default value is 5
+        # 1. Default value is 2
         with patch.dict(os.environ, base_env, clear=True):
-            test_settings = Settings()
-            assert test_settings.words_unstudied_extra_count == 5
+            test_settings = Settings(_env_file=None)
+            assert test_settings.words_unstudied_extra_count == 2
 
         # 2. Non-default positive override
         with patch.dict(os.environ, {**base_env, "WORDS_UNSTUDIED_EXTRA_COUNT": "3"}, clear=True):
