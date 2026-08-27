@@ -528,7 +528,6 @@ class AgentsManager:
                 user=user,
                 teacher_response=teacher_response,
                 learning_memory_signals=learning_memory_signals,
-                pre_results=pre_results,
             )
 
         async def _word_keeper_branch() -> list[dict]:
@@ -546,7 +545,6 @@ class AgentsManager:
                 user=user,
                 teacher_response=teacher_response,
                 vocabulary_candidates=filtered_vocabulary_candidates,
-                pre_results=pre_results,
             )
 
         coordinator_results, word_keeper_results = await asyncio.gather(
@@ -866,7 +864,6 @@ class AgentsManager:
         teacher_response: str | None = None,
         vocabulary_candidates: list[WordSaveCandidate] | None = None,
         learning_memory_signals: list[LearningMemorySignal] | None = None,
-        pre_results: list[dict] | None = None,
     ) -> list[dict]:
         if not routing_items:
             return []
@@ -896,9 +893,7 @@ class AgentsManager:
                 ),
                 vocabulary_candidates=vocabulary_candidates or [],
                 learning_memory_signals=learning_memory_signals or [],
-                pre_results=pre_results or [],
                 routing_reason=item.reason,
-                chat_history_size=effective_history_size,
             )
             try:
                 result = await specialist.run(context)

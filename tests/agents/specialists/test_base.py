@@ -44,6 +44,18 @@ def test_base_specialist_is_abstract():
         BaseSpecialist(name="test")
 
 
+def test_specialist_context_has_only_consumed_dispatch_fields():
+    assert set(SpecialistContext.model_fields) == {
+        "message",
+        "history",
+        "user",
+        "teacher_response",
+        "vocabulary_candidates",
+        "learning_memory_signals",
+        "routing_reason",
+    }
+
+
 class MockSpecialist(BaseSpecialist):
     """A concrete implementation for testing."""
 

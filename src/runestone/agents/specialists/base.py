@@ -22,9 +22,7 @@ class SpecialistContext(BaseModel):
     teacher_response: str | None = None
     vocabulary_candidates: list[WordSaveCandidate] = Field(default_factory=list)
     learning_memory_signals: list[LearningMemorySignal] = Field(default_factory=list)
-    pre_results: list[dict[str, Any]] = Field(default_factory=list)
     routing_reason: str = ""
-    chat_history_size: int = 0
 
 
 class SpecialistAction(BaseModel):
