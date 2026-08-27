@@ -764,6 +764,15 @@ async def test_prepare_pre_turn_passes_bounded_history_into_news_agent(
 
     assert capture.context is not None
     assert [msg.content for msg in capture.context.history] == ["old2", "old3"]
+    assert set(capture.context.model_dump()) == {
+        "message",
+        "history",
+        "user",
+        "teacher_response",
+        "vocabulary_candidates",
+        "learning_memory_signals",
+        "routing_reason",
+    }
 
 
 # ---------------------------------------------------------------------------

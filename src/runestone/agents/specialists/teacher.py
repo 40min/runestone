@@ -78,6 +78,7 @@ class TeacherAgent:
 
     MAX_HISTORY_MESSAGES = 10
     RECURSION_LIMIT = RECURSION_LIMIT_TEACHER
+    PRE_RESULTS_MAX_CHARS = 12000
     RECENT_SIDE_EFFECTS_MAX_ITEMS = 5
     RECENT_SIDE_EFFECTS_MAX_CHARS = 2000
     RECALL_WORDS_MAX_ITEMS = 50
@@ -542,7 +543,9 @@ already names a clear topic.
                 )
                 messages.append(SystemMessage(content=self._format_current_recall_words(current_recall_words)))
         if pre_results:
-            messages.append(SystemMessage(content=self._format_pre_results(pre_results)))
+            formatted_pre_results = self._format_pre_results(pre_results)
+            if formatted_pre_results:
+                messages.append(SystemMessage(content=formatted_pre_results))
         if recent_side_effects:
             messages.append(SystemMessage(content=self._format_recent_side_effects(recent_side_effects)))
 
@@ -768,6 +771,8 @@ already names a clear topic.
             result = item.get("result", {}) if isinstance(item, dict) else {}
             status = result.get("status", "unknown")
             info_for_teacher = result.get("info_for_teacher", "")
+            if status == "no_action" and (not isinstance(info_for_teacher, str) or not info_for_teacher.strip()):
+                continue
             truncated_info = TeacherAgent._truncate_text(
                 info_for_teacher,
                 max_len=INFO_FOR_TEACHER_MAX_CHARS,
@@ -775,8 +780,27 @@ already names a clear topic.
             )
             # Raw artifacts stay machine-oriented; teacher-facing context should
             # come from info_for_teacher and recent side-effect summaries.
-            lines.append(f"- {name} ({status}): " f"{truncated_info or 'no info'}")
-        return "\n".join(lines)
+            line = f"- {name} ({status}): {truncated_info or 'no info'}"
+            available = TeacherAgent.PRE_RESULTS_MAX_CHARS - len("\n".join(lines)) - 1
+            if available <= 0:
+                logger.warning("[agents:teacher] Exhausted pre-results char budget")
+                break
+            if len(line) > available:
+                logger.warning(
+                    "[agents:teacher] Truncated pre-results text for '%s' to fit %s-char aggregate budget",
+                    name,
+                    TeacherAgent.PRE_RESULTS_MAX_CHARS,
+                )
+                line = TeacherAgent._truncate_text(
+                    line,
+                    max_len=available,
+                    log_label=f"pre_result_line:{name}",
+                )
+                if line:
+                    lines.append(line)
+                break
+            lines.append(line)
+        return "\n".join(lines) if len(lines) > 1 else ""
 
     @staticmethod
     def _format_active_learning_focus_memory(active_learning_focus_memory: str) -> str:

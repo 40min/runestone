@@ -258,7 +258,47 @@ def test_get_tool_limit_fallback_agent_builds_no_tools_variant(mock_settings, mo
     mock_build_agent.assert_called_once_with(include_tools=False)
 
 
-def test_format_pre_results_uses_info_for_teacher_only():
+def test_format_pre_results_preserves_safe_teacher_information_only():
+    formatted = TeacherAgent._format_pre_results(
+        [
+            {
+                "name": "word_keeper",
+                "routing_reason": "ROUTING_SENTINEL",
+                "latency_ms": "LATENCY_SENTINEL",
+                "result": {
+                    "status": "action_taken",
+                    "info_for_teacher": "Saved 2 vocabulary items.",
+                    "actions": ["ACTION_SENTINEL"],
+                    "artifacts": {"saved_words": ["ARTIFACT_SENTINEL"]},
+                    "technical_error": "TECHNICAL_ERROR_SENTINEL",
+                },
+            },
+            {
+                "name": "news_agent",
+                "result": {
+                    "status": "error",
+                    "info_for_teacher": "Current news could not be prepared safely.",
+                    "technical_error": "RAW_ERROR_SENTINEL",
+                },
+            },
+        ]
+    )
+
+    assert formatted.startswith("[PRE_RESPONSE_SPECIALISTS]\n- word_keeper (action_taken): Saved 2 vocabulary items.")
+    assert "- news_agent (error): Current news could not be prepared safely." in formatted
+    assert formatted.index("word_keeper") < formatted.index("news_agent")
+    for sentinel in (
+        "ROUTING_SENTINEL",
+        "LATENCY_SENTINEL",
+        "ACTION_SENTINEL",
+        "ARTIFACT_SENTINEL",
+        "TECHNICAL_ERROR_SENTINEL",
+        "RAW_ERROR_SENTINEL",
+    ):
+        assert sentinel not in formatted
+
+
+def test_format_pre_results_keeps_ordinary_result_unchanged():
     formatted = TeacherAgent._format_pre_results(
         [
             {
@@ -266,16 +306,13 @@ def test_format_pre_results_uses_info_for_teacher_only():
                 "result": {
                     "status": "action_taken",
                     "info_for_teacher": "Saved 2 vocabulary items.",
-                    "artifacts": {"saved_words": ["ord", "fras"]},
+                    "artifacts": {"sentinel": "SECRET"},
                 },
             }
         ]
     )
 
-    assert "[PRE_RESPONSE_SPECIALISTS]" in formatted
-    assert "Saved 2 vocabulary items." in formatted
-    assert "saved_words" not in formatted
-    assert "artifacts:" not in formatted
+    assert formatted == ("[PRE_RESPONSE_SPECIALISTS]\n" "- word_keeper (action_taken): Saved 2 vocabulary items.")
 
 
 def test_format_pre_results_uses_no_info_fallback():
@@ -292,18 +329,24 @@ def test_format_pre_results_uses_no_info_fallback():
     assert "items" not in formatted
 
 
-def test_format_pre_results_truncates_long_summary():
-    long_summary = "x" * (INFO_FOR_TEACHER_MAX_CHARS + 2000)
+def test_format_pre_results_enforces_exact_aggregate_budget_and_order():
+    first_summary = "first:" + "x" * INFO_FOR_TEACHER_MAX_CHARS
+    second_summary = "second:" + "y" * INFO_FOR_TEACHER_MAX_CHARS
 
     formatted = TeacherAgent._format_pre_results(
-        [{"name": "grammar", "result": {"status": "action_taken", "info_for_teacher": long_summary}}]
+        [
+            {"name": "first", "result": {"status": "action_taken", "info_for_teacher": first_summary}},
+            {"name": "second", "result": {"status": "action_taken", "info_for_teacher": second_summary}},
+        ]
     )
 
-    assert len(formatted) < len(long_summary)
+    assert len(formatted) == TeacherAgent.PRE_RESULTS_MAX_CHARS == 12000
+    assert formatted.index("first") > formatted.index("[PRE_RESPONSE_SPECIALISTS]")
+    assert "second" not in formatted
     assert formatted.endswith("...")
 
 
-def test_format_pre_results_logs_when_summary_is_truncated(caplog):
+def test_format_pre_results_logs_when_aggregate_budget_is_truncated(caplog):
     long_summary = "x" * (INFO_FOR_TEACHER_MAX_CHARS + 2000)
 
     with caplog.at_level("WARNING"):
@@ -311,7 +354,52 @@ def test_format_pre_results_logs_when_summary_is_truncated(caplog):
             [{"name": "grammar", "result": {"status": "action_taken", "info_for_teacher": long_summary}}]
         )
 
-    assert "Truncated text for pre_result:grammar" in caplog.text
+    assert "Truncated pre-results text for 'grammar' to fit 12000-char aggregate budget" in caplog.text
+
+
+def test_format_pre_results_filters_only_empty_no_action_entries():
+    formatted = TeacherAgent._format_pre_results(
+        [
+            {"name": "empty", "result": {"status": "no_action", "info_for_teacher": ""}},
+            {"name": "whitespace", "result": {"status": "no_action", "info_for_teacher": "  \n\t  "}},
+            {
+                "name": "visible",
+                "result": {"status": "no_action", "info_for_teacher": "  Keep this original summary.  "},
+            },
+            {"name": "action", "result": {"status": "action_taken", "info_for_teacher": "Done."}},
+        ]
+    )
+
+    assert formatted == (
+        "[PRE_RESPONSE_SPECIALISTS]\n"
+        "- visible (no_action):   Keep this original summary.  \n"
+        "- action (action_taken): Done."
+    )
+
+
+@pytest.mark.anyio
+async def test_generate_response_skips_all_filtered_pre_results(teacher_agent, mock_user):
+    teacher_agent.agent.ainvoke.return_value = {"messages": [AIMessage(content="Response")]}
+
+    await teacher_agent.generate_response(
+        message="Hello",
+        history=[],
+        user=mock_user,
+        pre_results=[
+            {"name": "empty", "result": {"status": "no_action", "info_for_teacher": ""}},
+            {"name": "whitespace", "result": {"status": "no_action", "info_for_teacher": " \n\t"}},
+        ],
+    )
+
+    messages = teacher_agent.agent.ainvoke.call_args[0][0]["messages"]
+    assert (
+        TeacherAgent._format_pre_results([{"name": "empty", "result": {"status": "no_action", "info_for_teacher": ""}}])
+        == ""
+    )
+    assert not any(
+        isinstance(message, SystemMessage) and "[PRE_RESPONSE_SPECIALISTS]" in message.content for message in messages
+    )
+    assert not any(isinstance(message, SystemMessage) and not message.content for message in messages)
 
 
 @pytest.mark.anyio

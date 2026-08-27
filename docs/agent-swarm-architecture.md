@@ -616,6 +616,22 @@ Routing items contain only:
 - `learning_memory_keeper`: 0 messages
 - `personal_memory_keeper`: 2 messages
 
+### Specialist Dispatch Envelope
+
+`SpecialistContext` is the shared in-process dispatch envelope. It contains exactly:
+
+- `message`
+- `history`
+- `user`
+- `teacher_response`
+- `vocabulary_candidates`
+- `learning_memory_signals`
+- `routing_reason`
+
+The manager applies its history-window policy before dispatch. The envelope is not
+serialized wholesale into an LLM prompt, and manager-owned `pre_results` do not flow
+through it.
+
 ### TeacherAgent Contract
 
 Input:
@@ -623,8 +639,14 @@ Input:
 - latest user message
 - recent conversation history
 - the user's current profile `mother_tongue`, when configured
-- `[PRE_RESULTS]`
+- `[PRE_RESPONSE_SPECIALISTS]`, when a specialist has teacher-facing information
 - `[RECENT_SIDE_EFFECTS]`
+
+`[PRE_RESPONSE_SPECIALISTS]` is the LLM serialization boundary for pre-response
+specialist results. It preserves specialist order and safe `info_for_teacher` strings,
+excludes machine-oriented artifacts and technical details, omits empty `no_action`
+entries, and has one aggregate 12,000-character budget including its header and line
+separators. If every entry is omitted, no specialist system message is added.
 
 Language behavior:
 
