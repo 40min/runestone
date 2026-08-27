@@ -344,7 +344,7 @@ class RecordingTelegramRecallDelivery(TelegramRecallDelivery):
         self.sent: list[int] = []
         self.callback_transactions: list[bool] = []
 
-    async def _send_queue_word(self, _chat_id: int, word: RecallQueueWord) -> bool:
+    async def _send_queue_word(self, _client: Any, _chat_id: int, word: RecallQueueWord) -> bool:
         session = self.provider.current_session
         require(self.provider.active_sessions == 1 and session is not None, "delivery callback lost its user session")
         self.callback_transactions.append(session.in_transaction())
@@ -975,7 +975,11 @@ class RecallWorkflow:
             "scheduled delivery session lifecycle was not enumeration-then-isolated-users",
         )
         require(scheduled_provider.recovery_checks == 1, "later scheduled user session was not PostgreSQL-usable")
-        require(scheduled_delivery.callback_transactions == [True], "row-lock transaction ended before callback")
+        require(scheduled_delivery.callback_transactions, "scheduled delivery callback did not run")
+        require(
+            scheduled_delivery.callback_transactions == [True],
+            "row-lock transaction ended before callback",
+        )
         require(len(scheduled_delivery.sent) == 1, "scheduled delivery did not send exactly one target-user word")
         return (
             f"populated empty queue, delivered {len(sent)} words in order, wrapped cursor, and verified "
