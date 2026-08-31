@@ -562,6 +562,28 @@ describe("Profile", () => {
     });
   });
 
+  it("blocks submission with an invalid email and never calls updateProfile", async () => {
+    const updateProfileMock = vi.fn().mockResolvedValue(mockUserData);
+
+    setupAuthActionsMock({
+      updateProfile: updateProfileMock,
+    });
+
+    render(<Profile />, { wrapper });
+
+    const emailInput = screen.getByLabelText("Email");
+    await userEvent.clear(emailInput);
+    await userEvent.type(emailInput, "not-an-email");
+
+    // Clicking submit must not bypass native email constraint validation
+    await userEvent.click(screen.getByRole("button", { name: "Update Profile" }));
+    expect(updateProfileMock).not.toHaveBeenCalled();
+
+    // Pressing Enter must reach the same form submission path and stay blocked
+    await userEvent.type(emailInput, "{enter}");
+    expect(updateProfileMock).not.toHaveBeenCalled();
+  });
+
   it("refreshes user data on mount", async () => {
     const refreshUserDataMock = vi.fn().mockResolvedValue(undefined);
 

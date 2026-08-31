@@ -93,7 +93,7 @@ describe('FileUpload', () => {
     expect(screen.getByText('test.jpg')).toBeInTheDocument();
   });
 
-  it('allows zooming in and out of preview image', async () => {
+  it('opens the zoom dialog from the full-mode zoom control', async () => {
     render(<FileUpload onFileSelect={mockOnFileSelect} isProcessing={false} />);
 
     const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
@@ -104,16 +104,28 @@ describe('FileUpload', () => {
     const previewImage = screen.getByAltText('Preview');
     expect(previewImage).toBeInTheDocument();
 
-    // Click to zoom in
-    fireEvent.click(previewImage);
-    expect(previewImage).toHaveClass('max-h-screen');
+    // Dialog should not be open initially
+    expect(screen.queryByAltText('Enlarged Preview')).not.toBeInTheDocument();
 
-    // Click again to zoom out
-    fireEvent.click(previewImage);
-    expect(previewImage).toHaveClass('max-h-72');
+    // Activate the named zoom control
+    await userEvent.click(screen.getByRole('button', { name: 'Zoom preview image' }));
+
+    // Enlarged image should be shown in Dialog
+    const enlargedImage = screen.getByAltText('Enlarged Preview');
+    expect(enlargedImage).toBeInTheDocument();
+    expect(screen.getByLabelText('Image preview')).toBeInTheDocument();
+
+    // Click close button to close dialog
+    const closeBtn = screen.getByLabelText('close zoom');
+    await userEvent.click(closeBtn);
+
+    // Dialog should close
+    await waitFor(() => {
+      expect(screen.queryByAltText('Enlarged Preview')).not.toBeInTheDocument();
+    });
   });
 
-  it('allows enlarging the preview image in compact mode', async () => {
+  it('opens the zoom dialog from the compact-mode zoom control', async () => {
     const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
     render(
       <FileUpload
@@ -131,7 +143,7 @@ describe('FileUpload', () => {
     expect(screen.queryByAltText('Enlarged Preview')).not.toBeInTheDocument();
 
     // Click preview to enlarge
-    fireEvent.click(previewImage);
+    await userEvent.click(screen.getByRole('button', { name: 'Zoom preview image' }));
 
     // Enlarged image should be shown in Dialog
     const enlargedImage = screen.getByAltText('Enlarged Preview');
@@ -140,7 +152,7 @@ describe('FileUpload', () => {
 
     // Click close button to close dialog
     const closeBtn = screen.getByLabelText('close zoom');
-    fireEvent.click(closeBtn);
+    await userEvent.click(closeBtn);
 
     // Dialog should close
     await waitFor(() => {
@@ -148,7 +160,7 @@ describe('FileUpload', () => {
     });
   });
 
-  it('supports keyboard interaction for compact preview zoom', async () => {
+  it('closes the zoom dialog with Escape', async () => {
     const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
     render(
       <FileUpload
@@ -159,17 +171,18 @@ describe('FileUpload', () => {
       />
     );
 
-    const previewImage = screen.getByAltText('Preview');
-    const zoomTrigger = previewImage.parentElement;
-    expect(zoomTrigger).toHaveAttribute('role', 'button');
-    expect(zoomTrigger).toHaveAttribute('tabindex', '0');
+    await userEvent.click(screen.getByTestId('compact-preview-trigger'));
 
-    zoomTrigger?.focus();
-    fireEvent.keyDown(zoomTrigger!, { key: 'Enter' });
     expect(screen.getByAltText('Enlarged Preview')).toBeInTheDocument();
+
+    await userEvent.keyboard('{Escape}');
+
+    await waitFor(() => {
+      expect(screen.queryByAltText('Enlarged Preview')).not.toBeInTheDocument();
+    });
   });
 
-  it('opens compact preview zoom with the spacebar', () => {
+  it('exposes a native zoom button with keyboard activation in compact mode', async () => {
     const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
     render(
       <FileUpload
@@ -181,14 +194,35 @@ describe('FileUpload', () => {
     );
 
     const zoomTrigger = screen.getByTestId('compact-preview-trigger');
-    expect(zoomTrigger).toHaveAttribute('role', 'button');
+    expect(zoomTrigger).toHaveAttribute('tabindex', '0');
 
-    fireEvent.keyDown(zoomTrigger, { key: ' ' });
+    zoomTrigger?.focus();
+    await userEvent.keyboard('{Enter}');
 
     expect(screen.getByAltText('Enlarged Preview')).toBeInTheDocument();
   });
 
-  it('does not expose compact preview keyboard affordances without a file', () => {
+  it('opens compact preview zoom with the spacebar', async () => {
+    const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
+    render(
+      <FileUpload
+        onFileSelect={mockOnFileSelect}
+        isProcessing={false}
+        compact
+        selectedFileOverride={file}
+      />
+    );
+
+    const zoomTrigger = screen.getByTestId('compact-preview-trigger');
+    expect(zoomTrigger.tagName).toBe('BUTTON');
+
+    zoomTrigger?.focus();
+    await userEvent.keyboard(' ');
+
+    expect(screen.getByAltText('Enlarged Preview')).toBeInTheDocument();
+  });
+
+  it('does not expose a zoom trigger in compact mode without a file', () => {
     render(
       <FileUpload
         onFileSelect={mockOnFileSelect}
@@ -199,7 +233,7 @@ describe('FileUpload', () => {
 
     const uploadPlaceholder = screen.getByTestId('compact-preview-trigger');
     expect(uploadPlaceholder).not.toHaveAttribute('role');
-    expect(uploadPlaceholder).toHaveAttribute('tabindex', '-1');
+    expect(screen.queryByRole('button', { name: 'Zoom preview image' })).not.toBeInTheDocument();
   });
 
   it('cleans up object URL on unmount', async () => {

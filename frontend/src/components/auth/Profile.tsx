@@ -288,10 +288,6 @@ const Profile: React.FC = () => {
         type="submit"
         loading={loading}
         loadingText="Updating..."
-        onClick={(e) => {
-          e.preventDefault();
-          handleSubmit(e);
-        }}
         sx={{
           fontFamily: profileFontFamily,
           borderRadius: "0.75rem",

@@ -351,38 +351,45 @@ const VocabularyLedger: React.FC<VocabularyLedgerProps> = ({
                       {getPriorityLabel(item.priority_learn)} · {item.priority_learn}
                     </Box>
                   </Typography>
-                  <Tooltip
-                    title={
-                      isBoosting
-                        ? "Updating priority..."
-                        : isHighestPriority
-                          ? "Already highest priority"
-                          : "Boost priority"
-                    }
+                  {/* Disabled MUI controls use pointer-events: none, so activation of the
+                      boost action area must be isolated here instead of on the button. */}
+                  <Box
+                    onClick={(event) => event.stopPropagation()}
+                    sx={{ display: "inline-flex" }}
                   >
-                    <span>
-                      <IconButton
-                        aria-label={`Boost priority for ${item.word_phrase}`}
-                        size="small"
-                        disabled={isHighestPriority || isBoosting}
-                        onClick={(event) => onBoostPriority(event, item)}
-                        sx={{
-                          width: 30,
-                          height: 30,
-                          color: "#9fb2e8",
-                          border: ledgerBorder,
-                          borderRadius: 1,
-                          "&:hover": { backgroundColor: "rgba(159,178,232,.1)" },
-                          "&.Mui-disabled": {
-                            color: "rgba(159,178,232,.3)",
-                            borderColor: "rgba(99,114,173,.18)",
-                          },
-                        }}
-                      >
-                        <TrendingUpIcon sx={{ fontSize: 15 }} />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
+                    <Tooltip
+                      title={
+                        isBoosting
+                          ? "Updating priority..."
+                          : isHighestPriority
+                            ? "Already highest priority"
+                            : "Boost priority"
+                      }
+                    >
+                      <span>
+                        <IconButton
+                          aria-label={`Boost priority for ${item.word_phrase}`}
+                          size="small"
+                          disabled={isHighestPriority || isBoosting}
+                          onClick={(event) => onBoostPriority(event, item)}
+                          sx={{
+                            width: 30,
+                            height: 30,
+                            color: "#9fb2e8",
+                            border: ledgerBorder,
+                            borderRadius: 1,
+                            "&:hover": { backgroundColor: "rgba(159,178,232,.1)" },
+                            "&.Mui-disabled": {
+                              color: "rgba(159,178,232,.3)",
+                              borderColor: "rgba(99,114,173,.18)",
+                            },
+                          }}
+                        >
+                          <TrendingUpIcon sx={{ fontSize: 15 }} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </Box>
                 </Box>
                 <Typography sx={{ color: "#8290b3", fontSize: "0.76rem", mt: 0.7 }}>
                   {learningNote(item)}
