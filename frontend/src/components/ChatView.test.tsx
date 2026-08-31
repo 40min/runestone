@@ -639,9 +639,11 @@ describe('ChatView', () => {
       fireEvent.change(fileInput, { target: { files: [file] } });
     }
 
-    // 2. Verifies the image is shown
+    // 2. Verifies the image is shown via its accessible thumbnail button
     await waitFor(() => {
-      expect(screen.getByAltText('Uploaded')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'View uploaded image 1' })
+      ).toBeInTheDocument();
     });
 
     // 3. Ensure button is enabled (since we mocked history to have messages)
@@ -656,7 +658,9 @@ describe('ChatView', () => {
 
     // 5. Verifies the image is removed
     await waitFor(() => {
-      expect(screen.queryByAltText('Uploaded')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'View uploaded image 1' })
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -804,7 +808,9 @@ describe('ChatView', () => {
 
     // Wait for image to appear in sidebar
     await waitFor(() => {
-      expect(screen.getByAltText('Uploaded')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'View uploaded image 1' })
+      ).toBeInTheDocument();
     });
   });
 
