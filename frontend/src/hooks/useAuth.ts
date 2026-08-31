@@ -117,7 +117,10 @@ export const useAuthActions = (): UseAuthActionsReturn => {
   const refreshInProgressRef = useRef<boolean>(false);
 
   const refreshUserData = useCallback(async (): Promise<void> => {
-    if (loading || refreshInProgressRef.current || !token) {
+    // refreshInProgressRef is the sole overlap guard; keeping `loading` out of
+    // the guard and dependencies makes this callback stable across
+    // profile-update loading transitions so consumers can list it in Effects.
+    if (refreshInProgressRef.current || !token) {
       return;
     }
 
@@ -130,7 +133,7 @@ export const useAuthActions = (): UseAuthActionsReturn => {
     } finally {
       refreshInProgressRef.current = false;
     }
-  }, [get, contextUpdateUserData, loading, token]);
+  }, [get, contextUpdateUserData, token]);
 
   return {
     login,

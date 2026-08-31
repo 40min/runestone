@@ -584,6 +584,38 @@ describe("Profile", () => {
     expect(updateProfileMock).not.toHaveBeenCalled();
   });
 
+  it("does not refresh user data again across a profile update loading transition", async () => {
+    const refreshUserDataMock = vi.fn().mockResolvedValue(undefined);
+    const updateProfileMock = vi
+      .fn()
+      .mockImplementation(
+        () => new Promise((resolve) => setTimeout(() => resolve(mockUserData), 0))
+      );
+
+    setupAuthActionsMock({
+      refreshUserData: refreshUserDataMock,
+      updateProfile: updateProfileMock,
+    });
+
+    render(<Profile />, { wrapper });
+
+    await waitFor(() => {
+      expect(refreshUserDataMock).toHaveBeenCalledTimes(1);
+    });
+
+    const nameInput = screen.getByLabelText("Name");
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, "Updated");
+    await userEvent.click(screen.getByRole("button", { name: "Update Profile" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Profile updated successfully!")).toBeInTheDocument();
+    });
+
+    // The loading transition from updateProfile must not re-run the mount Effect.
+    expect(refreshUserDataMock).toHaveBeenCalledTimes(1);
+  });
+
   it("refreshes user data on mount", async () => {
     const refreshUserDataMock = vi.fn().mockResolvedValue(undefined);
 

@@ -91,6 +91,72 @@ const deriveResponseTimesFromTimestamps = (messages: ChatMessage[]): ChatMessage
   });
 };
 
+const mapServerMessage = (message: ServerChatMessage): ChatMessage => {
+  return {
+    id: `server-${message.id}`,
+    serverId: message.id,
+    role: message.role,
+    content: message.content,
+    sources: message.sources ?? undefined,
+    teacherEmotion: normalizeTeacherEmotion(message.teacher_emotion),
+    createdAt: message.created_at ?? undefined,
+  };
+};
+
+const mergeServerMessages = (previous: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] => {
+  if (incoming.length === 0) {
+    return previous;
+  }
+
+  const next = [...previous];
+  const knownServerIds = new Set(
+    next
+      .map((message) => message.serverId)
+      .filter((value): value is number => typeof value === 'number')
+  );
+
+  for (const incomingMessage of incoming) {
+    if (typeof incomingMessage.serverId === 'number' && knownServerIds.has(incomingMessage.serverId)) {
+      continue;
+    }
+
+    const optimisticIndex = next.findIndex(
+      (message) =>
+        typeof message.serverId !== 'number' &&
+        message.role === incomingMessage.role &&
+        message.content === incomingMessage.content
+    );
+
+    if (optimisticIndex >= 0) {
+      next[optimisticIndex] = {
+        ...incomingMessage,
+        // Keep the optimistic client id stable so UI bindings (e.g. playback controls)
+        // don't break when the history poll swaps in the server-backed record.
+        id: next[optimisticIndex].id,
+        responseTimeMs: next[optimisticIndex].responseTimeMs,
+      };
+    } else {
+      next.push(incomingMessage);
+    }
+
+    if (typeof incomingMessage.serverId === 'number') {
+      knownServerIds.add(incomingMessage.serverId);
+    }
+  }
+
+  return next;
+};
+
+const getMaxServerId = (incoming: ChatMessage[]): number | null => {
+  let maxServerId: number | null = null;
+  for (const message of incoming) {
+    if (typeof message.serverId === 'number') {
+      maxServerId = maxServerId === null ? message.serverId : Math.max(maxServerId, message.serverId);
+    }
+  }
+  return maxServerId;
+};
+
 export const useChat = (): UseChatReturn => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -125,74 +191,10 @@ export const useChat = (): UseChatReturn => {
     pollIntervalRef.current = Math.min(pollIntervalRef.current * 2, MAX_POLL_INTERVAL_MS);
   }, []);
 
-  const mapServerMessage = useCallback((message: ServerChatMessage): ChatMessage => {
-    return {
-      id: `server-${message.id}`,
-      serverId: message.id,
-      role: message.role,
-      content: message.content,
-      sources: message.sources ?? undefined,
-      teacherEmotion: normalizeTeacherEmotion(message.teacher_emotion),
-      createdAt: message.created_at ?? undefined,
-    };
-  }, []);
-
-  const mergeServerMessages = useCallback((previous: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] => {
-    if (incoming.length === 0) {
-      return previous;
-    }
-
-    const next = [...previous];
-    const knownServerIds = new Set(
-      next
-        .map((message) => message.serverId)
-        .filter((value): value is number => typeof value === 'number')
-    );
-
-    for (const incomingMessage of incoming) {
-      if (typeof incomingMessage.serverId === 'number' && knownServerIds.has(incomingMessage.serverId)) {
-        continue;
-      }
-
-      const optimisticIndex = next.findIndex(
-        (message) =>
-          typeof message.serverId !== 'number' &&
-          message.role === incomingMessage.role &&
-          message.content === incomingMessage.content
-      );
-
-      if (optimisticIndex >= 0) {
-        next[optimisticIndex] = {
-          ...incomingMessage,
-          // Keep the optimistic client id stable so UI bindings (e.g. playback controls)
-          // don't break when the history poll swaps in the server-backed record.
-          id: next[optimisticIndex].id,
-          responseTimeMs: next[optimisticIndex].responseTimeMs,
-        };
-      } else {
-        next.push(incomingMessage);
-      }
-
-      if (typeof incomingMessage.serverId === 'number') {
-        knownServerIds.add(incomingMessage.serverId);
-      }
-    }
-
-    return next;
-  }, []);
-
-  const getMaxServerId = useCallback((incoming: ChatMessage[]): number | null => {
-    let maxServerId: number | null = null;
-    for (const message of incoming) {
-      if (typeof message.serverId === 'number') {
-        maxServerId = maxServerId === null ? message.serverId : Math.max(maxServerId, message.serverId);
-      }
-    }
-    return maxServerId;
-  }, []);
-
-  const fetchHistory = useCallback(async (force: boolean = false): Promise<boolean> => {
-    if ((!force && isLoading) || fetchInProgressRef.current || !token) return false;
+  const fetchHistory = useCallback(async (): Promise<boolean> => {
+    // fetchInProgressRef is the only overlap guard; render-only `isLoading`
+    // must not gate or churn this callback so polling Effects stay stable.
+    if (fetchInProgressRef.current || !token) return false;
 
     fetchInProgressRef.current = true;
     setIsFetchingHistory(true);
@@ -269,14 +271,12 @@ export const useChat = (): UseChatReturn => {
       setIsFetchingHistory(false);
       fetchInProgressRef.current = false;
     }
-  }, [get, getMaxServerId, isLoading, mapServerMessage, mergeServerMessages, token]);
+  }, [get, token]);
 
-  // Initial fetch
+  // Initial fetch; re-synchronizes when the token or API client changes.
   useEffect(() => {
     void fetchHistory();
-    // Only run on mount, but keep fetchHistory in deps for correctness
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchHistory]);
 
   // Poll for cross-device synchronization while chat is mounted
   useEffect(() => {
@@ -406,7 +406,7 @@ export const useChat = (): UseChatReturn => {
         setIsBackendAvailable(true);
         resetPollingInterval();
         broadcastChange();
-        void fetchHistory(true);
+        void fetchHistory();
         return assistantMessage.id;
       } catch (err) {
         const errorMessage =
@@ -450,7 +450,7 @@ export const useChat = (): UseChatReturn => {
 
   const refreshHistory = useCallback(async () => {
     resetPollingInterval();
-    await fetchHistory(true);
+    await fetchHistory();
   }, [fetchHistory, resetPollingInterval]);
 
   return {

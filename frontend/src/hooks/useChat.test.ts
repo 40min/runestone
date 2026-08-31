@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useChat } from './useChat';
 
 const mockNow = vi.fn();
+const MAX_TEST_POLL_HORIZON_MS = 120000;
 
 // Mock config
 vi.mock('../config', () => ({
@@ -33,6 +34,19 @@ const buildHistoryPayload = (
   has_more: hasMore,
   history_truncated: historyTruncated,
   messages,
+});
+
+const createDeferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+};
+
+const okResponse = <T,>(payload: T) => ({
+  ok: true,
+  json: () => Promise.resolve(payload),
 });
 
 // Mock AuthContext
@@ -1062,5 +1076,177 @@ describe('useChat', () => {
     await waitFor(() => expect(result.current.messages).toHaveLength(3));
     expect(result.current.isSyncingHistory).toBe(false);
     expect(result.current.messages.map((message) => message.content)).toEqual(['Page1', 'Page2', 'Page3']);
+  });
+
+  it('reconciles the exchange exactly once when GET completes before POST', async () => {
+    const deferredGet = createDeferred<ReturnType<typeof okResponse<unknown>>>();
+    const deferredPost = createDeferred<ReturnType<typeof okResponse<unknown>>>();
+    let historyCallCount = 0;
+    const persistedExchange = buildHistoryPayload(
+      [
+        { id: 1, role: 'user', content: 'Hej!' },
+        { id: 2, role: 'assistant', content: 'Svar!' },
+      ],
+      'chat-1',
+      2
+    );
+
+    mockFetch.mockImplementation((url, options) => {
+      if (options?.method === 'GET' || !options?.method) {
+        historyCallCount++;
+        if (historyCallCount === 1) {
+          return Promise.resolve(okResponse(buildHistoryPayload([], 'chat-1', 0)));
+        }
+        if (historyCallCount === 2) {
+          return deferredGet.promise;
+        }
+        return Promise.resolve(okResponse(persistedExchange));
+      }
+
+      return deferredPost.promise;
+    });
+
+    const { result } = renderHook(() => useChat());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    let sendPromise: Promise<string | null> | undefined;
+    act(() => {
+      sendPromise = result.current.sendMessage('Hej!');
+    });
+
+    // A history GET starts and completes while the POST is still in flight.
+    let refreshPromise: Promise<void> | undefined;
+    act(() => {
+      refreshPromise = result.current.refreshHistory();
+    });
+    await act(async () => {
+      deferredGet.resolve(okResponse(buildHistoryPayload([], 'chat-1', 0)));
+      await refreshPromise;
+    });
+
+    // The POST completes afterwards, then history reconciles the exchange.
+    await act(async () => {
+      deferredPost.resolve(okResponse({ message: 'Svar!' }));
+      await sendPromise;
+    });
+
+    await waitFor(() => {
+      expect(result.current.messages).toHaveLength(2);
+      expect(result.current.messages.filter((m) => m.role === 'user')).toHaveLength(1);
+      expect(result.current.messages.filter((m) => m.role === 'assistant')).toHaveLength(1);
+    });
+    expect(result.current.messages[0]).toEqual(
+      expect.objectContaining({ role: 'user', content: 'Hej!', serverId: 1 })
+    );
+    expect(result.current.messages[1]).toEqual(
+      expect.objectContaining({ role: 'assistant', content: 'Svar!', serverId: 2 })
+    );
+  });
+
+  it('reconciles the exchange exactly once when POST completes before GET', async () => {
+    const deferredGet = createDeferred<ReturnType<typeof okResponse<unknown>>>();
+    const deferredPost = createDeferred<ReturnType<typeof okResponse<unknown>>>();
+    let historyCallCount = 0;
+    const persistedExchange = buildHistoryPayload(
+      [
+        { id: 1, role: 'user', content: 'Hej!' },
+        { id: 2, role: 'assistant', content: 'Svar!' },
+      ],
+      'chat-1',
+      2
+    );
+
+    mockFetch.mockImplementation((url, options) => {
+      if (options?.method === 'GET' || !options?.method) {
+        historyCallCount++;
+        if (historyCallCount === 1) {
+          return Promise.resolve(okResponse(buildHistoryPayload([], 'chat-1', 0)));
+        }
+        if (historyCallCount === 2) {
+          return deferredGet.promise;
+        }
+        return Promise.resolve(okResponse(buildHistoryPayload([], 'chat-1', 0)));
+      }
+
+      return deferredPost.promise;
+    });
+
+    const { result } = renderHook(() => useChat());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    let sendPromise: Promise<string | null> | undefined;
+    act(() => {
+      sendPromise = result.current.sendMessage('Hej!');
+    });
+
+    let refreshPromise: Promise<void> | undefined;
+    act(() => {
+      refreshPromise = result.current.refreshHistory();
+    });
+
+    // The POST completes while the history GET is still in flight.
+    await act(async () => {
+      deferredPost.resolve(okResponse({ message: 'Svar!' }));
+      await sendPromise;
+    });
+
+    // Optimistic messages exist before reconciliation.
+    expect(result.current.messages).toHaveLength(2);
+
+    // The GET completes afterwards and must not duplicate the exchange.
+    await act(async () => {
+      deferredGet.resolve(okResponse(persistedExchange));
+      await refreshPromise;
+    });
+
+    expect(result.current.messages).toHaveLength(2);
+    expect(result.current.messages[0]).toEqual(
+      expect.objectContaining({ role: 'user', content: 'Hej!', serverId: 1 })
+    );
+    expect(result.current.messages[1]).toEqual(
+      expect.objectContaining({ role: 'assistant', content: 'Svar!', serverId: 2 })
+    );
+  });
+
+  it('stops polling and history fetching after unmount', async () => {
+    vi.useFakeTimers();
+
+    mockFetch.mockImplementation((url, options) => {
+      if (options?.method === 'GET' || !options?.method) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(buildHistoryPayload([], 'chat-1', 0)),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ message: 'Response' }),
+      });
+    });
+
+    try {
+      const { unmount } = renderHook(() => useChat());
+
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      const callsAtUnmount = mockFetch.mock.calls.length;
+      expect(callsAtUnmount).toBeGreaterThanOrEqual(1);
+
+      unmount();
+
+      await act(async () => {
+        vi.advanceTimersByTime(MAX_TEST_POLL_HORIZON_MS);
+        await Promise.resolve();
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(callsAtUnmount);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
