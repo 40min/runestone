@@ -12,8 +12,8 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import type { SxProps, Theme } from '@mui/material';
 import type { EnrichedVocabularyItem } from '../../hooks/useImageProcessing';
+import { analyzerSurfaceCardSx } from './analyzerStyles';
 import StyledCheckbox from './StyledCheckbox';
 
 interface VocabularyAnalysisTableProps {
@@ -21,9 +21,6 @@ interface VocabularyAnalysisTableProps {
   selectedItems: Map<string, boolean>;
   onSelectionChange: (id: string, checked: boolean) => void;
   onSelectAll: (checked: boolean) => void;
-  masterCheckboxId?: string;
-  rowCheckboxIdPrefix?: string;
-  sx?: SxProps<Theme>;
 }
 
 /**
@@ -35,21 +32,15 @@ const VocabularyAnalysisTable: React.FC<VocabularyAnalysisTableProps> = ({
   selectedItems,
   onSelectionChange,
   onSelectAll,
-  masterCheckboxId,
-  rowCheckboxIdPrefix,
-  sx = {},
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const allSelected = rows.length > 0 && rows.every((row) => selectedItems.get(row.id));
   const someSelected = rows.some((row) => selectedItems.get(row.id)) && !allSelected;
 
-  const rowCheckboxId = (row: EnrichedVocabularyItem) =>
-    rowCheckboxIdPrefix ? `${rowCheckboxIdPrefix}-${row.id}` : undefined;
-
   if (isMobile) {
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, ...sx }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, ...analyzerSurfaceCardSx }}>
         <Box
           sx={{
             display: 'flex',
@@ -61,7 +52,7 @@ const VocabularyAnalysisTable: React.FC<VocabularyAnalysisTableProps> = ({
           }}
         >
           <StyledCheckbox
-            id={masterCheckboxId}
+            id="vocabulary-master-checkbox"
             checked={allSelected}
             indeterminate={someSelected}
             onChange={onSelectAll}
@@ -85,7 +76,7 @@ const VocabularyAnalysisTable: React.FC<VocabularyAnalysisTableProps> = ({
           >
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <StyledCheckbox
-                id={rowCheckboxId(row)}
+                id={`vocabulary-item-${row.id}`}
                 checked={selectedItems.get(row.id) || false}
                 onChange={(checked) => onSelectionChange(row.id, checked)}
               />
@@ -132,14 +123,7 @@ const VocabularyAnalysisTable: React.FC<VocabularyAnalysisTableProps> = ({
   }
 
   return (
-    <TableContainer
-      component={Paper}
-      sx={{
-        backgroundColor: '#2a1f35',
-        borderRadius: '0.5rem',
-        ...sx,
-      }}
-    >
+    <TableContainer component={Paper} sx={analyzerSurfaceCardSx}>
       <Table>
         <TableHead>
           <TableRow>
@@ -152,7 +136,7 @@ const VocabularyAnalysisTable: React.FC<VocabularyAnalysisTableProps> = ({
               }}
             >
               <StyledCheckbox
-                id={masterCheckboxId}
+                id="vocabulary-master-checkbox"
                 checked={allSelected}
                 indeterminate={someSelected}
                 onChange={onSelectAll}
@@ -177,7 +161,7 @@ const VocabularyAnalysisTable: React.FC<VocabularyAnalysisTableProps> = ({
             <TableRow key={row.id} sx={{ borderBottom: '1px solid #4d3c63' }}>
               <TableCell sx={{ borderBottom: '1px solid #4d3c63' }}>
                 <StyledCheckbox
-                  id={rowCheckboxId(row)}
+                  id={`vocabulary-item-${row.id}`}
                   checked={selectedItems.get(row.id) || false}
                   onChange={(checked) => onSelectionChange(row.id, checked)}
                 />

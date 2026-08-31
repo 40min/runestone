@@ -196,7 +196,8 @@ describe('FileUpload', () => {
     const zoomTrigger = screen.getByTestId('compact-preview-trigger');
     expect(zoomTrigger).toHaveAttribute('tabindex', '0');
 
-    zoomTrigger?.focus();
+    await userEvent.tab();
+    expect(zoomTrigger).toHaveFocus();
     await userEvent.keyboard('{Enter}');
 
     expect(screen.getByAltText('Enlarged Preview')).toBeInTheDocument();
@@ -216,7 +217,8 @@ describe('FileUpload', () => {
     const zoomTrigger = screen.getByTestId('compact-preview-trigger');
     expect(zoomTrigger.tagName).toBe('BUTTON');
 
-    zoomTrigger?.focus();
+    await userEvent.tab();
+    expect(zoomTrigger).toHaveFocus();
     await userEvent.keyboard(' ');
 
     expect(screen.getByAltText('Enlarged Preview')).toBeInTheDocument();

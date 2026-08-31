@@ -18,7 +18,6 @@ import {
   StyledCheckbox,
   VocabularyAnalysisTable,
   analyzerShellGradients,
-  analyzerSurfaceCardSx,
   buildAnalyzerShellSx,
 } from "./ui";
 import { parseMarkdown } from "../utils/markdownParser";
@@ -727,11 +726,6 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                   selectedItems={checkedItems}
                   onSelectionChange={handleCheckboxChange}
                   onSelectAll={handleCheckAll}
-                  masterCheckboxId="vocabulary-master-checkbox"
-                  rowCheckboxIdPrefix="vocabulary-item"
-                  sx={{
-                    ...analyzerSurfaceCardSx,
-                  }}
                   rows={filteredVocabulary}
                 />
               </Box>

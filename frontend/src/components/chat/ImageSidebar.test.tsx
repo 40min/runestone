@@ -43,10 +43,11 @@ describe('ImageSidebar', () => {
   it('opens the image dialog when a thumbnail is activated with the keyboard', async () => {
     render(<ImageSidebar images={images} />);
 
+    await userEvent.tab();
     const thumbnail = screen.getByRole('button', {
       name: 'View uploaded image 1',
     });
-    thumbnail.focus();
+    expect(thumbnail).toHaveFocus();
     await userEvent.keyboard('{Enter}');
 
     expect(

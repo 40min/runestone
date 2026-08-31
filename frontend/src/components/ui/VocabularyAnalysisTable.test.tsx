@@ -32,8 +32,6 @@ const renderTable = (
     selectedItems: new Map<string, boolean>(),
     onSelectionChange,
     onSelectAll,
-    masterCheckboxId: "vocabulary-master-checkbox",
-    rowCheckboxIdPrefix: "vocabulary-item",
     ...overrides,
   };
   render(<VocabularyAnalysisTable {...props} />);
