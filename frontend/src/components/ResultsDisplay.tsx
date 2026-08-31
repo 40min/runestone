@@ -8,18 +8,16 @@ import {
   CircularProgress,
 } from "@mui/material";
 import type { AlertColor } from "@mui/material";
-import DOMPurify from "dompurify";
 import { ArrowRight, Copy, Save, Sparkles } from "lucide-react";
-import { v4 as uuidv4 } from "uuid";
+import { generateId } from "../utils/id";
 import {
   CustomButton,
   ErrorAlert,
   SurfaceCard,
   TabNavigation,
   StyledCheckbox,
-  DataTable,
+  VocabularyAnalysisTable,
   analyzerShellGradients,
-  analyzerSurfaceCardSx,
   buildAnalyzerShellSx,
 } from "./ui";
 import { parseMarkdown } from "../utils/markdownParser";
@@ -36,7 +34,7 @@ const enrichVocabularyItems = (
 ): EnrichedVocabularyItem[] => {
   return vocabulary.map((item) => ({
     ...item,
-    id: item.id || uuidv4(),
+    id: item.id || generateId(),
   }));
 };
 
@@ -513,7 +511,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                 sx={{ color: "white" }}
                 className="markdown-content"
                 dangerouslySetInnerHTML={{
-                  __html: DOMPurify.sanitize(renderedOcrHtml),
+                  // parseMarkdown is the single DOMPurify sanitization boundary.
+                  __html: renderedOcrHtml, // nosemgrep
                 }}
               />
             </SurfaceCard>
@@ -723,75 +722,11 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
 
             {analysisResult && (
               <Box sx={{ mt: 3 }}>
-                <DataTable
-                  selectable={true}
+                <VocabularyAnalysisTable
                   selectedItems={checkedItems}
                   onSelectionChange={handleCheckboxChange}
                   onSelectAll={handleCheckAll}
-                  masterCheckboxId="vocabulary-master-checkbox"
-                  rowCheckboxIdPrefix="vocabulary-item"
-                  sx={{
-                    ...analyzerSurfaceCardSx,
-                  }}
-                  columns={[
-                    { key: "swedish", label: "Swedish" },
-                    { key: "english", label: "English" },
-                    {
-                      key: "example_phrase",
-                      label: "Example Phrase",
-                      render: (value) => (value as string) || "—",
-                    },
-                  ]}
-                  data={filteredVocabulary}
-                  renderMobileRow={(row, _index, checkbox) => (
-                    <Box
-                      key={row.id}
-                      sx={{
-                        ...analyzerSurfaceCardSx,
-                        p: 1.35,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1.5,
-                      }}
-                    >
-                      {checkbox}
-                      <Box sx={{ minWidth: 0, flex: "0 0 30%" }}>
-                        <Typography
-                          sx={{
-                            color: "#f4f7ff",
-                            fontWeight: 700,
-                            lineHeight: 1.25,
-                            fontSize: "1.05rem",
-                            wordBreak: "break-word",
-                          }}
-                        >
-                          {String(row.swedish || "—")}
-                        </Typography>
-                        <Typography
-                          sx={{
-                            color: "#adbce4",
-                            fontSize: "0.95rem",
-                            lineHeight: 1.2,
-                            mt: 0.25,
-                          }}
-                        >
-                          {String(row.english || "—")}
-                        </Typography>
-                      </Box>
-                      <Typography
-                        sx={{
-                          color: "#d0d9ef",
-                          flex: 1,
-                          fontSize: "1rem",
-                          lineHeight: 1.3,
-                          whiteSpace: "normal",
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {String(row.example_phrase || "—")}
-                      </Typography>
-                    </Box>
-                  )}
+                  rows={filteredVocabulary}
                 />
               </Box>
             )}

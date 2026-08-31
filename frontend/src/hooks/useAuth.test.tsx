@@ -576,6 +576,52 @@ describe("useAuthActions", () => {
     expect(result.current.error).toBe(null);
   });
 
+  it("keeps refreshUserData stable across loading transitions", async () => {
+    const mockTokenResponse = { access_token: "test-token" };
+    const mockUserResponse = {
+      id: 1,
+      email: "test@example.com",
+      name: "Test",
+      surname: "User",
+      timezone: "UTC",
+      pages_recognised_count: 5,
+    };
+
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockTokenResponse),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockUserResponse),
+      } as Response);
+
+    mockLocalStorage.getItem.mockImplementation((key) => {
+      if (key === "runestone_token") return "test-token";
+      return null;
+    });
+
+    const { result } = renderHook(() => useAuthActions(), { wrapper });
+
+    const refreshBefore = result.current.refreshUserData;
+
+    await act(async () => {
+      await result.current.login({
+        email: "test@example.com",
+        password: "password123",
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    // A stable callback lets consumers include it in Effect dependency lists
+    // without re-triggering mount-time refreshes on loading changes.
+    expect(result.current.refreshUserData).toBe(refreshBefore);
+  });
+
   it("refreshes user data from API", async () => {
     const mockUserData = {
       id: 1,

@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Replace,
   X,
+  ZoomIn,
 } from "lucide-react";
 import {
   CustomButton,
@@ -132,6 +133,68 @@ const FileUpload: React.FC<FileUploadProps> = ({
     ? "OCR-only extracts text and lets you analyze later."
     : "Full analysis extracts text, identifies grammar points, and builds vocabulary.";
 
+  const zoomDialog = (
+    <Dialog
+      open={isZoomed}
+      onClose={() => setIsZoomed(false)}
+      aria-label="Image preview"
+      maxWidth="md"
+      fullWidth
+      sx={{
+        "& .MuiBackdrop-root": {
+          bgcolor: "rgba(2, 6, 23, 0.85)",
+          backdropFilter: "blur(12px)",
+        },
+      }}
+      PaperProps={{
+        sx: {
+          bgcolor: "transparent",
+          boxShadow: "none",
+          overflow: "hidden",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          position: "relative",
+        },
+      }}
+    >
+      <Box
+        sx={{ position: "relative", maxWidth: "100%", maxHeight: "90vh", display: "inline-block" }}
+      >
+        <IconButton
+          onClick={() => setIsZoomed(false)}
+          aria-label="close zoom"
+          sx={{
+            position: "absolute",
+            top: 12,
+            right: 12,
+            color: "white",
+            bgcolor: "rgba(15, 23, 42, 0.6)",
+            "&:hover": {
+              bgcolor: "rgba(15, 23, 42, 0.8)",
+            },
+            zIndex: 10,
+          }}
+        >
+          <X size={20} />
+        </IconButton>
+        {previewUrl && (
+          <img
+            src={previewUrl}
+            alt="Enlarged Preview"
+            style={{
+              maxWidth: "100%",
+              maxHeight: "90vh",
+              objectFit: "contain",
+              borderRadius: "0.75rem",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
+            }}
+          />
+        )}
+      </Box>
+    </Dialog>
+  );
+
   if (compact) {
     return (
       <>
@@ -151,53 +214,54 @@ const FileUpload: React.FC<FileUploadProps> = ({
               alignItems: "center",
             }}
           >
-            <Box
-              data-testid="compact-preview-trigger"
-              onClick={previewUrl ? () => setIsZoomed(true) : undefined}
-              onKeyDown={
-                previewUrl
-                  ? (e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setIsZoomed(true);
-                      }
-                    }
-                  : undefined
-              }
-              tabIndex={previewUrl ? 0 : -1}
-              role={previewUrl ? "button" : undefined}
-              sx={{
-                width: 98,
-                height: 98,
-                borderRadius: "0.9rem",
-                border: "1px solid rgba(140, 160, 220, 0.35)",
-                overflow: "hidden",
-                flexShrink: 0,
-                bgcolor: "rgba(18, 24, 64, 0.75)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: previewUrl ? "pointer" : "default",
-                transition: "transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease",
-                "&:hover": previewUrl
-                  ? {
-                      transform: "scale(1.04)",
-                      borderColor: "rgba(140, 160, 220, 0.7)",
-                      boxShadow: "0 0 12px rgba(110, 135, 207, 0.3)",
-                    }
-                  : {},
-              }}
-            >
-              {previewUrl ? (
+            {previewUrl ? (
+              <IconButton
+                data-testid="compact-preview-trigger"
+                aria-label="Zoom preview image"
+                onClick={() => setIsZoomed(true)}
+                disableRipple
+                sx={{
+                  width: 98,
+                  height: 98,
+                  borderRadius: "0.9rem",
+                  border: "1px solid rgba(140, 160, 220, 0.35)",
+                  overflow: "hidden",
+                  flexShrink: 0,
+                  bgcolor: "rgba(18, 24, 64, 0.75)",
+                  p: 0,
+                  transition: "transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease",
+                  "&:hover": {
+                    transform: "scale(1.04)",
+                    borderColor: "rgba(140, 160, 220, 0.7)",
+                    boxShadow: "0 0 12px rgba(110, 135, 207, 0.3)",
+                  },
+                }}
+              >
                 <img
                   src={previewUrl}
                   alt="Preview"
                   className="h-full w-full object-cover"
                 />
-              ) : (
+              </IconButton>
+            ) : (
+              <Box
+                data-testid="compact-preview-trigger"
+                sx={{
+                  width: 98,
+                  height: 98,
+                  borderRadius: "0.9rem",
+                  border: "1px solid rgba(140, 160, 220, 0.35)",
+                  overflow: "hidden",
+                  flexShrink: 0,
+                  bgcolor: "rgba(18, 24, 64, 0.75)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
                 <CloudUpload size={26} color="#6d87cf" />
-              )}
-            </Box>
+              </Box>
+            )}
             <Box sx={{ minWidth: 0 }}>
               <Typography
                 sx={{
@@ -309,65 +373,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
           />
         </Box>
 
-        <Dialog
-          open={isZoomed}
-          onClose={() => setIsZoomed(false)}
-          aria-label="Image preview"
-          maxWidth="md"
-          fullWidth
-          sx={{
-            "& .MuiBackdrop-root": {
-              bgcolor: "rgba(2, 6, 23, 0.85)",
-              backdropFilter: "blur(12px)",
-            },
-          }}
-          PaperProps={{
-            sx: {
-              bgcolor: "transparent",
-              boxShadow: "none",
-              overflow: "hidden",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              position: "relative",
-            },
-          }}
-        >
-          <Box
-            sx={{ position: "relative", maxWidth: "100%", maxHeight: "90vh", display: "inline-block" }}
-          >
-            <IconButton
-              onClick={() => setIsZoomed(false)}
-              aria-label="close zoom"
-              sx={{
-                position: "absolute",
-                top: 12,
-                right: 12,
-                color: "white",
-                bgcolor: "rgba(15, 23, 42, 0.6)",
-                "&:hover": {
-                  bgcolor: "rgba(15, 23, 42, 0.8)",
-                },
-                zIndex: 10,
-              }}
-            >
-              <X size={20} />
-            </IconButton>
-            {previewUrl && (
-              <img
-                src={previewUrl}
-                alt="Enlarged Preview"
-                style={{
-                  maxWidth: "100%",
-                  maxHeight: "90vh",
-                  objectFit: "contain",
-                  borderRadius: "0.75rem",
-                  border: "1px solid rgba(255, 255, 255, 0.15)",
-                }}
-              />
-            )}
-          </Box>
-        </Dialog>
+        {zoomDialog}
       </>
     );
   }
@@ -398,14 +404,30 @@ const FileUpload: React.FC<FileUploadProps> = ({
       >
         {previewUrl ? (
           <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <img
-              src={previewUrl}
-              alt="Preview"
-              className={`max-w-full object-contain rounded-lg cursor-pointer transition-all duration-300 ${
-                isZoomed ? "max-h-screen" : "max-h-72"
-              }`}
-              onClick={() => setIsZoomed((prev) => !prev)}
-            />
+            <Box sx={{ position: "relative" }}>
+              <img
+                src={previewUrl}
+                alt="Preview"
+                className="max-w-full object-contain rounded-lg transition-all duration-300 max-h-72"
+              />
+              <IconButton
+                data-testid="full-preview-trigger"
+                aria-label="Zoom preview image"
+                onClick={() => setIsZoomed(true)}
+                sx={{
+                  position: "absolute",
+                  top: 8,
+                  right: 8,
+                  color: "white",
+                  bgcolor: "rgba(15, 23, 42, 0.6)",
+                  "&:hover": {
+                    bgcolor: "rgba(15, 23, 42, 0.8)",
+                  },
+                }}
+              >
+                <ZoomIn size={20} />
+              </IconButton>
+            </Box>
             <Typography
               sx={{
                 mt: 1.5,
@@ -522,6 +544,8 @@ const FileUpload: React.FC<FileUploadProps> = ({
         style={{ display: "none" }}
         disabled={isProcessing}
       />
+
+      {zoomDialog}
     </Box>
   );
 };

@@ -64,12 +64,10 @@ const Profile: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [error, setError] = useState("");
 
-  // Refresh user data on mount to get latest memory from agent
+  // Refresh user data on mount and whenever the auth token re-synchronizes.
   useEffect(() => {
     refreshUserData();
-    // Only run on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refreshUserData]);
 
   useEffect(() => {
     if (userData) {
@@ -288,10 +286,6 @@ const Profile: React.FC = () => {
         type="submit"
         loading={loading}
         loadingText="Updating..."
-        onClick={(e) => {
-          e.preventDefault();
-          handleSubmit(e);
-        }}
         sx={{
           fontFamily: profileFontFamily,
           borderRadius: "0.75rem",

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Modal } from '@mui/material';
+import { Box, Dialog, IconButton } from '@mui/material';
 import { X } from 'lucide-react';
 
 interface UploadedImage {
@@ -13,10 +13,6 @@ interface ImageSidebarProps {
 
 export const ImageSidebar: React.FC<ImageSidebarProps> = ({ images }) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-
-  const handleThumbnailClick = (url: string) => {
-    setSelectedImage(url);
-  };
 
   const handleCloseModal = () => {
     setSelectedImage(null);
@@ -40,16 +36,17 @@ export const ImageSidebar: React.FC<ImageSidebarProps> = ({ images }) => {
           flexShrink: 0,
         }}
       >
-        {images.map((image) => (
-          <Box
+        {images.map((image, index) => (
+          <IconButton
             key={image.id}
-            onClick={() => handleThumbnailClick(image.url)}
+            aria-label={`View uploaded image ${index + 1}`}
+            onClick={() => setSelectedImage(image.url)}
             sx={{
               width: '100%',
               aspectRatio: '1',
               borderRadius: '4px',
               overflow: 'hidden',
-              cursor: 'pointer',
+              p: 0,
               border: '1px solid rgba(99, 114, 173, 0.5)',
               transition: 'border-color 0.2s',
               '&:hover': {
@@ -57,69 +54,73 @@ export const ImageSidebar: React.FC<ImageSidebarProps> = ({ images }) => {
               },
             }}
           >
-            <img
+            <Box
+              component="img"
               src={image.url}
-              alt="Uploaded"
-              style={{
+              alt=""
+              sx={{
                 width: '100%',
                 height: '100%',
                 objectFit: 'cover',
               }}
             />
-          </Box>
+          </IconButton>
         ))}
       </Box>
 
-      {/* Full-size image modal */}
-      <Modal
+      {/* Full-size image dialog */}
+      <Dialog
         open={selectedImage !== null}
         onClose={handleCloseModal}
+        aria-label="Uploaded image preview"
+        maxWidth="md"
         sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          '& .MuiBackdrop-root': {
+            bgcolor: 'rgba(2, 6, 23, 0.85)',
+            backdropFilter: 'blur(12px)',
+          },
         }}
-      >
-        <Box
-          sx={{
+        PaperProps={{
+          sx: {
+            bgcolor: 'transparent',
+            boxShadow: 'none',
+            overflow: 'hidden',
             position: 'relative',
             maxWidth: '90vw',
-            maxHeight: '90vh',
-            outline: 'none',
+          },
+        }}
+      >
+        <IconButton
+          aria-label="Close image preview"
+          onClick={handleCloseModal}
+          sx={{
+            position: 'absolute',
+            top: 10,
+            right: 10,
+            color: 'white',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            padding: '8px',
+            zIndex: 1,
+            '&:hover': {
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            },
           }}
         >
-          <Box
-            onClick={handleCloseModal}
-            sx={{
-              position: 'absolute',
-              top: 10,
-              right: 10,
-              cursor: 'pointer',
-              backgroundColor: 'rgba(0, 0, 0, 0.5)',
-              borderRadius: '50%',
-              padding: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1,
+          <X size={24} />
+        </IconButton>
+        {selectedImage && (
+          <img
+            src={selectedImage}
+            alt="Full size"
+            style={{
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              objectFit: 'contain',
+              borderRadius: '8px',
             }}
-          >
-            <X size={24} color="white" />
-          </Box>
-          {selectedImage && (
-            <img
-              src={selectedImage}
-              alt="Full size"
-              style={{
-                maxWidth: '100%',
-                maxHeight: '90vh',
-                objectFit: 'contain',
-                borderRadius: '8px',
-              }}
-            />
-          )}
-        </Box>
-      </Modal>
+          />
+        )}
+      </Dialog>
     </>
   );
 };

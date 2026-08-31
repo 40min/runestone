@@ -562,6 +562,60 @@ describe("Profile", () => {
     });
   });
 
+  it("blocks submission with an invalid email and never calls updateProfile", async () => {
+    const updateProfileMock = vi.fn().mockResolvedValue(mockUserData);
+
+    setupAuthActionsMock({
+      updateProfile: updateProfileMock,
+    });
+
+    render(<Profile />, { wrapper });
+
+    const emailInput = screen.getByLabelText("Email");
+    await userEvent.clear(emailInput);
+    await userEvent.type(emailInput, "not-an-email");
+
+    // Clicking submit must not bypass native email constraint validation
+    await userEvent.click(screen.getByRole("button", { name: "Update Profile" }));
+    expect(updateProfileMock).not.toHaveBeenCalled();
+
+    // Pressing Enter must reach the same form submission path and stay blocked
+    await userEvent.type(emailInput, "{enter}");
+    expect(updateProfileMock).not.toHaveBeenCalled();
+  });
+
+  it("does not refresh user data again across a profile update loading transition", async () => {
+    const refreshUserDataMock = vi.fn().mockResolvedValue(undefined);
+    const updateProfileMock = vi
+      .fn()
+      .mockImplementation(
+        () => new Promise((resolve) => setTimeout(() => resolve(mockUserData), 0))
+      );
+
+    setupAuthActionsMock({
+      refreshUserData: refreshUserDataMock,
+      updateProfile: updateProfileMock,
+    });
+
+    render(<Profile />, { wrapper });
+
+    await waitFor(() => {
+      expect(refreshUserDataMock).toHaveBeenCalledTimes(1);
+    });
+
+    const nameInput = screen.getByLabelText("Name");
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, "Updated");
+    await userEvent.click(screen.getByRole("button", { name: "Update Profile" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Profile updated successfully!")).toBeInTheDocument();
+    });
+
+    // The loading transition from updateProfile must not re-run the mount Effect.
+    expect(refreshUserDataMock).toHaveBeenCalledTimes(1);
+  });
+
   it("refreshes user data on mount", async () => {
     const refreshUserDataMock = vi.fn().mockResolvedValue(undefined);
 

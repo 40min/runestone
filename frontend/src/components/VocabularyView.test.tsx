@@ -1003,6 +1003,155 @@ describe("VocabularyView", () => {
     });
   });
 
+  it("opens edit exactly once when a ledger row background is clicked", () => {
+    const openEditModal = vi.fn();
+
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [
+        {
+          id: 7,
+          user_id: 1,
+          word_phrase: "snabb",
+          translation: "fast",
+          example_phrase: null,
+          extra_info: null,
+          in_learn: false,
+          priority_learn: 9,
+          last_learned: null,
+          learned_times: 0,
+          created_at: "2023-10-27T10:00:00Z",
+          updated_at: "2023-10-27T10:00:00Z",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal,
+      closeEditModal: vi.fn(),
+      updateVocabularyItem: vi.fn().mockResolvedValue(undefined),
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
+    });
+
+    renderWithAuthProvider(<VocabularyView />);
+
+    const article = screen.getByText("snabb").closest("article");
+    expect(article).not.toBeNull();
+    fireEvent.click(article!);
+
+    expect(openEditModal).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not open edit when the disabled boost action area is clicked", () => {
+    const openEditModal = vi.fn();
+    const updateVocabularyItem = vi.fn().mockResolvedValue(undefined);
+
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [
+        {
+          id: 8,
+          user_id: 1,
+          word_phrase: "viktig",
+          translation: "important",
+          example_phrase: null,
+          extra_info: null,
+          in_learn: true,
+          priority_learn: 0,
+          last_learned: null,
+          learned_times: 0,
+          created_at: "2023-10-27T10:00:00Z",
+          updated_at: "2023-10-27T10:00:00Z",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal,
+      closeEditModal: vi.fn(),
+      updateVocabularyItem,
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
+    });
+
+    renderWithAuthProvider(<VocabularyView />);
+
+    // Highest-priority boost is disabled; clicking its action area must be inert.
+    fireEvent.click(
+      screen.getByRole("button", { name: "Boost priority for viktig" })
+    );
+
+    expect(updateVocabularyItem).not.toHaveBeenCalled();
+    expect(openEditModal).not.toHaveBeenCalled();
+  });
+
+  it("does not boost or open edit while a boost update is in flight", async () => {
+    const openEditModal = vi.fn();
+    let resolveUpdate: (() => void) | null = null;
+    const updateVocabularyItem = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveUpdate = resolve;
+        })
+    );
+
+    mockUseRecentVocabulary.mockReturnValue({
+      recentVocabulary: [
+        {
+          id: 9,
+          user_id: 1,
+          word_phrase: "klar",
+          translation: "ready",
+          example_phrase: null,
+          extra_info: null,
+          in_learn: false,
+          priority_learn: 5,
+          last_learned: null,
+          learned_times: 0,
+          created_at: "2023-10-27T10:00:00Z",
+          updated_at: "2023-10-27T10:00:00Z",
+        },
+      ],
+      loading: false,
+      error: null,
+      refetch: vi.fn(),
+      isEditModalOpen: false,
+      editingItem: null,
+      openEditModal,
+      closeEditModal: vi.fn(),
+      updateVocabularyItem,
+      createVocabularyItem: vi.fn(),
+      deleteVocabularyItem: vi.fn(),
+      lookupVocabularyItem: vi.fn(),
+    });
+
+    renderWithAuthProvider(<VocabularyView />);
+    const boostButton = screen.getByRole("button", { name: "Boost priority for klar" });
+
+    fireEvent.click(boostButton);
+    await waitFor(() => {
+      expect(boostButton).toBeDisabled();
+    });
+
+    // While in flight the boost area is disabled; clicks must not boost again
+    // or fall through to row editing.
+    fireEvent.click(boostButton);
+
+    expect(updateVocabularyItem).toHaveBeenCalledTimes(1);
+    expect(openEditModal).not.toHaveBeenCalled();
+
+    resolveUpdate?.();
+    await waitFor(() => {
+      expect(boostButton).toBeEnabled();
+    });
+    expect(openEditModal).not.toHaveBeenCalled();
+  });
+
   it("shows an error message when boost update fails", async () => {
     const refetchStats = vi.fn().mockResolvedValue(undefined);
     const updateVocabularyItem = vi.fn().mockRejectedValue(new Error("Network timeout"));
