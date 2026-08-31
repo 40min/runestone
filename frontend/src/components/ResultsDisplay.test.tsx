@@ -943,8 +943,8 @@ describe("ResultsDisplay", () => {
     }
   });
 
-  describe("UUID Generation", () => {
-    it("should generate UUIDs for vocabulary items without IDs", () => {
+  describe("ID Generation", () => {
+    it("should generate IDs for vocabulary items without IDs", () => {
       const mockVocabulary = [
         { swedish: "hund", english: "dog", known: false },
         { swedish: "katt", english: "cat", known: false },

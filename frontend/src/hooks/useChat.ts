@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
+import { generateId } from '../utils/id';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useApi } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
@@ -57,7 +57,7 @@ interface UseChatReturn {
   refreshHistory: () => Promise<void>;
 }
 
-const CLIENT_ID = uuidv4();
+const CLIENT_ID = generateId();
 const INITIAL_POLL_INTERVAL_MS = 5000;
 const MAX_POLL_INTERVAL_MS = 60000;
 const HISTORY_LIMIT = 200;
@@ -370,7 +370,7 @@ export const useChat = (): UseChatReturn => {
       const startedAt = performance.now();
 
       const newUserMessage: ChatMessage = {
-        id: uuidv4(),
+        id: generateId(),
         role: 'user',
         content: userMessage.trim(),
         createdAt: new Date().toISOString(),
@@ -393,7 +393,7 @@ export const useChat = (): UseChatReturn => {
         });
 
         const assistantMessage: ChatMessage = {
-          id: uuidv4(),
+          id: generateId(),
           role: 'assistant',
           content: data.message,
           sources: data.sources ?? undefined,

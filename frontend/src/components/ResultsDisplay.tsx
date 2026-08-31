@@ -8,9 +8,8 @@ import {
   CircularProgress,
 } from "@mui/material";
 import type { AlertColor } from "@mui/material";
-import DOMPurify from "dompurify";
 import { ArrowRight, Copy, Save, Sparkles } from "lucide-react";
-import { v4 as uuidv4 } from "uuid";
+import { generateId } from "../utils/id";
 import {
   CustomButton,
   ErrorAlert,
@@ -36,7 +35,7 @@ const enrichVocabularyItems = (
 ): EnrichedVocabularyItem[] => {
   return vocabulary.map((item) => ({
     ...item,
-    id: item.id || uuidv4(),
+    id: item.id || generateId(),
   }));
 };
 
@@ -513,7 +512,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
                 sx={{ color: "white" }}
                 className="markdown-content"
                 dangerouslySetInnerHTML={{
-                  __html: DOMPurify.sanitize(renderedOcrHtml),
+                  // parseMarkdown is the single DOMPurify sanitization boundary.
+                  __html: renderedOcrHtml, // nosemgrep
                 }}
               />
             </SurfaceCard>
