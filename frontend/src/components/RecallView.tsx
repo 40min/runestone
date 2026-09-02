@@ -12,6 +12,7 @@ import {
 import AddEditVocabularyModal from "./AddEditVocabularyModal";
 import RecallQueuePanel from "./recall/RecallQueuePanel";
 import RecallSummaryPanel from "./recall/RecallSummaryPanel";
+import RecallDeliverySchedule from "./recall/RecallDeliverySchedule";
 
 const RecallView = () => {
   const {
@@ -24,7 +25,10 @@ const RecallView = () => {
     refreshSelection,
     postponeWord,
     removeWord,
+    saveSchedule,
+    setDeliveryEnabled,
     clearFeedback,
+    feedbackAction,
   } = useRecall();
   const { get, put, delete: apiDelete } = useApi();
   const isMutating = pendingAction !== null;
@@ -194,6 +198,21 @@ const RecallView = () => {
           onRemove={(id, phrase) => void removeWord(id, phrase)}
         />
       </Box>
+
+      <RecallDeliverySchedule
+        recall={recall}
+        disabled={!recall.configured || isMutating}
+        pendingAction={pendingAction}
+        error={error}
+        success={success}
+        feedbackAction={feedbackAction}
+        onSaveTimes={(startHour, endHour) =>
+          void saveSchedule(startHour, endHour)
+        }
+        onToggleDelivery={(enabled, startHour, endHour) =>
+          void setDeliveryEnabled(enabled, startHour, endHour)
+        }
+      />
 
       <Snackbar
         open={Boolean(success)}

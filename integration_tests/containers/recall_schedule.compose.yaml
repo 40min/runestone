@@ -1,0 +1,64 @@
+# This stack is deliberately separate from docker-compose.yaml.  It has no
+# host bind mounts and is only used by verify_recall_schedule_startup.py.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: runestone
+      POSTGRES_PASSWORD: runestone-container-test
+      POSTGRES_DB: runestone_recall_schedule_test
+    volumes:
+      - recall_schedule_database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U runestone -d runestone_recall_schedule_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [recall_schedule]
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.backend
+    environment: &test_environment
+      ALLOWED_ORIGINS: http://localhost:5173
+      DATABASE_URL: postgresql+asyncpg://runestone:runestone-container-test@postgres:5432/runestone_recall_schedule_test
+      FRONTEND_URL: http://localhost:5173
+      GEMINI_API_KEY: test-gemini-key
+      JWT_SECRET_KEY: test-jwt-key-not-for-production
+      LLM_PROVIDER: openai
+      LLM_MODEL_NAME: gpt-4o-mini
+      OPENAI_API_KEY: test-openai-key
+      OPENROUTER_API_KEY: test-openrouter-key
+      TELEGRAM_BOT_TOKEN: test-telegram-token
+      TEACHER_MODEL: test-model
+      COORDINATOR_MODEL: test-model
+      STARTUP_DB_CHECK: "false"
+      PYTHONTZPATH: ""
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/api/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    networks: [recall_schedule]
+
+  recall:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.recall
+    environment: *test_environment
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [recall_schedule]
+
+volumes:
+  recall_schedule_database:
+
+networks:
+  recall_schedule:
+    internal: true

@@ -198,6 +198,35 @@ class TestUserService:
         mock_user_repo.update.assert_called()
 
     @pytest.mark.anyio
+    async def test_update_user_profile_validates_and_trims_timezone(self, user_service, mock_user_repo, user):
+        mock_user_repo.update.return_value = user
+
+        await user_service.update_user_profile(
+            user,
+            UserProfileUpdate(timezone="  America/New_York  "),
+        )
+
+        assert user.timezone == "America/New_York"
+        mock_user_repo.update.assert_awaited_once_with(user)
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("timezone_name", ["", "CET", "Europe/Not_A_Zone"])
+    async def test_update_user_profile_rejects_invalid_timezone(
+        self,
+        user_service,
+        mock_user_repo,
+        user,
+        timezone_name,
+    ):
+        with pytest.raises(ValueError, match="valid IANA timezone"):
+            await user_service.update_user_profile(
+                user,
+                UserProfileUpdate(timezone=timezone_name),
+            )
+
+        mock_user_repo.update.assert_not_awaited()
+
+    @pytest.mark.anyio
     async def test_update_user_profile_normalizes_telegram_username(self, user_service, mock_user_repo, user):
         """Test updating Telegram username stores the canonical format."""
         mock_user_repo.find_by_telegram_username.return_value = []

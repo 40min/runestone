@@ -3,21 +3,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useRecall } from "./useRecall";
 import type { RecallState } from "../types/recall";
 
-const { mockGet, mockPost } = vi.hoisted(() => ({
+const { mockGet, mockPost, mockPatch } = vi.hoisted(() => ({
   mockGet: vi.fn(),
   mockPost: vi.fn(),
+  mockPatch: vi.fn(),
 }));
 
 vi.mock("../utils/api", () => ({
   useApi: () => ({
     get: mockGet,
     post: mockPost,
+    patch: mockPatch,
   }),
 }));
 
 const initialRecall: RecallState = {
   configured: true,
   delivery_enabled: true,
+  recall_start_hour: 9,
+  recall_end_hour: 22,
+  timezone: "Europe/Helsinki",
   words: [
     {
       id: 1,
@@ -42,6 +47,7 @@ describe("useRecall", () => {
   beforeEach(() => {
     mockGet.mockReset();
     mockPost.mockReset();
+    mockPatch.mockReset();
     mockGet.mockResolvedValue(initialRecall);
   });
 
@@ -123,6 +129,58 @@ describe("useRecall", () => {
     expect(mockPost).toHaveBeenCalledWith("/api/recall/words/1/remove");
     expect(result.current.recall).toEqual(authoritativeResponse);
     expect(result.current.success).toBe("Removed hej from learning.");
+  });
+
+  it("saves both schedule hours and replaces the authoritative response", async () => {
+    const authoritativeResponse: RecallState = {
+      ...initialRecall,
+      recall_start_hour: 8,
+      recall_end_hour: 18,
+    };
+    mockPatch.mockResolvedValueOnce(authoritativeResponse);
+    const { result } = renderHook(() => useRecall());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.saveSchedule(8, 18);
+    });
+
+    expect(mockPatch).toHaveBeenCalledWith("/api/recall/settings", {
+      recall_start_hour: 8,
+      recall_end_hour: 18,
+    });
+    expect(result.current.recall).toEqual(authoritativeResponse);
+  });
+
+  it("sends draft hours with the requested delivery state", async () => {
+    mockPatch.mockResolvedValueOnce({ ...initialRecall, delivery_enabled: false });
+    const { result } = renderHook(() => useRecall());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.setDeliveryEnabled(false, 8, 18);
+    });
+
+    expect(mockPatch).toHaveBeenCalledWith("/api/recall/settings", {
+      recall_start_hour: 8,
+      recall_end_hour: 18,
+      delivery_enabled: false,
+    });
+    expect(result.current.success).toBe("Recall delivery stopped.");
+  });
+
+  it("retains authoritative recall state when settings mutation fails", async () => {
+    mockPatch.mockRejectedValueOnce(new Error("settings unavailable"));
+    const { result } = renderHook(() => useRecall());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.saveSchedule(8, 18);
+    });
+
+    expect(result.current.recall).toEqual(initialRecall);
+    expect(result.current.error).toBe("settings unavailable");
+    expect(result.current.feedbackAction).toBe("saveSettings");
   });
 
   it("retains the current queue when a mutation fails", async () => {

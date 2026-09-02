@@ -3,13 +3,12 @@
 import logging
 from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
-from datetime import datetime
 from functools import partial
 
 import httpx
 
 from runestone.recall.service import RecallService
-from runestone.recall.types import RecallQueueWord, RecallState
+from runestone.recall.types import RecallQueueWord
 from runestone.utils.markdown import escape_markdown
 
 logger = logging.getLogger(__name__)
@@ -33,38 +32,26 @@ class TelegramRecallDelivery:
             raise ValueError("Telegram bot token is required")
 
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
-        self.recall_start_hour = settings.recall_start_hour
-        self.recall_end_hour = settings.recall_end_hour
 
     async def send_next_recall_word(self) -> None:
         """Send one recall word to each eligible user in isolated sessions."""
-        current_hour = datetime.now().hour
-        if not (self.recall_start_hour <= current_hour < self.recall_end_hour):
-            logger.info(
-                "Outside recall hours (%s-%s), skipping recall",
-                self.recall_start_hour,
-                self.recall_end_hour,
-            )
-            return
-
-        # Enumeration has its own short-lived read session. The resulting DTOs
-        # remain safe to use after that session closes.
+        # Enumeration has its own short-lived read session and returns ids only.
         async with self.recall_session_provider() as recall_service:
-            active_users = await recall_service.get_active_recall_states()
+            candidate_user_ids = await recall_service.get_delivery_candidate_user_ids()
 
-        logger.info("Starting recall word sending for %s active users", len(active_users))
+        logger.info("Starting recall word sending for %s candidates", len(candidate_user_ids))
         async with httpx.AsyncClient(timeout=10.0) as client:
             send_word = partial(self._send_queue_word, client)
-            for user_state in active_users:
+            for user_id in candidate_user_ids:
                 try:
                     # deliver_next_word owns commit/rollback for this session and
                     # deliberately keeps its row lock across the send callback.
                     async with self.recall_session_provider() as recall_service:
-                        await self._process_user_recall_word(recall_service, user_state, send_word)
+                        await self._process_user_recall_word(recall_service, user_id, send_word)
                 except Exception as exc:
                     logger.error(
                         "Failed to process recall word for user %s: %s",
-                        user_state.user_id,
+                        user_id,
                         exc,
                     )
 
@@ -73,20 +60,20 @@ class TelegramRecallDelivery:
     async def _process_user_recall_word(
         self,
         recall_service: RecallService,
-        user_state: RecallState,
+        user_id: int,
         send_word: SendWord,
         max_attempts: int = 3,
     ) -> None:
         """Delegate one user's locked delivery workflow to its recall service."""
         updated_state = await recall_service.deliver_next_word(
-            user_state.user_id,
+            user_id,
             send_word,
             max_attempts=max_attempts,
         )
         if updated_state is not None:
             logger.info(
                 "Completed recall delivery for user %s at cursor %s",
-                user_state.telegram_username or user_state.user_id,
+                user_id,
                 updated_state.next_word_index,
             )
 

@@ -48,8 +48,6 @@ class TestSettings:
             database_url: str = "postgresql+asyncpg://user:pass@localhost/runestone"
             telegram_offset_file_path: str = "state/offset.txt"
             telegram_bot_token: str
-            recall_start_hour: int = 9
-            recall_end_hour: int = 22
             recall_interval_minutes: int = 60
 
             class Config:
@@ -66,8 +64,6 @@ class TestSettings:
             "DATABASE_URL": "postgresql+asyncpg://user:pass@localhost/runestone",
             "TELEGRAM_OFFSET_FILE_PATH": "custom/offset.txt",
             "TELEGRAM_BOT_TOKEN": "test-token",
-            "RECALL_START_HOUR": "8",
-            "RECALL_END_HOUR": "23",
             "RECALL_INTERVAL_MINUTES": "30",
         }
 
@@ -82,8 +78,6 @@ class TestSettings:
             assert test_settings.database_url == "postgresql+asyncpg://user:pass@localhost/runestone"
             assert test_settings.telegram_offset_file_path == "custom/offset.txt"
             assert test_settings.telegram_bot_token == "test-token"
-            assert test_settings.recall_start_hour == 8
-            assert test_settings.recall_end_hour == 23
             assert test_settings.recall_interval_minutes == 30
 
     def test_settings_required_fields(self):
@@ -98,8 +92,6 @@ class TestSettings:
             database_url: str = "postgresql+asyncpg://user:pass@localhost/runestone"
             telegram_offset_file_path: str = "state/offset.txt"
             telegram_bot_token: str
-            recall_start_hour: int = 9
-            recall_end_hour: int = 22
             recall_interval_minutes: int = 60
 
             class Config:
@@ -123,6 +115,11 @@ class TestSettings:
         assert settings.allowed_origins == "http://localhost:5173,http://127.0.0.1:5173,http://frontend:3010"
         assert settings.telegram_bot_token == "test_telegram_bot_token_for_testing_only"
         assert settings.words_unstudied_extra_count == 5
+
+    def test_recall_keeps_only_global_interval_configuration(self):
+        assert settings.recall_interval_minutes == 60
+        assert not hasattr(settings, "recall_start_hour")
+        assert not hasattr(settings, "recall_end_hour")
 
     def test_words_unstudied_extra_count_default_and_overrides(self):
         """Test words_unstudied_extra_count default, custom override, zero, and negative rejection."""

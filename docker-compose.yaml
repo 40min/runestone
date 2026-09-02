@@ -145,7 +145,7 @@ services:
     volumes:
       - ./state:/app/state
     depends_on:
-      postgres:
+      backend:
         condition: service_healthy
     networks:
       - runestone-network

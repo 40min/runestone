@@ -42,6 +42,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
+    PYTHONTZPATH="" \
     PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app/src" \
     HF_CACHE_DIR=/app/state/hf-cache \
@@ -71,5 +72,5 @@ COPY --chown=runestone:runestone alembic.ini recall_main.py pyproject.toml READM
 # Switch to non-root user
 USER runestone
 
-# Run database migrations and start the application
-CMD ["sh", "-c", "alembic upgrade head && python recall_main.py"]
+# The backend is the sole migration executor for repository Compose.
+CMD ["python", "recall_main.py"]

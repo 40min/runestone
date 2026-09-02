@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from sqlalchemy import delete, select, text, update
@@ -44,6 +45,7 @@ from runestone.services.vocabulary_service import VocabularyService
 from runestone.telegram.commands import TelegramCommandProcessor
 from runestone.telegram.delivery import TelegramRecallDelivery
 from runestone.telegram.offset_store import TelegramUpdateOffsetStore
+from runestone.utils.timezones import effective_timezone_name
 
 DEFAULT_USER_ID = 5
 DEFAULT_CHAT_ID = 9_005_005
@@ -235,9 +237,9 @@ class UserScopedRecallProxy:
         self.delegate = delegate
         self.enumeration_copies = enumeration_copies
 
-    async def get_active_recall_states(self) -> list[RecallState]:
-        states = await self.delegate.get_active_recall_states()
-        scoped = [state for state in states if state.user_id == self.user_id]
+    async def get_delivery_candidate_user_ids(self) -> list[int]:
+        user_ids = await self.delegate.get_delivery_candidate_user_ids()
+        scoped = [user_id for user_id in user_ids if user_id == self.user_id]
         return scoped * self.enumeration_copies
 
     def __getattr__(self, name: str) -> Any:
@@ -339,8 +341,6 @@ class RecordingTelegramRecallDelivery(TelegramRecallDelivery):
         self.provider = provider
         self.bot_token = "integration-test-no-network"
         self.base_url = "network-is-forbidden"
-        self.recall_start_hour = 0
-        self.recall_end_hour = 24
         self.sent: list[int] = []
         self.callback_transactions: list[bool] = []
 
@@ -382,6 +382,8 @@ class OriginalState:
     state_exists: bool
     telegram_chat_id: int | None
     is_enabled: bool
+    recall_start_hour: int
+    recall_end_hour: int
     next_word_index: int
     state_created_at: datetime | None
     state_updated_at: datetime | None
@@ -460,6 +462,8 @@ async def read_other_recall_fingerprint(db: AsyncSession, user_id: int) -> dict[
             "user_id": state.user_id,
             "telegram_chat_id": state.telegram_chat_id,
             "is_enabled": state.is_enabled,
+            "recall_start_hour": state.recall_start_hour,
+            "recall_end_hour": state.recall_end_hour,
             "next_word_index": state.next_word_index,
             "created_at": json_value(state.created_at),
             "updated_at": json_value(state.updated_at),
@@ -542,6 +546,8 @@ async def read_original_state(db: AsyncSession, user_id: int) -> OriginalState:
         state_exists=state is not None,
         telegram_chat_id=state.telegram_chat_id if state else None,
         is_enabled=bool(state.is_enabled) if state else False,
+        recall_start_hour=state.recall_start_hour if state else 9,
+        recall_end_hour=state.recall_end_hour if state else 22,
         next_word_index=state.next_word_index if state else 0,
         state_created_at=state.created_at if state else None,
         state_updated_at=state.updated_at if state else None,
@@ -613,6 +619,8 @@ async def read_evidence(db: AsyncSession, user_id: int, fixture_prefix: str) -> 
             {
                 "telegram_chat_id": state.telegram_chat_id,
                 "is_enabled": bool(state.is_enabled),
+                "recall_start_hour": state.recall_start_hour,
+                "recall_end_hour": state.recall_end_hour,
                 "next_word_index": state.next_word_index,
                 "created_at": json_value(state.created_at),
                 "updated_at": json_value(state.updated_at),
@@ -723,6 +731,17 @@ async def prepare_fixture_state(
 ) -> RecallState:
     total_capacity = settings.words_per_day + settings.words_unstudied_extra_count
     await recall_repository.upsert_for_user(user_id, chat_id=DEFAULT_CHAT_ID, is_enabled=enabled)
+    locked = await recall_repository.get_recall_state_for_update(user_id)
+    user = await db.get(User, user_id, populate_existing=True)
+    if locked is None or user is None:
+        raise AssertionError("fixture recall state or user was not created")
+    local_hour = datetime.now(timezone.utc).astimezone(ZoneInfo(effective_timezone_name(user.timezone))).hour
+    await recall_repository.update_locked_delivery_settings(
+        locked,
+        local_hour,
+        (local_hour + 1) % 24,
+        enabled,
+    )
     await recall_repository.replace_queue(
         user_id,
         queue_words(fixtures, total_capacity),
@@ -1494,23 +1513,19 @@ class RecallWorkflow:
     async def eligibility(self) -> str:
         await self.reset(enabled=True)
         self.case_before = await self.evidence()
-        active_states = await self.recall_service.get_active_recall_states()
-        require(
-            self.user_id in [state.user_id for state in active_states], "enabled active user is not delivery-eligible"
-        )
+        candidate_user_ids = await self.recall_service.get_delivery_candidate_user_ids()
+        require(self.user_id in candidate_user_ids, "enabled active user is not a delivery candidate")
 
         await self.recall_service.disable_for_user(self.user_id, chat_id=DEFAULT_CHAT_ID)
         await self.db.commit()
-        disabled_states = await self.recall_service.get_active_recall_states()
-        require(
-            self.user_id not in [state.user_id for state in disabled_states], "disabled recall state remains eligible"
-        )
+        disabled_user_ids = await self.recall_service.get_delivery_candidate_user_ids()
+        require(self.user_id not in disabled_user_ids, "disabled recall state remains a candidate")
 
         await self.recall_repository.upsert_for_user(self.user_id, chat_id=DEFAULT_CHAT_ID, is_enabled=True)
         await self.db.execute(update(User).where(User.id == self.user_id).values(active=False))
         await self.db.commit()
-        inactive_states = await self.recall_service.get_active_recall_states()
-        require(self.user_id not in [state.user_id for state in inactive_states], "inactive account remains eligible")
+        inactive_user_ids = await self.recall_service.get_delivery_candidate_user_ids()
+        require(self.user_id not in inactive_user_ids, "inactive account remains a candidate")
 
         sent_while_inactive: list[int] = []
 
@@ -1616,8 +1631,8 @@ class RecallWorkflow:
         await self.db.rollback()
         async with SessionLocal() as delivery_db, SessionLocal() as deactivate_db:
             delivery_service, _, _ = build_recall_service(delivery_db, fixture_ids)
-            enumerated = await delivery_service.get_active_recall_states()
-            require(self.user_id in [state.user_id for state in enumerated], "race setup did not enumerate user")
+            enumerated = await delivery_service.get_delivery_candidate_user_ids()
+            require(self.user_id in enumerated, "race setup did not enumerate user")
             await deactivate_db.execute(update(User).where(User.id == self.user_id).values(active=False))
             await deactivate_db.commit()
             raced_sends: list[int] = []
@@ -2146,6 +2161,8 @@ async def restore_original_state(
             db.add(state)
         state.telegram_chat_id = original.telegram_chat_id
         state.is_enabled = original.is_enabled
+        state.recall_start_hour = original.recall_start_hour
+        state.recall_end_hour = original.recall_end_hour
         state.next_word_index = original.next_word_index
         state.created_at = original.state_created_at
         state.updated_at = original.state_updated_at
@@ -2466,8 +2483,7 @@ async def run(args: argparse.Namespace) -> int:
             "words_per_day": settings.words_per_day,
             "words_unstudied_extra_count": settings.words_unstudied_extra_count,
             "cooldown_days": settings.cooldown_days,
-            "recall_start_hour": settings.recall_start_hour,
-            "recall_end_hour": settings.recall_end_hour,
+            "recall_interval_minutes": settings.recall_interval_minutes,
         },
         "initial_snapshot": {
             "user_and_recall": asdict(original) if original else None,

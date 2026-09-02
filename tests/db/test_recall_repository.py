@@ -1,6 +1,7 @@
 """PostgreSQL integration tests for recall-state persistence helpers."""
 
 import asyncio
+from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import event, func, select
@@ -12,7 +13,7 @@ from runestone.db.recall_repository import QueueRemovalResult, RecallRepository
 from runestone.recall.types import RecallQueueWord
 
 
-def make_user(suffix: str, *, active: bool = True) -> User:
+def make_user(suffix: str, *, active: bool = True, timezone_name: str = "UTC") -> User:
     """Build a valid user with stable Telegram linkage for a test."""
     return User(
         email=f"recall-{suffix}@example.com",
@@ -20,6 +21,7 @@ def make_user(suffix: str, *, active: bool = True) -> User:
         name="Recall",
         telegram_username=f"recall_{suffix}",
         active=active,
+        timezone=timezone_name,
     )
 
 
@@ -53,12 +55,19 @@ async def test_upsert_for_user_creates_and_updates_without_resetting_cursor(db_s
 
     created = await repository.upsert_for_user(user.id, chat_id=100, is_enabled=True)
     await repository.replace_queue(user.id, [], next_word_index=3)
+    locked = await repository.get_recall_state_for_update(user.id)
+    assert locked is not None
+    await repository.update_locked_delivery_settings(locked, 23, 7, True)
     updated = await repository.upsert_for_user(user.id, chat_id=200, is_enabled=False)
 
     assert created.telegram_chat_id == 100
     assert created.is_enabled is True
     assert updated.telegram_chat_id == 200
     assert updated.is_enabled is False
+    assert created.recall_start_hour == 9
+    assert created.recall_end_hour == 22
+    assert updated.recall_start_hour == 23
+    assert updated.recall_end_hour == 7
     assert updated.next_word_index == 3
     assert await db_session.scalar(select(func.count()).select_from(RecallUserStateDB)) == 1
 
@@ -182,7 +191,7 @@ async def test_advance_cursor_wraps_and_empty_queue_stays_at_zero(db_session: As
 
 
 @pytest.mark.anyio
-async def test_get_active_recall_states_filters_inactive_and_batches_queues(
+async def test_get_delivery_candidate_user_ids_is_one_lightweight_ordered_query(
     db_session: AsyncSession,
     db_engine,
 ):
@@ -209,14 +218,119 @@ async def test_get_active_recall_states_filters_inactive_and_batches_queues(
 
     event.listen(db_engine.sync_engine, "before_cursor_execute", count_selects)
     try:
-        states = await repository.get_active_recall_states()
+        user_ids = await repository.get_delivery_candidate_user_ids(now=datetime(2026, 1, 15, 12, tzinfo=timezone.utc))
     finally:
         event.remove(db_engine.sync_engine, "before_cursor_execute", count_selects)
 
-    assert [state.user_id for state in states] == [queued_user.id, empty_user.id]
-    assert [entry.id for entry in states[0].daily_selection] == [queued_word.id]
-    assert states[1].daily_selection == []
-    assert select_count == 2
+    assert user_ids == [queued_user.id, empty_user.id]
+    assert select_count == 1
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("timezone_name", "start_hour", "end_hour", "now", "eligible"),
+    [
+        ("UTC", 9, 22, datetime(2026, 1, 15, 9, tzinfo=timezone.utc), True),
+        ("UTC", 9, 22, datetime(2026, 1, 15, 22, tzinfo=timezone.utc), False),
+        ("UTC", 22, 7, datetime(2026, 1, 15, 22, tzinfo=timezone.utc), True),
+        ("UTC", 22, 7, datetime(2026, 1, 16, 6, tzinfo=timezone.utc), True),
+        ("UTC", 22, 7, datetime(2026, 1, 16, 7, tzinfo=timezone.utc), False),
+        ("Europe/Helsinki", 11, 12, datetime(2026, 1, 15, 9, tzinfo=timezone.utc), True),
+        ("Europe/Helsinki", 3, 4, datetime(2026, 3, 29, 0, 30, tzinfo=timezone.utc), False),
+        ("Europe/Helsinki", 3, 4, datetime(2026, 3, 29, 1, 30, tzinfo=timezone.utc), False),
+        ("Europe/Helsinki", 3, 4, datetime(2026, 10, 25, 0, 30, tzinfo=timezone.utc), True),
+        ("Europe/Helsinki", 3, 4, datetime(2026, 10, 25, 1, 30, tzinfo=timezone.utc), True),
+        ("America/New_York", 4, 5, datetime(2026, 1, 15, 9, tzinfo=timezone.utc), True),
+    ],
+)
+async def test_get_delivery_candidate_user_ids_evaluates_local_delivery_window(
+    db_session: AsyncSession,
+    timezone_name: str,
+    start_hour: int,
+    end_hour: int,
+    now: datetime,
+    eligible: bool,
+):
+    user = make_user("window", timezone_name=timezone_name)
+    db_session.add(user)
+    await db_session.flush()
+    repository = RecallRepository(db_session)
+    await repository.upsert_for_user(user.id, chat_id=123, is_enabled=True)
+    state = await repository.get_recall_state_for_update(user.id)
+    assert state is not None
+    await repository.update_locked_delivery_settings(state, start_hour, end_hour, True)
+
+    user_ids = await repository.get_delivery_candidate_user_ids(now=now)
+
+    assert (user.id in user_ids) is eligible
+
+
+@pytest.mark.anyio
+async def test_get_delivery_candidate_user_ids_ignores_corrupt_timezone_without_blocking_valid_users(
+    db_session: AsyncSession,
+):
+    valid_user = make_user("valid_timezone")
+    corrupt_user = make_user("corrupt_timezone", timezone_name="Europe/Not_A_Zone")
+    db_session.add_all([valid_user, corrupt_user])
+    await db_session.flush()
+    repository = RecallRepository(db_session)
+    await repository.upsert_for_user(valid_user.id, chat_id=123, is_enabled=True)
+    await repository.upsert_for_user(corrupt_user.id, chat_id=456, is_enabled=True)
+
+    user_ids = await repository.get_delivery_candidate_user_ids(now=datetime(2026, 1, 15, 12, tzinfo=timezone.utc))
+
+    assert user_ids == [valid_user.id]
+
+
+@pytest.mark.anyio
+async def test_update_locked_delivery_settings_preserves_linkage_queue_and_cursor(db_session: AsyncSession):
+    user = make_user("settings")
+    db_session.add(user)
+    await db_session.flush()
+    word = (await add_words(db_session, user.id, "natt"))[0]
+    repository = RecallRepository(db_session)
+    await repository.upsert_for_user(user.id, chat_id=321, is_enabled=True)
+    await repository.replace_queue(user.id, as_queue_entries([word]), next_word_index=4)
+    locked = await repository.get_recall_state_for_update(user.id)
+    assert locked is not None
+
+    updated = await repository.update_locked_delivery_settings(locked, 23, 7, False)
+
+    assert updated.telegram_chat_id == 321
+    assert updated.is_enabled is False
+    assert updated.recall_start_hour == 23
+    assert updated.recall_end_hour == 7
+    assert updated.next_word_index == 4
+    assert [entry.id for entry in updated.daily_selection] == [word.id]
+    persisted = await repository.get_recall_state(user.id)
+    assert persisted == updated
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("start_hour", "end_hour"),
+    [(-1, 22), (24, 22), (9, -1), (9, 24), (9, 9)],
+)
+async def test_recall_schedule_constraints_reject_invalid_hours(
+    db_session: AsyncSession,
+    start_hour: int,
+    end_hour: int,
+):
+    user = make_user(f"invalid_hours_{start_hour}_{end_hour}")
+    db_session.add(user)
+    await db_session.flush()
+    db_session.add(
+        RecallUserStateDB(
+            user_id=user.id,
+            telegram_chat_id=123,
+            is_enabled=True,
+            recall_start_hour=start_hour,
+            recall_end_hour=end_hour,
+        )
+    )
+
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
 
 
 @pytest.mark.anyio

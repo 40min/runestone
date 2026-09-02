@@ -17,6 +17,7 @@ from ..core.logging_config import get_logger
 from ..db.models import User
 from ..db.user_repository import UserRepository
 from ..db.utils import is_postgresql_unique_violation
+from ..utils.timezones import validate_timezone_name
 
 
 class UserService:
@@ -82,6 +83,9 @@ class UserService:
 
         # Update user fields
         update_dict = update_data.model_dump(exclude_unset=True)
+
+        if "timezone" in update_dict:
+            update_dict["timezone"] = validate_timezone_name(update_dict["timezone"])
 
         # Hash password if provided
         if "password" in update_dict:
