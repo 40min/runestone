@@ -338,10 +338,15 @@ describe("Profile", () => {
     const timezoneInput = screen.getByLabelText("Timezone");
     const updateButton = screen.getByRole("button", { name: "Update Profile" });
 
+    await userEvent.click(timezoneInput);
     await userEvent.clear(timezoneInput);
     await userEvent.type(timezoneInput, "America/New_York");
+    await userEvent.click(
+      await screen.findByRole("option", { name: "America/New_York" })
+    );
     await userEvent.click(updateButton);
 
+    expect(timezoneInput).toHaveValue("America/New_York");
     await waitFor(() => {
       expect(screen.getByText("Profile updated successfully!")).toBeInTheDocument();
     });
@@ -667,8 +672,12 @@ describe("Profile", () => {
     await userEvent.type(nameInput, "Updated");
     await userEvent.clear(surnameInput);
     await userEvent.type(surnameInput, "Name");
+    await userEvent.click(timezoneInput);
     await userEvent.clear(timezoneInput);
-    await userEvent.type(timezoneInput, "EST");
+    await userEvent.type(timezoneInput, "America/New_York");
+    await userEvent.click(
+      await screen.findByRole("option", { name: "America/New_York" })
+    );
     await userEvent.click(updateButton);
 
     await waitFor(() => {
@@ -676,7 +685,7 @@ describe("Profile", () => {
         expect.objectContaining({
           name: "Updated",
           surname: "Name",
-          timezone: "EST",
+          timezone: "America/New_York",
         })
       );
     });

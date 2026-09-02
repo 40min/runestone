@@ -153,8 +153,6 @@ class Settings(BaseSettings):
     telegram_offset_file_path: str = "state/offset.txt"
 
     # Recall Configuration
-    recall_start_hour: int = 9
-    recall_end_hour: int = 22  # 10 PM
     recall_interval_minutes: int = 60
 
     # JWT Configuration

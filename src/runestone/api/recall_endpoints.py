@@ -6,15 +6,21 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from runestone.api.recall_schemas import RecallResponse, RecallWordResponse
+from runestone.api.recall_schemas import RecallResponse, RecallSettingsUpdate, RecallWordResponse
 from runestone.auth.dependencies import get_current_user
-from runestone.core.exceptions import RecallOperationError, RecallQueueWordNotFoundError, RecallStateNotFoundError
+from runestone.core.exceptions import (
+    InvalidRecallScheduleError,
+    RecallOperationError,
+    RecallQueueWordNotFoundError,
+    RecallStateNotFoundError,
+)
 from runestone.core.logging_config import get_logger
 from runestone.db.database import get_db
 from runestone.db.models import User
 from runestone.dependencies import get_recall_service
 from runestone.recall.service import RecallService
 from runestone.recall.types import RecallState
+from runestone.utils.timezones import effective_timezone_name
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -24,13 +30,25 @@ RECALL_NOT_CONFIGURED_DETAIL = (
 )
 
 
-def _response_from_state(state: RecallState | None) -> RecallResponse:
+def _response_from_state(state: RecallState | None, timezone_name: object) -> RecallResponse:
+    effective_timezone = effective_timezone_name(timezone_name)
     if state is None:
-        return RecallResponse(configured=False, delivery_enabled=False, words=[])
+        return RecallResponse(
+            configured=False,
+            delivery_enabled=False,
+            recall_start_hour=9,
+            recall_end_hour=22,
+            timezone=effective_timezone,
+            words=[],
+        )
 
+    configured = state.telegram_chat_id is not None
     return RecallResponse(
-        configured=True,
-        delivery_enabled=state.is_enabled,
+        configured=configured,
+        delivery_enabled=state.is_enabled if configured else False,
+        recall_start_hour=state.recall_start_hour,
+        recall_end_hour=state.recall_end_hour,
+        timezone=effective_timezone,
         words=[
             RecallWordResponse(
                 id=word.id,
@@ -45,14 +63,14 @@ def _response_from_state(state: RecallState | None) -> RecallResponse:
 
 async def _run_mutation(
     operation: Callable[[], Awaitable[RecallState]],
-    *,
     db: AsyncSession,
     user_id: int,
+    timezone_name: object,
 ) -> RecallResponse:
     """Run one recall mutation in the request-owned transaction."""
     try:
         state = await operation()
-        response = _response_from_state(state)
+        response = _response_from_state(state, timezone_name)
         await db.commit()
         return response
     except RecallStateNotFoundError as exc:
@@ -61,6 +79,9 @@ async def _run_mutation(
     except RecallQueueWordNotFoundError as exc:
         await db.rollback()
         raise HTTPException(status_code=404, detail=exc.message) from exc
+    except InvalidRecallScheduleError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Invalid recall delivery schedule") from exc
     except RecallOperationError as exc:
         await db.rollback()
         logger.error("Recall mutation failed for user %s: %s", user_id, exc.details or exc.message)
@@ -86,7 +107,7 @@ async def get_recall(
 ) -> RecallResponse:
     """Return the authenticated user's recall configuration and ordered queue."""
     try:
-        return _response_from_state(await service.get_state_for_user(current_user.id))
+        return _response_from_state(await service.get_state_for_user(current_user.id), current_user.timezone)
     except RecallOperationError as exc:
         logger.error("Failed to load recall state for user %s: %s", current_user.id, exc.details or exc.message)
         raise HTTPException(status_code=500, detail="Failed to retrieve recall selection") from exc
@@ -114,7 +135,36 @@ async def bump_recall(
     async def operation() -> RecallState:
         return await service.bump_words(current_user.id)
 
-    return await _run_mutation(operation, db=db, user_id=current_user.id)
+    return await _run_mutation(operation, db, current_user.id, current_user.timezone)
+
+
+@router.patch(
+    "/settings",
+    response_model=RecallResponse,
+    responses={
+        200: {"description": "Recall delivery settings updated"},
+        400: {"description": "Invalid recall delivery schedule"},
+        409: {"description": "Recall not configured"},
+        422: {"description": "Validation error"},
+    },
+)
+async def update_recall_settings(
+    update_data: RecallSettingsUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[RecallService, Depends(get_recall_service)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> RecallResponse:
+    """Update the authenticated user's configured delivery settings."""
+
+    async def operation() -> RecallState:
+        return await service.update_delivery_settings(
+            current_user.id,
+            update_data.recall_start_hour,
+            update_data.recall_end_hour,
+            update_data.delivery_enabled,
+        )
+
+    return await _run_mutation(operation, db, current_user.id, current_user.timezone)
 
 
 @router.post(
@@ -135,8 +185,9 @@ async def postpone_recall_word(
     """Postpone one current queue word by its owned vocabulary id."""
     return await _run_mutation(
         lambda: service.postpone_queue_word(current_user.id, vocabulary_id),
-        db=db,
-        user_id=current_user.id,
+        db,
+        current_user.id,
+        current_user.timezone,
     )
 
 
@@ -158,6 +209,7 @@ async def remove_recall_word(
     """Soft-deactivate one current queue word by its owned vocabulary id."""
     return await _run_mutation(
         lambda: service.remove_queue_word_from_learning(current_user.id, vocabulary_id),
-        db=db,
-        user_id=current_user.id,
+        db,
+        current_user.id,
+        current_user.timezone,
     )

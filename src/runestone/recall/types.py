@@ -22,6 +22,8 @@ class RecallState:
     telegram_username: str | None
     telegram_chat_id: int | None
     is_enabled: bool
+    recall_start_hour: int = 9
+    recall_end_hour: int = 22
     next_word_index: int = 0
     daily_selection: list[RecallQueueWord] = field(default_factory=list)
 

@@ -1,11 +1,15 @@
 """Database-backed recall state orchestration and selection rules."""
 
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import SQLAlchemyError
 
 from runestone.core.exceptions import (
+    InvalidRecallScheduleError,
     RecallOperationError,
     RecallQueueWordNotFoundError,
     RecallStateNotFoundError,
@@ -19,6 +23,9 @@ from runestone.recall.types import RecallEnableResult, RecallEnableStatus, Recal
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 from runestone.utils.telegram import normalize_telegram_username
+from runestone.utils.timezones import validate_timezone_name
+
+logger = logging.getLogger(__name__)
 
 
 class RecallService:
@@ -121,13 +128,40 @@ class RecallService:
         except SQLAlchemyError as exc:
             raise RecallOperationError("Failed to disable recall", details=str(exc)) from exc
 
-    async def get_active_recall_states(self) -> list[RecallState]:
-        """Load recall states eligible for scheduled delivery."""
+    async def get_delivery_candidate_user_ids(self) -> list[int]:
+        """Return active users whose enabled recall state needs evaluation."""
         try:
-            states = await self.recall_repository.get_active_recall_states()
-            return states
+            return await self.recall_repository.get_delivery_candidate_user_ids()
         except SQLAlchemyError as exc:
-            raise RecallOperationError("Failed to load active recall states", details=str(exc)) from exc
+            raise RecallOperationError("Failed to load recall delivery candidates", details=str(exc)) from exc
+
+    async def update_delivery_settings(
+        self,
+        user_id: int,
+        recall_start_hour: int | None,
+        recall_end_hour: int | None,
+        delivery_enabled: bool | None,
+    ) -> RecallState:
+        """Lock and update a configured user's delivery settings."""
+        try:
+            current_state = await self.recall_repository.get_recall_state_for_update(user_id)
+            if current_state is None or current_state.telegram_chat_id is None:
+                raise RecallStateNotFoundError(user_id)
+
+            start_hour = current_state.recall_start_hour if recall_start_hour is None else recall_start_hour
+            end_hour = current_state.recall_end_hour if recall_end_hour is None else recall_end_hour
+            is_enabled = current_state.is_enabled if delivery_enabled is None else delivery_enabled
+            self._validate_delivery_schedule(start_hour, end_hour)
+            return await self.recall_repository.update_locked_delivery_settings(
+                current_state,
+                start_hour,
+                end_hour,
+                is_enabled,
+            )
+        except RecallOperationError:
+            raise
+        except Exception as exc:
+            raise RecallOperationError("Failed to update recall delivery settings", details=str(exc)) from exc
 
     async def bump_words(self, user_id: int) -> RecallState:
         """Deprioritize and replace a user's current queue with a fresh selection."""
@@ -304,6 +338,7 @@ class RecallService:
         user_id: int,
         send_word: Callable[[int, RecallQueueWord], Awaitable[bool]],
         max_attempts: int = 3,
+        now: datetime | None = None,
     ) -> RecallState | None:
         """Deliver and persist one user's next recall word as one locked workflow.
 
@@ -313,15 +348,18 @@ class RecallService:
         side-effect boundary.
         """
         try:
-            # 1. Lock and prepare the authoritative state before inspecting its queue.
-            current_state = await self.recall_repository.get_recall_state_for_update(user_id)
+            # 1. Lock mutable delivery state before inspecting the queue.
+            current_state = await self.recall_repository.get_delivery_state_for_update(user_id)
             if current_state is None or not current_state.is_enabled or current_state.telegram_chat_id is None:
                 await self.recall_repository.rollback()
                 return None
 
-            if not await self.user_service.is_user_active(user_id):
+            user = await self.user_service.get_user_by_id(user_id)
+            if user is None or not user.active or not self._is_delivery_eligible(current_state, user, now):
                 await self.recall_repository.rollback()
                 return None
+
+            current_state = await self.recall_repository.load_locked_recall_queue(current_state)
             current_state = await self._ensure_daily_selection_locked(current_state)
 
             # 2. Remove stale entries and retry replacement queues while the lock is held.
@@ -372,6 +410,35 @@ class RecallService:
         except Exception as exc:
             await self.recall_repository.rollback()
             raise RecallOperationError("Failed to deliver recall word", details=str(exc)) from exc
+
+    @staticmethod
+    def _is_delivery_eligible(state: RecallState, user: User, now: datetime | None) -> bool:
+        """Evaluate current locked hours in the user's current timezone."""
+        if not 0 <= state.recall_start_hour <= 23 or not 0 <= state.recall_end_hour <= 23:
+            return False
+        if state.recall_start_hour == state.recall_end_hour:
+            return False
+
+        try:
+            timezone_name = validate_timezone_name(user.timezone)
+        except (AttributeError, TypeError, ValueError):
+            logger.warning("invalid_timezone_fallback user_id=%s", state.user_id)
+            timezone_name = "UTC"
+
+        current_time = now or datetime.now(timezone.utc)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=timezone.utc)
+        local_hour = current_time.astimezone(ZoneInfo(timezone_name)).hour
+        if state.recall_start_hour < state.recall_end_hour:
+            return state.recall_start_hour <= local_hour < state.recall_end_hour
+        return local_hour >= state.recall_start_hour or local_hour < state.recall_end_hour
+
+    @staticmethod
+    def _validate_delivery_schedule(start_hour: int, end_hour: int) -> None:
+        valid_start = type(start_hour) is int and 0 <= start_hour <= 23
+        valid_end = type(end_hour) is int and 0 <= end_hour <= 23
+        if not valid_start or not valid_end or start_hour == end_hour:
+            raise InvalidRecallScheduleError()
 
     async def remove_queue_item(self, user_id: int, vocabulary_id: int) -> bool:
         """Remove one queued item within a transaction owned by the caller.

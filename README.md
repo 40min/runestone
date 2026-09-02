@@ -19,7 +19,7 @@ A command-line tool and web application for analyzing Swedish textbook pages usi
 - **🖥️ Web Interface**: Responsive web application for easy image upload and results viewing
 - **🧠 Agent Memory**: Structured, user-managed memory items with API + UI support
 - **📚 Grammar RAG**: Hybrid search (BM25 + Vector) over Swedish grammar cheatsheets
-- **🤖 Rune Recall**: Telegram bot for daily vocabulary recall and command processing
+- **🤖 Rune Recall**: Telegram vocabulary recall with per-user timezone and delivery hours
 
 ## 🚀 Quick Start
 
@@ -235,7 +235,7 @@ Telegram `/postpone` lowers urgency:
 - Ensure vocabulary data is available in the database
 
 **Configuration:**
-- `RECALL_INTERVAL_MINUTES`: Interval between recall messages (default: 60)
+- `RECALL_INTERVAL_MINUTES`: Global cadence for evaluating each user's local recall window (default: 60)
 
 ## 📖 Example Output
 

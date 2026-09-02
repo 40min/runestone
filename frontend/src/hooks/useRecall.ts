@@ -15,7 +15,14 @@ interface UseRecallReturn {
   refreshSelection: () => Promise<void>;
   postponeWord: (vocabularyId: number, wordPhrase: string) => Promise<void>;
   removeWord: (vocabularyId: number, wordPhrase: string) => Promise<void>;
+  saveSchedule: (startHour: number, endHour: number) => Promise<void>;
+  setDeliveryEnabled: (
+    enabled: boolean,
+    startHour: number,
+    endHour: number
+  ) => Promise<void>;
   clearFeedback: () => void;
+  feedbackAction: RecallPendingAction["type"] | null;
 }
 
 export const useRecall = (): UseRecallReturn => {
@@ -25,13 +32,18 @@ export const useRecall = (): UseRecallReturn => {
     useState<RecallPendingAction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [feedbackAction, setFeedbackAction] = useState<
+    RecallPendingAction["type"] | null
+  >(null);
   const mutationInFlightRef = useRef(false);
   const hasFetchedRef = useRef(false);
-  const { get, post } = useApi();
+  const { get, post, patch } = useApi();
 
   const refetch = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setSuccess(null);
+    setFeedbackAction(null);
     try {
       setRecall(await get<RecallState>("/api/recall"));
     } catch (requestError) {
@@ -67,22 +79,64 @@ export const useRecall = (): UseRecallReturn => {
       setPendingAction(action);
       setError(null);
       setSuccess(null);
+      setFeedbackAction(null);
       try {
         const updated = await post<RecallState>(endpoint);
         setRecall(updated);
         setSuccess(successMessage);
+        setFeedbackAction(action.type);
       } catch (requestError) {
         setError(
           requestError instanceof Error
             ? requestError.message
             : "Failed to update recall selection"
         );
+        setFeedbackAction(action.type);
       } finally {
         mutationInFlightRef.current = false;
         setPendingAction(null);
       }
     },
     [post]
+  );
+
+  const runSettingsMutation = useCallback(
+    async (
+      body: {
+        recall_start_hour: number;
+        recall_end_hour: number;
+        delivery_enabled?: boolean;
+      },
+      action: RecallPendingAction,
+      successMessage: string
+    ) => {
+      if (mutationInFlightRef.current) {
+        return;
+      }
+
+      mutationInFlightRef.current = true;
+      setPendingAction(action);
+      setError(null);
+      setSuccess(null);
+      setFeedbackAction(null);
+      try {
+        const updated = await patch<RecallState>("/api/recall/settings", body);
+        setRecall(updated);
+        setSuccess(successMessage);
+        setFeedbackAction(action.type);
+      } catch (requestError) {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Failed to update recall settings"
+        );
+        setFeedbackAction(action.type);
+      } finally {
+        mutationInFlightRef.current = false;
+        setPendingAction(null);
+      }
+    },
+    [patch]
   );
 
   const refreshSelection = useCallback(
@@ -115,9 +169,34 @@ export const useRecall = (): UseRecallReturn => {
     [runMutation]
   );
 
+  const saveSchedule = useCallback(
+    (startHour: number, endHour: number) =>
+      runSettingsMutation(
+        { recall_start_hour: startHour, recall_end_hour: endHour },
+        { type: "saveSettings" },
+        "Recall delivery times saved."
+      ),
+    [runSettingsMutation]
+  );
+
+  const setDeliveryEnabled = useCallback(
+    (enabled: boolean, startHour: number, endHour: number) =>
+      runSettingsMutation(
+        {
+          recall_start_hour: startHour,
+          recall_end_hour: endHour,
+          delivery_enabled: enabled,
+        },
+        { type: "toggleDelivery", enabled },
+        `Recall delivery ${enabled ? "started" : "stopped"}.`
+      ),
+    [runSettingsMutation]
+  );
+
   const clearFeedback = useCallback(() => {
     setError(null);
     setSuccess(null);
+    setFeedbackAction(null);
   }, []);
 
   return {
@@ -130,6 +209,9 @@ export const useRecall = (): UseRecallReturn => {
     refreshSelection,
     postponeWord,
     removeWord,
+    saveSchedule,
+    setDeliveryEnabled,
     clearFeedback,
+    feedbackAction,
   };
 };

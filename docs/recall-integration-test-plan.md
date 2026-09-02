@@ -85,9 +85,9 @@ The finite consumer interaction inventory is:
 
 ### 3. Scheduled delivery and Telegram presentation
 
-- A job inside the configured delivery window processes every eligible user; a job before the start,
-  exactly at the start, just before the end, and exactly at/after the end follows the configured
-  inclusive/exclusive boundaries in the deployment timezone.
+- A job evaluates each enabled user against that user's saved timezone and delivery hours. Ordinary
+  and overnight windows cover just before/exactly at start and just before/exactly at end at fixed
+  aware UTC instants, including spring-forward and fall-back conversions.
 - State absent, disabled state, missing chat ID, inactive account, or an empty candidate pool sends
   nothing and leaves learning metadata/cursor unchanged.
 - An empty queue is filled from eligible vocabulary; enough, few, one, and zero candidates produce a
@@ -180,11 +180,11 @@ Outbound Telegram calls and LLM calls are replaced with deterministic recorders.
 Before running the scenarios, record:
 
 - user `5`: `active`, `telegram_username`, and current chat ID;
-- `recall_user_states`: presence, `is_enabled`, `telegram_chat_id`, and `next_word_index`;
+- `recall_user_states`: presence, `is_enabled`, `telegram_chat_id`, delivery hours, and `next_word_index`;
 - ordered `recall_queue_items` joined to `vocabulary`;
 - all fixture vocabulary fields;
 - Telegram offset-file presence and content;
-- configured `WORDS_PER_DAY`, `WORDS_UNSTUDIED_EXTRA_COUNT`, cooldown, and recall delivery window.
+- configured `WORDS_PER_DAY`, `WORDS_UNSTUDIED_EXTRA_COUNT`, cooldown, and global recall interval.
 
 ## Invariants Checked After Every Mutating Scenario
 

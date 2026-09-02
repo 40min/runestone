@@ -2,7 +2,7 @@
 
 Runestone stores per-user recall delivery state and the ordered recall words queue in the application database. The Telegram polling offset remains in `state/offset.txt`; it is a single bot-wide cursor and is not part of the database-backed recall state.
 
-The database migration is `8c3e4a1f2b7d_add_recall_state_tables.py`. This is a clean cutover from the former `state.json` representation: existing file-backed recall users, queues, and cursors are not imported. After deployment, a linked user must send `/start` to create or enable database-backed recall state. The worker fills an empty queue during its normal delivery flow. This branch assumes the revision has not yet been deployed; a database already stamped with an earlier form of the same revision would require a follow-up migration because Alembic will not rerun it.
+The original database cutover is `8c3e4a1f2b7d_add_recall_state_tables.py`; `d4f8a2c7e1b9_add_recall_delivery_schedule.py` adds each user's delivery hours and normalizes invalid legacy timezone values to `UTC`. Existing and new recall states default to `09:00`–`22:00`. A linked user must send `/start` to create or enable database-backed recall state, and the worker fills an empty queue during its normal delivery flow.
 
 ## Data Model
 
@@ -15,6 +15,7 @@ This table has one row per Runestone user:
 | `user_id` | Primary key and foreign key to `users.id`. The existing user row remains the source of account identity and Telegram username. |
 | `telegram_chat_id` | Nullable Telegram chat destination. `/start` updates it; a state without a chat id cannot receive recall messages. |
 | `is_enabled` | Recall delivery preference, defaulting to `false`. This is separate from `users.active`: delivery requires both an active account and enabled recall state. |
+| `recall_start_hour`, `recall_end_hour` | Per-user local delivery window, defaulting to `9` and `22`. Hours are constrained to `0..23` and must differ. Start is inclusive, end is exclusive, and a start later than the end represents an overnight window. |
 | `next_word_index` | Zero-based cursor identifying the next position to send from the ordered queue. It defaults to `0` and has a non-negative check constraint. |
 | `created_at`, `updated_at` | Recall-state timestamps. |
 
@@ -63,21 +64,24 @@ For example, given queue `[A, B, C]` with `next_word_index = 2`, removing `A` pr
 The authenticated web application exposes Recall as a top-level desktop and mobile view. The
 `?view=recall` deep link restores the page and sets the document title to `Runestone | Recall`. It
 shows the ordered queue, available word text, translation and example fields, selected-word count,
-and whether Telegram delivery is enabled. Delivery status is read-only: the page does not start,
-stop, enable, or disable delivery.
+and a delivery-schedule panel. Configured users can save one-hour start/end values and start or stop
+delivery. The panel shows the effective profile timezone read-only; Profile owns timezone changes
+through a searchable, selection-only IANA timezone control.
 
 A user without `recall_user_states` receives an unconfigured empty response and is directed to link
 their Telegram username in Profile and send `/start` to the bot. This Telegram interaction
 establishes the destination chat id; the web transport does not attempt to create that linkage.
-Existing queues remain manageable when delivery is disabled or outside the worker's delivery
-window.
+A missing or chat-less state disables schedule, toggle, and queue actions. A configured but stopped
+state retains its queue and queue actions. Starting or stopping delivery also saves the valid draft
+hours atomically, and stopping preserves the chat id, queue, cursor, and hours.
 
 The recall API is mounted at `/api/recall` and always derives ownership from the authenticated
 Runestone user:
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| `GET` | `/api/recall` | Return configuration state, read-only delivery status, and the ordered queue. |
+| `GET` | `/api/recall` | Return configuration state, delivery status, hours, effective timezone, and the ordered queue without creating state. |
+| `PATCH` | `/api/recall/settings` | Partially update strict delivery hours or enablement for an existing Telegram-linked state and return the complete authoritative response. |
 | `POST` | `/api/recall/bump` | Deprioritize the locked active queue, replace it through the shared bump workflow, reset the cursor, and return the complete queue. |
 | `POST` | `/api/recall/words/{vocabulary_id}/postpone` | Require current queue membership, remove and deprioritize the item, exclude it from immediate best-effort refill, and return the complete queue. |
 | `POST` | `/api/recall/words/{vocabulary_id}/remove` | Require current queue membership, set the owned item to `in_learn=false` and lowest urgency, best-effort refill the shortened queue, and return the complete queue. |
@@ -90,6 +94,9 @@ rather than resolving display text. A configured response has this shape:
 {
   "configured": true,
   "delivery_enabled": true,
+  "recall_start_hour": 9,
+  "recall_end_hour": 22,
+  "timezone": "Europe/Helsinki",
   "words": [
     {
       "id": 42,
@@ -108,12 +115,16 @@ username, chat id, or next-word cursor. An unconfigured read returns `200` with:
 {
   "configured": false,
   "delivery_enabled": false,
+  "recall_start_hour": 9,
+  "recall_end_hour": 22,
+  "timezone": "UTC",
   "words": []
 }
 ```
 
-Unauthenticated and inactive-account requests retain the shared `401`/`403` authentication
-behavior. Mutations return `409` with Telegram onboarding guidance until recall is configured; a
+The settings endpoint rejects unknown, empty, null, or type-coerced fields with `422`, and rejects
+equal effective hours with `400`. Unauthenticated and inactive-account requests retain the shared
+`401`/`403` authentication behavior. Mutations return `409` with Telegram onboarding guidance until recall is configured; a
 vocabulary id outside the authenticated user's current queue returns `404` without revealing
 another user's ownership. Unexpected read failures return `500` with the generic detail
 `Failed to retrieve recall selection`. Mutation, commit, and other unexpected failures roll back
@@ -157,7 +168,7 @@ mutations with Telegram commands and scheduled delivery for that user. A web mut
 wait while scheduled delivery holds the same user's lock across a Telegram send. The read endpoint
 is transaction-neutral and does not commit.
 
-Scheduled delivery checks its configured delivery window before opening a database session. It then enumerates active recall states in one short-lived session and opens a fresh session for each user delivery. Within that per-user session, delivery acquires the user's recall-state row lock before validating enabled state and chat linkage, loading or creating the selection, resolving invalid items, and choosing the next word. After taking that lock it performs a fresh scalar read of `users.active`, bypassing any identity-mapped `User` object, so deactivation between enumeration and delivery prevents the send. The lock remains held across the injected Telegram send callback. This serializes delivery with other workers and queue mutations for that user, preventing two replicas from sending from the same cursor concurrently, while a failed transaction for one user cannot contaminate later users. Invalid-item cleanup and an exhausted selection's replacement also occur while holding that lock.
+Scheduled delivery keeps one global `RECALL_INTERVAL_MINUTES` cadence. A short-lived PostgreSQL query joins `pg_timezone_names` and returns only ordered user ids that are enabled, active, have a recognized timezone, and are currently inside their local ordinary or overnight delivery window. The worker opens a fresh session for each candidate, locks the mutable recall state, and rechecks enablement, chat linkage, account activation, current timezone, and the current local delivery window before loading queue or vocabulary data. A corrupt timezone that appears after enumeration falls back to UTC for that user and is logged without its stored value. Delivery retains the row lock across the injected Telegram callback, so one user's failure cannot contaminate later candidates.
 
 After Telegram accepts the message, `RecallService` writes learning metadata without committing, advances and wraps the cursor, and commits both changes together. Send failures and exceptions roll back the open transaction. If invalid-item cleanup exhausts its retries, that cleanup is committed before the job finishes.
 

@@ -90,6 +90,16 @@ class RecallStateNotFoundError(RecallOperationError):
         )
 
 
+class InvalidRecallScheduleError(RecallOperationError):
+    """Raised when recall delivery hours cannot form a valid window."""
+
+    def __init__(self):
+        super().__init__(
+            message="Invalid recall delivery schedule",
+            details="Recall delivery hours must be distinct integers from 0 through 23",
+        )
+
+
 class WordNotFoundError(VocabularyOperationError):
     """Raised when a word is not found in user's vocabulary."""
 

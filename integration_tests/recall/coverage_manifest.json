@@ -19,7 +19,7 @@
     "B06": {"status": "grouped", "case": "eligibility", "reason": "Inactive user is excluded and direct delivery is asserted as a no-op."},
     "B07": {"status": "grouped", "case": "delivery-edge", "reason": "One inactive queued fixture is removed/refilled before a valid send."},
     "B08": {"status": "grouped", "case": "delivery-edge", "reason": "All queued fixtures and replacement pool are made inactive."},
-    "B09": {"status": "automated", "case": "pytest:tests/telegram/test_delivery.py", "reason": "The production delivery adapter is clock-controlled at before/start/inside/end/after boundary partitions."},
+    "B09": {"status": "automated", "case": "pytest:tests/recall/test_service.py", "reason": "Locked per-user delivery tests cover inclusive start, exclusive end, ordinary and overnight windows."},
 
     "C01": {"status": "grouped", "case": "commands", "reason": "Production command dispatch enables the active linked fixture profile."},
     "C02": {"status": "grouped", "case": "commands", "reason": "Repeated start preserves queue/cursor and one state row."},
@@ -66,7 +66,7 @@
     "G05": {"status": "grouped", "case": "concurrency", "reason": "Independent delete/refill transactions verify deleted ID cannot reappear."},
 
     "H01": {"status": "grouped", "case": "isolation", "reason": "Teacher words are compared with exact persisted queue order."},
-    "H02": {"status": "grouped", "case": "eligibility", "reason": "Consumer-visible multi-state eligibility is covered; request-session and query-count instrumentation are explicitly outside this contract."},
+    "H02": {"status": "grouped", "case": "eligibility", "reason": "Candidate enumeration covers enabled active users; repository tests separately prove one id-only query without queue data."},
     "H03": {"status": "grouped", "case": "isolation", "reason": "When foreign vocabulary exists, read/delete/queue operations are attempted with target-user ownership and fingerprinted."},
 
     "I01": {"status": "automated", "case": "runner-finally", "reason": "Finally restores exact user/state/queue rows and proves fixture absence plus both isolation fingerprints."},
@@ -84,8 +84,8 @@
     "K03": {"status": "grouped", "case": "normal-delivery", "reason": "Fresh PostgreSQL sessions isolate a real failed scheduled user operation from a later user operation, while focused delivery tests cover deterministic continuation."},
     "K04": {"status": "grouped", "case": "normal-delivery", "reason": "Accepted delivery advances learning metadata and cursor once through PostgreSQL."},
     "K05": {"status": "grouped", "case": "delivery-edge", "reason": "Absent eligibility partitions and stale/entirely invalid queues send nothing or repair before sending."},
-    "K06": {"status": "automated", "case": "pytest:tests/telegram/test_delivery.py", "reason": "Outside delivery hours the production scheduler transport opens no recall provider."},
-    "K07": {"status": "automated", "case": "pytest:tests/telegram/test_delivery.py", "reason": "Provider lifecycle tests prove one short enumeration scope followed by one fresh scope for every active user."},
+    "K06": {"status": "automated", "case": "pytest:tests/recall/test_service.py", "reason": "Ineligible locked users release without queue, vocabulary, cursor, learning, or Telegram effects."},
+    "K07": {"status": "automated", "case": "pytest:tests/telegram/test_delivery.py", "reason": "Provider lifecycle tests prove one short id-only enumeration scope followed by one fresh scope for every candidate."},
 
     "L01": {"status": "grouped", "case": "vocabulary-context", "reason": "Queued phrase, translation, and example edits preserve membership/cursor and reach Teacher and delivery consumers."},
     "L02": {"status": "grouped", "case": "vocabulary-context", "reason": "Production create and reactivation do not rewrite the current queue and the created eligible word is available to the next bump."},

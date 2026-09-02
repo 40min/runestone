@@ -1,4 +1,5 @@
 from dataclasses import replace
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, call
 
@@ -6,6 +7,7 @@ import pytest
 from sqlalchemy.exc import SQLAlchemyError
 
 from runestone.core.exceptions import (
+    InvalidRecallScheduleError,
     RecallOperationError,
     RecallQueueWordNotFoundError,
     RecallStateNotFoundError,
@@ -22,18 +24,22 @@ from runestone.services.vocabulary_service import VocabularyService
 
 
 def make_state(
-    *,
     user_id: int = 1,
     telegram_username: str | None = None,
+    telegram_chat_id: int | None = 123,
     next_word_index: int = 0,
     daily_selection: list[RecallQueueWord] | None = None,
     is_enabled: bool = True,
+    recall_start_hour: int = 9,
+    recall_end_hour: int = 22,
 ) -> RecallState:
     return RecallState(
         user_id=user_id,
         telegram_username=telegram_username,
-        telegram_chat_id=123,
+        telegram_chat_id=telegram_chat_id,
         is_enabled=is_enabled,
+        recall_start_hour=recall_start_hour,
+        recall_end_hour=recall_end_hour,
         next_word_index=next_word_index,
         daily_selection=daily_selection or [],
     )
@@ -48,7 +54,8 @@ def recall_service():
     recall_repository = Mock()
     recall_repository.get_recall_state = AsyncMock()
     recall_repository.get_recall_state_for_update = AsyncMock()
-    recall_repository.get_active_recall_states = AsyncMock(return_value=[])
+    recall_repository.get_delivery_candidate_user_ids = AsyncMock(return_value=[])
+    recall_repository.update_locked_delivery_settings = AsyncMock()
     recall_repository.get_current_recall_words = AsyncMock(return_value=[])
     recall_repository.remove_queue_word = AsyncMock()
     recall_repository.replace_queue = AsyncMock()
@@ -57,6 +64,15 @@ def recall_service():
     recall_repository.upsert_for_user = AsyncMock()
     recall_repository.commit = AsyncMock()
     recall_repository.rollback = AsyncMock()
+
+    async def get_delivery_state_for_update(user_id: int):
+        return await recall_repository.get_recall_state_for_update(user_id)
+
+    async def load_locked_recall_queue(state: RecallState):
+        return state
+
+    recall_repository.get_delivery_state_for_update = AsyncMock(side_effect=get_delivery_state_for_update)
+    recall_repository.load_locked_recall_queue = AsyncMock(side_effect=load_locked_recall_queue)
 
     vocabulary_service = Mock()
     vocabulary_service.get_vocabulary_item_by_phrase = AsyncMock()
@@ -71,10 +87,10 @@ def recall_service():
 
     user_service = Mock()
     user_service.get_users_by_telegram_username = AsyncMock(return_value=[])
+    user_service.get_user_by_id = AsyncMock(return_value=SimpleNamespace(id=1, active=True, timezone="UTC"))
     user_service.is_user_active = AsyncMock(return_value=True)
     settings = SimpleNamespace(words_per_day=3, cooldown_days=7, words_unstudied_extra_count=0)
-    service = RecallService(recall_repository, vocabulary_service, user_service, settings)
-    return service
+    return RecallService(recall_repository, vocabulary_service, user_service, settings)
 
 
 @pytest.mark.anyio
@@ -159,26 +175,80 @@ async def test_get_state_for_user_wraps_database_failure(recall_service):
 
 
 @pytest.mark.anyio
-async def test_get_active_recall_states_delegates_filtered_batch_load_to_repository(recall_service):
-    active_state = make_state(user_id=1, telegram_username="active_user")
-    recall_service.recall_repository.get_active_recall_states.return_value = [active_state]
+async def test_get_delivery_candidate_user_ids_delegates_lightweight_load_to_repository(recall_service):
+    recall_service.recall_repository.get_delivery_candidate_user_ids.return_value = [1, 7]
 
-    states = await recall_service.get_active_recall_states()
+    user_ids = await recall_service.get_delivery_candidate_user_ids()
 
-    assert states == [active_state]
+    assert user_ids == [1, 7]
     recall_service.recall_repository.rollback.assert_not_awaited()
 
 
 @pytest.mark.anyio
-async def test_get_active_recall_states_wraps_database_failure_without_owning_transaction(recall_service):
+async def test_get_delivery_candidate_user_ids_wraps_database_failure_without_owning_transaction(recall_service):
     database_error = SQLAlchemyError("database unavailable")
-    recall_service.recall_repository.get_active_recall_states.side_effect = database_error
+    recall_service.recall_repository.get_delivery_candidate_user_ids.side_effect = database_error
 
-    with pytest.raises(RecallOperationError, match="Failed to load active recall states") as exc_info:
-        await recall_service.get_active_recall_states()
+    with pytest.raises(RecallOperationError, match="Failed to load recall delivery candidates") as exc_info:
+        await recall_service.get_delivery_candidate_user_ids()
 
     assert exc_info.value.__cause__ is database_error
     recall_service.recall_repository.rollback.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_update_delivery_settings_merges_fields_and_preserves_locked_state(recall_service):
+    state = make_state(
+        user_id=7,
+        next_word_index=2,
+        daily_selection=[make_word(9, "natt")],
+        recall_start_hour=9,
+        recall_end_hour=22,
+    )
+    updated = replace(state, recall_start_hour=23, is_enabled=False)
+    recall_service.recall_repository.get_recall_state_for_update.return_value = state
+    recall_service.recall_repository.update_locked_delivery_settings.return_value = updated
+
+    result = await recall_service.update_delivery_settings(7, 23, None, False)
+
+    assert result == updated
+    recall_service.recall_repository.get_recall_state_for_update.assert_awaited_once_with(7)
+    recall_service.recall_repository.update_locked_delivery_settings.assert_awaited_once_with(
+        state,
+        23,
+        22,
+        False,
+    )
+    recall_service.recall_repository.commit.assert_not_awaited()
+    recall_service.recall_repository.rollback.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "state",
+    [None, make_state(user_id=7, telegram_chat_id=None)],
+)
+async def test_update_delivery_settings_requires_telegram_link(recall_service, state):
+    recall_service.recall_repository.get_recall_state_for_update.return_value = state
+
+    with pytest.raises(RecallStateNotFoundError):
+        await recall_service.update_delivery_settings(7, 9, 22, True)
+
+    recall_service.recall_repository.update_locked_delivery_settings.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_update_delivery_settings_rejects_equal_merged_hours(recall_service):
+    recall_service.recall_repository.get_recall_state_for_update.return_value = make_state(
+        user_id=7,
+        recall_start_hour=9,
+        recall_end_hour=22,
+    )
+
+    with pytest.raises(InvalidRecallScheduleError):
+        await recall_service.update_delivery_settings(7, 22, None, None)
+
+    recall_service.recall_repository.update_locked_delivery_settings.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -601,15 +671,64 @@ async def test_deliver_next_word_rolls_back_unusable_state(recall_service):
 async def test_deliver_next_word_revalidates_active_user_after_state_lock(recall_service):
     state = make_state(user_id=1, daily_selection=[make_word(7, "hej")])
     recall_service.recall_repository.get_recall_state_for_update.return_value = state
-    recall_service.user_service.is_user_active.return_value = False
+    recall_service.user_service.get_user_by_id.return_value = SimpleNamespace(
+        id=1,
+        active=False,
+        timezone="UTC",
+    )
     send_word = AsyncMock(return_value=True)
 
     result = await recall_service.deliver_next_word(1, send_word)
 
     assert result is None
-    recall_service.user_service.is_user_active.assert_awaited_once_with(1)
+    recall_service.user_service.get_user_by_id.assert_awaited_once_with(1)
     send_word.assert_not_awaited()
+    recall_service.recall_repository.load_locked_recall_queue.assert_not_awaited()
     recall_service.recall_repository.rollback.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_deliver_next_word_rechecks_local_window_before_queue_access(recall_service):
+    state = make_state(
+        user_id=1,
+        recall_start_hour=13,
+        recall_end_hour=14,
+        daily_selection=[make_word(7, "hej")],
+    )
+    recall_service.recall_repository.get_recall_state_for_update.return_value = state
+    send_word = AsyncMock(return_value=True)
+
+    result = await recall_service.deliver_next_word(
+        1,
+        send_word,
+        now=datetime(2026, 1, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result is None
+    send_word.assert_not_awaited()
+    recall_service.recall_repository.load_locked_recall_queue.assert_not_awaited()
+    recall_service.recall_repository.rollback.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_deliver_next_word_falls_back_to_utc_for_corrupt_timezone(recall_service, caplog):
+    state = make_state(user_id=1, recall_start_hour=12, recall_end_hour=13)
+    recall_service.recall_repository.get_recall_state_for_update.return_value = state
+    recall_service.user_service.get_user_by_id.return_value = SimpleNamespace(
+        id=1,
+        active=True,
+        timezone="private-corrupt-value",
+    )
+
+    await recall_service.deliver_next_word(
+        1,
+        AsyncMock(),
+        now=datetime(2026, 1, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert "invalid_timezone_fallback user_id=1" in caplog.text
+    assert "private-corrupt-value" not in caplog.text
+    recall_service.recall_repository.load_locked_recall_queue.assert_awaited_once()
 
 
 @pytest.mark.anyio
@@ -779,14 +898,15 @@ async def test_delivery_rechecks_active_user_after_concurrent_deactivation(db_se
         await repository.replace_queue(user_id, [make_word(vocabulary_id, "hej")])
         await repository.commit()
 
-        active_states = await service.get_active_recall_states()
-        assert [state.user_id for state in active_states] == [user_id]
+        candidate_user_ids = await service.get_delivery_candidate_user_ids()
+        assert candidate_user_ids == [user_id]
         assert user.active is True  # Keep a stale active entity cached in the delivery session.
 
         concurrently_updated_user = await deactivation_session.get(User, user_id)
         assert concurrently_updated_user is not None
         concurrently_updated_user.active = False
         await deactivation_session.commit()
+        delivery_session.expire_all()
 
         send_word = AsyncMock(return_value=True)
         result = await service.deliver_next_word(user_id, send_word)

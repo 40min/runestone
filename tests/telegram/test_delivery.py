@@ -38,14 +38,12 @@ class RecordingRecallProvider:
 def mock_settings():
     settings = Mock()
     settings.telegram_bot_token = "token"
-    settings.recall_start_hour = 0
-    settings.recall_end_hour = 24
     return settings
 
 
-def make_service(*, active_states=None):
+def make_service(candidate_user_ids=None):
     service = Mock()
-    service.get_active_recall_states = AsyncMock(return_value=active_states or [])
+    service.get_delivery_candidate_user_ids = AsyncMock(return_value=candidate_user_ids or [])
     service.deliver_next_word = AsyncMock()
     return service
 
@@ -67,45 +65,20 @@ def test_init_requires_bot_token(mock_settings):
 
 
 @pytest.mark.anyio
-async def test_outside_delivery_hours_opens_no_recall_session(mock_settings):
-    mock_settings.recall_start_hour = 12
-    mock_settings.recall_end_hour = 13
-    provider = Mock(side_effect=AssertionError("provider should not be called"))
+async def test_each_sweep_enumerates_candidates_without_transport_window(mock_settings):
+    enumeration_service = make_service()
+    provider = RecordingRecallProvider(enumeration_service)
     delivery = TelegramRecallDelivery(provider, mock_settings)
 
-    with patch("runestone.telegram.delivery.datetime") as mock_datetime:
-        mock_datetime.now.return_value.hour = 8
-        await delivery.send_next_recall_word()
+    await delivery.send_next_recall_word()
 
-    provider.assert_not_called()
-
-
-@pytest.mark.anyio
-@pytest.mark.parametrize(
-    ("hour", "inside_window"),
-    [(8, False), (9, True), (16, True), (17, False), (23, False)],
-)
-async def test_delivery_window_has_inclusive_start_and_exclusive_end(
-    mock_settings,
-    hour,
-    inside_window,
-):
-    mock_settings.recall_start_hour = 9
-    mock_settings.recall_end_hour = 17
-    provider = RecordingRecallProvider(make_service())
-    delivery = TelegramRecallDelivery(provider, mock_settings)
-
-    with patch("runestone.telegram.delivery.datetime") as mock_datetime:
-        mock_datetime.now.return_value.hour = hour
-        await delivery.send_next_recall_word()
-
-    assert provider.call_count == int(inside_window)
+    enumeration_service.get_delivery_candidate_user_ids.assert_awaited_once_with()
+    assert provider.call_count == 1
 
 
 @pytest.mark.anyio
 async def test_enumeration_closes_before_fresh_session_for_each_user(mock_settings):
-    states = [make_state(1, "first"), make_state(2, "second")]
-    enumeration_service = make_service(active_states=states)
+    enumeration_service = make_service(candidate_user_ids=[1, 2])
     first_user_service = make_service()
     second_user_service = make_service()
     provider = RecordingRecallProvider(
@@ -115,14 +88,10 @@ async def test_enumeration_closes_before_fresh_session_for_each_user(mock_settin
     )
     delivery = TelegramRecallDelivery(provider, mock_settings)
 
-    with (
-        patch("runestone.telegram.delivery.datetime") as mock_datetime,
-        patch("runestone.telegram.delivery.httpx.AsyncClient") as client_class,
-    ):
-        mock_datetime.now.return_value.hour = 10
+    with patch("runestone.telegram.delivery.httpx.AsyncClient") as client_class:
         await delivery.send_next_recall_word()
 
-    enumeration_service.get_active_recall_states.assert_awaited_once_with()
+    enumeration_service.get_delivery_candidate_user_ids.assert_awaited_once_with()
     first_callback = first_user_service.deliver_next_word.await_args.args[1]
     second_callback = second_user_service.deliver_next_word.await_args.args[1]
     assert first_callback is second_callback
@@ -143,19 +112,14 @@ async def test_enumeration_closes_before_fresh_session_for_each_user(mock_settin
 
 @pytest.mark.anyio
 async def test_failed_user_session_closes_and_later_user_still_runs(mock_settings):
-    states = [make_state(1, "first"), make_state(2, "second")]
-    enumeration_service = make_service(active_states=states)
+    enumeration_service = make_service(candidate_user_ids=[1, 2])
     failed_service = make_service()
     failed_service.deliver_next_word.side_effect = RuntimeError("database failed")
     later_service = make_service()
     provider = RecordingRecallProvider(enumeration_service, failed_service, later_service)
     delivery = TelegramRecallDelivery(provider, mock_settings)
 
-    with (
-        patch("runestone.telegram.delivery.datetime") as mock_datetime,
-        patch("runestone.telegram.delivery.httpx.AsyncClient"),
-    ):
-        mock_datetime.now.return_value.hour = 10
+    with patch("runestone.telegram.delivery.httpx.AsyncClient"):
         await delivery.send_next_recall_word()
 
     later_service.deliver_next_word.assert_awaited_once()
@@ -175,7 +139,7 @@ async def test_process_user_delegates_locked_workflow(mock_settings):
     delivery = TelegramRecallDelivery(Mock(), mock_settings)
     send_word = AsyncMock()
 
-    await delivery._process_user_recall_word(recall_service, state, send_word, max_attempts=2)
+    await delivery._process_user_recall_word(recall_service, state.user_id, send_word, max_attempts=2)
 
     recall_service.deliver_next_word.assert_awaited_once_with(
         1,

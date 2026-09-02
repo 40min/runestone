@@ -1,74 +1,77 @@
-# Per-user Recall Delivery Window and Timezone
+# Per-user Recall Schedule and Timezone
 
 ## Plan Control
 
 - Dart task: [`VjO9npvNgjXf` — user-profile: add user's timezone and take it into acc on sending words](https://app.dartai.com/t/VjO9npvNgjXf-user-profile-add-users-timezon)
-- Plan ID: `VjO9npvNgjXf-user-recall-timezone-v2`
-- Plan state: `CANDIDATE_REAUDIT_PENDING`
-- Freeze candidate identity: pending independent review
-- Repository planning baseline: `386f5583abe7b0bda82a4facede33b05c72316da`
-- Alembic planning baseline: `8c3e4a1f2b7d (head)`
+- Plan ID: `VjO9npvNgjXf-user-recall-timezone-v3`
+- State: `READY_TO_FREEZE`
+- Freeze candidate identity: `VjO9npvNgjXf-user-recall-timezone-v3@5d369c496788f120f144b9bf6077a0d789cca0ceea5e8e95b5199ed5dec821b9`
+- Independently reviewed candidate SHA-256: `5d369c496788f120f144b9bf6077a0d789cca0ceea5e8e95b5199ed5dec821b9`
+- Repository baseline: `66a22e40650f304e8b70fa903297dba4689b6f9c` (`main`; clean committed baseline plus this plan-only modification)
+- Alembic baseline: `8c3e4a1f2b7d (head)`
 - SDD tier: `S2`
-- Execution model: one backend/data owner, one frontend owner, one recall owner, one lead integrator, and one independent read-only reviewer
-- Planning artifact: this document; implementation must not mutate a frozen revision
+- Execution: one backend/data owner, one frontend owner, one lead integrator, and one independent read-only reviewer
 
-The planning checkout is the clean committed `feat/specialist-context-refactor` branch plus this untracked plan. The branch delta is unrelated to this task and does not overlap the declared implementation write set. Implementation must begin from a clean, then-current Runestone base after the preflight below; it must not inherit, revert, or use unrelated feature-branch changes as evidence.
+This file is planning authority only. Implementation must start from a clean, then-current base after preflight and must not mutate a frozen revision.
+
+## Implementation at a Glance
+
+1. Keep timezone as an account preference on Profile and replace free text with a selection-only IANA timezone control.
+2. Store start/end hours with `recall_user_states`; expose hours, enablement, and effective timezone through the Recall API.
+3. Put start time, end time, and Start/Stop delivery controls on the existing Recall page—not on Profile.
+4. Evaluate each enabled user against their saved timezone and window inside the locked delivery use case, then remove global start/end configuration.
+5. Prove migration, API, UI, temporal, transaction, container, and rollback behavior before release.
 
 ## Clarification Log and Assumptions
 
-1. The user confirmed that each user configures their own recall delivery window. The global `RECALL_START_HOUR` and `RECALL_END_HOUR` settings are retired.
-2. New users and existing users receive the current global defaults: start `09:00`, end `22:00`.
-3. `RECALL_INTERVAL_MINUTES` remains a worker-level setting. It controls how often the worker evaluates users; it is not a user preference and does not promise delivery at an exact wall-clock minute.
-4. Timezone choices use IANA timezone identifiers such as `Europe/Helsinki`. The profile UI is a searchable, selection-only control rather than a free-text field.
-5. The UI offers the browser-detected timezone as a suggestion but never silently overwrites an already saved value.
-6. `UTC` is the default and the defensive runtime fallback. The one frozen acceptance rule is: trim the input; accept exactly `UTC`, or a slash-containing key for which `ZoneInfo(key)` succeeds; preserve the accepted trimmed key verbatim. Legacy values failing that exact rule are normalized to `UTC` by the migration.
-7. Delivery hours have one-hour granularity. Start is inclusive and end is exclusive. Overnight windows are supported; for example, `22:00` to `07:00` includes local hours `22` through `23` and `00` through `06`.
-8. Equal start and end values are rejected rather than interpreted as either an empty or 24-hour window. A future explicit “all day” option is outside this task.
-9. A saved preference takes effect on the next recall-worker evaluation. No restart, rescheduling job, or per-user APScheduler job is required.
-10. Delivery eligibility is evaluated from the user’s current persisted profile inside the existing per-user recall session, before queue mutation or Telegram I/O. The existing callback-spanning transaction and row-lock contract remains intact once an eligible delivery begins.
-11. DST follows `zoneinfo` conversion from an aware UTC instant. The system evaluates each real scheduler tick against the resulting local hour; it does not synthesize a send for a skipped spring-forward hour or deduplicate the repeated fall-back hour.
-12. The current code already persists and exposes `users.timezone`, and the profile already renders it as raw text. This plan completes and hardens that partial feature; it does not add a second timezone column.
-13. No change is requested to recall enable/disable commands, queue selection, words per day, cooldown rules, Telegram message content, or exact scheduler cadence.
+1. The user corrected the UX location: recall start/end and Start/Stop belong on the existing Recall page.
+2. Profile continues to own timezone because it is account-wide and already used outside Recall. Recall displays the effective timezone read-only and directs the user to Profile to change it.
+3. The Recall page adds exactly three editable actions in this scope: start hour, end hour, and Start/Stop. Queue controls remain unchanged.
+4. Existing `recall_user_states.is_enabled` remains the only delivery-enablement source; no second boolean is added.
+5. Web and Telegram Start/Stop update the same state. Web Stop preserves chat ID, queue, cursor, and hours. Web Start requires an existing configured state with a stored chat ID.
+6. An unconfigured user sees disabled default `09:00`–`22:00` controls plus current Telegram onboarding. Sending `/start` creates the state with those defaults and enables delivery.
+7. Existing configured users receive `09:00`–`22:00` during migration. New states receive the same database defaults.
+8. `RECALL_INTERVAL_MINUTES` remains global. It controls evaluation cadence and does not promise an exact delivery minute.
+9. Timezone values are IANA identifiers. Profile uses a searchable, selection-only control; browser detection is a suggestion and never silently overwrites a saved value.
+10. Frozen timezone rule: trim input; accept exactly `UTC`, or a slash-containing key for which `ZoneInfo(key)` succeeds; preserve the trimmed key. Migration normalizes legacy failures to `UTC`.
+11. Hours have one-hour granularity. Start is inclusive, end exclusive, and overnight windows are supported. Equal start/end is rejected; all-day mode is outside scope.
+12. Saved settings apply on the next worker evaluation. No restart or per-user scheduler job is required.
+13. Eligibility uses fresh persisted state inside the existing per-user session before queue mutation or Telegram I/O. The callback-spanning lock/transaction remains intact for eligible delivery.
+14. DST follows conversion from an aware UTC instant. The worker neither synthesizes skipped spring-forward sends nor deduplicates repeated fall-back hours.
+15. Current code already stores `users.timezone`, exposes Recall at `?view=recall`, persists `is_enabled`, and shows delivery status read-only. This plan connects and hardens those parts.
 
 ## SDD Tier Resolution
 
-The canonical resolver input was:
+This remains `S2`: persisted data, authenticated contracts, browser UX, all-user delivery policy, container timezone data, and deployment sequencing carry meaningful data/browser/architecture/release risk across multiple owners. The UX relocation does not lower those risks.
+
+Canonical resolver input:
 
 ```json
 {
-  "taskCount": 4,
-  "executableOwners": [
-    "profile-backend-owner",
-    "profile-frontend-owner",
-    "recall-delivery-owner"
-  ],
+  "taskCount": 3,
+  "executableOwners": ["recall-backend-owner", "recall-frontend-owner", "timezone-plan-lead"],
   "capabilityHints": [
     "database-migration",
-    "profile-api-contract",
+    "authenticated-recall-settings-api",
     "browser-timezone-selection",
-    "scheduled-delivery-policy"
+    "scheduled-delivery-policy",
+    "container-startup-sequencing"
   ],
   "riskFlags": {
     "architecture": true,
-    "security": false,
     "performance": true,
     "browser": true,
     "data": true,
     "release": true,
-    "externalEnvironment": false
+    "security": false,
+    "externalEnvironment": true
   },
-  "requirementsBytes": 15000,
+  "requirementsBytes": 18000,
   "externalSpecification": true
 }
 ```
 
-Resolved with:
-
-```bash
-agent-lifecycle tier resolve --request /tmp/runestone-timezone-tier-request.json
-```
-
-Result:
+Resolved with `agent-lifecycle tier resolve --request /tmp/runestone-recall-schedule-tier-v3.json`:
 
 ```json
 {
@@ -78,417 +81,439 @@ Result:
     "multiple-executable-owners",
     "architecture-risk",
     "browser-risk",
+    "externalEnvironment-risk",
     "performance-risk",
     "external-specification-required"
   ],
-  "requestDigest": "2b310b60e2949799eaf5c7112d84c157d798e1297b75314a1fc6539ed24c7910"
+  "requestDigest": "b4b37684fe84ee819f7e533b62d19ce16a60b3e38f48dc8ee94dec71d3cedf66"
 }
 ```
-
-S2 is required because this changes persisted user data, a public profile contract, browser UX, scheduling behavior for every enabled user, two Python container dependency surfaces, and three independently executable workstreams.
 
 ## Product Specification
 
-### Problem
+### Problem and outcome
 
-Recall delivery currently checks one deployment-local global window before loading any users. Every enabled user is therefore treated as if they live in the worker’s timezone and want the same delivery hours. The user profile already stores a timezone, but the API accepts arbitrary strings, the frontend uses free text, and scheduled delivery ignores it.
+Delivery currently checks one deployment-local window before loading users. Users are treated as if they share the worker's timezone and preferred hours. Profile timezone accepts arbitrary text, scheduled delivery ignores it, and the Recall page cannot change hours or enablement.
 
-### Desired outcome
+After this work:
 
-- Each user owns a timezone, recall start hour, and recall end hour in their profile.
-- The profile offers mistake-resistant IANA timezone selection and simple start/end selectors.
-- Defaults preserve today’s `09:00–22:00` behavior for UTC users while allowing every user to customize it.
-- One worker interval continues to scan enabled users, but each candidate is checked against their current local time before a word is sent.
-- DST and overnight windows behave deterministically.
-- Invalid profile data cannot break a whole delivery sweep.
-- Global start/end configuration is removed from code, environment templates, tests, and operational documentation.
+- Profile owns a valid IANA timezone through a mistake-resistant selector.
+- Recall owns its start/end hours and enablement in `recall_user_states`.
+- Recall page owns the corresponding controls.
+- One global worker interval remains, but eligibility is per user.
+- Defaults preserve current `09:00`–`22:00` behavior for UTC users.
+- Invalid data for one user cannot break a sweep.
 
 ### User-visible behavior
 
-The Profile screen shows:
+Profile shows a searchable **Timezone** selector containing `UTC` and browser-supported IANA zones. It includes a valid saved value and browser-detected suggestion without silently saving the latter.
 
-- a searchable **Timezone** selector containing `UTC` and browser-supported IANA zones;
-- the browser-detected zone as a suggested option when it is valid;
-- a **Recall delivery starts** selector with `00:00` through `23:00`;
-- a **Recall delivery ends** selector with `00:00` through `23:00`;
-- helper text explaining that the start is inclusive, the end is exclusive, and overnight windows are supported;
-- client validation when start and end are equal, plus the existing form-level backend `ErrorAlert` for rejected API values.
+The Recall page adds a compact **Delivery schedule** section near existing delivery status:
 
-Saving the profile persists all three preferences. A successful response refreshes the authoritative values in auth context. The UI does not claim an exact message minute because delivery still runs on the configured worker interval.
+- **Starts** and **Ends** selectors, each `00:00` through `23:00`;
+- helper text explaining cadence, inclusive start, exclusive end, and overnight windows;
+- read-only effective timezone plus direction to Profile;
+- **Start delivery** when configured and stopped, or **Stop delivery** when running;
+- pending-state protection against a second same-page settings mutation;
+- success/error feedback using existing Snackbars.
 
-### Backend/API contract
+For API/UI purposes, `configured` means a recall row exists **and** has a non-null Telegram chat ID. A chat-less row left by `/stop`-before-`/start` is unconfigured. For absent or chat-less unconfigured users, schedule, Start/Stop, and queue actions are disabled and current Telegram onboarding remains. Queue actions remain enabled only for configured-but-disabled users. Direct bump/postpone/remove calls against a chat-less row retain the current row-based backend behavior; this accepted API/UI difference avoids redefining queue ownership, while the UI prevents those actions until Telegram linkage exists.
 
-`GET /api/me` adds two required integer fields while retaining required `timezone`:
+The form keeps server state separate from draft hours. **Save times** patches the two valid draft hours. Start/Stop atomically patches the currently displayed valid draft hours plus the desired enablement, so it never discards unsaved edits. Equal draft hours disable Save and Start/Stop, show an inline error, and move focus to the invalid schedule group on submission attempt. A failed request keeps the draft and prior authoritative enablement; reload discards drafts and reloads persisted values. Every success replaces Recall state and resets the draft from the full server response.
+
+### Recall API
+
+`GET /api/recall` keeps existing fields and adds required settings fields:
 
 ```json
 {
-  "timezone": "Europe/Helsinki",
+  "configured": true,
+  "delivery_enabled": true,
   "recall_start_hour": 9,
-  "recall_end_hour": 22
+  "recall_end_hour": 22,
+  "timezone": "Europe/Helsinki",
+  "words": []
 }
 ```
 
-`PUT /api/me` accepts partial updates for the same fields:
+For no recall row, return `configured=false`, `delivery_enabled=false`, default hours `9`/`22`, validated effective profile timezone, and `words=[]`. For a chat-less row, return `configured=false`, its stored hours, `delivery_enabled=false`, timezone, and its existing queue. A read never creates state.
 
-- `timezone`: a JSON string that, after trimming, is exactly `UTC` or contains `/` and succeeds with `ZoneInfo`;
-- `recall_start_hour`: a strict JSON integer `0..23` (numeric strings and booleans are rejected);
-- `recall_end_hour`: a strict JSON integer `0..23` (numeric strings and booleans are rejected);
-- the effective start and end, after combining submitted and persisted values, must differ.
+Add `PATCH /api/recall/settings`. It accepts a partial object with at least one of:
 
-Explicit JSON `null` is rejected for all three fields; omission is the only way to leave a preference unchanged. Invalid primitive values return FastAPI validation status `422`. An equal effective window is a domain validation error returned through the endpoint’s existing profile-update error mapping with status `400`.
+- `recall_start_hour`: strict JSON integer `0..23`;
+- `recall_end_hour`: strict JSON integer `0..23`;
+- `delivery_enabled`: strict JSON boolean.
 
-Accepted timezone keys are stored verbatim after trimming. Aliases are not canonicalized. Slashless abbreviations such as `EST` and `CET` are rejected even if the host `zoneinfo` database recognizes them; slash-containing keys such as `Etc/GMT+5` are accepted when `ZoneInfo` resolves them.
+Omission preserves a field. Explicit null, booleans as hours, numeric strings, unknown fields, and an empty object return `422`. After merging with persisted values, equal hours return `400`. `timezone` is read-only here and remains writable through `PUT /api/me`.
 
-### Persistence contract
+The endpoint requires an existing state with non-null Telegram chat ID; otherwise it returns existing onboarding guidance with `409` and no mutation. It derives user ID from authentication, calls a locked `RecallService` operation, commits exactly once at the endpoint boundary, rolls back on failure, and returns the full `RecallResponse`.
 
-Add these non-null columns to `users`:
+Add `InvalidRecallScheduleError` under `runestone.core.exceptions`. RecallService raises it only when the merged effective hours are equal or persisted hours are invalid. The endpoint maps an invalid submitted/effective schedule to `400` with a safe fixed detail; it must be handled before the generic `RecallOperationError` branch so it cannot become `500`. Corrupt persisted hours encountered during delivery fail closed and remain an operational error category rather than a client response.
+
+Start/Stop semantics:
+
+- Stop preserves chat ID, queue, cursor, and hours.
+- Start resumes the configured state without Telegram relinking.
+- Repeated Start/Stop is idempotent.
+- Telegram `/start` and `/stop` continue to update the same `is_enabled` field.
+- New `/start` uses database hour defaults; repeated `/start` preserves saved hours.
+
+`PUT /api/me` retains timezone only. It rejects explicit null/non-string input with `422`; strings failing the frozen rule use the endpoint's existing domain-validation `400` path.
+
+### Persistence and timezone runtime
+
+Add to `recall_user_states`:
 
 - `recall_start_hour INTEGER NOT NULL DEFAULT 9`;
 - `recall_end_hour INTEGER NOT NULL DEFAULT 22`.
 
-Add database checks for `0 <= hour <= 23` and `recall_start_hour <> recall_end_hour`. Keep matching ORM defaults so transient/new application users and database inserts agree.
+Add named range and unequal checks, and matching ORM defaults. Do not add hours to `users` or another enablement column.
+
+Timezone normalization is an irreversible data correction with zero accepted data loss (`RPO=0`) for original profile values. The release owner must first count distinct/total valid and invalid rows and create a recoverable, access-controlled database backup or encrypted `user_id`→original-timezone export. Record its location, checksum, retention, and restore owner outside this plan. Production migration is blocked without that evidence.
+
+Before production, rehearse the revision on a size-representative PostgreSQL copy. The migration sets a 5-second lock timeout and 60-second statement timeout (or stricter deployment-standard values), aborts without partial commit on timeout, and records elapsed time. The release owner schedules a maintenance window from that result rather than assuming metadata-only DDL.
 
 The migration must:
 
-1. add both columns with server defaults so existing rows backfill safely;
-2. normalize legacy `users.timezone` values that fail the frozen rule above to `UTC`; the revision must implement its own rule with `zoneinfo` and must not import a mutable application helper;
-3. install the hour-range and unequal-window constraints;
-4. keep the defaults for future inserts;
-5. provide a downgrade that removes only the new constraints and columns, never the pre-existing timezone column.
+1. backfill existing recall states through server defaults;
+2. normalize legacy `users.timezone` values failing the frozen rule to `UTC`, using revision-local validation rather than an application helper;
+3. install range and unequal constraints;
+4. keep defaults for future `/start` inserts;
+5. emit/record the number of normalized rows without logging raw timezone values;
+6. downgrade only the new constraints/columns, never timezone, enablement, or queues. Schema downgrade does not restore normalized timezone strings; recovery uses the pre-deploy artifact.
 
-Python’s `zoneinfo` must use an application-controlled timezone database in both backend and recall images. Add the `tzdata` Python dependency, refresh `uv.lock`, and set `PYTHONTZPATH=""` in both runtime Dockerfiles so `zoneinfo` bypasses system timezone paths and uses the locked package.
+Add `tzdata` as an unconditional runtime dependency, refresh `uv.lock`, and set `PYTHONTZPATH=""` in backend and recall runtime images so `zoneinfo` uses locked package data.
 
-### Recall-delivery contract
+### Delivery contract
 
-The worker retains one `IntervalTrigger(minutes=RECALL_INTERVAL_MINUTES)`. `TelegramRecallDelivery` no longer reads or checks global start/end settings. It enumerates active recall states as it does now and opens one isolated session per user.
+Keep one `IntervalTrigger(minutes=RECALL_INTERVAL_MINUTES)`. Remove global-window checks from `TelegramRecallDelivery`. Replace queue-bearing `get_active_recall_states()` with `get_delivery_candidate_user_ids()`, which performs one PostgreSQL query returning only ordered user IDs for enabled, active users currently inside their local ordinary or overnight window. The query joins `pg_timezone_names`, so a manually corrupted timezone excludes only that user instead of failing enumeration for every user. It may evaluate saved hours and timezone but must not load them, queues, vocabulary rows, or usernames into application memory. Remove the old public enumeration method if no production caller remains. The transport opens one isolated session per candidate.
 
 Within `RecallService.deliver_next_word()`:
 
-1. lock and validate the enabled recall state using the existing transaction lifecycle;
-2. load the current user through `UserService`, preserving the service boundary and avoiding repository access from Telegram transport;
-3. reject inactive/missing users as today;
-4. convert an aware UTC `now` to the saved `ZoneInfo` timezone;
-5. evaluate the local hour against the saved window;
-6. on an ineligible window, roll back/release the session and return `None` without selecting, mutating, or sending a word;
-7. on eligibility, continue the existing queue validation, Telegram callback, learning-event, cursor, and commit sequence unchanged.
-
-The production method obtains an aware UTC time itself. A narrow injectable clock/`now` boundary is permitted for deterministic unit tests, but no time service framework or global clock abstraction may be introduced.
-
-The window predicate is:
+1. lock current recall state;
+2. reject missing, disabled, or chat-less state without mutation;
+3. load the current user through `UserService` and recheck account activation, timezone, and the locked delivery window to close enumeration races;
+4. reject an ineligible candidate before queue or vocabulary access;
+5. preserve existing queue validation, callback, learning, cursor, commit, and rollback order.
 
 ```text
-start < end:  start <= local_hour < end
-start > end:  local_hour >= start OR local_hour < end
-start == end: invalid persisted state; do not deliver
+start < end: start <= local_hour < end
+start > end: local_hour >= start OR local_hour < end
+start == end: invalid persisted state; fail closed
 ```
 
-If legacy/corrupt timezone data somehow survives migration, delivery logs only user ID plus a fixed `invalid_timezone_fallback` category, uses `UTC` for that evaluation, and continues processing other users. It never logs the corrupt value. Invalid hours fail closed for that user and do not abort the sweep.
+If corrupt timezone survives migration, log only user ID plus fixed category `invalid_timezone_fallback`, evaluate that user in UTC, and continue. Never log the corrupt value. Invalid hours fail closed for that user.
 
-### Timezone-option contract
+### Frontend timezone options
 
-The frontend uses `Intl.supportedValuesOf("timeZone")` when available, adds `UTC`, includes the saved value and valid browser-detected value, removes duplicates, and sorts deterministically. It does not use `freeSolo`.
-
-When `Intl.supportedValuesOf` is unavailable, the selector still contains `UTC`, the saved valid value, and the browser-detected valid value. This fallback prevents arbitrary input without adding a timezone-list dependency. Browser capability loss must not make an existing valid saved value disappear.
+Profile uses `Intl.supportedValuesOf("timeZone")` when available, adds `UTC`, includes saved and valid browser-detected values, deduplicates, sorts, and does not use `freeSolo`. Without that API, it still offers `UTC`, saved valid value, and valid detected value. No timezone dependency or endpoint is added.
 
 ### Non-goals
 
-- Per-user delivery interval, exact send minute, weekdays, quiet-day calendars, notification count, or pause-until controls.
-- One APScheduler job per user or scheduler recreation after a profile save.
-- Geolocation, automatic timezone persistence, IP-based timezone inference, or location permission.
-- A new timezone API endpoint or a second timezone source of truth.
-- Moving recall state into the user table or moving profile fields into `recall_user_states`.
-- Changing Telegram commands, queue contents, cursor rules, message formatting, or callback transaction ownership.
-- Generalizing a reusable scheduling framework.
-- Deployment, production database migration, or real Telegram sends as part of implementation validation.
+- Timezone editing on Recall or recall controls on Profile.
+- Minute granularity, exact send minute, per-user interval, weekdays, quiet-day calendars, pause-until, or all-day mode.
+- Web creation of a recall row before Telegram supplies chat ID.
+- Per-user scheduler jobs or scheduler recreation.
+- Moving timezone into recall state or duplicating enablement in users.
+- Queue, words-per-day, cooldown, Telegram content, or callback transaction changes.
+- A general scheduling framework, production migration, deployment, or real Telegram sends during validation.
 
 ## Requirements
 
-- **R1 — Profile persistence:** Persist per-user `recall_start_hour` and `recall_end_hour` with `09:00–22:00` defaults and database constraints.
-- **R2 — Timezone integrity:** Accept only supported IANA timezone choices, normalize legacy invalid data to `UTC`, and provide deterministic runtime fallback.
-- **R3 — API contract:** Return and partially update timezone plus delivery-window fields through `/api/me` without breaking existing profile fields.
-- **R4 — Profile UX:** Replace timezone free text with searchable selection and add accessible hour selectors with clear overnight semantics.
-- **R5 — Per-user eligibility:** Evaluate every enabled user against their own timezone and window before Telegram I/O or queue mutation.
-- **R6 — Transaction preservation:** Preserve the existing per-user session, row lock, callback-spanning transaction, commit, and rollback contracts.
-- **R7 — Configuration cleanup:** Remove global start/end settings everywhere while retaining the global recall interval.
-- **R8 — Temporal correctness:** Cover ordinary, boundary, overnight, UTC, invalid-data, spring-forward, and fall-back behavior deterministically.
-- **R9 — Isolation:** One invalid or ineligible user must not prevent other eligible users from being processed.
-- **R10 — Container/runtime support:** Ship a pinned timezone database to both Python runtime images and verify the frontend/browser fallback.
-- **R11 — Durable documentation:** Update profile and recall documentation to describe the new source of truth, defaults, and operational cadence.
-- **R12 — Release evidence:** Prove migration, API, frontend, recall, container dependency, readiness, and independent-review gates before release.
+- **R1 Persistence:** Hours live with configured recall state, default `09`/`22`, with database constraints.
+- **R2 Timezone:** Profile owns valid IANA timezone; migration and runtime handle legacy corruption safely.
+- **R3 API:** Recall GET returns settings/timezone/queue; authenticated PATCH updates hours and enablement.
+- **R4 Recall UX:** Existing Recall page provides accessible hour and Start/Stop controls with onboarding/pending/feedback behavior.
+- **R5 Profile UX:** Profile timezone becomes searchable and selection-only; no recall controls are added there.
+- **R6 Eligibility:** Candidate enumeration evaluates each user's saved timezone and window before any per-user queue work.
+- **R7 Transactions:** Settings update locks recall state and commits once at endpoint; delivery preserves its callback-spanning transaction.
+- **R8 Lifecycle:** Web and Telegram share enablement; Stop preserves state; Start requires existing linkage.
+- **R9 Cleanup:** Remove global start/end settings, retain global interval.
+- **R10 Temporal/isolation:** Cover boundaries, overnight, DST, corruption, and independent multi-user outcomes.
+- **R11 Release:** Prove runtime timezone data, migration/recovery, focused suites, real-browser behavior, readiness, security, containers, docs, and independent review.
+- **R12 Enumeration performance:** Every interval enumerates lightweight candidate IDs only; queue/vocabulary work occurs only inside eligible locked delivery.
 
 ## Developer Overview
 
-The persisted preference belongs to the user profile because it is configurable before or independently of Telegram recall activation. Recall remains the owner of delivery eligibility and uses `UserService` to read the current profile; Telegram transport remains a thin coordinator and never accesses a repository.
+Timezone stays in the user domain because it is an account preference already consumed outside Recall. Hours and enablement belong to the recall aggregate and its page. RecallService coordinates delivery policy through UserService; each service continues to access only its own repository.
 
-The scheduler does not become user-aware. Its only responsibility is to wake the worker at a bounded global cadence. Per-user local-time policy belongs inside the locked recall use case, which guarantees that no queue or learning mutation occurs when the user is outside their window.
+The Recall endpoint is the outer transaction boundary for web settings. It does not access repositories or locks directly. RecallService locks and updates through RecallRepository; the endpoint commits/rolls back once.
 
-The implementation deliberately reuses platform facilities: Python `zoneinfo`, browser `Intl`, MUI selection controls, the existing `/api/me` endpoint, and the existing recall session provider. No scheduling or timezone library is introduced beyond shipping `tzdata` for reproducible Python runtime data.
+The scheduler remains user-agnostic and only wakes at the global cadence. The locked per-user use case owns local-time eligibility, so out-of-window users have no queue, cursor, learning, or Telegram side effect.
 
-## Workstreams and Dependency DAG
+## Workstreams and DAG
 
 ```text
 Frozen plan + clean baseline
-  └── WS1 backend profile/data contract
-        ├── WS2 frontend profile UX
-        └── WS3 recall eligibility and config cleanup
-              └── WS4 lead integration, migration/runtime evidence, docs, readiness
-                    └── independent implementation audit
+  -> WS1 backend/data/API
+       -> WS2 Recall and Profile frontend
+            -> WS3 lead integration/docs/evidence
+                 -> independent implementation audit
+                      -> external release-owner migration/deployment gate
 ```
 
-WS2 and WS3 may run in parallel only after WS1 publishes the final field names, validation semantics, and migration. WS4 owns shared integration seams and is never hidden inside another owner’s task.
+`recall-release-owner` is an external, non-repository owner with authority for the protected timezone backup/export, restore rehearsal, maintenance window, production migration, and orchestrator sequencing evidence. This owner has no implementation write set and cannot delegate production mutation to WS1 or WS3 without plan reopen and explicit authority.
 
-### WS1 — Backend profile and data foundation
+### WS1 — Backend, data, API, and delivery policy
 
-- Owner: `profile-backend-owner`
-- Depends on: frozen plan, clean relevant write set, unchanged Alembic head
-- Goal: R1-R3 and Python timezone-data foundation for R10
+- Owner: `recall-backend-owner`
+- Covers: R1-R3, R6-R10, R12, runtime portion of R11
 
-Steps:
+1. Add recall hours/constraints, recoverable timezone normalization, unconditional `tzdata`, and both Dockerfile settings.
+2. Add `runestone.utils.timezones`; keep package `__init__.py` empty.
+3. Harden Profile timezone validation without adding recall fields to Profile.
+4. Extend recall DTO/schema/serialization with hours and effective timezone, including non-mutating unconfigured defaults.
+5. Add locked settings update and `PATCH /api/recall/settings`, preserving linkage and endpoint-owned transactions.
+6. Replace queue-bearing active-state enumeration with a single timezone-catalog-backed candidate-ID query; retain locked enablement/chat checks and recheck current activation/timezone/window in `deliver_next_word()` before queue access.
+7. Remove global start/end settings, retain the interval/Telegram lifecycle, remove Alembic startup from Recall, and make Docker Compose Recall wait for healthy backend migration completion.
+8. Add migration, API, query-count, repository, service, Telegram, config, and temporal regressions.
 
-1. Add the two constrained user columns and deterministic legacy-timezone normalization migration. Read distinct timezone keys, classify that bounded set in Python, and normalize invalid rows with set-based updates rather than loading every user row.
-2. Add the unconditional `tzdata` runtime dependency, refresh `uv.lock`, and force both Python runtime images to use package data with `PYTHONTZPATH=""`.
-3. Add a small timezone validation helper under `runestone.utils` using `zoneinfo`; keep package `__init__.py` empty.
-4. Extend profile response/update schemas and `UserService` response/update validation.
-5. Add API, service, schema, and migration-focused regressions, including strict primitive/null rejection, partial one-field updates, equal-window rejection, upgrade/downgrade scope, and normalization.
-6. Hand the exact public field contract to WS2 and the current-user preference read contract to WS3.
+### WS2 — Recall and Profile frontend
 
-### WS2 — Frontend profile UX
+- Owner: `recall-frontend-owner`
+- Depends on: WS1 schema handoff
+- Covers: R3-R5 and browser portion of R11
 
-- Owner: `profile-frontend-owner`
-- Depends on: WS1 contract handoff
-- Goal: R3-R4 and browser portion of R10
+1. Extend Recall types/useRecall with settings mutations, in-flight protection, and authoritative response replacement.
+2. Add a focused delivery-schedule component with hours, timezone context, Save times, and Start/Stop.
+3. Integrate it into RecallView; disable settings for onboarding and keep queue controls while stopped.
+4. Replace Profile timezone free text with a selection-only autocomplete using browser `Intl` and bounded fallbacks.
+5. Test configured/stopped/unconfigured/pending/success/failure/overnight/equality and timezone fallback paths.
 
-Steps:
-
-1. Add a selection-only timezone autocomplete backed by browser `Intl`, with `UTC`/saved/detected fallbacks.
-2. Replace the existing timezone text input.
-3. Add start/end hour selectors, helper text, local equality validation, and retain the existing form-level backend error display.
-4. Extend auth/profile types and update payloads.
-5. Add focused tests for searching/selecting, no free-text acceptance, fallback option construction, detected suggestion, saved-value retention, hour changes, overnight save, equal-hour rejection, and API payload/refresh behavior.
-
-### WS3 — Recall policy and configuration cleanup
-
-- Owner: `recall-delivery-owner`
-- Depends on: WS1 contract handoff
-- Goal: R5-R9
-
-Steps:
-
-1. Move delivery-window eligibility from `TelegramRecallDelivery` into the transport-independent recall use case.
-2. Read the current user profile through `UserService` inside each per-user delivery session.
-3. Implement UTC-aware `ZoneInfo` conversion and the ordinary/overnight predicate with defensive invalid-data handling.
-4. Preserve queue, cursor, callback, commit, rollback, and per-user failure isolation behavior.
-5. Remove global start/end settings from `Settings`, `.env` templates, unit fixtures, integration evidence, and delivery construction; retain interval scheduling.
-6. Cover simultaneous users in different zones/windows at the same UTC instant in bounded unit/orchestration tests. Extend the guarded harness only for sequential preference changes to its one explicitly confirmed user.
-
-### WS4 — Lead integration, documentation, and release evidence
+### WS3 — Lead integration and evidence
 
 - Owner: `timezone-plan-lead`
-- Depends on: WS1-WS3 complete
-- Goal: R10-R12 and shared seam verification
+- Depends on: WS1 and WS2
+- Covers: R11
 
-Steps:
+1. Resolve contract integration only; reopen for undeclared feature work.
+2. Update README and recall persistence/integration docs.
+3. Verify PostgreSQL upgrade/downgrade/upgrade, normalization recovery evidence, and expected DDL/update locking.
+4. Verify both Python images use locked timezone data.
+5. Run focused, readiness, security, container, and scope gates.
+6. Route frozen plan, diff, ownership, and evidence to independent implementation audit.
 
-1. Resolve contract integration only; do not absorb unowned feature work silently.
-2. Reconcile README and recall persistence/integration documentation.
-3. Verify the migration upgrade/downgrade/upgrade path on a disposable PostgreSQL database and record the DDL/update locking expectation.
-4. Verify both built Python images have an empty `zoneinfo.TZPATH`, contain the locked `tzdata` version, and resolve representative IANA zones.
-5. Run focused checks, full readiness, security, and container build gates.
-6. Submit the plan, diff, ownership record, and evidence to an independent implementation auditor before finalisation.
+### External release gate — production authority
 
-## Exact Write-Set Manifest
+- Owner: `recall-release-owner` (external, non-repository)
+- Depends on: independent implementation audit `READY`
+- Inputs: frozen plan, migration revision/checksum, disposable/staging evidence, production row counts, protected backup/export destination, approved maintenance window, and production orchestrator access.
+- Required outputs: valid/invalid row counts; backup/export location and checksum; restore-rehearsal result and elapsed time; migration window approval; production migration result; backend-before-Recall sequencing logs; rollback decision record.
+- Authority boundary: this owner alone authorizes production backup, migration, restore, and deployment ordering. Implementation agents may prepare commands/evidence but may not perform those mutations.
 
-No owner may write outside its set. A required additional path triggers plan reopen or an explicit lead-owned revision before the write.
+## Exact Write Sets
 
-### WS1 exclusive writes
+Additional paths require plan reopen or explicit lead-owned revision.
 
-- `alembic/versions/d4f6a8b0c2e1_add_user_recall_delivery_window.py` (new)
-- `pyproject.toml`
-- `uv.lock`
-- `Dockerfile.backend`
-- `Dockerfile.recall`
-- `src/runestone/db/models.py`
+### WS1 exclusive
+
+- `alembic/versions/<new_revision>_add_recall_delivery_schedule.py` (new; record generated ID at run start)
+- `pyproject.toml`, `uv.lock`, `Dockerfile.backend`, `Dockerfile.recall`
+- `docker-compose.yaml`
+- `src/runestone/db/models.py`, `src/runestone/db/recall_repository.py`
 - `src/runestone/utils/timezones.py` (new)
-- `src/runestone/api/schemas.py`
+- `src/runestone/core/exceptions.py`
+- `src/runestone/api/schemas.py`, `src/runestone/api/recall_schemas.py`, `src/runestone/api/recall_endpoints.py`
 - `src/runestone/services/user_service.py`
-- `tests/api/test_user_endpoints.py`
-- `tests/services/conftest.py`
-- `tests/services/test_user_service.py`
-- `integration_tests/migrations/verify_user_recall_delivery_window.py` (new)
+- `src/runestone/recall/types.py`, `src/runestone/recall/service.py`
+- `src/runestone/telegram/delivery.py`, `src/runestone/config.py`
+- `tests/api/test_user_endpoints.py`, `tests/api/test_recall_endpoints.py`
+- `tests/db/test_recall_repository.py`
+- `tests/services/conftest.py`, `tests/services/test_user_service.py`
+- `tests/recall/test_service.py`, `tests/telegram/test_delivery.py`, `tests/telegram/test_commands.py`, `tests/test_config.py`
+- `tests/test_recall_main.py`
+- `.env.example`, `.env.test`
+- `integration_tests/containers/recall_schedule.compose.yaml` (new, isolated test-only stack)
+- `integration_tests/containers/verify_recall_schedule_startup.py` (new)
+- `integration_tests/browser/prepare_recall_schedule_fixture.py` (new)
+- `integration_tests/recall/run_recall_workflow.py`, `integration_tests/recall/coverage_manifest.json`
 
-### WS2 exclusive writes
+### WS2 exclusive
 
 - `frontend/src/components/auth/TimezoneAutocomplete.tsx` (new)
 - `frontend/src/components/auth/TimezoneAutocomplete.test.tsx` (new)
-- `frontend/src/components/auth/Profile.tsx`
-- `frontend/src/components/auth/Profile.test.tsx`
-- `frontend/src/hooks/useAuth.ts`
-- `frontend/src/hooks/useAuth.test.tsx`
-- `frontend/src/types/auth.ts`
+- `frontend/src/components/auth/Profile.tsx`, `frontend/src/components/auth/Profile.test.tsx`
+- `frontend/src/components/recall/RecallDeliverySchedule.tsx` (new)
+- `frontend/src/components/recall/RecallDeliverySchedule.test.tsx` (new)
+- `frontend/src/components/recall/RecallSummaryPanel.tsx`
+- `frontend/src/components/RecallView.tsx`, `frontend/src/components/RecallView.test.tsx`
+- `frontend/src/hooks/useRecall.ts`, `frontend/src/hooks/useRecall.test.ts`
+- `frontend/src/types/recall.ts`
+- `integration_tests/browser/verify_recall_schedule_configured.js` (new)
+- `integration_tests/browser/verify_recall_schedule_unconfigured.js` (new)
 
-### WS3 exclusive writes
-
-- `src/runestone/recall/service.py`
-- `src/runestone/telegram/delivery.py`
-- `src/runestone/config.py`
-- `tests/recall/test_service.py`
-- `tests/telegram/test_delivery.py`
-- `tests/test_config.py`
-- `.env.example`
-- `.env.test`
-- `integration_tests/recall/run_recall_workflow.py`
-- `integration_tests/recall/coverage_manifest.json`
-
-### WS4 lead-owned integration writes
+### WS3 lead-owned
 
 - `README.md`
 - `docs/recall-state-persistence.md`
 - `docs/recall-integration-test-plan.md`
 
-### Planning-only file
+### Planning-only
 
-- `docs/todo/user-profile-recall-timezone.md` — immutable after freeze; no implementation owner may edit it
+- `docs/todo/user-profile-recall-timezone.md` — immutable after freeze
 
 ## Read-only Inputs and Forbidden Writes
 
-Read-only implementation inputs:
+Read-only anchors: `AGENTS.md`, `recall_main.py`, recall providers, user repository, user endpoints, auth hooks/types, `LanguageAutocomplete`, frontend API utility/package files, Makefile, and existing Alembic revisions.
 
-- `AGENTS.md`
-- `recall_main.py`
-- `src/runestone/recall/providers.py`
-- `src/runestone/db/user_repository.py`
-- `src/runestone/db/recall_repository.py`
-- `src/runestone/recall/types.py`
-- `src/runestone/api/user_endpoints.py`
-- `frontend/src/components/auth/LanguageAutocomplete.tsx`
-- `frontend/package.json`
-- `frontend/package-lock.json`
-- `Dockerfile.frontend`
-- `docker-compose.yaml`
-- `Makefile`
-- existing Alembic revisions
+Forbidden without reopen:
 
-Forbidden without plan reopen:
+- hour fields in `users` or a second enablement source;
+- timezone editing on Recall or recall settings on Profile;
+- repository/row-lock access from API or Telegram transport;
+- web creation of chat-less recall state;
+- new scheduler jobs, timezone dependency/endpoint, or Telegram behavior changes;
+- queue/learning/cursor/provider/session ownership changes;
+- dependencies/containers/lockfiles beyond `tzdata`, `PYTHONTZPATH`, backend-as-migration-executor startup sequencing, and Recall's backend-health dependency;
+- unrelated staging, reverting, or formatting.
 
-- changes to `recall_user_states` or recall queue schema;
-- direct repository access from Telegram delivery or API transport;
-- changes to scheduler job count or per-user scheduler jobs;
-- a frontend timezone package or new API endpoint;
-- changes to Telegram command/message behavior;
-- changes to queue selection, learning metadata, cursor semantics, transaction providers, or session ownership;
-- dependency, Dockerfile, deployment, or generated lockfile changes beyond the declared `tzdata`/`uv.lock`/`PYTHONTZPATH` scope;
-- staging, reverting, or formatting unrelated branch work.
+## Current Code Anchors
 
-## Acceptance Criteria and Evidence Contract
+| Contract | Current symbol/path | Planned change |
+| --- | --- | --- |
+| Recall response | `recall_endpoints._response_from_state`, `RecallResponse` | Serialize configured-by-chat-link, hours, and effective timezone. |
+| Settings transaction | `recall_endpoints._run_mutation` | Reuse endpoint-owned commit/rollback and explicitly map `InvalidRecallScheduleError` to `400`. |
+| Enable/disable | `RecallService.enable_for_username`, `disable_for_user`; `RecallRepository.upsert_for_user` | Preserve saved hours/chat linkage and share state with web settings. |
+| Candidate scan | `RecallService.get_active_recall_states`, `RecallRepository.get_active_recall_states` | Replace with ordered lightweight user-ID enumeration; remove queue-bearing public API. |
+| Delivery lock | `RecallService.deliver_next_word` | Recheck mutable delivery state and account activation before queue access while retaining callback-spanning transaction. |
+| Global gate | `TelegramRecallDelivery.send_next_recall_word`, `Settings.recall_start_hour/end_hour` | Delete global gate/settings; retain interval. |
+| Recall UI | `RecallView`, `RecallSummaryPanel`, `useRecall`, `RecallState` | Add schedule component and authoritative PATCH mutations. |
+| Profile timezone | `Profile`, `UserProfileUpdate`, `UserService.update_user_profile` | Selection-only UI plus frozen backend validation. |
+| Startup migration | backend/Recall Dockerfile `CMD`, Compose `depends_on` | Backend alone migrates; Recall starts only after backend health. |
 
-| ID | Acceptance criterion | Requirements | Evidence |
+## Acceptance and Evidence
+
+| ID | Acceptance | Requirements | Evidence |
 | --- | --- | --- | --- |
-| AC1 | Existing and new users have non-null `09`/`22` delivery defaults with database range and unequal checks. | R1 | E1, E2 |
-| AC2 | Legacy empty/invalid timezones become `UTC`; valid IANA values survive migration. | R2 | E1, E2 |
-| AC3 | `/api/me` returns and partially updates all three preferences, rejects invalid zones/hours/equal effective windows, and preserves unrelated fields. | R2, R3 | E2 |
-| AC4 | Profile timezone is selection-only, searchable, includes saved/UTC/detected values, and works when `Intl.supportedValuesOf` is absent. | R4, R10 | E3 |
-| AC5 | Profile start/end selectors submit integer hours, explain overnight semantics, allow overnight windows, and reject equality. | R4 | E3 |
-| AC6 | At the same UTC instant, users in different zones are independently delivered or skipped according to their own windows. | R5, R8, R9 | E4, E5 |
-| AC7 | Start is inclusive, end exclusive; ordinary and overnight boundaries are correct. | R5, R8 | E4 |
-| AC8 | DST conversion uses aware UTC time and produces deterministic spring/fall eligibility without timezone exceptions. | R2, R8 | E4 |
-| AC9 | Ineligible or corrupt-preference users cause no Telegram call, learning event, cursor advance, queue mutation, or sweep-wide failure. | R5, R6, R9 | E4, E5 |
-| AC10 | Eligible delivery preserves the existing lock, callback, mutation, commit, rollback, and isolation sequence. | R6 | E4, E5 |
-| AC11 | Global start/end settings have no production/config/documentation consumers; global interval scheduling remains unchanged. | R7 | E6 |
-| AC12 | Both Python runtime images receive locked `tzdata`; frontend adds no timezone dependency. | R10 | E7, E9 |
-| AC13 | Durable docs describe profile ownership, defaults, interval-versus-window semantics, overnight behavior, and UTC fallback. | R11 | E8 |
-| AC14 | Focused suites, migration checks, readiness, security, container builds, scope inventory, and independent audit pass. | R12 | E1-E10 |
+| AC1 | Recall states have non-null `09`/`22` defaults and named range/unequal checks; users has no hour columns. | R1 | E1, E2 |
+| AC2 | Invalid legacy timezone becomes UTC; valid IANA survives; Profile rejects new invalid values; pre-migration originals are recoverable at RPO 0. | R2, R11 | E1, E3 |
+| AC3 | Recall GET returns configured/enabled/hours/timezone/queue without creating state. | R3 | E2 |
+| AC4 | Settings PATCH strictly validates partial input, equality after merge, ownership, locking, one commit, and authoritative response. | R3, R7 | E2, E4 |
+| AC5 | Web Stop/Start is idempotent, atomically saves valid displayed hours, preserves linkage/queue/cursor, and returns 409 when unconfigured/chat-less. | R4, R8 | E2, E4, E5 |
+| AC6 | Recall UI owns hours and Start/Stop, handles dirty/equal/onboarding/pending/error/reload states, keeps queue actions for configured-but-disabled users, and disables them for absent/chat-less users. | R4 | E5, E6 |
+| AC7 | Profile owns selection-only timezone; Recall displays it read-only; labels, keyboard use, focus, and status announcements work in a real browser. | R2, R4, R5 | E5, E6 |
+| AC8 | Users in different zones/windows get independent outcomes at one UTC instant. | R6, R10 | E4 |
+| AC9 | Inclusive/exclusive, overnight, spring-forward, and fall-back behavior is deterministic. | R6, R10 | E4 |
+| AC10 | Ineligible/corrupt users cause no queue/vocabulary query or side effect and do not block another user. | R6, R7, R10 | E4 |
+| AC11 | Eligible delivery preserves lock/callback/mutation/commit/rollback order. | R7 | E4 |
+| AC12 | Global start/end has no live consumer; one global interval remains. | R9 | E7 |
+| AC13 | Both Python images use locked tzdata; frontend adds no timezone dependency. | R11 | E8 |
+| AC14a | Repository Dockerfiles and isolated Compose evidence prove backend is the sole migration executor and Recall waits for backend health. | R11 | E8, E11 |
+| AC14b | External release owner records protected recovery and equivalent production-orchestrator migration sequencing. This is deployment acceptance, not implementation completion. | R11 | External release gate |
+| AC15 | Candidate enumeration is one lightweight query and does not load queues/vocabulary/usernames/hours. | R12 | E2, E4 |
+| AC16 | Docs and release record accurately cover UI ownership, lifecycle, migration/recovery, rollback, and unavailable gates. | R11 | E9-E11 |
 
-### E1 — Migration evidence
+### E1 Migration
 
-- Assert Alembic has one head before and after the new revision.
-- Run upgrade → downgrade one revision → upgrade on a disposable database.
-- Inspect `users` columns, defaults, constraints, valid timezone preservation, invalid timezone normalization, and downgrade scope.
-- Do not use a production or shared non-test database.
-
-Suggested disposable SQLite smoke command, followed by the PostgreSQL-backed migration test required for constraint truth:
+Verify the migration once against the target PostgreSQL database: confirm the Alembic head, columns, defaults, named constraints, and zero invalid schedule/timezone rows. Do not retain or run a disposable upgrade/downgrade verifier as part of routine checks. Before production, record valid/invalid counts, backup/export checksum, restore owner, retention, and a timed restore rehearsal. SQLite is not constraint truth.
 
 ```bash
-rm -f /tmp/runestone_timezone_migration_check.db
-DATABASE_URL=sqlite+aiosqlite:////tmp/runestone_timezone_migration_check.db UV_CACHE_DIR=.uv-cache uv run alembic upgrade head
+.venv/bin/alembic heads
 ```
 
-### E2 — Backend profile regressions
+### E2 Recall API/repository
 
 ```bash
-UV_CACHE_DIR=.uv-cache uv run --extra dev pytest \
-  tests/api/test_user_endpoints.py \
-  tests/services/test_user_service.py \
-  -v
+UV_CACHE_DIR=.uv-cache uv run --extra dev pytest tests/api/test_recall_endpoints.py tests/db/test_recall_repository.py -v
 ```
 
-Include independent partial-update cases for start-only and end-only requests so equality is checked against persisted counterpart values.
+Cover absent and chat-less unconfigured reads, strict null/primitive/unknown/empty payloads, one-field merge validation, toggle idempotence, preservation, ownership, explicit equal-window `InvalidRecallScheduleError` → `400`, commit/rollback, generic errors, and repository query counts. Candidate enumeration must execute one query and no queue query. Direct bump/postpone/remove against a chat-less existing row retains current row-based backend behavior; API tests freeze that behavior while frontend tests prove the UI disables those actions.
 
-### E3 — Frontend profile regressions
+### E3 Profile timezone
+
+```bash
+UV_CACHE_DIR=.uv-cache uv run --extra dev pytest tests/api/test_user_endpoints.py tests/services/test_user_service.py -v
+```
+
+### E4 Recall service/delivery
+
+```bash
+UV_CACHE_DIR=.uv-cache uv run --extra dev pytest tests/recall/test_service.py tests/telegram/test_delivery.py tests/telegram/test_commands.py tests/test_recall_main.py -v
+```
+
+Use fixed aware UTC instants and `UTC`, `Europe/Helsinki`, `America/New_York`; cover ordinary/overnight boundaries, DST, web/Telegram lifecycle, and transaction order. Repository assertions must prove out-of-window users are not enumerated, while service assertions retain per-user isolation.
+
+### E5 Frontend
 
 ```bash
 cd frontend
-npm run test:run -- \
-  src/components/auth/TimezoneAutocomplete.test.tsx \
-  src/components/auth/Profile.test.tsx \
-  src/hooks/useAuth.test.tsx
+npm run test:run -- src/components/auth/TimezoneAutocomplete.test.tsx src/components/auth/Profile.test.tsx src/components/recall/RecallDeliverySchedule.test.tsx src/components/RecallView.test.tsx src/hooks/useRecall.test.ts
 ```
 
-### E4 — Recall policy regressions
+Component tests must cover dirty hours plus Start/Stop atomic payload, equal-hour focus/error, failed-save draft retention, persisted reload, keyboard-operable labels, and `role=status`/`role=alert` feedback.
+
+### E6 Authenticated real-browser gate
+
+Prepare a disposable browser fixture through the owned guarded helper. It must reject non-loopback database hosts and database names not ending in `_test`, create configured and chat-less accounts through production service boundaries, snapshot every touched row, write one-time credentials to a mode-0600 file under the evidence directory without printing them, and provide a manifest-driven cleanup that restores/removes all fixtures. Authenticate each persistent headed session manually from that file; credentials must never enter shell history, logs, screenshots, or repository files.
 
 ```bash
-UV_CACHE_DIR=.uv-cache uv run --extra dev pytest \
-  tests/recall/test_service.py \
-  tests/telegram/test_delivery.py \
-  tests/test_recall_main.py \
-  -v
+export BROWSER_TEST_DATABASE_URL=postgresql+asyncpg://runestone:runestone@127.0.0.1:5432/runestone_recall_browser_test
+export BROWSER_EVIDENCE_DIR=/tmp/runestone-recall-schedule-browser/manual-run
+UV_CACHE_DIR=.uv-cache uv run --extra dev python integration_tests/browser/prepare_recall_schedule_fixture.py --database-url "$BROWSER_TEST_DATABASE_URL" --output-dir "$BROWSER_EVIDENCE_DIR"
+DATABASE_URL="$BROWSER_TEST_DATABASE_URL" make run-dev
+playwright-cli -s=recall-schedule-configured open --browser=chrome --headed http://localhost:5173/
+playwright-cli -s=recall-schedule-configured goto http://localhost:5173/?view=recall
+playwright-cli -s=recall-schedule-configured run-code "$(cat integration_tests/browser/verify_recall_schedule_configured.js)"
+playwright-cli -s=recall-schedule-unconfigured open --browser=chrome --headed http://localhost:5173/
+playwright-cli -s=recall-schedule-unconfigured goto http://localhost:5173/?view=recall
+playwright-cli -s=recall-schedule-unconfigured run-code "$(cat integration_tests/browser/verify_recall_schedule_unconfigured.js)"
+UV_CACHE_DIR=.uv-cache uv run --extra dev python integration_tests/browser/prepare_recall_schedule_fixture.py --cleanup-manifest "$BROWSER_EVIDENCE_DIR/fixture-manifest.json"
 ```
 
-Use fixed aware UTC instants. Required zones include `UTC`, `Europe/Helsinki`, and `America/New_York`; include ordinary, overnight, spring-forward, and fall-back fixtures.
+Using keyboard input only, record snapshots/screenshots and network responses proving:
 
-### E5 — Guarded integration evidence
+1. Profile timezone can be searched/selected and remains after reload.
+2. Recall Starts/Ends have programmatic labels and can be changed without a pointer.
+3. Equal hours expose an associated error and focus the schedule group; no PATCH occurs.
+4. Dirty valid hours plus Start/Stop produce one PATCH containing both hours and enablement.
+5. Controls block duplicate input while pending; failure retains draft and prior status with an alert; success is announced and survives reload.
+6. An absent/chat-less account has disabled schedule, toggle, and queue actions plus onboarding; a configured-but-stopped account retains enabled queue actions.
 
-Extend the existing no-network recall harness and coverage manifest with:
+Run `make run-dev` in one terminal and the browser commands in another; cleanup runs after both servers stop. The browser scripts use role/label locators, keyboard input, request/response assertions, reloads, and screenshots; they restore the configured account's original schedule/enablement in `finally`. They write redacted JSON plus PNG evidence beneath the evidence directory; WS3 records paths and SHA-256 checksums. This gate is separate from `make check-readiness`. Lack of a safe authenticated browser environment blocks release evidence, not implementation code completion, and is never a pass.
 
-- two enabled users evaluated at one UTC instant with opposite eligibility outcomes;
-- preference change taking effect on the next evaluation;
-- ineligible user state/queue fingerprint unchanged;
-- one corrupt legacy preference failing closed/falling back without blocking the other user;
-- post-run restoration of user profile preferences in addition to existing recall/vocabulary/offset restoration.
+### Supplemental guarded workflow preview
 
-Preview and run only under the harness’s existing confirmation/restore contract. A real Telegram send is forbidden.
-
-### E6 — Configuration and scheduler evidence
+Extend the no-network harness/manifest for defaults, web/Telegram Stop/Start preservation, changed settings on next evaluation, unchanged ineligible fingerprint, invalid-data isolation, and restoration of hours/enablement/chat/queue/cursor/user/offset. Cover two-user opposite eligibility in bounded orchestration tests unless the harness gains explicit multi-user confirmation/recovery.
 
 ```bash
-rg -n "recall_start_hour|recall_end_hour|RECALL_START_HOUR|RECALL_END_HOUR" \
-  src recall_main.py tests integration_tests .env.example .env.test README.md docs
-rg -n "recall_interval_minutes|RECALL_INTERVAL_MINUTES" \
-  src recall_main.py tests .env.example .env.test README.md docs
+UV_CACHE_DIR=.uv-cache uv run --extra dev python integration_tests/recall/run_recall_workflow.py --show-coverage
 ```
 
-The first command must return no live configuration/production references; migration/history references may be explicitly explained. The second must prove the interval remains wired to the one scheduled send job.
+Live mutation still requires existing `--apply` plus matching user/host/database confirmations. Real Telegram sends are forbidden.
 
-### E7 — Dependency and container evidence
+`--show-coverage` proves only manifest coverage. It is supplemental and is not acceptance evidence for runtime behavior. Do not run `--apply` merely to close this plan.
+
+### E7 Configuration/scheduler
+
+```bash
+UV_CACHE_DIR=.uv-cache uv run --extra dev pytest tests/test_config.py tests/test_recall_main.py -v
+rg -n "RECALL_START_HOUR|RECALL_END_HOUR" src recall_main.py tests integration_tests .env.example .env.test README.md docs
+rg -n "recall_interval_minutes|RECALL_INTERVAL_MINUTES" src recall_main.py tests .env.example .env.test README.md docs
+```
+
+Tests must assert `Settings` exposes no start/end fields and recall startup constructs exactly one interval delivery job. `rg` is supplemental inventory: first may match migration/history prose but no live consumer; second locates the retained interval.
+
+### E8 Dependencies/containers
 
 ```bash
 UV_CACHE_DIR=.uv-cache uv lock --check
 UV_CACHE_DIR=.uv-cache uv run python -c "from zoneinfo import ZoneInfo; [ZoneInfo(name) for name in ('UTC', 'Europe/Helsinki', 'America/New_York')]"
 make security-check
-make docker-build
+UV_CACHE_DIR=.uv-cache uv run --extra dev python integration_tests/containers/verify_recall_schedule_startup.py
+git diff --exit-code 66a22e40650f304e8b70fa903297dba4689b6f9c -- frontend/package.json frontend/package-lock.json
 ```
 
-`make docker-build` is the pre-release container gate because the backend and recall images independently copy the locked environment. If local Docker is unavailable, CI must run the equivalent three-image build before release; it cannot be reported as locally passed.
+The owned verifier uses only `integration_tests/containers/recall_schedule.compose.yaml`, a unique Compose project name, an ephemeral named database volume, test-safe environment values, and no host state/database bind mounts. It must refuse non-local database hosts. It builds backend/Recall; uses `docker image inspect` to assert backend `Config.Cmd` contains `alembic upgrade head` and Recall `Config.Cmd` does not; asserts both containers have `PYTHONTZPATH=""`, import `tzdata`, have `zoneinfo.TZPATH == ()`, and resolve representative zones; starts the isolated stack with a bounded 120-second health wait; asserts backend migration-success log precedes Recall startup; records `docker compose ps` and redacted logs; and always runs `down --volumes --remove-orphans` in `finally`. Evidence goes under `/tmp/runestone-recall-schedule-containers/<run-id>/` with SHA-256 checksums.
 
-### E8 — Durable documentation evidence
+Docker evidence is required for implementation acceptance. Production-orchestrator sequencing is a later external release gate; its absence does not prevent an implementation audit from returning `READY`, but it blocks deployment.
+
+### E9 Documentation
 
 ```bash
-rg -n "timezone|delivery window|09:00|22:00|RECALL_INTERVAL_MINUTES|UTC|overnight" \
-  README.md docs/recall-state-persistence.md docs/recall-integration-test-plan.md
+rg -n "timezone|delivery schedule|Start delivery|Stop delivery|09:00|22:00|RECALL_INTERVAL_MINUTES|overnight" README.md docs/recall-state-persistence.md docs/recall-integration-test-plan.md
 ```
 
-Reviewer confirms documentation distinguishes worker cadence from each user’s eligibility window.
-
-### E9 — Standard readiness and diff hygiene
+### E10 Readiness/scope
 
 ```bash
 make check-readiness
@@ -498,96 +523,58 @@ git diff --name-only
 git ls-files --others --exclude-standard
 ```
 
-Scope evidence must separate the task write set from pre-existing unrelated changes. A focused pass is not called a clean full gate when readiness or container checks have not run.
+Separate task scope from pre-existing work. Do not call focused results a clean full gate when readiness, security, PostgreSQL, or containers did not run.
 
-### E10 — Independent implementation audit
+### E11 Independent implementation audit
 
-The reviewer receives the frozen plan, baseline/reopen record, exact diff, ownership log, E1-E9 outputs, and any unavailable-environment caveat. The reviewer checks requirement traceability, data migration, profile contract, DST/window behavior, transaction preservation, no-network evidence, container runtime support, forbidden writes, and release truthfulness before returning `READY`, `CHANGES_REQUIRED`, or `BLOCKED`.
+Reviewer receives frozen plan, baseline/reopen record, diff, ownership log, E1-E10, and unavailable-environment caveats. It checks traceability, persistence ownership, settings lifecycle, migration, DST, transaction preservation, no-network evidence, containers, forbidden writes, rollback, and truthful phase status. It may return implementation `READY` when AC1-AC14a and AC15-AC16 pass even if external AC14b is pending; the release record must then say `IMPLEMENTATION_READY_RELEASE_BLOCKED`. Production mutation remains outside agent authority and deployment remains blocked until `recall-release-owner` supplies AC14b.
 
 ## Preflight, Budgets, and Reopen Triggers
-
-### Implementation preflight
 
 ```bash
 git status --short
 git branch --show-current
 git rev-parse HEAD
-UV_CACHE_DIR=.uv-cache uv run alembic heads
-test ! -e alembic/versions/d4f6a8b0c2e1_add_user_recall_delivery_window.py
-git diff --quiet -- <owner write-set paths>
-git diff --cached --quiet -- <owner write-set paths>
+.venv/bin/alembic heads
+git diff --check
 ```
 
-Each owner must confirm exclusive ownership through the active orchestration mechanism; filesystem cleanliness alone does not prove another worker will not edit a path.
+Record generated Alembic filename after head confirmation. Each owner confirms exclusive ownership through active orchestration; filesystem cleanliness alone is insufficient.
 
-### Budgets
+Budgets:
 
-- WS1: one owner, one migration/API/dependency workstream, one focused correction round.
-- WS2: one owner, one component/profile/type workstream, one focused correction round.
-- WS3: one owner, one recall/config/integration-harness workstream, one focused correction round.
-- WS4: lead-only seam integration and evidence, not a general implementation overflow owner.
-- Plan review: one independent audit plus up to two correction rounds.
-- Implementation review: one independent audit plus one focused correction round.
-- Test retries: rerun only a failing focused gate after an in-scope fix; rerun readiness/security/container gates after focused suites pass.
+- WS1: active context ≤24k tokens, rendered packet ≤8k, one implementation pass plus one correction round.
+- WS2: active context ≤18k tokens, rendered packet ≤7k, one pass after schema handoff plus one correction round.
+- WS3: active context ≤14k tokens, rendered packet ≤6k, integration/evidence only—not overflow implementation.
+- Independent plan/implementation review: active context ≤20k tokens and rendered evidence index ≤8k; at most two plan correction rounds and one implementation correction round.
+- Command evidence: keep each captured output ≤4k tokens; store full logs outside the active packet and reference path/checksum.
+- Rerun only failing focused gates after in-scope fixes; rerun broad gates after focused suites pass.
 
-### Small-context packet (`small-context-profile.v1`)
+`small-context-profile.v1`: give each executor Plan Control, decisions, relevant contract, assigned requirements/workstream/write set, forbidden writes, mapped evidence, the Current Code Anchors table, and `AGENTS.md`. The compact packet must remain within the owner limit above. Chat history is not authority.
 
-Every executor receives only:
+Reopen and independently re-audit if Alembic head, UI ownership, persistence location, enablement source, API field/PATCH/onboarding semantics, hour/default/equality/DST rules, web-linkage requirement, scheduler model, transaction ownership, dependency strategy, write set, or external authority changes.
 
-- Plan Control;
-- Clarification Log and Assumptions;
-- Product Specification and relevant behavioral contract;
-- Requirements assigned to its workstream;
-- its workstream steps and exact write set;
-- Read-only Inputs and Forbidden Writes;
-- mapped acceptance criteria/evidence commands;
-- `AGENTS.md` and the specific current-code anchors named in its packet.
+## Rollout and Rollback
 
-Chat history is not implementation authority. Large files must be opened at relevant symbols/tests rather than read wholesale.
+1. Before production, count valid/invalid timezone rows and create/rehearse the RPO-0 recovery artifact. No raw timezone value enters ordinary logs.
+2. New recall columns are backward-compatible: old code ignores them and keeps global hours.
+3. In repository Compose, backend remains the sole migration executor; Recall's image starts `python recall_main.py` without Alembic and Compose waits for healthy backend. Production must use an equivalent one-shot/sole executor and gate Recall startup on successful migration. Missing ordering evidence blocks release.
+4. Keep deployed global start/end variables until the new worker is healthy; new code ignores them, then operations may remove them. Interval remains.
+5. Observe fixed-category invalid-data/settings failures, candidate counts, and delivery volume without logging profile values, message content, or new personal data.
+6. Emergency code rollback leaves new columns. Old code resumes global hours. Do not downgrade schema or restore timezone values during emergency rollback.
+7. For unexpected volume, stop/revert Recall first. Stored settings and backend UI cannot send without the worker.
+8. Later schema downgrade is separate maintenance. It does not restore normalized timezone values; use the protected recovery artifact only when the release owner explicitly authorizes data restoration.
 
-### Reopen triggers
+## Plan Lock and Review Request
 
-Reopen and independently re-audit the plan if any of these occur:
+After `READY_TO_FREEZE`, record plan ID, repository/Alembic baselines, reviewed document SHA-256, and revision as immutable authority. Outputs, diffs, ownership records, tests, and audits stay mutable outside this file. Contract or ownership change creates a new revision and independent review.
 
-- Alembic head changes from `8c3e4a1f2b7d` before implementation;
-- `/api/me` field names or profile ownership changes;
-- hour granularity, defaults, equal-window semantics, or DST behavior changes;
-- per-user intervals, exact send times, weekday schedules, or a 24-hour mode enter scope;
-- eligibility must move outside the recall use case or transaction lifecycle changes;
-- browser support requires a timezone package or backend timezone-list endpoint;
-- any implementation requires a write outside the manifest;
-- runtime images cannot resolve IANA zones from the locked dependency;
-- unrelated current work overlaps a write-set file;
-- external network, production database, deployment, or real Telegram authority becomes necessary.
-
-## Rollout and Rollback Safety
-
-1. Merge and deploy code plus migration together; backend and recall containers both run Alembic on startup, so the migration must be idempotent under normal Alembic locking/ordering assumptions.
-2. Deploying the migration first is backward-compatible because old code ignores the new columns and retains global settings. Deploying new recall code before the migration is not supported.
-3. Before removing deployment environment variables, verify the new recall container is running the migrated code. Stale `RECALL_START_HOUR`/`RECALL_END_HOUR` values may remain temporarily because settings ignore extras, but they are no longer authoritative.
-4. Observe logs for invalid preference fallback, per-user processing failures, and delivery volume by hour without logging message content or personal profile data beyond existing user IDs.
-5. Code rollback is safe while the new columns remain. Do not downgrade the migration during an emergency rollback; old code can continue using its global window. Schema downgrade is a separate maintenance action after confirming no newer code reads the columns.
-6. If delivery volume changes unexpectedly, stop/revert the recall container first. Profile writes and stored preferences can remain in place without causing sends.
-
-## Plan Lock and Mutable Run Artifacts
-
-Once this candidate reaches `READY_TO_FREEZE`, its plan ID, repository baseline, Alembic baseline, reviewed document digest, and revision become immutable authority. Implementation evidence, command output, diffs, ownership records, and audit results are mutable run artifacts stored outside this file.
-
-If implementation needs a contract or ownership change, reopen the plan, create a new revision identity, and obtain independent plan review. Do not edit a frozen plan in place.
-
-## Independent Plan Review Request
-
-The independent reviewer must use the `audit-agent-plan` matrix and inspect this document against the repository planning baseline. Required output:
-
-1. findings ordered by severity;
-2. requirement → acceptance → workstream → evidence coverage matrix;
-3. SDD tier and clarification/assumption assessment;
-4. migration, DST, transaction, browser, dependency, release, and rollback risk assessment;
-5. exact write ownership, overlap, DAG, budget, and small-context assessment;
-6. validation command executability and sufficiency;
-7. freeze verdict: `READY_TO_FREEZE`, `CHANGES_REQUIRED`, or `BLOCKED`;
-8. exact edits for every non-ready finding.
+The independent reviewer must apply `audit-agent-plan` against the repository baseline and return findings first, traceability, scope/tier/ownership/DAG/budget/context assessment, validation executability, and one verdict: `READY_TO_FREEZE`, `CHANGES_REQUIRED`, or `BLOCKED`. Every non-ready finding names the exact edit.
 
 ## Review Record
 
-Pending independent plan audit.
+- Audit round 1: `CHANGES_REQUIRED`. Findings covered migration sequencing, queue-bearing all-day enumeration, irreversible timezone recovery, non-executing guarded evidence, dirty-hour toggle semantics, real-browser/accessibility proof, executable container/config assertions, and incomplete freeze metadata/budgets.
+- Correction round 1: designated backend-only migration execution and Compose health ordering; added lightweight candidate enumeration; added RPO-0 recovery and migration timeouts; demoted guarded preview; froze atomic dirty-hour Start/Stop; added real-browser/container/config gates; recorded tier resolution, anchors, paths, exception mapping, and numeric packet budgets.
+- Audit round 2: `CHANGES_REQUIRED`. Remaining findings were chat-less queue semantics, incomplete WS3/release ownership, conflated implementation/deployment acceptance, and insufficiently reproducible browser/container gates.
+- Correction round 2: froze chat-less UI/API behavior; added `timezone-plan-lead` to tier resolution; defined external `recall-release-owner`; split implementation and production release gates; added guarded browser fixture/scripts and isolated container startup verifier with exact evidence/cleanup contracts.
+- Audit round 3: `READY_TO_FREEZE`; no open High or Medium findings. Requirements R1-R12 map to acceptance, owned workstreams, executable evidence, and final audit gates.

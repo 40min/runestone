@@ -8,6 +8,7 @@ import { ErrorAlert } from "../ui";
 import AuthButton from "./AuthButton";
 import AuthTextField from "./AuthTextField";
 import LanguageAutocomplete from "./LanguageAutocomplete";
+import TimezoneAutocomplete, { isValidTimezone } from "./TimezoneAutocomplete";
 
 const profileFontFamily = '"Space Grotesk", "Noto Sans", sans-serif';
 
@@ -76,7 +77,10 @@ const Profile: React.FC = () => {
         surname: userData.surname || "",
         telegram_username: userData.telegram_username || "",
         mother_tongue: userData.mother_tongue || "",
-        timezone: userData.timezone || "UTC",
+        timezone:
+          userData.timezone && isValidTimezone(userData.timezone)
+            ? userData.timezone
+            : "UTC",
         password: "",
         confirmPassword: "",
         email: userData.email || "",
@@ -254,11 +258,11 @@ const Profile: React.FC = () => {
         sx={profileFieldSx}
       />
 
-      <AuthTextField
+      <TimezoneAutocomplete
         label="Timezone"
-        name="timezone"
         value={formData.timezone}
-        onChange={(e) => handleChange("timezone", e.target.value)}
+        onChange={(value) => handleChange("timezone", value)}
+        helperText="Search and select a valid IANA timezone. The browser suggestion is not saved until you choose it."
         sx={profileFieldSx}
       />
 

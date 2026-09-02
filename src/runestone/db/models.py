@@ -125,6 +125,8 @@ class RecallUserStateDB(Base):
     user_id: Mapped[int] = mapped_column(primary_key=True)
     telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false(), default=False)
+    recall_start_hour: Mapped[int] = mapped_column(Integer, nullable=False, server_default="9", default=9)
+    recall_end_hour: Mapped[int] = mapped_column(Integer, nullable=False, server_default="22", default=22)
     next_word_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
@@ -134,6 +136,18 @@ class RecallUserStateDB(Base):
             ["user_id"],
             ["users.id"],
             name="fk_recall_user_states_user_id_users",
+        ),
+        CheckConstraint(
+            "recall_start_hour >= 0 AND recall_start_hour <= 23",
+            name="ck_recall_user_states_start_hour_range",
+        ),
+        CheckConstraint(
+            "recall_end_hour >= 0 AND recall_end_hour <= 23",
+            name="ck_recall_user_states_end_hour_range",
+        ),
+        CheckConstraint(
+            "recall_start_hour <> recall_end_hour",
+            name="ck_recall_user_states_hours_unequal",
         ),
         CheckConstraint("next_word_index >= 0", name="ck_recall_user_states_next_word_index_non_negative"),
     )

@@ -141,8 +141,8 @@ class TestUserProfileEndpoints:
         data = response.json()
         assert "Password must be at least 6 characters long" in data["detail"]
 
-    async def test_update_user_profile_empty_fields(self, client):
-        """Test updating user profile with empty string values."""
+    async def test_update_user_profile_rejects_empty_timezone(self, client):
+        """Test updating profile rejects a timezone outside the frozen rule."""
         update_payload = {
             "name": "",
             "surname": "",
@@ -151,13 +151,30 @@ class TestUserProfileEndpoints:
 
         response = await client.put("/api/me", json=update_payload)
 
-        assert response.status_code == 200
-        data = response.json()
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Timezone must be a valid IANA timezone"
 
-        # Verify empty strings are accepted
-        assert data["name"] == ""
-        assert data["surname"] == ""
-        assert data["timezone"] == ""
+    async def test_update_user_profile_trims_valid_timezone(self, client):
+        response = await client.put("/api/me", json={"timezone": "  Europe/Helsinki  "})
+
+        assert response.status_code == 200
+        assert response.json()["timezone"] == "Europe/Helsinki"
+
+    async def test_update_user_profile_rejects_timezone_without_slash(self, client):
+        response = await client.put("/api/me", json={"timezone": "CET"})
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Timezone must be a valid IANA timezone"
+
+    async def test_update_user_profile_rejects_explicit_null_timezone(self, client):
+        response = await client.put("/api/me", json={"timezone": None})
+
+        assert response.status_code == 422
+
+    async def test_update_user_profile_rejects_non_string_timezone(self, client):
+        response = await client.put("/api/me", json={"timezone": 123})
+
+        assert response.status_code == 422
 
     async def test_get_user_profile_unauthorized(self, client_no_db):
         """Test accessing user profile without authentication."""

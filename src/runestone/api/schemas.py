@@ -9,7 +9,7 @@ This provides a stable API contract and encapsulates internal schema organizatio
 from typing import Any, Optional
 
 # This provides a stable API contract and encapsulates internal schema organization
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StrictStr, field_validator
 
 from runestone.constants import VOCABULARY_PRIORITY_DEFAULT, VOCABULARY_PRIORITY_HIGH, VOCABULARY_PRIORITY_LOW
 from runestone.core.prompt_builder.types import ImprovementMode
@@ -238,7 +238,7 @@ class UserProfileUpdate(BaseModel):
     surname: Optional[str] = None
     telegram_username: Optional[str] = None
     mother_tongue: Optional[str] = None
-    timezone: Optional[str] = None
+    timezone: Optional[StrictStr] = None
     password: Optional[str] = None
     email: Optional[str] = None
 
@@ -247,6 +247,14 @@ class UserProfileUpdate(BaseModel):
     def normalize_telegram_username_field(cls, v: Optional[str]) -> Optional[str]:
         """Store Telegram usernames in the canonical lookup format."""
         return normalize_telegram_username(v)
+
+    @field_validator("timezone", mode="before")
+    @classmethod
+    def reject_null_timezone(cls, value):
+        """Reject explicit null while keeping an omitted timezone optional."""
+        if value is None:
+            raise ValueError("Timezone cannot be null")
+        return value
 
 
 class LoginRequest(BaseModel):

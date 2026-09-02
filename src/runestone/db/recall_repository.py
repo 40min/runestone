@@ -1,9 +1,10 @@
 """Persistence helpers for recall user state and queue items."""
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import Integer, and_, cast, column, delete, extract, func, or_, select, table, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -42,29 +43,84 @@ class RecallRepository:
         queue = await self._load_queue(user_id)
         return self._to_state(row, queue)
 
-    async def get_active_recall_states(self) -> list[RecallState]:
-        """Load active users' enabled recall states in at most two queries."""
+    async def get_delivery_state_for_update(self, user_id: int) -> RecallState | None:
+        """Lock delivery settings without loading queue or vocabulary data."""
+        row = await self._load_state_row_for_update(user_id)
+        return None if row is None else self._to_state(row, [])
+
+    async def load_locked_recall_queue(self, state: RecallState) -> RecallState:
+        """Load queue data after the caller has accepted locked delivery settings."""
+        return replace(state, daily_selection=await self._load_queue(state.user_id))
+
+    async def get_delivery_candidate_user_ids(self, now: datetime | None = None) -> list[int]:
+        """Return enabled active users currently inside their local delivery window."""
+        timezone_names = table("pg_timezone_names", column("name"), schema="pg_catalog")
+        local_hour = cast(
+            extract(
+                "hour",
+                func.timezone(timezone_names.c.name, now or datetime.now(timezone.utc)),
+            ),
+            Integer,
+        )
         stmt = (
-            select(RecallUserStateDB, User.telegram_username)
+            select(RecallUserStateDB.user_id)
             .join(User, User.id == RecallUserStateDB.user_id)
-            .where(RecallUserStateDB.is_enabled.is_(True), User.active.is_(True))
+            .join(timezone_names, timezone_names.c.name == User.timezone)
+            .where(
+                RecallUserStateDB.is_enabled.is_(True),
+                User.active.is_(True),
+                or_(
+                    and_(
+                        RecallUserStateDB.recall_start_hour < RecallUserStateDB.recall_end_hour,
+                        local_hour >= RecallUserStateDB.recall_start_hour,
+                        local_hour < RecallUserStateDB.recall_end_hour,
+                    ),
+                    and_(
+                        RecallUserStateDB.recall_start_hour > RecallUserStateDB.recall_end_hour,
+                        or_(
+                            local_hour >= RecallUserStateDB.recall_start_hour,
+                            local_hour < RecallUserStateDB.recall_end_hour,
+                        ),
+                    ),
+                ),
+            )
             .order_by(RecallUserStateDB.user_id.asc())
         )
         result = await self.db.execute(stmt)
-        rows = result.all()
-        if not rows:
-            return []
+        return list(result.scalars().all())
 
-        user_ids = [state_row.user_id for state_row, _ in rows]
-        queues = await self._load_queues(user_ids)
-        return [
-            self._to_state(
-                state_row,
-                queues.get(state_row.user_id, []),
-                telegram_username=telegram_username,
+    async def update_locked_delivery_settings(
+        self,
+        state: RecallState,
+        recall_start_hour: int,
+        recall_end_hour: int,
+        is_enabled: bool,
+    ) -> RecallState:
+        """Persist settings after the caller has locked the recall aggregate."""
+        stmt = (
+            update(RecallUserStateDB)
+            .where(RecallUserStateDB.user_id == state.user_id)
+            .values(
+                recall_start_hour=recall_start_hour,
+                recall_end_hour=recall_end_hour,
+                is_enabled=is_enabled,
+                updated_at=func.now(),
             )
-            for state_row, telegram_username in rows
-        ]
+        )
+        result = await self.db.execute(stmt)
+        if result.rowcount != 1:
+            raise ValueError(f"Recall state for user {state.user_id} not found")
+        await self.db.flush()
+        return RecallState(
+            user_id=state.user_id,
+            telegram_username=state.telegram_username,
+            telegram_chat_id=state.telegram_chat_id,
+            is_enabled=is_enabled,
+            recall_start_hour=recall_start_hour,
+            recall_end_hour=recall_end_hour,
+            next_word_index=state.next_word_index,
+            daily_selection=state.daily_selection,
+        )
 
     async def upsert_for_user(self, user_id: int, *, chat_id: int | None, is_enabled: bool) -> RecallState:
         """Atomically create or update recall-delivery linkage for one user."""
@@ -275,6 +331,8 @@ class RecallRepository:
             telegram_username=telegram_username,
             telegram_chat_id=row.telegram_chat_id,
             is_enabled=row.is_enabled,
+            recall_start_hour=row.recall_start_hour,
+            recall_end_hour=row.recall_end_hour,
             next_word_index=row.next_word_index,
             daily_selection=queue,
         )
