@@ -227,6 +227,58 @@ async def test_get_delivery_candidate_user_ids_is_one_lightweight_ordered_query(
 
 
 @pytest.mark.anyio
+async def test_get_delivery_state_for_update_defers_queue_loading(db_session: AsyncSession, db_engine):
+    user = make_user("deferred_state")
+    db_session.add(user)
+    await db_session.flush()
+    word = (await add_words(db_session, user.id, "ett"))[0]
+    repository = RecallRepository(db_session)
+    await repository.upsert_for_user(user.id, chat_id=123, is_enabled=True)
+    await repository.replace_queue(user.id, as_queue_entries([word]), next_word_index=1)
+    await db_session.commit()
+
+    select_count = 0
+
+    def count_selects(_conn, _cursor, statement: str, _parameters, _context, _executemany) -> None:
+        nonlocal select_count
+        if statement.lstrip().upper().startswith("SELECT"):
+            select_count += 1
+
+    event.listen(db_engine.sync_engine, "before_cursor_execute", count_selects)
+    try:
+        state = await repository.get_delivery_state_for_update(user.id)
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", count_selects)
+
+    assert state is not None
+    assert state.telegram_chat_id == 123
+    assert state.next_word_index == 1
+    assert state.daily_selection == []
+    assert select_count == 1
+
+
+@pytest.mark.anyio
+async def test_load_locked_recall_queue_loads_ordered_words_into_deferred_state(db_session: AsyncSession):
+    user = make_user("deferred_queue")
+    db_session.add(user)
+    await db_session.flush()
+    first, second = await add_words(db_session, user.id, "ett", "tva")
+    repository = RecallRepository(db_session)
+    await repository.upsert_for_user(user.id, chat_id=123, is_enabled=True)
+    await repository.replace_queue(user.id, as_queue_entries([second, first]), next_word_index=1)
+    await db_session.commit()
+
+    delivery_state = await repository.get_delivery_state_for_update(user.id)
+    assert delivery_state is not None
+    loaded_state = await repository.load_locked_recall_queue(delivery_state)
+
+    assert loaded_state.telegram_chat_id == delivery_state.telegram_chat_id
+    assert loaded_state.is_enabled is delivery_state.is_enabled
+    assert loaded_state.next_word_index == delivery_state.next_word_index
+    assert [word.id for word in loaded_state.daily_selection] == [second.id, first.id]
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     ("timezone_name", "start_hour", "end_hour", "now", "eligible"),
     [
