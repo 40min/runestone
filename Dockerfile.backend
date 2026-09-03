@@ -82,5 +82,10 @@ USER runestone
 # Expose port
 EXPOSE 8010
 
+# Keep the source commit in the image so the startup command can identify the
+# deployed release. Coolify supplies this build argument when enabled.
+ARG SOURCE_COMMIT
+ENV SOURCE_COMMIT=${SOURCE_COMMIT}
+
 # Run database migrations and start the application
-CMD ["sh", "-c", "alembic upgrade head && uvicorn runestone.api.main:app --host 0.0.0.0 --port 8010"]
+CMD ["sh", "-c", "if [ -n \"${SOURCE_COMMIT:-}\" ]; then export SENTRY_RELEASE=\"runestone-api@${SOURCE_COMMIT}\"; fi; alembic upgrade head && exec uvicorn runestone.api.main:app --host 0.0.0.0 --port 8010"]
