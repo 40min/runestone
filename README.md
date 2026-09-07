@@ -195,14 +195,19 @@ The bot will:
 - Process user interactions via Telegram
 
 The web Recall page is available from the authenticated desktop and mobile navigation, or through
-the `?view=recall` deep link. It shows the ordered queue and read-only Telegram delivery status.
-Users can refresh the complete selection, postpone a queued word, or soft-remove a queued word from
-learning. Every mutation returns and displays the complete authoritative queue, including any
-replacement words selected during refill.
+the `?view=recall` deep link. It shows the ordered queue, the effective profile timezone, and each
+user's delivery schedule. Configured users can save one-hour start/end values and start or stop
+delivery; the start hour is inclusive, the end hour is exclusive, and overnight windows are
+supported. Users can also refresh the complete selection, postpone a queued word, or soft-remove a
+queued word from learning. Every mutation returns and displays the complete authoritative state,
+including any replacement words selected during refill.
 
 Telegram remains responsible for activation. A user without recall state must link their Telegram
-username in Profile and send `/start` to the bot. The web page does not provide Start, Stop, or
-delivery-toggle controls, but queue management remains available when delivery is disabled.
+username in Profile and send `/start` to the bot. The web page does not provide Telegram-linking
+controls. Once linked, web and Telegram Start/Stop share the same delivery state;
+stopping preserves the saved schedule and queue, and queue management remains available while
+delivery is disabled. Timezone changes remain on Profile through a searchable IANA timezone
+selector.
 
 ### Vocabulary Priority Model
 

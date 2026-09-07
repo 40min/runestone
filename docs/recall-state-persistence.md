@@ -170,6 +170,11 @@ is transaction-neutral and does not commit.
 
 Scheduled delivery keeps one global `RECALL_INTERVAL_MINUTES` cadence. A short-lived PostgreSQL query joins `pg_timezone_names` and returns only ordered user ids that are enabled, active, have a recognized timezone, and are currently inside their local ordinary or overnight delivery window. The worker opens a fresh session for each candidate, locks the mutable recall state, and rechecks enablement, chat linkage, account activation, current timezone, and the current local delivery window before loading queue or vocabulary data. A corrupt timezone that appears after enumeration falls back to UTC for that user and is logged without its stored value. Delivery retains the row lock across the injected Telegram callback, so one user's failure cannot contaminate later candidates.
 
+DST behavior follows conversion from an aware UTC instant into the saved timezone. The worker does
+not synthesize a delivery for a skipped spring-forward hour or deduplicate a repeated fall-back
+hour. Schedule changes take effect on the next global evaluation; they do not create or restart a
+per-user scheduler job.
+
 After Telegram accepts the message, `RecallService` writes learning metadata without committing, advances and wraps the cursor, and commits both changes together. Send failures and exceptions roll back the open transaction. If invalid-item cleanup exhausts its retries, that cleanup is committed before the job finishes.
 
 Command-facing remove and postpone workflows construct their return state without committing. Their per-update transaction provider commits after the application outcome and outgoing messages have been prepared. A commit failure discards those messages and leaves the update unacknowledged. Scheduled delivery remains different: `deliver_next_word` constructs its return state and owns the final commit or rollback because its row lock deliberately spans the send callback.
@@ -194,6 +199,31 @@ Telegram polling fetches and sorts updates before opening a database session. St
 The file offset acknowledges only the highest contiguous handled prefix. Expected domain failures preserve their existing user-facing response and advance after provider rollback. A database or SQLAlchemy failure found anywhere in the exception cause chain before or during commit rolls back, emits no success message, stops the batch, and retains that update's offset for a later poll with a fresh session. Once commit succeeds, a later session-cleanup failure is logged without suppressing the prepared response or replaying the command. Unknown non-database application failures follow the generic handled-error policy and advance. A Telegram send failure after commit is logged and advances because command application has already succeeded; exactly-once outbound delivery would require a separate idempotency or outbox design.
 
 The worker injects provider functions into the Telegram processors and does not open a batch- or job-level database session. Backend request operations continue to construct repositories and services around their request-scoped `AsyncSession`; recall persistence does not retain a startup-long database session.
+
+## Migration, Deployment, And Rollback
+
+The schedule migration is PostgreSQL-specific operational work. It adds the hour columns and named
+range/unequal constraints, keeps the `9`/`22` server defaults for future states, and normalizes
+legacy timezone values that fail the application's IANA validation rule to `UTC`. The downgrade
+removes only the schedule columns and constraints; it cannot restore the original timezone strings.
+
+Before applying the migration to production, the release owner must count valid and invalid
+timezone rows and create a protected, recoverable backup or user-id-to-original-timezone export.
+Its location, checksum, retention, restore owner, and a timed restore rehearsal are release records,
+not repository artifacts. The migration uses local lock and statement timeouts, but it should still
+be rehearsed on a size-representative PostgreSQL copy before choosing a maintenance window.
+
+Repository containers use the locked `tzdata` package with `PYTHONTZPATH=""`. The backend is the
+sole migration executor, and Compose starts Recall only after the backend health check succeeds.
+Production orchestration must provide equivalent migration-before-worker ordering. Repository tests
+and container checks establish implementation readiness; they do not substitute for the protected
+backup, credentialed production migration, restore rehearsal, authenticated browser evidence, or
+deployment logs owned by the release process.
+
+An emergency code rollback may leave the new columns in place: older code ignores them and resumes
+using its global delivery hours. Stop or revert the Recall worker first if delivery volume is
+unexpected. Schema downgrade and restoration of normalized timezone values are separate maintenance
+operations and require explicit release-owner authorization.
 
 ## Filesystem State That Remains
 
