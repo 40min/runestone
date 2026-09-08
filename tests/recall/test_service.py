@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, call
 
 import pytest
+from freezegun import freeze_time
 from sqlalchemy.exc import SQLAlchemyError
 
 from runestone.core.exceptions import (
@@ -609,6 +610,7 @@ async def test_remove_queue_word_from_learning_rejects_missing_recall_state(reca
 
 
 @pytest.mark.anyio
+@freeze_time("2026-01-15 12:00:00+00:00", real_asyncio=True)
 async def test_deliver_next_word_commits_metadata_and_wrapped_cursor_together(recall_service):
     state = make_state(user_id=1, next_word_index=2, daily_selection=[make_word(7, "hej")])
     recall_service.recall_repository.get_recall_state_for_update.return_value = state
@@ -629,6 +631,7 @@ async def test_deliver_next_word_commits_metadata_and_wrapped_cursor_together(re
 
 
 @pytest.mark.anyio
+@freeze_time("2026-01-15 12:00:00+00:00", real_asyncio=True)
 async def test_deliver_next_word_rolls_back_when_send_is_rejected(recall_service):
     state = make_state(user_id=1, daily_selection=[make_word(7, "hej")])
     recall_service.recall_repository.get_recall_state_for_update.return_value = state
@@ -645,6 +648,7 @@ async def test_deliver_next_word_rolls_back_when_send_is_rejected(recall_service
 
 
 @pytest.mark.anyio
+@freeze_time("2026-01-15 12:00:00+00:00", real_asyncio=True)
 async def test_deliver_next_word_wraps_unexpected_failures_as_recall_errors(recall_service):
     state = make_state(user_id=1, daily_selection=[make_word(7, "hej")])
     recall_service.recall_repository.get_recall_state_for_update.return_value = state
@@ -658,6 +662,7 @@ async def test_deliver_next_word_wraps_unexpected_failures_as_recall_errors(reca
 
 
 @pytest.mark.anyio
+@freeze_time("2026-01-15 12:00:00+00:00", real_asyncio=True)
 async def test_deliver_next_word_rolls_back_unusable_state(recall_service):
     recall_service.recall_repository.get_recall_state_for_update.return_value = make_state(is_enabled=False)
 
@@ -668,6 +673,7 @@ async def test_deliver_next_word_rolls_back_unusable_state(recall_service):
 
 
 @pytest.mark.anyio
+@freeze_time("2026-01-15 12:00:00+00:00", real_asyncio=True)
 async def test_deliver_next_word_revalidates_active_user_after_state_lock(recall_service):
     state = make_state(user_id=1, daily_selection=[make_word(7, "hej")])
     recall_service.recall_repository.get_recall_state_for_update.return_value = state
@@ -732,6 +738,7 @@ async def test_deliver_next_word_falls_back_to_utc_for_corrupt_timezone(recall_s
 
 
 @pytest.mark.anyio
+@freeze_time("2026-01-15 12:00:00+00:00", real_asyncio=True)
 async def test_deliver_next_word_removes_invalid_queue_entry_and_commits_cleanup(recall_service):
     initial_state = make_state(user_id=1, daily_selection=[make_word(7, "stale")])
     empty_state = make_state(user_id=1)
@@ -748,6 +755,7 @@ async def test_deliver_next_word_removes_invalid_queue_entry_and_commits_cleanup
 
 
 @pytest.mark.anyio
+@freeze_time("2026-01-15 12:00:00+00:00", real_asyncio=True)
 async def test_deliver_next_word_refills_after_invalid_entry_before_sending(recall_service):
     stale_state = make_state(user_id=1, daily_selection=[make_word(7, "stale")])
     empty_state = make_state(user_id=1)
@@ -866,6 +874,7 @@ async def test_postpone_single_eligible_word_does_not_reselect_it(db_session):
 
 @pytest.mark.anyio
 @pytest.mark.db_schema_reset
+@freeze_time("2026-01-15 12:00:00+00:00", real_asyncio=True)
 async def test_delivery_rechecks_active_user_after_concurrent_deactivation(db_session_factory):
     delivery_session = db_session_factory()
     deactivation_session = db_session_factory()
@@ -924,6 +933,7 @@ async def test_delivery_rechecks_active_user_after_concurrent_deactivation(db_se
 
 
 @pytest.mark.anyio
+@freeze_time("2026-01-15 12:00:00+00:00", real_asyncio=True)
 async def test_delivery_rolls_back_learning_metadata_when_cursor_update_fails(db_session):
     user = User(
         name="Recall",
@@ -1186,6 +1196,7 @@ async def test_refill_queue_does_not_backfill_missing_unstudied_slots_with_studi
 
 
 @pytest.mark.anyio
+@freeze_time("2026-01-15 12:00:00+00:00", real_asyncio=True)
 async def test_deliver_next_word_scans_stale_expanded_queue_bounded_by_expanded_maximum(recall_service):
     """Delivery scans and cleans an expanded queue containing stale entries without looping indefinitely (AC9)."""
     recall_service.words_per_day = 3
