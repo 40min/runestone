@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, call
 
 import pytest
+from freezegun import freeze_time
 from sqlalchemy.exc import SQLAlchemyError
 
 from runestone.core.exceptions import (
@@ -23,16 +24,10 @@ from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 
 
-class FrozenDatetime:
-    @classmethod
-    def now(cls, tz=None):
-        value = datetime(2026, 1, 15, 12, tzinfo=timezone.utc)
-        return value.astimezone(tz) if tz else value
-
-
 @pytest.fixture
-def freeze_recall_clock(monkeypatch):
-    monkeypatch.setattr("runestone.recall.service.datetime", FrozenDatetime)
+def freeze_recall_clock():
+    with freeze_time("2026-01-15 12:00:00+00:00", real_asyncio=True):
+        yield
 
 
 def make_state(
@@ -878,9 +873,7 @@ async def test_postpone_single_eligible_word_does_not_reselect_it(db_session):
 
 @pytest.mark.anyio
 @pytest.mark.db_schema_reset
-async def test_delivery_rechecks_active_user_after_concurrent_deactivation(
-    db_session_factory, freeze_recall_clock, monkeypatch
-):
+async def test_delivery_rechecks_active_user_after_concurrent_deactivation(db_session_factory, freeze_recall_clock):
     delivery_session = db_session_factory()
     deactivation_session = db_session_factory()
     try:
@@ -912,12 +905,6 @@ async def test_delivery_rechecks_active_user_after_concurrent_deactivation(
         await repository.replace_queue(user_id, [make_word(vocabulary_id, "hej")])
         await repository.commit()
 
-        get_candidates = repository.get_delivery_candidate_user_ids
-
-        async def get_frozen_candidates():
-            return await get_candidates(now=FrozenDatetime.now(timezone.utc))
-
-        monkeypatch.setattr(repository, "get_delivery_candidate_user_ids", get_frozen_candidates)
         candidate_user_ids = await service.get_delivery_candidate_user_ids()
         assert candidate_user_ids == [user_id]
         assert user.active is True  # Keep a stale active entity cached in the delivery session.
