@@ -128,12 +128,10 @@ class RecallService:
         except SQLAlchemyError as exc:
             raise RecallOperationError("Failed to disable recall", details=str(exc)) from exc
 
-    async def get_delivery_candidate_user_ids(self, now: datetime | None = None) -> list[int]:
+    async def get_delivery_candidate_user_ids(self) -> list[int]:
         """Return active users whose enabled recall state needs evaluation."""
         try:
-            if now is None:
-                return await self.recall_repository.get_delivery_candidate_user_ids()
-            return await self.recall_repository.get_delivery_candidate_user_ids(now=now)
+            return await self.recall_repository.get_delivery_candidate_user_ids()
         except SQLAlchemyError as exc:
             raise RecallOperationError("Failed to load recall delivery candidates", details=str(exc)) from exc
 

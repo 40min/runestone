@@ -22,7 +22,17 @@ from runestone.recall.types import RecallEnableStatus, RecallQueueWord, RecallSt
 from runestone.services.user_service import UserService
 from runestone.services.vocabulary_service import VocabularyService
 
-DELIVERY_NOW = datetime(2026, 1, 15, 12, tzinfo=timezone.utc)
+
+class FrozenDatetime:
+    @classmethod
+    def now(cls, tz=None):
+        value = datetime(2026, 1, 15, 12, tzinfo=timezone.utc)
+        return value.astimezone(tz) if tz else value
+
+
+@pytest.fixture
+def freeze_recall_clock(monkeypatch):
+    monkeypatch.setattr("runestone.recall.service.datetime", FrozenDatetime)
 
 
 def make_state(
@@ -611,14 +621,14 @@ async def test_remove_queue_word_from_learning_rejects_missing_recall_state(reca
 
 
 @pytest.mark.anyio
-async def test_deliver_next_word_commits_metadata_and_wrapped_cursor_together(recall_service):
+async def test_deliver_next_word_commits_metadata_and_wrapped_cursor_together(recall_service, freeze_recall_clock):
     state = make_state(user_id=1, next_word_index=2, daily_selection=[make_word(7, "hej")])
     recall_service.recall_repository.get_recall_state_for_update.return_value = state
     recall_service.recall_repository.get_recall_state.side_effect = AssertionError("read happened after commit")
     recall_service.vocabulary_service.get_learnable_item.return_value = make_word(7, "hej")
     send_word = AsyncMock(return_value=True)
 
-    result = await recall_service.deliver_next_word(1, send_word, now=DELIVERY_NOW)
+    result = await recall_service.deliver_next_word(1, send_word)
 
     assert result == replace(state, next_word_index=0)
     send_word.assert_awaited_once_with(123, make_word(7, "hej"))
@@ -631,13 +641,13 @@ async def test_deliver_next_word_commits_metadata_and_wrapped_cursor_together(re
 
 
 @pytest.mark.anyio
-async def test_deliver_next_word_rolls_back_when_send_is_rejected(recall_service):
+async def test_deliver_next_word_rolls_back_when_send_is_rejected(recall_service, freeze_recall_clock):
     state = make_state(user_id=1, daily_selection=[make_word(7, "hej")])
     recall_service.recall_repository.get_recall_state_for_update.return_value = state
     recall_service.vocabulary_service.get_learnable_item.return_value = make_word(7, "hej")
     send_word = AsyncMock(return_value=False)
 
-    result = await recall_service.deliver_next_word(1, send_word, now=DELIVERY_NOW)
+    result = await recall_service.deliver_next_word(1, send_word)
 
     assert result is None
     recall_service.vocabulary_service.record_learning_event.assert_not_awaited()
@@ -647,30 +657,30 @@ async def test_deliver_next_word_rolls_back_when_send_is_rejected(recall_service
 
 
 @pytest.mark.anyio
-async def test_deliver_next_word_wraps_unexpected_failures_as_recall_errors(recall_service):
+async def test_deliver_next_word_wraps_unexpected_failures_as_recall_errors(recall_service, freeze_recall_clock):
     state = make_state(user_id=1, daily_selection=[make_word(7, "hej")])
     recall_service.recall_repository.get_recall_state_for_update.return_value = state
     recall_service.vocabulary_service.get_learnable_item.side_effect = RuntimeError("database failed")
 
     with pytest.raises(RecallOperationError, match="Failed to deliver recall word") as error:
-        await recall_service.deliver_next_word(1, AsyncMock(), now=DELIVERY_NOW)
+        await recall_service.deliver_next_word(1, AsyncMock())
 
     assert error.value.details == "database failed"
     recall_service.recall_repository.rollback.assert_awaited_once()
 
 
 @pytest.mark.anyio
-async def test_deliver_next_word_rolls_back_unusable_state(recall_service):
+async def test_deliver_next_word_rolls_back_unusable_state(recall_service, freeze_recall_clock):
     recall_service.recall_repository.get_recall_state_for_update.return_value = make_state(is_enabled=False)
 
-    result = await recall_service.deliver_next_word(1, AsyncMock(), now=DELIVERY_NOW)
+    result = await recall_service.deliver_next_word(1, AsyncMock())
 
     assert result is None
     recall_service.recall_repository.rollback.assert_awaited_once()
 
 
 @pytest.mark.anyio
-async def test_deliver_next_word_revalidates_active_user_after_state_lock(recall_service):
+async def test_deliver_next_word_revalidates_active_user_after_state_lock(recall_service, freeze_recall_clock):
     state = make_state(user_id=1, daily_selection=[make_word(7, "hej")])
     recall_service.recall_repository.get_recall_state_for_update.return_value = state
     recall_service.user_service.get_user_by_id.return_value = SimpleNamespace(
@@ -680,7 +690,7 @@ async def test_deliver_next_word_revalidates_active_user_after_state_lock(recall
     )
     send_word = AsyncMock(return_value=True)
 
-    result = await recall_service.deliver_next_word(1, send_word, now=DELIVERY_NOW)
+    result = await recall_service.deliver_next_word(1, send_word)
 
     assert result is None
     recall_service.user_service.get_user_by_id.assert_awaited_once_with(1)
@@ -734,14 +744,14 @@ async def test_deliver_next_word_falls_back_to_utc_for_corrupt_timezone(recall_s
 
 
 @pytest.mark.anyio
-async def test_deliver_next_word_removes_invalid_queue_entry_and_commits_cleanup(recall_service):
+async def test_deliver_next_word_removes_invalid_queue_entry_and_commits_cleanup(recall_service, freeze_recall_clock):
     initial_state = make_state(user_id=1, daily_selection=[make_word(7, "stale")])
     empty_state = make_state(user_id=1)
     recall_service.recall_repository.get_recall_state_for_update.return_value = initial_state
     recall_service.recall_repository.get_recall_state.return_value = empty_state
     recall_service.vocabulary_service.get_learnable_item.return_value = None
 
-    result = await recall_service.deliver_next_word(1, AsyncMock(), max_attempts=0, now=DELIVERY_NOW)
+    result = await recall_service.deliver_next_word(1, AsyncMock(), max_attempts=0)
 
     assert result is None
     recall_service.recall_repository.remove_queue_word.assert_awaited_once_with(1, 7)
@@ -750,7 +760,7 @@ async def test_deliver_next_word_removes_invalid_queue_entry_and_commits_cleanup
 
 
 @pytest.mark.anyio
-async def test_deliver_next_word_refills_after_invalid_entry_before_sending(recall_service):
+async def test_deliver_next_word_refills_after_invalid_entry_before_sending(recall_service, freeze_recall_clock):
     stale_state = make_state(user_id=1, daily_selection=[make_word(7, "stale")])
     empty_state = make_state(user_id=1)
     replacement = make_word(9, "replacement")
@@ -767,7 +777,7 @@ async def test_deliver_next_word_refills_after_invalid_entry_before_sending(reca
     recall_service.vocabulary_service.select_daily_candidates.return_value = [replacement]
     send_word = AsyncMock(return_value=True)
 
-    result = await recall_service.deliver_next_word(1, send_word, now=DELIVERY_NOW)
+    result = await recall_service.deliver_next_word(1, send_word)
 
     assert result == refilled_state
     recall_service.recall_repository.remove_queue_word.assert_awaited_once_with(1, 7)
@@ -868,7 +878,9 @@ async def test_postpone_single_eligible_word_does_not_reselect_it(db_session):
 
 @pytest.mark.anyio
 @pytest.mark.db_schema_reset
-async def test_delivery_rechecks_active_user_after_concurrent_deactivation(db_session_factory):
+async def test_delivery_rechecks_active_user_after_concurrent_deactivation(
+    db_session_factory, freeze_recall_clock, monkeypatch
+):
     delivery_session = db_session_factory()
     deactivation_session = db_session_factory()
     try:
@@ -900,7 +912,13 @@ async def test_delivery_rechecks_active_user_after_concurrent_deactivation(db_se
         await repository.replace_queue(user_id, [make_word(vocabulary_id, "hej")])
         await repository.commit()
 
-        candidate_user_ids = await service.get_delivery_candidate_user_ids(now=DELIVERY_NOW)
+        get_candidates = repository.get_delivery_candidate_user_ids
+
+        async def get_frozen_candidates():
+            return await get_candidates(now=FrozenDatetime.now(timezone.utc))
+
+        monkeypatch.setattr(repository, "get_delivery_candidate_user_ids", get_frozen_candidates)
+        candidate_user_ids = await service.get_delivery_candidate_user_ids()
         assert candidate_user_ids == [user_id]
         assert user.active is True  # Keep a stale active entity cached in the delivery session.
 
@@ -911,7 +929,7 @@ async def test_delivery_rechecks_active_user_after_concurrent_deactivation(db_se
         delivery_session.expire_all()
 
         send_word = AsyncMock(return_value=True)
-        result = await service.deliver_next_word(user_id, send_word, now=DELIVERY_NOW)
+        result = await service.deliver_next_word(user_id, send_word)
 
         assert result is None
         send_word.assert_not_awaited()
@@ -926,7 +944,7 @@ async def test_delivery_rechecks_active_user_after_concurrent_deactivation(db_se
 
 
 @pytest.mark.anyio
-async def test_delivery_rolls_back_learning_metadata_when_cursor_update_fails(db_session):
+async def test_delivery_rolls_back_learning_metadata_when_cursor_update_fails(db_session, freeze_recall_clock):
     user = User(
         name="Recall",
         surname="Delivery",
@@ -959,7 +977,7 @@ async def test_delivery_rolls_back_learning_metadata_when_cursor_update_fails(db
     recall_repository.advance_cursor = AsyncMock(side_effect=RuntimeError("cursor failed"))
 
     with pytest.raises(RecallOperationError, match="Failed to deliver recall word"):
-        await service.deliver_next_word(user_id, AsyncMock(return_value=True), now=DELIVERY_NOW)
+        await service.deliver_next_word(user_id, AsyncMock(return_value=True))
 
     await db_session.refresh(word)
     state = await recall_repository.get_recall_state(user_id)
@@ -1188,7 +1206,9 @@ async def test_refill_queue_does_not_backfill_missing_unstudied_slots_with_studi
 
 
 @pytest.mark.anyio
-async def test_deliver_next_word_scans_stale_expanded_queue_bounded_by_expanded_maximum(recall_service):
+async def test_deliver_next_word_scans_stale_expanded_queue_bounded_by_expanded_maximum(
+    recall_service, freeze_recall_clock
+):
     """Delivery scans and cleans an expanded queue containing stale entries without looping indefinitely (AC9)."""
     recall_service.words_per_day = 3
     recall_service.words_unstudied_extra_count = 2  # max total = 5
@@ -1204,7 +1224,7 @@ async def test_deliver_next_word_scans_stale_expanded_queue_bounded_by_expanded_
     recall_service.vocabulary_service.get_learnable_item.return_value = None
 
     send_word = AsyncMock(return_value=True)
-    result = await recall_service.deliver_next_word(1, send_word, max_attempts=0, now=DELIVERY_NOW)
+    result = await recall_service.deliver_next_word(1, send_word, max_attempts=0)
 
     assert result is None
     send_word.assert_not_awaited()
