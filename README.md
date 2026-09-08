@@ -511,6 +511,11 @@ Design docs:
 - Model-cost operations and price refresh: [`model-cost-tracking.md`](docs/model-cost-tracking.md:1)
 - Documentation naming convention: [`docs/README.md`](docs/README.md:1)
 
+
+### Error Telemetry (Better Stack)
+
+- Sanitized error-telemetry policy (event allowlist, breadcrumb contract, fail-closed behavior): [`error-telemetry.md`](docs/error-telemetry.md:1)
+
 ## 📋 Requirements
 
 - **Python**: 3.13+
