@@ -690,7 +690,7 @@ Output artifacts:
 
 Priority behavior:
 
-- normal/manual vocabulary defaults to `priority_learn=9`
+- normal/manual vocabulary defaults to `priority_learn=5`
 - WordKeeper/`prioritize_words_for_learning` decrements existing/restored words (`max(priority-1, 0)`)
 - brand-new agent-created words start at `priority_learn=4`
 

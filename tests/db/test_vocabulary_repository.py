@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, insert, select
 from sqlalchemy.dialects.postgresql import dialect
 
 from runestone.api.schemas import VocabularyItemCreate
@@ -761,6 +761,30 @@ class TestVocabularyRepository:
         persisted = await db_session.get(VocabularyModel, vocabulary_id)
         assert persisted.priority_learn == 3
 
+    async def test_new_vocabulary_defaults_to_standard_priority(self, repo, db_session):
+        """ORM-created and database-default rows both receive the standard default priority."""
+        orm_word = VocabularyModel(user_id=1, word_phrase="orm-default", translation="an apple")
+        db_session.add(orm_word)
+        await db_session.flush()
+        assert orm_word.priority_learn == 5
+
+        result = await db_session.execute(
+            insert(VocabularyModel).values(user_id=1, word_phrase="db-default", translation="a banana")
+        )
+        db_word = await db_session.get(VocabularyModel, result.inserted_primary_key[0])
+        assert db_word is not None
+        assert db_word.priority_learn == 5
+
+        explicit_low = VocabularyModel(
+            user_id=1,
+            word_phrase="explicit-low",
+            translation="a pear",
+            priority_learn=9,
+        )
+        db_session.add(explicit_low)
+        await db_session.flush()
+        assert explicit_low.priority_learn == 9
+
     async def test_deprioritize_item_caps_low_priority(self, repo, db_session):
         """Repeated deprioritization cannot exceed the lowest supported priority."""
         vocab = VocabularyModel(
@@ -1505,16 +1529,19 @@ class TestVocabularyRepository:
         eligible_ids = {unstudied_low_prio.id, unstudied_high_prio.id}
         eligible_phrases = {"unstudied-low-prio", "unstudied-high-prio"}
 
-        # 1. Assert selection returns only eligible unstudied words in random order.
+        # 1. Assert selection returns only eligible unstudied words, highest priority first.
         results = await repo.select_unstudied_words(user_id=1, cooldown_days=7, limit=10)
         assert len(results) == 2
         assert {r.id for r in results} == eligible_ids
         assert {r.word_phrase for r in results} == eligible_phrases
+        assert results[0].id == unstudied_high_prio.id
+        assert results[1].id == unstudied_low_prio.id
 
-        # 2. Assert limit works
+        # 2. Assert limit works: priority ordering precedes randomized tie-breaking,
+        #    so the limited selection deterministically takes the higher priority word.
         limited_results = await repo.select_unstudied_words(user_id=1, cooldown_days=7, limit=1)
         assert len(limited_results) == 1
-        assert limited_results[0].id in eligible_ids
+        assert limited_results[0].id == unstudied_high_prio.id
 
         # 3. Assert exclusions work
         excluded_results = await repo.select_unstudied_words(
@@ -1523,8 +1550,8 @@ class TestVocabularyRepository:
         assert len(excluded_results) == 1
         assert excluded_results[0].id == unstudied_high_prio.id
 
-    async def test_select_unstudied_words_uses_random_ordering(self):
-        """The unstudied query applies random ordering before the configured limit."""
+    async def test_select_unstudied_words_orders_priority_before_randomized_tiebreak(self):
+        """The unstudied query orders by priority first and randomizes ties before the limit."""
         mock_db = AsyncMock()
         mock_result = Mock()
         mock_result.scalars.return_value.all.return_value = []
@@ -1536,7 +1563,8 @@ class TestVocabularyRepository:
         stmt = mock_db.execute.await_args[0][0]
         sql = str(stmt.compile(dialect=dialect()))
 
-        assert "ORDER BY random()" in sql
+        order_clause = sql[sql.index("ORDER BY") :]
+        assert order_clause.index("priority_learn") < order_clause.index("random()")
         assert "vocabulary.user_id" in sql
         assert "in_learn" in sql
         assert "learned_times" in sql

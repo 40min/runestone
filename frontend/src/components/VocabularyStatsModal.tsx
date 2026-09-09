@@ -36,11 +36,11 @@ const PRIORITY_NAMES = [
   "High",
   "Above average",
   "Average",
-  "Below average",
+  "Standard",
   "Low",
   "Very low",
   "Minimal",
-  "Default",
+  "Lowest",
 ];
 
 const learnedLabel = (label: string) => {

@@ -44,11 +44,11 @@ const priorityLabels = [
   "high",
   "above average",
   "average",
-  "below average",
+  "standard",
   "low",
   "very low",
   "minimal",
-  "default",
+  "lowest",
 ];
 
 const getPriorityLabel = (priority: number) =>

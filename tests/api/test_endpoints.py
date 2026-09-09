@@ -324,7 +324,7 @@ class TestVocabularyEndpoints:
         assert data["example_phrase"] == "Jag äter ett äpple varje dag."
         assert data["user_id"] == 1
         assert data["in_learn"] is True
-        assert data["priority_learn"] == 9
+        assert data["priority_learn"] == 5
         assert data["last_learned"] is None
         assert "id" in data
         assert "created_at" in data

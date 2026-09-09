@@ -12,26 +12,25 @@ RECURSION_LIMIT_NEWS_AGENT = 20
 RECURSION_LIMIT_MEMORY_MAINTAINER = 250
 RECURSION_LIMIT_TEACHER = 30
 
-# Vocabulary priority model (0 = highest, 9 = lowest/default)
+# Vocabulary priority model (0 = highest urgency, 5 = default, 9 = lowest urgency)
 VOCABULARY_PRIORITY_HIGH = 0
 VOCABULARY_PRIORITY_AGENT_NEW = 4
-VOCABULARY_PRIORITY_LEGACY_TRUE_BACKFILL = 5
+VOCABULARY_PRIORITY_DEFAULT = 5
 VOCABULARY_PRIORITY_LOW = 9
-VOCABULARY_PRIORITY_DEFAULT = VOCABULARY_PRIORITY_LOW
 
-# Human-readable labels for vocabulary priority values (0 = highest, 9 = lowest/default).
-# The service layer uses this mapping when building distribution responses.
+# Human-readable labels for vocabulary priority values (0 = highest urgency, 5 = default,
+# 9 = lowest urgency). The service layer uses this mapping when building distribution responses.
 VOCABULARY_PRIORITY_LABELS: dict[int, str] = {
     0: "Highest (0)",
     1: "Very High (1)",
     2: "High (2)",
     3: "Above Average (3)",
     4: "Average (4)",
-    5: "Below Average (5)",
+    5: "Standard (5)",
     6: "Low (6)",
     7: "Very Low (7)",
     8: "Minimal (8)",
-    9: "Default (9)",
+    9: "Lowest (9)",
 }
 
 
