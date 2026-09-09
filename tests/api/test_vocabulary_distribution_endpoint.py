@@ -164,6 +164,11 @@ class TestVocabularyDistributionEndpoint:
         for item in data["priority_distribution"]:
             assert item["label"] == VOCABULARY_PRIORITY_LABELS[item["priority"]]
 
+    def test_priority_5_is_the_default_tier_label(self):
+        """Priority 5 carries the neutral default label; 9 is the lowest urgency, not the default."""
+        assert VOCABULARY_PRIORITY_LABELS[5] == "Standard (5)"
+        assert VOCABULARY_PRIORITY_LABELS[9] == "Lowest (9)"
+
     async def test_user_isolation(self, client_with_overrides, db_with_test_user):
         """Each user only sees their own vocabulary in the distribution."""
         async for client_a, _ in client_with_overrides():

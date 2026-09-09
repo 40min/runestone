@@ -457,7 +457,7 @@ class VocabularyRepository:
     async def select_unstudied_words(
         self, user_id: int, cooldown_days: int = 7, limit: int = 100, excluded_word_ids: Optional[List[int]] = None
     ) -> List[Vocabulary]:
-        """Select eligible unstudied recall candidates in random order."""
+        """Select eligible unstudied candidates by priority with randomized tie-breaking within a tier."""
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=cooldown_days)
 
         base_filter = [
@@ -470,7 +470,12 @@ class VocabularyRepository:
         if excluded_word_ids:
             base_filter.append(~Vocabulary.id.in_(excluded_word_ids))
 
-        stmt = select(Vocabulary).filter(*base_filter).order_by(func.random()).limit(limit)
+        stmt = (
+            select(Vocabulary)
+            .filter(*base_filter)
+            .order_by(Vocabulary.priority_learn.asc(), func.random())
+            .limit(limit)
+        )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
@@ -555,7 +560,7 @@ class VocabularyRepository:
         return result.scalar() or 0
 
     async def get_words_prioritized_count(self, user_id: int) -> int:
-        """Get count of active vocabulary items with elevated priority."""
+        """Get count of active vocabulary items above the lowest urgency cap."""
         stmt = select(func.count(Vocabulary.id)).filter(
             Vocabulary.user_id == user_id,
             Vocabulary.in_learn.is_(True),

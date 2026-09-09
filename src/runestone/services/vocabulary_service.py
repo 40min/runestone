@@ -514,7 +514,7 @@ class VocabularyService:
         limit: int,
         excluded_word_ids: list[int] | None = None,
     ) -> list[RecallQueueWord]:
-        """Return randomized unstudied learnable candidates for recall selection."""
+        """Return unstudied learnable candidates by priority with randomized tie-breaking."""
         words = await self.repo.select_unstudied_words(
             user_id,
             cooldown_days,

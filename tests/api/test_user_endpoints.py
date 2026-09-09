@@ -73,7 +73,9 @@ class TestUserProfileEndpoints:
         assert data["words_in_learn_count"] == 1
         assert data["words_skipped_count"] == 1
         assert data["overall_words_count"] == 3
-        assert data["words_prioritized_count"] == 1
+        # Both active words count: the default-tier word and the explicitly
+        # prioritized one are both above the lowest-urgency cap.
+        assert data["words_prioritized_count"] == 2
 
     async def test_update_user_profile_success(self, client):
         """Test successful user profile update."""

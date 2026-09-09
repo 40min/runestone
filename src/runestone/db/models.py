@@ -162,6 +162,9 @@ class RecallQueueItemDB(Base):
     user_id: Mapped[int] = mapped_column(nullable=False, index=True)
     vocabulary_id: Mapped[int] = mapped_column(nullable=False, index=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Records how the row was selected (regular portion vs extra unstudied selector).
+    # Later learning, postponement, or priority changes do not change it while queued.
+    is_unstudied_extra: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false(), default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     __table_args__ = (

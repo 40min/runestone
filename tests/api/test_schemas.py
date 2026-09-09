@@ -155,13 +155,13 @@ class TestVocabularySchemas:
     """Test cases for vocabulary-related schemas."""
 
     def test_vocabulary_item_create(self):
-        """Test VocabularyItemCreate schema."""
+        """Test VocabularyItemCreate schema defaults to the standard priority tier."""
         item = VocabularyItemCreate(
             word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple"
         )
         assert item.word_phrase == "ett äpple"
         assert item.translation == "an apple"
-        assert item.priority_learn == 9
+        assert item.priority_learn == 5
 
     def test_vocabulary_item_create_priority_range_validation(self):
         """Test VocabularyItemCreate validates numeric priority range."""

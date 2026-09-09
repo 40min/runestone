@@ -181,11 +181,11 @@ describe("VocabularyStatsModal", () => {
       "High · 2",
       "Above average · 3",
       "Average · 4",
-      "Below average · 5",
+      "Standard · 5",
       "Low · 6",
       "Very low · 7",
       "Minimal · 8",
-      "Default · 9",
+      "Lowest · 9",
     ];
     priorityLabels.forEach((label) =>
       expect(screen.getByText(label)).toBeInTheDocument()

@@ -196,17 +196,20 @@ class RecallService:
                 )
             )
 
+        regular_words = [self._as_regular_portion(word) for word in portion_words]
+
+        extra_words: list[RecallQueueWord] = []
         if self.words_unstudied_extra_count > 0:
-            excluded_unstudied_ids = list(dict.fromkeys(bumped_word_ids + [word.id for word in portion_words]))
+            excluded_unstudied_ids = list(dict.fromkeys(bumped_word_ids + [word.id for word in regular_words]))
             unstudied_words = await self.vocabulary_service.select_unstudied_candidates(
                 user_id=state.user_id,
                 cooldown_days=self.cooldown_days,
                 limit=self.words_unstudied_extra_count,
                 excluded_word_ids=excluded_unstudied_ids or None,
             )
-            portion_words.extend(unstudied_words)
+            extra_words = [self._as_unstudied_extra(word) for word in unstudied_words]
 
-        await self.recall_repository.replace_queue(state.user_id, portion_words, next_word_index=0)
+        await self.recall_repository.replace_queue(state.user_id, regular_words + extra_words, next_word_index=0)
         refreshed = await self.recall_repository.get_recall_state(state.user_id)
         return refreshed or state
 
@@ -479,38 +482,52 @@ class RecallService:
         *,
         additionally_excluded_word_ids: list[int] | None = None,
     ) -> RecallState:
-        n = len(state.daily_selection)
-        max_capacity = self.words_per_day + self.words_unstudied_extra_count
-        unstudied_needed = max(0, min(self.words_unstudied_extra_count, max_capacity - n))
-        priority_needed = max(0, self.words_per_day - n)
+        """Refill each queue portion from its persisted provenance flag.
 
-        if unstudied_needed <= 0 and priority_needed <= 0:
+        Counts come from the queued rows' selection provenance, never from a
+        word's current priority or learning counters. Regular additions are
+        selected and appended first; extra unstudied additions follow.
+        """
+        regular_count = sum(1 for word in state.daily_selection if not word.is_unstudied_extra)
+        extra_count = len(state.daily_selection) - regular_count
+        max_capacity = self.words_per_day + self.words_unstudied_extra_count
+        remaining_capacity = max(max_capacity - len(state.daily_selection), 0)
+        if remaining_capacity == 0:
             return state
 
-        base_excluded_ids = list(
+        excluded_ids = list(
             dict.fromkeys([word.id for word in state.daily_selection] + (additionally_excluded_word_ids or []))
         )
 
-        unstudied_additions: list[RecallQueueWord] = []
-        if unstudied_needed > 0:
-            unstudied_additions = await self.vocabulary_service.select_unstudied_candidates(
-                user_id=state.user_id,
-                cooldown_days=self.cooldown_days,
-                limit=unstudied_needed,
-                excluded_word_ids=base_excluded_ids or None,
-            )
+        regular_additions: list[RecallQueueWord] = []
+        regular_needed = min(max(self.words_per_day - regular_count, 0), remaining_capacity)
+        if regular_needed > 0:
+            regular_additions = [
+                self._as_regular_portion(word)
+                for word in await self.vocabulary_service.select_daily_candidates(
+                    user_id=state.user_id,
+                    cooldown_days=self.cooldown_days,
+                    limit=regular_needed,
+                    excluded_word_ids=excluded_ids or None,
+                )
+            ]
+            remaining_capacity -= len(regular_additions)
 
-        priority_additions: list[RecallQueueWord] = []
-        if priority_needed > 0:
-            priority_excluded_ids = list(dict.fromkeys(base_excluded_ids + [word.id for word in unstudied_additions]))
-            priority_additions = await self.vocabulary_service.select_daily_candidates(
-                user_id=state.user_id,
-                cooldown_days=self.cooldown_days,
-                limit=priority_needed,
-                excluded_word_ids=priority_excluded_ids or None,
-            )
+        extra_additions: list[RecallQueueWord] = []
+        extra_needed = min(max(self.words_unstudied_extra_count - extra_count, 0), remaining_capacity)
+        if extra_needed > 0:
+            extra_excluded_ids = list(dict.fromkeys(excluded_ids + [word.id for word in regular_additions]))
+            extra_additions = [
+                self._as_unstudied_extra(word)
+                for word in await self.vocabulary_service.select_unstudied_candidates(
+                    user_id=state.user_id,
+                    cooldown_days=self.cooldown_days,
+                    limit=extra_needed,
+                    excluded_word_ids=extra_excluded_ids or None,
+                )
+            ]
 
-        additions = unstudied_additions + priority_additions
+        additions = regular_additions + extra_additions
         if not additions:
             return state
 
@@ -523,15 +540,16 @@ class RecallService:
             self.cooldown_days,
             limit=self.words_per_day,
         )
+        regular_words = [self._as_regular_portion(word) for word in portion_words]
         if self.words_unstudied_extra_count > 0:
             unstudied_words = await self.vocabulary_service.select_unstudied_candidates(
                 user_id=user_id,
                 cooldown_days=self.cooldown_days,
                 limit=self.words_unstudied_extra_count,
-                excluded_word_ids=[w.id for w in portion_words] or None,
+                excluded_word_ids=[w.id for w in regular_words] or None,
             )
-            portion_words = portion_words + unstudied_words
-        return portion_words
+            regular_words = regular_words + [self._as_unstudied_extra(word) for word in unstudied_words]
+        return regular_words
 
     async def _select_bumped_daily_portion(
         self,
@@ -560,8 +578,22 @@ class RecallService:
         return any(word.id == vocabulary_id for word in state.daily_selection)
 
     @staticmethod
+    def _as_regular_portion(word: RecallQueueWord) -> RecallQueueWord:
+        """Mark a candidate as selected for the regular WORDS_PER_DAY portion."""
+        return replace(word, is_unstudied_extra=False)
+
+    @staticmethod
+    def _as_unstudied_extra(word: RecallQueueWord) -> RecallQueueWord:
+        """Mark a candidate as selected through the extra unstudied-word selector."""
+        return replace(word, is_unstudied_extra=True)
+
+    @staticmethod
     def _merge_queue_metadata(queued_word: RecallQueueWord, validated_word: RecallQueueWord) -> RecallQueueWord:
-        """Prefer persisted queue text while filling any missing optional metadata."""
+        """Prefer persisted queue text while filling any missing optional metadata.
+
+        The provenance flag is deliberately not copied: the merged word only
+        feeds transport and is never re-persisted.
+        """
         return RecallQueueWord(
             id=queued_word.id,
             word_phrase=queued_word.word_phrase or validated_word.word_phrase,

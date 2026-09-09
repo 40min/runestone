@@ -126,6 +126,90 @@ async def test_replace_and_append_queue_preserve_order(db_session: AsyncSession)
 
 
 @pytest.mark.anyio
+async def test_replace_queue_persists_mixed_portion_flags_and_order(db_session: AsyncSession):
+    user = make_user("replace_flags")
+    db_session.add(user)
+    await db_session.flush()
+    regular, extra = await add_words(db_session, user.id, "ett", "tva")
+    repository = RecallRepository(db_session)
+    await repository.upsert_for_user(user.id, chat_id=123, is_enabled=True)
+
+    entries = as_queue_entries([regular, extra])
+    entries[1].is_unstudied_extra = True
+    await repository.replace_queue(user.id, entries, next_word_index=1)
+
+    state = await repository.get_recall_state(user.id)
+
+    assert state is not None
+    assert state.next_word_index == 1
+    assert [(word.id, word.is_unstudied_extra) for word in state.daily_selection] == [
+        (regular.id, False),
+        (extra.id, True),
+    ]
+
+
+@pytest.mark.anyio
+async def test_append_queue_words_persists_flags_without_changing_cursor(db_session: AsyncSession):
+    user = make_user("append_flags")
+    db_session.add(user)
+    await db_session.flush()
+    first, second, third = await add_words(db_session, user.id, "ett", "tva", "tre")
+    repository = RecallRepository(db_session)
+    await repository.upsert_for_user(user.id, chat_id=123, is_enabled=True)
+    await repository.replace_queue(user.id, as_queue_entries([first, second]), next_word_index=1)
+
+    appended = as_queue_entries([third])
+    appended[0].is_unstudied_extra = True
+    await repository.append_queue_words(user.id, appended)
+
+    state = await repository.get_recall_state(user.id)
+
+    assert state is not None
+    assert state.next_word_index == 1
+    assert [(word.id, word.is_unstudied_extra) for word in state.daily_selection] == [
+        (first.id, False),
+        (second.id, False),
+        (third.id, True),
+    ]
+
+
+@pytest.mark.anyio
+async def test_remove_queue_word_preserves_remaining_flags_while_compacting(db_session: AsyncSession):
+    user = make_user("remove_flags")
+    db_session.add(user)
+    await db_session.flush()
+    regular, extra, last = await add_words(db_session, user.id, "ett", "tva", "tre")
+    repository = RecallRepository(db_session)
+    await repository.upsert_for_user(user.id, chat_id=123, is_enabled=True)
+    entries = as_queue_entries([regular, extra, last])
+    entries[1].is_unstudied_extra = True
+    await repository.replace_queue(user.id, entries, next_word_index=2)
+
+    result = await repository.remove_queue_word(user.id, regular.id)
+    state = await repository.get_recall_state(user.id)
+
+    assert result == QueueRemovalResult(removed_position=0, next_word_index=1)
+    assert state is not None
+    assert [(word.id, word.is_unstudied_extra) for word in state.daily_selection] == [
+        (extra.id, True),
+        (last.id, False),
+    ]
+    rows = list(
+        (
+            await db_session.scalars(
+                select(RecallQueueItemDB)
+                .where(RecallQueueItemDB.user_id == user.id)
+                .order_by(RecallQueueItemDB.position)
+            )
+        ).all()
+    )
+    assert [(row.vocabulary_id, row.position, row.is_unstudied_extra) for row in rows] == [
+        (extra.id, 0, True),
+        (last.id, 1, False),
+    ]
+
+
+@pytest.mark.anyio
 async def test_remove_queue_word_compacts_positions_and_adjusts_locked_cursor(db_session: AsyncSession):
     user = make_user("remove")
     db_session.add(user)

@@ -31,9 +31,10 @@ The former embedded `daily_selection` array is normalized into one row per queue
 | `user_id` | Foreign key to `recall_user_states.user_id`. |
 | `vocabulary_id` | Foreign key to `vocabulary.id`. The queue does not duplicate `word_phrase`. |
 | `position` | Zero-based ordering within the user's queue. It has a non-negative check constraint. |
+| `is_unstudied_extra` | Selection provenance flag: `false` for rows selected into the regular `WORDS_PER_DAY` portion, `true` for rows selected through the extra unstudied-word selector. It records how the row was chosen; later learning, postponement, or priority changes do not change it while the row remains queued. |
 | `created_at` | Queue-row creation timestamp. |
 
-The table enforces uniqueness for both `(user_id, position)` and `(user_id, vocabulary_id)`. A composite foreign key from `(user_id, vocabulary_id)` to the matching vocabulary row also prevents a queue from referencing another user's word. A user therefore cannot have two words at the same position or the same vocabulary item twice in one queue. Reads join to `vocabulary` for the current phrase, translation, and example phrase, then sort by `position`, with `vocabulary_id` as a deterministic secondary order.
+The table enforces uniqueness for both `(user_id, position)` and `(user_id, vocabulary_id)`. A composite foreign key from `(user_id, vocabulary_id)` to the matching vocabulary row also prevents a queue from referencing another user's word. A user therefore cannot have two words at the same position or the same vocabulary item twice in one queue. Reads join to `vocabulary` for the current phrase, translation, and example phrase, then sort by `position`, with `vocabulary_id` as a deterministic secondary order, and return the provenance flag with each queued word. The flag is queue-maintenance metadata only: it is never included in the authenticated Recall API response, and the transport-facing merge drops it because the merged word is never re-persisted.
 
 Application DTOs still expose the queue as `daily_selection`, but this is a transport-facing name. Each DTO entry contains the vocabulary id and the joined display fields used by Telegram; there is no serialized words array or copied vocabulary text in the recall tables.
 
@@ -41,14 +42,14 @@ Application DTOs still expose the queue as `daily_selection`, but this is a tran
 
 The queue and `next_word_index` are related but stored separately: queue rows define the stable order, and the cursor points into that order.
 
-- Creating the initial selection requests up to `WORDS_PER_DAY` priority-selected words, appends up to `WORDS_UNSTUDIED_EXTRA_COUNT` additional unstudied words (`coalesce(learned_times, 0) == 0` ordered by `id ASC`), replaces the queue, and resets the cursor to `0`. Maximum queue capacity is `WORDS_PER_DAY + WORDS_UNSTUDIED_EXTRA_COUNT`.
+- Creating the initial selection requests up to `WORDS_PER_DAY` priority-selected words (marked regular), then appends up to `WORDS_UNSTUDIED_EXTRA_COUNT` additional unstudied words marked as extras (zero learning count, cooldown, and exclusion filters apply, ordered by `priority_learn ASC` with `random()` tie-breaking), replaces the queue, and resets the cursor to `0`. Maximum queue capacity is `WORDS_PER_DAY + WORDS_UNSTUDIED_EXTRA_COUNT`.
 - `/bump_words` and the web `Refresh selection` action invoke the same service workflow. While the
   recall-state row is locked, the workflow raises every active queued word's numeric
   learning-priority value, excludes the bumped vocabulary IDs from replacement selection, replaces
-  the priority portion, appends unstudied additions excluding bumped and priority words, and resets
-  the cursor to `0`. The priority changes and queue replacement share the outer command or request
-  transaction.
-- Topping up a short queue (refill) appends new words after the existing positions and leaves the cursor unchanged. Refill first adds eligible unstudied words up to `max(0, min(WORDS_UNSTUDIED_EXTRA_COUNT, WORDS_PER_DAY + WORDS_UNSTUDIED_EXTRA_COUNT - n))`, then adds ordinary priority candidates up to `max(WORDS_PER_DAY - n, 0)`, without backfilling missing unstudied slots with studied words.
+  the priority portion (both replacement selections mark rows regular), appends unstudied additions
+  marked as extras excluding bumped and priority words, and resets the cursor to `0`. The priority
+  changes and queue replacement share the outer command or request transaction.
+- Topping up a short queue (refill) appends new words after the existing positions and leaves the cursor unchanged. Refill counts each portion from the persisted `is_unstudied_extra` flags, never from a word's current priority or learning counters. It first appends regular candidates up to `min(max(WORDS_PER_DAY - regular_count, 0), remaining_capacity)`, then extra unstudied candidates up to `min(max(WORDS_UNSTUDIED_EXTRA_COUNT - extra_count, 0), remaining_capacity)`, where `remaining_capacity` is `max(WORDS_PER_DAY + WORDS_UNSTUDIED_EXTRA_COUNT - n, 0)`. This appends regular additions before extra additions. Postponed IDs are excluded from both selectors, and an exhausted pool leaves its slots empty rather than misclassifying candidates from the other portion.
 - A successful Telegram send updates the vocabulary learning timestamp and advances `next_word_index` in one database commit. Cursor advancement wraps against the authoritative queue length, so a completed cycle resumes at position `0`. A failed send rolls back and does not advance it.
 - Removing, postponing, or discarding an invalid word compacts the remaining positions to `0..n-1` and adjusts the cursor to keep the same logical next word where possible.
 - If a removed word was before the cursor, the cursor decreases by one. If the queue becomes empty, or the adjusted cursor is outside the shortened queue, it resets to `0`.
@@ -206,6 +207,15 @@ The schedule migration is PostgreSQL-specific operational work. It adds the hour
 range/unequal constraints, keeps the `9`/`22` server defaults for future states, and normalizes
 legacy timezone values that fail the application's IANA validation rule to `UTC`. The downgrade
 removes only the schedule columns and constraints; it cannot restore the original timezone strings.
+
+The portion-provenance migration adds `recall_queue_items.is_unstudied_extra` as non-null with a
+persistent `false` server default and backfills existing rows as regular rows; historical
+provenance cannot be reconstructed reliably from priority, learning counters, or
+deployment-specific settings. Existing queues, ordering, and cursors are preserved, and provenance
+converges as rows are removed and refilled; a full refresh/bump immediately rewrites the queue with
+accurate flags. The same revision changes the `vocabulary.priority_learn` server default from `9`
+to `5` (upgrade and downgrade change only the default, not existing values). The downgrade restores
+default `9` and drops the flag column.
 
 Before applying the migration to production, the release owner must count valid and invalid
 timezone rows and create a protected, recoverable backup or user-id-to-original-timezone export.

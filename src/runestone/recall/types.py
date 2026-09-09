@@ -12,6 +12,9 @@ class RecallQueueWord:
     word_phrase: str
     translation: str | None = None
     example_phrase: str | None = None
+    # Queue-maintenance provenance: whether the row was selected through the extra
+    # unstudied-word selector. Internal only; never exposed by the Recall API response.
+    is_unstudied_extra: bool = False
 
 
 @dataclass(slots=True)

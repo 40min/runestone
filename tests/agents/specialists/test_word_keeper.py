@@ -304,7 +304,7 @@ async def test_word_keeper_enriches_and_saves_new_word(specialist, mock_chat_mod
             "example_phrase": "Det var ett avgörande beslut.",
             "extra_info": "adjective; common/neuter/plural: avgörande",
             "in_learn": True,
-            "priority_learn": 9,
+            "priority_learn": 5,
         }
     ]
     assert vocabulary_service.insert_or_prioritize_words.call_args.kwargs == {"user_id": 12}
@@ -428,7 +428,7 @@ async def test_word_keeper_saves_corrected_word_instead_of_student_misspelling(s
             "example_phrase": "Våren är min favoritårstid.",
             "extra_info": 'noun; corrected from student form "varen"',
             "in_learn": True,
-            "priority_learn": 9,
+            "priority_learn": 5,
         }
     ]
 

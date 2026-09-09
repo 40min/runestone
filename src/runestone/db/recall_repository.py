@@ -160,6 +160,7 @@ class RecallRepository:
                     user_id=user_id,
                     vocabulary_id=word.id,
                     position=position,
+                    is_unstudied_extra=word.is_unstudied_extra,
                 )
             )
         row.next_word_index = next_word_index
@@ -176,6 +177,7 @@ class RecallRepository:
                     user_id=user_id,
                     vocabulary_id=word.id,
                     position=start_position + offset,
+                    is_unstudied_extra=word.is_unstudied_extra,
                 )
             )
         await self.db.flush()
@@ -199,24 +201,27 @@ class RecallRepository:
         if removed_position is None:
             return None
 
-        remaining_vocabulary_ids = [item.vocabulary_id for item in queue_rows if item.vocabulary_id != vocabulary_id]
+        remaining_queue_words = [
+            (item.vocabulary_id, item.is_unstudied_extra) for item in queue_rows if item.vocabulary_id != vocabulary_id
+        ]
 
         # Delete and rebuild while holding the state lock. Direct in-place
         # renumbering can transiently violate the PostgreSQL position unique key.
         await self.db.execute(delete(RecallQueueItemDB).where(RecallQueueItemDB.user_id == user_id))
-        for position, remaining_vocabulary_id in enumerate(remaining_vocabulary_ids):
+        for position, (remaining_vocabulary_id, is_unstudied_extra) in enumerate(remaining_queue_words):
             self.db.add(
                 RecallQueueItemDB(
                     user_id=user_id,
                     vocabulary_id=remaining_vocabulary_id,
                     position=position,
+                    is_unstudied_extra=is_unstudied_extra,
                 )
             )
 
         state_row.next_word_index = self._cursor_after_removal(
             current_index=state_row.next_word_index,
             removed_position=removed_position,
-            new_length=len(remaining_vocabulary_ids),
+            new_length=len(remaining_queue_words),
         )
 
         await self.db.flush()
@@ -288,6 +293,7 @@ class RecallRepository:
                 Vocabulary.word_phrase,
                 Vocabulary.translation,
                 Vocabulary.example_phrase,
+                queue_alias.is_unstudied_extra,
             )
             .join(Vocabulary, Vocabulary.id == queue_alias.vocabulary_id)
             .where(queue_alias.user_id.in_(selected_user_ids))
@@ -295,13 +301,14 @@ class RecallRepository:
         )
         result = await self.db.execute(stmt)
         queues: dict[int, list[RecallQueueWord]] = {user_id: [] for user_id in selected_user_ids}
-        for user_id, vocabulary_id, word_phrase, translation, example_phrase in result.all():
+        for user_id, vocabulary_id, word_phrase, translation, example_phrase, is_unstudied_extra in result.all():
             queues[user_id].append(
                 RecallQueueWord(
                     id=vocabulary_id,
                     word_phrase=word_phrase,
                     translation=translation,
                     example_phrase=example_phrase,
+                    is_unstudied_extra=is_unstudied_extra,
                 )
             )
         return queues
