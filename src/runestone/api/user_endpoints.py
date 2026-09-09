@@ -15,7 +15,7 @@ from runestone.db.models import User
 from runestone.dependencies import get_user_service
 from runestone.services.user_service import UserService
 
-router = APIRouter()
+router = APIRouter(tags=["users"])
 logger = get_logger(__name__)
 
 

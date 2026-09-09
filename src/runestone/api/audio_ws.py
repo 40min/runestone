@@ -13,7 +13,7 @@ from runestone.core.connection_manager import connection_manager
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(tags=["audio"])
 
 
 @router.websocket("/ws/audio")

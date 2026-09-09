@@ -47,7 +47,7 @@ from runestone.recall.service import RecallService
 from runestone.services.grammar_service import GrammarService
 from runestone.services.vocabulary_service import VocabularyService
 
-router = APIRouter()
+router = APIRouter(tags=["processing"])
 logger = get_logger(__name__)
 
 

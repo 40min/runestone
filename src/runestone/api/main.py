@@ -110,60 +110,28 @@ def create_application() -> FastAPI:
     )
 
     # Include API routers
-    app.include_router(
-        api_router,
-        prefix="/api",
-        tags=["processing"],
-    )
+    app.include_router(api_router, prefix="/api")
 
     # Include grammar router
-    app.include_router(
-        grammar_router,
-        prefix="/api",
-        tags=["grammar"],
-    )
+    app.include_router(grammar_router, prefix="/api")
 
     # Include auth router
-    app.include_router(
-        auth_router,
-        prefix="/api/auth",
-        tags=["auth"],
-    )
+    app.include_router(auth_router, prefix="/api")
 
     # Include user router
-    app.include_router(
-        user_router,
-        prefix="/api",
-        tags=["users"],
-    )
+    app.include_router(user_router, prefix="/api")
 
     # Include chat router
-    app.include_router(
-        chat_router,
-        prefix="/api/chat",
-        tags=["chat"],
-    )
+    app.include_router(chat_router, prefix="/api")
 
     # Include audio WebSocket router
-    app.include_router(
-        audio_ws_router,
-        prefix="/api",
-        tags=["audio"],
-    )
+    app.include_router(audio_ws_router, prefix="/api")
 
     # Include memory router
-    app.include_router(
-        memory_router,
-        prefix="/api",
-        tags=["memory"],
-    )
+    app.include_router(memory_router, prefix="/api")
 
     # Include recall router
-    app.include_router(
-        recall_router,
-        prefix="/api/recall",
-        tags=["recall"],
-    )
+    app.include_router(recall_router, prefix="/api")
 
     return app
 

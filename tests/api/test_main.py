@@ -74,6 +74,29 @@ class TestFastAPIApp:
             assert response.status_code == 200
 
 
+def test_openapi_routes_have_single_domain_tag() -> None:
+    """Keep router-owned prefixes and tags visible in the public API contract."""
+    schema = app.openapi()
+    expected_routes = {
+        ("/api/health", "get"): "processing",
+        ("/api/grammar/search", "get"): "grammar",
+        ("/api/auth/register", "post"): "auth",
+        ("/api/me", "get"): "users",
+        ("/api/chat/history", "get"): "chat",
+        ("/api/memory", "get"): "memory",
+        ("/api/recall", "get"): "recall",
+    }
+
+    for (path, method), expected_tag in expected_routes.items():
+        operation = schema["paths"][path][method]
+        assert operation["tags"] == [expected_tag]
+
+
+def test_audio_websocket_route_is_registered() -> None:
+    """Keep the audio WebSocket path under the shared API prefix."""
+    assert app.url_path_for("audio_websocket") == "/api/ws/audio"
+
+
 async def test_startup_price_refresh_succeeds_without_blocking_readiness(monkeypatch, caplog) -> None:
     patch_lifespan_dependencies(monkeypatch)
     started = asyncio.Event()

@@ -28,7 +28,7 @@ from runestone.services.voice_service import VoiceService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(prefix="/chat", tags=["chat"])
 
 SUPPORTED_TRANSCRIPTION_LANGUAGES = set(LANGUAGE_CODE_MAP) | set(LANGUAGE_CODE_MAP.values())
 
