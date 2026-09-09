@@ -22,7 +22,7 @@ from runestone.recall.service import RecallService
 from runestone.recall.types import RecallState
 from runestone.utils.timezones import effective_timezone_name
 
-router = APIRouter()
+router = APIRouter(prefix="/recall", tags=["recall"])
 logger = get_logger(__name__)
 
 RECALL_NOT_CONFIGURED_DETAIL = (

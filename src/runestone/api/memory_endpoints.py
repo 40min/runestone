@@ -27,7 +27,7 @@ from runestone.db.models import User
 from runestone.dependencies import get_agents_manager, get_memory_item_service
 from runestone.services.memory_item_service import MemoryItemService
 
-router = APIRouter()
+router = APIRouter(tags=["memory"])
 logger = get_logger(__name__)
 
 

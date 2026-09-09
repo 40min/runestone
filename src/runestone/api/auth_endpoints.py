@@ -13,7 +13,7 @@ from runestone.core.exceptions import InactiveUserError, InvalidCredentialsError
 from runestone.dependencies import get_auth_service
 from runestone.services.auth_service import AuthService
 
-router = APIRouter()
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register")
