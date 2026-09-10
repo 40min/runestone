@@ -1,0 +1,31 @@
+name: Safety
+
+on:
+  pull_request:
+    types: [opened]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run Safety hook
+        env:
+          SAFETY_REQUIRED: "1"
+          SAFETY_API_KEY: ${{ secrets.SAFETY_API_KEY }}
+        run: pre-commit run safety --hook-stage manual --all-files

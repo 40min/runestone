@@ -453,6 +453,22 @@ The project uses several tools for code quality:
 - **pre-commit**: Git hooks for quality checks
 - **pytest**: Testing framework with coverage
 
+### Safety dependency scanning
+
+The `safety-dependency-scan` pre-commit hook is `manual`-only so it does not run during ordinary local commits. Run it deliberately with:
+
+```bash
+make security-check
+```
+
+Set your API key first:
+
+```bash
+export SAFETY_API_KEY="your-safety-api-key"
+```
+
+CI enforces the scan via the `Safety` workflow when a pull request is opened and on every push to `main`; you can also trigger it manually from the Actions tab for an intentional rerun or verification. The workflow sets `SAFETY_REQUIRED=1` and passes `SAFETY_API_KEY` from GitHub Actions secrets. If the key is missing when required, the hook fails closed with a clear error; the wrapper does not print the key or pass it on the command line, and Safety receives it through the environment for authentication.
+
 ## 🏗️ Architecture
 
 ```
