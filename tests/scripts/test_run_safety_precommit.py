@@ -42,3 +42,5 @@ def test_authenticated_run_invokes_safety_and_propagates_exit_code(monkeypatch):
     assert "scan" in command
     assert "--target" in command
     assert "." in command
+    assert "--output" not in command
+    assert "bare" not in command

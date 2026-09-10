@@ -41,8 +41,6 @@ def main() -> int:
             "scan",
             "--target",
             ".",
-            "--output",
-            "bare",
         ],
         check=False,
     )
