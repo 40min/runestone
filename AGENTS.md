@@ -46,6 +46,7 @@ Prefer the Makefile targets over spelling out raw tool commands; the Makefile al
 - For refreshing running containers, prefer `make restart-recall`, `make rebuild-restart-recall`, or `make rebuild-restart-all` over ad hoc Docker commands.
 - Use `make rebuild-container NAMES="..."` only for explicit full container rebuilds; **note** that this target also runs `git pull` and `sudo docker` cleanup steps, which may affect local changes.
 - Manage schema changes through Alembic targets: `make db-init`, `make db-migrate MESSAGE="..."`, `make db-upgrade`, `make db-downgrade REVISION=...`, `make db-current`, and `make db-history`.
+- Do not write tests specifically for Alembic migration scripts.
 - Use `make clean` when caches or generated artifacts may be skewing local results, and `make info` when you need a quick environment snapshot while debugging setup issues.
 
 For LangChain `@tool` tests, use `.ainvoke()` for tools without `ToolRuntime`; use `.coroutine(runtime, ...)` with a manually constructed runtime for tools that depend on `ToolRuntime` context.
