@@ -5,6 +5,8 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
+from pathlib import Path
 
 
 def main() -> int:
@@ -34,16 +36,26 @@ def main() -> int:
         print("Safety executable is unavailable in the hook environment.", file=sys.stderr)
         return 1
 
-    result = subprocess.run(
-        [
-            safety_executable,
-            "--disable-optional-telemetry",
-            "scan",
-            "--target",
-            ".",
-        ],
-        check=False,
-    )
+    with tempfile.TemporaryDirectory(prefix="runestone-safety-") as scan_directory:
+        scan_root = Path(scan_directory)
+        for dependency_file in ("pyproject.toml", "uv.lock", ".safety-project.ini"):
+            source = Path(dependency_file)
+            if source.exists():
+                shutil.copy2(source, scan_root / dependency_file)
+        for source in Path.cwd().glob("requirements*.txt"):
+            shutil.copy2(source, scan_root / source.name)
+
+        result = subprocess.run(
+            [
+                safety_executable,
+                "--disable-optional-telemetry",
+                "scan",
+                "--target",
+                ".",
+            ],
+            cwd=scan_root,
+            check=False,
+        )
     return result.returncode
 
 

@@ -44,3 +44,5 @@ def test_authenticated_run_invokes_safety_and_propagates_exit_code(monkeypatch):
     assert "." in command
     assert "--output" not in command
     assert "bare" not in command
+    assert mock_run.call_args.kwargs["cwd"].name.startswith("runestone-safety-")
+    assert not mock_run.call_args.kwargs["cwd"].exists()
