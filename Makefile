@@ -195,7 +195,7 @@ security-check:
 	@uv run pre-commit run bandit --all-files
 	@uv run pre-commit run eslint --hook-stage manual --all-files
 	@uv run pre-commit run semgrep --all-files
-	@uv run pre-commit run safety --all-files
+	@uv run pre-commit run safety --hook-stage manual --all-files
 	@echo "✅ Security checks complete!"
 
 # =============================================================================

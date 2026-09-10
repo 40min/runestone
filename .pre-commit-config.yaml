@@ -150,11 +150,12 @@ repos:
     hooks:
       - id: safety
         name: safety-dependency-scan
+        stages: [manual]
         language: python
         entry: python scripts/run_safety_precommit.py
         additional_dependencies: ["safety==3.8.1"]
         pass_filenames: false
-        files: ^(pyproject\.toml|uv\.lock|requirements.*\.txt)$
+        files: ^(pyproject\.toml|uv\.lock|requirements.*\.txt|scripts/run_safety_precommit\.py)$
 
       - id: frontend-lockfile-check
         name: frontend-lockfile-check

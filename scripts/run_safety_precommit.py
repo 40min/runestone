@@ -8,8 +8,21 @@ import sys
 
 
 def main() -> int:
-    """Run a dependency scan when Safety credentials are available."""
-    if not os.getenv("SAFETY_API_KEY"):
+    """Run a dependency scan when Safety credentials are available.
+
+    The scan is optional during ordinary local pre-commit runs. When
+    SAFETY_REQUIRED=1 the scan must run; a missing SAFETY_API_KEY is treated
+    as a hard failure so CI cannot silently skip dependency checks.
+    """
+    api_key = os.getenv("SAFETY_API_KEY")
+    required = os.getenv("SAFETY_REQUIRED") == "1"
+    if not api_key:
+        if required:
+            print(
+                "Safety scan is required (SAFETY_REQUIRED=1) but SAFETY_API_KEY is not set.",
+                file=sys.stderr,
+            )
+            return 1
         print(
             "Skipping Safety scan: set SAFETY_API_KEY to enable non-interactive dependency checks.",
             file=sys.stderr,
