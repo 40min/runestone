@@ -58,6 +58,11 @@ where = ["src"]
 torch = { index = "pytorch-cpu" }
 
 [[tool.uv.index]]
+name = "safety"
+url = "https://pkgs.safetycli.com/repository/ikarus-labs/project/runestone/pypi/simple/"
+default = false
+
+[[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
