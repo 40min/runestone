@@ -27,6 +27,7 @@ from runestone.core.error_tracking import (
     _sanitize_event,
     setup_error_tracking,
 )
+from runestone.core.logging_config import RunestoneLogFilter, get_current_request_id
 from runestone.dependencies import get_chat_service
 
 
@@ -641,6 +642,87 @@ async def test_middleware_binds_request_id_to_events_in_request_scope(capture_tr
     event = _single_event(capture_transport)
     request_id = event["contexts"]["runestone"]["request_id"]
     assert re.fullmatch(r"[0-9a-f]{32}", request_id)
+
+
+async def test_middleware_binds_same_request_id_to_local_logs(capture_transport, caplog) -> None:
+    """Logs emitted inside the request carry the same ID as the Sentry context."""
+    caplog.set_level(logging.INFO)
+    logged_ids: list[str | None] = []
+
+    async def inner_app(scope, receive, send) -> None:
+        logging.getLogger("runestone.test").info("inside request")
+        logged_ids.append(get_current_request_id())
+        sentry_sdk.capture_message("inside request")
+
+    middleware = RequestCorrelationMiddleware(inner_app)
+    # The root handler's filter runs at emission in production; caplog's own
+    # handler bypasses it, so install the production filter on the emitting
+    # logger to observe the record field at emission time.
+    test_logger = logging.getLogger("runestone.test")
+    emission_filter = RunestoneLogFilter()
+    test_logger.addFilter(emission_filter)
+    try:
+        await _run_request(middleware, {"type": "http", "method": "GET", "path": "/x"})
+    finally:
+        test_logger.removeFilter(emission_filter)
+
+    exported_id = _single_event(capture_transport)["contexts"]["runestone"]["request_id"]
+    assert logged_ids == [exported_id]
+    assert caplog.records[0].request_id == exported_id
+
+
+async def test_middleware_resets_request_id_after_request(caplog) -> None:
+    """The ContextVar is restored after the request; later logs carry no ID."""
+    caplog.set_level(logging.INFO)
+
+    async def inner_app(scope, receive, send) -> None:
+        pass
+
+    middleware = RequestCorrelationMiddleware(inner_app)
+    await _run_request(middleware, {"type": "http", "method": "GET", "path": "/x"})
+
+    assert get_current_request_id() is None
+    test_logger = logging.getLogger("runestone.test")
+    emission_filter = RunestoneLogFilter()
+    test_logger.addFilter(emission_filter)
+    try:
+        test_logger.info("after request")
+    finally:
+        test_logger.removeFilter(emission_filter)
+    assert caplog.records[-1].request_id is None
+
+
+async def test_concurrent_requests_bind_distinct_ids_to_local_logs(capture_transport) -> None:
+    """Overlapping requests log under their own ID, never another request's."""
+    barrier = asyncio.Barrier(5)
+    logged_ids: list[str | None] = []
+
+    async def inner_app(scope, receive, send) -> None:
+        await barrier.wait()
+        logged_ids.append(get_current_request_id())
+
+    middleware = RequestCorrelationMiddleware(inner_app)
+    scopes = [{"type": "http", "method": "GET", "path": "/x", "index": index} for index in range(5)]
+    await asyncio.gather(*(_run_request(middleware, scope) for scope in scopes))
+
+    assert len(logged_ids) == 5
+    assert len(set(logged_ids)) == 5
+    for request_id in logged_ids:
+        assert re.fullmatch(r"[0-9a-f]{32}", request_id or "")
+
+
+async def test_escaping_exception_resets_context_var_but_keeps_sentry_id(capture_transport) -> None:
+    """The ContextVar is reset even when the app raises; Sentry keeps the ID."""
+
+    async def inner_app(scope, receive, send) -> None:
+        raise RuntimeError("escape")
+
+    middleware = RequestCorrelationMiddleware(inner_app)
+    with sentry_sdk.isolation_scope():
+        with pytest.raises(RuntimeError, match="escape"):
+            await middleware({"type": "http", "method": "GET", "path": "/x"}, _noop_receive, _noop_send)
+
+    assert get_current_request_id() is None
 
 
 async def test_concurrent_requests_receive_distinct_request_ids(capture_transport) -> None:

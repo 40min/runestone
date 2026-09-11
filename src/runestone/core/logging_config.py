@@ -9,6 +9,7 @@ import logging
 import os
 import re
 import sys
+from contextvars import ContextVar, Token
 from typing import Optional
 
 from rich.console import Console
@@ -16,15 +17,48 @@ from rich.logging import RichHandler
 
 _LEADING_TAG_RE = re.compile(r"^\[[^\]]+\]\s*")
 
+_request_id_var: ContextVar[Optional[str]] = ContextVar("runestone_request_id", default=None)
+
+
+def get_current_request_id() -> Optional[str]:
+    """Return the request-bound correlation ID, or ``None`` outside a request."""
+    return _request_id_var.get()
+
+
+def set_current_request_id(request_id: str) -> Token:
+    """Bind the correlation ID for the current request scope."""
+    return _request_id_var.set(request_id)
+
+
+def reset_current_request_id(token: Token) -> None:
+    """Restore the previous correlation ID using the token from ``set_current_request_id``."""
+    _request_id_var.reset(token)
+
 
 class RunestoneLogFilter(logging.Filter):
     """Attach derived display fields used by the log formatter."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.producer = _derive_producer(record.name)
+        record.request_id = _request_id_var.get()
         if isinstance(record.msg, str):
             record.msg = _LEADING_TAG_RE.sub("", record.msg)
         return True
+
+
+class RunestoneLogFormatter(logging.Formatter):
+    """Render local log lines with the request correlation ID when one is bound.
+
+    The suffix is appended only for records produced inside a request scope;
+    outside requests the line is unchanged.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        message = super().format(record)
+        request_id = getattr(record, "request_id", None)
+        if request_id:
+            message = f"{message} | request_id={request_id}"
+        return message
 
 
 def _derive_producer(logger_name: str) -> str:
@@ -90,7 +124,7 @@ def setup_logging(level: str = "INFO", format_string: Optional[str] = None, verb
     else:
         handler = logging.StreamHandler(sys.stdout)
 
-    handler.setFormatter(logging.Formatter(format_string, datefmt=date_format))
+    handler.setFormatter(RunestoneLogFormatter(format_string, datefmt=date_format))
 
     handler.addFilter(log_filter)
     root_logger.addHandler(handler)

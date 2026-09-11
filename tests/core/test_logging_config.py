@@ -1,7 +1,17 @@
 import logging
 from io import StringIO
 
+import pytest
+
 from runestone.core import logging_config
+
+
+@pytest.fixture
+def bound_request_id():
+    """Bind a correlation ID for the current test task and reset it after."""
+    token = logging_config.set_current_request_id("a" * 32)
+    yield "a" * 32
+    logging_config.reset_current_request_id(token)
 
 
 def test_resolve_color_setting_truthy(monkeypatch):
@@ -35,6 +45,79 @@ def test_log_filter_strips_leading_tag_and_sets_producer():
     assert accepted is True
     assert record.producer == "api.endpoints"
     assert record.msg == "Analysis request received"
+
+
+def test_log_filter_attaches_bound_request_id(bound_request_id):
+    record = logging.LogRecord(
+        name="runestone.api.endpoints",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="Analysis request received",
+        args=(),
+        exc_info=None,
+    )
+    logging_config.RunestoneLogFilter().filter(record)
+
+    assert record.request_id == bound_request_id
+
+
+def test_log_filter_attaches_no_request_id_outside_requests():
+    record = logging.LogRecord(
+        name="runestone.api.endpoints",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="Analysis request received",
+        args=(),
+        exc_info=None,
+    )
+    logging_config.RunestoneLogFilter().filter(record)
+
+    assert record.request_id is None
+
+
+def test_formatter_renders_request_id_suffix(bound_request_id):
+    record = logging.LogRecord(
+        name="runestone.api.endpoints",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="Analysis request received",
+        args=(),
+        exc_info=None,
+    )
+    logging_config.RunestoneLogFilter().filter(record)
+    rendered = logging_config.RunestoneLogFormatter("%(message)s").format(record)
+
+    assert rendered == f"Analysis request received | request_id={bound_request_id}"
+
+
+def test_formatter_omits_suffix_outside_requests():
+    record = logging.LogRecord(
+        name="runestone.api.endpoints",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="Analysis request received",
+        args=(),
+        exc_info=None,
+    )
+    logging_config.RunestoneLogFilter().filter(record)
+    rendered = logging_config.RunestoneLogFormatter("%(message)s").format(record)
+
+    assert rendered == "Analysis request received"
+    assert "request_id=" not in rendered
+
+
+def test_setup_logging_installs_request_id_formatter(monkeypatch):
+    monkeypatch.setenv("RUNESTONE_LOG_COLOR", "auto")
+    monkeypatch.setattr(logging_config.sys, "stdout", StringIO())
+    logging_config.setup_logging(level="INFO")
+
+    root = logging.getLogger()
+    assert len(root.handlers) == 1
+    assert isinstance(root.handlers[0].formatter, logging_config.RunestoneLogFormatter)
 
 
 def test_setup_logging_forces_color_handler_when_enabled(monkeypatch):

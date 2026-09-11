@@ -144,6 +144,14 @@ pre-existing `runestone` context instead of replacing it.
   users or sessions. Its diagnostic value is correlating multiple error events
   raised inside one request scope (for example a handled 500 plus a late
   background-task failure).
+- The same ID is bound to a request-scoped `ContextVar`
+  (`runestone.core.logging_config`) and rendered as a `request_id=<hex>`
+  suffix on **local** log lines by `RunestoneLogFormatter` while the request is
+  in flight. This is private-log correlation only: the exported event still
+  carries the ID solely through the validated `contexts.runestone.request_id`
+  rule above, and breadcrumb/log messages remain discarded by the sanitizer.
+  The `ContextVar` is reset with its token when the request scope exits, so
+  later logs in the same task carry no ID.
 - WebSocket and lifespan scopes pass through without an ID.
 - When the SDK is not initialized, the middleware passes through without
   mutating any ambient scope.
