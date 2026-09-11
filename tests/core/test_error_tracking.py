@@ -712,17 +712,25 @@ async def test_concurrent_requests_bind_distinct_ids_to_local_logs(capture_trans
 
 
 async def test_escaping_exception_resets_context_var_but_keeps_sentry_id(capture_transport) -> None:
-    """The ContextVar is reset even when the app raises; Sentry keeps the ID."""
+    """The ContextVar is reset even when the app raises; Sentry keeps the ID.
+
+    The capture happens after the middleware has returned, mirroring what
+    Sentry's outer ASGI integration does for an escaping exception.
+    """
 
     async def inner_app(scope, receive, send) -> None:
         raise RuntimeError("escape")
 
     middleware = RequestCorrelationMiddleware(inner_app)
     with sentry_sdk.isolation_scope():
-        with pytest.raises(RuntimeError, match="escape"):
+        try:
             await middleware({"type": "http", "method": "GET", "path": "/x"}, _noop_receive, _noop_send)
+        except RuntimeError:
+            sentry_sdk.capture_exception()
 
     assert get_current_request_id() is None
+    event = _single_event(capture_transport)
+    assert re.fullmatch(r"[0-9a-f]{32}", event["contexts"]["runestone"]["request_id"])
 
 
 async def test_concurrent_requests_receive_distinct_request_ids(capture_transport) -> None:
@@ -852,16 +860,33 @@ async def test_websocket_scope_passes_through_without_request_id(capture_transpo
     assert "request_id" not in event.get("contexts", {}).get("runestone", {})
 
 
-async def test_middleware_is_inert_when_sdk_is_disabled(capture_transport, monkeypatch) -> None:
-    """Without an initialized SDK the middleware never mutates ambient state."""
+async def test_middleware_is_inert_toward_sentry_when_sdk_is_disabled(capture_transport, caplog, monkeypatch) -> None:
+    """Without an initialized SDK, local logs still correlate but Sentry is untouched."""
+    caplog.set_level(logging.INFO)
     monkeypatch.setattr(sentry_sdk, "is_initialized", lambda: False)
+    logged_ids: list[str | None] = []
 
     async def inner_app(scope, receive, send) -> None:
+        logging.getLogger("runestone.test").info("inside request")
+        logged_ids.append(get_current_request_id())
         sentry_sdk.capture_message("disabled mode")
 
     middleware = RequestCorrelationMiddleware(inner_app)
-    await _run_request(middleware, {"type": "http", "method": "GET", "path": "/x"})
+    test_logger = logging.getLogger("runestone.test")
+    emission_filter = RunestoneLogFilter()
+    test_logger.addFilter(emission_filter)
+    try:
+        await _run_request(middleware, {"type": "http", "method": "GET", "path": "/x"})
+    finally:
+        test_logger.removeFilter(emission_filter)
 
+    # Local-log correlation works without Sentry.
+    assert len(logged_ids) == 1
+    assert re.fullmatch(r"[0-9a-f]{32}", logged_ids[0] or "")
+    assert caplog.records[0].request_id == logged_ids[0]
+    # The ContextVar is cleaned up after the request.
+    assert get_current_request_id() is None
+    # No Sentry context mutation: the captured event carries no request ID.
     event = _single_event(capture_transport)
     assert "request_id" not in event.get("contexts", {}).get("runestone", {})
 

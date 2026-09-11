@@ -456,15 +456,19 @@ class RequestCorrelationMiddleware:
     the client, never exposed in a response header, and never correlated with
     users or sessions. WebSocket and lifespan scopes pass through unchanged.
 
-    The same ID is bound to a request-scoped ``ContextVar`` so local log lines
-    render ``request_id=<hex>`` (private logs only; the sanitizer owns export),
-    and to Sentry's per-request isolation scope as
-    ``contexts.runestone.request_id``. The context stays installed for the
-    whole request so exceptions that escape this middleware are still captured
-    with the ID by Sentry's outer ASGI integration; cleanup relies on that
-    integration discarding the per-request isolation scope (sentry-sdk 2.68.1
-    creates and clears one per ASGI request), so this middleware must run
-    inside its lifecycle.
+    The ID is always bound to a request-scoped ``ContextVar`` so local log
+    lines render ``request_id=<hex>`` even when error tracking is disabled
+    (private logs only; the sanitizer owns export). The Sentry binding to the
+    per-request isolation scope as ``contexts.runestone.request_id`` happens
+    only when the SDK is initialized. Detached background tasks created during
+    the request intentionally inherit the ID via contextvar copy semantics;
+    the token reset restores only the requesting task's context.
+
+    The Sentry context stays installed for the whole request so exceptions
+    that escape this middleware are still captured with the ID by Sentry's
+    outer ASGI integration; cleanup relies on that integration discarding the
+    per-request isolation scope (sentry-sdk 2.68.1 creates and clears one per
+    ASGI request), so this middleware must run inside its lifecycle.
     """
 
     def __init__(self, app: Callable[..., Any]) -> None:
@@ -476,20 +480,22 @@ class RequestCorrelationMiddleware:
         receive: _ASGIReceive,
         send: _ASGISend,
     ) -> None:
-        if scope.get("type") != "http" or not sentry_sdk.is_initialized():
+        if scope.get("type") != "http":
             await self.app(scope, receive, send)
             return
 
         request_id = uuid.uuid4().hex
         token = set_current_request_id(request_id)
         try:
-            isolation_scope = sentry_sdk.get_isolation_scope()
-            # Merge instead of replace so any pre-existing ``runestone`` context
-            # fields survive alongside the ID. sentry-sdk 2.68.1 has no public
-            # context getter, hence the pinned-version private read.
-            runestone_context = dict(isolation_scope._contexts.get("runestone") or {})
-            runestone_context["request_id"] = request_id
-            isolation_scope.set_context("runestone", runestone_context)
+            if sentry_sdk.is_initialized():
+                isolation_scope = sentry_sdk.get_isolation_scope()
+                # Merge instead of replace so any pre-existing ``runestone``
+                # context fields survive alongside the ID. sentry-sdk 2.68.1
+                # has no public context getter, hence the pinned-version
+                # private read.
+                runestone_context = dict(isolation_scope._contexts.get("runestone") or {})
+                runestone_context["request_id"] = request_id
+                isolation_scope.set_context("runestone", runestone_context)
             await self.app(scope, receive, send)
         finally:
             reset_current_request_id(token)

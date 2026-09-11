@@ -42,7 +42,7 @@ Still outstanding:
 - Quota/volume documentation is recorded, but the required privacy/security approval is not yet obtained (commit-bound, on the PR).
 - The optional release-owner synthetic canary before deployment has not been performed.
 
-Follow-up commit (local-log correlation): the same middleware-generated ID is additionally bound to a request-scoped `ContextVar` in `core/logging_config.py` and rendered as a `request_id=<hex>` suffix on local log lines by `RunestoneLogFormatter`, reset via token when the request scope exits. This touches private logs only; the export contract, sanitizer, and HTTP-only scope are unchanged, and the ID still reaches Better Stack solely through `contexts.runestone.request_id`.
+Follow-up commit (local-log correlation): the same middleware-generated ID is additionally bound to a request-scoped `ContextVar` in `core/logging_config.py` and rendered as a `request_id=<hex>` suffix on local log lines by `RunestoneLogFormatter`, reset via token when the request scope exits. The ContextVar binding is unconditional for HTTP requests (local logs correlate even without a DSN); the Sentry scope binding stays conditional on SDK initialization. Detached background tasks created during a request intentionally inherit the ID via contextvar copy semantics. This touches private logs only; the export contract, sanitizer, and HTTP-only scope are unchanged, and the ID still reaches Better Stack solely through `contexts.runestone.request_id`.
 
 The standalone recall worker in `recall_main.py` does not initialize error tracking. Instrumenting that process is not silently bundled into this task; see Non-goals and follow-up.
 

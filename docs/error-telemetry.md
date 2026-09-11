@@ -147,14 +147,22 @@ pre-existing `runestone` context instead of replacing it.
 - The same ID is bound to a request-scoped `ContextVar`
   (`runestone.core.logging_config`) and rendered as a `request_id=<hex>`
   suffix on **local** log lines by `RunestoneLogFormatter` while the request is
-  in flight. This is private-log correlation only: the exported event still
-  carries the ID solely through the validated `contexts.runestone.request_id`
-  rule above, and breadcrumb/log messages remain discarded by the sanitizer.
-  The `ContextVar` is reset with its token when the request scope exits, so
-  later logs in the same task carry no ID.
+  in flight. This binding is unconditional for HTTP requests, so private logs
+  correlate even when error tracking is disabled (no DSN, the documented local
+  development default). This is private-log correlation only: the exported
+  event still carries the ID solely through the validated
+  `contexts.runestone.request_id` rule above, and breadcrumb/log messages
+  remain discarded by the sanitizer. The `ContextVar` is reset with its token
+  when the request scope exits, so later logs in the same task carry no ID.
+- Detached background tasks created during a request intentionally inherit the
+  ID: `asyncio` tasks copy the current context at creation, so a task spawned
+  mid-request logs with that request's ID for its lifetime, including after
+  the response is returned. The token reset restores only the requesting
+  task's context, not the child's copy.
 - WebSocket and lifespan scopes pass through without an ID.
-- When the SDK is not initialized, the middleware passes through without
-  mutating any ambient scope.
+- When the SDK is not initialized, the local-log binding above still applies;
+  only the Sentry scope binding is skipped, so no ambient Sentry state is
+  mutated.
 - The ID reaches export only through the validated
   `contexts.runestone.request_id` rule above; request IDs via tags, log
   messages, headers, or request data are dropped.
