@@ -46,6 +46,7 @@ Two SDK callbacks enforce a default-deny policy:
 | `request.method` | `[A-Z]{3,16}` |
 | `transaction` | route template only, and only when the SDK source is `route` or `component` |
 | `contexts.runestone.status_code` | integer `100..599` (a three-digit string is parsed; other coercion rejected) |
+| `contexts.runestone.request_id` | exactly 32 lowercase hex characters (see request correlation below) |
 | `breadcrumbs.values[]` | ≤20 entries, each passing the breadcrumb contract |
 
 Validator details:
@@ -56,6 +57,12 @@ Validator details:
 - `release`: `[A-Za-z0-9._:/@-]{1,128}`; `environment`: `[A-Za-z0-9._-]{1,64}`
 - route template: `^/[A-Za-z0-9_{}./:-]{0,199}$`, `/` is the sole valid root,
   and `?`/`#`/`%`/`//`/`..`/empty segments are rejected
+- `request_id`: `^[0-9a-f]{32}$` exactly; any other value is omitted
+
+The exported `contexts.runestone` dict is a **validated union** of
+scope-injected fields (`request_id`) and event-level fields (`status_code`);
+it is never a wholesale replacement of the dict, so both fields survive when
+both are present.
 
 Explicitly dropped: exception values/messages, `logentry`, `user`, `extra`,
 arbitrary `tags`/`contexts`, stack `vars`, absolute paths, source context,
@@ -90,6 +97,76 @@ Allowed `runestone_telemetry` fields:
 
 Fields that fail validation are dropped individually; an invalid `operation`
 drops the whole breadcrumb.
+
+### Initial breadcrumb producers
+
+Only five production log records carry markers (four operation schemas). Their
+local human-readable messages are unchanged; the marker adds only validated,
+code/config-owned fields:
+
+| Producer | Marker fields |
+| --- | --- |
+| `agents/manager.py::prepare_pre_turn` coordinator fallback | `operation=coordinator_plan`, `outcome=fallback_teacher_only`, configured coordinator provider/model |
+| `agents/manager.py::generate_teacher_response` re-raised teacher failure | `operation=teacher_response`, `outcome=failed`, configured teacher provider/model |
+| `core/ocr.py::_preprocess_image_for_ocr` recoverable fallback | `operation=ocr_preprocess`, `outcome=fallback_original` |
+| `core/ocr.py::extract_text` `OCRError` exit | `operation=ocr_extract`, `outcome=failed`, configured OCR provider/model |
+| `core/ocr.py::extract_text` first unexpected-exception record | `operation=ocr_extract`, `outcome=failed`, configured OCR provider/model |
+
+Logs containing user IDs, chat IDs, usernames, Telegram/update identifiers,
+URLs, paths, counts derived from user content, exception strings, or arbitrary
+provider responses are never marked. `duration_bucket` and `retry_count`
+remain **validator-only**: no production site currently has an authoritative
+value, and inventing one is worse than omitting it.
+
+### INFO decision
+
+INFO breadcrumbs stay disabled. The breadcrumb admission contract accepts only
+`WARNING`/`ERROR`/`CRITICAL` records; a marked INFO record is excluded even
+when it carries a valid marker (covered by a real-SDK test). No current
+diagnostic case justifies admitting every INFO record to the SDK callback.
+
+## Request correlation
+
+`RequestCorrelationMiddleware` (registered in `create_application()`) generates
+one `uuid.uuid4().hex` value per HTTP request scope and binds it to Sentry's
+per-request isolation scope as `contexts.runestone.request_id`. The middleware
+never removes the context itself: the context must stay installed for the whole
+request so exceptions that escape the middleware are still captured with the ID
+by Sentry's outer ASGI integration. Cleanup relies on that integration
+discarding its per-request isolation scope (sentry-sdk 2.68.1 creates and
+clears one per ASGI request), which both prevents the ID leaking into the next
+request and keeps it available for automatic exception capture; the middleware
+must therefore run inside the SDK's ASGI lifecycle. It merges the ID into any
+pre-existing `runestone` context instead of replacing it.
+
+- The ID is generated **internally only**: inbound correlation values are never
+  accepted, no response header is exposed, and the ID is never correlated with
+  users or sessions. Its diagnostic value is correlating multiple error events
+  raised inside one request scope (for example a handled 500 plus a late
+  background-task failure).
+- WebSocket and lifespan scopes pass through without an ID.
+- When the SDK is not initialized, the middleware passes through without
+  mutating any ambient scope.
+- The ID reaches export only through the validated
+  `contexts.runestone.request_id` rule above; request IDs via tags, log
+  messages, headers, or request data are dropped.
+
+## Volume and quota
+
+The 128 KiB per-event cap is enforced in code and tested; a fully populated
+event (bounded by 20 sanitized crumbs at maximum field sizes) serializes to
+roughly 17 KiB.
+
+Quota impact (from Better Stack's own pricing page,
+https://betterstack.com/pricing): error tracking includes 100,000 exceptions
+per month; additional exceptions are billed at $0.000050 per exception, with
+90-day retention. This is a per-event cost, not a hard ceiling: sustained error
+volume raises cost even though Better Stack's adaptive spike protection samples
+bursts above an application's baseline to keep ingest volume near expected
+levels
+(https://betterstack.com/docs/errors/using-the-product/spike-protection/).
+Spike protection reduces unexpected cost growth from error loops; it does not
+cap billing for a consistently elevated error rate.
 
 ## SDK options
 

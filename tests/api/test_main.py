@@ -14,6 +14,7 @@ from httpx import ASGITransport, AsyncClient
 import runestone.api.main as main_module
 import runestone.model_costs.startup as startup_module
 from runestone.api.main import app
+from runestone.core.error_tracking import RequestCorrelationMiddleware
 from runestone.model_costs.pricing import RefreshCounts
 
 
@@ -95,6 +96,11 @@ def test_openapi_routes_have_single_domain_tag() -> None:
 def test_audio_websocket_route_is_registered() -> None:
     """Keep the audio WebSocket path under the shared API prefix."""
     assert app.url_path_for("audio_websocket") == "/api/ws/audio"
+
+
+def test_request_correlation_middleware_is_registered() -> None:
+    """Bind internal request IDs to Sentry's isolation scope for every request."""
+    assert any(middleware.cls is RequestCorrelationMiddleware for middleware in app.user_middleware)
 
 
 async def test_startup_price_refresh_succeeds_without_blocking_readiness(monkeypatch, caplog) -> None:

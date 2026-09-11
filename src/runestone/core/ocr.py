@@ -150,7 +150,16 @@ class OCRProcessor:
 
         except (AttributeError, TypeError) as e:
             # Handle cases where we might be working with a mock object during testing
-            self.logger.warning("image preprocessing failed error=%s; using original image", str(e))
+            self.logger.warning(
+                "image preprocessing failed error=%s; using original image",
+                str(e),
+                extra={
+                    "runestone_telemetry": {
+                        "operation": "ocr_preprocess",
+                        "outcome": "fallback_original",
+                    }
+                },
+            )
 
             # Return original image if preprocessing fails (e.g., during testing with mocks)
             # Ensure it's in RGB format for LLM processing
@@ -264,9 +273,30 @@ class OCRProcessor:
             return ocr_response
 
         except OCRError:
-            self.logger.error("ocr error raised; re-raising")
+            self.logger.error(
+                "ocr error raised; re-raising",
+                extra={
+                    "runestone_telemetry": {
+                        "operation": "ocr_extract",
+                        "outcome": "failed",
+                        "provider": self.settings.resolve_ocr_llm_provider(),
+                        "model": self.settings.resolve_ocr_llm_model(),
+                    }
+                },
+            )
             raise
         except Exception as e:
-            self.logger.error("ocr unexpected error type=%s", type(e).__name__)
+            self.logger.error(
+                "ocr unexpected error type=%s",
+                type(e).__name__,
+                extra={
+                    "runestone_telemetry": {
+                        "operation": "ocr_extract",
+                        "outcome": "failed",
+                        "provider": self.settings.resolve_ocr_llm_provider(),
+                        "model": self.settings.resolve_ocr_llm_model(),
+                    }
+                },
+            )
             self.logger.error("ocr unexpected error message=%s", str(e))
             raise OCRError(f"OCR processing failed: {type(e).__name__}: {str(e)}")

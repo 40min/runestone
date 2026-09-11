@@ -1,20 +1,128 @@
 """Tests for error tracking initialization and sanitized telemetry export."""
 
+import asyncio
 import copy
 import json
 import logging
+import re
 from collections.abc import Generator
+from types import SimpleNamespace
 from typing import Any, Literal, cast, get_args, get_origin
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
+import httpx
 import pytest
 import sentry_sdk
 from sentry_sdk.envelope import Envelope
 from sentry_sdk.transport import Transport
 
-from runestone.config import AgentLLMSettings, Settings
+from runestone.agents.manager import AgentsManager
+from runestone.auth.dependencies import get_current_user
+from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
 from runestone.core import error_tracking
-from runestone.core.error_tracking import _PROVIDERS, _sanitize_breadcrumb, _sanitize_event, setup_error_tracking
+from runestone.core.error_tracking import (
+    _PROVIDERS,
+    RequestCorrelationMiddleware,
+    _sanitize_breadcrumb,
+    _sanitize_event,
+    setup_error_tracking,
+)
+from runestone.dependencies import get_chat_service
+
+
+@pytest.fixture
+def mock_settings():
+    """Local copy of the manager settings fixture; agents tests define their own."""
+    settings = Mock(spec=Settings)
+    settings.teacher_provider = "openrouter"
+    settings.teacher_model = "test-model"
+    settings.teacher_backup_provider = "gemini"
+    settings.teacher_backup_model = None
+    settings.coordinator_model = "test-coordinator-model"
+    settings.coordinator_provider = "openrouter"
+    settings.word_keeper_provider = "openrouter"
+    settings.word_keeper_model = "test-model"
+    settings.news_agent_provider = "openrouter"
+    settings.news_agent_model = "test-model"
+    settings.memory_keeper_provider = "openrouter"
+    settings.memory_keeper_model = "test-model"
+    settings.memory_maintainer_provider = "openrouter"
+    settings.memory_maintainer_model = "test-memory-maintainer-model"
+    settings.memory_mastered_cleanup_days = 7
+    settings.memory_maintenance_timeout_seconds = 240.0
+    settings.agent_persona = "default"
+    settings.openrouter_api_key = "test-api-key"
+    settings.openai_api_key = "test-openai-key"
+    settings.allowed_origins = "http://localhost:5173"
+    settings.telegram_offset_file_path = "state/offset.txt"
+    settings.get_agent_llm_settings.side_effect = lambda agent_name: {
+        "teacher": AgentLLMSettings(
+            provider="openrouter",
+            model="test-model",
+            temperature=1.0,
+            reasoning_level=ReasoningLevel.NONE,
+            timeout_seconds=10.0,
+            max_retries=3,
+        ),
+        "coordinator": AgentLLMSettings(
+            provider="openrouter",
+            model="test-coordinator-model",
+            temperature=0.0,
+            reasoning_level=ReasoningLevel.NONE,
+            timeout_seconds=3.0,
+            max_retries=3,
+        ),
+        "word_keeper": AgentLLMSettings(
+            provider="openrouter",
+            model="test-model",
+            temperature=0.0,
+            reasoning_level=ReasoningLevel.NONE,
+            timeout_seconds=15.0,
+            max_retries=3,
+        ),
+        "news_agent": AgentLLMSettings(
+            provider="openrouter",
+            model="test-model",
+            temperature=0.0,
+            reasoning_level=ReasoningLevel.NONE,
+            timeout_seconds=10.0,
+            max_retries=3,
+        ),
+        "memory_keeper": AgentLLMSettings(
+            provider="openrouter",
+            model="test-model",
+            temperature=0.0,
+            reasoning_level=ReasoningLevel.NONE,
+            timeout_seconds=15.0,
+            max_retries=3,
+        ),
+        "learning_memory_keeper": AgentLLMSettings(
+            provider="openrouter",
+            model="test-model",
+            temperature=0.0,
+            reasoning_level=ReasoningLevel.NONE,
+            timeout_seconds=15.0,
+            max_retries=3,
+        ),
+        "personal_memory_keeper": AgentLLMSettings(
+            provider="openrouter",
+            model="test-model",
+            temperature=0.0,
+            reasoning_level=ReasoningLevel.NONE,
+            timeout_seconds=8.0,
+            max_retries=2,
+        ),
+        "memory_maintainer": AgentLLMSettings(
+            provider="openrouter",
+            model="test-memory-maintainer-model",
+            temperature=0.0,
+            reasoning_level=ReasoningLevel.NONE,
+            timeout_seconds=30.0,
+            max_retries=3,
+        ),
+    }[agent_name]
+    return settings
+
 
 TEST_SENTINELS = (
     "SENTINEL-password",
@@ -459,6 +567,223 @@ def test_status_code_validation() -> None:
         assert "contexts" not in _project(invalid)
 
 
+def test_request_id_validation_and_union_merge() -> None:
+    """The runestone context is a validated union of request_id and status_code."""
+
+    def _project(runestone: object) -> dict:
+        event = {"platform": "python", "contexts": {"runestone": runestone}}
+        projected = _sanitize_event(event, {})
+        assert projected is not None
+        return projected
+
+    valid_id = "0123456789abcdef0123456789abcdef"
+    both = _project({"status_code": 500, "request_id": valid_id})
+    assert both["contexts"]["runestone"] == {"status_code": 500, "request_id": valid_id}
+
+    only_id = _project({"request_id": valid_id})
+    assert only_id["contexts"]["runestone"] == {"request_id": valid_id}
+
+    only_status = _project({"status_code": 502})
+    assert only_status["contexts"]["runestone"] == {"status_code": 502}
+
+    for invalid in (
+        valid_id.upper(),
+        "0" * 31,
+        "0" * 33,
+        "g" * 32,
+        12345678901234567890123456789012,
+        True,
+        None,
+        {"hex": valid_id},
+    ):
+        projected = _project({"status_code": 500, "request_id": invalid})
+        assert projected["contexts"]["runestone"] == {"status_code": 500}
+
+    assert "contexts" not in _project({"request_id": "not-a-uuid-hex-value"})
+
+
+async def test_isolation_scope_request_id_reaches_captured_event(capture_transport) -> None:
+    """A request ID bound to the isolation scope survives event projection."""
+    request_id = "b" * 32
+    sentry_sdk.get_isolation_scope().set_context("runestone", {"request_id": request_id})
+    try:
+        _capture_runtime_error()
+    finally:
+        sentry_sdk.get_isolation_scope().remove_context("runestone")
+
+    event = _single_event(capture_transport)
+    assert event["contexts"]["runestone"]["request_id"] == request_id
+
+
+async def _noop_receive() -> dict[str, Any]:
+    return {"type": "http.request"}
+
+
+async def _noop_send(message: dict[str, Any]) -> None:
+    return None
+
+
+async def _run_request(middleware: RequestCorrelationMiddleware, scope: dict[str, Any]) -> None:
+    """Drive one request the way Sentry's ASGI integration does in production."""
+    with sentry_sdk.isolation_scope():
+        await middleware(scope, _noop_receive, _noop_send)
+
+
+async def test_middleware_binds_request_id_to_events_in_request_scope(capture_transport) -> None:
+    """HTTP scopes get a fresh 32-hex request ID visible to captured events."""
+
+    async def inner_app(scope, receive, send) -> None:
+        sentry_sdk.capture_message("inside request")
+
+    middleware = RequestCorrelationMiddleware(inner_app)
+    await _run_request(middleware, {"type": "http", "method": "GET", "path": "/x"})
+
+    event = _single_event(capture_transport)
+    request_id = event["contexts"]["runestone"]["request_id"]
+    assert re.fullmatch(r"[0-9a-f]{32}", request_id)
+
+
+async def test_concurrent_requests_receive_distinct_request_ids(capture_transport) -> None:
+    """Overlapping HTTP requests never share or leak a request ID."""
+    barrier = asyncio.Barrier(5)
+    event_ids: list[str] = []
+
+    async def inner_app(scope, receive, send) -> None:
+        await barrier.wait()
+        event_ids.append(cast("str", sentry_sdk.capture_message("concurrent")))
+
+    middleware = RequestCorrelationMiddleware(inner_app)
+    scopes = [{"type": "http", "method": "GET", "path": "/x", "index": index} for index in range(5)]
+    await asyncio.gather(*(_run_request(middleware, scope) for scope in scopes))
+
+    assert len(event_ids) == 5
+    request_ids = []
+    for envelope in capture_transport.envelopes:
+        event = envelope.get_event()
+        assert event is not None
+        request_ids.append(event["contexts"]["runestone"]["request_id"])
+    assert len(set(request_ids)) == 5
+    for request_id in request_ids:
+        assert re.fullmatch(r"[0-9a-f]{32}", request_id)
+
+
+async def test_completed_request_does_not_leak_request_id(capture_transport) -> None:
+    """A request ID never survives into events captured after the request."""
+
+    async def inner_app(scope, receive, send) -> None:
+        sentry_sdk.capture_message("inside request")
+
+    middleware = RequestCorrelationMiddleware(inner_app)
+    await _run_request(middleware, {"type": "http", "method": "GET", "path": "/x"})
+    sentry_sdk.capture_message("after request")
+
+    assert len(capture_transport.envelopes) == 2
+    later_event = capture_transport.envelopes[1].get_event()
+    assert later_event is not None
+    assert "request_id" not in later_event.get("contexts", {}).get("runestone", {})
+
+
+async def test_escaping_exception_is_captured_with_request_id(capture_transport) -> None:
+    """An exception escaping the middleware is captured with the ID still bound.
+
+    Sentry's outer ASGI integration captures the escaping exception after this
+    middleware has returned; the context must therefore not be removed early.
+    """
+
+    async def inner_app(scope, receive, send) -> None:
+        raise RuntimeError("escape")
+
+    middleware = RequestCorrelationMiddleware(inner_app)
+    with sentry_sdk.isolation_scope():
+        try:
+            await middleware({"type": "http", "method": "GET", "path": "/x"}, _noop_receive, _noop_send)
+        except RuntimeError:
+            sentry_sdk.capture_exception()
+
+    event = _single_event(capture_transport)
+    assert re.fullmatch(r"[0-9a-f]{32}", event["contexts"]["runestone"]["request_id"])
+
+
+async def test_outer_sentry_asgi_wrapper_captures_escaping_exception_with_request_id(
+    capture_transport,
+) -> None:
+    """The real SentryAsgiMiddleware captures the exception and the ID survives.
+
+    This drives the production middleware order: Sentry's ASGI integration
+    outermost, request correlation inside it, automatic exception capture (no
+    manual capture call in the test).
+    """
+    from sentry_sdk.integrations.asgi import SentryAsgiMiddleware
+
+    async def inner_app(scope, receive, send) -> None:
+        raise RuntimeError("escape")
+
+    asgi_app = SentryAsgiMiddleware(RequestCorrelationMiddleware(inner_app))
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/x",
+        "headers": [],
+        "query_string": b"",
+        "server": ("testserver", 80),
+        "scheme": "http",
+    }
+
+    with pytest.raises(RuntimeError, match="escape"):
+        await asgi_app(scope, _noop_receive, _noop_send)
+
+    event = _single_event(capture_transport)
+    assert re.fullmatch(r"[0-9a-f]{32}", event["contexts"]["runestone"]["request_id"])
+    exception_values = event["exception"]["values"]
+    assert exception_values[0]["type"] == "RuntimeError"
+
+
+async def test_middleware_merges_into_existing_runestone_context(capture_transport) -> None:
+    """A pre-existing runestone context survives alongside the new request ID."""
+    sentry_sdk.get_isolation_scope().set_context("runestone", {"status_code": 500})
+    try:
+
+        async def inner_app(scope, receive, send) -> None:
+            sentry_sdk.capture_message("inside request")
+
+        middleware = RequestCorrelationMiddleware(inner_app)
+        await _run_request(middleware, {"type": "http", "method": "GET", "path": "/x"})
+    finally:
+        sentry_sdk.get_isolation_scope().remove_context("runestone")
+
+    event = _single_event(capture_transport)
+    runestone = event["contexts"]["runestone"]
+    assert runestone["status_code"] == 500
+    assert re.fullmatch(r"[0-9a-f]{32}", runestone["request_id"])
+
+
+async def test_websocket_scope_passes_through_without_request_id(capture_transport) -> None:
+    """WebSocket scopes are not correlated and do not mutate the ambient scope."""
+
+    async def inner_app(scope, receive, send) -> None:
+        sentry_sdk.capture_message("websocket")
+
+    middleware = RequestCorrelationMiddleware(inner_app)
+    await _run_request(middleware, {"type": "websocket", "path": "/ws"})
+
+    event = _single_event(capture_transport)
+    assert "request_id" not in event.get("contexts", {}).get("runestone", {})
+
+
+async def test_middleware_is_inert_when_sdk_is_disabled(capture_transport, monkeypatch) -> None:
+    """Without an initialized SDK the middleware never mutates ambient state."""
+    monkeypatch.setattr(sentry_sdk, "is_initialized", lambda: False)
+
+    async def inner_app(scope, receive, send) -> None:
+        sentry_sdk.capture_message("disabled mode")
+
+    middleware = RequestCorrelationMiddleware(inner_app)
+    await _run_request(middleware, {"type": "http", "method": "GET", "path": "/x"})
+
+    event = _single_event(capture_transport)
+    assert "request_id" not in event.get("contexts", {}).get("runestone", {})
+
+
 def test_maximum_breadcrumb_event_stays_under_size_cap() -> None:
     """A full 20-breadcrumb event of maximum-size fields stays under 128 KiB."""
     crumbs = [
@@ -520,3 +845,76 @@ def test_breadcrumb_provider_allowlist_covers_configured_llm_providers() -> None
     # refactor could make the subset assertion below pass vacuously.
     assert {"openai", "openrouter", "gemini"} <= configured
     assert configured <= _PROVIDERS
+
+
+class _FailingChatServiceStub:
+    """Invoke the real manager producer path, then fail the request."""
+
+    def __init__(self, manager: AgentsManager) -> None:
+        self._manager = manager
+
+    async def process_message(self, user_id: int, message: str, tts_expected: bool = False, speed: float = 1.0):
+        return await self._manager.generate_teacher_response(
+            message=message,
+            history=[],
+            user=SimpleNamespace(id=user_id),  # type: ignore[arg-type]
+            pre_results=[],
+            active_learning_focus_memory="",
+        )
+
+
+async def test_chat_message_failure_exports_named_breadcrumb_and_request_id(
+    capture_transport,
+    mock_settings,
+) -> None:
+    """The production capture path exports the marked breadcrumb, route, and request ID only."""
+    from runestone.api import main as api_main
+
+    manager = AgentsManager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response = AsyncMock(side_effect=ValueError("SENTINEL-exc-value"))
+
+    app = api_main.create_application()
+    app.dependency_overrides[get_chat_service] = lambda: _FailingChatServiceStub(manager)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=987654321)
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/chat/message?tracking=SENTINEL-query",
+                json={"message": "SENTINEL-prompt"},
+                headers={"Authorization": "Bearer SENTINEL-header"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+
+    assert len(capture_transport.envelopes) == 1
+    envelope = capture_transport.envelopes[0]
+    serialized = envelope.serialize()
+    for sentinel in (
+        "SENTINEL-exc-value",
+        "SENTINEL-prompt",
+        "SENTINEL-header",
+        "SENTINEL-query",
+        "987654321",
+        "chat response generation failed",
+        "teacher response generation failed",
+    ):
+        assert sentinel.encode() not in serialized
+
+    event = envelope.get_event()
+    assert event is not None
+    assert event["transaction"] == "/api/chat/message"
+    assert event["request"] == {"method": "POST"}
+    request_id = event["contexts"]["runestone"]["request_id"]
+    assert re.fullmatch(r"[0-9a-f]{32}", request_id)
+
+    crumbs = event["breadcrumbs"]["values"]
+    assert [crumb["message"] for crumb in crumbs] == ["teacher_response"]
+    assert crumbs[0]["data"] == {
+        "operation": "teacher_response",
+        "outcome": "failed",
+        "provider": "openrouter",
+        "model": "test-model",
+    }

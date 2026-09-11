@@ -2,6 +2,7 @@
 Tests for the OCR processing module.
 """
 
+import logging
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -109,8 +110,7 @@ class TestOCRProcessor:
         mock_model = Mock()
         bound_model = AsyncMock()
         mock_model.bind.return_value = bound_model
-        bound_model.ainvoke.return_value = AIMessage(
-            content="""{
+        bound_model.ainvoke.return_value = AIMessage(content="""{
             "transcribed_text": "Svenska text från läroboken",
             "recognition_statistics": {
                 "total_elements": 50,
@@ -118,8 +118,7 @@ class TestOCRProcessor:
                 "unclear_uncertain": 0,
                 "unable_to_recognize": 0
             }
-        }"""
-        )
+        }""")
 
         processor = OCRProcessor(settings=self.settings, model=mock_model)
         result = await processor.extract_text(mock_image)
@@ -170,8 +169,7 @@ class TestOCRProcessor:
         mock_model = Mock()
         bound_model = AsyncMock()
         mock_model.bind.return_value = bound_model
-        bound_model.ainvoke.return_value = AIMessage(
-            content="""{
+        bound_model.ainvoke.return_value = AIMessage(content="""{
             "transcribed_text": "Hi",
             "recognition_statistics": {
                 "total_elements": 1,
@@ -179,8 +177,7 @@ class TestOCRProcessor:
                 "unclear_uncertain": 0,
                 "unable_to_recognize": 0
             }
-        }"""
-        )
+        }""")
 
         processor = OCRProcessor(settings=self.settings, model=mock_model)
 
@@ -329,8 +326,7 @@ class TestOCRProcessor:
         mock_model = Mock()
         bound_model = AsyncMock()
         mock_model.bind.return_value = bound_model
-        bound_model.ainvoke.return_value = AIMessage(
-            content="""{
+        bound_model.ainvoke.return_value = AIMessage(content="""{
             "transcribed_text": "Extracted Swedish text content.",
             "recognition_statistics": {
                 "total_elements": 100,
@@ -338,8 +334,7 @@ class TestOCRProcessor:
                 "unclear_uncertain": 3,
                 "unable_to_recognize": 2
             }
-        }"""
-        )
+        }""")
 
         processor = OCRProcessor(settings=self.settings, model=mock_model)
         result = await processor.extract_text(mock_image)
@@ -361,8 +356,7 @@ class TestOCRProcessor:
         mock_model = Mock()
         bound_model = AsyncMock()
         mock_model.bind.return_value = bound_model
-        bound_model.ainvoke.return_value = AIMessage(
-            content="""{
+        bound_model.ainvoke.return_value = AIMessage(content="""{
             "transcribed_text": "Some text.",
             "recognition_statistics": {
                 "total_elements": 100,
@@ -370,8 +364,7 @@ class TestOCRProcessor:
                 "unclear_uncertain": 15,
                 "unable_to_recognize": 5
             }
-        }"""
-        )
+        }""")
 
         processor = OCRProcessor(settings=self.settings, model=mock_model)
 
@@ -379,3 +372,88 @@ class TestOCRProcessor:
             await processor.extract_text(mock_image)
 
         assert "OCR recognition percentage below 90%: 80.0% (80/100)" in str(exc_info.value)
+
+    def _marked_records(self, caplog):
+        return [record for record in caplog.records if hasattr(record, "runestone_telemetry")]
+
+    def test_preprocess_fallback_marks_sanitized_telemetry(self, caplog):
+        """The recoverable preprocessing fallback carries a sanitized marker."""
+
+        class _BrokenImage:
+            @property
+            def mode(self) -> str:
+                raise AttributeError("SENTINEL-exc-value")
+
+        broken_image = _BrokenImage()
+
+        processor = OCRProcessor(settings=self.settings, model=Mock())
+        with caplog.at_level(logging.WARNING, logger="runestone.core.ocr"):
+            result = processor._preprocess_image_for_ocr(broken_image)  # type: ignore[arg-type]
+
+        assert result is broken_image
+        marked = self._marked_records(caplog)
+        assert len(marked) == 1
+        assert marked[0].levelno == logging.WARNING
+        assert marked[0].runestone_telemetry == {
+            "operation": "ocr_preprocess",
+            "outcome": "fallback_original",
+        }
+        assert "SENTINEL-exc-value" not in str(marked[0].runestone_telemetry)
+
+    @pytest.mark.anyio
+    async def test_extract_text_ocrexit_marks_sanitized_telemetry(self, caplog):
+        """The OCRError exit carries exactly one sanitized marker with config-owned values."""
+        mock_image = Mock()
+        mock_image.mode = "RGB"
+        mock_image.size = (800, 600)
+
+        mock_model = Mock()
+        bound_model = AsyncMock()
+        mock_model.bind.return_value = bound_model
+        bound_model.ainvoke.side_effect = OCRError("SENTINEL-exc-value")
+
+        processor = OCRProcessor(settings=self.settings, model=mock_model)
+
+        with caplog.at_level(logging.ERROR, logger="runestone.core.ocr"):
+            with pytest.raises(OCRError):
+                await processor.extract_text(mock_image)
+
+        marked = self._marked_records(caplog)
+        assert len(marked) == 1
+        assert marked[0].runestone_telemetry == {
+            "operation": "ocr_extract",
+            "outcome": "failed",
+            "provider": self.settings.resolve_ocr_llm_provider(),
+            "model": self.settings.resolve_ocr_llm_model(),
+        }
+        assert "SENTINEL-exc-value" not in str(marked[0].runestone_telemetry)
+
+    @pytest.mark.anyio
+    async def test_extract_text_unexpected_error_marks_sanitized_telemetry_once(self, caplog):
+        """Only the first unexpected-error record is marked; exception text stays unmarked."""
+        mock_image = Mock()
+        mock_image.mode = "RGB"
+        mock_image.size = (800, 600)
+
+        mock_model = Mock()
+        bound_model = AsyncMock()
+        mock_model.bind.return_value = bound_model
+        bound_model.ainvoke.side_effect = RuntimeError("SENTINEL-exc-value")
+
+        processor = OCRProcessor(settings=self.settings, model=mock_model)
+
+        with caplog.at_level(logging.ERROR, logger="runestone.core.ocr"):
+            with pytest.raises(OCRError):
+                await processor.extract_text(mock_image)
+
+        marked = self._marked_records(caplog)
+        assert len(marked) == 1
+        assert marked[0].getMessage() == "ocr unexpected error type=RuntimeError"
+        assert marked[0].runestone_telemetry == {
+            "operation": "ocr_extract",
+            "outcome": "failed",
+            "provider": self.settings.resolve_ocr_llm_provider(),
+            "model": self.settings.resolve_ocr_llm_model(),
+        }
+        unmarked = [record for record in caplog.records if not hasattr(record, "runestone_telemetry")]
+        assert any("SENTINEL-exc-value" in record.getMessage() for record in unmarked)
