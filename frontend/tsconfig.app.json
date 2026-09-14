@@ -15,6 +15,10 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
+    // Keep @types/node (needed by vite.config.ts) from leaking into app code,
+    // where it would change setTimeout's return type.
+    "types": ["vite/client"],
+
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
