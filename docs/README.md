@@ -26,7 +26,7 @@ Examples:
 
 ## Explainers
 
-- [`explainers/richer-sanitized-better-stack-logging.md`](explainers/richer-sanitized-better-stack-logging.md): implementation rationale, producer choices, request correlation, investigation flow, and review evidence for richer sanitized Better Stack breadcrumbs
+- [`explainers/richer-sanitized-better-stack-logging-explainer.html`](explainers/richer-sanitized-better-stack-logging-explainer.html): visual implementation explainer for richer sanitized Better Stack breadcrumbs
 
 ## `docs/todo` Purpose
 

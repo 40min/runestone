@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Richer Sanitized Better Stack Logging — Plan Explainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,700;9..144,900&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f2efe6;
+    --paper-deep: #e9e4d6;
+    --ink: #1a170f;
+    --ink-soft: #4a4536;
+    --ink-faint: #8b8570;
+    --redact: #c8361f;
+    --safe: #1d6b3f;
+    --amber: #a4650c;
+    --rule: #c9c2ad;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+    --display: "Fraunces", Georgia, serif;
+    --body: "Newsreader", Georgia, serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(200,54,31,0.06), transparent),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  }
+
+  .page { max-width: 980px; margin: 0 auto; padding: 0 24px 110px; }
+
+  .reveal { opacity: 0; transform: translateY(14px); animation: rise .7s cubic-bezier(.2,.7,.2,1) forwards; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+
+  /* ---------- header ---------- */
+  header { padding: 68px 0 36px; border-bottom: 3px double var(--ink); }
+  .file-tab {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--ink-soft);
+    display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 26px;
+  }
+  .file-tab .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--redact); display: inline-block; margin-right: 6px; }
+  h1 {
+    font-family: var(--display); font-weight: 900;
+    font-size: clamp(38px, 6.5vw, 66px); line-height: 1.02; letter-spacing: -.015em; max-width: 16ch;
+  }
+  h1 em { font-style: italic; font-weight: 500; color: var(--redact); }
+  .standfirst { margin-top: 20px; max-width: 60ch; font-size: 17.5px; color: var(--ink-soft); }
+  .standfirst strong { color: var(--ink); }
+  .standfirst code {
+    font-family: var(--mono); font-size: .8em; background: var(--paper-deep);
+    border: 1px solid var(--rule); border-radius: 3px; padding: 1px 5px;
+  }
+
+  /* ---------- sections ---------- */
+  section { padding: 54px 0 10px; }
+  .sec-head { display: flex; align-items: baseline; gap: 16px; border-bottom: 1px solid var(--rule); padding-bottom: 12px; margin-bottom: 26px; }
+  .sec-num { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--redact); letter-spacing: .1em; }
+  h2 { font-family: var(--display); font-weight: 700; font-size: clamp(23px, 3.3vw, 33px); letter-spacing: -.01em; }
+  .sec-note { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .12em; white-space: nowrap; }
+
+  p.lede { max-width: 64ch; margin-bottom: 20px; font-size: 16.5px; color: var(--ink-soft); }
+  p.lede strong, .note strong { color: var(--ink); }
+  p.lede code, .note code, td code {
+    font-family: var(--mono); font-size: .82em; background: var(--paper-deep);
+    border: 1px solid var(--rule); border-radius: 3px; padding: 1px 5px;
+  }
+
+  figure { border: 1.5px solid var(--ink); background: #f7f4ec; padding: 22px 18px 16px; margin-top: 6px; }
+  figcaption {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--ink-faint); padding: 12px 6px 0; text-align: center;
+  }
+  figure svg { display: block; width: 100%; height: auto; }
+
+  .note {
+    margin-top: 20px; border: 1.5px solid var(--amber); background: rgba(164,101,12,.06);
+    padding: 16px 20px; font-size: 15.5px; color: var(--ink-soft);
+  }
+  .note .tag {
+    font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--amber); display: block; margin-bottom: 6px;
+  }
+  .note.danger { border-color: var(--redact); background: rgba(200,54,31,.05); }
+  .note.danger .tag { color: var(--redact); }
+
+  /* ---------- steps list under graph ---------- */
+  .step {
+    display: grid; grid-template-columns: 132px 1fr; gap: 20px;
+    padding: 16px 0; border-bottom: 1px dashed var(--rule);
+  }
+  .step:last-of-type { border-bottom: none; }
+  .step-label {
+    font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink-soft); padding-top: 4px;
+  }
+  .step-label .n { display: block; font: 900 21px var(--display); color: var(--ink); margin-bottom: 2px; }
+  .step-body h4 { font: 700 18.5px var(--display); margin-bottom: 5px; }
+  .step-body p { font-size: 15px; color: var(--ink-soft); max-width: 64ch; }
+  .step-body .files { margin-top: 6px; font-family: var(--mono); font-size: 11px; color: var(--ink-faint); }
+
+  /* ---------- redaction bars ---------- */
+  .redact-list { margin-top: 4px; }
+  .redact-item { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
+  .redact-bar {
+    flex: 0 0 0; overflow: hidden; white-space: nowrap; background: var(--ink); color: var(--ink);
+    font: 500 12.5px var(--mono); padding: 6px 0; border-radius: 2px;
+    transition: flex-basis .45s cubic-bezier(.6,0,.2,1), background .45s; cursor: help;
+  }
+  .redact-item:hover .redact-bar { flex: 1 1 auto; background: var(--redact); color: var(--paper); padding: 6px 12px; }
+  .redact-why { font: 400 11px var(--mono); color: var(--ink-faint); white-space: nowrap; }
+
+  .contract-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 6px; }
+  .contract-box { border: 1.5px solid var(--ink); padding: 20px 22px; background: var(--paper); }
+  .contract-box.allowed { border-left: 6px solid var(--safe); }
+  .contract-box.denied  { border-left: 6px solid var(--redact); }
+  .contract-box h3 { font: 600 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; margin-bottom: 12px; }
+  .contract-box.allowed h3 { color: var(--safe); }
+  .contract-box.denied h3 { color: var(--redact); }
+  .contract-box ul { list-style: none; }
+  .contract-box li { font-size: 14.5px; padding: 5px 0; border-bottom: 1px dotted var(--rule); color: var(--ink-soft); }
+  .contract-box li:last-child { border-bottom: none; }
+  .contract-box li::before { font-family: var(--mono); margin-right: 8px; }
+  .contract-box.allowed li::before { content: "▸"; color: var(--safe); }
+  .contract-box.denied li::before { content: "▸"; color: var(--redact); }
+
+  /* ---------- producers table ---------- */
+  .producers { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  .producers th {
+    font: 600 10.5px var(--mono); letter-spacing: .12em; text-transform: uppercase;
+    text-align: left; color: var(--ink-soft); border-bottom: 2px solid var(--ink); padding: 10px 10px 8px;
+  }
+  .producers td { border-bottom: 1px dashed var(--rule); padding: 11px 10px; vertical-align: top; color: var(--ink-soft); }
+  .producers td:first-child { font-family: var(--mono); font-size: 12.5px; color: var(--ink); }
+  .op {
+    display: inline-block; font: 500 11px var(--mono); background: var(--paper-deep);
+    border: 1px solid var(--rule); padding: 1px 7px; border-radius: 2px; margin: 1px 2px 1px 0; white-space: nowrap;
+  }
+  .op.warn { color: var(--amber); border-color: var(--amber); }
+  .op.fail { color: var(--redact); border-color: var(--redact); }
+
+  footer {
+    margin-top: 64px; padding-top: 18px; border-top: 3px double var(--ink);
+    font: 400 11px var(--mono); color: var(--ink-faint);
+    display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  }
+  footer a { color: var(--ink-soft); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="reveal">
+    <div class="file-tab">
+      <span><span class="dot"></span>task kMMaU6ulmWQy</span>
+      <span>status: <strong style="color: var(--amber)">BLOCKED — pending task confirmation</strong></span>
+      <span>baseline 4b08c4a</span>
+      <span>sentry-sdk 2.68.1</span>
+    </div>
+    <h1>Richer, <em>sanitized</em> Better Stack logging</h1>
+    <p class="standfirst">
+      The sanitizer shipped in <code>4b08c4a</code> is live but <strong>inert</strong> — no
+      production code emits a telemetry marker, so no breadcrumb has ever reached a real error
+      event. This plan switches the trail on: <strong>five marked log records</strong>, one
+      server-generated <strong>request ID</strong>, and the same default-deny sanitizer as the
+      only export authority.
+    </p>
+  </header>
+
+  <!-- ============ §01 PIPELINE ============ -->
+  <section class="reveal" style="animation-delay:.1s">
+    <div class="sec-head"><span class="sec-num">§ 01</span><h2>How a log becomes a breadcrumb</h2><span class="sec-note">fails closed at every gate</span></div>
+    <p class="lede">
+      A marked log record must survive <strong>three default-deny gates</strong> before anything
+      reaches Better Stack. Each gate rebuilds the payload from scratch — it never edits the
+      original — and drops everything it doesn't explicitly allow.
+    </p>
+
+    <figure>
+      <svg viewBox="0 0 880 700" role="img" aria-label="Pipeline from log record to Better Stack envelope">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#1a170f"/>
+          </marker>
+          <marker id="arrR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c8361f"/>
+          </marker>
+        </defs>
+
+        <!-- spine boxes -->
+        <g font-family="IBM Plex Mono, monospace">
+          <!-- 1 log record -->
+          <rect x="240" y="16" width="330" height="52" rx="4" fill="#f2efe6" stroke="#1a170f" stroke-width="1.6"/>
+          <text x="405" y="38" text-anchor="middle" font-size="13" font-weight="600" fill="#1a170f">1 · LOG RECORD</text>
+          <text x="405" y="56" text-anchor="middle" font-size="11" fill="#4a4536">runestone logger · WARNING / ERROR / CRITICAL</text>
+
+          <line x1="405" y1="68" x2="405" y2="104" stroke="#1a170f" stroke-width="1.6" marker-end="url(#arr)"/>
+
+          <!-- 2 gate -->
+          <rect x="240" y="108" width="330" height="112" rx="4" fill="#f2efe6" stroke="#1a170f" stroke-width="1.6"/>
+          <text x="405" y="130" text-anchor="middle" font-size="13" font-weight="600" fill="#1a170f">2 · before_breadcrumb — DEFAULT DENY</text>
+          <text x="405" y="150" text-anchor="middle" font-size="11" fill="#4a4536">runestone logger namespace?</text>
+          <text x="405" y="168" text-anchor="middle" font-size="11" fill="#4a4536">level ≥ WARNING? · valid marker?</text>
+          <text x="405" y="186" text-anchor="middle" font-size="11" fill="#4a4536">field-by-field re-validation</text>
+          <text x="405" y="207" text-anchor="middle" font-size="10.5" fill="#c8361f">callback wrapped — can never fail open</text>
+
+          <line x1="405" y1="220" x2="405" y2="256" stroke="#1a170f" stroke-width="1.6" marker-end="url(#arr)"/>
+
+          <!-- 3 crumb store -->
+          <rect x="240" y="260" width="330" height="70" rx="4" fill="#f2efe6" stroke="#1a170f" stroke-width="1.6"/>
+          <text x="405" y="286" text-anchor="middle" font-size="13" font-weight="600" fill="#1a170f">3 · BREADCRUMB STORE — max 20</text>
+          <text x="405" y="304" text-anchor="middle" font-size="11" fill="#4a4536">rebuilt crumb: operation · outcome · provider · model</text>
+          <text x="405" y="320" text-anchor="middle" font-size="11" fill="#4a4536">+ route · status · request_id where available</text>
+
+          <line x1="405" y1="330" x2="405" y2="366" stroke="#1a170f" stroke-width="1.6" marker-end="url(#arr)"/>
+
+          <!-- 4 event -->
+          <rect x="240" y="370" width="330" height="52" rx="4" fill="#f2efe6" stroke="#1a170f" stroke-width="1.6"/>
+          <text x="405" y="392" text-anchor="middle" font-size="13" font-weight="600" fill="#1a170f">4 · EXCEPTION EVENT CAPTURED</text>
+          <text x="405" y="410" text-anchor="middle" font-size="11" fill="#4a4536">Starlette integration · re-raised request error</text>
+
+          <line x1="405" y1="422" x2="405" y2="458" stroke="#1a170f" stroke-width="1.6" marker-end="url(#arr)"/>
+
+          <!-- 5 before_send -->
+          <rect x="240" y="462" width="330" height="94" rx="4" fill="#f2efe6" stroke="#1a170f" stroke-width="1.6"/>
+          <text x="405" y="484" text-anchor="middle" font-size="13" font-weight="600" fill="#1a170f">5 · before_send — EVENT REBUILD</text>
+          <text x="405" y="502" text-anchor="middle" font-size="11" fill="#4a4536">crumbs re-validated at serialization time</text>
+          <text x="405" y="518" text-anchor="middle" font-size="11" fill="#4a4536">exception types + code frames only</text>
+          <text x="405" y="539" text-anchor="middle" font-size="10.5" fill="#c8361f">128 KiB cap → event dropped entirely</text>
+
+          <line x1="405" y1="556" x2="405" y2="592" stroke="#1a170f" stroke-width="1.6" marker-end="url(#arr)"/>
+
+          <!-- 6 envelope -->
+          <rect x="240" y="596" width="330" height="62" rx="4" fill="#1a170f"/>
+          <text x="405" y="622" text-anchor="middle" font-size="13" font-weight="600" fill="#f2efe6">6 · ENVELOPE → BETTER STACK</text>
+          <text x="405" y="640" text-anchor="middle" font-size="11" fill="#c9c2ad">one error event · logs / tracing / sessions off</text>
+        </g>
+
+        <!-- drop collector -->
+        <g font-family="IBM Plex Mono, monospace">
+          <rect x="680" y="130" width="180" height="330" rx="4" fill="#c8361f"/>
+          <text x="770" y="170" text-anchor="middle" font-size="13" font-weight="600" fill="#f2efe6">DROPPED</text>
+          <text x="770" y="194" text-anchor="middle" font-size="11" fill="#f2efe6" opacity=".9">third-party logs</text>
+          <text x="770" y="214" text-anchor="middle" font-size="11" fill="#f2efe6" opacity=".9">INFO / DEBUG</text>
+          <text x="770" y="234" text-anchor="middle" font-size="11" fill="#f2efe6" opacity=".9">unmarked records</text>
+          <text x="770" y="254" text-anchor="middle" font-size="11" fill="#f2efe6" opacity=".9">invalid fields</text>
+          <text x="770" y="280" text-anchor="middle" font-size="10.5" fill="#f2efe6" opacity=".75">nothing is redacted</text>
+          <text x="770" y="296" text-anchor="middle" font-size="10.5" fill="#f2efe6" opacity=".75">in place — it is</text>
+          <text x="770" y="312" text-anchor="middle" font-size="10.5" fill="#f2efe6" opacity=".75">rebuilt or omitted</text>
+          <text x="770" y="352" text-anchor="middle" font-size="10.5" fill="#f2efe6" opacity=".75">any surprise at</text>
+          <text x="770" y="368" text-anchor="middle" font-size="10.5" fill="#f2efe6" opacity=".75">export = dropped</text>
+        </g>
+
+        <!-- drop arrows -->
+        <line x1="570" y1="164" x2="676" y2="164" stroke="#c8361f" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+        <line x1="570" y1="295" x2="676" y2="295" stroke="#c8361f" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+        <line x1="570" y1="509" x2="676" y2="509" stroke="#c8361f" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+        <text x="623" y="156" text-anchor="middle" font-size="10" fill="#c8361f" font-family="IBM Plex Mono, monospace">fails a gate</text>
+      </svg>
+      <figcaption>three default-deny gates · a record either survives rebuilt, or is gone</figcaption>
+    </figure>
+
+    <div class="note">
+      <span class="tag">Why this design</span>
+      <strong>Redact-in-place is fragile:</strong> a new SDK field would be exported by default
+      after a dependency upgrade. Rebuilding from an explicit allowlist means a new field simply
+      doesn't survive — the export surface can't grow by accident.
+    </div>
+  </section>
+
+  <!-- ============ §02 PRODUCERS ============ -->
+  <section class="reveal" style="animation-delay:.15s">
+    <div class="sec-head"><span class="sec-num">§ 02</span><h2>Who emits markers</h2><span class="sec-note">five records · four schemas · two files</span></div>
+    <p class="lede">
+      Markers attach to <strong>existing log records</strong> at failure or fallback boundaries —
+      the last crumb before a re-raised exception, or the explanation of earlier degradation.
+      Local messages stay byte-for-byte unchanged; the marker only rides along in
+      <code>extra</code>.
+    </p>
+    <table class="producers">
+      <thead><tr><th>Site</th><th>Marker</th><th>Why it earns its place</th></tr></thead>
+      <tbody>
+        <tr><td>manager.py · coordinator fallback</td><td><span class="op">coordinator_plan</span><span class="op warn">fallback_teacher_only</span></td><td>Explains a later teacher-only turn — without exporting the exception or chat data.</td></tr>
+        <tr><td>manager.py · teacher re-raise</td><td><span class="op">teacher_response</span><span class="op fail">failed</span></td><td>Last safe crumb before automatic capture of the re-raised request exception.</td></tr>
+        <tr><td>ocr.py · preprocess fallback</td><td><span class="op">ocr_preprocess</span><span class="op warn">fallback_original</span></td><td>Preserves earlier degradation if OCR later fails. No image data.</td></tr>
+        <tr><td>ocr.py · OCRError re-raise</td><td><span class="op">ocr_extract</span><span class="op fail">failed</span></td><td>Marks the domain-failure exit exactly once; earlier validation logs stay unmarked.</td></tr>
+        <tr><td>ocr.py · unexpected error</td><td><span class="op">ocr_extract</span><span class="op fail">failed</span></td><td>Marks the unexpected exit once; the adjacent <code>str(e)</code> record stays unmarked.</td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <span class="tag">Deliberate omissions</span>
+      <strong><code>duration_bucket</code> and <code>retry_count</code> stay validator-only.</strong>
+      No production site has an authoritative value for either, and inventing one is worse than
+      omitting it. The waiver is recorded in <code>docs/error-telemetry.md</code>, so the gap
+      against the task's field list is traceable — not silent.
+    </div>
+  </section>
+
+  <!-- ============ §03 DATA CONTRACT ============ -->
+  <section class="reveal" style="animation-delay:.2s">
+    <div class="sec-head"><span class="sec-num">§ 03</span><h2>What crosses the wire</h2><span class="sec-note">hover a red bar to see what's held back</span></div>
+    <div class="contract-grid">
+      <div class="contract-box allowed">
+        <h3>Exported — code-owned only</h3>
+        <ul>
+          <li><strong>operation</strong> + <strong>outcome</strong> (validated identifiers)</li>
+          <li><strong>route template</strong> (e.g. <code>/chat/{session_id}</code>)</li>
+          <li><strong>provider / model</strong> — from <code>settings</code>, config-owned</li>
+          <li><strong>request_id</strong> — new: server-side <code>uuid4().hex</code>, 32 lowercase hex</li>
+          <li><strong>status_code</strong> (validated 100–599)</li>
+          <li>exception <strong>types</strong> &amp; code frames — no messages, no locals</li>
+        </ul>
+      </div>
+      <div class="contract-box denied">
+        <h3>Never exported</h3>
+        <div class="redact-list">
+          <div class="redact-item"><span class="redact-bar">transcripts · prompts · chat messages</span><span class="redact-why">user content</span></div>
+          <div class="redact-item"><span class="redact-bar">vocabulary entries</span><span class="redact-why">user content</span></div>
+          <div class="redact-item"><span class="redact-bar">tokens · auth data · cookies</span><span class="redact-why">credentials</span></div>
+          <div class="redact-item"><span class="redact-bar">usernames · user ids · chat ids</span><span class="redact-why">identifiers</span></div>
+          <div class="redact-item"><span class="redact-bar">telegram updates · provider responses</span><span class="redact-why">external data</span></div>
+          <div class="redact-item"><span class="redact-bar">exception text · log args · query strings</span><span class="redact-why">free text</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ §04 REQUEST ID ============ -->
+  <section class="reveal" style="animation-delay:.25s">
+    <div class="sec-head"><span class="sec-num">§ 04</span><h2>The new field: request_id</h2><span class="sec-note">merge semantics, drawn</span></div>
+    <p class="lede">
+      A tiny pass-through middleware generates one ID per HTTP request and binds it to Sentry's
+      existing ASGI isolation scope. <strong>No inbound IDs are trusted; no response header is
+      exposed.</strong> Its value: correlating multiple error events inside one request — a
+      handled 500 plus a late background-task failure, for instance.
+    </p>
+
+    <figure>
+      <svg viewBox="0 0 880 220" role="img" aria-label="Contexts merge semantics">
+        <defs>
+          <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#1a170f"/>
+          </marker>
+        </defs>
+        <g font-family="IBM Plex Mono, monospace" font-size="11.5">
+          <!-- scope -->
+          <rect x="20" y="30" width="230" height="66" rx="4" fill="#f2efe6" stroke="#1a170f" stroke-width="1.6"/>
+          <text x="135" y="54" text-anchor="middle" font-weight="600" fill="#1a170f">isolation scope (per request)</text>
+          <text x="135" y="76" text-anchor="middle" fill="#1d6b3f">runestone: { request_id }</text>
+
+          <!-- event -->
+          <rect x="20" y="124" width="230" height="66" rx="4" fill="#f2efe6" stroke="#1a170f" stroke-width="1.6"/>
+          <text x="135" y="148" text-anchor="middle" font-weight="600" fill="#1a170f">event (as captured)</text>
+          <text x="135" y="170" text-anchor="middle" fill="#1a6594">runestone: { status_code }</text>
+
+          <line x1="250" y1="63" x2="330" y2="95" stroke="#1a170f" stroke-width="1.6" marker-end="url(#arr2)"/>
+          <line x1="250" y1="157" x2="330" y2="125" stroke="#1a170f" stroke-width="1.6" marker-end="url(#arr2)"/>
+
+          <!-- projection -->
+          <rect x="336" y="60" width="250" height="100" rx="4" fill="#1a170f"/>
+          <text x="461" y="92" text-anchor="middle" font-weight="600" fill="#f2efe6">_project_event</text>
+          <text x="461" y="114" text-anchor="middle" fill="#c9c2ad">validated UNION —</text>
+          <text x="461" y="132" text-anchor="middle" fill="#c9c2ad">never wholesale replacement</text>
+
+          <line x1="586" y1="110" x2="656" y2="110" stroke="#1a170f" stroke-width="1.6" marker-end="url(#arr2)"/>
+
+          <!-- result -->
+          <rect x="660" y="60" width="200" height="100" rx="4" fill="#f2efe6" stroke="#1d6b3f" stroke-width="2"/>
+          <text x="760" y="92" text-anchor="middle" font-weight="600" fill="#1d6b3f">contexts.runestone</text>
+          <text x="760" y="116" text-anchor="middle" fill="#1a170f">{ request_id, </text>
+          <text x="760" y="134" text-anchor="middle" fill="#1a170f">status_code }</text>
+        </g>
+      </svg>
+      <figcaption>scope-injected request_id + event-level status_code → one validated union</figcaption>
+    </figure>
+
+    <div class="note">
+      <span class="tag">Practical notes</span>
+      IDs are <strong>not correlated to users or sessions</strong>. A DEBUG-level local log of the
+      ID is allowed — the sanitizer owns export, so local logs carry zero risk. WebSocket scopes
+      pass through untouched until a WebSocket-path producer ever exists.
+    </div>
+  </section>
+
+  <!-- ============ §05 STEPS ============ -->
+  <section class="reveal" style="animation-delay:.3s">
+    <div class="sec-head"><span class="sec-num">§ 05</span><h2>How it gets built</h2><span class="sec-note">strict order · one owner</span></div>
+
+    <figure>
+      <svg viewBox="0 0 880 130" role="img" aria-label="Implementation timeline">
+        <line x1="60" y1="52" x2="820" y2="52" stroke="#1a170f" stroke-width="1.6"/>
+        <g font-family="IBM Plex Mono, monospace" font-size="10.5" text-anchor="middle">
+          <g><circle cx="60" cy="52" r="17" fill="#f2efe6" stroke="#a4650c" stroke-width="2"/><text x="60" y="56" font-weight="600" fill="#a4650c">⌀</text><text x="60" y="94" fill="#4a4536">preflight</text><text x="60" y="108" fill="#8b8570">task + SDK pin</text></g>
+          <g><circle cx="212" cy="52" r="17" fill="#f2efe6" stroke="#1a170f" stroke-width="2"/><text x="212" y="56" font-weight="700" fill="#1a170f">1</text><text x="212" y="94" fill="#4a4536">correlation</text><text x="212" y="108" fill="#8b8570">request-id + ASGI</text></g>
+          <g><circle cx="364" cy="52" r="17" fill="#f2efe6" stroke="#1a170f" stroke-width="2"/><text x="364" y="56" font-weight="700" fill="#1a170f">2</text><text x="364" y="94" fill="#4a4536">producers</text><text x="364" y="108" fill="#8b8570">five markers</text></g>
+          <g><circle cx="516" cy="52" r="17" fill="#f2efe6" stroke="#1a170f" stroke-width="2"/><text x="516" y="56" font-weight="700" fill="#1a170f">3</text><text x="516" y="94" fill="#4a4536">full path</text><text x="516" y="108" fill="#8b8570">real-SDK envelope</text></g>
+          <g><circle cx="668" cy="52" r="17" fill="#f2efe6" stroke="#1a170f" stroke-width="2"/><text x="668" y="56" font-weight="700" fill="#1a170f">4</text><text x="668" y="94" fill="#4a4536">policy</text><text x="668" y="108" fill="#8b8570">docs + quota</text></g>
+          <g><circle cx="820" cy="52" r="17" fill="#1d6b3f" stroke="#1d6b3f" stroke-width="2"/><text x="820" y="56" font-weight="700" fill="#f2efe6">✓</text><text x="820" y="94" fill="#4a4536">privacy review</text><text x="820" y="108" fill="#8b8570">commit-bound</text></g>
+        </g>
+      </svg>
+      <figcaption>preflight → 1 → 2 → 3 → 4 → review · a changed Dart task sends the plan back</figcaption>
+    </figure>
+
+    <div class="step" style="margin-top:20px">
+      <div class="step-label"><span class="n">1</span>Correlation</div>
+      <div class="step-body">
+        <h4>Request-ID validator + ASGI middleware</h4>
+        <p>Validator: exactly 32 lowercase hex. The event projection becomes a validated union of
+        scope-injected <code>request_id</code> and event-level <code>status_code</code> — tested with
+        both fields and each alone. Concurrency tests prove distinct IDs and zero cross-request leakage.</p>
+        <div class="files">error_tracking.py · api/main.py · test_error_tracking.py · test_main.py</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-label"><span class="n">2</span>Producers</div>
+      <div class="step-body">
+        <h4>The five exact markers</h4>
+        <p>Marker mappings asserted on <code>LogRecord</code> objects, not formatted
+        <code>caplog.text</code>. One negative test per surface: exception text and sensitive sentinels
+        absent. A source search confirms no unplanned production marker.</p>
+        <div class="files">agents/manager.py · core/ocr.py · their test files</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-label"><span class="n">3</span>Full path</div>
+      <div class="step-body">
+        <h4>Real SDK, real request, real envelope</h4>
+        <p>Dependency overrides route a synthetic chat failure through the real
+        <code>AgentsManager</code>; the endpoint 500s and Sentry's Starlette integration captures it.
+        Assertions: breadcrumbs in order, request ID present, secret/user sentinels absent from
+        serialized envelope bytes. Baseline SDK-option and item-type tests are reused, not re-proven.</p>
+        <div class="files">test_error_tracking.py</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-label"><span class="n">4</span>Policy</div>
+      <div class="step-body">
+        <h4>Docs, quota honesty, approval</h4>
+        <p><code>docs/error-telemetry.md</code> gains request-ID provenance, the producer list, the
+        INFO decision, and the duration/retry waiver. Quota impact comes from provider-owned
+        documentation — or the acceptance criterion is explicitly renegotiated with the task owner.</p>
+        <div class="files">docs/error-telemetry.md</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-label"><span class="n">✓</span>Review</div>
+      <div class="step-body">
+        <h4>Commit-bound privacy/security approval</h4>
+        <p>Independent reviewer inspects the diff, sentinels, and durable policy. Standard code
+        review covers implementation correctness. Then the repo gates:
+        <code>make security-check</code> + <code>make check-readiness</code>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ §06 ACCEPTANCE ============ -->
+  <section class="reveal" style="animation-delay:.35s">
+    <div class="sec-head"><span class="sec-num">§ 06</span><h2>Acceptance at a glance</h2></div>
+    <table class="producers">
+      <thead><tr><th>Task requirement</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr><td>Sanitized breadcrumbs reach a captured error</td><td>Real-SDK envelope test, named producer crumbs asserted</td></tr>
+        <tr><td>Secrets &amp; user content excluded</td><td>Sentinel matrix over serialized envelope bytes</td></tr>
+        <tr><td>Request correlation safe &amp; isolated</td><td>HTTP concurrency tests · no inbound trust · no leakage</td></tr>
+        <tr><td>INFO policy evaluated</td><td>Stays WARNING-only; test proves marked INFO is excluded</td></tr>
+        <tr><td>No duplicate / new telemetry channels</td><td>SDK-option + item-type assertions (reused baseline)</td></tr>
+        <tr><td>Volume bounded &amp; documented</td><td>20-crumb + 128 KiB cap tests; one-sentence size note</td></tr>
+        <tr><td>Quota impact documented or renegotiated</td><td>Provider-owned docs, or explicit task-owner sign-off</td></tr>
+        <tr><td>Privacy/security approval</td><td>Commit-bound review on the implementation PR</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ============ §07 RELEASE ============ -->
+  <section class="reveal" style="animation-delay:.4s">
+    <div class="sec-head"><span class="sec-num">§ 07</span><h2>Release &amp; rollback</h2></div>
+    <div class="note danger">
+      <span class="tag">Canary — optional, single, synthetic</span>
+      The release owner may send <strong>one synthetic event</strong> to a verified
+      <em>non-production</em> Better Stack app, fake sentinels only. Expected fields present,
+      blocked sentinels absent. Event ID + commit recorded; DSN never recorded.
+    </div>
+    <div class="note">
+      <span class="tag">Rollback &amp; emergency</span>
+      Revert the implementation commit while retaining ancestor sanitizer <code>4b08c4a</code>.
+      Emergency containment: remove <code>SENTRY_DSN</code> via deployment secrets — release owner
+      only; repository agents never touch live secrets.
+    </div>
+    <div class="note">
+      <span class="tag">Explicitly out of scope</span>
+      INFO breadcrumbs, standalone Better Stack Logs, tracing, metrics, sessions, replay,
+      profiling, frontend telemetry · the standalone recall worker (own follow-up first) ·
+      Better Stack account / billing / retention changes · broad structured-logging cleanup.
+    </div>
+  </section>
+
+  <footer class="reveal" style="animation-delay:.45s">
+    <span>Explainer for <a href="../todo/richer-sanitized-better-stack-logging.md">richer-sanitized-better-stack-logging.md</a></span>
+    <span>authority lives in the plan + docs/error-telemetry.md — this page is commentary only</span>
+  </footer>
+
+</div>
+</body>
+</html>

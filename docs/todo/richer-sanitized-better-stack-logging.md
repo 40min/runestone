@@ -1,43 +1,26 @@
 # Richer Sanitized Better Stack Logging
 
-This explainer describes the implementation merged in PR [#274](https://github.com/40min/runestone/pull/274).
-It is retained as a durable explanation of the design and investigation flow;
-[`docs/error-telemetry.md`](../error-telemetry.md) is the normative policy for
-the current export contract.
+## Plan control
 
-## Implementation record
+- Dart task: [`kMMaU6ulmWQy` — Enable richer sanitized Better Stack logging](https://app.dartai.com/t/kMMaU6ulmWQy-Enable-richer-sanitized-Better)
+- Repository baseline: `69cc42178d6eb8f445270f2318eeed37dc0f3a51` (`main`, clean before this plan)
+- Risk tier: privacy-sensitive export-path expansion; requires independent privacy/security review and durable policy documentation. No other elevated process gates.
+- State: `IN_PROGRESS` — the pre-freeze Dart re-read could not be performed by a repository agent (the Dart page requires login). The repository owner re-confirmed the task on 2026-09-11: status `Doing`, priority `Medium`, blocker `0YWS31901O3I` closed by `4b08c4a`, description and acceptance criteria unchanged from the 2026-09-08 snapshot. Implementation started on that confirmation; commit-bound privacy/security approval remains outstanding.
+- Execution mode: standard, one cohesive backend implementation
 
-- Dart task: [`kMMaU6ulmWQy` — Enable richer sanitized Better Stack logging](https://app.dartai.com/t/kMMaU6ulmWQy-Enable-richer-sanitized-Better), completed
-- Planning baseline: `69cc42178d6eb8f445270f2318eeed37dc0f3a51` (`main`, clean before this work)
-- Implemented in: PR #274, merge commit `2c550a7`
-- Risk tier: privacy-sensitive export-path expansion; the merged change passed
-  the independent review and repository security/readiness gates.
+This document is implementation authority only after review. It does not authorize deployment, Better Stack account changes, secret access, or sending production/user data.
 
-This document does not authorize deployment, Better Stack account changes,
-secret access, or sending production/user data.
+The Dart page redirected to login during this planning run. Task scope and acceptance below come from the last verified Dart snapshot (2026-09-08). A live agent re-read was not possible (Dart requires login); the repository owner re-confirmed the task on 2026-09-11 (status `Doing`, priority `Medium`, blocker closed by `4b08c4a`, description and acceptance criteria unchanged), and implementation proceeded on that confirmation.
 
-The Dart page required login during planning. The repository owner re-confirmed
-the scope on 2026-09-11; the task was subsequently completed after the
-implementation and review.
-
-The original acceptance required useful sanitized breadcrumbs, representative
-secret/user-content exclusion, documented volume/quota impact, and
-privacy/security approval. Those requirements are now evidenced by the merged
-implementation, tests, policy, and PR review.
+Last verified snapshot: task status `Doing`, priority `Medium`, sanitizer blocker `0YWS31901O3I`, and acceptance requiring useful sanitized breadcrumbs in captured events, representative secret/user-content exclusion, documented volume/quota impact, and privacy/security approval. The blocker was subsequently completed by `4b08c4a` and closed in Dart.
 
 ## Outcome
 
-The merged change adds a small, explicitly marked trail of safe application
-warning/error breadcrumbs to Better Stack error events. It preserves the
-existing default-deny sanitizer, keeps standalone log events and INFO
-breadcrumbs disabled, adds internal request correlation, and proves the
-complete production path with the real Sentry SDK and synthetic sensitive
-sentinels.
+Add a small, explicitly marked trail of safe application warning/error breadcrumbs to Better Stack error events. Preserve the existing default-deny sanitizer, keep standalone log events and INFO breadcrumbs disabled, add internal request correlation, and prove the complete production path with the real Sentry SDK and synthetic sensitive sentinels.
 
-## Sanitizer baseline and current implementation
+## Current implementation
 
-The default-deny sanitizer was established in commit `4b08c4a` and remains the
-foundation of the richer logging path:
+Already complete in commit `4b08c4a`:
 
 - `src/runestone/core/error_tracking.py` rebuilds events and breadcrumbs from explicit allowlists and fails closed.
 - Logging breadcrumbs are accepted only from `runestone` loggers at `WARNING`/`ERROR`/`CRITICAL` with a valid `runestone_telemetry` mapping.
@@ -54,11 +37,10 @@ Resolved by this implementation:
 - Tests pass a production producer through an application request to a captured real-SDK envelope, including a `SentryAsgiMiddleware` escaping-exception regression test and sentinel matrix.
 - Quota/volume impact is documented in `docs/error-telemetry.md`.
 
-Release follow-up:
+Still outstanding:
 
-- The optional release-owner synthetic canary before deployment remains outside
-  repository implementation and may be performed against a verified
-  non-production Better Stack application.
+- Quota/volume documentation is recorded, but the required privacy/security approval is not yet obtained (commit-bound, on the PR).
+- The optional release-owner synthetic canary before deployment has not been performed.
 
 Follow-up commit (local-log correlation): the same middleware-generated ID is additionally bound to a request-scoped `ContextVar` in `core/logging_config.py` and rendered as a `request_id=<hex>` suffix on local log lines by `RunestoneLogFormatter`, reset via token when the request scope exits. The ContextVar binding is unconditional for HTTP requests (local logs correlate even without a DSN); the Sentry scope binding stays conditional on SDK initialization. Detached background tasks created during a request intentionally inherit the ID via contextvar copy semantics. This touches private logs only; the export contract, sanitizer, and HTTP-only scope are unchanged, and the ID still reaches Better Stack solely through `contexts.runestone.request_id`.
 
@@ -75,23 +57,17 @@ The standalone recall worker in `recall_main.py` does not initialize error track
 
 ## Safe data contract extension
 
-The merged contract extends the existing contract with one field:
+Extend the existing contract with one field:
 
 | Output | Source | Validator | Failure behavior |
 | --- | --- | --- | --- |
 | `contexts.runestone.request_id` | Runestone-generated `uuid.uuid4().hex` | exactly 32 lowercase hex characters | omit invalid field |
 
-`contexts.runestone.status_code` is preserved when both fields are present: the
-event projection is a validated union of scope-injected and event-level fields,
-never a wholesale replacement of the `runestone` context. Request IDs are not
-admitted through arbitrary tags, log messages, inbound headers, or request data.
-The exact rule is also recorded in [`docs/error-telemetry.md`](../error-telemetry.md)
-and hostile tests.
+Preserve `contexts.runestone.status_code` when both fields are present: the event projection is a validated union of scope-injected and event-level fields, never a wholesale replacement of the `runestone` context. Do not admit request IDs through arbitrary tags, log messages, inbound headers, or request data. Update `docs/error-telemetry.md` and hostile tests with the exact rule.
 
 ## Initial production producers
 
-The merged implementation marks only these existing records; their local
-human-readable messages remain unchanged.
+Add markers only to these existing records; keep their local human-readable messages unchanged.
 
 | File and path | Marker | Safe fields | Why it is useful |
 | --- | --- | --- | --- |
@@ -103,31 +79,9 @@ human-readable messages remain unchanged.
 
 Do not mark logs containing user IDs, chat IDs, usernames, Telegram/update identifiers, URLs, paths, counts derived from user content, exception strings, or arbitrary provider responses. Do not invent `retry_count` or `duration_bucket` where the production code has no authoritative value.
 
-## Investigation flow
-
-Better Stack is the safe signal, not the complete error transcript. An
-investigation proceeds as follows:
-
-1. Start with the captured event's exception type/module, relative stack frames,
-   route template, status code, producer breadcrumb, and
-   `contexts.runestone.request_id`.
-2. Search the authorized private application logs for the same
-   `request_id=<hex>` suffix. Those logs retain the operational message and
-   exception details under the deployment's normal access controls; they are
-   never copied into the Better Stack event by the sanitizer.
-3. Correlate all matching records in the request scope, including logs from
-   detached background tasks that inherited the ID. If no ID is present, use
-   the event's remaining allowlisted fields and timestamps/stack frames.
-4. Treat WebSocket, lifespan, and standalone recall-worker records as separate
-   paths: this middleware does not assign them request IDs, and the recall
-   worker is not initialized for Sentry export in this release.
-
-## Historical implementation steps and ownership
+## Implementation steps and ownership
 
 Implementation order is strictly `preflight -> 1 -> 2 -> 3 -> 4 -> privacy/security review`. Implementation uses one owner to avoid overlapping edits in the telemetry contract and tests.
-
-The steps below record how the change was built and verified; they are not
-outstanding work items.
 
 ### Preflight and forbidden writes
 
@@ -260,21 +214,18 @@ Repository tests do not authorize external telemetry transmission. The release o
 - Instrumenting the standalone recall worker. If Better Stack coverage is required there, create a follow-up that first defines its own initialization/release identity (for example `runestone-recall@<commit>`), isolation lifecycle for scheduled jobs, and synthetic worker-path evidence; do not add dead Telegram markers before that boundary exists.
 - Better Stack account, retention, data-region, billing, alert, or production-secret changes.
 
-## Execution record
+## Execution
 
-One implementation owner performed the source, test, and doc writes; the review
-was read-only and commit-bound. The durable evidence is the merged diff, the
-focused and repository-wide checks, and `docs/error-telemetry.md`. This file is
-retained here as an explainer rather than as an active work plan.
+One implementation owner performs all source, test, and doc writes; privacy/security review is read-only and commit-bound. Keep the evidence packet to the changed diff, focused command summaries, and `docs/error-telemetry.md`. No evidence-tier machinery, audit workflow, plan-digest protocol, or plan-retention lifecycle: this file can be removed once durable decisions live in `docs/error-telemetry.md` and the Dart task is complete.
 
 ## Final checklist
 
-- [x] (done) Dart task scope/status re-confirmed by the repository owner on 2026-09-11; a live agent re-read was not possible because Dart required login.
+- [x] (done) Dart task re-confirmed for scope/status — by the repository owner on 2026-09-11, not by a live agent re-read (Dart requires login); see the State line above.
 - [x] (done) Confirm `sentry-sdk==2.68.1` and preserve forbidden dependency files.
 - [x] (done) Implement request-ID projection with explicit merge semantics and HTTP ASGI isolation binding.
 - [x] (done) Add exactly the five named production markers implementing four operation schemas.
 - [x] (done) Add real-SDK production-path and hostile sentinel evidence, reusing baseline envelope assertions.
 - [x] (done) Record INFO decision, duration/retry waiver, quota note, and one-sentence volume evidence in `docs/error-telemetry.md`.
-- [x] (done) Pass focused tests, `make security-check`, and `make check-readiness` on the final review surface.
-- [x] (done) Obtain commit-bound privacy/security approval on the implementation PR.
+- [ ] Pass focused tests, `make security-check`, and `make check-readiness` on the final review surface.
+- [ ] Obtain commit-bound privacy/security approval before publication.
 - [ ] Optional single synthetic canary by the release owner before deployment.
