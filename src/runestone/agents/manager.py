@@ -226,7 +226,18 @@ class AgentsManager:
                 ],
             )
         except (RunestoneError, ValueError, RuntimeError) as e:
-            logger.error("coordinator failed, falling back to teacher only: %s", e)
+            logger.error(
+                "coordinator failed, falling back to teacher only: %s",
+                e,
+                extra={
+                    "runestone_telemetry": {
+                        "operation": "coordinator_plan",
+                        "outcome": "fallback_teacher_only",
+                        "provider": self.settings.coordinator_provider,
+                        "model": self.settings.coordinator_model,
+                    }
+                },
+            )
 
         if plan is None:
             plan = CoordinatorPlan(
@@ -292,7 +303,18 @@ class AgentsManager:
                 current_recall_words=current_recall_words or [],
             )
         except (RunestoneError, ValueError, RuntimeError) as e:
-            logger.error("teacher response generation failed: %s", e)
+            logger.error(
+                "teacher response generation failed: %s",
+                e,
+                extra={
+                    "runestone_telemetry": {
+                        "operation": "teacher_response",
+                        "outcome": "failed",
+                        "provider": self.settings.teacher_provider,
+                        "model": self.settings.teacher_model,
+                    }
+                },
+            )
             raise
 
         sources = self._extract_sources(

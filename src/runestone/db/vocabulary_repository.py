@@ -47,8 +47,7 @@ class VocabularyRepository:
             **{f"word_phrase_{index}": word_phrase for index, word_phrase in enumerate(word_phrases)},
         }
         # nosemgrep
-        stmt = text(
-            f"""
+        stmt = text(f"""
             WITH requested(word_phrase, ordinal) AS (
                 VALUES {requested_values}
             ),
@@ -90,8 +89,7 @@ class VocabularyRepository:
             LEFT JOIN existing e ON e.word_phrase = r.word_phrase
             LEFT JOIN updated u ON u.id = e.id
             ORDER BY r.ordinal
-            """
-        )
+            """)
 
         result = await self.db.execute(stmt, params)
         rows = result.mappings().all()
@@ -183,8 +181,7 @@ class VocabularyRepository:
             )
 
         # nosemgrep
-        stmt = text(
-            f"""
+        stmt = text(f"""
             WITH requested(word_phrase, translation, example_phrase, extra_info, ordinal) AS (
                 VALUES {requested_values}
             ),
@@ -230,8 +227,7 @@ class VocabularyRepository:
             JOIN upserted u ON u.word_phrase = r.word_phrase
             LEFT JOIN existing e ON e.word_phrase = r.word_phrase
             ORDER BY r.ordinal
-            """
-        )
+            """)
         result = await self.db.execute(stmt, params)
         rows = result.mappings().all()
         await self.db.commit()

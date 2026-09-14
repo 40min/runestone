@@ -3,6 +3,7 @@ Tests for AgentsManager orchestration.
 """
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from decimal import Decimal
@@ -2850,3 +2851,76 @@ def test_manager_registers_default_specialists(mock_settings):
         "news_agent",
         "word_keeper",
     ]
+
+
+# ---------------------------------------------------------------------------
+# Sanitized telemetry breadcrumb producers
+# ---------------------------------------------------------------------------
+
+
+def _telemetry_records(caplog):
+    return [record for record in caplog.records if hasattr(record, "runestone_telemetry")]
+
+
+@pytest.mark.anyio
+async def test_coordinator_fallback_marks_sanitized_telemetry(
+    mock_settings,
+    mock_user,
+    mock_memory_item_service,
+    mock_chat_session_learning_focus_service,
+    mock_side_effect_service,
+    caplog,
+):
+    """The coordinator fallback marker carries config-owned fields, never exception text."""
+    manager = _make_manager(mock_settings)
+    manager.coordinator.plan_pre_turn = AsyncMock(side_effect=ValueError("SENTINEL-coordinator-secret"))
+    manager.teacher = AsyncMock()
+
+    with caplog.at_level(logging.ERROR, logger="runestone.agents.manager"):
+        await manager.prepare_pre_turn(
+            message="Hello",
+            chat_id="chat-1",
+            history=[],
+            user=mock_user,
+            memory_item_service=mock_memory_item_service,
+            chat_session_learning_focus_service=mock_chat_session_learning_focus_service,
+            side_effect_service=mock_side_effect_service,
+        )
+
+    marked = _telemetry_records(caplog)
+    assert len(marked) == 1
+    assert marked[0].runestone_telemetry == {
+        "operation": "coordinator_plan",
+        "outcome": "fallback_teacher_only",
+        "provider": "openrouter",
+        "model": "test-coordinator-model",
+    }
+    assert "SENTINEL-coordinator-secret" not in str(marked[0].runestone_telemetry)
+
+
+@pytest.mark.anyio
+async def test_teacher_failure_marks_sanitized_telemetry(mock_settings, mock_user, caplog):
+    """The re-raised teacher failure marker is the last safe breadcrumb before capture."""
+    manager = _make_manager(mock_settings)
+    manager.teacher = AsyncMock()
+    manager.teacher.generate_response = AsyncMock(side_effect=ValueError("SENTINEL-teacher-secret"))
+
+    with caplog.at_level(logging.ERROR, logger="runestone.agents.manager"):
+        with pytest.raises(ValueError):
+            await manager.generate_teacher_response(
+                message="Hello",
+                history=[],
+                user=mock_user,
+                pre_results=[],
+                active_learning_focus_memory="",
+            )
+
+    marked = _telemetry_records(caplog)
+    assert len(marked) == 1
+    assert marked[0].runestone_telemetry == {
+        "operation": "teacher_response",
+        "outcome": "failed",
+        "provider": "openrouter",
+        "model": "test-model",
+    }
+    assert "SENTINEL-teacher-secret" not in str(marked[0].runestone_telemetry)

@@ -12,13 +12,15 @@ import json
 import logging
 import math
 import re
+import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, MutableMapping, cast
 
 import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from runestone.config import Settings
+from runestone.core.logging_config import reset_current_request_id, set_current_request_id
 
 if TYPE_CHECKING:
     from sentry_sdk._types import BreadcrumbProcessor, EventProcessor
@@ -39,6 +41,7 @@ _ROUTE_TEMPLATE_RE = re.compile(r"/[A-Za-z0-9_{}./:-]{0,199}")
 _OPERATION_RE = re.compile(r"[a-z][a-z0-9_]{0,63}")
 _OUTCOME_RE = re.compile(r"[a-z][a-z0-9_]{0,47}")
 _MODEL_RE = re.compile(r"[A-Za-z0-9._:/-]{1,128}")
+_REQUEST_ID_RE = re.compile(r"[0-9a-f]{32}")
 
 _LEVELS = frozenset({"debug", "info", "warning", "error", "critical", "fatal"})
 _BREADCRUMB_LEVELS = frozenset({"warning", "error", "critical"})
@@ -80,6 +83,13 @@ def _validate_status_code(value: Any) -> "int | None":
     if isinstance(value, str) and len(value) == 3 and value.isdigit():
         value = int(value)
     if isinstance(value, int) and 100 <= value <= 599:
+        return value
+    return None
+
+
+def _validate_request_id(value: Any) -> "str | None":
+    """Accept exactly 32 lowercase hex characters (a Runestone-generated UUID hex)."""
+    if isinstance(value, str) and _REQUEST_ID_RE.fullmatch(value):
         return value
     return None
 
@@ -358,9 +368,19 @@ def _project_event(event: Any) -> dict[str, Any]:
 
     contexts = event.get("contexts")
     if isinstance(contexts, dict) and isinstance(contexts.get("runestone"), dict):
-        status_code = _validate_status_code(contexts["runestone"].get("status_code"))
+        # The exported runestone context is a validated union of scope-injected
+        # fields (request_id) and event-level fields (status_code); it is never
+        # a wholesale replacement of the dict.
+        runestone = contexts["runestone"]
+        projected_runestone: dict[str, Any] = {}
+        status_code = _validate_status_code(runestone.get("status_code"))
         if status_code is not None:
-            projected["contexts"] = {"runestone": {"status_code": status_code}}
+            projected_runestone["status_code"] = status_code
+        request_id = _validate_request_id(runestone.get("request_id"))
+        if request_id is not None:
+            projected_runestone["request_id"] = request_id
+        if projected_runestone:
+            projected["contexts"] = {"runestone": projected_runestone}
 
     breadcrumbs = event.get("breadcrumbs")
     if isinstance(breadcrumbs, dict) and isinstance(breadcrumbs.get("values"), list):
@@ -421,3 +441,61 @@ def setup_error_tracking(settings: Settings) -> None:
             )
         ],
     )
+
+
+_ASGIReceive = Callable[[], Awaitable["dict[str, Any]"]]
+_ASGISend = Callable[["dict[str, Any]"], Awaitable[None]]
+
+
+class RequestCorrelationMiddleware:
+    """Bind a fresh internal request ID to the request scope and Sentry.
+
+    The ID is generated server-side for each HTTP scope and exists only to
+    correlate multiple error events raised inside one request (for example a
+    handled 500 plus a late background-task failure). It is never accepted from
+    the client, never exposed in a response header, and never correlated with
+    users or sessions. WebSocket and lifespan scopes pass through unchanged.
+
+    The ID is always bound to a request-scoped ``ContextVar`` so local log
+    lines render ``request_id=<hex>`` even when error tracking is disabled
+    (private logs only; the sanitizer owns export). The Sentry binding to the
+    per-request isolation scope as ``contexts.runestone.request_id`` happens
+    only when the SDK is initialized. Detached background tasks created during
+    the request intentionally inherit the ID via contextvar copy semantics;
+    the token reset restores only the requesting task's context.
+
+    The Sentry context stays installed for the whole request so exceptions
+    that escape this middleware are still captured with the ID by Sentry's
+    outer ASGI integration; cleanup relies on that integration discarding the
+    per-request isolation scope (sentry-sdk 2.68.1 creates and clears one per
+    ASGI request), so this middleware must run inside its lifecycle.
+    """
+
+    def __init__(self, app: Callable[..., Any]) -> None:
+        self.app = app
+
+    async def __call__(
+        self,
+        scope: MutableMapping[str, Any],
+        receive: _ASGIReceive,
+        send: _ASGISend,
+    ) -> None:
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request_id = uuid.uuid4().hex
+        token = set_current_request_id(request_id)
+        try:
+            if sentry_sdk.is_initialized():
+                isolation_scope = sentry_sdk.get_isolation_scope()
+                # Merge instead of replace so any pre-existing ``runestone``
+                # context fields survive alongside the ID. sentry-sdk 2.68.1
+                # has no public context getter, hence the pinned-version
+                # private read.
+                runestone_context = dict(isolation_scope._contexts.get("runestone") or {})
+                runestone_context["request_id"] = request_id
+                isolation_scope.set_context("runestone", runestone_context)
+            await self.app(scope, receive, send)
+        finally:
+            reset_current_request_id(token)

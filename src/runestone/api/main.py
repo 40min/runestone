@@ -27,7 +27,7 @@ from runestone.core.clients.voice.voice_factory import (
     create_voice_synthesis_client,
     create_voice_transcription_client,
 )
-from runestone.core.error_tracking import setup_error_tracking
+from runestone.core.error_tracking import RequestCorrelationMiddleware, setup_error_tracking
 from runestone.core.logging_config import setup_logging
 from runestone.core.service_llm import build_service_llm_model
 from runestone.db.database import setup_database
@@ -108,6 +108,9 @@ def create_application() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Bind an internal request ID to Sentry's isolation scope for error correlation.
+    app.add_middleware(RequestCorrelationMiddleware)
 
     # Include API routers
     app.include_router(api_router, prefix="/api")

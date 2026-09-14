@@ -57,16 +57,12 @@ def upgrade() -> None:
 
     if user_count == 0:
         # Insert default user
-        conn.execute(
-            sa.text(
-                """
+        conn.execute(sa.text("""
                 INSERT INTO users (id, email, hashed_password, name, surname, timezone, pages_recognised_count)
                 VALUES (1, 'user1@example.com',
                         '$pbkdf2-sha256$29000$917rHYNQak0pBcB4z5nTug$Ba9.08/ZshwcrLgC/isZRFGnOK5zkqAQeBDW/mx42sI',
                         '40min', NULL, 'UTC', 0)
-            """
-            )
-        )
+            """))
 
     # Add user_id column to vocabulary table if it doesn't exist
     if "user_id" not in vocabulary_columns:

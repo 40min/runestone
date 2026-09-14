@@ -35,8 +35,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Downgrade schema."""
     op.drop_index("ix_memory_items_user_area_key_unique", table_name="memory_items")
-    op.execute(
-        """
+    op.execute("""
         DELETE FROM memory_items
         WHERE id IN (
             SELECT id
@@ -51,8 +50,7 @@ def downgrade() -> None:
             ) duplicate_rows
             WHERE row_num > 1
         )
-        """
-    )
+        """)
     op.create_unique_constraint(
         "uq_memory_items_user_category_key",
         "memory_items",

@@ -792,15 +792,13 @@ class TestVocabularyService:
     async def test_enrich_vocabulary_items_success(self, service, caplog):
         """Test successful vocabulary items batch enrichment."""
         # Mock LLM client to return batch response
-        service.llm_model.ainvoke.return_value = AIMessage(
-            content="""
+        service.llm_model.ainvoke.return_value = AIMessage(content="""
         {
             "ett äpple": "en-word, noun, base form: äpple",
             "en banan": "en-word, noun",
             "vara": "verb, forms: vara, är, var, varit"
         }
-        """
-        )
+        """)
 
         # Test items
         items = [
@@ -917,15 +915,13 @@ class TestVocabularyService:
     async def test_enrich_vocabulary_items_partial_failure(self, service):
         """Test vocabulary items batch enrichment with partial failures."""
         # Mock LLM with some null values
-        service.llm_model.ainvoke.return_value = AIMessage(
-            content="""
+        service.llm_model.ainvoke.return_value = AIMessage(content="""
         {
             "ett äpple": "en-word, noun, base form: äpple",
             "en banan": null,
             "vara": "verb, forms: vara, är, var, varit"
         }
-        """
-        )
+        """)
 
         items = [
             VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple."),
@@ -980,13 +976,11 @@ class TestVocabularyService:
     async def test_save_vocabulary_with_batch_enrichment(self, service, db_session):
         """Test save_vocabulary using batch enrichment."""
         # Mock batch enrichment
-        service.llm_model.ainvoke.return_value = AIMessage(
-            content="""
+        service.llm_model.ainvoke.return_value = AIMessage(content="""
         {
             "ett äpple": "en-word, noun, base form: äpple"
         }
-        """
-        )
+        """)
 
         items = [
             VocabularyItemCreate(word_phrase="ett äpple", translation="an apple", example_phrase="Jag äter ett äpple.")
