@@ -37,9 +37,7 @@ Your sole job is to decide which specialist agents to route to for the current s
 """
 
 
-COORDINATOR_PRE_RESPONSE_PROMPT = (
-    COORDINATOR_BASE_PROMPT
-    + """
+COORDINATOR_PRE_RESPONSE_PROMPT = COORDINATOR_BASE_PROMPT + """
 
 ## Current Phase
 - This is the pre-response phase.
@@ -84,12 +82,9 @@ be answered from static knowledge.
 - The topic is vague or unspecified (e.g. "give me some news", "any news?"). Let the teacher clarify on the next turn.
 - The student is asking a grammar or vocabulary question with no real-time component.
 """
-)
 
 
-COORDINATOR_POST_RESPONSE_PROMPT = (
-    COORDINATOR_BASE_PROMPT
-    + """
+COORDINATOR_POST_RESPONSE_PROMPT = COORDINATOR_BASE_PROMPT + """
 
 ## Current Phase
 - This is the post-response phase.
@@ -131,7 +126,6 @@ COORDINATOR_POST_RESPONSE_PROMPT = (
 - The student praises progress without asking to change stored learning memory.
 - The request is really about personal facts rather than `area_to_improve`.
 """
-)
 
 
 class CoordinatorAgent:
