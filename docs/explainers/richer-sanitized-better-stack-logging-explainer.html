@@ -164,17 +164,16 @@
   <header class="reveal">
     <div class="file-tab">
       <span><span class="dot"></span>task kMMaU6ulmWQy</span>
-      <span>status: <strong style="color: var(--amber)">BLOCKED — pending task confirmation</strong></span>
+      <span>status: <strong style="color: var(--green)">DONE — merged in PR #274</strong></span>
       <span>baseline 4b08c4a</span>
       <span>sentry-sdk 2.68.1</span>
     </div>
     <h1>Richer, <em>sanitized</em> Better Stack logging</h1>
     <p class="standfirst">
-      The sanitizer shipped in <code>4b08c4a</code> is live but <strong>inert</strong> — no
-      production code emits a telemetry marker, so no breadcrumb has ever reached a real error
-      event. This plan switches the trail on: <strong>five marked log records</strong>, one
-      server-generated <strong>request ID</strong>, and the same default-deny sanitizer as the
-      only export authority.
+      The default-deny sanitizer shipped in <code>4b08c4a</code> is now active with
+      <strong>five marked log records</strong>, one server-generated <strong>request ID</strong>,
+      and the sanitizer as the only export authority. The merged implementation was verified with
+      the real SDK, hostile sentinels, security checks, and repository readiness checks.
     </p>
   </header>
 
@@ -388,8 +387,16 @@
     <div class="note">
       <span class="tag">Practical notes</span>
       IDs are <strong>not correlated to users or sessions</strong>. A DEBUG-level local log of the
-      ID is allowed — the sanitizer owns export, so local logs carry zero risk. WebSocket scopes
-      pass through untouched until a WebSocket-path producer ever exists.
+      ID is allowed; the sanitizer prevents that local message from entering Better Stack.
+      WebSocket scopes pass through untouched until a WebSocket-path producer ever exists.
+    </div>
+    <div class="note">
+      <span class="tag">Investigation flow</span>
+      Start with the Better Stack event's exception type/module, relative frames, route, status,
+      producer breadcrumb, and <code>request_id</code>. Search authorized private application logs
+      for <code>request_id=&lt;hex&gt;</code> to recover the operational message and exact exception
+      details; those values are deliberately never exported. Detached tasks inherit the ID, while
+      WebSocket, lifespan, and standalone recall-worker paths remain separate.
     </div>
   </section>
 
@@ -506,8 +513,8 @@
   </section>
 
   <footer class="reveal" style="animation-delay:.45s">
-    <span>Explainer for <a href="../todo/richer-sanitized-better-stack-logging.md">richer-sanitized-better-stack-logging.md</a></span>
-    <span>authority lives in the plan + docs/error-telemetry.md — this page is commentary only</span>
+    <span>Visual explainer for the merged telemetry implementation</span>
+    <span>current policy lives in <code>docs/error-telemetry.md</code></span>
   </footer>
 
 </div>
