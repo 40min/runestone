@@ -19,9 +19,14 @@ Examples:
 ## Stable Docs
 
 - [`agent-swarm-architecture.md`](agent-swarm-architecture.md): current agent routing, tool ownership, async-post behavior, and memory boundaries
+- [`error-telemetry.md`](error-telemetry.md): current default-deny Better Stack error-export policy
 - [`memory-maintainer.md`](memory-maintainer.md): chat-reset background memory cleanup flow and maintainer tool contract
 - [`recall-integration-test-plan.md`](recall-integration-test-plan.md): database-aware manual and one-off integration coverage for recall workflows
 - [`recall-state-persistence.md`](recall-state-persistence.md): database-backed recall state, ordered words queue, cursor rules, and remaining file-backed Telegram offset
+
+## Explainers
+
+- [`explainers/richer-sanitized-better-stack-logging.md`](explainers/richer-sanitized-better-stack-logging.md): implementation rationale, producer choices, request correlation, investigation flow, and review evidence for richer sanitized Better Stack breadcrumbs
 
 ## `docs/todo` Purpose
 
