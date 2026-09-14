@@ -24,8 +24,8 @@ COPY frontend/ ./
 # Remove .env file for Docker build (we want empty API_BASE_URL for nginx proxy)
 RUN rm -f .env
 
-# Build the application
-RUN npm run build
+# Build the application with PWA generation enabled
+RUN BUILD_PWA=1 npm run build
 
 # Production stage
 FROM nginx:alpine

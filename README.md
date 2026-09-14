@@ -469,6 +469,15 @@ export SAFETY_API_KEY="your-safety-api-key"
 
 CI enforces the scan via the `Safety` workflow when a pull request is opened and on every push to `main`; you can also trigger it manually from the Actions tab for an intentional rerun or verification. The workflow sets `SAFETY_REQUIRED=1` and passes `SAFETY_API_KEY` from GitHub Actions secrets. If the key is missing when required, the hook fails closed with a clear error; the wrapper does not print the key or pass it on the command line, and Safety receives it through the environment for authentication.
 
+## 📱 PWA (Progressive Web App)
+
+Runestone is installable as a PWA on supported desktop and mobile browsers (install via your browser's address-bar or menu install option; HTTPS is required outside localhost).
+
+- **Identity:** manifest, icons, and theme are generated from `frontend/vite.config.ts` and `frontend/public/`.
+- **Offline support is shell-only:** a previously loaded build can reopen without a network, but all server-backed features (authentication, OCR, vocabulary, Recall, grammar, chat, audio) remain network-only. No API responses are ever cached.
+- **Updates:** a new deployed build shows a `Reload` / `Later` prompt; nothing reloads automatically, so in-progress input is never discarded. Choose `Reload` when convenient.
+- **Recovery from a stale installed client:** close the installed window, clear site data (or unregister the service worker) in browser DevTools → Application, then reopen the site.
+
 ## 🏗️ Architecture
 
 ```
