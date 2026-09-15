@@ -12,6 +12,7 @@ import json
 import logging
 import math
 import re
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, MutableMapping, cast
@@ -45,13 +46,42 @@ _REQUEST_ID_RE = re.compile(r"[0-9a-f]{32}")
 
 _LEVELS = frozenset({"debug", "info", "warning", "error", "critical", "fatal"})
 _BREADCRUMB_LEVELS = frozenset({"warning", "error", "critical"})
-_PROVIDERS = frozenset({"openai", "openrouter", "gemini"})
+_PROVIDERS = frozenset({"openai", "openrouter", "gemini", "elevenlabs"})
 _DURATION_BUCKETS = frozenset({"lt_100ms", "100ms_1s", "1s_5s", "5s_30s", "gte_30s"})
 _RECORD_LEVEL_TO_BREADCRUMB = {
     logging.WARNING: "warning",
     logging.ERROR: "error",
     logging.CRITICAL: "critical",
 }
+
+
+def duration_bucket(started_at: float) -> str:
+    """Return the bounded latency label for a monotonic operation start time."""
+    elapsed = time.monotonic() - started_at
+    if elapsed < 0.1:
+        return "lt_100ms"
+    if elapsed < 1:
+        return "100ms_1s"
+    if elapsed < 5:
+        return "1s_5s"
+    if elapsed < 30:
+        return "5s_30s"
+    return "gte_30s"
+
+
+def capture_sanitized_exception(exception: BaseException) -> None:
+    """Capture a handled boundary failure through the configured event sanitizer.
+
+    Callers must not add exception text, request data, or other untrusted
+    fields. ``_sanitize_event`` rebuilds the SDK event from the allowlist
+    before it can leave the process.
+    """
+    try:
+        if sentry_sdk.is_initialized():
+            sentry_sdk.capture_exception(exception)
+    except Exception:
+        # Error reporting must never change the outcome of application work.
+        pass
 
 
 def _is_runestone_logger(name: Any) -> bool:

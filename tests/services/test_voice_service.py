@@ -1,5 +1,5 @@
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -12,6 +12,7 @@ from runestone.services.voice_service import VoiceService
 @pytest.fixture
 def mock_settings():
     settings = MagicMock(spec=Settings)
+    settings.voice_transcription_provider = "openai"
     settings.voice_transcription_model = "whisper-1"
     settings.voice_enhancement_model = "gpt-4o-mini"
     return settings
@@ -63,21 +64,41 @@ async def test_transcribe_audio_with_language(voice_service, mock_transcription_
 
 
 @pytest.mark.anyio
-async def test_transcribe_audio_empty_response(voice_service, mock_transcription_client):
+async def test_transcribe_audio_empty_response(voice_service, mock_transcription_client, caplog):
     """Test transcription returning empty result."""
     mock_transcription_client.transcribe_audio.return_value = ""
 
-    with pytest.raises(RunestoneError, match="Transcription returned empty result"):
-        await voice_service.transcribe_audio(b"audio")
+    with patch("runestone.services.voice_service.duration_bucket", return_value="100ms_1s"):
+        with caplog.at_level("ERROR", logger="runestone.services.voice_service"):
+            with pytest.raises(RunestoneError, match="Transcription returned empty result"):
+                await voice_service.transcribe_audio(b"SENTINEL-audio")
+
+    assert caplog.records[-1].runestone_telemetry == {
+        "operation": "voice_transcription",
+        "outcome": "empty_result",
+        "provider": "openai",
+        "model": "whisper-1",
+        "duration_bucket": "100ms_1s",
+    }
 
 
 @pytest.mark.anyio
-async def test_transcribe_audio_api_error(voice_service, mock_transcription_client):
+async def test_transcribe_audio_api_error(voice_service, mock_transcription_client, caplog):
     """Test transcription API error."""
     mock_transcription_client.transcribe_audio.side_effect = Exception("API Error")
 
-    with pytest.raises(RunestoneError, match="Failed to transcribe audio"):
-        await voice_service.transcribe_audio(b"audio")
+    with patch("runestone.services.voice_service.duration_bucket", return_value="1s_5s"):
+        with caplog.at_level("ERROR", logger="runestone.services.voice_service"):
+            with pytest.raises(RunestoneError, match="Failed to transcribe audio"):
+                await voice_service.transcribe_audio(b"audio")
+
+    assert caplog.records[-1].runestone_telemetry == {
+        "operation": "voice_transcription",
+        "outcome": "failed",
+        "provider": "openai",
+        "model": "whisper-1",
+        "duration_bucket": "1s_5s",
+    }
 
 
 @pytest.mark.anyio
@@ -95,21 +116,39 @@ async def test_enhance_text_success(voice_service, mock_enhancement_client):
 
 
 @pytest.mark.anyio
-async def test_enhance_text_empty_response(voice_service, mock_enhancement_client):
+async def test_enhance_text_empty_response(voice_service, mock_enhancement_client, caplog):
     """Test enhancement returning empty result (should return original)."""
     mock_enhancement_client.enhance_text.return_value = ""
 
-    result = await voice_service.enhance_text("original")
-    assert result == "original"
+    with patch("runestone.services.voice_service.duration_bucket", return_value="lt_100ms"):
+        with caplog.at_level("WARNING", logger="runestone.services.voice_service"):
+            result = await voice_service.enhance_text("SENTINEL-transcript")
+    assert result == "SENTINEL-transcript"
+    assert caplog.records[-1].runestone_telemetry == {
+        "operation": "voice_enhancement",
+        "outcome": "fallback_original",
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "duration_bucket": "lt_100ms",
+    }
 
 
 @pytest.mark.anyio
-async def test_enhance_text_api_error(voice_service, mock_enhancement_client):
+async def test_enhance_text_api_error(voice_service, mock_enhancement_client, caplog):
     """Test enhancement API error (should return original)."""
     mock_enhancement_client.enhance_text.side_effect = Exception("API Error")
 
-    result = await voice_service.enhance_text("original")
+    with patch("runestone.services.voice_service.duration_bucket", return_value="5s_30s"):
+        with caplog.at_level("ERROR", logger="runestone.services.voice_service"):
+            result = await voice_service.enhance_text("original")
     assert result == "original"
+    assert caplog.records[-1].runestone_telemetry == {
+        "operation": "voice_enhancement",
+        "outcome": "fallback_original",
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "duration_bucket": "5s_30s",
+    }
 
 
 @pytest.mark.anyio

@@ -8,7 +8,7 @@ import re
 from collections.abc import Generator
 from types import SimpleNamespace
 from typing import Any, Literal, cast, get_args, get_origin
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import httpx
 import pytest
@@ -25,10 +25,15 @@ from runestone.core.error_tracking import (
     RequestCorrelationMiddleware,
     _sanitize_breadcrumb,
     _sanitize_event,
+    duration_bucket,
     setup_error_tracking,
 )
+from runestone.core.exceptions import RunestoneError
 from runestone.core.logging_config import RunestoneLogFilter, get_current_request_id
 from runestone.dependencies import get_chat_service
+from runestone.model_costs.tracking import _CostCollector
+from runestone.services.tts_service import TTSService
+from runestone.services.voice_service import VoiceService
 
 
 @pytest.fixture
@@ -191,6 +196,23 @@ def _single_event(transport: _InMemoryTransport) -> dict[str, Any]:
     event = transport.envelopes[0].get_event()
     assert event is not None
     return cast("dict[str, Any]", event)
+
+
+@pytest.mark.parametrize(
+    ("elapsed", "expected"),
+    [
+        (0.05, "lt_100ms"),
+        (0.5, "100ms_1s"),
+        (2.0, "1s_5s"),
+        (10.0, "5s_30s"),
+        (30.0, "gte_30s"),
+    ],
+)
+def test_duration_bucket_ranges(monkeypatch: pytest.MonkeyPatch, elapsed: float, expected: str) -> None:
+    started_at = 100.0
+    monkeypatch.setattr(error_tracking.time, "monotonic", lambda: started_at + elapsed)
+
+    assert duration_bucket(started_at) == expected
 
 
 def test_error_tracking_is_disabled_without_dsn() -> None:
@@ -933,25 +955,110 @@ def _literal_values(annotation: Any) -> set[str]:
     return values
 
 
-def test_breadcrumb_provider_allowlist_covers_configured_llm_providers() -> None:
-    """An LLM provider added to config must be added to the breadcrumb allowlist too.
+def test_breadcrumb_provider_allowlist_covers_configured_providers() -> None:
+    """A configured provider must be added to the breadcrumb allowlist too.
 
-    Breadcrumbs drop an unrecognized ``provider`` silently, so drift between the
-    config Literals and ``_PROVIDERS`` would lose telemetry without any failure.
-    Voice/TTS providers are a separate domain and deliberately out of scope.
+    Breadcrumbs drop an unrecognized ``provider`` silently, so config drift
+    would lose telemetry without any failure.
     """
-    non_llm_provider_fields = frozenset({"voice_transcription_provider", "tts_provider"})
     configured: set[str] = set()
     for name, field in Settings.model_fields.items():
-        if not name.endswith("_provider") or name in non_llm_provider_fields:
+        if not name.endswith("_provider"):
             continue
         configured.update(_literal_values(field.annotation))
     configured.update(_literal_values(AgentLLMSettings.model_fields["provider"].annotation))
 
-    # Sanity guard: the extraction must see all three LLM providers, otherwise a
+    # Sanity guard: the extraction must see voice and LLM providers, otherwise a
     # refactor could make the subset assertion below pass vacuously.
-    assert {"openai", "openrouter", "gemini"} <= configured
+    assert {"openai", "openrouter", "gemini", "elevenlabs"} <= configured
     assert configured <= _PROVIDERS
+
+
+async def test_voice_failure_exports_only_sanitized_telemetry_breadcrumb(capture_transport) -> None:
+    """The real SDK admits the voice marker but excludes private voice failure data."""
+    settings = Mock(spec=Settings)
+    settings.voice_transcription_provider = "elevenlabs"
+    settings.voice_transcription_model = "eleven_multilingual_v2"
+    transcription_client = Mock()
+    transcription_client.transcribe_audio = AsyncMock(side_effect=RuntimeError("SENTINEL-provider-error"))
+    service = VoiceService(settings, transcription_client, Mock())
+
+    with sentry_sdk.new_scope() as scope:
+        scope.set_user({"id": "SENTINEL-user"})
+        scope.set_tag("Authorization", "Bearer SENTINEL-auth")
+        with patch("runestone.services.voice_service.duration_bucket", return_value="100ms_1s"):
+            with pytest.raises(RunestoneError, match="Failed to transcribe audio"):
+                await service.transcribe_audio(b"SENTINEL-audio", language="SENTINEL-language")
+        _capture_runtime_error()
+
+    event = _single_event(capture_transport)
+    serialized = json.dumps(event)
+    for sentinel in (
+        "SENTINEL-audio",
+        "SENTINEL-language",
+        "SENTINEL-provider-error",
+        "SENTINEL-user",
+        "SENTINEL-auth",
+    ):
+        assert sentinel not in serialized
+
+    crumbs = event["breadcrumbs"]["values"]
+    assert len(crumbs) == 1
+    assert crumbs[0]["message"] == "voice_transcription"
+    assert crumbs[0]["data"] == {
+        "operation": "voice_transcription",
+        "outcome": "failed",
+        "provider": "elevenlabs",
+        "model": "eleven_multilingual_v2",
+        "duration_bucket": "100ms_1s",
+    }
+
+
+@pytest.mark.anyio
+async def test_background_tts_failure_captures_only_sanitized_synthesis_event(capture_transport) -> None:
+    """The detached task converts a marked failure into a sanitized SDK event."""
+    settings = Mock(spec=Settings)
+    settings.tts_provider = "openai"
+    settings.tts_model = "gpt-4o-mini-tts"
+    synthesis_client = MagicMock()
+
+    async def fail_stream(text: str, speed: float = 1.0):
+        del text
+        del speed
+        raise RuntimeError("SENTINEL-exception SENTINEL-audio SENTINEL-websocket")
+        yield b"unreachable"
+
+    synthesis_client.synthesize_speech_stream = MagicMock(side_effect=fail_stream)
+    service = TTSService(settings, synthesis_client)
+    cost_tracking = _CostCollector("chat_turn").transfer("tts")
+    websocket = MagicMock(send_bytes=AsyncMock(), send_json=AsyncMock())
+
+    with sentry_sdk.new_scope() as scope:
+        scope.set_user({"id": "SENTINEL-user"})
+        scope.set_tag("Authorization", "Bearer SENTINEL-auth")
+        scope.set_extra("websocket", "SENTINEL-websocket")
+        with patch("runestone.services.tts_service.connection_manager.get_connection", return_value=websocket):
+            await service.push_audio_to_client(1, "SENTINEL-transcript", cost_tracking)
+            task = service._active_tasks[1]
+            with pytest.raises(RuntimeError, match="SENTINEL-exception"):
+                await task
+            await asyncio.sleep(0)
+
+    assert cost_tracking.status == "failed"
+    event = _single_event(capture_transport)
+    serialized = json.dumps(event)
+    for sentinel in (
+        "SENTINEL-transcript",
+        "SENTINEL-audio",
+        "SENTINEL-websocket",
+        "SENTINEL-auth",
+        "SENTINEL-user",
+        "SENTINEL-exception",
+    ):
+        assert sentinel not in serialized
+
+    crumbs = event["breadcrumbs"]["values"]
+    assert [crumb["message"] for crumb in crumbs] == ["tts_synthesis"]
 
 
 class _FailingChatServiceStub:

@@ -7,11 +7,13 @@ via WebSocket. Provider-specific API calls live in voice clients.
 
 import asyncio
 import logging
+import time
 from typing import AsyncIterator
 
 from runestone.config import Settings
 from runestone.core.clients.voice.voice_factory import VoiceSynthesisClient
 from runestone.core.connection_manager import connection_manager
+from runestone.core.error_tracking import capture_sanitized_exception, duration_bucket
 from runestone.model_costs.tracking import CostTrackingHandle
 
 logger = logging.getLogger(__name__)
@@ -38,6 +40,18 @@ class TTSService:
         # Global limit on concurrent synthesis requests to avoid overwhelming external providers.
         self._synthesis_semaphore = asyncio.Semaphore(5)
 
+    def _telemetry(self, operation: str, started_at: float) -> dict[str, str]:
+        """Return a configuration-only marker for a failed audio operation."""
+        provider = self.settings.tts_provider
+        model = self.settings.elevenlabs_tts_model if provider == "elevenlabs" else self.settings.tts_model
+        return {
+            "operation": operation,
+            "outcome": "failed",
+            "provider": provider,
+            "model": model,
+            "duration_bucket": duration_bucket(started_at),
+        }
+
     async def synthesize_speech_stream(
         self,
         text: str,
@@ -58,6 +72,7 @@ class TTSService:
         Raises:
             Exception: If TTS API call fails
         """
+        started_at = time.monotonic()
         try:
             # Backpressure: limit concurrent provider calls
             async with self._synthesis_semaphore:
@@ -71,8 +86,12 @@ class TTSService:
                     total_bytes += len(chunk)
                     yield chunk
                 logger.debug(f"TTS synthesis finished: {chunk_count} chunks, {total_bytes} bytes yielded")
-        except Exception as e:
-            logger.error(f"TTS synthesis failed: {e}", exc_info=True)
+        except Exception:
+            logger.error(
+                "TTS synthesis failed",
+                exc_info=True,
+                extra={"runestone_telemetry": self._telemetry("tts_synthesis", started_at)},
+            )
             raise
 
     async def push_audio_to_client(
@@ -138,9 +157,10 @@ class TTSService:
             try:
                 if not t.cancelled():
                     t.result()
-            except Exception:
-                # Exceptions inside _stream_audio_task should already be logged,
-                # but this ensures no "Task exception was never retrieved" warning.
+            except Exception as exception:
+                # Logging only creates a sanitized breadcrumb. Capture an event at
+                # the detached-task boundary while the exception is still available.
+                capture_sanitized_exception(exception)
                 logger.exception(f"Unhandled exception in TTS task for user {user_id}")
 
         task.add_done_callback(_cleanup)
@@ -156,6 +176,7 @@ class TTSService:
         Internal task to synthesize and stream audio.
         """
         terminal_status = "completed"
+        started_at = time.monotonic()
         try:
             with cost_tracking.activate():
                 websocket = connection_manager.get_connection(user_id)
@@ -167,20 +188,33 @@ class TTSService:
                 stream = self.synthesize_speech_stream(text, speed=speed)
                 try:
                     async for chunk in stream:
-                        await websocket.send_bytes(chunk)
+                        try:
+                            await websocket.send_bytes(chunk)
+                        except Exception:
+                            logger.error(
+                                "Audio delivery failed",
+                                exc_info=True,
+                                extra={"runestone_telemetry": self._telemetry("audio_delivery", started_at)},
+                            )
+                            raise
                 finally:
                     await stream.aclose()
-                await websocket.send_json({"status": "complete"})
+                try:
+                    await websocket.send_json({"status": "complete"})
+                except Exception:
+                    logger.error(
+                        "Audio delivery failed",
+                        exc_info=True,
+                        extra={"runestone_telemetry": self._telemetry("audio_delivery", started_at)},
+                    )
+                    raise
                 logger.debug(f"TTS audio pushed to user {user_id}. All chunks sent.")
         except asyncio.CancelledError:
             terminal_status = "stale_replaced" if asyncio.current_task() in self._replacement_tasks else "cancelled"
             logger.debug(f"TTS task for user {user_id} was cancelled")
             raise
-        except Exception as e:
+        except Exception:
             terminal_status = "failed"
-            logger.error(f"Failed to push audio to user {user_id}: {e}")
-            # Re-raise to let the done_callback see the exception if needed,
-            # though we already logged it.
             raise
         finally:
             cost_tracking.finish(terminal_status)
