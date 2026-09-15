@@ -16,6 +16,7 @@ def mock_settings():
     """Create mock settings."""
     mock = MagicMock()
     mock.openai_api_key = "fake-key"
+    mock.tts_provider = "openai"
     mock.tts_model = "gpt-4o-mini-tts"
     mock.tts_voice = "onyx"
     return mock
@@ -54,6 +55,42 @@ async def test_synthesize_speech_stream(mock_settings, mock_synthesis_client):
         text="Hello",
         speed=1.0,
     )
+
+
+@pytest.mark.anyio
+async def test_synthesize_speech_failure_logs_sanitized_telemetry(mock_settings, mock_synthesis_client, caplog):
+    async def failed_stream(text: str, speed: float = 1.0):
+        del text
+        del speed
+        raise RuntimeError("SENTINEL-provider-error")
+        yield b"unreachable"
+
+    mock_synthesis_client.synthesize_speech_stream = MagicMock(side_effect=failed_stream)
+    service = TTSService(mock_settings, mock_synthesis_client)
+
+    with patch("runestone.services.tts_service.duration_bucket", return_value="gte_30s"):
+        with caplog.at_level("ERROR", logger="runestone.services.tts_service"):
+            with pytest.raises(RuntimeError, match="SENTINEL-provider-error"):
+                async for _chunk in service.synthesize_speech_stream("SENTINEL-transcript"):
+                    pass
+
+    assert caplog.records[-1].runestone_telemetry == {
+        "operation": "tts_synthesis",
+        "outcome": "failed",
+        "provider": "openai",
+        "model": "gpt-4o-mini-tts",
+        "duration_bucket": "gte_30s",
+    }
+
+
+def test_tts_telemetry_uses_elevenlabs_model(mock_settings, mock_synthesis_client):
+    mock_settings.tts_provider = "elevenlabs"
+    mock_settings.elevenlabs_tts_model = "eleven_multilingual_v2"
+
+    telemetry = TTSService(mock_settings, mock_synthesis_client)._telemetry("tts_synthesis", 0.0)
+
+    assert telemetry["provider"] == "elevenlabs"
+    assert telemetry["model"] == "eleven_multilingual_v2"
 
 
 @pytest.mark.anyio
@@ -169,6 +206,62 @@ async def test_stream_audio_failure_closes_tts_child(mock_settings, mock_synthes
             await service._stream_audio_task(1, "Hello", cost_tracking=child)
 
     assert child.status == "failed"
+
+
+@pytest.mark.anyio
+async def test_stream_audio_provider_failure_marks_only_synthesis(
+    mock_settings,
+    mock_synthesis_client,
+    caplog,
+):
+    async def fail_stream(text: str, speed: float = 1.0):
+        del text
+        del speed
+        raise RuntimeError("provider failed")
+        yield b"unreachable"
+
+    mock_synthesis_client.synthesize_speech_stream = MagicMock(side_effect=fail_stream)
+    service = TTSService(mock_settings, mock_synthesis_client)
+    websocket = MagicMock(send_bytes=AsyncMock(), send_json=AsyncMock())
+
+    with patch("runestone.services.tts_service.connection_manager.get_connection", return_value=websocket):
+        with caplog.at_level("ERROR", logger="runestone.services.tts_service"):
+            with pytest.raises(RuntimeError, match="provider failed"):
+                await service._stream_audio_task(1, "Hello", cost_tracking=_make_tts_child())
+
+    markers = [
+        record.runestone_telemetry["operation"] for record in caplog.records if hasattr(record, "runestone_telemetry")
+    ]
+    assert markers == ["tts_synthesis"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("failing_send", ["send_bytes", "send_json"])
+async def test_stream_audio_delivery_failures_mark_only_delivery(
+    mock_settings,
+    mock_synthesis_client,
+    caplog,
+    failing_send,
+):
+    async def stream_one_chunk(text: str, speed: float = 1.0):
+        del text
+        del speed
+        yield b"chunk"
+
+    mock_synthesis_client.synthesize_speech_stream = MagicMock(side_effect=stream_one_chunk)
+    service = TTSService(mock_settings, mock_synthesis_client)
+    websocket = MagicMock(send_bytes=AsyncMock(), send_json=AsyncMock())
+    getattr(websocket, failing_send).side_effect = RuntimeError("socket failed")
+
+    with patch("runestone.services.tts_service.connection_manager.get_connection", return_value=websocket):
+        with caplog.at_level("ERROR", logger="runestone.services.tts_service"):
+            with pytest.raises(RuntimeError, match="socket failed"):
+                await service._stream_audio_task(1, "Hello", cost_tracking=_make_tts_child())
+
+    markers = [
+        record.runestone_telemetry["operation"] for record in caplog.records if hasattr(record, "runestone_telemetry")
+    ]
+    assert markers == ["audio_delivery"]
 
 
 @pytest.mark.anyio

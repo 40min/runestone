@@ -19,6 +19,12 @@ Two SDK callbacks enforce a default-deny policy:
   The event projection repeats breadcrumb validation before export, so later
   SDK processing cannot bypass the policy.
 
+`capture_sanitized_exception()` is the sole application helper for explicitly
+capturing a handled boundary failure. It accepts only the exception object and
+relies on `before_send` to rebuild the resulting event from the same allowlist;
+callers must not attach exception text, request data, or other untrusted fields.
+Services never import the Sentry SDK directly.
+
 ## Fail-closed behavior
 
 - An event that serializes to more than **128 KiB**, or that triggers any
@@ -30,6 +36,9 @@ Two SDK callbacks enforce a default-deny policy:
   sentry-sdk 2.68.1 fails **open** on an escaping `before_breadcrumb`
   exception and would retain the original unsanitized breadcrumb.
 - Hostile input objects are never mutated.
+- Explicit capture is best-effort: `capture_sanitized_exception()` captures only
+  when the SDK is initialized and suppresses its own failures, so telemetry
+  cannot change the application's outcome.
 
 ## Event allowlist
 
@@ -66,7 +75,8 @@ both are present.
 
 Explicitly dropped: exception values/messages, `logentry`, `user`, `extra`,
 arbitrary `tags`/`contexts`, stack `vars`, absolute paths, source context,
-attachments, and every unknown or future field.
+attachments, audio bytes, transcripts and other text payloads, WebSocket
+payloads, authentication data, user IDs, and every unknown or future field.
 
 ## Breadcrumb contract
 
@@ -88,7 +98,7 @@ Allowed `runestone_telemetry` fields:
 | --- | --- |
 | `operation` (message) | `[a-z][a-z0-9_]{0,63}` — mandatory |
 | `route_template` | same route-template rule as `transaction` |
-| `provider` | one of `openai`, `openrouter`, `gemini` — only ever from application configuration, never request data or exception text |
+| `provider` | one of `openai`, `openrouter`, `gemini`, `elevenlabs` — only ever from application configuration, never request data or exception text |
 | `model` | config-sourced, `[A-Za-z0-9._:/-]`, ≤128 chars |
 | `duration_bucket` | one of `lt_100ms`, `100ms_1s`, `1s_5s`, `5s_30s`, `gte_30s` |
 | `retry_count` | integer `0..10` |
@@ -98,11 +108,12 @@ Allowed `runestone_telemetry` fields:
 Fields that fail validation are dropped individually; an invalid `operation`
 drops the whole breadcrumb.
 
-### Initial breadcrumb producers
+### Breadcrumb producers
 
-Only five production log records carry markers (four operation schemas). Their
-local human-readable messages are unchanged; the marker adds only validated,
-code/config-owned fields:
+The existing agent/OCR producers continue to carry their markers. The voice
+pipeline adds markers at four owned failure/degradation boundaries. Markers
+carry only fixed operation and outcome labels, provider/model values from
+configuration, and a measured `duration_bucket`:
 
 | Producer | Marker fields |
 | --- | --- |
@@ -111,12 +122,28 @@ code/config-owned fields:
 | `core/ocr.py::_preprocess_image_for_ocr` recoverable fallback | `operation=ocr_preprocess`, `outcome=fallback_original` |
 | `core/ocr.py::extract_text` `OCRError` exit | `operation=ocr_extract`, `outcome=failed`, configured OCR provider/model |
 | `core/ocr.py::extract_text` first unexpected-exception record | `operation=ocr_extract`, `outcome=failed`, configured OCR provider/model |
+| `services/voice_service.py::transcribe_audio` | `operation=voice_transcription`, `outcome=empty_result` or `failed`, configured transcription provider/model, measured duration bucket |
+| `services/voice_service.py::enhance_text` | `operation=voice_enhancement`, `outcome=fallback_original`, configured OpenAI enhancement model, measured duration bucket |
+| `services/tts_service.py::synthesize_speech_stream` | `operation=tts_synthesis`, `outcome=failed`, configured TTS provider/model, measured duration bucket |
+| `services/tts_service.py::_stream_audio_task` | `operation=audio_delivery`, `outcome=failed`, configured TTS provider/model, measured duration bucket |
 
-Logs containing user IDs, chat IDs, usernames, Telegram/update identifiers,
-URLs, paths, counts derived from user content, exception strings, or arbitrary
-provider responses are never marked. `duration_bucket` and `retry_count`
-remain **validator-only**: no production site currently has an authoritative
-value, and inventing one is worse than omitting it.
+Voice/audio markers never contain audio bytes, transcripts, enhanced or source
+text, WebSocket payloads, authentication data, user IDs, exception values, or
+counts derived from user content. `duration_bucket` is measured from a monotonic
+start time and contains only one of the bounded labels in the field table.
+`retry_count` remains validator-only: no producer has an authoritative value,
+and inventing one is worse than omitting it.
+
+### Detached TTS failures
+
+`TTSService` runs delivery in a detached task. Its done callback consumes
+`task.result()`; if that raises, it passes the exception object to
+`capture_sanitized_exception()`. This is the only explicit capture at that
+boundary, and it occurs while the exception is still available. The captured
+event and its `tts_synthesis` breadcrumb pass through the same default-deny
+event and breadcrumb projections. Audio, transcript text, WebSocket data,
+authentication data, user IDs, and exception values remain excluded. The
+service imports the core helper, never the Sentry SDK.
 
 ### INFO decision
 
@@ -203,16 +230,17 @@ changes must be deliberate:
   breadcrumb table above, and the tests. An unknown key is dropped silently —
   nothing fails — so a producer emitting an unlisted field simply never sees
   it in Better Stack.
-- **New LLM provider**: adding a provider to the config Literals is guarded by
-  `test_breadcrumb_provider_allowlist_covers_configured_llm_providers`, which
-  fails until `_PROVIDERS` is updated (an unrecognized `provider` would be
-  dropped from breadcrumbs). Voice/TTS providers are a separate domain and out
-  of scope.
+- **New provider**: update `_PROVIDERS`, the provider configuration-Literal
+  regression test, and this table together. The allowlist currently covers the
+  configured LLM providers and the `elevenlabs` voice/TTS provider; an
+  unrecognized `provider` is dropped from breadcrumbs.
 - **New `operation`/`outcome` values**: keep them lowercase snake_case; a value
   outside the pattern drops the whole breadcrumb, not just the field.
 - **Breadcrumb producers**: a producer must log from a `runestone`/`runestone.*`
   logger at `WARNING`+ with a valid `runestone_telemetry` marker; anything else
-  is dropped by the admission contract.
+  is dropped by the admission contract. Build markers from fixed labels,
+  configuration, and bounded measurements only; never derive marker fields
+  from audio, text, a WebSocket, authentication, a user, or an exception.
 
 ## Residual risk
 
