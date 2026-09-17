@@ -7,6 +7,7 @@ for database operations in the Runestone application.
 
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -17,6 +18,7 @@ from sqlalchemy.orm import declarative_base
 from alembic import command
 from alembic.config import Config
 from runestone.config import settings
+from runestone.core.error_tracking import capture_sanitized_exception, duration_bucket
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +45,38 @@ SessionLocal = async_sessionmaker(
 
 # Create Base class
 Base = declarative_base()
+
+
+def record_database_boundary_failure(
+    operation: str,
+    exception: BaseException,
+    started_at: float,
+) -> None:
+    """Emit one bounded failure marker and capture without affecting the boundary.
+
+    The marker carries only the operation label, outcome, and duration bucket;
+    exception identity and context come from the companion captured event.
+    """
+    try:
+        logger.error(
+            "database boundary failure operation=%s",
+            operation,
+            extra={
+                "runestone_telemetry": {
+                    "operation": operation,
+                    "outcome": "failed",
+                    "duration_bucket": duration_bucket(started_at),
+                }
+            },
+        )
+    except Exception:
+        # Diagnostics must never change a startup or transaction outcome.
+        pass
+    try:
+        capture_sanitized_exception(exception)
+    except Exception:
+        # Logging and event capture fail independently.
+        pass
 
 
 async def get_db():
@@ -103,6 +137,8 @@ async def setup_database() -> None:
         logger.info("Skipping startup database verification because STARTUP_DB_CHECK is disabled.")
         return
 
+    started_at = time.monotonic()
+
     from sqlalchemy import inspect
 
     def check_tables(connection):
@@ -131,6 +167,9 @@ async def setup_database() -> None:
                     raise ValueError(f"Missing database tables after migrations: {', '.join(missing_tables_after)}")
 
         logger.info("Database and tables verified successfully.")
-    except Exception as e:
-        logger.error(f"Database setup check failed: {e}")
+    except Exception as exc:
+        record_database_boundary_failure("database_startup_check", exc, started_at)
+        # The marker log above never carries exception text; keep the local
+        # traceback here so failures are diagnosable without a configured DSN.
+        logger.error("Database setup check failed", exc_info=True)
         raise

@@ -326,6 +326,24 @@ async def test_mutation_failure_rolls_back_and_returns_generic_detail(recall_api
     db.rollback.assert_awaited_once_with()
 
 
+async def test_mutation_failure_records_bounded_telemetry_after_rollback(recall_api_client, monkeypatch):
+    client, service, db = recall_api_client
+    failure = RecallOperationError("Failed to postpone word", details="SENTINEL-private-database-detail")
+    service.postpone_queue_word.side_effect = failure
+    telemetry = Mock()
+    monkeypatch.setattr("runestone.api.recall_endpoints.record_database_boundary_failure", telemetry)
+
+    response = await client.post("/api/recall/words/42/postpone")
+
+    assert response.status_code == 500
+    db.rollback.assert_awaited_once_with()
+    telemetry.assert_called_once()
+    operation, exception, _started_at = telemetry.call_args.args
+    assert operation == "recall_transaction"
+    assert exception is failure
+    assert telemetry.call_args.kwargs == {}
+
+
 async def test_commit_failure_rolls_back_and_returns_generic_detail(recall_api_client):
     client, service, db = recall_api_client
     service.postpone_queue_word.return_value = make_state(user_id=client.user.id)
