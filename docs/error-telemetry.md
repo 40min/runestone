@@ -110,8 +110,12 @@ drops the whole breadcrumb.
 
 ## Database and startup boundaries
 
-Database readiness and the Recall API's outer request-owned transaction emit a
-marked breadcrumb only when they fail. The marker contains a fixed operation,
+`record_database_boundary_failure(operation, exception, started_at)` in
+`src/runestone/db/database.py` instruments two database boundaries, emitting a
+marked breadcrumb only when they fail: `database_startup_check` from
+`setup_database` (database readiness at application startup) and
+`recall_transaction` from the Recall API's outer request-owned transaction
+rollback paths. The marker contains a fixed operation,
 `failed` outcome, and duration bucket. It never contains SQL, connection URLs,
 table names, row identifiers, migration details, exception messages, or user
 data. The same handled exception is captured in the same startup or request
@@ -144,6 +148,10 @@ configuration, and a measured `duration_bucket`:
 | `services/voice_service.py::enhance_text` | `operation=voice_enhancement`, `outcome=fallback_original`, configured OpenAI enhancement model, measured duration bucket |
 | `services/tts_service.py::synthesize_speech_stream` | `operation=tts_synthesis`, `outcome=failed`, configured TTS provider/model, measured duration bucket |
 | `services/tts_service.py::_stream_audio_task` | `operation=audio_delivery`, `outcome=failed`, configured TTS provider/model, measured duration bucket |
+| `api/auth_endpoints.py::register` unexpected failure | `operation=auth_register`, `outcome=failed`, `route_template=/api/auth/register`, `status_code=500` |
+| `api/auth_endpoints.py::login` unexpected failure | `operation=auth_login`, `outcome=failed`, `route_template=/api/auth/`, `status_code=500` |
+| `auth/dependencies.py::get_current_user` unexpected token-resolution failure | `operation=auth_token_validation`, `outcome=failed`, `status_code=500` |
+| `api/user_endpoints.py::update_user_profile` unexpected failure | `operation=profile_update`, `outcome=failed`, `route_template=/api/me`, `status_code=500` |
 
 Voice/audio markers never contain audio bytes, transcripts, enhanced or source
 text, WebSocket payloads, authentication data, user IDs, exception values, or
@@ -151,6 +159,26 @@ counts derived from user content. `duration_bucket` is measured from a monotonic
 start time and contains only one of the bounded labels in the field table.
 `retry_count` remains validator-only: no producer has an authoritative value,
 and inventing one is worse than omitting it.
+
+### Authentication decision and expected volume
+
+Authentication markers describe unexpected server failures only. Registration
+validation, duplicate accounts, invalid credentials, invalid or missing tokens,
+inactive users, and authorization rejections are ordinary client outcomes: they
+produce no marker and no explicit Better Stack event. The token-resolution
+boundary has no fixed route template because it protects multiple routes; its
+operation and fixed 500 status still distinguish it from a client rejection.
+
+At normal volume, an unexpected re-raised authentication failure produces one
+automatic Sentry event with one breadcrumb. The handled profile-update 500 is
+captured once by the SDK's FastAPI integration with its preceding breadcrumb and
+the original exception type/frames;
+the endpoint does not explicitly capture it and therefore cannot duplicate the
+event. This excludes credential spraying and invalid-token traffic from error quota. The producer
+markers contain only fixed code-owned strings and integer 500: never email,
+username, password, token/JWT, account ID, IP, user agent, headers, cookies,
+request values, rejection detail, or exception text. This boundary is approved
+only by the hostile-envelope and real-SDK tests that accompany it.
 
 ### Detached TTS failures
 

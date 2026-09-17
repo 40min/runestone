@@ -4,6 +4,7 @@ API endpoints for user profile operations.
 This module defines the FastAPI routes for user profile management.
 """
 
+from contextlib import suppress
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -74,9 +75,20 @@ async def update_user_profile(
             status_code=400,
             detail=str(e),
         )
-    except Exception as e:
-        logger.error(f"Failed to update user profile for user {current_user.id}: {e}")
+    except Exception as exc:
+        with suppress(Exception):
+            logger.error(
+                "User profile update failed",
+                extra={
+                    "runestone_telemetry": {
+                        "operation": "profile_update",
+                        "outcome": "failed",
+                        "route_template": "/api/me",
+                        "status_code": 500,
+                    }
+                },
+            )
         raise HTTPException(
             status_code=500,
             detail="Failed to update user profile",
-        )
+        ) from exc
