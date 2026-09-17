@@ -185,6 +185,24 @@ class TestRecallMain:
         mock_engine.connect.assert_called_once()
         mock_conn.run_sync.assert_called_once()
 
+    @patch("runestone.db.database.record_database_boundary_failure")
+    @patch("runestone.db.database.engine")
+    @pytest.mark.asyncio
+    async def test_setup_database_records_bounded_failure_and_reraises(self, mock_engine, mock_telemetry):
+        """Startup keeps its failure semantics while emitting one safe boundary marker."""
+        mock_conn = AsyncMock()
+        mock_engine.connect.return_value.__aenter__.return_value = mock_conn
+        failure = RuntimeError("SENTINEL-database-url postgres://user:password@host/db")
+        mock_conn.run_sync.side_effect = failure
+
+        with pytest.raises(RuntimeError, match="SENTINEL-database-url"):
+            await setup_database()
+
+        mock_telemetry.assert_called_once()
+        operation, exception, _started_at = mock_telemetry.call_args.args
+        assert operation == "database_startup_check"
+        assert exception is failure
+
     @patch("recall_main.provide_recall_transaction")
     @patch("recall_main.TelegramCommandProcessor")
     @pytest.mark.asyncio

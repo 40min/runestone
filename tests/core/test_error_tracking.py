@@ -15,6 +15,7 @@ import pytest
 import sentry_sdk
 from sentry_sdk.envelope import Envelope
 from sentry_sdk.transport import Transport
+from sqlalchemy.exc import DisconnectionError
 
 from runestone.agents.manager import AgentsManager
 from runestone.auth.dependencies import get_current_user
@@ -30,6 +31,7 @@ from runestone.core.error_tracking import (
 )
 from runestone.core.exceptions import RunestoneError
 from runestone.core.logging_config import RunestoneLogFilter, get_current_request_id
+from runestone.db.database import record_database_boundary_failure
 from runestone.dependencies import get_chat_service
 from runestone.model_costs.tracking import _CostCollector
 from runestone.services.tts_service import TTSService
@@ -491,8 +493,55 @@ def test_only_marked_runestone_warnings_become_breadcrumbs(capture_transport, ca
         "duration_bucket": "1s_5s",
         "retry_count": 1,
         "outcome": "success",
+        "outcome": "success",
         "status_code": 200,
     }
+
+
+def test_database_boundary_failure_exports_only_sanitized_marker(capture_transport) -> None:
+    """A handled database failure keeps bounded context in its same-scope event."""
+    try:
+        raise DisconnectionError(
+            "SENTINEL-postgres-url postgres://user:password@host/db " "SENTINEL-row-id=42 SENTINEL-user-data"
+        )
+    except DisconnectionError as exc:
+        record_database_boundary_failure(
+            "database_startup_check",
+            exc,
+            started_at=0.0,
+        )
+
+    event = _single_event(capture_transport)
+    serialized = json.dumps(event)
+    for sentinel in ("SENTINEL-postgres-url", "SENTINEL-row-id", "SENTINEL-user-data", "password@host"):
+        assert sentinel not in serialized
+
+    crumbs = event["breadcrumbs"]["values"]
+    assert len(crumbs) == 1
+    assert crumbs[0]["data"] == {
+        "operation": "database_startup_check",
+        "outcome": "failed",
+        "duration_bucket": "gte_30s",
+    }
+    assert event["exception"]["values"][0]["type"] == "DisconnectionError"
+
+
+def test_database_boundary_telemetry_failure_is_non_fatal() -> None:
+    """A broken diagnostics dependency cannot alter the caller's failure path."""
+    with patch("runestone.db.database.capture_sanitized_exception", side_effect=RuntimeError("telemetry unavailable")):
+        record_database_boundary_failure("recall_transaction", RuntimeError("database unavailable"), started_at=0.0)
+
+
+def test_database_boundary_logging_failure_does_not_skip_capture() -> None:
+    """A local logging failure leaves best-effort event capture available."""
+    exception = RuntimeError("database unavailable")
+    with (
+        patch("runestone.db.database.logger.error", side_effect=RuntimeError("logging unavailable")),
+        patch("runestone.db.database.capture_sanitized_exception") as capture,
+    ):
+        record_database_boundary_failure("recall_transaction", exception, started_at=0.0)
+
+    capture.assert_called_once_with(exception)
 
 
 def test_serialized_breadcrumb_bound(capture_transport, caplog: pytest.LogCaptureFixture) -> None:

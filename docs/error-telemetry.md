@@ -108,6 +108,24 @@ Allowed `runestone_telemetry` fields:
 Fields that fail validation are dropped individually; an invalid `operation`
 drops the whole breadcrumb.
 
+## Database and startup boundaries
+
+Database readiness and the Recall API's outer request-owned transaction emit a
+marked breadcrumb only when they fail. The marker contains a fixed operation,
+`failed` outcome, and duration bucket. It never contains SQL, connection URLs,
+table names, row identifiers, migration details, exception messages, or user
+data. The same handled exception is captured in the same startup or request
+lifecycle, so the event's exception type and stack frames carry the failure
+identity; the marker does not duplicate it through a coarser classification.
+A startup breadcrumb is not expected to survive into a later request.
+Capturing and marker projection are best-effort; they run after rollback where
+applicable and cannot alter transaction ownership, the HTTP response, or
+startup failure behavior. This failure-only policy bounds volume; these paths
+do not infer retries, so they do not emit a retry count. In addition to the
+marker, `setup_database` logs `Database setup check failed` with
+`exc_info=True`, so startup failures stay diagnosable in private local logs
+when no DSN is configured.
+
 ### Breadcrumb producers
 
 The existing agent/OCR producers continue to carry their markers. The voice

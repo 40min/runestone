@@ -1,5 +1,6 @@
 """Authenticated web transport for recall queue management."""
 
+import time
 from collections.abc import Awaitable, Callable
 from typing import Annotated
 
@@ -15,7 +16,7 @@ from runestone.core.exceptions import (
     RecallStateNotFoundError,
 )
 from runestone.core.logging_config import get_logger
-from runestone.db.database import get_db
+from runestone.db.database import get_db, record_database_boundary_failure
 from runestone.db.models import User
 from runestone.dependencies import get_recall_service
 from runestone.recall.service import RecallService
@@ -68,6 +69,7 @@ async def _run_mutation(
     timezone_name: object,
 ) -> RecallResponse:
     """Run one recall mutation in the request-owned transaction."""
+    started_at = time.monotonic()
     try:
         state = await operation()
         response = _response_from_state(state, timezone_name)
@@ -84,10 +86,12 @@ async def _run_mutation(
         raise HTTPException(status_code=400, detail="Invalid recall delivery schedule") from exc
     except RecallOperationError as exc:
         await db.rollback()
+        record_database_boundary_failure("recall_transaction", exc, started_at)
         logger.error("Recall mutation failed for user %s: %s", user_id, exc.details or exc.message)
         raise HTTPException(status_code=500, detail="Failed to update recall selection") from exc
     except Exception as exc:
         await db.rollback()
+        record_database_boundary_failure("recall_transaction", exc, started_at)
         logger.exception("Unexpected recall mutation failure for user %s", user_id)
         raise HTTPException(status_code=500, detail="Failed to update recall selection") from exc
 
