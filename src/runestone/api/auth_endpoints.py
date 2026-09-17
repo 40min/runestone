@@ -4,16 +4,19 @@ Authentication endpoints for Runestone.
 This module provides registration and login endpoints for user authentication.
 """
 
+from contextlib import suppress
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from runestone.api.schemas import LoginRequest, RegisterRequest
 from runestone.core.exceptions import InactiveUserError, InvalidCredentialsError, RegistrationError
+from runestone.core.logging_config import get_logger
 from runestone.dependencies import get_auth_service
 from runestone.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = get_logger(__name__)
 
 
 @router.post("/register")
@@ -38,6 +41,21 @@ async def register(
         user = await service.register_user(user_data.email, user_data.password)
     except RegistrationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception:
+        with suppress(Exception):
+            logger.error(
+                "Authentication registration failed",
+                exc_info=True,
+                extra={
+                    "runestone_telemetry": {
+                        "operation": "auth_register",
+                        "outcome": "failed",
+                        "route_template": "/api/auth/register",
+                        "status_code": 500,
+                    }
+                },
+            )
+        raise
 
     return {"message": "User registered successfully", "user_id": user.id}
 
@@ -68,5 +86,20 @@ async def login(
             detail=str(exc),
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
+    except Exception:
+        with suppress(Exception):
+            logger.error(
+                "Authentication login failed",
+                exc_info=True,
+                extra={
+                    "runestone_telemetry": {
+                        "operation": "auth_login",
+                        "outcome": "failed",
+                        "route_template": "/api/auth/",
+                        "status_code": 500,
+                    }
+                },
+            )
+        raise
 
     return {"access_token": access_token, "token_type": "bearer"}

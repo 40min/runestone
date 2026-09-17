@@ -5,17 +5,20 @@ This module provides dependency functions for user authentication,
 including the get_current_user dependency for securing endpoints.
 """
 
+from contextlib import suppress
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from runestone.core.exceptions import InactiveUserError, InvalidAccessTokenError
+from runestone.core.logging_config import get_logger
 from runestone.db.models import User
 from runestone.dependencies import get_auth_service
 from runestone.services.auth_service import AuthService
 
 security = HTTPBearer()
+logger = get_logger(__name__)
 
 
 async def get_current_user(
@@ -51,3 +54,17 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(exc),
         ) from exc
+    except Exception:
+        with suppress(Exception):
+            logger.error(
+                "Access token resolution failed",
+                exc_info=True,
+                extra={
+                    "runestone_telemetry": {
+                        "operation": "auth_token_validation",
+                        "outcome": "failed",
+                        "status_code": 500,
+                    }
+                },
+            )
+        raise
