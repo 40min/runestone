@@ -25,6 +25,7 @@ from runestone.core.error_tracking import (
     RequestCorrelationMiddleware,
     _sanitize_breadcrumb,
     _sanitize_event,
+    capture_sanitized_exception,
     duration_bucket,
     setup_error_tracking,
 )
@@ -256,6 +257,18 @@ def test_error_tracking_uses_privacy_conscious_defaults() -> None:
     assert logging_integration._sentry_logs_handler is None
     assert logging_integration._breadcrumb_handler is not None
     assert logging_integration._breadcrumb_handler.level == logging.WARNING
+
+
+def test_capture_sanitized_exception_swallows_sdk_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """If Sentry's own capture_exception raises, the application path continues."""
+    monkeypatch.setattr(sentry_sdk, "is_initialized", lambda: True)
+    mock_capture = Mock(side_effect=RuntimeError("sdk exploded"))
+    monkeypatch.setattr(sentry_sdk, "capture_exception", mock_capture)
+
+    exception = ValueError("application error")
+    capture_sanitized_exception(exception)
+
+    mock_capture.assert_called_once_with(exception)
 
 
 def test_serialized_event_includes_release_and_environment(capture_transport) -> None:
