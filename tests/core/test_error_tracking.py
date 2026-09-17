@@ -13,10 +13,13 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import httpx
 import pytest
 import sentry_sdk
+from fastapi import HTTPException
 from sentry_sdk.envelope import Envelope
 from sentry_sdk.transport import Transport
 
 from runestone.agents.manager import AgentsManager
+from runestone.api.schemas import UserProfileUpdate
+from runestone.api.user_endpoints import update_user_profile
 from runestone.auth.dependencies import get_current_user
 from runestone.config import AgentLLMSettings, ReasoningLevel, Settings
 from runestone.core import error_tracking
@@ -31,7 +34,7 @@ from runestone.core.error_tracking import (
 )
 from runestone.core.exceptions import RunestoneError
 from runestone.core.logging_config import RunestoneLogFilter, get_current_request_id
-from runestone.dependencies import get_chat_service
+from runestone.dependencies import get_chat_service, get_user_service
 from runestone.model_costs.tracking import _CostCollector
 from runestone.services.tts_service import TTSService
 from runestone.services.voice_service import VoiceService
@@ -1144,4 +1147,82 @@ async def test_chat_message_failure_exports_named_breadcrumb_and_request_id(
         "outcome": "failed",
         "provider": "openrouter",
         "model": "test-model",
+    }
+
+
+class _FailingProfileUpdateService:
+    async def update_user_profile(self, user: object, update_data: object) -> object:
+        raise RuntimeError("SENTINEL-exception email=SENTINEL-email password=SENTINEL-password")
+
+
+async def test_profile_update_preserves_500_when_marker_logging_fails() -> None:
+    """An unavailable telemetry logger cannot replace the profile API response."""
+    with patch("runestone.api.user_endpoints.logger.error", side_effect=RuntimeError("logging failed")):
+        with pytest.raises(HTTPException) as raised:
+            await update_user_profile(
+                UserProfileUpdate(name="Updated"),
+                SimpleNamespace(id=987654321),
+                _FailingProfileUpdateService(),
+            )
+
+    assert raised.value.status_code == 500
+
+
+async def test_profile_update_failure_exports_only_sanitized_authentication_telemetry(
+    capture_transport,
+) -> None:
+    """A handled profile failure captures one marker without request or identity data."""
+    from runestone.api import main as api_main
+
+    app = api_main.create_application()
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=987654321)
+    app.dependency_overrides[get_user_service] = _FailingProfileUpdateService
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.put(
+                "/api/me?token=SENTINEL-jwt",
+                json={"email": "SENTINEL-email", "password": "SENTINEL-password"},
+                headers={"Authorization": "Bearer SENTINEL-jwt", "User-Agent": "SENTINEL-user-agent"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert len(capture_transport.envelopes) == 1
+    envelope = capture_transport.envelopes[0]
+    serialized = envelope.serialize()
+    for sentinel in (
+        "SENTINEL-exception",
+        "SENTINEL-email",
+        "SENTINEL-password",
+        "SENTINEL-jwt",
+        "SENTINEL-user-agent",
+        "987654321",
+        "User profile update failed",
+    ):
+        assert sentinel.encode() not in serialized
+
+    event = envelope.get_event()
+    assert event is not None
+    assert event["transaction"] == "/api/me"
+    assert event["request"] == {"method": "PUT"}
+    request_id = event["contexts"]["runestone"]["request_id"]
+    assert re.fullmatch(r"[0-9a-f]{32}", request_id)
+    exception_values = event["exception"]["values"]
+    assert [value["type"] for value in exception_values] == ["RuntimeError", "HTTPException"]
+    assert "value" not in exception_values[0]
+    assert any(frame["function"] == "update_user_profile" for frame in exception_values[0]["stacktrace"]["frames"])
+    crumbs = event["breadcrumbs"]["values"]
+    assert len(crumbs) == 1
+    assert {key: value for key, value in crumbs[0].items() if key != "timestamp"} == {
+        "type": "log",
+        "level": "error",
+        "category": "runestone.api.user_endpoints",
+        "message": "profile_update",
+        "data": {
+            "operation": "profile_update",
+            "outcome": "failed",
+            "route_template": "/api/me",
+            "status_code": 500,
+        },
     }
