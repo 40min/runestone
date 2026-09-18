@@ -444,15 +444,19 @@ def _sanitize_event(event: Any, hint: dict[str, Any]) -> "dict[str, Any] | None"
         return None
 
 
-def setup_error_tracking(settings: Settings) -> None:
-    """Initialize Sentry-compatible error reporting when a DSN is configured."""
+def setup_error_tracking(settings: Settings, release: str | None = None) -> None:
+    """Initialize Sentry-compatible error reporting when a DSN is configured.
+
+    ``release`` lets a separate process report the same configured revision
+    under its own application identity without changing shared settings.
+    """
     if not settings.sentry_dsn:
         return
 
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
         environment=settings.sentry_environment,
-        release=settings.sentry_release,
+        release=settings.sentry_release if release is None else release,
         send_default_pii=False,
         include_local_variables=False,
         max_request_body_size="never",

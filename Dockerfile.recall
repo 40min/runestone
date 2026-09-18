@@ -72,5 +72,10 @@ COPY --chown=runestone:runestone alembic.ini recall_main.py pyproject.toml READM
 # Switch to non-root user
 USER runestone
 
+# Keep the source commit in the image so the worker uses a distinct release
+# identity for the exact deployed revision, matching the backend convention.
+ARG SOURCE_COMMIT
+ENV SENTRY_RELEASE=runestone-api@${SOURCE_COMMIT}
+
 # The backend is the sole migration executor for repository Compose.
 CMD ["python", "recall_main.py"]

@@ -264,6 +264,54 @@ def test_error_tracking_uses_privacy_conscious_defaults() -> None:
     assert logging_integration._breadcrumb_handler.level == logging.WARNING
 
 
+def test_error_tracking_accepts_a_worker_release_override() -> None:
+    """A standalone process can reuse the policy under its own release identity."""
+    settings = Mock(spec=Settings)
+    settings.sentry_dsn = "https://token@example.com/123"
+    settings.sentry_environment = "production"
+    settings.sentry_release = "runestone-api@abc123"
+
+    with patch("runestone.core.error_tracking.sentry_sdk.init") as init:
+        setup_error_tracking(settings, release="runestone-recall@abc123")
+
+    assert init.call_args.kwargs["release"] == "runestone-recall@abc123"
+
+
+@pytest.mark.parametrize(
+    "configured_release",
+    [
+        "runestone-api@https://SENTINEL-release-token@example.com/revision",
+        "runestone-api@" + "A" * 40,
+        "runestone-web@" + "a" * 40,
+    ],
+)
+def test_hostile_worker_release_never_reaches_real_sdk_envelope(configured_release: str) -> None:
+    """A malformed configured release becomes the fixed worker fallback before export."""
+    from recall_main import _recall_release
+
+    transport = _InMemoryTransport()
+    previous_client = sentry_sdk.get_global_scope().client
+    try:
+        with patch("runestone.core.error_tracking.sentry_sdk.init") as init:
+            setup_error_tracking(_settings(), release=_recall_release(configured_release))
+
+        options = dict(init.call_args.kwargs)
+        options["transport"] = transport
+        sentry_sdk.init(**options)
+        sentry_sdk.capture_message("worker release test")
+
+        event = _single_event(transport)
+        serialized = transport.envelopes[0].serialize().decode()
+        assert event["release"] == "runestone-recall@unknown"
+        assert configured_release not in serialized
+        assert "SENTINEL-release-token" not in serialized
+    finally:
+        sentry_sdk.get_global_scope().set_client(previous_client)
+        sentry_sdk.get_global_scope().clear_breadcrumbs()
+        sentry_sdk.get_isolation_scope().clear_breadcrumbs()
+        sentry_sdk.get_current_scope().clear_breadcrumbs()
+
+
 def test_capture_sanitized_exception_swallows_sdk_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     """If Sentry's own capture_exception raises, the application path continues."""
     monkeypatch.setattr(sentry_sdk, "is_initialized", lambda: True)
@@ -274,6 +322,197 @@ def test_capture_sanitized_exception_swallows_sdk_failure(monkeypatch: pytest.Mo
     capture_sanitized_exception(exception)
 
     mock_capture.assert_called_once_with(exception)
+
+
+@pytest.mark.anyio
+async def test_recall_worker_job_failure_exports_only_the_sanitized_marker(capture_transport) -> None:
+    """A caught scheduled-job failure retains its fixed marker, never Telegram data."""
+    from recall_main import process_updates_job
+
+    failure = RuntimeError("SENTINEL-telegram-user SENTINEL-token SENTINEL-exception-message")
+    processor = Mock()
+    processor.process_updates = AsyncMock(side_effect=failure)
+
+    with patch("recall_main.TelegramCommandProcessor", return_value=processor):
+        await process_updates_job(Mock())
+
+    event = _single_event(capture_transport)
+    serialized = json.dumps(event)
+    for sentinel in ("SENTINEL-telegram-user", "SENTINEL-token", "SENTINEL-exception-message"):
+        assert sentinel not in serialized
+    assert len(event["breadcrumbs"]["values"]) == 1
+    assert event["breadcrumbs"]["values"][0]["data"] == {
+        "operation": "telegram_poll_job",
+        "outcome": "failed",
+        "duration_bucket": "lt_100ms",
+    }
+    assert event["exception"]["values"][0]["type"] == "RuntimeError"
+
+
+@pytest.mark.anyio
+async def test_recall_worker_jobs_isolate_breadcrumbs_sequentially_and_concurrently(capture_transport) -> None:
+    """Each scheduled invocation gets a new scope, including overlapping jobs."""
+    from recall_main import process_updates_job
+
+    barrier = asyncio.Barrier(2)
+    jobs = iter(
+        (
+            ("worker_scope_one", 501, "1" * 32),
+            ("worker_scope_two", 502, "2" * 32),
+            ("worker_scope_three", 503, "3" * 32),
+        )
+    )
+
+    class RecordingProcessor:
+        def __init__(self, operation: str, status_code: int, request_id: str, wait_for_peer: bool) -> None:
+            self.operation = operation
+            self.status_code = status_code
+            self.request_id = request_id
+            self.wait_for_peer = wait_for_peer
+
+        async def process_updates(self) -> None:
+            sentry_sdk.get_isolation_scope().set_context(
+                "runestone",
+                {"status_code": self.status_code, "request_id": self.request_id},
+            )
+            logging.getLogger("runestone.recall_worker_test").error(
+                "SENTINEL-worker-marker",
+                extra={"runestone_telemetry": {"operation": self.operation}},
+            )
+            if self.wait_for_peer:
+                await barrier.wait()
+            try:
+                raise RuntimeError("SENTINEL-worker-exception")
+            except RuntimeError as exception:
+                capture_sanitized_exception(exception)
+
+    processor_count = 0
+
+    def processor_factory(_offset_store, _transaction_provider):
+        nonlocal processor_count
+        processor_count += 1
+        operation, status_code, request_id = next(jobs)
+        return RecordingProcessor(operation, status_code, request_id, wait_for_peer=processor_count <= 2)
+
+    with patch("recall_main.TelegramCommandProcessor", side_effect=processor_factory):
+        await asyncio.gather(process_updates_job(Mock()), process_updates_job(Mock()))
+        await process_updates_job(Mock())
+
+    assert len(capture_transport.envelopes) == 3
+    breadcrumb_sets = []
+    status_codes = []
+    request_ids = []
+    for envelope in capture_transport.envelopes:
+        event = envelope.get_event()
+        assert event is not None
+        crumbs = event["breadcrumbs"]["values"]
+        assert len(crumbs) == 1
+        breadcrumb_sets.append(crumbs[0]["data"]["operation"])
+        status_codes.append(event["contexts"]["runestone"]["status_code"])
+        request_ids.append(event["contexts"]["runestone"]["request_id"])
+        assert "SENTINEL-worker-marker" not in envelope.serialize().decode()
+        assert "SENTINEL-worker-exception" not in envelope.serialize().decode()
+    assert set(breadcrumb_sets) == {"worker_scope_one", "worker_scope_two", "worker_scope_three"}
+    assert set(status_codes) == {501, 502, 503}
+    assert set(request_ids) == {"1" * 32, "2" * 32, "3" * 32}
+    assert "runestone" not in sentry_sdk.get_isolation_scope()._contexts
+
+
+@pytest.mark.anyio
+async def test_recall_delivery_failure_marker_reaches_a_synthetic_event(capture_transport) -> None:
+    """A Telegram delivery marker remains useful without exporting message content."""
+    from runestone.telegram.delivery import TelegramRecallDelivery
+
+    settings = Mock()
+    settings.telegram_bot_token = "SENTINEL-bot-token"
+    delivery = TelegramRecallDelivery(Mock(), settings)
+    request = httpx.Request("POST", "https://api.telegram.org/sendMessage?token=SENTINEL-url-token")
+    response = MagicMock()
+    response.status_code = 503
+    response.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "SENTINEL-response-body",
+        request=request,
+        response=httpx.Response(503, request=request),
+    )
+    client = MagicMock()
+    client.post = AsyncMock(return_value=response)
+
+    assert (
+        await delivery._send_word_message(
+            client,
+            123456,
+            {
+                "word_phrase": "SENTINEL-vocabulary",
+                "translation": "SENTINEL-translation",
+                "example_phrase": "SENTINEL-example",
+            },
+        )
+        is False
+    )
+    _capture_runtime_error()
+
+    event = _single_event(capture_transport)
+    serialized = json.dumps(event)
+    for sentinel in (
+        "SENTINEL-bot-token",
+        "SENTINEL-url-token",
+        "SENTINEL-response-body",
+        "SENTINEL-vocabulary",
+        "SENTINEL-translation",
+        "SENTINEL-example",
+        "123456",
+    ):
+        assert sentinel not in serialized
+    assert event["breadcrumbs"]["values"][0]["data"] == {
+        "operation": "telegram_recall_message_delivery",
+        "outcome": "failed",
+        "duration_bucket": "lt_100ms",
+        "status_code": 503,
+    }
+
+
+@pytest.mark.anyio
+async def test_telegram_api_payload_stays_local_while_exporting_fixed_marker(capture_transport) -> None:
+    """Polling may retain Telegram's local diagnostic payload without sending it to Sentry."""
+    from runestone.telegram.commands import TelegramCommandProcessor
+
+    response = MagicMock()
+    response.raise_for_status.return_value = None
+    response.json.return_value = {
+        "ok": False,
+        "description": "SENTINEL-api-description",
+        "parameters": {"retry_after": "SENTINEL-api-payload"},
+    }
+    client = MagicMock()
+    client.get = AsyncMock(return_value=response)
+
+    with (
+        patch("runestone.telegram.commands.settings") as telegram_settings,
+        patch("runestone.telegram.commands.httpx.AsyncClient") as client_class,
+    ):
+        telegram_settings.telegram_bot_token = "SENTINEL-bot-token"
+        client_class.return_value.__aenter__.return_value = client
+        processor = TelegramCommandProcessor(Mock(), Mock())
+        assert await processor._fetch_updates() == []
+
+    _capture_runtime_error()
+    event = _single_event(capture_transport)
+    serialized = json.dumps(event)
+    for sentinel in ("SENTINEL-bot-token", "SENTINEL-api-description", "SENTINEL-api-payload"):
+        assert sentinel not in serialized
+    crumbs = event["breadcrumbs"]["values"]
+    assert len(crumbs) == 1
+    assert {key: value for key, value in crumbs[0].items() if key != "timestamp"} == {
+        "type": "log",
+        "level": "error",
+        "category": "runestone.telegram.commands",
+        "message": "telegram_poll_api",
+        "data": {
+            "operation": "telegram_poll_api",
+            "outcome": "failed",
+            "duration_bucket": "lt_100ms",
+        },
+    }
 
 
 def test_serialized_event_includes_release_and_environment(capture_transport) -> None:

@@ -24,8 +24,16 @@ def test_set_update_offset_supports_bare_filename(tmp_path, monkeypatch):
     assert store.get_update_offset() == 7
 
 
-def test_get_update_offset_returns_zero_for_malformed_content(tmp_path):
+def test_get_update_offset_returns_zero_for_malformed_content(tmp_path, caplog):
     offset_path = tmp_path / "offset.txt"
     offset_path.write_text("invalid")
 
     assert TelegramUpdateOffsetStore(str(offset_path)).get_update_offset() == 0
+    markers = [record.runestone_telemetry for record in caplog.records if hasattr(record, "runestone_telemetry")]
+    assert markers == [
+        {
+            "operation": "telegram_poll_offset_read",
+            "outcome": "failed",
+            "duration_bucket": "lt_100ms",
+        }
+    ]

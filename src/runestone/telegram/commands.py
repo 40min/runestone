@@ -2,6 +2,7 @@
 
 import logging
 import re
+import time
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
@@ -11,6 +12,7 @@ import httpx
 from sqlalchemy.exc import SQLAlchemyError
 
 from runestone.config import settings
+from runestone.core.error_tracking import duration_bucket
 from runestone.core.exceptions import (
     RecallOperationError,
     TelegramUsernameConflictError,
@@ -29,6 +31,23 @@ SUPPORTED_COMMANDS = frozenset({"/start", "/stop", "/state", "/remove", "/postpo
 
 CommandStatus = Literal["handled", "ignored", "retryable_failure"]
 RecallTransactionProvider = Callable[[], AbstractAsyncContextManager["RecallService"]]
+
+
+def _telemetry(
+    operation: str,
+    started_at: float,
+    outcome: str = "failed",
+    status_code: int | None = None,
+) -> dict[str, str | int]:
+    """Return bounded code-owned telemetry for a Telegram failure boundary."""
+    fields: dict[str, str | int] = {
+        "operation": operation,
+        "outcome": outcome,
+        "duration_bucket": duration_bucket(started_at),
+    }
+    if status_code is not None:
+        fields["status_code"] = status_code
+    return fields
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +94,7 @@ class TelegramCommandProcessor:
             if not self._is_relevant_command_update(update):
                 outcome = CommandOutcome(status="ignored")
             else:
+                started_at = time.monotonic()
                 try:
                     async with self.provide_recall_transaction() as recall_service:
                         outcome = await self._apply_command(update, recall_service)
@@ -83,10 +103,21 @@ class TelegramCommandProcessor:
                         logger.exception(
                             "Retryable database failure processing Telegram update %s",
                             update_id,
+                            extra={
+                                "runestone_telemetry": _telemetry(
+                                    "telegram_command_transaction",
+                                    started_at,
+                                    "retryable_failure",
+                                )
+                            },
                         )
                         outcome = CommandOutcome(status="retryable_failure")
                     else:
-                        logger.exception("Error processing Telegram update %s", update_id)
+                        logger.exception(
+                            "Error processing Telegram update %s",
+                            update_id,
+                            extra={"runestone_telemetry": _telemetry("telegram_command_transaction", started_at)},
+                        )
                         outcome = self._application_error_outcome(update, exc)
 
             if outcome.status == "retryable_failure":
@@ -97,19 +128,20 @@ class TelegramCommandProcessor:
                 acknowledged_offset = update_id + 1
 
         if acknowledged_offset is not None:
+            started_at = time.monotonic()
             try:
                 self.offset_store.set_update_offset(acknowledged_offset)
             except Exception:
-                logger.exception("Failed to update Telegram polling offset")
+                logger.exception(
+                    "Failed to update Telegram polling offset",
+                    extra={"runestone_telemetry": _telemetry("telegram_poll_offset_write", started_at)},
+                )
 
     async def _fetch_updates(self) -> list[dict]:
         """Fetch updates without opening a database session."""
-        try:
-            offset = self.offset_store.get_update_offset()
-        except Exception:
-            logger.exception("Failed to get Telegram polling offset")
-            return []
+        offset = self.offset_store.get_update_offset()
 
+        started_at = time.monotonic()
         try:
             async with httpx.AsyncClient(timeout=35.0) as client:
                 response = await client.get(
@@ -118,18 +150,54 @@ class TelegramCommandProcessor:
                 )
                 response.raise_for_status()
                 data = response.json()
+        except httpx.HTTPStatusError as exc:
+            logger.error(
+                "Failed to poll updates (HTTP error)",
+                exc_info=True,
+                extra={
+                    "runestone_telemetry": _telemetry(
+                        "telegram_poll_fetch",
+                        started_at,
+                        status_code=exc.response.status_code,
+                    )
+                },
+            )
+            return []
         except httpx.RequestError as exc:
-            logger.error("Failed to poll updates (network error): %s", exc)
+            logger.error(
+                "Failed to poll updates (network error): %s",
+                exc,
+                extra={"runestone_telemetry": _telemetry("telegram_poll_fetch", started_at)},
+            )
             return []
         except Exception:
-            logger.exception("Unexpected error during Telegram polling")
+            logger.exception(
+                "Unexpected error during Telegram polling",
+                extra={"runestone_telemetry": _telemetry("telegram_poll_parse", started_at)},
+            )
             return []
 
-        if not isinstance(data, dict) or not data.get("ok"):
-            logger.error("Telegram API error: %s", data)
+        if not isinstance(data, dict):
+            logger.error(
+                "Telegram polling response is not an object",
+                extra={"runestone_telemetry": _telemetry("telegram_poll_parse", started_at)},
+            )
+            return []
+        if not data.get("ok"):
+            logger.error(
+                "Telegram API error: %s",
+                data,
+                extra={"runestone_telemetry": _telemetry("telegram_poll_api", started_at)},
+            )
             return []
         updates = data.get("result", [])
-        return updates if isinstance(updates, list) else []
+        if isinstance(updates, list):
+            return updates
+        logger.error(
+            "Telegram polling response has invalid result",
+            extra={"runestone_telemetry": _telemetry("telegram_poll_parse", started_at)},
+        )
+        return []
 
     async def _apply_command(self, update: dict, recall_service: "RecallService") -> CommandOutcome:
         """Apply one structurally valid command and prepare its messages."""
@@ -294,13 +362,22 @@ class TelegramCommandProcessor:
 
     async def _send_outcome_messages(self, outcome: CommandOutcome) -> None:
         for message in outcome.messages:
+            started_at = time.monotonic()
             try:
                 sent = await self._send_message(message.chat_id, message.text, message.parse_mode)
             except Exception:
-                logger.exception("Unexpected error sending Telegram command response to chat %s", message.chat_id)
+                logger.exception(
+                    "Unexpected error sending Telegram command response to chat %s",
+                    message.chat_id,
+                    extra={"runestone_telemetry": _telemetry("telegram_command_response_delivery", started_at)},
+                )
                 continue
             if not sent:
-                logger.error("Failed to send Telegram command response to chat %s", message.chat_id)
+                logger.error(
+                    "Failed to send Telegram command response to chat %s",
+                    message.chat_id,
+                    extra={"runestone_telemetry": _telemetry("telegram_command_response_delivery", started_at)},
+                )
 
     async def _send_message(self, chat_id: int, text: str, parse_mode: str | None = None) -> bool:
         """Send one prepared message after command transaction closure."""

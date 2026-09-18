@@ -16,6 +16,10 @@ from runestone.recall.types import RecallEnableResult, RecallEnableStatus, Recal
 from runestone.telegram.commands import CommandOutcome, TelegramCommandProcessor, TelegramMessage
 
 
+def telemetry_markers(caplog):
+    return [record.runestone_telemetry for record in caplog.records if hasattr(record, "runestone_telemetry")]
+
+
 def make_state(
     *,
     enabled: bool = True,
@@ -162,13 +166,31 @@ async def test_fetch_updates_rejects_api_errors_malformed_and_empty_results(proc
 
 
 @pytest.mark.anyio
-async def test_fetch_updates_returns_empty_when_offset_read_fails(processor):
-    processor.offset_store.get_update_offset.side_effect = OSError("unreadable")
+@pytest.mark.parametrize(
+    ("failure", "expected"),
+    [
+        ("api", {"operation": "telegram_poll_api", "outcome": "failed", "duration_bucket": "lt_100ms"}),
+        ("parse", {"operation": "telegram_poll_parse", "outcome": "failed", "duration_bucket": "lt_100ms"}),
+        ("network", {"operation": "telegram_poll_fetch", "outcome": "failed", "duration_bucket": "lt_100ms"}),
+    ],
+)
+async def test_fetch_updates_emits_one_fixed_failure_marker(processor, caplog, failure, expected):
+    request = httpx.Request("GET", "https://api.telegram.org/getUpdates")
+    response = MagicMock()
+    response.raise_for_status.return_value = None
+    response.json.return_value = {"ok": False, "description": "SENTINEL-api-payload"}
+    client = MagicMock()
+    client.get = AsyncMock(return_value=response)
+    if failure == "parse":
+        response.json.return_value = "not-an-object"
+    if failure == "network":
+        client.get.side_effect = httpx.ConnectError("SENTINEL-network-detail", request=request)
 
     with patch("runestone.telegram.commands.httpx.AsyncClient") as client_class:
+        client_class.return_value.__aenter__.return_value = client
         assert await processor._fetch_updates() == []
 
-    client_class.assert_not_called()
+    assert telemetry_markers(caplog) == [expected]
 
 
 def test_outcome_types_are_immutable():
@@ -242,6 +264,7 @@ async def test_structural_ignores_do_not_open_provider_and_advance(processor):
 async def test_commit_failure_discards_messages_stops_batch_and_retains_failing_offset(
     processor,
     recall_service,
+    caplog,
 ):
     provider_count = 0
 
@@ -268,6 +291,13 @@ async def test_commit_failure_discards_messages_stops_batch_and_retains_failing_
     assert provider_count == 2
     assert processor._send_message.await_count == 1
     processor.offset_store.set_update_offset.assert_called_once_with(11)
+    assert telemetry_markers(caplog) == [
+        {
+            "operation": "telegram_command_transaction",
+            "outcome": "retryable_failure",
+            "duration_bucket": "lt_100ms",
+        }
+    ]
 
 
 @pytest.mark.anyio
@@ -405,6 +435,13 @@ async def test_post_commit_send_failure_logs_and_advances(processor, caplog):
 
     assert "Failed to send Telegram command response" in caplog.text
     processor.offset_store.set_update_offset.assert_called_once_with(4)
+    assert telemetry_markers(caplog) == [
+        {
+            "operation": "telegram_command_response_delivery",
+            "outcome": "failed",
+            "duration_bucket": "lt_100ms",
+        }
+    ]
 
 
 @pytest.mark.anyio
@@ -653,6 +690,13 @@ async def test_offset_write_failure_keeps_committed_command_response(processor, 
 
     processor._send_message.assert_awaited_once()
     assert "Failed to update Telegram polling offset" in caplog.text
+    assert telemetry_markers(caplog) == [
+        {
+            "operation": "telegram_poll_offset_write",
+            "outcome": "failed",
+            "duration_bucket": "lt_100ms",
+        }
+    ]
 
 
 def test_parse_word_from_reply_text_handles_markdown(processor):

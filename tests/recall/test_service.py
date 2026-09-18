@@ -388,7 +388,7 @@ async def test_bump_words_raises_specific_error_when_state_is_missing(recall_ser
 
 
 @pytest.mark.anyio
-async def test_bump_words_keeps_original_queue_excluded_across_fallback_selection(recall_service):
+async def test_bump_words_keeps_original_queue_excluded_across_fallback_selection(recall_service, caplog):
     queued_state = make_state(user_id=1, daily_selection=[make_word(7, "hej"), make_word(8, "tack")])
     replacement = make_word(9, "ny")
     refreshed_state = make_state(user_id=1, daily_selection=[replacement, make_word(10, "sen")])
@@ -416,6 +416,14 @@ async def test_bump_words_keeps_original_queue_excluded_across_fallback_selectio
             limit=2,
             excluded_word_ids=[7, 8, 9],
         ),
+    ]
+    markers = [record.runestone_telemetry for record in caplog.records if hasattr(record, "runestone_telemetry")]
+    assert markers == [
+        {
+            "operation": "recall_queue_refill",
+            "outcome": "fallback_alternative",
+            "duration_bucket": "lt_100ms",
+        }
     ]
     recall_service.recall_repository.replace_queue.assert_awaited_once_with(
         1,
@@ -732,8 +740,16 @@ async def test_deliver_next_word_falls_back_to_utc_for_corrupt_timezone(recall_s
         now=datetime(2026, 1, 15, 12, tzinfo=timezone.utc),
     )
 
-    assert "invalid_timezone_fallback user_id=1" in caplog.text
+    assert "Recall delivery timezone fallback used" in caplog.text
     assert "private-corrupt-value" not in caplog.text
+    markers = [record.runestone_telemetry for record in caplog.records if hasattr(record, "runestone_telemetry")]
+    assert markers == [
+        {
+            "operation": "recall_delivery_timezone",
+            "outcome": "fallback_utc",
+            "duration_bucket": "lt_100ms",
+        }
+    ]
     recall_service.recall_repository.load_locked_recall_queue.assert_awaited_once()
 
 

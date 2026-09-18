@@ -2,6 +2,9 @@
 
 import logging
 import os
+import time
+
+from runestone.core.error_tracking import duration_bucket
 
 logger = logging.getLogger(__name__)
 
@@ -14,13 +17,24 @@ class TelegramUpdateOffsetStore:
 
     def get_update_offset(self) -> int:
         """Return the current Telegram polling offset, defaulting to zero."""
+        started_at = time.monotonic()
         try:
             if os.path.exists(self.offset_file_path):
                 with open(self.offset_file_path) as file:
                     return int(file.read().strip())
             return 0
         except Exception as exc:
-            logger.error("Failed to get update offset: %s", exc)
+            logger.error(
+                "Failed to get update offset: %s",
+                exc,
+                extra={
+                    "runestone_telemetry": {
+                        "operation": "telegram_poll_offset_read",
+                        "outcome": "failed",
+                        "duration_bucket": duration_bucket(started_at),
+                    }
+                },
+            )
             return 0
 
     def set_update_offset(self, offset: int) -> None:
