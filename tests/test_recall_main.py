@@ -1,8 +1,9 @@
+from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from recall_main import create_scheduler, main, process_updates_job, send_recall_word_job
+from recall_main import _recall_release, create_scheduler, main, process_updates_job, send_recall_word_job
 from runestone.db.database import setup_database
 from runestone.telegram.offset_store import TelegramUpdateOffsetStore
 
@@ -36,6 +37,8 @@ class TestRecallMain:
         """Test successful main execution."""
         mock_settings.telegram_bot_token = self.test_token
         mock_settings.verbose = False
+        mock_settings.sentry_dsn = None
+        mock_settings.sentry_release = None
 
         mock_scheduler = Mock()
         mock_scheduler.get_jobs.return_value = []
@@ -74,6 +77,8 @@ class TestRecallMain:
         mock_settings.telegram_bot_token = self.test_token
         mock_settings.verbose = False
         mock_settings.telegram_offset_file_path = "custom/offset.txt"
+        mock_settings.sentry_dsn = None
+        mock_settings.sentry_release = None
 
         mock_scheduler = Mock()
         mock_scheduler.get_jobs.return_value = []
@@ -92,6 +97,8 @@ class TestRecallMain:
     async def test_main_missing_token(self, mock_settings):
         """Test main with missing telegram bot token."""
         mock_settings.telegram_bot_token = None
+        mock_settings.sentry_dsn = None
+        mock_settings.sentry_release = None
 
         with pytest.raises(SystemExit, match="1"):
             await main()
@@ -115,6 +122,8 @@ class TestRecallMain:
         """Test main with unexpected error."""
         mock_settings.telegram_bot_token = self.test_token
         mock_settings.verbose = False
+        mock_settings.sentry_dsn = None
+        mock_settings.sentry_release = None
         mock_setup_database.side_effect = RuntimeError("Database error")
 
         with pytest.raises(SystemExit, match="1"):
@@ -122,6 +131,62 @@ class TestRecallMain:
 
         mock_offset_store.assert_not_called()
         mock_create_scheduler.assert_not_called()
+
+    def test_recall_release_uses_only_safe_configured_revision(self):
+        """The worker gets a distinct release without copying arbitrary config text."""
+        source_commit = "a" * 40
+        assert _recall_release(f"runestone-api@{source_commit}") == f"runestone-recall@{source_commit}"
+        for unsafe_release in (
+            "runestone-api@abc123",
+            "runestone-web@" + source_commit,
+            "runestone-api@https://token@example.com/" + source_commit,
+            "runestone-api@" + "A" * 40,
+            "invalid release",
+            None,
+        ):
+            assert _recall_release(unsafe_release) == "runestone-recall@unknown"
+
+    def test_recall_image_derives_the_backend_release_from_source_commit(self):
+        """The production worker image receives the same build revision convention as the API."""
+        dockerfile = Path("Dockerfile.recall").read_text()
+
+        assert "ARG SOURCE_COMMIT" in dockerfile
+        assert "ENV SENTRY_RELEASE=runestone-api@${SOURCE_COMMIT}" in dockerfile
+        assert 'CMD ["python", "recall_main.py"]' in dockerfile
+
+    @patch("recall_main.setup_error_tracking")
+    @patch("recall_main.signal.signal")
+    @patch("recall_main.settings")
+    @patch("recall_main.setup_logging")
+    @patch("recall_main.setup_database", new_callable=AsyncMock)
+    @patch("recall_main.TelegramUpdateOffsetStore")
+    @patch("recall_main.create_scheduler")
+    @pytest.mark.asyncio
+    async def test_main_initializes_worker_specific_error_tracking_release(
+        self,
+        mock_create_scheduler,
+        mock_offset_store,
+        mock_setup_database,
+        mock_setup_logging,
+        mock_settings,
+        mock_signal,
+        mock_setup_error_tracking,
+    ):
+        """Worker telemetry reuses DSN/environment settings under its own release."""
+        mock_settings.telegram_bot_token = self.test_token
+        mock_settings.verbose = False
+        mock_settings.sentry_release = "runestone-api@" + "a" * 40
+        mock_scheduler = Mock()
+        mock_scheduler.get_jobs.return_value = []
+        mock_create_scheduler.return_value = mock_scheduler
+
+        with patch("asyncio.Event.wait", new_callable=AsyncMock):
+            await main(self.test_offset_file)
+
+        mock_setup_error_tracking.assert_called_once_with(
+            mock_settings,
+            release="runestone-recall@" + "a" * 40,
+        )
 
     @patch("recall_main.AsyncIOScheduler")
     @patch("recall_main.settings")
@@ -240,3 +305,29 @@ class TestRecallMain:
 
         mock_telegram_recall_delivery.assert_called_once_with(mock_recall_session_provider, mock_settings)
         mock_recall_instance.send_next_recall_word.assert_awaited_once()
+
+    @patch("recall_main.settings")
+    @patch("recall_main.provide_recall_session")
+    @patch("recall_main.TelegramRecallDelivery")
+    @pytest.mark.asyncio
+    async def test_send_recall_word_job_emits_exactly_one_failure_marker(
+        self,
+        mock_telegram_recall_delivery,
+        mock_recall_session_provider,
+        mock_settings,
+        caplog,
+    ):
+        mock_recall_instance = AsyncMock()
+        mock_recall_instance.send_next_recall_word.side_effect = RuntimeError("SENTINEL-delivery-failure")
+        mock_telegram_recall_delivery.return_value = mock_recall_instance
+
+        await send_recall_word_job()
+
+        markers = [record.runestone_telemetry for record in caplog.records if hasattr(record, "runestone_telemetry")]
+        assert markers == [
+            {
+                "operation": "telegram_recall_delivery_job",
+                "outcome": "failed",
+                "duration_bucket": "lt_100ms",
+            }
+        ]

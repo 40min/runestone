@@ -111,7 +111,7 @@ async def test_enumeration_closes_before_fresh_session_for_each_user(mock_settin
 
 
 @pytest.mark.anyio
-async def test_failed_user_session_closes_and_later_user_still_runs(mock_settings):
+async def test_failed_user_session_closes_and_later_user_still_runs(mock_settings, caplog):
     enumeration_service = make_service(candidate_user_ids=[1, 2])
     failed_service = make_service()
     failed_service.deliver_next_word.side_effect = RuntimeError("database failed")
@@ -128,6 +128,14 @@ async def test_failed_user_session_closes_and_later_user_still_runs(mock_setting
         ("close", 1),
         ("open", 2),
         ("close", 2),
+    ]
+    markers = [record.runestone_telemetry for record in caplog.records if hasattr(record, "runestone_telemetry")]
+    assert markers == [
+        {
+            "operation": "telegram_recall_delivery",
+            "outcome": "failed",
+            "duration_bucket": "lt_100ms",
+        }
     ]
 
 

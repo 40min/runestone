@@ -1,6 +1,7 @@
 """Database-backed recall state orchestration and selection rules."""
 
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -8,6 +9,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import SQLAlchemyError
 
+from runestone.core.error_tracking import duration_bucket
 from runestone.core.exceptions import (
     InvalidRecallScheduleError,
     RecallOperationError,
@@ -188,6 +190,7 @@ class RecallService:
         if len(portion_words) < self.words_per_day:
             needed = self.words_per_day - len(portion_words)
             fallback_ids = bumped_word_ids + [word.id for word in portion_words]
+            started_at = time.monotonic()
             portion_words.extend(
                 await self._select_bumped_daily_portion(
                     state.user_id,
@@ -195,6 +198,20 @@ class RecallService:
                     limit=needed,
                 )
             )
+            try:
+                logger.warning(
+                    "Recall queue fallback selection used",
+                    extra={
+                        "runestone_telemetry": {
+                            "operation": "recall_queue_refill",
+                            "outcome": "fallback_alternative",
+                            "duration_bucket": duration_bucket(started_at),
+                        }
+                    },
+                )
+            except Exception:
+                # Telemetry must not alter an otherwise successful queue replacement.
+                pass
 
         regular_words = [self._as_regular_portion(word) for word in portion_words]
 
@@ -422,10 +439,20 @@ class RecallService:
         if state.recall_start_hour == state.recall_end_hour:
             return False
 
+        started_at = time.monotonic()
         try:
             timezone_name = validate_timezone_name(user.timezone)
         except (AttributeError, TypeError, ValueError):
-            logger.warning("invalid_timezone_fallback user_id=%s", state.user_id)
+            logger.warning(
+                "Recall delivery timezone fallback used",
+                extra={
+                    "runestone_telemetry": {
+                        "operation": "recall_delivery_timezone",
+                        "outcome": "fallback_utc",
+                        "duration_bucket": duration_bucket(started_at),
+                    }
+                },
+            )
             timezone_name = "UTC"
 
         current_time = now or datetime.now(timezone.utc)

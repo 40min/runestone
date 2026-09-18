@@ -1,12 +1,14 @@
 """Scheduled Telegram transport for recall-word delivery."""
 
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
 from functools import partial
 
 import httpx
 
+from runestone.core.error_tracking import duration_bucket
 from runestone.recall.service import RecallService
 from runestone.recall.types import RecallQueueWord
 from runestone.utils.markdown import escape_markdown
@@ -15,6 +17,22 @@ logger = logging.getLogger(__name__)
 
 RecallSessionProvider = Callable[[], AbstractAsyncContextManager[RecallService]]
 SendWord = Callable[[int, RecallQueueWord], Awaitable[bool]]
+
+
+def _telemetry(
+    operation: str,
+    started_at: float,
+    status_code: int | None = None,
+) -> dict[str, str | int]:
+    """Return bounded code-owned telemetry for a scheduled delivery failure."""
+    fields: dict[str, str | int] = {
+        "operation": operation,
+        "outcome": "failed",
+        "duration_bucket": duration_bucket(started_at),
+    }
+    if status_code is not None:
+        fields["status_code"] = status_code
+    return fields
 
 
 class TelegramRecallDelivery:
@@ -43,6 +61,7 @@ class TelegramRecallDelivery:
         async with httpx.AsyncClient(timeout=10.0) as client:
             send_word = partial(self._send_queue_word, client)
             for user_id in candidate_user_ids:
+                started_at = time.monotonic()
                 try:
                     # deliver_next_word owns commit/rollback for this session and
                     # deliberately keeps its row lock across the send callback.
@@ -53,6 +72,7 @@ class TelegramRecallDelivery:
                         "Failed to process recall word for user %s: %s",
                         user_id,
                         exc,
+                        extra={"runestone_telemetry": _telemetry("telegram_recall_delivery", started_at)},
                     )
 
         logger.info("Completed recall word sending process")
@@ -102,6 +122,8 @@ class TelegramRecallDelivery:
         word: dict,
     ) -> bool:
         """Send a formatted vocabulary word to one Telegram chat."""
+        started_at = time.monotonic()
+        status_code: int | None = None
         word_phrase = escape_markdown(word.get("word_phrase", "Unknown"))
         translation = escape_markdown(word.get("translation", "Unknown"))
         example_phrase = word.get("example_phrase", "")
@@ -117,12 +139,60 @@ class TelegramRecallDelivery:
                 f"{self.base_url}/sendMessage",
                 json={"chat_id": chat_id, "text": message, "parse_mode": "MarkdownV2"},
             )
+            status_code = response.status_code
             response.raise_for_status()
             payload = response.json()
-            return isinstance(payload, dict) and payload.get("ok") is True
+            if isinstance(payload, dict) and payload.get("ok") is True:
+                return True
+            logger.error(
+                "Telegram rejected recall word delivery",
+                extra={
+                    "runestone_telemetry": _telemetry(
+                        "telegram_recall_message_delivery",
+                        started_at,
+                        status_code,
+                    )
+                },
+            )
+            return False
+        except httpx.HTTPStatusError as exc:
+            logger.error(
+                "Failed to send recall word (HTTP error)",
+                exc_info=True,
+                extra={
+                    "runestone_telemetry": _telemetry(
+                        "telegram_recall_message_delivery",
+                        started_at,
+                        exc.response.status_code,
+                    )
+                },
+            )
+            return False
         except httpx.RequestError as exc:
-            logger.error("Failed to send word message to chat %s: %s", chat_id, exc)
+            logger.error(
+                "Failed to send word message to chat %s: %s",
+                chat_id,
+                exc,
+                extra={
+                    "runestone_telemetry": _telemetry(
+                        "telegram_recall_message_delivery",
+                        started_at,
+                        status_code,
+                    )
+                },
+            )
             return False
         except Exception as exc:
-            logger.error("Unexpected error sending message to chat %s: %s", chat_id, exc)
+            logger.error(
+                "Unexpected error sending message to chat %s: %s",
+                chat_id,
+                exc,
+                extra={
+                    "runestone_telemetry": _telemetry(
+                        "telegram_recall_message_delivery",
+                        started_at,
+                        status_code,
+                    )
+                },
+            )
             return False

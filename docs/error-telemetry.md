@@ -2,8 +2,9 @@
 
 How Runestone exports error events to Better Stack (Sentry-compatible) without
 leaking secrets or personal data. Implemented in
-`src/runestone/core/error_tracking.py`; no other module may touch the Sentry
-SDK.
+`src/runestone/core/error_tracking.py`. Only the standalone Rune Recall entry
+point may additionally use the SDK's `isolation_scope()` to delimit a scheduled
+job; Telegram modules never touch the SDK directly.
 
 ## Design
 
@@ -130,7 +131,56 @@ marker, `setup_database` logs `Database setup check failed` with
 `exc_info=True`, so startup failures stay diagnosable in private local logs
 when no DSN is configured.
 
-### Breadcrumb producers
+## Rune Recall worker
+
+`recall_main.py` initializes the existing error-tracking policy immediately
+after worker logging setup. It reuses the configured DSN and environment but
+derives a separate release as `runestone-recall@<revision>` only when the
+configured value is exactly `runestone-api@` followed by a lowercase 40-hex
+source commit. `Dockerfile.recall` receives `SOURCE_COMMIT` and sets that
+backend-style configured release in the image environment. Missing, wrong-process, URL-like,
+token-shaped, or malformed configuration deliberately becomes the fixed
+`runestone-recall@unknown` value rather than copying configuration text. An
+empty `SENTRY_DSN` still disables initialization entirely.
+
+Each APScheduler polling and scheduled-recall invocation opens its own
+`sentry_sdk.isolation_scope()`. This keeps concurrent and consecutive jobs from
+sharing breadcrumbs or context without creating a worker correlation ID. An
+escaped job failure is explicitly captured once in that job's scope; failures
+that the normal polling or delivery flow handles remain bounded breadcrumbs so
+one problematic user cannot turn into one event per retry.
+
+| Boundary | Marker |
+| --- | --- |
+| polling offset read/write | `telegram_poll_offset_read` / `telegram_poll_offset_write`, `failed`, duration bucket |
+| polling transport, API rejection, or parse failure | `telegram_poll_fetch`, `telegram_poll_api`, or `telegram_poll_parse`, `failed`, duration bucket; an HTTP transport failure includes only its response `status_code` |
+| per-command transaction failure | `telegram_command_transaction`, `failed` or `retryable_failure`, duration bucket |
+| command response delivery failure | `telegram_command_response_delivery`, `failed`, duration bucket |
+| scheduled recall workflow failure | `telegram_recall_delivery`, `failed`, duration bucket |
+| scheduled recall message delivery failure | `telegram_recall_message_delivery`, `failed`, duration bucket; an authoritative HTTP response includes only `status_code` |
+| scheduled delivery queue replacement falls back to additional alternatives | `recall_queue_refill`, `fallback_alternative`, duration bucket |
+| scheduled delivery has an invalid user timezone and uses UTC | `recall_delivery_timezone`, `fallback_utc`, duration bucket |
+| escaped polling or scheduled-delivery job failure | `telegram_poll_job` or `telegram_recall_delivery_job`, `failed`, duration bucket, plus one sanitized exception event |
+
+These markers contain no user/chat/update IDs, usernames, vocabulary, message
+payloads, Telegram response bodies, URLs, bot tokens, exception text, or
+timezone details. Worker code has no authoritative attempt ordinal at its
+boundaries, so it omits `retry_count` rather than inventing one. The existing
+20-breadcrumb event cap still applies; the scheduler also limits each job to
+one active instance, and there are no success markers.
+
+### Canary and rollback
+
+Before enabling a production worker DSN, use a non-production worker with its
+own DSN and release, trigger a controlled scheduled-job exception containing a
+hostile sentinel, and verify the received event has only the fixed marker,
+exception type/relative frames, and worker release. Confirm that the sentinel,
+Telegram data, URLs, and token-shaped text are absent. Remove `SENTRY_DSN`
+from the worker deployment and restart it to stop exports immediately. A code
+rollback reverts the worker initialization, isolation wrappers, and worker
+markers together; the shared sanitizer stays in place.
+
+## Breadcrumb producers
 
 The existing agent/OCR producers continue to carry their markers. The voice
 pipeline adds markers at four owned failure/degradation boundaries. Markers

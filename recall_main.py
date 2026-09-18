@@ -11,14 +11,18 @@ Uses APScheduler for task scheduling and proper configuration management.
 
 import asyncio
 import logging
+import re
 import signal
 import sys
+import time
 from typing import Optional
 
+import sentry_sdk
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from runestone.config import settings
+from runestone.core.error_tracking import capture_sanitized_exception, duration_bucket, setup_error_tracking
 from runestone.core.logging_config import setup_logging
 from runestone.db.database import setup_database
 from runestone.recall.providers import provide_recall_session, provide_recall_transaction
@@ -26,23 +30,62 @@ from runestone.telegram.commands import TelegramCommandProcessor
 from runestone.telegram.delivery import TelegramRecallDelivery
 from runestone.telegram.offset_store import TelegramUpdateOffsetStore
 
+logger = logging.getLogger("runestone.recall_worker")
+
+_SOURCE_COMMIT_RE = re.compile(r"[0-9a-f]{40}")
+
+
+def _recall_release(configured_release: str | None) -> str:
+    """Return the worker release only for the backend's commit-shaped release."""
+    prefix = "runestone-api@"
+    if (
+        not isinstance(configured_release, str)
+        or not configured_release.startswith(prefix)
+        or not _SOURCE_COMMIT_RE.fullmatch(configured_release.removeprefix(prefix))
+    ):
+        return "runestone-recall@unknown"
+    return f"runestone-recall@{configured_release.removeprefix(prefix)}"
+
+
+def _record_job_failure(operation: str, exception: BaseException, started_at: float) -> None:
+    """Leave one bounded job marker and capture without changing worker behavior."""
+    try:
+        logger.error(
+            "Rune Recall scheduled job failed",
+            exc_info=True,
+            extra={
+                "runestone_telemetry": {
+                    "operation": operation,
+                    "outcome": "failed",
+                    "duration_bucket": duration_bucket(started_at),
+                }
+            },
+        )
+    except Exception:
+        pass
+    capture_sanitized_exception(exception)
+
 
 async def process_updates_job(offset_store: TelegramUpdateOffsetStore) -> None:
     """Process Telegram updates with one recall transaction per command."""
-    try:
-        telegram_processor = TelegramCommandProcessor(offset_store, provide_recall_transaction)
-        await telegram_processor.process_updates()
-    except Exception:
-        logging.getLogger(__name__).exception("Error in process_updates_job")
+    with sentry_sdk.isolation_scope():
+        started_at = time.monotonic()
+        try:
+            telegram_processor = TelegramCommandProcessor(offset_store, provide_recall_transaction)
+            await telegram_processor.process_updates()
+        except Exception as exception:
+            _record_job_failure("telegram_poll_job", exception, started_at)
 
 
 async def send_recall_word_job() -> None:
     """Send scheduled recall words with isolated per-operation sessions."""
-    try:
-        telegram_recall_delivery = TelegramRecallDelivery(provide_recall_session, settings)
-        await telegram_recall_delivery.send_next_recall_word()
-    except Exception:
-        logging.getLogger(__name__).exception("Error in send_recall_word_job")
+    with sentry_sdk.isolation_scope():
+        started_at = time.monotonic()
+        try:
+            telegram_recall_delivery = TelegramRecallDelivery(provide_recall_session, settings)
+            await telegram_recall_delivery.send_next_recall_word()
+        except Exception as exception:
+            _record_job_failure("telegram_recall_delivery_job", exception, started_at)
 
 
 def create_scheduler(offset_store: TelegramUpdateOffsetStore) -> AsyncIOScheduler:
@@ -78,7 +121,7 @@ async def main(offset_file_path: Optional[str] = None) -> None:
     # Setup logging
     log_level = "DEBUG" if settings.verbose else "INFO"
     setup_logging(level=log_level)
-    logger = logging.getLogger(__name__)
+    setup_error_tracking(settings, release=_recall_release(settings.sentry_release))
 
     logger.info("Starting Runestone Telegram Bot Worker")
 
