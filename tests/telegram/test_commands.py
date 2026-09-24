@@ -172,6 +172,15 @@ async def test_fetch_updates_rejects_api_errors_malformed_and_empty_results(proc
         ("api", {"operation": "telegram_poll_api", "outcome": "failed", "duration_bucket": "lt_100ms"}),
         ("parse", {"operation": "telegram_poll_parse", "outcome": "failed", "duration_bucket": "lt_100ms"}),
         ("network", {"operation": "telegram_poll_fetch", "outcome": "failed", "duration_bucket": "lt_100ms"}),
+        (
+            "http-status",
+            {
+                "operation": "telegram_poll_fetch",
+                "outcome": "failed",
+                "duration_bucket": "lt_100ms",
+                "status_code": 503,
+            },
+        ),
     ],
 )
 async def test_fetch_updates_emits_one_fixed_failure_marker(processor, caplog, failure, expected):
@@ -185,6 +194,12 @@ async def test_fetch_updates_emits_one_fixed_failure_marker(processor, caplog, f
         response.json.return_value = "not-an-object"
     if failure == "network":
         client.get.side_effect = httpx.ConnectError("SENTINEL-network-detail", request=request)
+    if failure == "http-status":
+        response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "server error",
+            request=request,
+            response=httpx.Response(503, request=request),
+        )
 
     with patch("runestone.telegram.commands.httpx.AsyncClient") as client_class:
         client_class.return_value.__aenter__.return_value = client
