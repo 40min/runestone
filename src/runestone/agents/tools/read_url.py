@@ -5,6 +5,7 @@ import datetime as dt
 import ipaddress
 import logging
 import socket
+import time
 from urllib.parse import urlparse
 
 import httpx
@@ -14,6 +15,8 @@ from lxml import html as lxml_html
 from markdownify import markdownify
 from readability import Document
 from trafilatura import extract
+
+from runestone.core.error_tracking import capture_sanitized_exception, duration_bucket
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +46,26 @@ _BLOCKED_LINE_PHRASES = (
     "subscribe",
     "sign in",
 )
+
+
+def _record_fetch_failure(exception: BaseException, started_at: float, status_code: int | None = None) -> None:
+    """Report a terminal outbound fetch failure using only bounded, code-owned fields."""
+    try:
+        marker = {
+            "operation": "url_fetch",
+            "provider": "http",
+            "outcome": "failed",
+            "duration_bucket": duration_bucket(started_at),
+        }
+        if status_code is not None:
+            marker["status_code"] = status_code
+        logger.warning("URL fetch terminal failure", extra={"runestone_telemetry": marker})
+    except Exception:
+        pass
+    try:
+        capture_sanitized_exception(exception)
+    except Exception:
+        pass
 
 
 def _normalize_url(raw_url: str) -> str:
@@ -140,6 +163,7 @@ async def _fetch_url_bytes(url: str) -> tuple[bytes, str, str, bool] | tuple[Non
 
     current_url = url
     truncated = False
+    started_at = time.monotonic()
 
     async with httpx.AsyncClient(follow_redirects=False, timeout=timeout, headers=headers) as client:
         for redirect_i in range(MAX_REDIRECTS + 1):
@@ -164,6 +188,11 @@ async def _fetch_url_bytes(url: str) -> tuple[bytes, str, str, bool] | tuple[Non
                         continue
 
                     if resp.status_code != 200:
+                        if 500 <= resp.status_code <= 599:
+                            try:
+                                resp.raise_for_status()
+                            except httpx.HTTPStatusError as exc:
+                                _record_fetch_failure(exc, started_at, resp.status_code)
                         return None, None, f"Error: HTTP {resp.status_code}.", False
 
                     content_type = _content_type_base(resp.headers.get("content-type"))
@@ -208,6 +237,7 @@ async def _fetch_url_bytes(url: str) -> tuple[bytes, str, str, bool] | tuple[Non
                     return bytes(buf), str(resp.url), content_type, truncated
             except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError, httpx.RequestError) as e:
                 logger.warning("read_url fetch error for url=%s: %s", current_url, e)
+                _record_fetch_failure(e, started_at)
                 return None, None, "Error: Network error while fetching URL.", False
 
     return None, None, "Error: Failed to fetch URL.", False
