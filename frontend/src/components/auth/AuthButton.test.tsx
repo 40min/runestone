@@ -132,4 +132,16 @@ describe('AuthButton', () => {
     const button = screen.getByRole('button');
     expect(button).toHaveClass('MuiButton-root');
   });
+
+  it('applies caller-provided sx overrides', () => {
+    render(
+      <AuthButton
+        sx={[{ marginTop: '13px' }, { padding: '17px' }]}
+      >
+        Styled Button
+      </AuthButton>
+    );
+
+    expect(screen.getByRole('button')).toHaveStyle({ marginTop: '13px' });
+  });
 });
