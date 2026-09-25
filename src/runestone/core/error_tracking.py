@@ -46,7 +46,7 @@ _REQUEST_ID_RE = re.compile(r"[0-9a-f]{32}")
 
 _LEVELS = frozenset({"debug", "info", "warning", "error", "critical", "fatal"})
 _BREADCRUMB_LEVELS = frozenset({"warning", "error", "critical"})
-_PROVIDERS = frozenset({"openai", "openrouter", "gemini", "elevenlabs"})
+_PROVIDERS = frozenset({"openai", "openrouter", "gemini", "elevenlabs", "ddgs", "http"})
 _DURATION_BUCKETS = frozenset({"lt_100ms", "100ms_1s", "1s_5s", "5s_30s", "gte_30s"})
 _RECORD_LEVEL_TO_BREADCRUMB = {
     logging.WARNING: "warning",

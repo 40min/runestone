@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from typing import Literal
 from urllib.parse import urlparse
 
@@ -9,6 +10,8 @@ from ddgs import DDGS
 from ddgs.exceptions import DDGSException, RatelimitException
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
+
+from runestone.core.error_tracking import capture_sanitized_exception, duration_bucket
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +52,29 @@ MAX_NEWS_TO_FETCH = 5
 DDGS_TIMEOUT = 8
 DDGS_MAX_RETRIES = 1
 DDGS_RETRY_DELAYS = (0.3, 0.6)
+
+
+def _record_news_failure(exception: DDGSException, started_at: float, retry_count: int) -> None:
+    """Report a terminal provider error without affecting the tool result."""
+    try:
+        logger.warning(
+            "News search terminal failure",
+            extra={
+                "runestone_telemetry": {
+                    "operation": "news_search",
+                    "provider": "ddgs",
+                    "outcome": "failed",
+                    "retry_count": retry_count,
+                    "duration_bucket": duration_bucket(started_at),
+                }
+            },
+        )
+    except Exception:
+        pass
+    try:
+        capture_sanitized_exception(exception)
+    except Exception:
+        pass
 
 
 def _fetch_news_sync(
@@ -93,6 +119,7 @@ async def search_news_with_dates(
     k = max(1, min(k, MAX_NEWS_TO_FETCH))
     results: list[NewsResult] = []
     ddgs_results = None
+    started_at = time.monotonic()
 
     for attempt in range(DDGS_MAX_RETRIES + 1):
         try:
@@ -109,6 +136,7 @@ async def search_news_with_dates(
             await asyncio.sleep(delay)
         except DDGSException as e:
             logger.exception("News search failed for query='%s'", query)
+            _record_news_failure(e, started_at, attempt)
             return {"error": f"Error searching news: {str(e)}"}
 
     try:

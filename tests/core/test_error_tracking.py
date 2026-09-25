@@ -13,12 +13,15 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import httpx
 import pytest
 import sentry_sdk
+from ddgs.exceptions import DDGSException, RatelimitException
 from fastapi import HTTPException
 from sentry_sdk.envelope import Envelope
 from sentry_sdk.transport import Transport
 from sqlalchemy.exc import DisconnectionError
 
 from runestone.agents.manager import AgentsManager
+from runestone.agents.tools import news as news_tool
+from runestone.agents.tools import read_url as read_url_tool
 from runestone.api.schemas import UserProfileUpdate
 from runestone.api.user_endpoints import update_user_profile
 from runestone.auth.dependencies import get_current_user
@@ -202,6 +205,184 @@ def _single_event(transport: _InMemoryTransport) -> dict[str, Any]:
     event = transport.envelopes[0].get_event()
     assert event is not None
     return cast("dict[str, Any]", event)
+
+
+@pytest.mark.anyio
+async def test_news_terminal_failure_exports_no_search_sentinels(capture_transport, monkeypatch) -> None:
+    secret = "SENTINEL-news-query"
+
+    def fail_search(*_args, **_kwargs):
+        raise DDGSException(f"SENTINEL-news-exception {secret}")
+
+    monkeypatch.setattr(news_tool, "_fetch_news_sync", fail_search)
+    result = await news_tool.search_news_with_dates.ainvoke({"query": secret})
+
+    assert "error" in result
+    event = _single_event(capture_transport)
+    serialized = json.dumps(event)
+    assert "SENTINEL" not in serialized
+    assert any(
+        crumb.get("data")
+        == {
+            "operation": "news_search",
+            "provider": "ddgs",
+            "outcome": "failed",
+            "retry_count": 0,
+            "duration_bucket": crumb.get("data", {}).get("duration_bucket"),
+        }
+        for crumb in event.get("breadcrumbs", {}).get("values", [])
+    )
+
+
+@pytest.mark.anyio
+async def test_news_retry_then_terminal_error_exports_one_event(capture_transport, monkeypatch) -> None:
+    attempts = 0
+
+    def fail_search(*_args, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RatelimitException("SENTINEL-rate-limit")
+        raise DDGSException("SENTINEL-provider-error")
+
+    async def no_sleep(_delay):
+        return None
+
+    monkeypatch.setattr(news_tool, "_fetch_news_sync", fail_search)
+    monkeypatch.setattr(news_tool.asyncio, "sleep", no_sleep)
+    result = await news_tool.search_news_with_dates.ainvoke({"query": "SENTINEL-query"})
+    assert "error" in result
+    assert attempts == 2
+    event = _single_event(capture_transport)
+    assert "SENTINEL" not in json.dumps(event)
+    assert [
+        crumb["data"]["retry_count"]
+        for crumb in event.get("breadcrumbs", {}).get("values", [])
+        if crumb.get("data", {}).get("operation") == "news_search"
+    ] == [1]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("failed_diagnostic", ["log", "capture"])
+async def test_news_telemetry_failure_preserves_tool_error(monkeypatch, failed_diagnostic) -> None:
+    def fail_search(*_args, **_kwargs):
+        raise DDGSException("provider failed")
+
+    monkeypatch.setattr(news_tool, "_fetch_news_sync", fail_search)
+    if failed_diagnostic == "log":
+        monkeypatch.setattr(news_tool.logger, "warning", Mock(side_effect=RuntimeError("logging failed")))
+    else:
+        monkeypatch.setattr(news_tool, "capture_sanitized_exception", Mock(side_effect=RuntimeError("SDK failed")))
+    result = await news_tool.search_news_with_dates.ainvoke({"query": "news"})
+    assert result == {"error": "Error searching news: provider failed"}
+
+
+@pytest.mark.anyio
+async def test_news_rate_limit_does_not_export_event(capture_transport, monkeypatch) -> None:
+    def fail_search(*_args, **_kwargs):
+        raise RatelimitException("SENTINEL-rate-limit")
+
+    async def no_sleep(_delay):
+        return None
+
+    monkeypatch.setattr(news_tool, "_fetch_news_sync", fail_search)
+    monkeypatch.setattr(news_tool.asyncio, "sleep", no_sleep)
+    result = await news_tool.search_news_with_dates.ainvoke({"query": "SENTINEL-query"})
+    assert result["error_type"] == "rate_limited"
+    assert capture_transport.envelopes == []
+
+
+@pytest.mark.anyio
+async def test_url_terminal_5xx_exports_only_fixed_fields(capture_transport, monkeypatch) -> None:
+    async def allow_url(_url):
+        return True, ""
+
+    original_client = httpx.AsyncClient
+
+    def client_with_response(**kwargs):
+        transport = httpx.MockTransport(lambda request: httpx.Response(503, text="SENTINEL-response-body"))
+        return original_client(transport=transport, **kwargs)
+
+    monkeypatch.setattr(read_url_tool, "_validate_fetch_url", allow_url)
+    monkeypatch.setattr(read_url_tool.httpx, "AsyncClient", client_with_response)
+    result = await read_url_tool._fetch_url_bytes("https://example.com/SENTINEL-url")
+    assert result[0] is None
+    event = _single_event(capture_transport)
+    assert "SENTINEL" not in json.dumps(event)
+    assert any(
+        crumb.get("data")
+        == {
+            "operation": "url_fetch",
+            "provider": "http",
+            "outcome": "failed",
+            "status_code": 503,
+            "duration_bucket": crumb.get("data", {}).get("duration_bucket"),
+        }
+        for crumb in event.get("breadcrumbs", {}).get("values", [])
+    )
+
+
+@pytest.mark.anyio
+async def test_url_4xx_does_not_export_event(capture_transport, monkeypatch) -> None:
+    async def allow_url(_url):
+        return True, ""
+
+    original_client = httpx.AsyncClient
+
+    def client_with_response(**kwargs):
+        return original_client(transport=httpx.MockTransport(lambda request: httpx.Response(404)), **kwargs)
+
+    monkeypatch.setattr(read_url_tool, "_validate_fetch_url", allow_url)
+    monkeypatch.setattr(read_url_tool.httpx, "AsyncClient", client_with_response)
+    result = await read_url_tool._fetch_url_bytes("https://example.com/SENTINEL-url")
+    assert result[0] is None
+    assert capture_transport.envelopes == []
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("failed_diagnostic", ["log", "capture"])
+async def test_url_telemetry_failure_preserves_fetch_error(monkeypatch, failed_diagnostic) -> None:
+    async def allow_url(_url):
+        return True, ""
+
+    original_client = httpx.AsyncClient
+
+    def client_with_response(**kwargs):
+        return original_client(transport=httpx.MockTransport(lambda request: httpx.Response(503)), **kwargs)
+
+    monkeypatch.setattr(read_url_tool, "_validate_fetch_url", allow_url)
+    monkeypatch.setattr(read_url_tool.httpx, "AsyncClient", client_with_response)
+    if failed_diagnostic == "log":
+        monkeypatch.setattr(read_url_tool.logger, "warning", Mock(side_effect=RuntimeError("logging failed")))
+    else:
+        monkeypatch.setattr(read_url_tool, "capture_sanitized_exception", Mock(side_effect=RuntimeError("SDK failed")))
+    result = await read_url_tool._fetch_url_bytes("https://example.com")
+    assert result == (None, None, "Error: HTTP 503.", False)
+
+
+@pytest.mark.anyio
+async def test_url_network_failure_exports_no_url_or_exception_text(capture_transport, monkeypatch) -> None:
+    async def allow_url(_url):
+        return True, ""
+
+    original_client = httpx.AsyncClient
+
+    def client_with_failure(**kwargs):
+        def fail(request):
+            raise httpx.ConnectError("SENTINEL-network-exception", request=request)
+
+        return original_client(transport=httpx.MockTransport(fail), **kwargs)
+
+    monkeypatch.setattr(read_url_tool, "_validate_fetch_url", allow_url)
+    monkeypatch.setattr(read_url_tool.httpx, "AsyncClient", client_with_failure)
+    result = await read_url_tool._fetch_url_bytes("https://example.com/SENTINEL-url")
+    assert result[0] is None
+    event = _single_event(capture_transport)
+    assert "SENTINEL" not in json.dumps(event)
+    assert any(
+        crumb.get("data", {}).get("provider") == "http" and "status_code" not in crumb.get("data", {})
+        for crumb in event.get("breadcrumbs", {}).get("values", [])
+    )
 
 
 @pytest.mark.parametrize(

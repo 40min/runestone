@@ -99,7 +99,7 @@ Allowed `runestone_telemetry` fields:
 | --- | --- |
 | `operation` (message) | `[a-z][a-z0-9_]{0,63}` — mandatory |
 | `route_template` | same route-template rule as `transaction` |
-| `provider` | one of `openai`, `openrouter`, `gemini`, `elevenlabs` — only ever from application configuration, never request data or exception text |
+| `provider` | one of `openai`, `openrouter`, `gemini`, `elevenlabs`, `ddgs`, `http` — fixed in code or from application configuration, never request data or exception text |
 | `model` | config-sourced, `[A-Za-z0-9._:/-]`, ≤128 chars |
 | `duration_bucket` | one of `lt_100ms`, `100ms_1s`, `1s_5s`, `5s_30s`, `gte_30s` |
 | `retry_count` | integer `0..10` |
@@ -291,6 +291,18 @@ pre-existing `runestone` context instead of replacing it.
   messages, headers, or request data are dropped.
 
 ## Volume and quota
+
+External tool reporting adds one sanitized exception event for a terminal DDGS
+news search error or an HTTP URL fetch network error or 5xx response. Rate
+limits, including exhausted retries, create no events. The news error marker
+contains the actual retry count; the HTTP marker includes a status code only
+for a 5xx response. Both include a fixed operation and provider, a fixed
+outcome, and monotonic duration bucket. Successful calls, empty results, URL
+validation rejections, HTTP 4xx responses, redirects, and content truncation
+create no events. Grammar search uses the local grammar index and has no
+outbound provider instrumentation. Queries, URLs, response bodies, headers,
+and exception messages are excluded from markers and the exported event.
+Repeated terminal failures can consume quota proportionally to request volume.
 
 The 128 KiB per-event cap is enforced in code and tested; a fully populated
 event (bounded by 20 sanitized crumbs at maximum field sizes) serializes to
