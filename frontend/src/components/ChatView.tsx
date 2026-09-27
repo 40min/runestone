@@ -52,10 +52,13 @@ const ChatView: React.FC = () => {
   const [inputMessage, setInputMessage] = useState("");
   const { userData } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const composerInputRef = useRef<HTMLTextAreaElement>(null);
+  const scrollToPendingRef = useRef(false);
   const lastMessageRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef(0);
   const prevIsAnyProcessingRef = useRef(false);
+  const prevIsLoadingRef = useRef(false);
   const {
     messages,
     isLoading,
@@ -248,16 +251,20 @@ const ChatView: React.FC = () => {
     const isNewMessage = messages.length > prevMessagesLengthRef.current;
     const isProcessingStarted =
       isAnyProcessing && !prevIsAnyProcessingRef.current;
-    const isProcessingEnded =
-      !isAnyProcessing && prevIsAnyProcessingRef.current;
 
-    // For user messages, only scroll if near bottom to avoid disrupting reading
-    // For assistant messages, always scroll to show the response
+    // Background updates only scroll when the reader is near the end.
     const isAtBottom =
       container.scrollHeight - container.scrollTop <=
       container.clientHeight + 150;
 
-    if (isInitialLoad) {
+    if (scrollToPendingRef.current && isLoading) {
+      scrollToPendingRef.current = false;
+      messagesEndRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "end",
+        inline: "nearest",
+      });
+    } else if (isInitialLoad) {
       // Initial load of messages (e.g. switching back to Chat tab / history refresh)
       scrollToLastMessage("auto", "start");
     } else if (isNewMessage) {
@@ -268,8 +275,11 @@ const ChatView: React.FC = () => {
           scrollToLastMessage("smooth", "end");
         }
       } else {
-        // For assistant messages, always scroll to the beginning of the response
-        scrollToLastMessage("smooth", "start");
+        // Keep a locally requested response in view; background history updates
+        // only scroll when the reader is already near the end.
+        if (isLoading || prevIsLoadingRef.current || isAtBottom) {
+          scrollToLastMessage("smooth", "start");
+        }
       }
     } else if (isProcessingStarted) {
       // When processing starts, scroll to show loading indicator
@@ -280,24 +290,20 @@ const ChatView: React.FC = () => {
           inline: "nearest",
         });
       }
-    } else if (isProcessingEnded && messages.length > 0) {
-      // When processing ends and there's an assistant message, scroll to ensure it's visible
-      const lastMessageIsAssistant =
-        messages[messages.length - 1].role === "assistant";
-      if (lastMessageIsAssistant) {
-        scrollToLastMessage("smooth", "start");
-      }
     }
 
     prevMessagesLengthRef.current = messages.length;
     prevIsAnyProcessingRef.current = isAnyProcessing;
-  }, [messages, isAnyProcessing]);
+    prevIsLoadingRef.current = isLoading;
+  }, [messages, isAnyProcessing, isLoading]);
 
   const handleSendMessage = async () => {
-    if (!inputMessage.trim() || isLoading) return;
+    if (!inputMessage.trim() || isAnyProcessing || isRecording) return;
 
     const messageToSend = inputMessage.trim();
+    scrollToPendingRef.current = true;
     setInputMessage("");
+    composerInputRef.current?.focus();
     const assistantMessageId = await sendMessage(
       messageToSend,
       voiceEnabled,
@@ -341,6 +347,7 @@ const ChatView: React.FC = () => {
     const transcribedText = await stopRecording();
     if (transcribedText) {
       if (autoSend) {
+        scrollToPendingRef.current = true;
         const assistantMessageId = await sendMessage(
           transcribedText,
           voiceEnabled,
@@ -478,7 +485,9 @@ const ChatView: React.FC = () => {
           <ChatComposerInputRow
             inputMessage={inputMessage}
             isAnyProcessing={isAnyProcessing}
+            isInputDisabled={isUploading || isTranscribing || isSyncingHistory}
             isRecording={isRecording}
+            inputRef={composerInputRef}
             onInputChange={setInputMessage}
             onKeyPress={handleKeyPress}
             onSendMessage={handleSendMessage}

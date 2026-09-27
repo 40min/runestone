@@ -6,7 +6,9 @@ import { ChatInput, CustomButton } from "../ui";
 interface ChatComposerInputRowProps {
   inputMessage: string;
   isAnyProcessing: boolean;
+  isInputDisabled: boolean;
   isRecording: boolean;
+  inputRef: React.Ref<HTMLTextAreaElement>;
   onInputChange: (value: string) => void;
   onKeyPress: (event: React.KeyboardEvent) => void;
   onSendMessage: () => void;
@@ -15,7 +17,9 @@ interface ChatComposerInputRowProps {
 export const ChatComposerInputRow: React.FC<ChatComposerInputRowProps> = ({
   inputMessage,
   isAnyProcessing,
+  isInputDisabled,
   isRecording,
+  inputRef,
   onInputChange,
   onKeyPress,
   onSendMessage,
@@ -29,11 +33,12 @@ export const ChatComposerInputRow: React.FC<ChatComposerInputRowProps> = ({
       }}
     >
       <ChatInput
+        inputRef={inputRef}
         value={inputMessage}
         onChange={(event) => onInputChange(event.target.value)}
         onKeyPress={onKeyPress}
         placeholder="Skriv ditt svar här..."
-        disabled={isAnyProcessing || isRecording}
+        disabled={isInputDisabled || isRecording}
       />
       <CustomButton
         onClick={onSendMessage}
