@@ -113,6 +113,21 @@ describe('AuthTextField', () => {
     expect(input).toBeInTheDocument();
   });
 
+  it('applies caller-provided sx overrides to the field container', () => {
+    render(
+      <AuthTextField
+        label="Styled Field"
+        name="styled"
+        value=""
+        onChange={() => {}}
+        sx={{ marginTop: '13px' }}
+      />
+    );
+
+    expect(screen.getByLabelText('Styled Field').closest('.MuiTextField-root'))
+      .toHaveStyle({ marginTop: '13px' });
+  });
+
   it('handles password type correctly', () => {
     render(<AuthTextField label="Password" name="password" type="password" value="" onChange={() => {}} />);
     const input = screen.getByLabelText('Password');
