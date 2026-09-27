@@ -540,6 +540,37 @@ describe('ChatView', () => {
     });
   });
 
+  it('keeps the composer focused and preserves the next draft while waiting', async () => {
+    let resolveMessage!: (value: Response) => void;
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/api/chat/history')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ messages: [] }) });
+      }
+      return new Promise<Response>((resolve) => { resolveMessage = resolve; });
+    });
+
+    render(<AuthProvider><ChatView /></AuthProvider>);
+    const input = screen.getByPlaceholderText('Skriv ditt svar här...') as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: 'First message' } });
+    fireEvent.click(getSendButton());
+
+    await waitFor(() => expect(screen.getByText('Teacher is thinking...')).toBeInTheDocument());
+    expect(screen.getByRole('status')).toHaveTextContent('Teacher is thinking...');
+    expect(input).toHaveFocus();
+    expect(input).not.toBeDisabled();
+    fireEvent.change(input, { target: { value: 'Next message' } });
+    expect(getSendButton()).toBeDisabled();
+    expect(input).toHaveValue('Next message');
+
+    await act(async () => resolveMessage({
+      ok: true,
+      json: () => Promise.resolve({ message: 'Response' }),
+    } as Response));
+    await waitFor(() => expect(getSendButton()).not.toBeDisabled());
+    expect(input).toHaveValue('Next message');
+    expect(input).toHaveFocus();
+  });
+
   it('displays error message when API call fails', async () => {
     mockFetch.mockImplementation((url) => {
       if (url.includes('/api/chat/history')) {
@@ -926,8 +957,10 @@ describe('ChatView', () => {
       expect(screen.getByText('Teacher is thinking...')).toBeInTheDocument();
     });
 
-    // Verify scrollIntoView was called when loading started
-    expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
+    // Sending explicitly reveals the pending status even when prior chat was scrolled away.
+    expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith(
+      expect.objectContaining({ block: 'end' })
+    );
 
     // Resolve the promise to clean up
     await act(async () => {
@@ -998,5 +1031,43 @@ describe('ChatView', () => {
     expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith(
       expect.objectContaining({ block: 'start' })
     );
+  });
+
+  it('does not interrupt reading when a background history refresh adds a message', async () => {
+    let refreshed = false;
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/api/chat/history')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            chat_id: 'chat-1',
+            chat_mismatch: false,
+            latest_id: refreshed ? 2 : 1,
+            has_more: false,
+            history_truncated: false,
+            messages: refreshed
+              ? [{ id: 2, role: 'assistant', content: 'Background answer' }]
+              : [{ id: 1, role: 'user', content: 'Earlier question' }],
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ message: 'Response' }) });
+    });
+
+    render(<AuthProvider><ChatView /></AuthProvider>);
+    const previousMessage = await screen.findByText('Earlier question');
+    for (let ancestor = previousMessage.parentElement; ancestor; ancestor = ancestor.parentElement) {
+      Object.defineProperties(ancestor, {
+        scrollHeight: { configurable: true, value: 1000 },
+        clientHeight: { configurable: true, value: 200 },
+        scrollTop: { configurable: true, value: 0 },
+      });
+    }
+    (window.HTMLElement.prototype.scrollIntoView as ReturnType<typeof vi.fn>).mockClear();
+
+    refreshed = true;
+    act(() => window.dispatchEvent(new Event('focus')));
+    await screen.findByText('Background answer');
+    expect(window.HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
   });
 });

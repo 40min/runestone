@@ -66,6 +66,51 @@ describe("useRecall", () => {
     expect(result.current.error).toBeNull();
   });
 
+  it("fetches again when remounted and when the browser returns to the page", async () => {
+    const refreshed = { ...initialRecall, words: [{ id: 2, word_phrase: "ny" }] };
+    mockGet.mockResolvedValueOnce(initialRecall).mockResolvedValueOnce(refreshed);
+    const first = renderHook(() => useRecall());
+    await waitFor(() => expect(first.result.current.loading).toBe(false));
+    first.unmount();
+
+    const second = renderHook(() => useRecall());
+    await waitFor(() => expect(second.result.current.recall).toEqual(refreshed));
+    expect(mockGet).toHaveBeenCalledTimes(2);
+
+    act(() => window.dispatchEvent(new Event("focus")));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(3));
+  });
+
+  it("coalesces focus and visibility refreshes while a request is pending", async () => {
+    const pending = createDeferred<RecallState>();
+    mockGet.mockResolvedValueOnce(initialRecall).mockReturnValueOnce(pending.promise);
+    const { result } = renderHook(() => useRecall());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(mockGet).toHaveBeenCalledTimes(2);
+
+    await act(async () => pending.resolve({ ...initialRecall, words: [] }));
+    expect(result.current.recall?.words).toEqual([]);
+  });
+
+  it("does not let an older refresh replace a mutation response", async () => {
+    const pending = createDeferred<RecallState>();
+    const changed = { ...initialRecall, words: [] };
+    mockGet.mockResolvedValueOnce(initialRecall).mockReturnValueOnce(pending.promise);
+    mockPost.mockResolvedValueOnce(changed);
+    const { result } = renderHook(() => useRecall());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => window.dispatchEvent(new Event("focus")));
+    await act(async () => result.current.removeWord(1, "hej"));
+    await act(async () => pending.resolve(initialRecall));
+    expect(result.current.recall).toEqual(changed);
+  });
+
   it("reports an initial load error and can retry", async () => {
     mockGet
       .mockRejectedValueOnce(new Error("Network unavailable"))

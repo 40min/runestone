@@ -36,25 +36,39 @@ export const useRecall = (): UseRecallReturn => {
     RecallPendingAction["type"] | null
   >(null);
   const mutationInFlightRef = useRef(false);
+  const fetchInFlightRef = useRef<Promise<void> | null>(null);
+  const stateVersionRef = useRef(0);
   const hasFetchedRef = useRef(false);
   const { get, post, patch } = useApi();
 
   const refetch = useCallback(async () => {
+    if (mutationInFlightRef.current) return;
+    if (fetchInFlightRef.current) return fetchInFlightRef.current;
+
+    const version = stateVersionRef.current;
     setLoading(true);
     setError(null);
     setSuccess(null);
     setFeedbackAction(null);
-    try {
-      setRecall(await get<RecallState>("/api/recall"));
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Failed to load recall selection"
-      );
-    } finally {
-      setLoading(false);
-    }
+    const request = (async () => {
+      try {
+        const updated = await get<RecallState>("/api/recall");
+        if (version === stateVersionRef.current) setRecall(updated);
+      } catch (requestError) {
+        if (version === stateVersionRef.current) {
+          setError(
+            requestError instanceof Error
+              ? requestError.message
+              : "Failed to load recall selection"
+          );
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
+    fetchInFlightRef.current = request;
+    await request;
+    if (fetchInFlightRef.current === request) fetchInFlightRef.current = null;
   }, [get]);
 
   useEffect(() => {
@@ -63,6 +77,18 @@ export const useRecall = (): UseRecallReturn => {
     }
     hasFetchedRef.current = true;
     void refetch();
+  }, [refetch]);
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (!document.hidden) void refetch();
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, [refetch]);
 
   const runMutation = useCallback(
@@ -76,6 +102,7 @@ export const useRecall = (): UseRecallReturn => {
       }
 
       mutationInFlightRef.current = true;
+      stateVersionRef.current += 1;
       setPendingAction(action);
       setError(null);
       setSuccess(null);
@@ -115,6 +142,7 @@ export const useRecall = (): UseRecallReturn => {
       }
 
       mutationInFlightRef.current = true;
+      stateVersionRef.current += 1;
       setPendingAction(action);
       setError(null);
       setSuccess(null);
