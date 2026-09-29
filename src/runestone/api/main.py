@@ -27,7 +27,7 @@ from runestone.core.clients.voice.voice_factory import (
     create_voice_synthesis_client,
     create_voice_transcription_client,
 )
-from runestone.core.error_tracking import RequestCorrelationMiddleware, setup_error_tracking
+from runestone.core.error_tracking import RequestCorrelationMiddleware, create_detached_task, setup_error_tracking
 from runestone.core.logging_config import setup_logging
 from runestone.core.service_llm import build_service_llm_model
 from runestone.db.database import setup_database
@@ -76,8 +76,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         transcription_client=create_voice_transcription_client(settings),
         enhancement_client=create_voice_enhancement_client(settings),
     )
-    app.state.model_price_refresh_task = asyncio.create_task(
-        refresh_startup_model_prices(settings),
+    app.state.model_price_refresh_task = create_detached_task(
+        lambda: refresh_startup_model_prices(settings),
         name="model-price-refresh",
     )
     try:

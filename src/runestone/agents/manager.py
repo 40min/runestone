@@ -29,6 +29,7 @@ from runestone.agents.specialists.word_keeper import WordKeeperSpecialist
 from runestone.agents.tools.utils import serialize_active_learning_focus
 from runestone.config import Settings
 from runestone.constants import MAX_TEACHER_GRAMMAR_SOURCE_LINKS, TeacherEmotion
+from runestone.core.error_tracking import capture_sanitized_exception, create_detached_task, duration_bucket
 from runestone.core.exceptions import RunestoneError
 from runestone.core.observability import elapsed_ms_since
 from runestone.db.models import User
@@ -569,6 +570,7 @@ class AgentsManager:
                 vocabulary_candidates=filtered_vocabulary_candidates,
             )
 
+        branches_started_at = time.monotonic()
         coordinator_results, word_keeper_results = await asyncio.gather(
             _coordinator_branch(),
             _word_keeper_branch(),
@@ -582,7 +584,17 @@ class AgentsManager:
             logger.error(
                 "coordinator post branch failed",
                 exc_info=(type(coordinator_results), coordinator_results, coordinator_results.__traceback__),
+                extra={
+                    "runestone_telemetry": {
+                        "operation": "post_turn_coordinator",
+                        "outcome": "failed",
+                        "provider": self.settings.coordinator_provider,
+                        "model": self.settings.coordinator_model,
+                        "duration_bucket": duration_bucket(branches_started_at),
+                    }
+                },
             )
+            capture_sanitized_exception(coordinator_results)
         else:
             post_results.extend(coordinator_results)
 
@@ -590,7 +602,17 @@ class AgentsManager:
             logger.error(
                 "direct word keeper post branch failed",
                 exc_info=(type(word_keeper_results), word_keeper_results, word_keeper_results.__traceback__),
+                extra={
+                    "runestone_telemetry": {
+                        "operation": "post_turn_word_keeper",
+                        "outcome": "failed",
+                        "provider": self.settings.word_keeper_provider,
+                        "model": self.settings.word_keeper_model,
+                        "duration_bucket": duration_bucket(branches_started_at),
+                    }
+                },
             )
+            capture_sanitized_exception(word_keeper_results)
         else:
             post_results.extend(word_keeper_results)
 
@@ -690,26 +712,47 @@ class AgentsManager:
             return False
 
         async def _run() -> None:
+            started_at = time.monotonic()
             try:
                 async with track_model_costs("memory_maintenance"):
                     result = await asyncio.wait_for(
                         self.run_memory_maintenance(user),
                         timeout=self.settings.memory_maintenance_timeout_seconds,
                     )
-            except asyncio.TimeoutError:
+            except asyncio.TimeoutError as exception:
                 logger.error(
                     "memory maintenance timed out timeout_s=%s user_id=%s",
                     self.settings.memory_maintenance_timeout_seconds,
                     user.id,
+                    extra={
+                        "runestone_telemetry": {
+                            "operation": "memory_maintenance",
+                            "outcome": "timed_out",
+                            "provider": self.settings.memory_maintainer_provider,
+                            "model": self.settings.memory_maintainer_model,
+                            "duration_bucket": duration_bucket(started_at),
+                        }
+                    },
                 )
+                capture_sanitized_exception(exception)
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as exception:
                 logger.error(
                     "memory maintenance failed user_id=%s",
                     user.id,
                     exc_info=True,
+                    extra={
+                        "runestone_telemetry": {
+                            "operation": "memory_maintenance",
+                            "outcome": "failed",
+                            "provider": self.settings.memory_maintainer_provider,
+                            "model": self.settings.memory_maintainer_model,
+                            "duration_bucket": duration_bucket(started_at),
+                        }
+                    },
                 )
+                capture_sanitized_exception(exception)
             else:
                 artifacts = result.artifacts if isinstance(result.artifacts, dict) else {}
                 logger.info(
@@ -734,7 +777,7 @@ class AgentsManager:
                 self._memory_maintenance_registry.unregister(user_key)
 
         with suspend_model_cost_tracking():
-            task = asyncio.create_task(_run())
+            task = create_detached_task(_run)
         self._memory_maintenance_registry.register(user_key, task)
         logger.info("memory maintenance background task started user_id=%s", user.id)
         return True
@@ -769,6 +812,7 @@ class AgentsManager:
 
         async def _run():
             terminal_status = "completed"
+            started_at = time.monotonic()
             try:
                 with cost_tracking.activate():
                     async with provide_agent_side_effect_service() as background_side_effect_service:
@@ -790,13 +834,21 @@ class AgentsManager:
                             )
                             if isinstance(result_status, str):
                                 terminal_status = result_status
-                        except asyncio.TimeoutError:
+                        except asyncio.TimeoutError as exception:
                             terminal_status = "timed_out"
                             logger.error(
                                 "post task timed out timeout_s=%s chat_id=%s",
                                 self.POST_TASK_TIMEOUT_SECONDS,
                                 chat_id,
+                                extra={
+                                    "runestone_telemetry": {
+                                        "operation": "post_turn",
+                                        "outcome": "timed_out",
+                                        "duration_bucket": duration_bucket(started_at),
+                                    }
+                                },
                             )
+                            capture_sanitized_exception(exception)
                             await background_side_effect_service.mark_coordinator_failed_if_current(
                                 row_id=coordinator_row_id,
                                 user_id=user.id,
@@ -811,16 +863,40 @@ class AgentsManager:
                                 user_id=user.id,
                                 chat_id=chat_id,
                             )
-                        except Exception:
+                        except Exception as exception:
                             terminal_status = "failed"
-                            logger.error("post task failed chat_id=%s", chat_id, exc_info=True)
+                            logger.error(
+                                "post task failed chat_id=%s",
+                                chat_id,
+                                exc_info=True,
+                                extra={
+                                    "runestone_telemetry": {
+                                        "operation": "post_turn",
+                                        "outcome": "failed",
+                                        "duration_bucket": duration_bucket(started_at),
+                                    }
+                                },
+                            )
+                            capture_sanitized_exception(exception)
             except asyncio.CancelledError:
                 current_task = asyncio.current_task()
                 terminal_status = self._post_task_terminal_overrides.get(current_task, "cancelled")
                 raise
-            except Exception:
+            except Exception as exception:
                 terminal_status = "failed"
-                logger.error("post task orchestration failed chat_id=%s", chat_id, exc_info=True)
+                logger.error(
+                    "post task orchestration failed chat_id=%s",
+                    chat_id,
+                    exc_info=True,
+                    extra={
+                        "runestone_telemetry": {
+                            "operation": "post_turn",
+                            "outcome": "failed",
+                            "duration_bucket": duration_bucket(started_at),
+                        }
+                    },
+                )
+                capture_sanitized_exception(exception)
             finally:
                 cost_tracking.finish(terminal_status)
                 current_task = asyncio.current_task()
@@ -828,7 +904,7 @@ class AgentsManager:
                     self._post_task_terminal_overrides.pop(current_task, None)
                 self._unregister_post_task(chat_id, current_task)
 
-        task = asyncio.create_task(_run())
+        task = create_detached_task(_run)
         self._register_post_task(chat_id, task, cost_tracking)
         logger.info(
             "post task background task started chat_id=%s timeout_s=%s",

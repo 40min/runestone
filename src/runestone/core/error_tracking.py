@@ -8,6 +8,8 @@ records. Both callbacks fail closed without logging, because a log emission
 would recurse back into the SDK.
 """
 
+import asyncio
+import contextvars
 import json
 import logging
 import math
@@ -82,6 +84,20 @@ def capture_sanitized_exception(exception: BaseException) -> None:
     except Exception:
         # Error reporting must never change the outcome of application work.
         pass
+
+
+def create_detached_task(coroutine_factory: Callable[[], Awaitable[Any]], name: str | None = None) -> asyncio.Task[Any]:
+    """Start work with a fresh context before entering its own Sentry scope.
+
+    The fresh context prevents request and sibling scope state from being copied
+    at task creation. Callers activate any required cost tracking in the runner.
+    """
+
+    async def run() -> Any:
+        with sentry_sdk.isolation_scope():
+            return await coroutine_factory()
+
+    return asyncio.create_task(run(), name=name, context=contextvars.Context())
 
 
 def _is_runestone_logger(name: Any) -> bool:
@@ -495,8 +511,8 @@ class RequestCorrelationMiddleware:
     (private logs only; the sanitizer owns export). The Sentry binding to the
     per-request isolation scope as ``contexts.runestone.request_id`` happens
     only when the SDK is initialized. Detached background tasks created during
-    the request intentionally inherit the ID via contextvar copy semantics;
-    the token reset restores only the requesting task's context.
+    the request use a fresh context, so they do not inherit its ID or Sentry
+    breadcrumbs. The token reset restores the requesting task's context.
 
     The Sentry context stays installed for the whole request so exceptions
     that escape this middleware are still captured with the ID by Sentry's

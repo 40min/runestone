@@ -6,17 +6,20 @@ via WebSocket. Provider-specific API calls live in voice clients.
 """
 
 import asyncio
+import contextvars
 import logging
 import time
+from contextvars import ContextVar
 from typing import AsyncIterator
 
 from runestone.config import Settings
 from runestone.core.clients.voice.voice_factory import VoiceSynthesisClient
 from runestone.core.connection_manager import connection_manager
-from runestone.core.error_tracking import capture_sanitized_exception, duration_bucket
+from runestone.core.error_tracking import capture_sanitized_exception, create_detached_task, duration_bucket
 from runestone.model_costs.tracking import CostTrackingHandle
 
 logger = logging.getLogger(__name__)
+_tts_marker_captured: ContextVar[bool] = ContextVar("tts_marker_captured", default=False)
 
 
 class TTSService:
@@ -86,12 +89,14 @@ class TTSService:
                     total_bytes += len(chunk)
                     yield chunk
                 logger.debug(f"TTS synthesis finished: {chunk_count} chunks, {total_bytes} bytes yielded")
-        except Exception:
+        except Exception as exception:
             logger.error(
                 "TTS synthesis failed",
                 exc_info=True,
                 extra={"runestone_telemetry": self._telemetry("tts_synthesis", started_at)},
             )
+            _tts_marker_captured.set(True)
+            capture_sanitized_exception(exception)
             raise
 
     async def push_audio_to_client(
@@ -134,8 +139,7 @@ class TTSService:
                     if task.cancelled() and previous_cost_tracking.status is None:
                         previous_cost_tracking.finish("stale_replaced")
 
-            stream_task = self._stream_audio_task(user_id, text, cost_tracking, speed)
-            task = asyncio.create_task(stream_task)
+            task = create_detached_task(lambda: self._stream_audio_task(user_id, text, cost_tracking, speed))
             self._active_tasks[user_id] = task
             self._active_cost_tracking[user_id] = cost_tracking
             new_task_scheduled = True
@@ -157,13 +161,10 @@ class TTSService:
             try:
                 if not t.cancelled():
                     t.result()
-            except Exception as exception:
-                # Logging only creates a sanitized breadcrumb. Capture an event at
-                # the detached-task boundary while the exception is still available.
-                capture_sanitized_exception(exception)
+            except Exception:
                 logger.exception(f"Unhandled exception in TTS task for user {user_id}")
 
-        task.add_done_callback(_cleanup)
+        task.add_done_callback(_cleanup, context=contextvars.Context())
 
     async def _stream_audio_task(
         self,
@@ -177,6 +178,7 @@ class TTSService:
         """
         terminal_status = "completed"
         started_at = time.monotonic()
+        marker_token = _tts_marker_captured.set(False)
         try:
             with cost_tracking.activate():
                 websocket = connection_manager.get_connection(user_id)
@@ -190,31 +192,42 @@ class TTSService:
                     async for chunk in stream:
                         try:
                             await websocket.send_bytes(chunk)
-                        except Exception:
+                        except Exception as exception:
                             logger.error(
                                 "Audio delivery failed",
                                 exc_info=True,
                                 extra={"runestone_telemetry": self._telemetry("audio_delivery", started_at)},
                             )
+                            _tts_marker_captured.set(True)
+                            capture_sanitized_exception(exception)
                             raise
                 finally:
                     await stream.aclose()
                 try:
                     await websocket.send_json({"status": "complete"})
-                except Exception:
+                except Exception as exception:
                     logger.error(
                         "Audio delivery failed",
                         exc_info=True,
                         extra={"runestone_telemetry": self._telemetry("audio_delivery", started_at)},
                     )
+                    _tts_marker_captured.set(True)
+                    capture_sanitized_exception(exception)
                     raise
                 logger.debug(f"TTS audio pushed to user {user_id}. All chunks sent.")
         except asyncio.CancelledError:
             terminal_status = "stale_replaced" if asyncio.current_task() in self._replacement_tasks else "cancelled"
             logger.debug(f"TTS task for user {user_id} was cancelled")
             raise
-        except Exception:
+        except Exception as exception:
             terminal_status = "failed"
+            if not _tts_marker_captured.get():
+                logger.error(
+                    "TTS background task failed",
+                    extra={"runestone_telemetry": self._telemetry("tts_delivery", started_at)},
+                )
+                capture_sanitized_exception(exception)
             raise
         finally:
+            _tts_marker_captured.reset(marker_token)
             cost_tracking.finish(terminal_status)

@@ -6,6 +6,8 @@ import json
 import logging
 import re
 from collections.abc import Generator
+from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from types import SimpleNamespace
 from typing import Any, Literal, cast, get_args, get_origin
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
@@ -33,6 +35,7 @@ from runestone.core.error_tracking import (
     _sanitize_breadcrumb,
     _sanitize_event,
     capture_sanitized_exception,
+    create_detached_task,
     duration_bucket,
     setup_error_tracking,
 )
@@ -40,6 +43,7 @@ from runestone.core.exceptions import RunestoneError
 from runestone.core.logging_config import RunestoneLogFilter, get_current_request_id
 from runestone.db.database import record_database_boundary_failure
 from runestone.dependencies import get_chat_service, get_user_service
+from runestone.model_costs.startup import refresh_startup_model_prices
 from runestone.model_costs.tracking import _CostCollector
 from runestone.services.tts_service import TTSService
 from runestone.services.voice_service import VoiceService
@@ -1123,6 +1127,58 @@ async def test_isolation_scope_request_id_reaches_captured_event(capture_transpo
     assert event["contexts"]["runestone"]["request_id"] == request_id
 
 
+@pytest.mark.anyio
+async def test_detached_task_event_excludes_request_and_sibling_scope(capture_transport) -> None:
+    """The real SDK starts detached work without a copied isolation scope."""
+
+    async def fail() -> None:
+        try:
+            raise RuntimeError("SENTINEL-background-secret")
+        except RuntimeError as exception:
+            logging.getLogger("runestone.background").error(
+                "background failed",
+                extra={
+                    "runestone_telemetry": {
+                        "operation": "post_turn",
+                        "outcome": "failed",
+                        "duration_bucket": "lt_100ms",
+                    }
+                },
+            )
+            capture_sanitized_exception(exception)
+
+    with sentry_sdk.isolation_scope() as request_scope:
+        request_scope.set_context("runestone", {"request_id": "a" * 32})
+        logging.getLogger("runestone.background").error(
+            "sibling failed",
+            extra={"runestone_telemetry": {"operation": "sibling", "outcome": "failed"}},
+        )
+        await create_detached_task(fail)
+
+    event = _single_event(capture_transport)
+    assert "runestone" not in event.get("contexts", {})
+    assert [crumb["message"] for crumb in event["breadcrumbs"]["values"]] == ["post_turn"]
+    assert "SENTINEL-background-secret" not in json.dumps(event)
+
+
+@pytest.mark.anyio
+async def test_pre_poll_detached_cancellation_does_not_create_coroutine() -> None:
+    created = []
+
+    async def work() -> None:
+        pass
+
+    def factory():
+        created.append(True)
+        return work()
+
+    task = create_detached_task(factory)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert created == []
+
+
 async def _noop_receive() -> dict[str, Any]:
     return {"type": "http.request"}
 
@@ -1544,6 +1600,152 @@ async def test_background_tts_failure_captures_only_sanitized_synthesis_event(ca
 
     crumbs = event["breadcrumbs"]["values"]
     assert [crumb["message"] for crumb in crumbs] == ["tts_synthesis"]
+
+
+@pytest.mark.anyio
+async def test_background_audio_delivery_captures_once_and_callback_has_fresh_context(capture_transport) -> None:
+    settings = Mock(spec=Settings)
+    settings.tts_provider = "openai"
+    settings.tts_model = "gpt-4o-mini-tts"
+    synthesis_client = MagicMock()
+
+    async def stream(text: str, speed: float = 1.0):
+        yield b"SENTINEL-audio"
+
+    synthesis_client.synthesize_speech_stream = MagicMock(side_effect=stream)
+    service = TTSService(settings, synthesis_client)
+    cost_tracking = _CostCollector("chat_turn").transfer("tts")
+    websocket = MagicMock(send_bytes=AsyncMock(side_effect=RuntimeError("SENTINEL-delivery")))
+    callback_context = ContextVar("test_callback_request_context", default=None)
+    callback_context.set("SENTINEL-request")
+    seen_in_callback = []
+
+    def observe_callback_log(*args, **kwargs):
+        seen_in_callback.append(callback_context.get())
+
+    with patch("runestone.services.tts_service.connection_manager.get_connection", return_value=websocket):
+        with patch("runestone.services.tts_service.logger.exception", side_effect=observe_callback_log):
+            await service.push_audio_to_client(3, "SENTINEL-transcript", cost_tracking)
+            with pytest.raises(RuntimeError, match="SENTINEL-delivery"):
+                await service._active_tasks[3]
+            await asyncio.sleep(0)
+
+    assert seen_in_callback == [None]
+    event = _single_event(capture_transport)
+    assert [crumb["message"] for crumb in event["breadcrumbs"]["values"]] == ["audio_delivery"]
+    assert "SENTINEL-" not in json.dumps(event)
+
+
+@pytest.mark.anyio
+async def test_memory_failure_marker_and_capture_share_detached_scope(capture_transport, mock_settings) -> None:
+    manager = AgentsManager(mock_settings)
+    manager.memory_maintainer.run_for_user = AsyncMock(side_effect=RuntimeError("SENTINEL-memory"))
+    user = SimpleNamespace(id=3)
+    await manager.start_background_memory_maintenance(user)
+    await manager._memory_maintenance_registry.tasks[str(user.id)]
+
+    event = _single_event(capture_transport)
+    assert [crumb["message"] for crumb in event["breadcrumbs"]["values"]] == ["memory_maintenance"]
+    assert event["breadcrumbs"]["values"][0]["data"]["outcome"] == "failed"
+    assert "SENTINEL-memory" not in json.dumps(event)
+
+
+@pytest.mark.anyio
+async def test_model_price_failure_marker_reaches_capture(capture_transport) -> None:
+    with patch(
+        "runestone.model_costs.startup.refresh_price_snapshot",
+        new=AsyncMock(side_effect=RuntimeError("SENTINEL-price-feed")),
+    ):
+        await create_detached_task(lambda: refresh_startup_model_prices(Mock(spec=Settings)))
+
+    event = _single_event(capture_transport)
+    assert [crumb["message"] for crumb in event["breadcrumbs"]["values"]] == ["model_price_refresh"]
+    assert "SENTINEL-price-feed" not in json.dumps(event)
+
+
+@pytest.mark.anyio
+async def test_consumed_post_branches_capture_each_failure(capture_transport, mock_settings) -> None:
+    manager = AgentsManager(mock_settings)
+    manager.coordinator.plan_post_turn = AsyncMock(side_effect=RuntimeError("SENTINEL-coordinator"))
+    manager._run_specialists = AsyncMock(side_effect=RuntimeError("SENTINEL-word"))
+    manager._filter_post_vocabulary_candidates = Mock(return_value=[Mock()])
+
+    results, coordinator_failed = await manager._run_post_branches(
+        message="SENTINEL-message",
+        history=[],
+        user=SimpleNamespace(id=3),
+        teacher_response="SENTINEL-response",
+        vocabulary_candidates=[],
+        learning_memory_signals=[],
+        pre_results=[],
+    )
+
+    assert results == []
+    assert coordinator_failed is True
+    assert len(capture_transport.envelopes) == 2
+    events = [envelope.get_event() for envelope in capture_transport.envelopes]
+    assert {event["breadcrumbs"]["values"][-1]["message"] for event in events} == {
+        "post_turn_coordinator",
+        "post_turn_word_keeper",
+    }
+    assert all("SENTINEL-" not in json.dumps(event) for event in events)
+
+
+@pytest.mark.anyio
+async def test_post_turn_timeout_marker_and_capture_share_detached_scope(capture_transport, mock_settings) -> None:
+    manager = AgentsManager(mock_settings)
+    manager.POST_TASK_TIMEOUT_SECONDS = 0.01
+
+    async def slow_post_turn(**kwargs):
+        await asyncio.sleep(1)
+
+    manager.run_post_turn = AsyncMock(side_effect=slow_post_turn)
+    side_effect_service = MagicMock(mark_coordinator_failed_if_current=AsyncMock())
+
+    @asynccontextmanager
+    async def provide_service():
+        yield side_effect_service
+
+    child = _CostCollector("chat_turn").transfer("post_turn")
+    with patch("runestone.agents.manager.provide_agent_side_effect_service", provide_service):
+        await manager.start_background_post_turn(
+            message="SENTINEL-message",
+            chat_id="SENTINEL-chat",
+            history=[],
+            user=SimpleNamespace(id=3),
+            teacher_response="SENTINEL-response",
+            vocabulary_candidates=[],
+            learning_memory_signals=[],
+            pre_results=[],
+            coordinator_row_id=42,
+            cost_tracking=child,
+        )
+        await manager._post_task_registry.tasks["SENTINEL-chat"]
+
+    assert child.status == "timed_out"
+    event = _single_event(capture_transport)
+    assert [crumb["message"] for crumb in event["breadcrumbs"]["values"]] == ["post_turn"]
+    assert event["breadcrumbs"]["values"][0]["data"]["outcome"] == "timed_out"
+    assert "SENTINEL-chat" not in json.dumps(event)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("telemetry_mode", ["disabled", "failing"])
+async def test_memory_failure_outcome_survives_telemetry_unavailability(mock_settings, telemetry_mode) -> None:
+    manager = AgentsManager(mock_settings)
+    manager.memory_maintainer.run_for_user = AsyncMock(side_effect=RuntimeError("maintenance failed"))
+    user = SimpleNamespace(id=3)
+    if telemetry_mode == "disabled":
+        telemetry_patch = patch("runestone.core.error_tracking.sentry_sdk.is_initialized", return_value=False)
+    else:
+        telemetry_patch = patch(
+            "runestone.core.error_tracking.sentry_sdk.capture_exception",
+            side_effect=RuntimeError("telemetry unavailable"),
+        )
+    with telemetry_patch:
+        assert await manager.start_background_memory_maintenance(user) is True
+        await manager._memory_maintenance_registry.tasks[str(user.id)]
+    assert manager.is_memory_maintenance_running(user.id) is False
 
 
 class _FailingChatServiceStub:

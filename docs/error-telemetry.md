@@ -191,6 +191,9 @@ configuration, and a measured `duration_bucket`:
 | --- | --- |
 | `agents/manager.py::prepare_pre_turn` coordinator fallback | `operation=coordinator_plan`, `outcome=fallback_teacher_only`, configured coordinator provider/model |
 | `agents/manager.py::generate_teacher_response` re-raised teacher failure | `operation=teacher_response`, `outcome=failed`, configured teacher provider/model |
+| `agents/manager.py::_run_post_branches` consumed coordinator or direct word-keeper failure | `operation=post_turn_coordinator` or `post_turn_word_keeper`, `outcome=failed`, configured branch provider/model, measured duration bucket; each consumed exception is captured once |
+| `agents/manager.py` detached post-turn or memory-maintenance failure | `operation=post_turn` or `memory_maintenance`, fixed `failed` or `timed_out` outcome, measured duration bucket; memory maintenance includes configured provider/model |
+| `model_costs/startup.py::refresh_startup_model_prices` handled failure | `operation=model_price_refresh`, `outcome=failed`, measured duration bucket |
 | `core/ocr.py::_preprocess_image_for_ocr` recoverable fallback | `operation=ocr_preprocess`, `outcome=fallback_original` |
 | `core/ocr.py::extract_text` `OCRError` exit | `operation=ocr_extract`, `outcome=failed`, configured OCR provider/model |
 | `core/ocr.py::extract_text` first unexpected-exception record | `operation=ocr_extract`, `outcome=failed`, configured OCR provider/model |
@@ -232,14 +235,14 @@ only by the hostile-envelope and real-SDK tests that accompany it.
 
 ### Detached TTS failures
 
-`TTSService` runs delivery in a detached task. Its done callback consumes
-`task.result()`; if that raises, it passes the exception object to
-`capture_sanitized_exception()`. This is the only explicit capture at that
-boundary, and it occurs while the exception is still available. The captured
-event and its `tts_synthesis` breadcrumb pass through the same default-deny
-event and breadcrumb projections. Audio, transcript text, WebSocket data,
-authentication data, user IDs, and exception values remain excluded. The
-service imports the core helper, never the Sentry SDK.
+`TTSService` runs delivery in a detached task. The synthesis or delivery
+failure is explicitly captured once inside that task's isolated scope, with
+its matching marker. The done callback consumes `task.result()` in a fresh
+context only for local logging and registry cleanup; it does not capture an
+event. The event and breadcrumb pass through the same default-deny projections.
+Audio, transcript text, WebSocket data, authentication data, user IDs, and
+exception values remain excluded. The service imports the core helper, never
+the Sentry SDK.
 
 ### INFO decision
 
@@ -277,11 +280,14 @@ pre-existing `runestone` context instead of replacing it.
   `contexts.runestone.request_id` rule above, and breadcrumb/log messages
   remain discarded by the sanitizer. The `ContextVar` is reset with its token
   when the request scope exits, so later logs in the same task carry no ID.
-- Detached background tasks created during a request intentionally inherit the
-  ID: `asyncio` tasks copy the current context at creation, so a task spawned
-  mid-request logs with that request's ID for its lifetime, including after
-  the response is returned. The token reset restores only the requesting
-  task's context, not the child's copy.
+- API-process detached tasks start with a fresh `Context` and enter a new
+  Sentry isolation scope before doing work. Request IDs, breadcrumbs, and
+  sibling task state therefore cannot be copied into their exported events.
+  Their private log lines also have no inherited request ID. Required cost
+  tracking is activated explicitly inside each task.
+- Expected task replacement and shutdown cancellation are control flow, so
+  they do not produce error events or marked breadcrumbs. Timed-out and failed
+  work is marked and explicitly captured inside its detached task scope.
 - WebSocket and lifespan scopes pass through without an ID.
 - When the SDK is not initialized, the local-log binding above still applies;
   only the Sentry scope binding is skipped, so no ambient Sentry state is
