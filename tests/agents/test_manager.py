@@ -357,7 +357,7 @@ async def test_suspended_model_cost_tracking_gives_memory_maintenance_an_indepen
 
 
 @pytest.mark.anyio
-async def test_suspending_model_cost_tracking_preserves_other_task_context(mock_settings, mock_user):
+async def test_background_memory_maintenance_does_not_inherit_request_context(mock_settings, mock_user):
     manager = _make_manager(mock_settings)
     request_context = ContextVar("test_request_context", default=None)
     request_context.set("request-123")
@@ -372,7 +372,7 @@ async def test_suspending_model_cost_tracking_preserves_other_task_context(mock_
     await manager.start_background_memory_maintenance(mock_user)
     await manager._memory_maintenance_registry.tasks[str(mock_user.id)]
 
-    assert inherited_values == ["request-123"]
+    assert inherited_values == [None]
 
 
 @pytest.mark.anyio
