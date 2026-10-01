@@ -1730,6 +1730,45 @@ async def test_post_turn_timeout_marker_and_capture_share_detached_scope(capture
 
 
 @pytest.mark.anyio
+async def test_post_turn_orchestration_failure_is_captured_and_seals_tracking(capture_transport, mock_settings) -> None:
+    manager = AgentsManager(mock_settings)
+    manager.run_post_turn = AsyncMock(return_value="completed")
+    child = _CostCollector("chat_turn").transfer("post_turn")
+
+    @asynccontextmanager
+    async def provide_service():
+        try:
+            yield MagicMock()
+        finally:
+            raise RuntimeError("SENTINEL-side-effect-service")
+
+    with patch(
+        "runestone.agents.manager.provide_agent_side_effect_service",
+        provide_service,
+    ):
+        await manager.start_background_post_turn(
+            message="SENTINEL-message",
+            chat_id="SENTINEL-chat",
+            history=[],
+            user=SimpleNamespace(id=3),
+            teacher_response="SENTINEL-response",
+            vocabulary_candidates=[],
+            learning_memory_signals=[],
+            pre_results=[],
+            coordinator_row_id=42,
+            cost_tracking=child,
+        )
+        await manager._post_task_registry.tasks["SENTINEL-chat"]
+
+    assert child.status == "failed"
+    assert "SENTINEL-chat" not in manager._post_task_registry.tasks
+    event = _single_event(capture_transport)
+    assert [crumb["message"] for crumb in event["breadcrumbs"]["values"]] == ["post_turn"]
+    assert event["breadcrumbs"]["values"][0]["data"]["outcome"] == "failed"
+    assert "SENTINEL" not in json.dumps(event)
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("telemetry_mode", ["disabled", "failing"])
 async def test_memory_failure_outcome_survives_telemetry_unavailability(mock_settings, telemetry_mode) -> None:
     manager = AgentsManager(mock_settings)
