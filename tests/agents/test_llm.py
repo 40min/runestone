@@ -6,6 +6,7 @@ import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
+from langchain_core.messages import HumanMessage
 from pydantic import SecretStr
 
 from runestone.agents.llm import build_chat_model
@@ -16,6 +17,7 @@ from runestone.config import (
     ReasoningLevel,
     Settings,
 )
+from runestone.core.service_llm import build_service_llm_model
 from runestone.model_costs.langchain_callback import LangChainCostCallback
 
 
@@ -109,7 +111,8 @@ def test_build_chat_model_gemini(mock_settings):
         call_kwargs = mock_chat_gemini.call_args[1]
         assert call_kwargs["model"] == "gemini-2.5-flash"
         assert call_kwargs["api_key"] == SecretStr("test-gemini-key")
-        assert call_kwargs["temperature"] == 0.2
+        assert "temperature" not in call_kwargs
+        assert mock_chat_gemini.return_value.temperature is None
         assert call_kwargs["timeout"] == DEFAULT_AGENT_LLM_TIMEOUT_SECONDS
         assert call_kwargs["max_retries"] == DEFAULT_AGENT_MAX_RETRIES
         assert call_kwargs["disable_streaming"] == "tool_calling"
@@ -303,3 +306,20 @@ def test_build_chat_model_missing_api_key(mock_settings):
         with pytest.raises(ValueError, match=f"API key for {provider_name} is not configured"):
             build_chat_model(mock_settings, "teacher")
         setattr(mock_settings, attr_name, f"restored-{provider_name}-key")
+
+
+@pytest.mark.parametrize("model_name", ["gemini-3-flash-preview", "gemini-2.5-flash"])
+@pytest.mark.parametrize("flow", ["agent", "service"])
+def test_gemini_request_omits_temperature(mock_settings, model_name, flow):
+    """Real SDK request serialization must leave sampling to the Gemini API."""
+    if flow == "agent":
+        mock_settings.get_agent_llm_settings.return_value = _make_settings(
+            provider="gemini", model=model_name, temperature=0.2
+        )
+        model = build_chat_model(mock_settings, "teacher")
+    else:
+        model = build_service_llm_model(mock_settings, provider="gemini", model_name=model_name, temperature=0.2)
+
+    request = model._prepare_request([HumanMessage(content="Transcribe this text")])
+    assert model.temperature is None
+    assert "temperature" not in request["config"].model_dump(exclude_none=True)
