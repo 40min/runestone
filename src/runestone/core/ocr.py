@@ -13,6 +13,7 @@ from typing import Optional
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
 from PIL import Image
 
 from runestone.config import Settings
@@ -227,7 +228,10 @@ class OCRProcessor:
                 self.settings.resolve_ocr_llm_provider(),
                 self.settings.resolve_ocr_llm_model(),
             )
-            ocr_model = self.model.bind(max_tokens=10000, temperature=0.1)
+            if isinstance(self.model, ChatGoogleGenerativeAI):
+                ocr_model = self.model.bind(max_tokens=10000)
+            else:
+                ocr_model = self.model.bind(max_tokens=10000, temperature=0.1)
             extracted_text = extract_message_text(
                 await ocr_model.ainvoke(
                     [

@@ -35,7 +35,8 @@ def build_service_llm_model(
         settings: Application settings.
         provider: Optional provider override. Defaults to ``settings.llm_provider``.
         model_name: Optional model override. Defaults to ``settings.llm_model_name``.
-        temperature: Sampling temperature for the model.
+        temperature: Sampling temperature for OpenAI and OpenRouter; ignored
+            for Gemini so the API uses its default.
 
     Returns:
         Configured LangChain chat model.
@@ -86,13 +87,16 @@ def build_service_llm_model(
         api_key = settings.gemini_api_key
         if not api_key:
             raise APIKeyError("Gemini API key is required. Set GEMINI_API_KEY environment variable.")
-        return ChatGoogleGenerativeAI(
+        model = ChatGoogleGenerativeAI(
             model=effective_model_name,
             api_key=SecretStr(api_key),
-            temperature=temperature,
             request_timeout=SERVICE_LLM_TIMEOUT_SECONDS,
             callbacks=callbacks,
         )
+        # The SDK rejects None at construction and injects 1.0 for Gemini 3.
+        # Clear it afterward so request serialization omits temperature.
+        model.temperature = None
+        return model
 
     api_key = settings.openai_api_key
     if not api_key:

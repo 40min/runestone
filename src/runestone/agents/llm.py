@@ -19,7 +19,8 @@ def build_chat_model(settings: Settings, agent_name: AgentName) -> BaseChatModel
     Args:
         settings: Application settings.
         agent_name: Agent identifier used to look up per-agent LLM settings
-            (provider, model, temperature, timeout, max_retries).
+            (provider, model, temperature, timeout, max_retries). Gemini ignores
+            the configured temperature and uses its API default.
 
     Returns:
         Configured LangChain chat model.
@@ -74,16 +75,19 @@ def build_chat_model(settings: Settings, agent_name: AgentName) -> BaseChatModel
         # Gemini 3+ supports reasoning levels directly via thinking_level.
         if agent_settings.reasoning_level != ReasoningLevel.NONE and agent_settings.model.startswith("gemini-3"):
             gemini_kwargs["thinking_level"] = agent_settings.reasoning_level.value
-        return ChatGoogleGenerativeAI(
+        model = ChatGoogleGenerativeAI(
             model=agent_settings.model,
             api_key=SecretStr(api_key),
-            temperature=agent_settings.temperature,
             timeout=agent_settings.timeout_seconds,
             max_retries=agent_settings.max_retries,
             disable_streaming="tool_calling",
             callbacks=[cost_callback],
             **gemini_kwargs,
         )
+        # The SDK rejects None at construction and injects 1.0 for Gemini 3.
+        # Clear it afterward so request serialization omits temperature.
+        model.temperature = None
+        return model
 
     return ChatOpenAI(
         model=agent_settings.model,

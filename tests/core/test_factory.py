@@ -172,7 +172,8 @@ class TestServiceLLMBuilder:
         call_kwargs = mock_chat_gemini.call_args[1]
         assert call_kwargs["model"] == "gemini-2.5-flash"
         assert call_kwargs["api_key"] == SecretStr("test-gemini-key")
-        assert call_kwargs["temperature"] == 0.1
+        assert "temperature" not in call_kwargs
+        assert mock_chat_gemini.return_value.temperature is None
         assert call_kwargs["request_timeout"] == SERVICE_LLM_TIMEOUT_SECONDS
 
     @patch("runestone.core.service_llm.ChatGoogleGenerativeAI")

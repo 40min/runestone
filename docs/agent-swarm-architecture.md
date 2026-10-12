@@ -54,6 +54,8 @@ model configuration. It returns an `AgentLLMSettings` value containing the
 provider, model, temperature, reasoning level, request timeout, and maximum
 retry count. `build_chat_model()` consumes that value directly; callers do not
 carry their own timeout constants or overrides.
+Configured temperatures apply to OpenAI and OpenRouter. Gemini requests omit
+temperature and use the provider default.
 
 Teacher, coordinator, WordKeeper, NewsAgent, and MemoryMaintainer each have
 their own timeout and retry environment variables. LearningMemoryKeeper and

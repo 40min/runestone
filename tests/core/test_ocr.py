@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from langchain_core.messages import AIMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 
 from runestone.config import Settings
 from runestone.core.exceptions import ImageProcessingError, OCRError
@@ -99,15 +101,30 @@ class TestOCRProcessor:
         assert "Image file not found" in str(exc_info.value)
 
     @pytest.mark.anyio
-    async def test_extract_text_success(self):
-        """Test successful text extraction."""
+    @pytest.mark.parametrize(
+        "service_provider,ocr_provider,model_class,expected_temperature",
+        [
+            ("openai", None, ChatOpenAI, 0.1),
+            ("openrouter", None, ChatOpenAI, 0.1),
+            ("gemini", None, ChatGoogleGenerativeAI, None),
+            ("openai", "gemini", ChatGoogleGenerativeAI, None),
+            ("gemini", "openai", ChatOpenAI, 0.1),
+            ("openai", None, ChatGoogleGenerativeAI, None),
+            ("gemini", None, ChatOpenAI, 0.1),
+            ("openai", "GeMiNi", ChatGoogleGenerativeAI, None),
+        ],
+    )
+    async def test_extract_text_success(self, service_provider, ocr_provider, model_class, expected_temperature):
+        """The injected model controls sampling even when settings disagree."""
+        self.settings.llm_provider = service_provider
+        self.settings.ocr_llm_provider = ocr_provider
         # Mock image
         mock_image = Mock()
         mock_image.mode = "RGB"
         mock_image.size = (800, 600)
 
         # Mock client response - now async
-        mock_model = Mock()
+        mock_model = Mock(spec=model_class)
         bound_model = AsyncMock()
         mock_model.bind.return_value = bound_model
         bound_model.ainvoke.return_value = AIMessage(content="""{
@@ -130,7 +147,10 @@ class TestOCRProcessor:
         assert result.recognition_statistics.successfully_transcribed == 50
 
         # Verify LLM client was called correctly
-        mock_model.bind.assert_called_once_with(max_tokens=10000, temperature=0.1)
+        if expected_temperature is None:
+            mock_model.bind.assert_called_once_with(max_tokens=10000)
+        else:
+            mock_model.bind.assert_called_once_with(max_tokens=10000, temperature=expected_temperature)
         bound_model.ainvoke.assert_called_once()
         args = bound_model.ainvoke.call_args[0][0]
         assert len(args) == 1
