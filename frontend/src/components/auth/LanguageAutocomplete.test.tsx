@@ -62,4 +62,18 @@ describe("LanguageAutocomplete", () => {
     const input = screen.getByLabelText("Mother Tongue") as HTMLInputElement;
     expect(input.value).toBe("Swedish");
   });
+
+  it("applies caller-provided sx overrides to the autocomplete container", () => {
+    render(
+      <LanguageAutocomplete
+        label="Mother Tongue"
+        value=""
+        onChange={() => {}}
+        sx={{ marginTop: "13px" }}
+      />
+    );
+
+    expect(screen.getByLabelText("Mother Tongue").closest(".MuiTextField-root"))
+      .toHaveStyle({ marginTop: "13px" });
+  });
 });
