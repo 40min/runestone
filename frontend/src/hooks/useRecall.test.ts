@@ -81,6 +81,20 @@ describe("useRecall", () => {
     await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(3));
   });
 
+  it("does not refresh when the page is hidden", async () => {
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    try {
+      const { result } = renderHook(() => useRecall());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      act(() => document.dispatchEvent(new Event("visibilitychange")));
+
+      expect(mockGet).toHaveBeenCalledOnce();
+    } finally {
+      hidden.mockRestore();
+    }
+  });
+
   it("coalesces focus and visibility refreshes while a request is pending", async () => {
     const pending = createDeferred<RecallState>();
     mockGet.mockResolvedValueOnce(initialRecall).mockReturnValueOnce(pending.promise);
