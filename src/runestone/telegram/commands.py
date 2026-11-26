@@ -143,10 +143,14 @@ class TelegramCommandProcessor:
 
         started_at = time.monotonic()
         try:
-            async with httpx.AsyncClient(timeout=35.0) as client:
+            # The Telegram long poll holds the request open for `timeout`
+            # seconds. Keep it well below the 5-second scheduler interval so a
+            # poll cycle finishes before the next tick and APScheduler stops
+            # skipping runs with "maximum number of running instances reached".
+            async with httpx.AsyncClient(timeout=15.0) as client:
                 response = await client.get(
                     f"{self.base_url}/getUpdates",
-                    params={"offset": offset, "timeout": 30},
+                    params={"offset": offset, "timeout": 3},
                 )
                 response.raise_for_status()
                 data = response.json()
