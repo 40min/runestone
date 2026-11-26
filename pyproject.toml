@@ -25,7 +25,11 @@ dependencies = [
     "passlib[bcrypt]>=1.7.4",
     "python-jose[cryptography]>=3.3.0",
     "langchain>=0.1.0",
-    "langchain-google-genai>=2.1.12",
+    "langchain-google-genai>=4.5.3",
+    # Explicit floor: google-genai selects its aiohttp transport whenever
+    # aiohttp is installed (it arrives transitively via langchain-community),
+    # so keep the transport library itself on the latest patch line.
+    "aiohttp>=3.14.5,<4",
     "langchain-openai>=0.0.5",
     "langchain-community>=0.0.20",
     "langchain-huggingface>=0.0.3",
