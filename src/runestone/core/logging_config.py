@@ -17,6 +17,12 @@ from rich.logging import RichHandler
 
 _LEADING_TAG_RE = re.compile(r"^\[[^\]]+\]\s*")
 
+# Telegram bot tokens appear in log output inside full request URLs emitted by
+# httpx exception tracebacks (for example "https://api.telegram.org/bot<TOKEN>/getUpdates").
+# The first alternative covers that URL form; the second catches the bare token.
+_BOT_TOKEN_RE = re.compile(r"bot\d{5,}:[A-Za-z0-9_-]{20,}|\b\d{5,}:[A-Za-z0-9_-]{30,}\b")
+_REDACTED_TOKEN = "bot<redacted>"
+
 _request_id_var: ContextVar[Optional[str]] = ContextVar("runestone_request_id", default=None)
 
 
@@ -50,11 +56,15 @@ class RunestoneLogFormatter(logging.Formatter):
     """Render local log lines with the request correlation ID when one is bound.
 
     The suffix is appended only for records produced inside a request scope;
-    outside requests the line is unchanged.
+    outside requests the line is unchanged. Rendering also redacts Telegram
+    bot tokens: the redaction runs on the fully formatted text so it covers
+    exception tracebacks, where HTTP client errors embed the full request URL
+    containing the token.
     """
 
     def format(self, record: logging.LogRecord) -> str:
         message = super().format(record)
+        message = _BOT_TOKEN_RE.sub(_REDACTED_TOKEN, message)
         request_id = getattr(record, "request_id", None)
         if request_id:
             message = f"{message} | request_id={request_id}"

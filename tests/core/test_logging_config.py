@@ -1,4 +1,5 @@
 import logging
+import sys
 from io import StringIO
 
 import pytest
@@ -108,6 +109,46 @@ def test_formatter_omits_suffix_outside_requests():
 
     assert rendered == "Analysis request received"
     assert "request_id=" not in rendered
+
+
+def test_formatter_redacts_bot_token_in_message():
+    token_url = "https://api.telegram.org/bot123456789:AAExxxxxxxxxxxxxxxxxxxxxxxxxxxx/getUpdates"
+    record = logging.LogRecord(
+        name="runestone.telegram.commands",
+        level=logging.ERROR,
+        pathname=__file__,
+        lineno=1,
+        msg=f"Failed to poll updates for {token_url}",
+        args=(),
+        exc_info=None,
+    )
+    rendered = logging_config.RunestoneLogFormatter("%(message)s").format(record)
+
+    assert "123456789" not in rendered
+    assert "AAExxxxxxxx" not in rendered
+    assert "https://api.telegram.org/bot<redacted>/getUpdates" in rendered
+
+
+def test_formatter_redacts_bare_bot_token_in_traceback():
+    try:
+        raise RuntimeError(
+            "request failed: https://api.telegram.org/bot123456789:AAExxxxxxxxxxxxxxxxxxxxxxxxxxxx/getUpdates"
+        )
+    except RuntimeError:
+        record = logging.LogRecord(
+            name="runestone.telegram.commands",
+            level=logging.ERROR,
+            pathname=__file__,
+            lineno=1,
+            msg="Failed to poll updates (HTTP error)",
+            args=(),
+            exc_info=sys.exc_info(),
+        )
+    rendered = logging_config.RunestoneLogFormatter("%(message)s").format(record)
+
+    assert "123456789" not in rendered
+    assert "AAExxxxxxxx" not in rendered
+    assert "bot<redacted>" in rendered
 
 
 def test_setup_logging_installs_request_id_formatter(monkeypatch):

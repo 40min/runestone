@@ -161,7 +161,7 @@ async def test_fetch_updates_rejects_api_errors_malformed_and_empty_results(proc
 
     client.get.assert_awaited_once_with(
         "https://api.telegram.org/bottest-token/getUpdates",
-        params={"offset": 0, "timeout": 30},
+        params={"offset": 0, "timeout": 3},
     )
 
 
